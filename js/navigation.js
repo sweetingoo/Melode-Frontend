@@ -209,8 +209,35 @@ function navigationComponent() {
                 return;
             }
 
+            // Check if user is superuser
+            const userData = localStorage.getItem('user_data');
+            let isSuperuser = false;
+
+            if (userData) {
+                try {
+                    const user = JSON.parse(userData);
+                    isSuperuser = user.is_superuser === true ||
+                        (user.permissions && user.permissions.includes('*'));
+                } catch (error) {
+                    console.error('Failed to parse user data:', error);
+                }
+            }
+
             // Update visibility for each nav item
             this.navItems.forEach(item => {
+                // Special handling for superuser-only items (Admin Panel)
+                if (item.superuserOnly) {
+                    item.visible = isSuperuser;
+                    return;
+                }
+
+                // If user is superuser, hide all non-superuser tabs (they use Admin Panel only)
+                if (isSuperuser && item.id !== 'profile') {
+                    item.visible = false;
+                    return;
+                }
+
+                // For regular users, check permissions
                 if (item.permission === null) {
                     // No permission required, always visible
                     item.visible = true;
