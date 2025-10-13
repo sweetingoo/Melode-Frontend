@@ -42,18 +42,8 @@
     roles: [],
     searchTerm: '',
     selectedRole: '',
-    showCreateUser: false,
     showEditUser: false,
     selectedUser: null,
-    newUser: {
-        email: '',
-        username: '',
-        first_name: '',
-        last_name: '',
-        title: '',
-        phone_number: '',
-        role_id: ''
-    },
     
     init() {
         this.loadUserData();
@@ -171,18 +161,6 @@
         return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
     },
     
-    async createUser() {
-        try {
-            // Mock API call - replace with actual implementation
-            console.log('Creating user:', this.newUser);
-            this.showCreateUser = false;
-            this.newUser = { email: '', username: '', first_name: '', last_name: '', title: '', phone_number: '', role_id: '' };
-            this.loadUsers();
-        } catch (error) {
-            console.error('Failed to create user:', error);
-        }
-    },
-    
     async toggleUserStatus(user) {
         try {
             // Mock API call - replace with actual implementation
@@ -261,9 +239,24 @@
                     <!-- Header -->
                     <div class="flex justify-between items-center mb-6">
                         <h3 class="text-lg font-medium text-gray-900">Users</h3>
-                        <button @click="showCreateUser = true" class="bg-primary-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-primary-700">
-                            <i class="fas fa-plus mr-2"></i>Add User
-                        </button>
+                        <a href="invitations.html" class="bg-primary-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-primary-700 inline-flex items-center">
+                            <i class="fas fa-envelope mr-2"></i>Send Invitation
+                        </a>
+                    </div>
+                    
+                    <!-- Info Alert -->
+                    <div class="mb-4 bg-blue-50 border border-blue-200 rounded-md p-4">
+                        <div class="flex">
+                            <div class="flex-shrink-0">
+                                <i class="fas fa-info-circle text-blue-400"></i>
+                            </div>
+                            <div class="ml-3">
+                                <p class="text-sm text-blue-700">
+                                    <strong>Note:</strong> Users cannot be created directly. To add a new user, send them an invitation from the 
+                                    <a href="invitations.html" class="font-medium underline hover:text-blue-800">Invitations page</a>.
+                                </p>
+                            </div>
+                        </div>
                     </div>
                     
                     <!-- Filters -->
@@ -357,67 +350,6 @@
             </div>
         </div>
     </main>
-
-    <!-- Create User Modal -->
-    <div x-show="showCreateUser" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-        <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <div class="mt-3">
-                <h3 class="text-lg font-medium text-gray-900 mb-4">Create New User</h3>
-                <form @submit.prevent="createUser()">
-                    <div class="mb-4">
-                        <label class="block text-sm font-medium text-gray-700">Email</label>
-                        <input type="email" x-model="newUser.email" required class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
-                    </div>
-                    <div class="mb-4">
-                        <label class="block text-sm font-medium text-gray-700">Username</label>
-                        <input type="text" x-model="newUser.username" required class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
-                    </div>
-                    <div class="grid grid-cols-2 gap-4 mb-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">First Name</label>
-                            <input type="text" x-model="newUser.first_name" required class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">Last Name</label>
-                            <input type="text" x-model="newUser.last_name" required class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
-                        </div>
-                    </div>
-                    <div class="mb-4">
-                        <label class="block text-sm font-medium text-gray-700">Title</label>
-                        <select x-model="newUser.title" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
-                            <option value="">Select title</option>
-                            <option value="Dr">Dr</option>
-                            <option value="Mr">Mr</option>
-                            <option value="Mrs">Mrs</option>
-                            <option value="Ms">Ms</option>
-                            <option value="Prof">Prof</option>
-                        </select>
-                    </div>
-                    <div class="mb-4">
-                        <label class="block text-sm font-medium text-gray-700">Phone Number</label>
-                        <input type="tel" x-model="newUser.phone_number" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
-                    </div>
-                    <div class="mb-4">
-                        <label class="block text-sm font-medium text-gray-700">Role</label>
-                        <select x-model="newUser.role_id" required class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
-                            <option value="">Select role</option>
-                            <template x-for="role in roles" :key="role.id">
-                                <option :value="role.id" x-text="role.display_name"></option>
-                            </template>
-                        </select>
-                    </div>
-                    <div class="flex justify-end space-x-3">
-                        <button type="button" @click="showCreateUser = false" class="bg-gray-300 text-gray-700 px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-400">
-                            Cancel
-                        </button>
-                        <button type="submit" class="bg-primary-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-primary-700">
-                            Create User
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
 
     <!-- Scripts -->
     <script>
