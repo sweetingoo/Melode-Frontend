@@ -95,33 +95,47 @@
             <!-- Permission-Based Cards Grid -->
             <div x-show="!isLoading && visibleCards.length > 0" class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
                 <template x-for="card in visibleCards" :key="card.id">
-                    <div class="bg-white overflow-hidden shadow rounded-lg hover:shadow-lg transition-shadow duration-200 cursor-pointer"
-                         @click="navigateTo(card.link)">
+                    <div :class="card.comingSoon ? 'bg-gray-50 opacity-75' : 'bg-white hover:shadow-lg'"
+                         class="overflow-hidden shadow rounded-lg transition-shadow duration-200 relative"
+                         :style="card.comingSoon ? 'cursor: not-allowed' : 'cursor: pointer'"
+                         @click="card.comingSoon ? null : navigateTo(card.link)">
+                        
+                        <!-- Coming Soon Badge -->
+                        <div x-show="card.comingSoon" class="absolute top-3 right-3 z-10">
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 border border-yellow-300">
+                                <i class="fas fa-clock mr-1"></i>
+                                Coming Soon
+                            </span>
+                        </div>
+                        
                         <div class="p-5">
                             <div class="flex items-center">
                                 <div class="flex-shrink-0">
-                                    <i :class="'fas ' + card.icon + ' text-3xl ' + card.color"></i>
+                                    <i :class="'fas ' + card.icon + ' text-3xl ' + (card.comingSoon ? 'text-gray-400' : card.color)"></i>
                                 </div>
                                 <div class="ml-5 w-0 flex-1">
                                     <dl>
-                                        <dt class="text-sm font-medium text-gray-500 truncate" x-text="card.title"></dt>
-                                        <dd class="text-lg font-semibold text-gray-900" x-text="card.subtitle"></dd>
+                                        <dt :class="card.comingSoon ? 'text-gray-400' : 'text-gray-500'" class="text-sm font-medium truncate" x-text="card.title"></dt>
+                                        <dd :class="card.comingSoon ? 'text-gray-500' : 'text-gray-900'" class="text-lg font-semibold" x-text="card.subtitle"></dd>
                                     </dl>
                                 </div>
                             </div>
                             <div class="mt-4">
-                                <p class="text-sm text-gray-600" x-text="card.description"></p>
+                                <p :class="card.comingSoon ? 'text-gray-400' : 'text-gray-600'" class="text-sm" x-text="card.description"></p>
                             </div>
                         </div>
-                        <div class="bg-gray-50 px-5 py-3 border-t border-gray-100">
+                        <div :class="card.comingSoon ? 'bg-gray-100' : 'bg-gray-50'" class="px-5 py-3 border-t border-gray-100">
                             <div class="flex items-center justify-between">
-                                <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                <span :class="card.comingSoon ? 'bg-gray-200 text-gray-500' : 'bg-blue-100 text-blue-800'" class="inline-flex items-center px-2 py-1 rounded text-xs font-medium">
                                     <i class="fas fa-key mr-1"></i>
                                     <span x-text="card.permission"></span>
                                 </span>
-                                <a :href="card.link" class="text-sm font-medium text-primary-600 hover:text-primary-500">
+                                <span x-show="!card.comingSoon" class="text-sm font-medium text-primary-600">
                                     Open <i class="fas fa-arrow-right ml-1"></i>
-                                </a>
+                                </span>
+                                <span x-show="card.comingSoon" class="text-sm font-medium text-gray-400">
+                                    In Development <i class="fas fa-hammer ml-1"></i>
+                                </span>
                             </div>
                         </div>
                     </div>
@@ -222,7 +236,8 @@
                         color: 'text-red-600',
                         link: '#patients',
                         permission: 'patient:read',
-                        permissionName: 'Read Patients'
+                        permissionName: 'Read Patients',
+                        comingSoon: true
                     },
                     {
                         id: 'appointments',
@@ -233,7 +248,8 @@
                         color: 'text-indigo-600',
                         link: '#appointments',
                         permission: 'appointment:read',
-                        permissionName: 'Read Appointments'
+                        permissionName: 'Read Appointments',
+                        comingSoon: true
                     },
                     {
                         id: 'medical-records',
@@ -244,7 +260,8 @@
                         color: 'text-teal-600',
                         link: '#medical-records',
                         permission: 'medical_records:read',
-                        permissionName: 'Read Medical Records'
+                        permissionName: 'Read Medical Records',
+                        comingSoon: true
                     },
                     {
                         id: 'prescriptions',
@@ -255,7 +272,8 @@
                         color: 'text-pink-600',
                         link: '#prescriptions',
                         permission: 'prescriptions:read',
-                        permissionName: 'Read Prescriptions'
+                        permissionName: 'Read Prescriptions',
+                        comingSoon: true
                     },
                     {
                         id: 'reports',
@@ -266,7 +284,8 @@
                         color: 'text-orange-600',
                         link: '#reports',
                         permission: 'reports:view',
-                        permissionName: 'View Reports'
+                        permissionName: 'View Reports',
+                        comingSoon: true
                     },
                     {
                         id: 'billing',
@@ -277,7 +296,8 @@
                         color: 'text-emerald-600',
                         link: '#billing',
                         permission: 'billing:read',
-                        permissionName: 'Read Billing'
+                        permissionName: 'Read Billing',
+                        comingSoon: true
                     },
                     {
                         id: 'settings',
@@ -288,7 +308,8 @@
                         color: 'text-gray-600',
                         link: '#settings',
                         permission: 'settings:manage',
-                        permissionName: 'Manage Settings'
+                        permissionName: 'Manage Settings',
+                        comingSoon: true
                     },
                     {
                         id: 'assets',
@@ -299,7 +320,8 @@
                         color: 'text-cyan-600',
                         link: '#assets',
                         permission: 'assets:read',
-                        permissionName: 'Read Assets'
+                        permissionName: 'Read Assets',
+                        comingSoon: true
                     },
                     {
                         id: 'tasks',
@@ -310,7 +332,8 @@
                         color: 'text-violet-600',
                         link: '#tasks',
                         permission: 'tasks:read',
-                        permissionName: 'Read Tasks'
+                        permissionName: 'Read Tasks',
+                        comingSoon: true
                     },
                     {
                         id: 'locations',
@@ -321,7 +344,8 @@
                         color: 'text-rose-600',
                         link: '#locations',
                         permission: 'locations:read',
-                        permissionName: 'Read Locations'
+                        permissionName: 'Read Locations',
+                        comingSoon: true
                     }
                 ],
                 
