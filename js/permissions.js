@@ -82,7 +82,7 @@ class PermissionManager {
             'superadmin': 100,
             'admin': 80,
             'doctor': 60,
-            'contractor': 50,
+            'contractor': 60,  // Same as doctor - they are equivalent
             'staff': 40,
             'user': 10
         };
@@ -157,8 +157,9 @@ class PermissionManager {
             return 'superadmin';
         }
 
-        if (this.hasRole('patient')) {
-            return 'patient';
+        // Check if user has doctor/contractor roles (treated identically)
+        if (this.hasAnyRole(['doctor', 'contractor'])) {
+            return 'doctor'; // doctor and contractor are the same
         }
 
         // Check if user has admin-level permissions
@@ -167,7 +168,7 @@ class PermissionManager {
         }
 
         // Check if user has staff-level permissions
-        if (this.hasAnyRole(['doctor', 'staff']) || this.hasAnyPermission(['invitation:create', 'invitation:read'])) {
+        if (this.hasAnyRole(['staff']) || this.hasAnyPermission(['invitation:create', 'invitation:read'])) {
             return 'staff';
         }
 
