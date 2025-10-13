@@ -83,8 +83,21 @@ class ApiClient {
      */
     async handleResponse(response) {
         if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.detail || `HTTP ${response.status}: ${response.statusText}`);
+            const errorData = await response.json().catch(() => null);
+
+            // Use ErrorHandler if available, otherwise fallback to simple error
+            if (window.ErrorHandler) {
+                const message = window.ErrorHandler.parseApiError(errorData);
+                const error = new Error(message);
+                error.status = response.status;
+                error.data = errorData;
+                error.fieldErrors = window.ErrorHandler.getFieldErrors(errorData);
+                throw error;
+            } else {
+                // Fallback if ErrorHandler not loaded
+                const message = errorData?.detail || `HTTP ${response.status}: ${response.statusText}`;
+                throw new Error(typeof message === 'string' ? message : JSON.stringify(message));
+            }
         }
 
         return response.json();
