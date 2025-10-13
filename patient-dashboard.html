@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Patient Dashboard - Melode Healthcare</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <script src="js/permissions.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            50: '#eff6ff',
+                            100: '#dbeafe',
+                            200: '#bfdbfe',
+                            300: '#93c5fd',
+                            400: '#60a5fa',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                            800: '#1e40af',
+                            900: '#1e3a8a',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-50 min-h-screen" x-data="{
+    userName: 'Loading...',
+    userAvatar: 'https://via.placeholder.com/32',
+    mfaRemembered: false,
+    mfaRememberDays: 30,
+    
+    init() {
+        this.loadUserData();
+        this.checkMfaRemember();
+    },
+    
+    loadUserData() {
+        const userData = localStorage.getItem('user_data');
+        if (userData) {
+            try {
+                const user = JSON.parse(userData);
+                this.userName = user.first_name + ' ' + user.last_name || user.username || user.email;
+                this.userAvatar = user.avatar_url || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(this.userName) + '&background=3b82f6&color=fff';
+            } catch (error) {
+                console.error('Failed to parse user data:', error);
+            }
+        }
+    },
+    
+    checkMfaRemember() {
+        const mfaRemember = localStorage.getItem('mfa_remember');
+        const mfaRememberDate = localStorage.getItem('mfa_remember_date');
+        
+        if (mfaRemember === 'true' && mfaRememberDate) {
+            const rememberDate = new Date(mfaRememberDate);
+            const now = new Date();
+            const daysDiff = Math.floor((now - rememberDate) / (1000 * 60 * 60 * 24));
+            
+            if (daysDiff <= this.mfaRememberDays) {
+                this.mfaRemembered = true;
+                console.log(`MFA remembered for ${daysDiff} days`);
+            } else {
+                // MFA remember expired
+                localStorage.removeItem('mfa_remember');
+                localStorage.removeItem('mfa_remember_date');
+                console.log('MFA remember expired');
+            }
+        }
+    },
+    
+    async logout() {
+        try {
+            const token = localStorage.getItem('access_token');
+            if (token) {
+                await fetch('http://127.0.0.1:8000/api/v1/auth/logout', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+            }
+        } catch (error) {
+            console.error('Logout error:', error);
+        } finally {
+            localStorage.clear();
+            window.location.href = 'login.html';
+        }
+    }
+}">
+    <!-- Navigation -->
+    <nav class="bg-white shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <h1 class="text-2xl font-bold text-primary-600">Melode Patient Portal</h1>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <div class="relative" x-data="{ userMenuOpen: false }">
+                        <button @click="userMenuOpen = !userMenuOpen" class="flex items-center text-sm rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                            <img class="h-8 w-8 rounded-full" :src="userAvatar" :alt="userName">
+                            <span class="ml-2 text-gray-700" x-text="userName"></span>
+                            <i class="fas fa-chevron-down ml-1 text-gray-400"></i>
+                        </button>
+                        <div x-show="userMenuOpen" @click.away="userMenuOpen = false" class="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5">
+                            <div class="py-1">
+                                <a href="profile.html" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                    <i class="fas fa-user mr-2"></i>Profile
+                                </a>
+                                <button @click="logout()" class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                    <i class="fas fa-sign-out-alt mr-2"></i>Logout
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        <div class="px-4 py-6 sm:px-0">
+            <!-- Welcome Section -->
+            <div class="bg-white overflow-hidden shadow rounded-lg mb-6">
+                <div class="px-4 py-5 sm:p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h1 class="text-2xl font-bold text-gray-900">Welcome to Your Patient Portal</h1>
+                            <p class="text-gray-600 mt-1">Manage your healthcare information and appointments</p>
+                        </div>
+                        <div class="flex items-center space-x-4">
+                            <div x-show="mfaRemembered" class="flex items-center text-green-600">
+                                <i class="fas fa-shield-alt mr-2"></i>
+                                <span class="text-sm font-medium">MFA Remembered (30 days)</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- MFA Status Card -->
+            <div x-show="!mfaRemembered" class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+                <div class="flex">
+                    <div class="flex-shrink-0">
+                        <i class="fas fa-exclamation-triangle text-yellow-400"></i>
+                    </div>
+                    <div class="ml-3">
+                        <h3 class="text-sm font-medium text-yellow-800">MFA Authentication Required</h3>
+                        <div class="mt-2 text-sm text-yellow-700">
+                            <p>For enhanced security, please complete MFA authentication. You can choose to remember this device for 30 days.</p>
+                        </div>
+                        <div class="mt-4">
+                            <button @click="window.location.href='mfa-setup.html'" class="bg-yellow-100 text-yellow-800 px-3 py-2 rounded-md text-sm font-medium hover:bg-yellow-200">
+                                Setup MFA
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 mb-6">
+                <!-- Appointments -->
+                <div class="bg-white overflow-hidden shadow rounded-lg">
+                    <div class="p-5">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0">
+                                <i class="fas fa-calendar-alt text-2xl text-primary-600"></i>
+                            </div>
+                            <div class="ml-5 w-0 flex-1">
+                                <dl>
+                                    <dt class="text-sm font-medium text-gray-500 truncate">Appointments</dt>
+                                    <dd class="text-lg font-medium text-gray-900">View & Manage</dd>
+                                </dl>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-gray-50 px-5 py-3">
+                        <div class="text-sm">
+                            <a href="#" class="font-medium text-primary-600 hover:text-primary-500">View appointments</a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Medical Records -->
+                <div class="bg-white overflow-hidden shadow rounded-lg">
+                    <div class="p-5">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0">
+                                <i class="fas fa-file-medical text-2xl text-green-600"></i>
+                            </div>
+                            <div class="ml-5 w-0 flex-1">
+                                <dl>
+                                    <dt class="text-sm font-medium text-gray-500 truncate">Medical Records</dt>
+                                    <dd class="text-lg font-medium text-gray-900">Access Records</dd>
+                                </dl>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-gray-50 px-5 py-3">
+                        <div class="text-sm">
+                            <a href="#" class="font-medium text-primary-600 hover:text-primary-500">View records</a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Prescriptions -->
+                <div class="bg-white overflow-hidden shadow rounded-lg">
+                    <div class="p-5">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0">
+                                <i class="fas fa-pills text-2xl text-purple-600"></i>
+                            </div>
+                            <div class="ml-5 w-0 flex-1">
+                                <dl>
+                                    <dt class="text-sm font-medium text-gray-500 truncate">Prescriptions</dt>
+                                    <dd class="text-lg font-medium text-gray-900">Manage Medications</dd>
+                                </dl>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-gray-50 px-5 py-3">
+                        <div class="text-sm">
+                            <a href="#" class="font-medium text-primary-600 hover:text-primary-500">View prescriptions</a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Profile -->
+                <div class="bg-white overflow-hidden shadow rounded-lg">
+                    <div class="p-5">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0">
+                                <i class="fas fa-user text-2xl text-blue-600"></i>
+                            </div>
+                            <div class="ml-5 w-0 flex-1">
+                                <dl>
+                                    <dt class="text-sm font-medium text-gray-500 truncate">Profile</dt>
+                                    <dd class="text-lg font-medium text-gray-900">Update Information</dd>
+                                </dl>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-gray-50 px-5 py-3">
+                        <div class="text-sm">
+                            <a href="profile.html" class="font-medium text-primary-600 hover:text-primary-500">Edit profile</a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Emergency Contacts -->
+                <div class="bg-white overflow-hidden shadow rounded-lg">
+                    <div class="p-5">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0">
+                                <i class="fas fa-phone text-2xl text-red-600"></i>
+                            </div>
+                            <div class="ml-5 w-0 flex-1">
+                                <dl>
+                                    <dt class="text-sm font-medium text-gray-500 truncate">Emergency Contacts</dt>
+                                    <dd class="text-lg font-medium text-gray-900">Manage Contacts</dd>
+                                </dl>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-gray-50 px-5 py-3">
+                        <div class="text-sm">
+                            <a href="#" class="font-medium text-primary-600 hover:text-primary-500">Manage contacts</a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Health Data -->
+                <div class="bg-white overflow-hidden shadow rounded-lg">
+                    <div class="p-5">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0">
+                                <i class="fas fa-heartbeat text-2xl text-pink-600"></i>
+                            </div>
+                            <div class="ml-5 w-0 flex-1">
+                                <dl>
+                                    <dt class="text-sm font-medium text-gray-500 truncate">Health Data</dt>
+                                    <dd class="text-lg font-medium text-gray-900">Track Health</dd>
+                                </dl>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-gray-50 px-5 py-3">
+                        <div class="text-sm">
+                            <a href="#" class="font-medium text-primary-600 hover:text-primary-500">View health data</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Activity -->
+            <div class="bg-white shadow rounded-lg">
+                <div class="px-4 py-5 sm:p-6">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">Recent Activity</h3>
+                    <div class="space-y-4">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0">
+                                <i class="fas fa-calendar-check text-green-500"></i>
+                            </div>
+                            <div class="ml-3">
+                                <p class="text-sm text-gray-900">Appointment scheduled for tomorrow at 2:00 PM</p>
+                                <p class="text-xs text-gray-500">2 hours ago</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0">
+                                <i class="fas fa-prescription-bottle-alt text-blue-500"></i>
+                            </div>
+                            <div class="ml-3">
+                                <p class="text-sm text-gray-900">New prescription added to your records</p>
+                                <p class="text-xs text-gray-500">1 day ago</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0">
+                                <i class="fas fa-file-medical text-purple-500"></i>
+                            </div>
+                            <div class="ml-3">
+                                <p class="text-sm text-gray-900">Lab results available for review</p>
+                                <p class="text-xs text-gray-500">3 days ago</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Scripts -->
+    <script>
+        // Check authentication and redirect if needed
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Patient dashboard loaded, checking authentication...');
+            
+            const isAuthenticated = localStorage.getItem('is_authenticated') === 'true';
+            const userData = localStorage.getItem('user_data');
+            const accessToken = localStorage.getItem('access_token');
+            
+            if (!isAuthenticated || !userData || !accessToken) {
+                console.log('Not authenticated, redirecting to login');
+                window.location.href = 'login.html';
+                return;
+            }
+            
+            try {
+                const user = JSON.parse(userData);
+                console.log('User data:', user);
+                
+                // Initialize permission manager
+                if (window.permissionManager) {
+                    window.permissionManager.init(user);
+                    const userType = window.permissionManager.getUserType();
+                    console.log('User type determined:', userType);
+                    
+                    // Only allow patients on this dashboard
+                    if (userType !== 'patient') {
+                        console.log('User is not a patient, redirecting to appropriate dashboard');
+                        if (userType === 'superadmin') {
+                            window.location.href = 'superadmin-dashboard.html';
+                        } else {
+                            window.location.href = 'index.html';
+                        }
+                        return;
+                    }
+                }
+                
+            } catch (error) {
+                console.error('Failed to parse user data:', error);
+                console.log('Clearing invalid data and redirecting to login');
+                localStorage.clear();
+                window.location.href = 'login.html';
+            }
+        });
+    </script>
+</body>
+</html>

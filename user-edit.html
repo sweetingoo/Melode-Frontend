@@ -1,0 +1,1009 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit User - Melode Healthcare Management</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            50: '#eff6ff',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-50 min-h-screen" x-data="userEditApp()">
+    <!-- Navigation -->
+    <nav class="bg-white shadow-lg border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <h1 class="text-2xl font-bold text-primary-600">Melode</h1>
+                    </div>
+                    <div class="hidden md:ml-6 md:flex md:space-x-8">
+                        <a href="superadmin-dashboard.html" class="text-gray-500 hover:text-primary-600 px-3 py-2 rounded-md text-sm font-medium">
+                            <i class="fas fa-home mr-1"></i>Dashboard
+                        </a>
+                        <a href="user-management.html" class="text-primary-600 px-3 py-2 rounded-md text-sm font-medium">
+                            <i class="fas fa-users mr-1"></i>Users
+                        </a>
+                        <a href="role-management.html" class="text-gray-500 hover:text-primary-600 px-3 py-2 rounded-md text-sm font-medium">
+                            <i class="fas fa-shield-alt mr-1"></i>Roles
+                        </a>
+                        <a href="permissions-management.html" class="text-gray-500 hover:text-primary-600 px-3 py-2 rounded-md text-sm font-medium">
+                            <i class="fas fa-key mr-1"></i>Permissions
+                        </a>
+                        <a href="invitations.html" class="text-gray-500 hover:text-primary-600 px-3 py-2 rounded-md text-sm font-medium">
+                            <i class="fas fa-envelope mr-1"></i>Invitations
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        <!-- Loading State -->
+        <div x-show="isLoading" class="text-center py-12">
+            <i class="fas fa-spinner fa-spin text-4xl text-primary-600 mb-4"></i>
+            <p class="text-gray-600">Loading user data...</p>
+        </div>
+
+        <!-- Main Content -->
+        <div x-show="!isLoading && user" class="px-4 py-6 sm:px-0">
+            <!-- Page Header -->
+            <div class="mb-6 flex items-center justify-between">
+                <div class="flex items-center">
+                    <a href="user-management.html" class="mr-4 text-gray-500 hover:text-gray-700">
+                        <i class="fas fa-arrow-left"></i>
+                    </a>
+                    <div>
+                        <h2 class="text-2xl font-bold text-gray-900">Edit User</h2>
+                        <p class="text-sm text-gray-500 mt-1" x-text="user ? user.email : ''"></p>
+                    </div>
+                </div>
+                <div class="flex space-x-2">
+                    <button 
+                        @click="saveChanges"
+                        :disabled="isSaving"
+                        class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 disabled:opacity-50">
+                        <i class="fas fa-save mr-2"></i>
+                        <span x-show="!isSaving">Save Changes</span>
+                        <span x-show="isSaving">Saving...</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="mb-6 border-b border-gray-200">
+                <nav class="-mb-px flex space-x-8">
+                    <button 
+                        @click="activeTab = 'info'"
+                        :class="activeTab === 'info' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                        class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+                        <i class="fas fa-user mr-2"></i>
+                        Basic Information
+                    </button>
+                    <button 
+                        @click="activeTab = 'roles'"
+                        :class="activeTab === 'roles' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                        class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+                        <i class="fas fa-shield-alt mr-2"></i>
+                        Roles & Permissions
+                    </button>
+                    <button 
+                        @click="activeTab = 'status'"
+                        :class="activeTab === 'status' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                        class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+                        <i class="fas fa-toggle-on mr-2"></i>
+                        Account Status
+                    </button>
+                </nav>
+            </div>
+
+            <!-- Tab Content -->
+            <div class="bg-white shadow rounded-lg">
+                <!-- Basic Information Tab -->
+                <div x-show="activeTab === 'info'" class="p-6">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">User Information</h3>
+                    <form class="space-y-6">
+                        <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                            <!-- Email -->
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Email</label>
+                                <input 
+                                    type="email" 
+                                    x-model="userData.email"
+                                    class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
+                            </div>
+
+                            <!-- Username -->
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Username</label>
+                                <input 
+                                    type="text" 
+                                    x-model="userData.username"
+                                    class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
+                            </div>
+
+                            <!-- Title -->
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Title</label>
+                                <select 
+                                    x-model="userData.title"
+                                    class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
+                                    <option value="">Select title</option>
+                                    <option value="Dr">Dr</option>
+                                    <option value="Mr">Mr</option>
+                                    <option value="Mrs">Mrs</option>
+                                    <option value="Ms">Ms</option>
+                                    <option value="Prof">Prof</option>
+                                    <option value="Nurse">Nurse</option>
+                                </select>
+                            </div>
+
+                            <!-- First Name -->
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">First Name</label>
+                                <input 
+                                    type="text" 
+                                    x-model="userData.first_name"
+                                    class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
+                            </div>
+
+                            <!-- Last Name -->
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Last Name</label>
+                                <input 
+                                    type="text" 
+                                    x-model="userData.last_name"
+                                    class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
+                            </div>
+
+                            <!-- Phone Number -->
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Phone Number</label>
+                                <input 
+                                    type="tel" 
+                                    x-model="userData.phone_number"
+                                    class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
+                            </div>
+
+                            <!-- Avatar URL -->
+                            <div class="sm:col-span-2">
+                                <label class="block text-sm font-medium text-gray-700">Avatar URL</label>
+                                <input 
+                                    type="url" 
+                                    x-model="userData.avatar_url"
+                                    class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                                    placeholder="https://example.com/avatar.jpg">
+                            </div>
+
+                            <!-- Bio -->
+                            <div class="sm:col-span-2">
+                                <label class="block text-sm font-medium text-gray-700">Bio</label>
+                                <textarea 
+                                    x-model="userData.bio"
+                                    rows="3"
+                                    class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm"></textarea>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Roles & Permissions Tab -->
+                <div x-show="activeTab === 'roles'" class="p-6">
+                    <div class="space-y-6">
+                        <!-- Current Roles -->
+                        <div>
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="text-lg font-medium text-gray-900">Assigned Roles</h3>
+                                <span class="text-sm text-gray-600" x-text="userRoles.length + ' role(s)'"></span>
+                            </div>
+                            <div class="space-y-2">
+                                <template x-for="role in userRoles" :key="role.id">
+                                    <div class="flex items-center justify-between p-4 bg-gradient-to-r from-primary-50 to-white border-l-4 border-primary-500 rounded-lg shadow-sm">
+                                        <div class="flex items-center flex-1">
+                                            <i class="fas fa-shield-alt text-primary-600 text-xl mr-3"></i>
+                                            <div class="flex-1">
+                                                <p class="font-medium text-gray-900 text-base" x-text="role.display_name"></p>
+                                                <p class="text-sm text-gray-600 mt-1" x-text="role.description"></p>
+                                                <p class="text-xs text-primary-600 mt-1 font-medium">
+                                                    <i class="fas fa-key mr-1"></i>
+                                                    <span x-text="getRolePermissionCount(role.id) + ' permissions'"></span>
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <button 
+                                            @click="removeRole(role.id)"
+                                            class="text-red-600 hover:text-red-800 p-2 ml-3"
+                                            title="Remove role">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    </div>
+                                </template>
+                                <div x-show="userRoles.length === 0" class="text-center py-8 text-gray-500 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+                                    <i class="fas fa-shield-alt text-3xl mb-2 text-gray-400"></i>
+                                    <p>No roles assigned</p>
+                                    <p class="text-xs mt-1">Assign a role below to grant permissions</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Assign New Role -->
+                        <div>
+                            <h3 class="text-lg font-medium text-gray-900 mb-4">Assign New Role</h3>
+                            <div class="flex space-x-4">
+                                <select 
+                                    x-model="selectedRoleId"
+                                    class="flex-1 border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
+                                    <option value="">Select a role...</option>
+                                    <template x-for="role in availableRoles" :key="role.id">
+                                        <option :value="role.id" x-text="role.display_name"></option>
+                                    </template>
+                                </select>
+                                <button 
+                                    @click="assignRole"
+                                    :disabled="!selectedRoleId"
+                                    class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                                    <i class="fas fa-plus mr-2"></i>
+                                    Assign
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Permissions View with Role Information -->
+                        <div>
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="text-lg font-medium text-gray-900">Permissions</h3>
+                                <div class="flex items-center space-x-3">
+                                    <span class="text-xs text-gray-500">
+                                        Last updated: <span x-text="new Date().toLocaleTimeString()"></span>
+                                    </span>
+                                    <button 
+                                        @click="loadUserPermissions()"
+                                        class="text-sm px-3 py-1 text-primary-600 hover:text-primary-800 border border-primary-600 rounded-md hover:bg-primary-50">
+                                        <i class="fas fa-sync-alt mr-1"></i>Refresh Permissions
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Permissions from Roles -->
+                            <div class="mb-6">
+                                <div class="flex items-center justify-between mb-3">
+                                    <h4 class="text-sm font-medium text-gray-700 flex items-center">
+                                        <i class="fas fa-shield-alt text-primary-600 mr-2"></i>
+                                        Permissions from Roles
+                                        <span class="ml-2 text-xs text-gray-500" x-text="'(' + getRoleBasedPermissionCount() + ' unique permissions)'"></span>
+                                    </h4>
+                                    <div class="text-xs text-gray-600" x-show="userRoles.length > 0">
+                                        <i class="fas fa-info-circle mr-1"></i>
+                                        From <span x-text="userRoles.length"></span> role(s)
+                                    </div>
+                                </div>
+                                <div class="max-h-96 overflow-y-auto border border-gray-200 rounded-lg">
+                                    <table class="min-w-full divide-y divide-gray-200">
+                                        <thead class="bg-gray-50 sticky top-0">
+                                            <tr>
+                                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Permission</th>
+                                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Resource:Action</th>
+                                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Granted By</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="bg-white divide-y divide-gray-200">
+                                            <template x-for="(perm, index) in roleBasedPermissions" :key="index">
+                                                <tr class="hover:bg-gray-50">
+                                                    <td class="px-4 py-3 text-sm font-medium text-gray-900" x-text="perm.display_name"></td>
+                                                    <td class="px-4 py-3 text-sm text-gray-600">
+                                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800" x-text="perm.name"></span>
+                                                    </td>
+                                                    <td class="px-4 py-3 text-sm">
+                                                        <template x-for="role in perm.roles" :key="role.id">
+                                                            <span class="inline-flex items-center px-2 py-1 mr-1 mb-1 rounded-md text-xs font-medium bg-primary-100 text-primary-800">
+                                                                <i class="fas fa-shield-alt mr-1"></i>
+                                                                <span x-text="role.display_name"></span>
+                                                            </span>
+                                                        </template>
+                                                    </td>
+                                                </tr>
+                                            </template>
+                                            <tr x-show="roleBasedPermissions.length === 0">
+                                                <td colspan="3" class="px-4 py-8 text-center text-sm text-gray-500">
+                                                    <i class="fas fa-info-circle mb-2"></i>
+                                                    <p>No permissions from roles. Assign roles to grant permissions.</p>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- Direct/Custom Permissions -->
+                            <div>
+                                <div class="flex items-center justify-between mb-3">
+                                    <h4 class="text-sm font-medium text-gray-700 flex items-center">
+                                        <i class="fas fa-user-tag text-green-600 mr-2"></i>
+                                        Custom Permissions (Direct Assignment)
+                                        <span class="ml-2 text-xs text-gray-500" x-text="'(' + directPermissions.length + ' permissions)'"></span>
+                                    </h4>
+                                    <button 
+                                        @click="showAssignPermissionModal = true"
+                                        class="text-sm px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded-md">
+                                        <i class="fas fa-plus mr-1"></i>Add Custom Permission
+                                    </button>
+                                </div>
+                                
+                                <div class="border border-gray-200 rounded-lg">
+                                    <table class="min-w-full divide-y divide-gray-200">
+                                        <thead class="bg-gray-50">
+                                            <tr>
+                                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Permission</th>
+                                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Resource:Action</th>
+                                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                                                <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="bg-white divide-y divide-gray-200">
+                                            <template x-for="(perm, index) in directPermissions" :key="index">
+                                                <tr class="hover:bg-gray-50">
+                                                    <td class="px-4 py-3 text-sm font-medium text-gray-900" x-text="perm.display_name"></td>
+                                                    <td class="px-4 py-3 text-sm">
+                                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800" x-text="perm.name"></span>
+                                                    </td>
+                                                    <td class="px-4 py-3 text-sm">
+                                                        <span class="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-yellow-100 text-yellow-800">
+                                                            <i class="fas fa-user-tag mr-1"></i>
+                                                            Custom
+                                                        </span>
+                                                    </td>
+                                                    <td class="px-4 py-3 text-sm text-right">
+                                                        <button 
+                                                            @click="removeDirectPermission(perm.id)"
+                                                            class="text-red-600 hover:text-red-800 ml-2"
+                                                            title="Remove permission">
+                                                            <i class="fas fa-trash"></i>
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            </template>
+                                            <tr x-show="directPermissions.length === 0">
+                                                <td colspan="4" class="px-4 py-8 text-center text-sm text-gray-500">
+                                                    <i class="fas fa-info-circle mb-2"></i>
+                                                    <p>No custom permissions assigned.</p>
+                                                    <p class="text-xs mt-1">Click "Add Custom Permission" to assign permissions directly to this user.</p>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- Permission Summary -->
+                            <div class="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                    <div class="flex items-center">
+                                        <i class="fas fa-shield-alt text-blue-600 text-2xl mr-3"></i>
+                                        <div>
+                                            <p class="text-xs text-blue-600 font-medium">From Roles</p>
+                                            <p class="text-2xl font-bold text-blue-900" x-text="getRoleBasedPermissionCount()"></p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+                                    <div class="flex items-center">
+                                        <i class="fas fa-user-tag text-green-600 text-2xl mr-3"></i>
+                                        <div>
+                                            <p class="text-xs text-green-600 font-medium">Custom</p>
+                                            <p class="text-2xl font-bold text-green-900" x-text="directPermissions.length"></p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                                    <div class="flex items-center">
+                                        <i class="fas fa-check-double text-purple-600 text-2xl mr-3"></i>
+                                        <div>
+                                            <p class="text-xs text-purple-600 font-medium">Total</p>
+                                            <p class="text-2xl font-bold text-purple-900" x-text="getTotalPermissionCount()"></p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Account Status Tab -->
+                <div x-show="activeTab === 'status'" class="p-6">
+                    <div class="space-y-6">
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">Account Status Management</h3>
+
+                        <!-- Status Cards -->
+                        <div class="grid grid-cols-1 gap-6 sm:grid-cols-3">
+                            <!-- Active Status -->
+                            <div class="bg-gray-50 rounded-lg p-4">
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="text-sm font-medium text-gray-700">Active</span>
+                                    <i :class="user.is_active ? 'fas fa-check-circle text-green-600' : 'fas fa-times-circle text-red-600'" class="text-xl"></i>
+                                </div>
+                                <p class="text-xs text-gray-500 mb-3">User can log in and access the system</p>
+                                <button 
+                                    @click="toggleActive"
+                                    :class="user.is_active ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'"
+                                    class="w-full text-white text-xs font-medium py-2 px-3 rounded">
+                                    <span x-text="user.is_active ? 'Deactivate' : 'Activate'"></span>
+                                </button>
+                            </div>
+
+                            <!-- Verified Status -->
+                            <div class="bg-gray-50 rounded-lg p-4">
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="text-sm font-medium text-gray-700">Verified</span>
+                                    <i :class="user.is_verified ? 'fas fa-check-circle text-green-600' : 'fas fa-times-circle text-gray-400'" class="text-xl"></i>
+                                </div>
+                                <p class="text-xs text-gray-500 mb-3">User's email has been verified</p>
+                                <button 
+                                    @click="verifyUser"
+                                    :disabled="user.is_verified"
+                                    class="w-full bg-primary-600 hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-medium py-2 px-3 rounded">
+                                    <span x-text="user.is_verified ? 'Verified' : 'Verify Now'"></span>
+                                </button>
+                            </div>
+
+                            <!-- Superuser Status -->
+                            <div class="bg-gray-50 rounded-lg p-4">
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="text-sm font-medium text-gray-700">Superuser</span>
+                                    <i :class="user.is_superuser ? 'fas fa-crown text-yellow-600' : 'fas fa-user text-gray-400'" class="text-xl"></i>
+                                </div>
+                                <p class="text-xs text-gray-500 mb-3">Has full system access</p>
+                                <div class="w-full bg-gray-300 text-gray-600 text-xs font-medium py-2 px-3 rounded text-center">
+                                    <span x-text="user.is_superuser ? 'Admin User' : 'Regular User'"></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Account Information -->
+                        <div class="border-t pt-6">
+                            <h4 class="text-md font-medium text-gray-900 mb-4">Account Details</h4>
+                            <dl class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                <div>
+                                    <dt class="text-sm font-medium text-gray-500">User ID</dt>
+                                    <dd class="mt-1 text-sm text-gray-900" x-text="user.id"></dd>
+                                </div>
+                                <div>
+                                    <dt class="text-sm font-medium text-gray-500">Created At</dt>
+                                    <dd class="mt-1 text-sm text-gray-900" x-text="user.created_at ? new Date(user.created_at).toLocaleString() : 'N/A'"></dd>
+                                </div>
+                                <div>
+                                    <dt class="text-sm font-medium text-gray-500">Last Updated</dt>
+                                    <dd class="mt-1 text-sm text-gray-900" x-text="user.updated_at ? new Date(user.updated_at).toLocaleString() : 'N/A'"></dd>
+                                </div>
+                                <div>
+                                    <dt class="text-sm font-medium text-gray-500">Last Login</dt>
+                                    <dd class="mt-1 text-sm text-gray-900" x-text="user.last_login ? new Date(user.last_login).toLocaleString() : 'Never'"></dd>
+                                </div>
+                            </dl>
+                        </div>
+
+                        <!-- Danger Zone -->
+                        <div class="border-t border-red-200 pt-6">
+                            <h4 class="text-md font-medium text-red-900 mb-2">Danger Zone</h4>
+                            <p class="text-sm text-gray-600 mb-4">Permanent actions that cannot be undone.</p>
+                            <button 
+                                @click="deleteUser"
+                                class="inline-flex items-center px-4 py-2 border border-red-300 rounded-md shadow-sm text-sm font-medium text-red-700 bg-white hover:bg-red-50">
+                                <i class="fas fa-trash mr-2"></i>
+                                Delete User Account
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Assign Custom Permission Modal -->
+    <div x-show="showAssignPermissionModal" 
+         x-cloak
+         class="fixed z-50 inset-0 overflow-y-auto" 
+         style="display: none;">
+        <div class="flex items-center justify-center min-h-screen px-4">
+            <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" @click="showAssignPermissionModal = false"></div>
+            
+            <div class="relative bg-white rounded-lg max-w-2xl w-full max-h-[80vh] overflow-hidden shadow-xl">
+                <!-- Modal Header -->
+                <div class="flex items-center justify-between p-6 border-b">
+                    <h3 class="text-lg font-medium text-gray-900">
+                        <i class="fas fa-user-tag text-green-600 mr-2"></i>
+                        Assign Custom Permission
+                    </h3>
+                    <button @click="showAssignPermissionModal = false" class="text-gray-400 hover:text-gray-600">
+                        <i class="fas fa-times text-xl"></i>
+                    </button>
+                </div>
+
+                <!-- Modal Body -->
+                <div class="p-6">
+                    <!-- Search -->
+                    <div class="mb-4">
+                        <input 
+                            type="text" 
+                            x-model="permissionSearchQuery"
+                            @input="searchPermissions()"
+                            placeholder="Search permissions..."
+                            class="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500">
+                    </div>
+
+                    <!-- Permission List -->
+                    <div class="max-h-96 overflow-y-auto border rounded-lg">
+                        <template x-for="permission in filteredPermissions" :key="permission.id">
+                            <div class="flex items-center justify-between p-3 hover:bg-gray-50 border-b last:border-b-0">
+                                <div class="flex-1">
+                                    <p class="font-medium text-sm text-gray-900" x-text="permission.display_name"></p>
+                                    <p class="text-xs text-gray-600 mt-1" x-text="permission.description || 'No description'"></p>
+                                    <div class="mt-1 flex items-center space-x-2">
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800" x-text="permission.name"></span>
+                                        <span class="text-xs text-gray-500" x-text="'(' + permission.resource + ':' + permission.action + ')'"></span>
+                                    </div>
+                                </div>
+                                <button 
+                                    @click="assignDirectPermission(permission.id)"
+                                    :disabled="isPermissionAlreadyAssigned(permission.id)"
+                                    class="ml-4 px-3 py-1 text-sm bg-green-600 hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-md">
+                                    <span x-show="!isPermissionAlreadyAssigned(permission.id)">
+                                        <i class="fas fa-plus mr-1"></i>Add
+                                    </span>
+                                    <span x-show="isPermissionAlreadyAssigned(permission.id)">
+                                        <i class="fas fa-check mr-1"></i>Added
+                                    </span>
+                                </button>
+                            </div>
+                        </template>
+                        <div x-show="filteredPermissions.length === 0" class="p-8 text-center text-gray-500">
+                            <i class="fas fa-search text-3xl mb-2"></i>
+                            <p>No permissions found</p>
+                        </div>
+                    </div>
+
+                    <!-- Info Box -->
+                    <div class="mt-4 bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                        <div class="flex">
+                            <i class="fas fa-info-circle text-yellow-600 mt-0.5 mr-2"></i>
+                            <div class="text-sm text-yellow-800">
+                                <p class="font-medium">About Custom Permissions</p>
+                                <p class="mt-1">Custom permissions are assigned directly to the user, independent of their roles. They provide granular access control for specific use cases.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Modal Footer -->
+                <div class="px-6 py-4 bg-gray-50 flex justify-end">
+                    <button 
+                        @click="showAssignPermissionModal = false"
+                        class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function userEditApp() {
+            return {
+                userId: null,
+                user: null,
+                userData: {},
+                userRoles: [],
+                userPermissions: [],
+                roleBasedPermissions: [],
+                directPermissions: [],
+                allRoles: [],
+                allPermissions: [],
+                filteredPermissions: [],
+                selectedRoleId: '',
+                activeTab: 'info',
+                isLoading: true,
+                isSaving: false,
+                showAssignPermissionModal: false,
+                permissionSearchQuery: '',
+
+                async init() {
+                    this.userId = new URLSearchParams(window.location.search).get('id');
+                    if (!this.userId) {
+                        alert('No user ID provided');
+                        window.location.href = 'user-management.html';
+                        return;
+                    }
+                    await this.loadUserData();
+                    await this.loadAllPermissions();
+                },
+
+                async loadUserData() {
+                    this.isLoading = true;
+                    try {
+                        const token = localStorage.getItem('access_token');
+                        
+                        const [userResponse, rolesResponse, permissionsResponse, allRolesResponse] = await Promise.all([
+                            fetch('http://127.0.0.1:8000/api/v1/users/' + this.userId, {
+                                headers: { 'Authorization': 'Bearer ' + token }
+                            }),
+                            fetch('http://127.0.0.1:8000/api/v1/roles/users/' + this.userId + '/roles', {
+                                headers: { 'Authorization': 'Bearer ' + token }
+                            }),
+                            fetch('http://127.0.0.1:8000/api/v1/users/' + this.userId + '/permissions', {
+                                headers: { 'Authorization': 'Bearer ' + token }
+                            }),
+                            fetch('http://127.0.0.1:8000/api/v1/roles/', {
+                                headers: { 'Authorization': 'Bearer ' + token }
+                            })
+                        ]);
+
+                        if (!userResponse.ok) throw new Error('Failed to load user');
+                        
+                        this.user = await userResponse.json();
+                        this.userData = { ...this.user };
+                        this.userRoles = rolesResponse.ok ? await rolesResponse.json() : [];
+                        const permData = permissionsResponse.ok ? await permissionsResponse.json() : {};
+                        this.userPermissions = permData.permissions || [];
+                        this.allRoles = allRolesResponse.ok ? await allRolesResponse.json() : [];
+                        
+                        // Load detailed permissions with role information
+                        await this.loadUserPermissions();
+                        
+                    } catch (error) {
+                        console.error('Error loading user:', error);
+                        alert('Failed to load user data');
+                    } finally {
+                        this.isLoading = false;
+                    }
+                },
+
+                get availableRoles() {
+                    const assignedRoleIds = this.userRoles.map(r => r.id);
+                    return this.allRoles.filter(r => !assignedRoleIds.includes(r.id));
+                },
+
+                async saveChanges() {
+                    this.isSaving = true;
+                    try {
+                        const token = localStorage.getItem('access_token');
+                        const response = await fetch('http://127.0.0.1:8000/api/v1/users/' + this.userId, {
+                            method: 'PUT',
+                            headers: {
+                                'Authorization': 'Bearer ' + token,
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(this.userData)
+                        });
+
+                        if (!response.ok) throw new Error('Failed to update user');
+                        
+                        this.user = await response.json();
+                        this.userData = { ...this.user };
+                        this.showSuccess('User updated successfully');
+                    } catch (error) {
+                        console.error('Error updating user:', error);
+                        alert('Failed to update user: ' + error.message);
+                    } finally {
+                        this.isSaving = false;
+                    }
+                },
+
+                async assignRole() {
+                    if (!this.selectedRoleId) return;
+                    
+                    try {
+                        const token = localStorage.getItem('access_token');
+                        const response = await fetch('http://127.0.0.1:8000/api/v1/roles/assign', {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': 'Bearer ' + token,
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                user_id: parseInt(this.userId),
+                                role_id: parseInt(this.selectedRoleId)
+                            })
+                        });
+
+                        if (!response.ok) throw new Error('Failed to assign role');
+                        
+                        // Clear cached data
+                        this.selectedRoleId = '';
+                        this.roleBasedPermissions = [];
+                        
+                        // Reload everything
+                        await this.loadUserData();
+                        
+                        this.showSuccess('Role assigned successfully - permissions refreshed');
+                    } catch (error) {
+                        console.error('Error assigning role:', error);
+                        alert('Failed to assign role: ' + error.message);
+                    }
+                },
+
+                async removeRole(roleId) {
+                    const roleToRemove = this.userRoles.find(r => r.id === roleId);
+                    const roleName = roleToRemove ? roleToRemove.display_name : 'this role';
+                    
+                    if (!confirm(`Are you sure you want to remove "${roleName}"? This will remove all permissions granted by this role.`)) return;
+                    
+                    try {
+                        const token = localStorage.getItem('access_token');
+                        const response = await fetch('http://127.0.0.1:8000/api/v1/roles/assign/' + this.userId + '/' + roleId, {
+                            method: 'DELETE',
+                            headers: { 'Authorization': 'Bearer ' + token }
+                        });
+
+                        if (!response.ok) throw new Error('Failed to remove role');
+                        
+                        // Clear cached permissions first
+                        this.roleBasedPermissions = [];
+                        
+                        // Reload everything
+                        await this.loadUserData();
+                        
+                        this.showSuccess(`Role "${roleName}" removed successfully - permissions refreshed`);
+                    } catch (error) {
+                        console.error('Error removing role:', error);
+                        alert('Failed to remove role: ' + error.message);
+                    }
+                },
+
+                async toggleActive() {
+                    const endpoint = this.user.is_active ? 'deactivate' : 'activate';
+                    try {
+                        const token = localStorage.getItem('access_token');
+                        const response = await fetch('http://127.0.0.1:8000/api/v1/users/' + this.userId + '/' + endpoint, {
+                            method: 'POST',
+                            headers: { 'Authorization': 'Bearer ' + token }
+                        });
+
+                        if (!response.ok) throw new Error('Failed to update status');
+                        
+                        this.user = await response.json();
+                        this.showSuccess('User status updated');
+                    } catch (error) {
+                        console.error('Error updating status:', error);
+                        alert('Failed to update status: ' + error.message);
+                    }
+                },
+
+                async verifyUser() {
+                    try {
+                        const token = localStorage.getItem('access_token');
+                        const response = await fetch('http://127.0.0.1:8000/api/v1/users/' + this.userId + '/verify', {
+                            method: 'POST',
+                            headers: { 'Authorization': 'Bearer ' + token }
+                        });
+
+                        if (!response.ok) throw new Error('Failed to verify user');
+                        
+                        this.user = await response.json();
+                        this.showSuccess('User verified successfully');
+                    } catch (error) {
+                        console.error('Error verifying user:', error);
+                        alert('Failed to verify user: ' + error.message);
+                    }
+                },
+
+                async deleteUser() {
+                    if (!confirm('Are you sure you want to DELETE this user? This action cannot be undone!')) return;
+                    if (!confirm('This will permanently delete all user data. Are you absolutely sure?')) return;
+                    
+                    try {
+                        const token = localStorage.getItem('access_token');
+                        const response = await fetch('http://127.0.0.1:8000/api/v1/users/' + this.userId, {
+                            method: 'DELETE',
+                            headers: { 'Authorization': 'Bearer ' + token }
+                        });
+
+                        if (!response.ok) throw new Error('Failed to delete user');
+                        
+                        alert('User deleted successfully');
+                        window.location.href = 'user-management.html';
+                    } catch (error) {
+                        console.error('Error deleting user:', error);
+                        alert('Failed to delete user: ' + error.message);
+                    }
+                },
+
+                showSuccess(message) {
+                    const div = document.createElement('div');
+                    div.className = 'fixed top-4 right-4 bg-green-100 border border-green-400 text-green-800 px-4 py-3 rounded shadow-lg z-50';
+                    div.innerHTML = '<i class="fas fa-check-circle mr-2"></i>' + message;
+                    document.body.appendChild(div);
+                    setTimeout(function() { div.remove(); }, 3000);
+                },
+
+                // ===== Permission Management Functions =====
+
+                async loadUserPermissions() {
+                    try {
+                        const token = localStorage.getItem('access_token');
+                        
+                        // Load all permissions from all roles
+                        const rolePermissionsMap = new Map();
+                        
+                        for (const role of this.userRoles) {
+                            // Get permissions for each role
+                            const roleResponse = await fetch(`http://127.0.0.1:8000/api/v1/roles/${role.id}`, {
+                                headers: { 'Authorization': 'Bearer ' + token }
+                            });
+                            
+                            if (roleResponse.ok) {
+                                const roleData = await roleResponse.json();
+                                if (roleData.permissions) {
+                                    roleData.permissions.forEach(perm => {
+                                        if (!rolePermissionsMap.has(perm.id)) {
+                                            rolePermissionsMap.set(perm.id, {
+                                                ...perm,
+                                                roles: []
+                                            });
+                                        }
+                                        rolePermissionsMap.get(perm.id).roles.push({
+                                            id: role.id,
+                                            name: role.name,
+                                            display_name: role.display_name
+                                        });
+                                    });
+                                }
+                            }
+                        }
+                        
+                        this.roleBasedPermissions = Array.from(rolePermissionsMap.values());
+                        
+                        // Load direct permissions from backend
+                        await this.loadDirectPermissions();
+                        
+                    } catch (error) {
+                        console.error('Error loading user permissions:', error);
+                    }
+                },
+
+                async loadDirectPermissions() {
+                    try {
+                        const response = await window.AuthUtils.get(`/users/${this.userId}/permissions/direct`);
+                        
+                        if (response.ok) {
+                            this.directPermissions = await response.json();
+                        } else {
+                            this.directPermissions = [];
+                        }
+                    } catch (error) {
+                        console.error('Error loading direct permissions:', error);
+                        this.directPermissions = [];
+                    }
+                },
+
+                async loadAllPermissions() {
+                    try {
+                        const token = localStorage.getItem('access_token');
+                        const response = await fetch('http://127.0.0.1:8000/api/v1/permissions/?per_page=100', {
+                            headers: { 'Authorization': 'Bearer ' + token }
+                        });
+                        
+                        if (response.ok) {
+                            this.allPermissions = await response.json();
+                            this.filteredPermissions = [...this.allPermissions];
+                        }
+                    } catch (error) {
+                        console.error('Error loading all permissions:', error);
+                    }
+                },
+
+                searchPermissions() {
+                    const query = this.permissionSearchQuery.toLowerCase();
+                    if (!query) {
+                        this.filteredPermissions = [...this.allPermissions];
+                        return;
+                    }
+                    
+                    this.filteredPermissions = this.allPermissions.filter(perm => 
+                        perm.display_name.toLowerCase().includes(query) ||
+                        perm.name.toLowerCase().includes(query) ||
+                        perm.resource.toLowerCase().includes(query) ||
+                        perm.action.toLowerCase().includes(query) ||
+                        (perm.description && perm.description.toLowerCase().includes(query))
+                    );
+                },
+
+                isPermissionAlreadyAssigned(permissionId) {
+                    // Check if permission is in role-based permissions
+                    const inRolePerms = this.roleBasedPermissions.some(p => p.id === permissionId);
+                    // Check if permission is in direct permissions
+                    const inDirectPerms = this.directPermissions.some(p => p.id === permissionId);
+                    return inRolePerms || inDirectPerms;
+                },
+
+                async assignDirectPermission(permissionId) {
+                    try {
+                        const permission = this.allPermissions.find(p => p.id === permissionId);
+                        if (!permission) return;
+                        
+                        const response = await window.AuthUtils.post(`/users/${this.userId}/permissions?permission_id=${permissionId}`, {});
+                        
+                        if (!response.ok) {
+                            const error = await response.json();
+                            throw new Error(error.detail || 'Failed to assign permission');
+                        }
+                        
+                        // Reload direct permissions
+                        await this.loadDirectPermissions();
+                        
+                        this.showSuccess(`Custom permission "${permission.display_name}" assigned successfully`);
+                    } catch (error) {
+                        console.error('Error assigning permission:', error);
+                        alert('Failed to assign permission: ' + error.message);
+                    }
+                },
+
+                async removeDirectPermission(permissionId) {
+                    const permission = this.directPermissions.find(p => p.id === permissionId);
+                    const permName = permission ? permission.display_name : 'this permission';
+                    
+                    if (!confirm(`Are you sure you want to remove custom permission "${permName}"?`)) return;
+                    
+                    try {
+                        const response = await window.AuthUtils.delete(`/users/${this.userId}/permissions/${permissionId}`);
+                        
+                        if (!response.ok) {
+                            const error = await response.json().catch(() => ({}));
+                            throw new Error(error.detail || 'Failed to remove permission');
+                        }
+                        
+                        // Reload direct permissions
+                        await this.loadDirectPermissions();
+                        
+                        this.showSuccess(`Custom permission "${permName}" removed successfully`);
+                    } catch (error) {
+                        console.error('Error removing permission:', error);
+                        alert('Failed to remove permission: ' + error.message);
+                    }
+                },
+
+                getRoleBasedPermissionCount() {
+                    return this.roleBasedPermissions.length;
+                },
+
+                getTotalPermissionCount() {
+                    // Count unique permissions (role-based + direct, avoiding duplicates)
+                    const allPermIds = new Set();
+                    this.roleBasedPermissions.forEach(p => allPermIds.add(p.id));
+                    this.directPermissions.forEach(p => allPermIds.add(p.id));
+                    return allPermIds.size;
+                },
+
+                getRolePermissionCount(roleId) {
+                    // Count how many permissions this specific role grants
+                    let count = 0;
+                    this.roleBasedPermissions.forEach(perm => {
+                        if (perm.roles && perm.roles.some(r => r.id === roleId)) {
+                            count++;
+                        }
+                    });
+                    return count;
+                }
+            };
+        }
+    </script>
+    <script src="js/auth-utils.js"></script>
+</body>
+</html>
+

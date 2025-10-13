@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invitations - Melode Healthcare Management</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            50: '#eff6ff',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        [x-cloak] { display: none !important; }
+        
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        .animate-slide-in {
+            animation: slideIn 0.3s ease-out;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen" x-data="invitationsApp()">
+    <!-- Navigation -->
+    <nav class="bg-white shadow-lg border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <h1 class="text-2xl font-bold text-primary-600">Melode</h1>
+                    </div>
+                    <div class="hidden md:ml-6 md:flex md:space-x-8">
+                        <a href="superadmin-dashboard.html" class="text-gray-500 hover:text-primary-600 px-3 py-2 rounded-md text-sm font-medium">
+                            <i class="fas fa-home mr-1"></i>Dashboard
+                        </a>
+                        <a href="user-management.html" class="text-gray-500 hover:text-primary-600 px-3 py-2 rounded-md text-sm font-medium">
+                            <i class="fas fa-users mr-1"></i>Users
+                        </a>
+                        <a href="role-management.html" class="text-gray-500 hover:text-primary-600 px-3 py-2 rounded-md text-sm font-medium">
+                            <i class="fas fa-shield-alt mr-1"></i>Roles
+                        </a>
+                        <a href="permissions-management.html" class="text-gray-500 hover:text-primary-600 px-3 py-2 rounded-md text-sm font-medium">
+                            <i class="fas fa-key mr-1"></i>Permissions
+                        </a>
+                        <a href="invitations.html" class="text-primary-600 px-3 py-2 rounded-md text-sm font-medium">
+                            <i class="fas fa-envelope mr-1"></i>Invitations
+                        </a>
+                    </div>
+                </div>
+                <div class="hidden md:flex md:items-center md:space-x-4">
+                    <div class="relative" x-data="{ userMenuOpen: false }">
+                        <button @click="userMenuOpen = !userMenuOpen" class="flex items-center text-sm rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                            <img class="h-8 w-8 rounded-full" :src="userAvatar" alt="User avatar">
+                            <span class="ml-2 text-gray-700" x-text="userName"></span>
+                            <i class="fas fa-chevron-down ml-1 text-xs"></i>
+                        </button>
+                        <div x-show="userMenuOpen" @click.away="userMenuOpen = false" class="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5">
+                            <a href="profile.html" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Profile</a>
+                            <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Settings</a>
+                            <a href="#" data-logout class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Sign out</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        <div class="px-4 py-6 sm:px-0">
+            <!-- Page Header -->
+            <div class="md:flex md:items-center md:justify-between">
+                <div class="flex-1 min-w-0">
+                    <h2 class="text-2xl font-bold leading-7 text-gray-900 sm:text-3xl sm:truncate">
+                        User Invitations
+                    </h2>
+                    <p class="mt-1 text-sm text-gray-500">
+                        Create and manage user invitations for your organization
+                    </p>
+                </div>
+                <div class="mt-4 flex md:mt-0 md:ml-4">
+                    <button 
+                        @click="showCreateForm = true"
+                        class="ml-3 inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                        <i class="fas fa-plus mr-2"></i>
+                        Create Invitation
+                    </button>
+                </div>
+            </div>
+
+            <!-- Quick Actions Guide -->
+            <div class="mt-8 bg-blue-50 border-l-4 border-blue-400 p-4">
+                <div class="flex">
+                    <div class="flex-shrink-0">
+                        <i class="fas fa-info-circle text-blue-400"></i>
+                    </div>
+                    <div class="ml-3">
+                        <p class="text-sm text-blue-700">
+                            <span class="font-medium">Quick Actions:</span>
+                            <span class="mx-2">•</span>
+                            <i class="fas fa-eye text-blue-600"></i> View invitation details
+                            <span class="mx-2">•</span>
+                            <i class="fas fa-paper-plane text-green-600"></i> Resend invitation email
+                            <span class="mx-2">•</span>
+                            <i class="fas fa-ban text-red-600"></i> Revoke invitation
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Invitations List -->
+            <div class="mt-4">
+                <div class="bg-white shadow overflow-hidden sm:rounded-md">
+                    <div class="px-4 py-5 sm:p-6">
+                        <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">All Invitations</h3>
+                        <div id="invitations-list">
+                            <!-- Invitations will be loaded here -->
+                            <div class="text-center py-8">
+                                <i class="fas fa-spinner fa-spin text-2xl text-gray-400"></i>
+                                <p class="mt-2 text-gray-500">Loading invitations...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Create Invitation Modal -->
+    <div x-show="showCreateForm" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50" @click.away="showCreateForm = false">
+        <div class="relative top-20 mx-auto p-5 border w-full max-w-2xl shadow-lg rounded-md bg-white">
+            <div class="mt-3">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-medium text-gray-900">Create New Invitation</h3>
+                    <button @click="showCreateForm = false" class="text-gray-400 hover:text-gray-600">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                
+                    <form @submit.prevent="handleCreateInvitation" class="space-y-6">
+                    <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                        <!-- Email -->
+                        <div class="sm:col-span-2">
+                            <label for="email" class="block text-sm font-medium text-gray-700">Email Address *</label>
+                            <input 
+                                type="email" 
+                                id="email" 
+                                name="email" 
+                                x-model="invitationData.email"
+                                required
+                                class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                                placeholder="user@example.com">
+                        </div>
+
+                        <!-- Role -->
+                        <div>
+                            <label for="role_id" class="block text-sm font-medium text-gray-700">Role *</label>
+                            <select 
+                                id="role_id" 
+                                name="role_id" 
+                                x-model="invitationData.role_id"
+                                required
+                                class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
+                                <option value="">Select role</option>
+                                <option value="1">Superadmin</option>
+                                <option value="2">Admin</option>
+                                <option value="3">Doctor</option>
+                                <option value="4">Contractor</option>
+                                <option value="5">Staff</option>
+                                <option value="6">Patient</option>
+                            </select>
+                        </div>
+
+                        <!-- Expires In Days -->
+                        <div>
+                            <label for="expires_in_days" class="block text-sm font-medium text-gray-700">Expires In (Days)</label>
+                            <select 
+                                id="expires_in_days" 
+                                name="expires_in_days" 
+                                x-model="invitationData.expires_in_days"
+                                class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
+                                <option value="1">1 day</option>
+                                <option value="3">3 days</option>
+                                <option value="7" selected>7 days</option>
+                                <option value="14">14 days</option>
+                                <option value="30">30 days</option>
+                            </select>
+                        </div>
+
+                        <!-- Suggested Username -->
+                        <div>
+                            <label for="suggested_username" class="block text-sm font-medium text-gray-700">Suggested Username *</label>
+                            <input 
+                                type="text" 
+                                id="suggested_username" 
+                                name="suggested_username" 
+                                x-model="invitationData.suggested_username"
+                                required
+                                class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                                placeholder="johndoe">
+                        </div>
+
+                        <!-- Title -->
+                        <div>
+                            <label for="suggested_title" class="block text-sm font-medium text-gray-700">Title</label>
+                            <select 
+                                id="suggested_title" 
+                                name="suggested_title" 
+                                x-model="invitationData.suggested_title"
+                                class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
+                                <option value="">Select title</option>
+                                <option value="Dr">Dr</option>
+                                <option value="Mr">Mr</option>
+                                <option value="Mrs">Mrs</option>
+                                <option value="Ms">Ms</option>
+                                <option value="Prof">Prof</option>
+                                <option value="Nurse">Nurse</option>
+                            </select>
+                        </div>
+
+                        <!-- First Name -->
+                        <div>
+                            <label for="suggested_first_name" class="block text-sm font-medium text-gray-700">First Name *</label>
+                            <input 
+                                type="text" 
+                                id="suggested_first_name" 
+                                name="suggested_first_name" 
+                                x-model="invitationData.suggested_first_name"
+                                required
+                                class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                                placeholder="John">
+                        </div>
+
+                        <!-- Last Name -->
+                        <div>
+                            <label for="suggested_last_name" class="block text-sm font-medium text-gray-700">Last Name *</label>
+                            <input 
+                                type="text" 
+                                id="suggested_last_name" 
+                                name="suggested_last_name" 
+                                x-model="invitationData.suggested_last_name"
+                                required
+                                class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                                placeholder="Doe">
+                        </div>
+
+                        <!-- Phone Number -->
+                        <div>
+                            <label for="suggested_phone_number" class="block text-sm font-medium text-gray-700">Phone Number</label>
+                            <input 
+                                type="tel" 
+                                id="suggested_phone_number" 
+                                name="suggested_phone_number" 
+                                x-model="invitationData.suggested_phone_number"
+                                class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                                placeholder="+44 7xxx xxx xxx">
+                        </div>
+                    </div>
+
+                    <div class="flex justify-end space-x-3">
+                        <button 
+                            type="button" 
+                            @click="showCreateForm = false"
+                            class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200">
+                            Cancel
+                        </button>
+                        <button 
+                            type="submit" 
+                            :disabled="isLoading"
+                            class="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50">
+                            <span x-show="!isLoading">Create Invitation</span>
+                            <span x-show="isLoading" class="flex items-center">
+                                <i class="fas fa-spinner fa-spin mr-2"></i>
+                                Creating...
+                            </span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- View Invitation Modal -->
+    <div x-show="showViewModal" x-cloak class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50" @click.away="showViewModal = false">
+        <div class="relative top-20 mx-auto p-6 border w-full max-w-2xl shadow-lg rounded-md bg-white">
+            <div class="mt-3">
+                <div class="flex items-center justify-between mb-6">
+                    <h3 class="text-xl font-semibold text-gray-900">
+                        <i class="fas fa-envelope text-primary-600 mr-2"></i>
+                        Invitation Details
+                    </h3>
+                    <button @click="showViewModal = false" class="text-gray-400 hover:text-gray-600 text-xl">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                
+                <div x-show="selectedInvitation" class="space-y-6">
+                    <!-- Status Badge -->
+                    <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                    <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Current Status</label>
+                            <span class="inline-flex px-3 py-1 text-sm font-semibold rounded-full" 
+                                  :class="selectedInvitation?.is_used ? 'bg-green-100 text-green-800' : 
+                                          new Date(selectedInvitation?.expires_at) < new Date() ? 'bg-red-100 text-red-800' :
+                                          'bg-yellow-100 text-yellow-800'"
+                                  x-text="selectedInvitation?.is_used ? 'Used' : 
+                                         new Date(selectedInvitation?.expires_at) < new Date() ? 'Expired' :
+                                         'Active'"></span>
+                        </div>
+                        <div class="text-right">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Invitation ID</label>
+                            <p class="text-sm font-mono text-gray-900" x-text="`#${selectedInvitation?.id}`"></p>
+                        </div>
+                    </div>
+
+                    <!-- Recipient Information -->
+                    <div class="border-b pb-4">
+                        <h4 class="text-md font-semibold text-gray-900 mb-3">
+                            <i class="fas fa-user-circle text-primary-600 mr-2"></i>
+                            Recipient Information
+                        </h4>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                                <label class="block text-sm font-medium text-gray-700">Email Address</label>
+                                <p class="mt-1 text-sm text-gray-900 font-medium" x-text="selectedInvitation?.email"></p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Username</label>
+                        <p class="mt-1 text-sm text-gray-900" x-text="selectedInvitation?.suggested_username"></p>
+                    </div>
+                    <div>
+                                <label class="block text-sm font-medium text-gray-700">Full Name</label>
+                                <p class="mt-1 text-sm text-gray-900" x-text="`${selectedInvitation?.suggested_title || ''} ${selectedInvitation?.suggested_first_name} ${selectedInvitation?.suggested_last_name}`.trim()"></p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Phone Number</label>
+                                <p class="mt-1 text-sm text-gray-900" x-text="selectedInvitation?.suggested_phone_number || 'Not provided'"></p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Invitation Details -->
+                    <div class="border-b pb-4">
+                        <h4 class="text-md font-semibold text-gray-900 mb-3">
+                            <i class="fas fa-info-circle text-primary-600 mr-2"></i>
+                            Invitation Details
+                        </h4>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Created At</label>
+                                <p class="mt-1 text-sm text-gray-900" x-text="new Date(selectedInvitation?.created_at).toLocaleString()"></p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Expires At</label>
+                        <p class="mt-1 text-sm text-gray-900" x-text="new Date(selectedInvitation?.expires_at).toLocaleString()"></p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Last Updated</label>
+                                <p class="mt-1 text-sm text-gray-900" x-text="selectedInvitation?.updated_at ? new Date(selectedInvitation?.updated_at).toLocaleString() : 'Never'"></p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Used At</label>
+                                <p class="mt-1 text-sm text-gray-900" x-text="selectedInvitation?.used_at ? new Date(selectedInvitation?.used_at).toLocaleString() : 'Not used yet'"></p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Actions -->
+                    <div class="flex justify-end space-x-3 pt-2">
+                        <button 
+                            @click="showViewModal = false"
+                            class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200">
+                            Close
+                        </button>
+                        <button 
+                            x-show="selectedInvitation && !selectedInvitation.is_used && new Date(selectedInvitation.expires_at) > new Date()"
+                            @click="window.app.resendInvitation(selectedInvitation.id); showViewModal = false;"
+                            class="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700">
+                            <i class="fas fa-paper-plane mr-2"></i>
+                            Resend
+                        </button>
+                        <button 
+                            x-show="selectedInvitation && !selectedInvitation.is_used"
+                            @click="window.app.revokeInvitation(selectedInvitation.id); showViewModal = false;"
+                            class="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700">
+                            <i class="fas fa-ban mr-2"></i>
+                            Revoke
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script>
+        // Alpine.js component function
+        function invitationsApp() {
+            return {
+                // User data
+                userName: '',
+                userAvatar: 'https://via.placeholder.com/32',
+                
+                // Invitations data
+                invitations: [],
+                
+                // Form data
+                invitationData: {
+                    email: '',
+                    role_id: '',
+                    suggested_username: '',
+                    suggested_title: '',
+                    suggested_first_name: '',
+                    suggested_last_name: '',
+                    suggested_phone_number: '',
+                    expires_in_days: 7
+                },
+                
+                // UI state
+                isLoading: false,
+                showCreateForm: false,
+                showViewModal: false,
+                selectedInvitation: null,
+                
+                init() {
+                    console.log('Invitations page initialized');
+                    this.updateUserInterface();
+                    this.loadInvitations();
+                    
+                    // Listen for custom event from global app object
+                    window.addEventListener('show-invitation', (e) => {
+                        this.selectedInvitation = e.detail;
+                        this.showViewModal = true;
+                    });
+                },
+                
+                updateUserInterface() {
+                    const userData = localStorage.getItem('user_data');
+                    if (userData) {
+                        try {
+                            const user = JSON.parse(userData);
+                            this.userName = user.first_name + ' ' + user.last_name || user.username || user.email;
+                            this.userAvatar = user.avatar_url || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(this.userName) + '&background=3b82f6&color=fff';
+                        } catch (error) {
+                            console.error('Failed to parse user data:', error);
+                        }
+                    }
+                },
+                
+                async loadInvitations() {
+                    try {
+                        const token = localStorage.getItem('access_token');
+                        if (!token) {
+                            console.error('No access token found');
+                            return;
+                        }
+                        
+                        const response = await fetch('http://127.0.0.1:8000/api/v1/invitations/', {
+                            headers: {
+                                'Authorization': 'Bearer ' + token,
+                                'Content-Type': 'application/json'
+                            }
+                        });
+                        
+                        if (!response.ok) {
+                            throw new Error('Failed to load invitations');
+                        }
+                        
+                        this.invitations = await response.json();
+                        this.displayInvitations();
+                    } catch (error) {
+                        console.error('Failed to load invitations:', error);
+                        this.showError('Failed to load invitations');
+                    }
+                },
+                
+                displayInvitations() {
+                    const container = document.getElementById('invitations-list');
+                    if (!container) return;
+
+                    if (this.invitations.length === 0) {
+                        container.innerHTML = '<div class="text-center py-8"><i class="fas fa-envelope-open text-4xl text-gray-400 mb-4"></i><p class="text-gray-500">No invitations found</p><p class="text-sm text-gray-400 mt-2">Create your first invitation to get started</p></div>';
+                        return;
+                    }
+
+                    const html = this.invitations.map(invitation => {
+                        const isExpired = new Date(invitation.expires_at) < new Date();
+                        const statusClass = invitation.is_used ? 'bg-green-100 text-green-800' : (isExpired ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800');
+                        const statusText = invitation.is_used ? 'Used' : (isExpired ? 'Expired' : 'Active');
+                        const showResend = !invitation.is_used && !isExpired;
+                        const showRevoke = !invitation.is_used;
+                        
+                        return '<div class="bg-white border border-gray-200 rounded-lg p-6 mb-4 hover:shadow-md transition-shadow">' +
+                            '<div class="flex items-center justify-between">' +
+                            '<div class="flex-1"><div class="flex items-center">' +
+                            '<div class="flex-shrink-0"><div class="h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center"><i class="fas fa-user text-gray-600"></i></div></div>' +
+                            '<div class="ml-4">' +
+                            '<h3 class="text-lg font-medium text-gray-900">' + invitation.email + '</h3>' +
+                            '<p class="text-sm text-gray-500">' + invitation.suggested_first_name + ' ' + invitation.suggested_last_name + '</p>' +
+                            '<p class="text-sm text-gray-500">Username: ' + invitation.suggested_username + '</p>' +
+                            '</div></div></div>' +
+                            '<div class="flex items-center space-x-3">' +
+                            '<span class="px-2 py-1 text-xs font-medium rounded-full ' + statusClass + '">' + statusText + '</span>' +
+                            '<div class="flex space-x-2">' +
+                            '<button onclick="app.viewInvitation(' + invitation.id + ')" class="text-blue-600 hover:text-blue-800 p-2 rounded hover:bg-blue-50" title="View details"><i class="fas fa-eye"></i></button>' +
+                            (showResend ? '<button onclick="app.resendInvitation(' + invitation.id + ')" class="text-green-600 hover:text-green-800 p-2 rounded hover:bg-green-50" title="Resend invitation"><i class="fas fa-paper-plane"></i></button>' : '') +
+                            (showRevoke ? '<button onclick="app.revokeInvitation(' + invitation.id + ')" class="text-red-600 hover:text-red-800 p-2 rounded hover:bg-red-50" title="Revoke invitation"><i class="fas fa-ban"></i></button>' : '') +
+                            '</div></div></div>' +
+                            '<div class="mt-4 text-sm text-gray-500">' +
+                            '<p>Expires: ' + new Date(invitation.expires_at).toLocaleDateString() + '</p>' +
+                            '<p>Created: ' + new Date(invitation.created_at).toLocaleDateString() + '</p>' +
+                            '</div></div>';
+                    }).join('');
+                    
+                    container.innerHTML = html;
+                },
+                
+                async handleCreateInvitation() {
+                    this.isLoading = true;
+                    this.clearMessages();
+
+                    try {
+                        const token = localStorage.getItem('access_token');
+                        if (!token) {
+                            throw new Error('No access token found');
+                        }
+                        
+                        const response = await fetch('http://127.0.0.1:8000/api/v1/invitations/', {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': 'Bearer ' + token,
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(this.invitationData)
+                        });
+                        
+                        if (!response.ok) {
+                            const errorData = await response.json().catch(() => ({}));
+                            throw new Error(errorData.detail || 'Failed to create invitation');
+                        }
+                        
+                        this.showSuccess('Invitation created successfully');
+                        this.showCreateForm = false;
+                        this.resetForm();
+                        await this.loadInvitations();
+                    } catch (error) {
+                        console.error('Create invitation failed:', error);
+                        this.showError('Failed to create invitation: ' + error.message);
+                    } finally {
+                        this.isLoading = false;
+                    }
+                },
+                
+                resetForm() {
+                    this.invitationData = {
+                        email: '',
+                        role_id: '',
+                        suggested_username: '',
+                        suggested_title: '',
+                        suggested_first_name: '',
+                        suggested_last_name: '',
+                        suggested_phone_number: '',
+                        expires_in_days: 7
+                    };
+                },
+                
+                showSuccess(message) {
+                    this.showMessage(message, 'success');
+                },
+                
+                showError(message) {
+                    this.showMessage(message, 'error');
+                },
+                
+                showMessage(message, type) {
+                    const existingMessages = document.querySelectorAll('.message-toast');
+                    existingMessages.forEach(msg => msg.remove());
+
+                    const messageDiv = document.createElement('div');
+                    const icon = type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle';
+                    messageDiv.className = 'message-toast fixed top-4 right-4 z-50 p-4 rounded-lg shadow-xl animate-slide-in ' +
+                        (type === 'success' ? 'bg-green-100 border border-green-400 text-green-800' : 'bg-red-100 border border-red-400 text-red-800');
+                    messageDiv.innerHTML = '<div class="flex items-center"><i class="fas ' + icon + ' mr-2"></i><span>' + message + '</span></div>';
+
+                    document.body.appendChild(messageDiv);
+
+                    setTimeout(function() {
+                        messageDiv.style.opacity = '0';
+                        messageDiv.style.transition = 'opacity 0.3s';
+                        setTimeout(function() { messageDiv.remove(); }, 300);
+                    }, 5000);
+                },
+                
+                clearMessages() {
+                    const existingMessages = document.querySelectorAll('.message-toast');
+                    existingMessages.forEach(msg => msg.remove());
+                }
+            };
+        }
+
+        // Add global app object for button onclick handlers
+        window.app = {
+            viewInvitation: async function(id) {
+                console.log('View invitation:', id);
+                
+                try {
+                    const token = localStorage.getItem('access_token');
+                    const response = await fetch(`http://127.0.0.1:8000/api/v1/invitations/${id}`, {
+                        headers: {
+                            'Authorization': 'Bearer ' + token,
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error('Failed to load invitation details');
+                    }
+                    
+                    const invitation = await response.json();
+                    
+                    // Get Alpine.js component and update it
+                    const bodyElement = document.querySelector('body[x-data]');
+                    if (bodyElement && bodyElement._x_dataStack) {
+                        const alpineComponent = bodyElement._x_dataStack[0];
+                        alpineComponent.selectedInvitation = invitation;
+                        alpineComponent.showViewModal = true;
+                    } else {
+                        // Fallback: dispatch custom event
+                        window.dispatchEvent(new CustomEvent('show-invitation', { detail: invitation }));
+                    }
+                } catch (error) {
+                    console.error('View invitation failed:', error);
+                    alert('Failed to load invitation details: ' + error.message);
+                }
+            },
+            
+            resendInvitation: async function(id) {
+                if (!confirm('Are you sure you want to resend this invitation? A new invitation email will be sent.')) {
+                    return;
+                }
+                
+                try {
+                    const token = localStorage.getItem('access_token');
+                    const response = await fetch(`http://127.0.0.1:8000/api/v1/invitations/${id}/resend`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': 'Bearer ' + token,
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    
+                    if (!response.ok) {
+                        const errorData = await response.json().catch(() => ({}));
+                        throw new Error(errorData.detail || 'Failed to resend invitation');
+                    }
+                    
+                    const result = await response.json();
+                    alert('Invitation resent successfully! A new invitation email has been sent.');
+                    
+                    // Reload invitations
+                    location.reload();
+                } catch (error) {
+                    console.error('Resend invitation failed:', error);
+                    alert('Failed to resend invitation: ' + error.message);
+                }
+            },
+            
+            revokeInvitation: async function(id) {
+                if (!confirm('Are you sure you want to revoke this invitation? This action cannot be undone.')) {
+                    return;
+                }
+                
+                try {
+                    const token = localStorage.getItem('access_token');
+                    const response = await fetch(`http://127.0.0.1:8000/api/v1/invitations/${id}`, {
+                        method: 'DELETE',
+                        headers: {
+                            'Authorization': 'Bearer ' + token,
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    
+                    if (!response.ok) {
+                        const errorData = await response.json().catch(() => ({}));
+                        throw new Error(errorData.detail || 'Failed to revoke invitation');
+                    }
+                    
+                    alert('Invitation revoked successfully!');
+                    
+                    // Reload invitations
+                    location.reload();
+                } catch (error) {
+                    console.error('Revoke invitation failed:', error);
+                    alert('Failed to revoke invitation: ' + error.message);
+                }
+            },
+            
+            deleteInvitation: async function(id) {
+                // Alias for revokeInvitation for backward compatibility
+                return this.revokeInvitation(id);
+            }
+        };
+    </script>
+    <script src="js/auth-utils.js"></script>
+</body>
+</html>

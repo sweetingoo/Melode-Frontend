@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profile - Melode Healthcare Management</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <script src="js/permissions.js"></script>
+    <script src="js/navigation.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            50: '#eff6ff',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- Unified Navigation -->
+    <nav class="bg-white shadow-lg border-b border-gray-200" x-data="navigationComponent()" x-init="init()">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <h1 class="text-2xl font-bold text-primary-600 cursor-pointer" @click="window.location.href = navItems.find(i => i.id === 'dashboard').href">Melode</h1>
+                    </div>
+                    <div class="hidden md:ml-6 md:flex md:space-x-4">
+                        <template x-for="item in navItems" :key="item.id">
+                            <a x-show="item.visible" 
+                               :href="item.href"
+                               :class="getNavLinkClasses(item.id)"
+                               class="transition-colors duration-150">
+                                <i :class="item.icon + ' mr-2'"></i>
+                                <span x-text="item.label"></span>
+                            </a>
+                        </template>
+                    </div>
+                    <div class="flex items-center md:hidden ml-4">
+                        <button @click="toggleMobileMenu()" class="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none">
+                            <i class="fas fa-bars text-xl" x-show="!mobileMenuOpen"></i>
+                            <i class="fas fa-times text-xl" x-show="mobileMenuOpen"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="hidden md:flex md:items-center md:space-x-4">
+                    <div class="relative">
+                        <button @click="userMenuOpen = !userMenuOpen" @click.away="userMenuOpen = false" class="flex items-center text-sm rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 p-1 hover:bg-gray-50">
+                            <img class="h-8 w-8 rounded-full" :src="userAvatar" :alt="userName">
+                            <span class="ml-2 text-gray-700 font-medium" x-text="userName"></span>
+                            <i class="fas fa-chevron-down ml-2 text-xs text-gray-400"></i>
+                        </button>
+                        <div x-show="userMenuOpen" x-transition class="origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 divide-y divide-gray-100 z-50" style="display: none;">
+                            <div class="px-4 py-3">
+                                <p class="text-sm font-medium text-gray-900" x-text="userName"></p>
+                                <p class="text-sm text-gray-500 truncate" x-text="userEmail"></p>
+                            </div>
+                            <div class="py-1">
+                                <a href="profile.html" class="group flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"><i class="fas fa-user mr-3 text-gray-400"></i>Your Profile</a>
+                            </div>
+                            <div class="py-1">
+                                <a href="#" @click.prevent="logout()" class="group flex items-center px-4 py-2 text-sm text-red-700 hover:bg-red-50"><i class="fas fa-sign-out-alt mr-3 text-red-500"></i>Sign out</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div x-show="mobileMenuOpen" x-transition class="md:hidden border-t border-gray-200" style="display: none;">
+            <div class="px-2 pt-2 pb-3 space-y-1">
+                <template x-for="item in navItems" :key="item.id">
+                    <a x-show="item.visible" :href="item.href" :class="isActive(item.id) ? 'bg-primary-50 border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:bg-gray-50'" class="block pl-3 pr-4 py-2 border-l-4 text-base font-medium">
+                        <i :class="item.icon + ' mr-2'"></i><span x-text="item.label"></span>
+                    </a>
+                </template>
+            </div>
+            <div class="pt-4 pb-3 border-t border-gray-200">
+                <div class="flex items-center px-4">
+                    <img class="h-10 w-10 rounded-full" :src="userAvatar" :alt="userName">
+                    <div class="ml-3">
+                        <div class="text-base font-medium text-gray-800" x-text="userName"></div>
+                        <div class="text-sm font-medium text-gray-500" x-text="userEmail"></div>
+                    </div>
+                </div>
+                <div class="mt-3 space-y-1">
+                    <a href="profile.html" class="block px-4 py-2 text-base font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100"><i class="fas fa-user mr-2"></i>Your Profile</a>
+                    <a href="#" @click.prevent="logout()" class="block px-4 py-2 text-base font-medium text-red-600 hover:text-red-800 hover:bg-red-50"><i class="fas fa-sign-out-alt mr-2"></i>Sign out</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="max-w-4xl mx-auto py-6 sm:px-6 lg:px-8" x-data="profileApp()">
+        <div class="px-4 py-6 sm:px-0">
+            <!-- Profile Header -->
+            <div class="bg-white shadow rounded-lg mb-6">
+                <div class="px-4 py-5 sm:p-6">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <img class="h-20 w-20 rounded-full" :src="userAvatar" alt="User avatar">
+                        </div>
+                        <div class="ml-6">
+                            <h1 class="text-2xl font-bold text-gray-900" x-text="userName"></h1>
+                            <p class="text-gray-600" x-text="userEmail"></p>
+                            <p class="text-sm text-gray-500" x-text="userTitle"></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Profile Form -->
+            <div class="bg-white shadow rounded-lg">
+                <div class="px-4 py-5 sm:p-6">
+                    <h2 class="text-lg font-medium text-gray-900 mb-6">Profile Information</h2>
+                    
+                    <form id="profile-form" class="space-y-6">
+                        <!-- Only Bio and Avatar URL are editable -->
+                        <div class="grid grid-cols-1 gap-6">
+                            <!-- Bio -->
+                            <div>
+                                <label for="bio" class="block text-sm font-medium text-gray-700">Bio</label>
+                                <textarea 
+                                    id="bio" 
+                                    name="bio" 
+                                    x-model="profileData.bio"
+                                    rows="3"
+                                    class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                                    placeholder="Tell us about yourself..."></textarea>
+                            </div>
+
+                            <!-- Avatar URL -->
+                            <div>
+                                <label for="avatar_url" class="block text-sm font-medium text-gray-700">Avatar URL</label>
+                                <input 
+                                    type="url" 
+                                    id="avatar_url" 
+                                    name="avatar_url" 
+                                    x-model="profileData.avatar_url"
+                                    class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                                    placeholder="https://example.com/avatar.jpg">
+                            </div>
+                        </div>
+
+                        <!-- Non-editable fields -->
+                        <div class="border-t pt-6">
+                            <h3 class="text-lg font-medium text-gray-900 mb-4">Account Information (Read-Only)</h3>
+                            <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                                <!-- Email (read-only) -->
+                                <div>
+                                    <label for="email" class="block text-sm font-medium text-gray-700">Email Address</label>
+                                    <input 
+                                        type="email" 
+                                        id="email" 
+                                        :value="userEmail"
+                                        disabled
+                                        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm bg-gray-50 text-gray-500 sm:text-sm">
+                                    <p class="mt-1 text-sm text-gray-500">Email address cannot be changed</p>
+                                </div>
+
+                                <!-- Username (read-only) -->
+                                <div>
+                                    <label for="username" class="block text-sm font-medium text-gray-700">Username</label>
+                                    <input 
+                                        type="text" 
+                                        id="username" 
+                                        :value="userUsername"
+                                        disabled
+                                        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm bg-gray-50 text-gray-500 sm:text-sm">
+                                    <p class="mt-1 text-sm text-gray-500">Username cannot be changed</p>
+                                </div>
+
+                                <!-- First Name (read-only) -->
+                                <div>
+                                    <label for="first_name" class="block text-sm font-medium text-gray-700">First Name</label>
+                                    <input 
+                                        type="text" 
+                                        id="first_name" 
+                                        :value="user.first_name"
+                                        disabled
+                                        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm bg-gray-50 text-gray-500 sm:text-sm">
+                                    <p class="mt-1 text-sm text-gray-500">First name cannot be changed</p>
+                                </div>
+
+                                <!-- Last Name (read-only) -->
+                                <div>
+                                    <label for="last_name" class="block text-sm font-medium text-gray-700">Last Name</label>
+                                    <input 
+                                        type="text" 
+                                        id="last_name" 
+                                        :value="user.last_name"
+                                        disabled
+                                        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm bg-gray-50 text-gray-500 sm:text-sm">
+                                    <p class="mt-1 text-sm text-gray-500">Last name cannot be changed</p>
+                                </div>
+
+                                <!-- Title (read-only) -->
+                                <div>
+                                    <label for="title_readonly" class="block text-sm font-medium text-gray-700">Title</label>
+                                    <input 
+                                        type="text" 
+                                        id="title_readonly" 
+                                        :value="user.title"
+                                        disabled
+                                        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm bg-gray-50 text-gray-500 sm:text-sm">
+                                    <p class="mt-1 text-sm text-gray-500">Title cannot be changed</p>
+                                </div>
+
+                                <!-- Phone Number (read-only) -->
+                                <div>
+                                    <label for="phone_readonly" class="block text-sm font-medium text-gray-700">Phone Number</label>
+                                    <input 
+                                        type="tel" 
+                                        id="phone_readonly" 
+                                        :value="user.phone_number"
+                                        disabled
+                                        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm bg-gray-50 text-gray-500 sm:text-sm">
+                                    <p class="mt-1 text-sm text-gray-500">Phone number cannot be changed</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Submit Button -->
+                        <div class="flex justify-end">
+                            <button 
+                                type="submit" 
+                                :disabled="isLoading"
+                                class="ml-3 inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed">
+                                <span x-show="!isLoading">Update Profile</span>
+                                <span x-show="isLoading" class="flex items-center">
+                                    <i class="fas fa-spinner fa-spin mr-2"></i>
+                                    Updating...
+                                </span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Password Change Section -->
+            <div class="bg-white shadow rounded-lg mt-6">
+                <div class="px-4 py-5 sm:p-6">
+                    <h2 class="text-lg font-medium text-gray-900 mb-6">Change Password</h2>
+                    
+                    <form id="password-form" @submit.prevent="handlePasswordChange" class="space-y-6">
+                        <div>
+                            <label for="current_password" class="block text-sm font-medium text-gray-700">Current Password</label>
+                            <input 
+                                type="password" 
+                                id="current_password" 
+                                name="current_password" 
+                                x-model="passwordData.current_password"
+                                required
+                                class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                                placeholder="Enter current password">
+                        </div>
+
+                        <div>
+                            <label for="new_password" class="block text-sm font-medium text-gray-700">New Password</label>
+                            <input 
+                                type="password" 
+                                id="new_password" 
+                                name="new_password" 
+                                x-model="passwordData.new_password"
+                                required
+                                class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                                placeholder="Enter new password">
+                            <div x-show="passwordErrors.length > 0" class="mt-2">
+                                <ul class="text-sm text-red-600">
+                                    <template x-for="error in passwordErrors" :key="error">
+                                        <li x-text="error"></li>
+                                    </template>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label for="confirm_password" class="block text-sm font-medium text-gray-700">Confirm New Password</label>
+                            <input 
+                                type="password" 
+                                id="confirm_password" 
+                                name="confirm_password" 
+                                x-model="passwordData.confirm_password"
+                                required
+                                class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                                placeholder="Confirm new password">
+                        </div>
+
+                        <div class="flex justify-end">
+                            <button 
+                                type="submit" 
+                                :disabled="isLoading"
+                                class="ml-3 inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed">
+                                <span x-show="!isLoading">Change Password</span>
+                                <span x-show="isLoading" class="flex items-center">
+                                    <i class="fas fa-spinner fa-spin mr-2"></i>
+                                    Changing...
+                                </span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Multi-Factor Authentication Section -->
+            <div class="bg-white shadow rounded-lg mt-6">
+                <div class="px-4 py-5 sm:p-6">
+                    <div class="flex items-center justify-between mb-6">
+                        <div>
+                            <h2 class="text-lg font-medium text-gray-900">Multi-Factor Authentication (MFA)</h2>
+                            <p class="mt-1 text-sm text-gray-500">Add an extra layer of security to your account</p>
+                        </div>
+                        <div class="flex items-center">
+                            <span x-show="mfaData.is_enabled" class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
+                                <i class="fas fa-check-circle mr-2"></i>
+                                Enabled
+                            </span>
+                            <span x-show="!mfaData.is_enabled" class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-800">
+                                <i class="fas fa-times-circle mr-2"></i>
+                                Disabled
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- MFA Status and Actions -->
+                    <div x-show="!mfaData.is_enabled" class="space-y-4">
+                        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                            <div class="flex">
+                                <div class="flex-shrink-0">
+                                    <i class="fas fa-info-circle text-blue-400"></i>
+                                </div>
+                                <div class="ml-3">
+                                    <h3 class="text-sm font-medium text-blue-800">Secure your account with MFA</h3>
+                                    <p class="mt-2 text-sm text-blue-700">
+                                        Multi-factor authentication adds an extra layer of security by requiring a verification code from your phone in addition to your password.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        <button 
+                            @click="setupMFA()" 
+                            :disabled="isLoading"
+                            class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50">
+                            <i class="fas fa-shield-alt mr-2"></i>
+                            Enable MFA
+                        </button>
+                    </div>
+
+                    <div x-show="mfaData.is_enabled" class="space-y-4">
+                        <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+                            <div class="flex">
+                                <div class="flex-shrink-0">
+                                    <i class="fas fa-check-circle text-green-400"></i>
+                                </div>
+                                <div class="ml-3 flex-1">
+                                    <h3 class="text-sm font-medium text-green-800">MFA is active</h3>
+                                    <p class="mt-2 text-sm text-green-700">
+                                        Your account is protected with multi-factor authentication.
+                                    </p>
+                                    <p class="mt-2 text-sm text-green-700">
+                                        <strong>Backup Codes Remaining:</strong> <span x-text="mfaData.backup_codes_remaining"></span>
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex space-x-3">
+                            <button 
+                                @click="regenerateBackupCodes()" 
+                                :disabled="isLoading"
+                                class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50">
+                                <i class="fas fa-redo mr-2"></i>
+                                Regenerate Backup Codes
+                            </button>
+                            <button 
+                                @click="disableMFA()" 
+                                :disabled="isLoading"
+                                class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50">
+                                <i class="fas fa-shield-alt mr-2"></i>
+                                Disable MFA
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- MFA Setup Modal -->
+    <div x-show="showMFASetupModal" 
+         x-cloak 
+         class="fixed z-50 inset-0 overflow-y-auto" 
+         aria-labelledby="modal-title" 
+         role="dialog" 
+         aria-modal="true"
+         style="display: none;">
+        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" @click="showMFASetupModal = false"></div>
+
+            <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+                <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                    <div class="sm:flex sm:items-start">
+                        <div class="mt-3 text-center sm:mt-0 sm:text-left w-full">
+                            <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4" id="modal-title">
+                                Set Up Multi-Factor Authentication
+                            </h3>
+                            
+                            <div class="mt-4 space-y-4">
+                                <!-- Step 1: Download Authenticator App -->
+                                <div class="bg-gray-50 p-4 rounded-lg">
+                                    <h4 class="font-medium text-gray-900 mb-2">Step 1: Download an Authenticator App</h4>
+                                    <p class="text-sm text-gray-600">Install an authenticator app like Google Authenticator, Microsoft Authenticator, or Authy on your phone.</p>
+                                </div>
+
+                                <!-- Step 2: Scan QR Code -->
+                                <div class="bg-gray-50 p-4 rounded-lg">
+                                    <h4 class="font-medium text-gray-900 mb-2">Step 2: Scan QR Code</h4>
+                                    <div x-show="mfaSetup.qr_code_image" class="flex justify-center my-4">
+                                        <img :src="mfaSetup.qr_code_image" alt="QR Code" class="border-2 border-gray-300 rounded-lg">
+                                    </div>
+                                    <p class="text-sm text-gray-600 mb-2">Or enter this secret key manually:</p>
+                                    <div class="bg-white p-2 rounded border border-gray-300 font-mono text-sm break-all" x-text="mfaSetup.secret_key"></div>
+                                </div>
+
+                                <!-- Step 3: Enter Verification Code -->
+                                <div class="bg-gray-50 p-4 rounded-lg">
+                                    <h4 class="font-medium text-gray-900 mb-2">Step 3: Enter Verification Code</h4>
+                                    <input 
+                                        type="text" 
+                                        x-model="mfaVerificationToken"
+                                        placeholder="Enter 6-digit code"
+                                        maxlength="6"
+                                        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                                    >
+                                </div>
+
+                                <!-- Backup Codes Display -->
+                                <div x-show="mfaSetup.backup_codes && mfaSetup.backup_codes.length > 0" class="bg-yellow-50 border border-yellow-200 p-4 rounded-lg">
+                                    <h4 class="font-medium text-yellow-900 mb-2">
+                                        <i class="fas fa-exclamation-triangle mr-2"></i>
+                                        Save Your Backup Codes
+                                    </h4>
+                                    <p class="text-sm text-yellow-800 mb-3">Store these codes in a safe place. You can use them to access your account if you lose access to your authenticator app.</p>
+                                    <div class="grid grid-cols-2 gap-2 bg-white p-3 rounded border border-yellow-300">
+                                        <template x-for="code in mfaSetup.backup_codes" :key="code">
+                                            <div class="font-mono text-sm text-gray-700" x-text="code"></div>
+                                        </template>
+                                    </div>
+                                    <button 
+                                        @click="copyBackupCodes()"
+                                        class="mt-3 text-sm text-primary-600 hover:text-primary-800">
+                                        <i class="fas fa-copy mr-1"></i> Copy all codes
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                    <button 
+                        @click="verifyAndEnableMFA()" 
+                        :disabled="!mfaVerificationToken || mfaVerificationToken.length !== 6 || isLoading"
+                        type="button" 
+                        class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-primary-600 text-base font-medium text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed">
+                        <span x-show="!isLoading">Verify and Enable</span>
+                        <span x-show="isLoading"><i class="fas fa-spinner fa-spin mr-2"></i>Verifying...</span>
+                    </button>
+                    <button 
+                        @click="showMFASetupModal = false" 
+                        type="button" 
+                        class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Backup Codes Display Modal -->
+    <div x-show="showBackupCodesModal" 
+         x-cloak 
+         class="fixed z-50 inset-0 overflow-y-auto" 
+         aria-labelledby="modal-title" 
+         role="dialog" 
+         aria-modal="true"
+         style="display: none;">
+        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" @click="showBackupCodesModal = false"></div>
+
+            <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+                <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                    <div class="sm:flex sm:items-start">
+                        <div class="mt-3 text-center sm:mt-0 sm:text-left w-full">
+                            <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">
+                                New Backup Codes Generated
+                            </h3>
+                            
+                            <div class="bg-yellow-50 border border-yellow-200 p-4 rounded-lg">
+                                <h4 class="font-medium text-yellow-900 mb-2">
+                                    <i class="fas fa-exclamation-triangle mr-2"></i>
+                                    Important: Save These Codes
+                                </h4>
+                                <p class="text-sm text-yellow-800 mb-3">
+                                    These backup codes replace your old ones. Store them in a safe place. You can use them to access your account if you lose access to your authenticator app.
+                                </p>
+                                <div class="grid grid-cols-2 gap-2 bg-white p-3 rounded border border-yellow-300">
+                                    <template x-for="code in backupCodes" :key="code">
+                                        <div class="font-mono text-sm text-gray-700" x-text="code"></div>
+                                    </template>
+                                </div>
+                                <button 
+                                    @click="copyBackupCodes()"
+                                    class="mt-3 text-sm text-primary-600 hover:text-primary-800">
+                                    <i class="fas fa-copy mr-1"></i> Copy all codes
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                    <button 
+                        @click="showBackupCodesModal = false" 
+                        type="button" 
+                        class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-primary-600 text-base font-medium text-white hover:bg-primary-700 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm">
+                        Done
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/auth-utils.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/app.js"></script>
+    <script src="js/profile.js"></script>
+</body>
+</html>

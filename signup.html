@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign Up - Melode Healthcare Management</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            50: '#eff6ff',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen flex items-center justify-center p-4">
+    <div class="max-w-md w-full">
+        <!-- Logo and Header -->
+        <div class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-primary-600 mb-2">Melode</h1>
+            <p class="text-gray-600">Complete Your Registration</p>
+        </div>
+
+        <!-- Loading State -->
+        <div id="loading-state" class="bg-white rounded-lg shadow-xl p-8">
+            <div class="text-center">
+                <i class="fas fa-spinner fa-spin text-4xl text-primary-600 mb-4"></i>
+                <p class="text-gray-600">Validating invitation...</p>
+            </div>
+        </div>
+
+        <!-- Error State -->
+        <div id="error-state" class="bg-white rounded-lg shadow-xl p-8 hidden">
+            <div class="text-center">
+                <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
+                    <i class="fas fa-exclamation-triangle text-red-600 text-xl"></i>
+                </div>
+                <h3 class="text-lg font-medium text-gray-900 mb-2">Invalid or Expired Invitation</h3>
+                <p id="error-message" class="text-sm text-gray-500 mb-6"></p>
+                <a href="login.html" class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700">
+                    <i class="fas fa-arrow-left mr-2"></i>
+                    Back to Login
+                </a>
+            </div>
+        </div>
+
+        <!-- Signup Form -->
+        <div id="signup-form" class="bg-white rounded-lg shadow-xl p-8 hidden">
+            <!-- Invitation Info -->
+            <div class="mb-6 p-4 bg-blue-50 border-l-4 border-blue-400 rounded">
+                <div class="flex items-start">
+                    <i class="fas fa-info-circle text-blue-600 mt-1 mr-3"></i>
+                    <div class="flex-1">
+                        <p class="text-sm text-blue-800 mb-1">
+                            <strong>You've been invited as:</strong>
+                        </p>
+                        <p id="invitation-info" class="text-sm text-blue-700"></p>
+                    </div>
+                </div>
+            </div>
+
+            <form id="registration-form" class="space-y-6">
+                <!-- Pre-filled Information (Read-only) -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        Your Information
+                    </label>
+                    <div class="space-y-3 p-4 bg-gray-50 rounded-lg">
+                        <div>
+                            <label class="text-xs text-gray-500">Email</label>
+                            <p id="display-email" class="text-sm font-medium text-gray-900"></p>
+                        </div>
+                        <div>
+                            <label class="text-xs text-gray-500">Username</label>
+                            <p id="display-username" class="text-sm font-medium text-gray-900"></p>
+                        </div>
+                        <div>
+                            <label class="text-xs text-gray-500">Full Name</label>
+                            <p id="display-name" class="text-sm font-medium text-gray-900"></p>
+                        </div>
+                        <div id="phone-display-container" class="hidden">
+                            <label class="text-xs text-gray-500">Phone Number</label>
+                            <p id="display-phone" class="text-sm font-medium text-gray-900"></p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Password Fields -->
+                <div>
+                    <label for="password" class="block text-sm font-medium text-gray-700">
+                        Create Password *
+                    </label>
+                    <div class="mt-1 relative">
+                        <input 
+                            type="password" 
+                            id="password" 
+                            name="password" 
+                            required
+                            minlength="8"
+                            class="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                            placeholder="Enter a strong password">
+                        <button 
+                            type="button"
+                            onclick="togglePassword('password')"
+                            class="absolute inset-y-0 right-0 pr-3 flex items-center">
+                            <i class="fas fa-eye text-gray-400 hover:text-gray-600"></i>
+                        </button>
+                    </div>
+                    <p class="mt-1 text-xs text-gray-500">
+                        Must be at least 8 characters long
+                    </p>
+                </div>
+
+                <div>
+                    <label for="confirm-password" class="block text-sm font-medium text-gray-700">
+                        Confirm Password *
+                    </label>
+                    <div class="mt-1 relative">
+                        <input 
+                            type="password" 
+                            id="confirm-password" 
+                            name="confirm-password" 
+                            required
+                            minlength="8"
+                            class="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                            placeholder="Confirm your password">
+                        <button 
+                            type="button"
+                            onclick="togglePassword('confirm-password')"
+                            class="absolute inset-y-0 right-0 pr-3 flex items-center">
+                            <i class="fas fa-eye text-gray-400 hover:text-gray-600"></i>
+                        </button>
+                    </div>
+                    <p id="password-match-error" class="mt-1 text-xs text-red-600 hidden">
+                        Passwords do not match
+                    </p>
+                </div>
+
+                <!-- Terms and Conditions -->
+                <div class="flex items-start">
+                    <input 
+                        type="checkbox" 
+                        id="terms" 
+                        name="terms" 
+                        required
+                        class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded mt-1">
+                    <label for="terms" class="ml-2 block text-sm text-gray-700">
+                        I agree to the <a href="#" class="text-primary-600 hover:text-primary-500">Terms of Service</a> 
+                        and <a href="#" class="text-primary-600 hover:text-primary-500">Privacy Policy</a>
+                    </label>
+                </div>
+
+                <!-- Submit Button -->
+                <div>
+                    <button 
+                        type="submit" 
+                        id="submit-btn"
+                        class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed">
+                        <span id="submit-text">Complete Registration</span>
+                        <span id="submit-loading" class="hidden">
+                            <i class="fas fa-spinner fa-spin mr-2"></i>
+                            Creating account...
+                        </span>
+                    </button>
+                </div>
+            </form>
+
+            <!-- Back to Login -->
+            <div class="mt-6 text-center">
+                <a href="login.html" class="text-sm text-primary-600 hover:text-primary-500">
+                    <i class="fas fa-arrow-left mr-1"></i>
+                    Back to Login
+                </a>
+            </div>
+        </div>
+
+        <!-- Success State -->
+        <div id="success-state" class="bg-white rounded-lg shadow-xl p-8 hidden">
+            <div class="text-center">
+                <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 mb-4">
+                    <i class="fas fa-check text-green-600 text-xl"></i>
+                </div>
+                <h3 class="text-lg font-medium text-gray-900 mb-2">Registration Successful!</h3>
+                <p class="text-sm text-gray-500 mb-6">Your account has been created successfully.</p>
+                <a href="login.html" class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700">
+                    Proceed to Login
+                    <i class="fas fa-arrow-right ml-2"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let invitationToken = '';
+        let invitationData = null;
+
+        // Toggle password visibility
+        function togglePassword(fieldId) {
+            const field = document.getElementById(fieldId);
+            const icon = field.nextElementSibling.querySelector('i');
+            
+            if (field.type === 'password') {
+                field.type = 'text';
+                icon.classList.remove('fa-eye');
+                icon.classList.add('fa-eye-slash');
+            } else {
+                field.type = 'password';
+                icon.classList.remove('fa-eye-slash');
+                icon.classList.add('fa-eye');
+            }
+        }
+
+        // Get token from URL
+        function getTokenFromUrl() {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get('token');
+        }
+
+        // Show/hide sections
+        function showSection(sectionId) {
+            ['loading-state', 'error-state', 'signup-form', 'success-state'].forEach(id => {
+                document.getElementById(id).classList.add('hidden');
+            });
+            document.getElementById(sectionId).classList.remove('hidden');
+        }
+
+        // Validate invitation token
+        async function validateInvitation(token) {
+            try {
+                const response = await fetch(`http://127.0.0.1:8000/api/v1/invitations/validate?token=${encodeURIComponent(token)}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to validate invitation');
+                }
+
+                const result = await response.json();
+                return result;
+            } catch (error) {
+                console.error('Validation error:', error);
+                return { is_valid: false, error_message: 'Unable to validate invitation. Please try again.' };
+            }
+        }
+
+        // Display invitation data
+        function displayInvitationData(invitation) {
+            invitationData = invitation;
+            
+            // Display email
+            document.getElementById('display-email').textContent = invitation.email;
+            
+            // Display username
+            document.getElementById('display-username').textContent = invitation.suggested_username;
+            
+            // Display full name
+            const fullName = [invitation.suggested_title, invitation.suggested_first_name, invitation.suggested_last_name]
+                .filter(Boolean)
+                .join(' ');
+            document.getElementById('display-name').textContent = fullName;
+            
+            // Display phone if available
+            if (invitation.suggested_phone_number) {
+                document.getElementById('phone-display-container').classList.remove('hidden');
+                document.getElementById('display-phone').textContent = invitation.suggested_phone_number;
+            }
+            
+            // Display invitation info
+            document.getElementById('invitation-info').textContent = 
+                `${fullName} (${invitation.email})`;
+        }
+
+        // Handle password matching
+        function checkPasswordMatch() {
+            const password = document.getElementById('password').value;
+            const confirmPassword = document.getElementById('confirm-password').value;
+            const errorElement = document.getElementById('password-match-error');
+            
+            if (confirmPassword && password !== confirmPassword) {
+                errorElement.classList.remove('hidden');
+                return false;
+            } else {
+                errorElement.classList.add('hidden');
+                return true;
+            }
+        }
+
+        // Handle form submission
+        async function handleSubmit(event) {
+            event.preventDefault();
+            
+            const password = document.getElementById('password').value;
+            const confirmPassword = document.getElementById('confirm-password').value;
+            const termsAccepted = document.getElementById('terms').checked;
+            
+            // Validate passwords match
+            if (password !== confirmPassword) {
+                document.getElementById('password-match-error').classList.remove('hidden');
+                return;
+            }
+            
+            if (!termsAccepted) {
+                alert('Please accept the Terms of Service and Privacy Policy');
+                return;
+            }
+            
+            // Show loading state
+            const submitBtn = document.getElementById('submit-btn');
+            submitBtn.disabled = true;
+            document.getElementById('submit-text').classList.add('hidden');
+            document.getElementById('submit-loading').classList.remove('hidden');
+            
+            try {
+                const response = await fetch('http://127.0.0.1:8000/api/v1/auth/signup', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        invitation_token: invitationToken,
+                        password: password
+                    })
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.detail || 'Registration failed');
+                }
+                
+                const userData = await response.json();
+                console.log('Registration successful:', userData);
+                
+                // Show success state
+                showSection('success-state');
+                
+            } catch (error) {
+                console.error('Registration error:', error);
+                alert('Registration failed: ' + error.message);
+                
+                // Reset button
+                submitBtn.disabled = false;
+                document.getElementById('submit-text').classList.remove('hidden');
+                document.getElementById('submit-loading').classList.add('hidden');
+            }
+        }
+
+        // Initialize page
+        async function init() {
+            // Get token from URL
+            invitationToken = getTokenFromUrl();
+            
+            if (!invitationToken) {
+                document.getElementById('error-message').textContent = 
+                    'No invitation token provided. Please use the link from your invitation email.';
+                showSection('error-state');
+                return;
+            }
+            
+            // Validate token
+            const validationResult = await validateInvitation(invitationToken);
+            
+            if (!validationResult.is_valid) {
+                document.getElementById('error-message').textContent = 
+                    validationResult.error_message || 'This invitation link is invalid or has expired.';
+                showSection('error-state');
+                return;
+            }
+            
+            // Display invitation data
+            displayInvitationData(validationResult.invitation);
+            showSection('signup-form');
+        }
+
+        // Event listeners
+        document.addEventListener('DOMContentLoaded', init);
+        document.getElementById('registration-form').addEventListener('submit', handleSubmit);
+        document.getElementById('confirm-password').addEventListener('input', checkPasswordMatch);
+        document.getElementById('password').addEventListener('input', checkPasswordMatch);
+    </script>
+</body>
+</html>
+

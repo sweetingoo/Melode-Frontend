@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Melode Healthcare Management</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            50: '#eff6ff',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-50 min-h-screen flex items-center justify-center" x-data="{
+    loginForm: {
+        email: '',
+        password: '',
+        mfa_token: '',
+        remember_me: false
+    },
+    forgotPasswordForm: {
+        email: ''
+    },
+    isLoading: false,
+    showMfaField: false,
+    showForgotPassword: false,
+    errorMessage: '',
+    successMessage: '',
+    
+    init() {
+        console.log('Login page initialized');
+    },
+    
+    async handleLogin() {
+        this.isLoading = true;
+        this.errorMessage = '';
+        this.successMessage = '';
+        
+        try {
+            // Basic validation
+            if (!this.loginForm.email || !this.loginForm.password) {
+                throw new Error('Please fill in all required fields');
+            }
+            
+            // Make actual API call
+            const response = await fetch('http://0.0.0.0:8001/api/v1/auth/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    email: this.loginForm.email,
+                    password: this.loginForm.password,
+                    mfa_token: this.loginForm.mfa_token || null
+                })
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.detail || `HTTP ${response.status}: ${response.statusText}`);
+            }
+            
+            const data = await response.json();
+            
+            // Store tokens
+            localStorage.setItem('access_token', data.access_token);
+            localStorage.setItem('refresh_token', data.refresh_token);
+            
+            // Handle remember me
+            if (this.loginForm.remember_me) {
+                const expirationDate = new Date();
+                expirationDate.setDate(expirationDate.getDate() + 30);
+                localStorage.setItem('session_expires', expirationDate.toISOString());
+            }
+            
+            this.successMessage = 'Login successful! Redirecting...';
+            
+            setTimeout(() => {
+                window.location.href = 'index.html';
+            }, 1000);
+            
+        } catch (error) {
+            console.error('Login failed:', error);
+            
+            // Handle MFA requirement
+            const errorMsg = error.message.toLowerCase();
+            if (errorMsg.includes('mfa token required') || 
+                errorMsg.includes('mfa required') || 
+                errorMsg.includes('multi-factor') ||
+                errorMsg.includes('invalid mfa token')) {
+                this.showMfaField = true;
+                
+                if (errorMsg.includes('invalid mfa')) {
+                    this.errorMessage = 'Invalid MFA token. Please check your authenticator app and try again.';
+                } else {
+                    this.errorMessage = 'This account has MFA enabled. Please enter your verification code.';
+                }
+                
+                // Focus the MFA input field after a short delay to ensure it's rendered
+                setTimeout(() => {
+                    const mfaInput = this.$refs.mfaInput;
+                    if (mfaInput) {
+                        mfaInput.focus();
+                    }
+                }, 100);
+            } else {
+                this.errorMessage = error.message || 'Login failed. Please check your credentials.';
+            }
+        } finally {
+            this.isLoading = false;
+        }
+    },
+    
+    async handleForgotPassword() {
+        this.isLoading = true;
+        this.errorMessage = '';
+        this.successMessage = '';
+        
+        try {
+            if (!this.forgotPasswordForm.email) {
+                throw new Error('Please enter your email address');
+            }
+            
+            // Make actual API call
+            const response = await fetch('http://0.0.0.0:8001/api/v1/auth/forgot-password', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    email: this.forgotPasswordForm.email
+                })
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.detail || `HTTP ${response.status}: ${response.statusText}`);
+            }
+            
+            this.successMessage = 'Password reset link sent to your email address.';
+            this.showForgotPassword = false;
+            this.forgotPasswordForm.email = '';
+        } catch (error) {
+            console.error('Forgot password failed:', error);
+            this.errorMessage = error.message || 'Failed to send reset link. Please try again.';
+        } finally {
+            this.isLoading = false;
+        }
+    },
+    
+    clearMessages() {
+        this.errorMessage = '';
+        this.successMessage = '';
+    }
+}">
+    <div class="max-w-md w-full space-y-8">
+        <div>
+            <div class="mx-auto h-12 w-12 flex items-center justify-center rounded-full bg-primary-100">
+                <i class="fas fa-heartbeat text-primary-600 text-xl"></i>
+            </div>
+            <h2 class="mt-6 text-center text-3xl font-extrabold text-gray-900">
+                Sign in to Melode
+            </h2>
+            <p class="mt-2 text-center text-sm text-gray-600">
+                Healthcare Management System
+            </p>
+        </div>
+        
+        <!-- Login Form -->
+        <div class="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
+
+            <!-- Login Form -->
+            <form @submit.prevent="handleLogin" class="space-y-6">
+                <div>
+                    <label for="email" class="block text-sm font-medium text-gray-700">
+                        Email address
+                    </label>
+                    <div class="mt-1">
+                        <input 
+                            id="email" 
+                            name="email" 
+                            type="email" 
+                            x-model="loginForm.email"
+                            required 
+                            class="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                            placeholder="Enter your email">
+                    </div>
+                </div>
+
+                <div>
+                    <label for="password" class="block text-sm font-medium text-gray-700">
+                        Password
+                    </label>
+                    <div class="mt-1">
+                        <input 
+                            id="password" 
+                            name="password" 
+                            type="password" 
+                            x-model="loginForm.password"
+                            required 
+                            class="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                            placeholder="Enter your password">
+                    </div>
+                </div>
+
+                <!-- MFA Token (if required) -->
+                <div x-show="showMfaField" x-transition class="border-l-4 border-primary-500 bg-primary-50 p-4 rounded-r-md">
+                    <div class="flex items-start mb-3">
+                        <div class="flex-shrink-0">
+                            <i class="fas fa-shield-alt text-primary-600"></i>
+                        </div>
+                        <div class="ml-3">
+                            <h3 class="text-sm font-medium text-primary-800">Multi-Factor Authentication Required</h3>
+                            <p class="mt-1 text-xs text-primary-700">Enter the 6-digit code from your authenticator app or use a backup code.</p>
+                        </div>
+                    </div>
+                    <label for="mfa_token" class="block text-sm font-medium text-gray-700">
+                        MFA Token
+                    </label>
+                    <div class="mt-1">
+                        <input 
+                            id="mfa_token" 
+                            name="mfa_token" 
+                            type="text" 
+                            x-model="loginForm.mfa_token"
+                            maxlength="8"
+                            class="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                            placeholder="Enter 6-digit code or backup code"
+                            x-ref="mfaInput">
+                    </div>
+                    <p class="mt-2 text-xs text-gray-600">
+                        <i class="fas fa-info-circle mr-1"></i>
+                        Lost access to your authenticator? Use one of your backup codes.
+                    </p>
+                </div>
+
+                <!-- Remember me -->
+                <div class="flex items-center">
+                    <input 
+                        id="remember_me" 
+                        name="remember_me" 
+                        type="checkbox" 
+                        x-model="loginForm.remember_me"
+                        class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded">
+                    <label for="remember_me" class="ml-2 block text-sm text-gray-900">
+                        Remember me for 30 days
+                    </label>
+                </div>
+
+                <div>
+                    <button 
+                        type="submit" 
+                        :disabled="isLoading"
+                        class="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed">
+                        <span x-show="!isLoading">Sign in</span>
+                        <span x-show="isLoading" class="flex items-center">
+                            <i class="fas fa-spinner fa-spin mr-2"></i>
+                            Signing in...
+                        </span>
+                    </button>
+                </div>
+
+                <div class="flex items-center justify-between">
+                    <div class="text-sm">
+                        <a href="#" @click="showForgotPassword = true" class="font-medium text-primary-600 hover:text-primary-500">
+                            Forgot your password?
+                        </a>
+                    </div>
+                </div>
+            </form>
+
+            <!-- Error/Success Messages -->
+            <div x-show="errorMessage" class="mt-4 p-4 bg-red-50 border border-red-200 rounded-md">
+                <div class="flex">
+                    <div class="flex-shrink-0">
+                        <i class="fas fa-exclamation-circle text-red-400"></i>
+                    </div>
+                    <div class="ml-3">
+                        <p class="text-sm text-red-800" x-text="errorMessage"></p>
+                    </div>
+                </div>
+            </div>
+
+            <div x-show="successMessage" class="mt-4 p-4 bg-green-50 border border-green-200 rounded-md">
+                <div class="flex">
+                    <div class="flex-shrink-0">
+                        <i class="fas fa-check-circle text-green-400"></i>
+                    </div>
+                    <div class="ml-3">
+                        <p class="text-sm text-green-800" x-text="successMessage"></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Forgot Password Modal -->
+        <div x-show="showForgotPassword" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50" @click.away="showForgotPassword = false">
+            <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+                <div class="mt-3">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">Reset Password</h3>
+                    <form @submit.prevent="handleForgotPassword">
+                        <div class="mb-4">
+                            <label for="reset_email" class="block text-sm font-medium text-gray-700">Email address</label>
+                            <input 
+                                type="email" 
+                                id="reset_email" 
+                                x-model="forgotPasswordForm.email"
+                                required
+                                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500">
+                        </div>
+                        <div class="flex justify-end space-x-3">
+                            <button 
+                                type="button" 
+                                @click="showForgotPassword = false"
+                                class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200">
+                                Cancel
+                            </button>
+                            <button 
+                                type="submit" 
+                                :disabled="isLoading"
+                                class="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50">
+                                Send Reset Link
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

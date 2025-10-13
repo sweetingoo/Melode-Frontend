@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Melode Healthcare</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <script src="js/permissions.js"></script>
+    <script src="js/auth-utils.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            50: '#eff6ff',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        [x-cloak] { display: none !important; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen" x-data="dashboardApp()">
+    <!-- Navigation -->
+    <nav class="bg-white shadow-lg border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <h1 class="text-2xl font-bold text-primary-600">Melode</h1>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <div class="relative" x-data="{ userMenuOpen: false }">
+                        <button @click="userMenuOpen = !userMenuOpen" class="flex items-center text-sm rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                            <img class="h-8 w-8 rounded-full" :src="userAvatar" alt="User avatar">
+                            <span class="ml-2 text-gray-700" x-text="userName"></span>
+                            <i class="fas fa-chevron-down ml-1 text-xs"></i>
+                        </button>
+                        <div x-show="userMenuOpen" @click.away="userMenuOpen = false" class="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5">
+                            <a href="profile.html" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                <i class="fas fa-user mr-2"></i>Your Profile
+                            </a>
+                            <button @click="logout()" class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                <i class="fas fa-sign-out-alt mr-2"></i>Sign out
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        <div class="px-4 py-6 sm:px-0">
+            <!-- Welcome Section -->
+            <div class="bg-white overflow-hidden shadow rounded-lg mb-6">
+                <div class="px-4 py-5 sm:p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h1 class="text-2xl font-bold text-gray-900">Welcome, <span x-text="userName"></span></h1>
+                            <p class="text-gray-600 mt-1">Here's what you have access to based on your permissions</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Loading State -->
+            <div x-show="isLoading" class="text-center py-12">
+                <i class="fas fa-spinner fa-spin text-4xl text-primary-600"></i>
+                <p class="mt-4 text-gray-600">Loading your dashboard...</p>
+            </div>
+
+            <!-- No Permissions State -->
+            <div x-show="!isLoading && visibleCards.length === 0" class="bg-yellow-50 border border-yellow-200 rounded-lg p-8 text-center">
+                <i class="fas fa-exclamation-triangle text-4xl text-yellow-500 mb-4"></i>
+                <h3 class="text-lg font-semibold text-gray-900 mb-2">No Access Yet</h3>
+                <p class="text-gray-600">You don't have any permissions assigned yet. Please contact your administrator.</p>
+            </div>
+
+            <!-- Permission-Based Cards Grid -->
+            <div x-show="!isLoading && visibleCards.length > 0" class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                <template x-for="card in visibleCards" :key="card.id">
+                    <div class="bg-white overflow-hidden shadow rounded-lg hover:shadow-lg transition-shadow duration-200 cursor-pointer"
+                         @click="navigateTo(card.link)">
+                        <div class="p-5">
+                            <div class="flex items-center">
+                                <div class="flex-shrink-0">
+                                    <i :class="'fas ' + card.icon + ' text-3xl ' + card.color"></i>
+                                </div>
+                                <div class="ml-5 w-0 flex-1">
+                                    <dl>
+                                        <dt class="text-sm font-medium text-gray-500 truncate" x-text="card.title"></dt>
+                                        <dd class="text-lg font-semibold text-gray-900" x-text="card.subtitle"></dd>
+                                    </dl>
+                                </div>
+                            </div>
+                            <div class="mt-4">
+                                <p class="text-sm text-gray-600" x-text="card.description"></p>
+                            </div>
+                        </div>
+                        <div class="bg-gray-50 px-5 py-3 border-t border-gray-100">
+                            <div class="flex items-center justify-between">
+                                <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                    <i class="fas fa-key mr-1"></i>
+                                    <span x-text="card.permission"></span>
+                                </span>
+                                <a :href="card.link" class="text-sm font-medium text-primary-600 hover:text-primary-500">
+                                    Open <i class="fas fa-arrow-right ml-1"></i>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+
+            <!-- Permission Summary -->
+            <div x-show="!isLoading && visibleCards.length > 0" class="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div class="flex items-start">
+                    <div class="flex-shrink-0">
+                        <i class="fas fa-info-circle text-blue-500 text-xl"></i>
+                    </div>
+                    <div class="ml-3 flex-1">
+                        <h3 class="text-sm font-medium text-blue-900">Your Access Level</h3>
+                        <div class="mt-2 text-sm text-blue-800">
+                            <p>You currently have access to <strong x-text="visibleCards.length"></strong> feature<span x-show="visibleCards.length !== 1">s</span> based on your assigned permissions.</p>
+                            <p class="mt-1">Total permissions: <strong x-text="userPermissions.length"></strong></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        function dashboardApp() {
+            return {
+                userName: 'Loading...',
+                userAvatar: 'https://via.placeholder.com/32',
+                userPermissions: [],
+                isLoading: true,
+                
+                // Define all possible cards with their required permissions
+                allCards: [
+                    {
+                        id: 'users',
+                        title: 'User Management',
+                        subtitle: 'Manage Users',
+                        description: 'View, create, edit, and manage user accounts',
+                        icon: 'fa-users',
+                        color: 'text-blue-600',
+                        link: 'user-management.html',
+                        permission: 'users:list',
+                        permissionName: 'List Users'
+                    },
+                    {
+                        id: 'roles',
+                        title: 'Role Management',
+                        subtitle: 'Manage Roles',
+                        description: 'Create and manage roles and their permissions',
+                        icon: 'fa-shield-alt',
+                        color: 'text-purple-600',
+                        link: 'role-management.html',
+                        permission: 'roles:list',
+                        permissionName: 'List Roles'
+                    },
+                    {
+                        id: 'permissions',
+                        title: 'Permissions',
+                        subtitle: 'Manage Permissions',
+                        description: 'Create and manage custom permissions',
+                        icon: 'fa-key',
+                        color: 'text-yellow-600',
+                        link: 'permissions-management.html',
+                        permission: 'permissions:list',
+                        permissionName: 'List Permissions'
+                    },
+                    {
+                        id: 'invitations',
+                        title: 'Invitations',
+                        subtitle: 'Send Invitations',
+                        description: 'Create and manage user invitations',
+                        icon: 'fa-envelope',
+                        color: 'text-green-600',
+                        link: 'invitations.html',
+                        permission: 'invitations:create',
+                        permissionName: 'Create Invitations'
+                    },
+                    {
+                        id: 'patients',
+                        title: 'Patients',
+                        subtitle: 'Patient Records',
+                        description: 'View and manage patient information',
+                        icon: 'fa-user-injured',
+                        color: 'text-red-600',
+                        link: '#patients',
+                        permission: 'patient:read',
+                        permissionName: 'Read Patients'
+                    },
+                    {
+                        id: 'appointments',
+                        title: 'Appointments',
+                        subtitle: 'Scheduling',
+                        description: 'View and manage appointments',
+                        icon: 'fa-calendar-alt',
+                        color: 'text-indigo-600',
+                        link: '#appointments',
+                        permission: 'appointment:read',
+                        permissionName: 'Read Appointments'
+                    },
+                    {
+                        id: 'medical-records',
+                        title: 'Medical Records',
+                        subtitle: 'Health Records',
+                        description: 'Access and manage medical records',
+                        icon: 'fa-file-medical',
+                        color: 'text-teal-600',
+                        link: '#medical-records',
+                        permission: 'medical_records:read',
+                        permissionName: 'Read Medical Records'
+                    },
+                    {
+                        id: 'prescriptions',
+                        title: 'Prescriptions',
+                        subtitle: 'Medications',
+                        description: 'Manage prescriptions and medications',
+                        icon: 'fa-pills',
+                        color: 'text-pink-600',
+                        link: '#prescriptions',
+                        permission: 'prescriptions:read',
+                        permissionName: 'Read Prescriptions'
+                    },
+                    {
+                        id: 'reports',
+                        title: 'Reports',
+                        subtitle: 'Analytics',
+                        description: 'View reports and analytics',
+                        icon: 'fa-chart-bar',
+                        color: 'text-orange-600',
+                        link: '#reports',
+                        permission: 'reports:view',
+                        permissionName: 'View Reports'
+                    },
+                    {
+                        id: 'billing',
+                        title: 'Billing',
+                        subtitle: 'Finance',
+                        description: 'Manage billing and invoices',
+                        icon: 'fa-dollar-sign',
+                        color: 'text-emerald-600',
+                        link: '#billing',
+                        permission: 'billing:read',
+                        permissionName: 'Read Billing'
+                    },
+                    {
+                        id: 'settings',
+                        title: 'Settings',
+                        subtitle: 'Configuration',
+                        description: 'Manage system settings',
+                        icon: 'fa-cog',
+                        color: 'text-gray-600',
+                        link: '#settings',
+                        permission: 'settings:manage',
+                        permissionName: 'Manage Settings'
+                    },
+                    {
+                        id: 'assets',
+                        title: 'Asset Management',
+                        subtitle: 'Equipment',
+                        description: 'Track and manage facility assets',
+                        icon: 'fa-boxes',
+                        color: 'text-cyan-600',
+                        link: '#assets',
+                        permission: 'assets:read',
+                        permissionName: 'Read Assets'
+                    },
+                    {
+                        id: 'tasks',
+                        title: 'Tasks',
+                        subtitle: 'Task Management',
+                        description: 'View and manage assigned tasks',
+                        icon: 'fa-tasks',
+                        color: 'text-violet-600',
+                        link: '#tasks',
+                        permission: 'tasks:read',
+                        permissionName: 'Read Tasks'
+                    },
+                    {
+                        id: 'locations',
+                        title: 'Locations',
+                        subtitle: 'Facilities',
+                        description: 'Manage locations and facilities',
+                        icon: 'fa-map-marker-alt',
+                        color: 'text-rose-600',
+                        link: '#locations',
+                        permission: 'locations:read',
+                        permissionName: 'Read Locations'
+                    }
+                ],
+                
+                visibleCards: [],
+                
+                async init() {
+                    console.log('Dashboard initialized');
+                    this.loadUserData();
+                    await this.loadUserPermissions();
+                    this.filterVisibleCards();
+                    this.isLoading = false;
+                },
+                
+                loadUserData() {
+                    const userData = localStorage.getItem('user_data');
+                    if (userData) {
+                        try {
+                            const user = JSON.parse(userData);
+                            this.userName = (user.first_name && user.last_name) 
+                                ? `${user.first_name} ${user.last_name}` 
+                                : user.username || user.email;
+                            this.userAvatar = user.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(this.userName)}&background=3b82f6&color=fff`;
+                        } catch (error) {
+                            console.error('Failed to parse user data:', error);
+                        }
+                    }
+                },
+                
+                async loadUserPermissions() {
+                    try {
+                        // Fetch user info from /auth/me endpoint
+                        const response = await window.AuthUtils.get('/auth/me');
+                        
+                        if (response.ok) {
+                            const userData = await response.json();
+                            
+                            // The /auth/me endpoint returns a 'permissions' array that already contains
+                            // all permissions (from both roles and direct assignments)
+                            if (userData.permissions && Array.isArray(userData.permissions)) {
+                                this.userPermissions = userData.permissions;
+                            } else {
+                                this.userPermissions = [];
+                            }
+                            
+                            console.log('Loaded permissions from /auth/me:', this.userPermissions);
+                            console.log('Total permissions:', this.userPermissions.length);
+                            console.log('User roles:', userData.roles?.length || 0);
+                            console.log('Direct permissions:', userData.direct_permissions?.length || 0);
+                        } else {
+                            console.error('Failed to fetch user data from /auth/me');
+                            // Fallback: try to load from token
+                            const token = localStorage.getItem('access_token');
+                            if (token) {
+                                const payload = JSON.parse(atob(token.split('.')[1]));
+                                this.userPermissions = payload.permissions || [];
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Failed to load permissions:', error);
+                        
+                        // Last resort: try token
+                        try {
+                            const token = localStorage.getItem('access_token');
+                            if (token) {
+                                const payload = JSON.parse(atob(token.split('.')[1]));
+                                this.userPermissions = payload.permissions || [];
+                            }
+                        } catch (e) {
+                            this.userPermissions = [];
+                        }
+                    }
+                },
+                
+                filterVisibleCards() {
+                    // Filter cards based on user permissions
+                    this.visibleCards = this.allCards.filter(card => {
+                        return this.hasPermission(card.permission);
+                    });
+                    
+                    console.log('Visible cards:', this.visibleCards.length);
+                },
+                
+                hasPermission(requiredPermission) {
+                    if (!requiredPermission) return true;
+                    
+                    // Check if user has the exact permission
+                    return this.userPermissions.some(perm => {
+                        if (typeof perm === 'string') {
+                            return perm === requiredPermission;
+                        } else if (perm.name) {
+                            return perm.name === requiredPermission;
+                        }
+                        return false;
+                    });
+                },
+                
+                navigateTo(link) {
+                    if (link && link !== '#' && !link.startsWith('#')) {
+                        window.location.href = link;
+                    }
+                },
+                
+                async logout() {
+                    try {
+                        const token = localStorage.getItem('access_token');
+                        if (token) {
+                            await fetch('http://127.0.0.1:8000/api/v1/auth/logout', {
+                                method: 'POST',
+                                headers: {
+                                    'Authorization': `Bearer ${token}`,
+                                    'Content-Type': 'application/json'
+                                }
+                            });
+                        }
+            } catch (error) {
+                        console.error('Logout error:', error);
+                    } finally {
+                localStorage.clear();
+                window.location.href = 'login.html';
+            }
+                }
+            };
+        }
+    </script>
+</body>
+</html>
