@@ -36,7 +36,7 @@ function navigationComponent() {
                 label: 'Users',
                 icon: 'fas fa-users',
                 href: 'user-management.html',
-                permission: 'users:read',
+                permission: 'user:read',
                 visible: false
             },
             {
@@ -44,7 +44,7 @@ function navigationComponent() {
                 label: 'Roles',
                 icon: 'fas fa-shield-alt',
                 href: 'role-management.html',
-                permission: 'roles:read',
+                permission: 'role:read',
                 visible: false
             },
             {
@@ -52,7 +52,7 @@ function navigationComponent() {
                 label: 'Permissions',
                 icon: 'fas fa-key',
                 href: 'permissions-management.html',
-                permission: 'permissions:read',
+                permission: 'permission:read',
                 visible: false
             },
             {
@@ -60,7 +60,7 @@ function navigationComponent() {
                 label: 'Invitations',
                 icon: 'fas fa-envelope',
                 href: 'invitations.html',
-                permission: 'invitations:read',
+                permission: 'invitation:read',
                 visible: false
             },
             {
