@@ -191,9 +191,9 @@
                                 required
                                 class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
                                 <option value="">Select role</option>
-                                <option value="1">Superadmin</option>
-                                <option value="3">Doctor/Contractor</option>
-                                <option value="5">Staff</option>
+                                <template x-for="role in roles" :key="role.id">
+                                    <option :value="role.id" x-text="role.display_name || role.name"></option>
+                                </template>
                             </select>
                         </div>
 
@@ -431,6 +431,7 @@
                 
                 // Invitations data
                 invitations: [],
+                roles: [], // Available roles from backend
                 
                 // Form data
                 invitationData: {
@@ -454,6 +455,7 @@
                 init() {
                     console.log('Invitations page initialized');
                     this.updateUserInterface();
+                    this.loadRoles();
                     this.loadInvitations();
                     
                     // Listen for custom event from global app object
@@ -473,6 +475,39 @@
                         } catch (error) {
                             console.error('Failed to parse user data:', error);
                         }
+                    }
+                },
+                
+                async loadRoles() {
+                    try {
+                        const token = localStorage.getItem('access_token');
+                        if (!token) {
+                            console.error('No access token found');
+                            return;
+                        }
+                        
+                        const apiUrl = window.getApiBaseUrl ? window.getApiBaseUrl() : 'http://127.0.0.1:8000/api/v1';
+                        const response = await fetch(`${apiUrl}/roles/`, {
+                            headers: {
+                                'Authorization': 'Bearer ' + token,
+                                'Content-Type': 'application/json'
+                            }
+                        });
+                        
+                        if (!response.ok) {
+                            throw new Error('Failed to load roles');
+                        }
+                        
+                        this.roles = await response.json();
+                        console.log('Loaded roles:', this.roles);
+                    } catch (error) {
+                        console.error('Failed to load roles:', error);
+                        // Fallback to basic roles if API fails
+                        this.roles = [
+                            { id: 1, name: 'superadmin', display_name: 'Superadmin' },
+                            { id: 3, name: 'doctor', display_name: 'Doctor/Contractor' },
+                            { id: 5, name: 'staff', display_name: 'Staff' }
+                        ];
                     }
                 },
                 
