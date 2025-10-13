@@ -206,7 +206,7 @@
                         icon: 'fa-users',
                         color: 'text-blue-600',
                         link: 'user-management.html',
-                        permission: 'users:list',
+                        permission: 'user:list',
                         permissionName: 'List Users'
                     },
                     {
@@ -217,7 +217,7 @@
                         icon: 'fa-shield-alt',
                         color: 'text-purple-600',
                         link: 'role-management.html',
-                        permission: 'roles:list',
+                        permission: 'role:list',
                         permissionName: 'List Roles'
                     },
                     {
@@ -228,7 +228,7 @@
                         icon: 'fa-key',
                         color: 'text-yellow-600',
                         link: 'permissions-management.html',
-                        permission: 'permissions:list',
+                        permission: 'permission:list',
                         permissionName: 'List Permissions'
                     },
                     {
@@ -239,7 +239,7 @@
                         icon: 'fa-envelope',
                         color: 'text-green-600',
                         link: 'invitations.html',
-                        permission: 'invitations:create',
+                        permission: 'invitation:create',
                         permissionName: 'Create Invitations'
                     },
                     {
@@ -423,19 +423,27 @@
                     // Check if user is superuser
                     const isSuperuser = this.user?.is_superuser === true || this.userPermissions.includes('*');
                     
+                    console.log('=== FILTERING DASHBOARD CARDS ===');
+                    console.log('Is superuser:', isSuperuser);
+                    console.log('User permissions:', this.userPermissions);
+                    
                     // Filter cards based on user permissions
                     this.visibleCards = this.allCards.filter(card => {
                         // Special handling for superuser-only cards
                         if (card.superuserOnly) {
-                            return isSuperuser;
+                            const allowed = isSuperuser;
+                            console.log(`Card: ${card.id} (superuser only) - Allowed: ${allowed}`);
+                            return allowed;
                         }
                         
                         // Regular permission check
-                        return this.hasPermission(card.permission);
+                        const hasAccess = this.hasPermission(card.permission);
+                        console.log(`Card: ${card.id} (requires: ${card.permission}) - Has access: ${hasAccess}`);
+                        return hasAccess;
                     });
                     
-                    console.log('Is superuser:', isSuperuser);
-                    console.log('Visible cards:', this.visibleCards.length);
+                    console.log('Visible cards count:', this.visibleCards.length);
+                    console.log('Visible card IDs:', this.visibleCards.map(c => c.id));
                 },
                 
                 hasPermission(requiredPermission) {
