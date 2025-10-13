@@ -10,7 +10,7 @@ function profileApp() {
         userEmail: '',
         userUsername: '',
         userTitle: '',
-        userAvatar: 'https://via.placeholder.com/32',
+        userAvatar: window.authManager ? window.authManager.generateAvatarPlaceholder('U', 32) : '',
 
         // Form data
         profileData: {

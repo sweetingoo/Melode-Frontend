@@ -7,7 +7,7 @@ function navigationComponent() {
     return {
         // User data
         userName: 'Loading...',
-        userAvatar: 'https://via.placeholder.com/32',
+        userAvatar: window.authManager ? window.authManager.generateAvatarPlaceholder('...', 32) : '',
         userEmail: '',
         userMenuOpen: false,
         mobileMenuOpen: false,

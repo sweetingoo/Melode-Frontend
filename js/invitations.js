@@ -6,7 +6,7 @@ function invitationsApp() {
     return {
         // User data
         userName: '',
-        userAvatar: 'https://via.placeholder.com/32',
+        userAvatar: window.authManager ? window.authManager.generateAvatarPlaceholder('U', 32) : '',
 
         // Invitations data
         invitations: [],

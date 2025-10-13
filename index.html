@@ -150,7 +150,7 @@
         function dashboardApp() {
             return {
                 userName: 'Loading...',
-                userAvatar: 'https://via.placeholder.com/32',
+                userAvatar: window.authManager ? window.authManager.generateAvatarPlaceholder('...', 32) : '',
                 userPermissions: [],
                 isLoading: true,
                 

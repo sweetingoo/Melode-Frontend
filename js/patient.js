@@ -6,7 +6,7 @@ function patientApp() {
     return {
         // User data
         userName: '',
-        userAvatar: 'https://via.placeholder.com/32',
+        userAvatar: window.authManager ? window.authManager.generateAvatarPlaceholder('P', 32) : '',
 
         // Patient stats
         stats: {

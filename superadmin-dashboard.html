@@ -37,7 +37,7 @@
 </head>
 <body class="bg-gray-50 min-h-screen" x-data="{
     userName: 'Loading...',
-    userAvatar: 'https://via.placeholder.com/32',
+    userAvatar: window.authManager ? window.authManager.generateAvatarPlaceholder('...', 32) : '',
     activeTab: 'overview',
     stats: {
         totalUsers: 0,
