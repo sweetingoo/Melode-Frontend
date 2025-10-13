@@ -73,8 +73,22 @@
                     <div class="flex items-center justify-between">
                         <div>
                             <h1 class="text-2xl font-bold text-gray-900">Welcome, <span x-text="userName"></span></h1>
-                            <p class="text-gray-600 mt-1">Here's what you have access to based on your permissions</p>
+                            <p class="text-gray-600 mt-1">Here's what you have access to based on your assigned permissions</p>
                         </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Info Badge -->
+            <div class="bg-blue-50 border-l-4 border-blue-500 p-4 mb-6">
+                <div class="flex">
+                    <div class="flex-shrink-0">
+                        <i class="fas fa-info-circle text-blue-500"></i>
+                    </div>
+                    <div class="ml-3">
+                        <p class="text-sm text-blue-800">
+                            <strong>Dashboard cards are shown based on your assigned permissions.</strong> Each card requires specific permissions to be visible and accessible. Contact your administrator if you need access to additional features.
+                        </p>
                     </div>
                 </div>
             </div>
@@ -143,16 +157,17 @@
             </div>
 
             <!-- Permission Summary -->
-            <div x-show="!isLoading && visibleCards.length > 0" class="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div x-show="!isLoading && visibleCards.length > 0" class="mt-8 bg-green-50 border border-green-200 rounded-lg p-4">
                 <div class="flex items-start">
                     <div class="flex-shrink-0">
-                        <i class="fas fa-info-circle text-blue-500 text-xl"></i>
+                        <i class="fas fa-check-circle text-green-500 text-xl"></i>
                     </div>
                     <div class="ml-3 flex-1">
-                        <h3 class="text-sm font-medium text-blue-900">Your Access Level</h3>
-                        <div class="mt-2 text-sm text-blue-800">
-                            <p>You currently have access to <strong x-text="visibleCards.length"></strong> feature<span x-show="visibleCards.length !== 1">s</span> based on your assigned permissions.</p>
-                            <p class="mt-1">Total permissions: <strong x-text="userPermissions.length"></strong></p>
+                        <h3 class="text-sm font-medium text-green-900">Your Assigned Permissions Summary</h3>
+                        <div class="mt-2 text-sm text-green-800">
+                            <p>✓ You have access to <strong x-text="visibleCards.length"></strong> feature<span x-show="visibleCards.length !== 1">s</span> based on your assigned permissions</p>
+                            <p class="mt-1">✓ Total permissions assigned to you: <strong x-text="userPermissions.length"></strong></p>
+                            <p class="mt-1 text-xs text-green-700">These cards are dynamically displayed based on your role and direct permission assignments.</p>
                         </div>
                     </div>
                 </div>
@@ -226,30 +241,6 @@
                         link: 'invitations.html',
                         permission: 'invitations:create',
                         permissionName: 'Create Invitations'
-                    },
-                    {
-                        id: 'patients',
-                        title: 'Patients',
-                        subtitle: 'Patient Records',
-                        description: 'View and manage patient information',
-                        icon: 'fa-user-injured',
-                        color: 'text-red-600',
-                        link: '#patients',
-                        permission: 'patient:read',
-                        permissionName: 'Read Patients',
-                        comingSoon: true
-                    },
-                    {
-                        id: 'appointments',
-                        title: 'Appointments',
-                        subtitle: 'Scheduling',
-                        description: 'View and manage appointments',
-                        icon: 'fa-calendar-alt',
-                        color: 'text-indigo-600',
-                        link: '#appointments',
-                        permission: 'appointment:read',
-                        permissionName: 'Read Appointments',
-                        comingSoon: true
                     },
                     {
                         id: 'medical-records',
