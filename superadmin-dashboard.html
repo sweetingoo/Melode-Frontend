@@ -689,15 +689,30 @@
             try {
                 const user = JSON.parse(userData);
                 console.log('User data:', user);
+                console.log('is_superuser flag:', user.is_superuser);
+                console.log('permissions:', user.permissions);
                 
                 // Initialize permission manager
                 if (window.permissionManager) {
                     window.permissionManager.init(user);
+                    
+                    console.log('Permission manager after init:', {
+                        permissions: window.permissionManager.permissions,
+                        roles: window.permissionManager.roles
+                    });
+                    
                     const userType = window.permissionManager.getUserType();
                     console.log('User type determined:', userType);
                     
+                    // Check if user has superadmin access (is_superuser flag or wildcard permission)
+                    const isSuperadmin = user.is_superuser === true || 
+                                       (user.permissions && user.permissions.includes('*')) ||
+                                       userType === 'superadmin';
+                    
+                    console.log('Is superadmin?', isSuperadmin);
+                    
                     // Only allow superadmin on this dashboard
-                    if (userType !== 'superadmin') {
+                    if (!isSuperadmin) {
                         console.log('User is not superadmin, redirecting to appropriate dashboard');
                         if (userType === 'patient') {
                             window.location.href = 'patient-dashboard.html';
@@ -706,6 +721,10 @@
                         }
                         return;
                     }
+                    
+                    console.log('✅ Superadmin access granted!');
+                } else {
+                    console.warn('Permission manager not loaded, allowing access by default for authenticated users');
                 }
                 
             } catch (error) {

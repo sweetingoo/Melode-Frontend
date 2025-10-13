@@ -152,10 +152,23 @@
                 userName: 'Loading...',
                 userAvatar: window.authManager ? window.authManager.generateAvatarPlaceholder('...', 32) : '',
                 userPermissions: [],
+                user: null,
                 isLoading: true,
                 
                 // Define all possible cards with their required permissions
                 allCards: [
+                    {
+                        id: 'admin-panel',
+                        title: 'Admin Panel',
+                        subtitle: 'Superadmin Dashboard',
+                        description: 'Access the superadmin control panel',
+                        icon: 'fa-crown',
+                        color: 'text-yellow-500',
+                        link: 'superadmin-dashboard.html',
+                        permission: null, // Special card - will be shown only for superusers
+                        permissionName: 'Superadmin Access',
+                        superuserOnly: true
+                    },
                     {
                         id: 'users',
                         title: 'User Management',
@@ -330,7 +343,16 @@
                             this.userName = (user.first_name && user.last_name) 
                                 ? `${user.first_name} ${user.last_name}` 
                                 : user.username || user.email;
-                            this.userAvatar = user.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(this.userName)}&background=3b82f6&color=fff`;
+                            
+                            // Use auth manager for avatar if available
+                            if (window.authManager && window.authManager.user) {
+                                this.userAvatar = window.authManager.getAvatarUrl();
+                            } else {
+                                this.userAvatar = user.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(this.userName)}&background=3b82f6&color=fff`;
+                            }
+                            
+                            // Store user for superuser check
+                            this.user = user;
                         } catch (error) {
                             console.error('Failed to parse user data:', error);
                         }
@@ -383,11 +405,21 @@
                 },
                 
                 filterVisibleCards() {
+                    // Check if user is superuser
+                    const isSuperuser = this.user?.is_superuser === true || this.userPermissions.includes('*');
+                    
                     // Filter cards based on user permissions
                     this.visibleCards = this.allCards.filter(card => {
+                        // Special handling for superuser-only cards
+                        if (card.superuserOnly) {
+                            return isSuperuser;
+                        }
+                        
+                        // Regular permission check
                         return this.hasPermission(card.permission);
                     });
                     
+                    console.log('Is superuser:', isSuperuser);
                     console.log('Visible cards:', this.visibleCards.length);
                 },
                 
