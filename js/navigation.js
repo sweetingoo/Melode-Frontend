@@ -162,7 +162,6 @@ function navigationComponent() {
             // Check user roles and superuser flag
             const roles = user.roles || [];
             const isSuperAdmin = user.is_superuser === true || roles.some(role => role.name === 'superadmin');
-            const isPatient = roles.some(role => role.name === 'patient');
 
             // Show/hide admin panel button for superusers
             const adminPanelItem = this.navItems.find(item => item.id === 'admin-panel');
@@ -173,10 +172,8 @@ function navigationComponent() {
             // Set appropriate dashboard
             if (isSuperAdmin) {
                 dashboardItem.href = 'superadmin-dashboard.html';
-            } else if (isPatient) {
-                dashboardItem.href = 'patient-dashboard.html';
             } else {
-                // All other users (admin, staff, nurse, doctor, etc.) get permission-based dashboard
+                // All other users (doctor, contractors, staff, etc.) get permission-based dashboard
                 dashboardItem.href = 'index.html';
             }
         },
@@ -191,7 +188,6 @@ function navigationComponent() {
             // Map filenames to nav item IDs
             const pageMap = {
                 'superadmin-dashboard.html': 'admin-panel',
-                'patient-dashboard.html': 'dashboard',
                 'index.html': 'dashboard',
                 'user-management.html': 'users',
                 'role-management.html': 'roles',

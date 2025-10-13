@@ -380,12 +380,8 @@
                     
                     // Only allow superadmin on this page
                     if (userType !== 'superadmin') {
-                        console.log('User is not superadmin, redirecting to appropriate dashboard');
-                        if (userType === 'patient') {
-                            window.location.href = 'patient-dashboard.html';
-                        } else {
-                            window.location.href = 'index.html';
-                        }
+                        console.log('User is not superadmin, redirecting to dashboard');
+                        window.location.href = 'index.html';
                         return;
                     }
                 }

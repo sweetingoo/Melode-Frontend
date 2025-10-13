@@ -105,13 +105,6 @@ class AuthManager {
     }
 
     /**
-     * Check if user is patient
-     */
-    isPatient() {
-        return this.hasRole('patient');
-    }
-
-    /**
      * Get user's display name
      */
     getDisplayName() {
@@ -207,10 +200,8 @@ class AuthManager {
         // Redirect based on role hierarchy
         if (this.isSuperadmin()) {
             window.location.href = 'superadmin-dashboard.html';
-        } else if (this.isPatient()) {
-            window.location.href = 'patient-dashboard.html';
         } else {
-            // All other users (admin, staff, nurse, doctor, etc.) go to permission-based dashboard
+            // All other users (doctor, contractors, staff, etc.) go to permission-based dashboard
             window.location.href = 'index.html';
         }
     }

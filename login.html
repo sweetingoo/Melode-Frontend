@@ -417,9 +417,6 @@
                         if (userType === 'superadmin') {
                             console.log('Redirecting to superadmin dashboard');
                             window.location.href = 'superadmin-dashboard.html';
-                        } else if (userType === 'patient') {
-                            console.log('Redirecting to patient dashboard');
-                            window.location.href = 'patient-dashboard.html';
                         } else {
                             console.log('Redirecting to regular dashboard for user type:', userType);
                             window.location.href = 'index.html';
@@ -429,9 +426,6 @@
                         if (user.roles && user.roles.some(role => role.name === 'superadmin')) {
                             console.log('Redirecting to superadmin dashboard');
                             window.location.href = 'superadmin-dashboard.html';
-                        } else if (user.roles && user.roles.some(role => role.name === 'patient')) {
-                            console.log('Redirecting to patient dashboard');
-                            window.location.href = 'patient-dashboard.html';
                         } else {
                             console.log('Redirecting to regular dashboard');
                             window.location.href = 'index.html';

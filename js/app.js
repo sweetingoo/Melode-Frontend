@@ -14,7 +14,6 @@ class MelodeApp {
     getCurrentPage() {
         const path = window.location.pathname;
         if (path.includes('login.html')) return 'login';
-        if (path.includes('patient-dashboard.html')) return 'patient-dashboard';
         if (path.includes('profile.html')) return 'profile';
         if (path.includes('invitations.html')) return 'invitations';
         return 'dashboard';
@@ -87,13 +86,6 @@ class MelodeApp {
     initializeInvitations() {
         this.loadInvitations();
         this.setupInvitationForm();
-    }
-
-    /**
-     * Initialize patient dashboard
-     */
-    initializePatientDashboard() {
-        this.loadPatientData();
     }
 
     /**
@@ -335,14 +327,6 @@ class MelodeApp {
             console.error('Delete invitation failed:', error);
             this.showError('Failed to delete invitation: ' + error.message);
         }
-    }
-
-    /**
-     * Load patient data
-     */
-    async loadPatientData() {
-        // Implement patient-specific data loading
-        console.log('Loading patient data...');
     }
 
     /**

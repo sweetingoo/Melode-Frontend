@@ -82,8 +82,8 @@ class PermissionManager {
             'superadmin': 100,
             'admin': 80,
             'doctor': 60,
+            'contractor': 50,
             'staff': 40,
-            'patient': 20,
             'user': 10
         };
 
