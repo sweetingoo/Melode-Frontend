@@ -354,10 +354,10 @@
                         const token = localStorage.getItem('access_token');
                         
                         const [rolesResponse, permissionsResponse] = await Promise.all([
-                            fetch(${window.getApiBaseUrl ? window.getApiBaseUrl() : 'http://127.0.0.1:8000/api/v1'}/roles/', {
+                            fetch(`${window.getApiBaseUrl ? window.getApiBaseUrl() : 'http://127.0.0.1:8000/api/v1'}/roles/`, {
                                 headers: { 'Authorization': 'Bearer ' + token }
                             }),
-                            fetch(${window.getApiBaseUrl ? window.getApiBaseUrl() : 'http://127.0.0.1:8000/api/v1'}/roles/permissions/', {
+                            fetch(`${window.getApiBaseUrl ? window.getApiBaseUrl() : 'http://127.0.0.1:8000/api/v1'}/roles/permissions/`, {
                                 headers: { 'Authorization': 'Bearer ' + token }
                             })
                         ]);
@@ -405,8 +405,8 @@
                     try {
                         const token = localStorage.getItem('access_token');
                         const url = this.showEditRole 
-                            ? ${window.getApiBaseUrl ? window.getApiBaseUrl() : 'http://127.0.0.1:8000/api/v1'}/roles/' + this.selectedRole.id
-                            : ${window.getApiBaseUrl ? window.getApiBaseUrl() : 'http://127.0.0.1:8000/api/v1'}/roles/';
+                            ? `${window.getApiBaseUrl ? window.getApiBaseUrl() : 'http://127.0.0.1:8000/api/v1'}/roles/` + this.selectedRole.id
+                            : `${window.getApiBaseUrl ? window.getApiBaseUrl() : 'http://127.0.0.1:8000/api/v1'}/roles/`;
                         
                         const response = await fetch(url, {
                             method: this.showEditRole ? 'PUT' : 'POST',
@@ -438,7 +438,7 @@
                     
                     try {
                         const token = localStorage.getItem('access_token');
-                        const response = await fetch(${window.getApiBaseUrl ? window.getApiBaseUrl() : 'http://127.0.0.1:8000/api/v1'}/roles/' + roleId, {
+                        const response = await fetch(`${window.getApiBaseUrl ? window.getApiBaseUrl() : 'http://127.0.0.1:8000/api/v1'}/roles/` + roleId, {
                             method: 'DELETE',
                             headers: { 'Authorization': 'Bearer ' + token }
                         });
@@ -500,7 +500,7 @@
                     this.isSaving = true;
                     try {
                         const token = localStorage.getItem('access_token');
-                        const response = await fetch(${window.getApiBaseUrl ? window.getApiBaseUrl() : 'http://127.0.0.1:8000/api/v1'}/roles/' + this.selectedRole.id, {
+                        const response = await fetch(`${window.getApiBaseUrl ? window.getApiBaseUrl() : 'http://127.0.0.1:8000/api/v1'}/roles/` + this.selectedRole.id, {
                             method: 'PUT',
                             headers: {
                                 'Authorization': 'Bearer ' + token,
