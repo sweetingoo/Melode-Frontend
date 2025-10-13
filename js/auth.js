@@ -116,11 +116,73 @@ class AuthManager {
     }
 
     /**
+     * Get user's initials for avatar
+     */
+    getInitials() {
+        if (!this.user) return 'G';
+        
+        // Try to get initials from first and last name
+        if (this.user.first_name && this.user.last_name) {
+            return (this.user.first_name.charAt(0) + this.user.last_name.charAt(0)).toUpperCase();
+        }
+        
+        // Try to get from first name only
+        if (this.user.first_name) {
+            return this.user.first_name.charAt(0).toUpperCase();
+        }
+        
+        // Fall back to username
+        if (this.user.username) {
+            return this.user.username.charAt(0).toUpperCase();
+        }
+        
+        // Fall back to email
+        if (this.user.email) {
+            return this.user.email.charAt(0).toUpperCase();
+        }
+        
+        return 'U';
+    }
+
+    /**
+     * Generate avatar placeholder SVG as data URL
+     */
+    generateAvatarPlaceholder(initials = null, size = 128) {
+        const letters = initials || this.getInitials();
+        const backgroundColor = '#3b82f6'; // Primary blue
+        const textColor = '#ffffff';
+        
+        const svg = `
+            <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+                <rect width="${size}" height="${size}" fill="${backgroundColor}" rx="${size / 8}"/>
+                <text x="50%" y="50%" dominant-baseline="central" text-anchor="middle" 
+                      font-family="system-ui, -apple-system, sans-serif" 
+                      font-size="${size / 2.5}" 
+                      font-weight="600" 
+                      fill="${textColor}">
+                    ${letters}
+                </text>
+            </svg>
+        `.trim();
+        
+        return `data:image/svg+xml;base64,${btoa(svg)}`;
+    }
+
+    /**
      * Get user's avatar URL
      */
     getAvatarUrl() {
-        if (!this.user) return 'https://via.placeholder.com/32';
-        return this.user.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(this.getDisplayName())}&background=3b82f6&color=fff`;
+        if (!this.user) {
+            return this.generateAvatarPlaceholder('G');
+        }
+        
+        // Use custom avatar URL if available
+        if (this.user.avatar_url) {
+            return this.user.avatar_url;
+        }
+        
+        // Generate placeholder with user's initials
+        return this.generateAvatarPlaceholder();
     }
 
     /**
