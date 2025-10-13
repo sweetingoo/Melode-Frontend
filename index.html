@@ -394,12 +394,17 @@
                 hasPermission(requiredPermission) {
                     if (!requiredPermission) return true;
                     
+                    // Check for wildcard permission (superuser)
+                    if (this.userPermissions.includes('*')) {
+                        return true;
+                    }
+                    
                     // Check if user has the exact permission
                     return this.userPermissions.some(perm => {
                         if (typeof perm === 'string') {
-                            return perm === requiredPermission;
+                            return perm === requiredPermission || perm === '*';
                         } else if (perm.name) {
-                            return perm.name === requiredPermission;
+                            return perm.name === requiredPermission || perm.name === '*';
                         }
                         return false;
                     });
