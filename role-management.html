@@ -6,6 +6,10 @@
     <title>Role Management - Melode Healthcare Management</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <!-- Configuration -->
+    <script src="js/config.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/auth.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <script>
         tailwind.config = {
@@ -349,10 +353,10 @@
                         const token = localStorage.getItem('access_token');
                         
                         const [rolesResponse, permissionsResponse] = await Promise.all([
-                            fetch('http://127.0.0.1:8000/api/v1/roles/', {
+                            fetch(${window.getApiBaseUrl ? window.getApiBaseUrl() : 'http://127.0.0.1:8000/api/v1'}/roles/', {
                                 headers: { 'Authorization': 'Bearer ' + token }
                             }),
-                            fetch('http://127.0.0.1:8000/api/v1/roles/permissions/', {
+                            fetch(${window.getApiBaseUrl ? window.getApiBaseUrl() : 'http://127.0.0.1:8000/api/v1'}/roles/permissions/', {
                                 headers: { 'Authorization': 'Bearer ' + token }
                             })
                         ]);
@@ -400,8 +404,8 @@
                     try {
                         const token = localStorage.getItem('access_token');
                         const url = this.showEditRole 
-                            ? 'http://127.0.0.1:8000/api/v1/roles/' + this.selectedRole.id
-                            : 'http://127.0.0.1:8000/api/v1/roles/';
+                            ? ${window.getApiBaseUrl ? window.getApiBaseUrl() : 'http://127.0.0.1:8000/api/v1'}/roles/' + this.selectedRole.id
+                            : ${window.getApiBaseUrl ? window.getApiBaseUrl() : 'http://127.0.0.1:8000/api/v1'}/roles/';
                         
                         const response = await fetch(url, {
                             method: this.showEditRole ? 'PUT' : 'POST',
@@ -433,7 +437,7 @@
                     
                     try {
                         const token = localStorage.getItem('access_token');
-                        const response = await fetch('http://127.0.0.1:8000/api/v1/roles/' + roleId, {
+                        const response = await fetch(${window.getApiBaseUrl ? window.getApiBaseUrl() : 'http://127.0.0.1:8000/api/v1'}/roles/' + roleId, {
                             method: 'DELETE',
                             headers: { 'Authorization': 'Bearer ' + token }
                         });
@@ -495,7 +499,7 @@
                     this.isSaving = true;
                     try {
                         const token = localStorage.getItem('access_token');
-                        const response = await fetch('http://127.0.0.1:8000/api/v1/roles/' + this.selectedRole.id, {
+                        const response = await fetch(${window.getApiBaseUrl ? window.getApiBaseUrl() : 'http://127.0.0.1:8000/api/v1'}/roles/' + this.selectedRole.id, {
                             method: 'PUT',
                             headers: {
                                 'Authorization': 'Bearer ' + token,

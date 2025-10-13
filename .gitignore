@@ -1,0 +1,49 @@
+# Environment Configuration
+# Note: config.js is tracked with 'development' as default
+# Developers can switch environments locally without committing changes
+config.js.backup
+
+# IDE and Editor files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Dependencies (if you add npm later)
+node_modules/
+package-lock.json
+yarn.lock
+
+# Build outputs (if you add a build process)
+dist/
+build/
+.cache/
+
+# Temporary files
+*.tmp
+*.temp
+.temp/
+.tmp/
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Desktop.ini
+
+# Environment variables (if using .env files in future)
+.env
+.env.local
+.env.*.local
+

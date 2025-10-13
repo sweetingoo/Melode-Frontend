@@ -34,20 +34,24 @@ A modern, responsive frontend for the Melode Healthcare Management System built 
 
 ```
 Melode-Frontend/
-├── index.html              # Main dashboard
-├── login.html              # Login page with role selection
-├── profile.html            # User profile management
-├── invitations.html        # Invitation management
-├── patient-dashboard.html  # Patient-specific dashboard
+├── index.html                  # Main dashboard
+├── login.html                  # Login page with role selection
+├── profile.html                # User profile management
+├── invitations.html            # Invitation management
+├── patient-dashboard.html      # Patient-specific dashboard
 ├── js/
-│   ├── api.js             # API integration layer
-│   ├── auth.js            # Authentication utilities
-│   ├── app.js             # Main application logic
-│   ├── login.js           # Login page functionality
-│   ├── profile.js         # Profile management
-│   ├── invitations.js     # Invitation management
-│   └── patient.js         # Patient dashboard
-└── README.md              # This file
+│   ├── config.js              # Active environment configuration ⚙️
+│   ├── config.development.js  # Development environment preset
+│   ├── config.staging.js      # Staging environment preset
+│   ├── config.production.js   # Production environment preset
+│   ├── api.js                 # API integration layer
+│   ├── auth.js                # Authentication utilities
+│   ├── app.js                 # Main application logic
+│   ├── login.js               # Login page functionality
+│   ├── profile.js             # Profile management
+│   ├── invitations.js         # Invitation management
+│   └── patient.js             # Patient dashboard
+└── README.md                  # This file
 ```
 
 ## API Integration
@@ -136,9 +140,17 @@ The frontend integrates with the FastAPI backend through the following endpoints
    cd Melode-Frontend
    ```
 
-2. **Configure API endpoint**
-   - Update the `baseURL` in `js/api.js` to point to your FastAPI backend
-   - Default: `http://localhost:8000/api/v1`
+2. **Configure Environment**
+   ```bash
+   # Choose your environment (development is default)
+   # Option 1: Use the default config.js (already set to development)
+   
+   # Option 2: Copy a specific environment config
+   cp js/config.staging.js js/config.js     # For staging
+   cp js/config.production.js js/config.js  # For production
+   
+   # Option 3: Edit js/config.js and change ENVIRONMENT value
+   ```
 
 3. **Start a local server**
    ```bash
@@ -158,10 +170,58 @@ The frontend integrates with the FastAPI backend through the following endpoints
 
 ## Configuration
 
-### API Configuration
-Update the API base URL in `js/api.js`:
+### Environment Configuration (NEW! ✨)
+
+The project now supports easy environment switching through configuration files!
+
+#### Quick Start - Change Environment
+
+**Option 1: Edit config.js directly**
+Open `js/config.js` and change the `ENVIRONMENT` value:
 ```javascript
-this.baseURL = 'https://your-api-domain.com/api/v1';
+const CONFIG = {
+    ENVIRONMENT: 'staging', // Change to: 'development', 'staging', or 'production'
+    // ...
+};
+```
+
+**Option 2: Use pre-built environment configs**
+Copy the appropriate environment file to `config.js`:
+
+```bash
+# For Development
+cp js/config.development.js js/config.js
+
+# For Staging
+cp js/config.staging.js js/config.js
+
+# For Production
+cp js/config.production.js js/config.js
+```
+
+#### Available Environments
+
+| Environment | API URL | Use Case |
+|------------|---------|----------|
+| `development` | `http://127.0.0.1:8000/api/v1` | Local development |
+| `staging` | `https://melode-api-staging.onrender.com/api/v1` | Testing/QA |
+| `production` | `https://api.melode.com/api/v1` | Live production |
+
+#### Adding Custom Environments
+
+Edit `js/config.js` to add your own environment:
+```javascript
+const CONFIG = {
+    ENVIRONMENT: 'custom',
+    
+    API_BASE_URLS: {
+        development: 'http://127.0.0.1:8000/api/v1',
+        staging: 'https://melode-api-staging.onrender.com/api/v1',
+        production: 'https://api.melode.com/api/v1',
+        custom: 'https://your-custom-url.com/api/v1', // Add your URL here
+    },
+    // ...
+};
 ```
 
 ### Session Configuration

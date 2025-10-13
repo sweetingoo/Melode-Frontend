@@ -4,7 +4,10 @@
  */
 
 const AuthUtils = {
-    API_BASE_URL: 'http://127.0.0.1:8000/api/v1',
+    // Use configured API base URL, fall back to localhost if config not loaded
+    get API_BASE_URL() {
+        return window.getApiBaseUrl ? window.getApiBaseUrl() : 'http://127.0.0.1:8000/api/v1';
+    },
 
     /**
      * Get access token from localStorage

@@ -5,7 +5,8 @@
 
 class ApiClient {
     constructor() {
-        this.baseURL = 'http://127.0.0.1:8000/api/v1'; // Updated to your backend URL
+        // Get API base URL from config (requires config.js to be loaded first)
+        this.baseURL = window.getApiBaseUrl ? window.getApiBaseUrl() : 'http://127.0.0.1:8000/api/v1';
         this.token = localStorage.getItem('access_token');
         this.refreshToken = localStorage.getItem('refresh_token');
     }

@@ -6,6 +6,10 @@
     <title>Edit User - Melode Healthcare Management</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <!-- Configuration -->
+    <script src="js/config.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/auth.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <script>
         tailwind.config = {
@@ -640,16 +644,16 @@
                         const token = localStorage.getItem('access_token');
                         
                         const [userResponse, rolesResponse, permissionsResponse, allRolesResponse] = await Promise.all([
-                            fetch('http://127.0.0.1:8000/api/v1/users/' + this.userId, {
+                            fetch(${window.getApiBaseUrl ? window.getApiBaseUrl() : 'http://127.0.0.1:8000/api/v1'}/users/' + this.userId, {
                                 headers: { 'Authorization': 'Bearer ' + token }
                             }),
-                            fetch('http://127.0.0.1:8000/api/v1/roles/users/' + this.userId + '/roles', {
+                            fetch(${window.getApiBaseUrl ? window.getApiBaseUrl() : 'http://127.0.0.1:8000/api/v1'}/roles/users/' + this.userId + '/roles', {
                                 headers: { 'Authorization': 'Bearer ' + token }
                             }),
-                            fetch('http://127.0.0.1:8000/api/v1/users/' + this.userId + '/permissions', {
+                            fetch(${window.getApiBaseUrl ? window.getApiBaseUrl() : 'http://127.0.0.1:8000/api/v1'}/users/' + this.userId + '/permissions', {
                                 headers: { 'Authorization': 'Bearer ' + token }
                             }),
-                            fetch('http://127.0.0.1:8000/api/v1/roles/', {
+                            fetch(${window.getApiBaseUrl ? window.getApiBaseUrl() : 'http://127.0.0.1:8000/api/v1'}/roles/', {
                                 headers: { 'Authorization': 'Bearer ' + token }
                             })
                         ]);
@@ -683,7 +687,7 @@
                     this.isSaving = true;
                     try {
                         const token = localStorage.getItem('access_token');
-                        const response = await fetch('http://127.0.0.1:8000/api/v1/users/' + this.userId, {
+                        const response = await fetch(${window.getApiBaseUrl ? window.getApiBaseUrl() : 'http://127.0.0.1:8000/api/v1'}/users/' + this.userId, {
                             method: 'PUT',
                             headers: {
                                 'Authorization': 'Bearer ' + token,
@@ -710,7 +714,7 @@
                     
                     try {
                         const token = localStorage.getItem('access_token');
-                        const response = await fetch('http://127.0.0.1:8000/api/v1/roles/assign', {
+                        const response = await fetch(${window.getApiBaseUrl ? window.getApiBaseUrl() : 'http://127.0.0.1:8000/api/v1'}/roles/assign', {
                             method: 'POST',
                             headers: {
                                 'Authorization': 'Bearer ' + token,
@@ -746,7 +750,7 @@
                     
                     try {
                         const token = localStorage.getItem('access_token');
-                        const response = await fetch('http://127.0.0.1:8000/api/v1/roles/assign/' + this.userId + '/' + roleId, {
+                        const response = await fetch(${window.getApiBaseUrl ? window.getApiBaseUrl() : 'http://127.0.0.1:8000/api/v1'}/roles/assign/' + this.userId + '/' + roleId, {
                             method: 'DELETE',
                             headers: { 'Authorization': 'Bearer ' + token }
                         });
@@ -770,7 +774,7 @@
                     const endpoint = this.user.is_active ? 'deactivate' : 'activate';
                     try {
                         const token = localStorage.getItem('access_token');
-                        const response = await fetch('http://127.0.0.1:8000/api/v1/users/' + this.userId + '/' + endpoint, {
+                        const response = await fetch(${window.getApiBaseUrl ? window.getApiBaseUrl() : 'http://127.0.0.1:8000/api/v1'}/users/' + this.userId + '/' + endpoint, {
                             method: 'POST',
                             headers: { 'Authorization': 'Bearer ' + token }
                         });
@@ -788,7 +792,7 @@
                 async verifyUser() {
                     try {
                         const token = localStorage.getItem('access_token');
-                        const response = await fetch('http://127.0.0.1:8000/api/v1/users/' + this.userId + '/verify', {
+                        const response = await fetch(${window.getApiBaseUrl ? window.getApiBaseUrl() : 'http://127.0.0.1:8000/api/v1'}/users/' + this.userId + '/verify', {
                             method: 'POST',
                             headers: { 'Authorization': 'Bearer ' + token }
                         });
@@ -809,7 +813,7 @@
                     
                     try {
                         const token = localStorage.getItem('access_token');
-                        const response = await fetch('http://127.0.0.1:8000/api/v1/users/' + this.userId, {
+                        const response = await fetch(${window.getApiBaseUrl ? window.getApiBaseUrl() : 'http://127.0.0.1:8000/api/v1'}/users/' + this.userId, {
                             method: 'DELETE',
                             headers: { 'Authorization': 'Bearer ' + token }
                         });
@@ -843,7 +847,8 @@
                         
                         for (const role of this.userRoles) {
                             // Get permissions for each role
-                            const roleResponse = await fetch(`http://127.0.0.1:8000/api/v1/roles/${role.id}`, {
+                            const apiUrl = window.getApiBaseUrl ? window.getApiBaseUrl() : 'http://127.0.0.1:8000/api/v1';
+                            const roleResponse = await fetch(`${apiUrl}/roles/${role.id}`, {
                                 headers: { 'Authorization': 'Bearer ' + token }
                             });
                             
@@ -895,7 +900,7 @@
                 async loadAllPermissions() {
                     try {
                         const token = localStorage.getItem('access_token');
-                        const response = await fetch('http://127.0.0.1:8000/api/v1/permissions/?per_page=100', {
+                        const response = await fetch(${window.getApiBaseUrl ? window.getApiBaseUrl() : 'http://127.0.0.1:8000/api/v1'}/permissions/?per_page=100', {
                             headers: { 'Authorization': 'Bearer ' + token }
                         });
                         
