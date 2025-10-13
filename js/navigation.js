@@ -23,6 +23,15 @@ function navigationComponent() {
                 visible: true
             },
             {
+                id: 'admin-panel',
+                label: 'Admin Panel',
+                icon: 'fas fa-crown',
+                href: 'superadmin-dashboard.html',
+                permission: null,  // Will be shown only for superusers
+                visible: false,
+                superuserOnly: true
+            },
+            {
                 id: 'users',
                 label: 'Users',
                 icon: 'fas fa-users',
@@ -106,10 +115,40 @@ function navigationComponent() {
         },
 
         /**
-         * Generate avatar URL
+         * Generate avatar URL using local SVG
          */
         generateAvatarUrl(name) {
-            return 'https://ui-avatars.com/api/?name=' + encodeURIComponent(name) + '&background=3b82f6&color=fff';
+            // Use auth manager if available
+            if (window.authManager && window.authManager.user) {
+                return window.authManager.getAvatarUrl();
+            }
+
+            // Fallback: generate local SVG
+            const initials = name ? name.split(' ').map(n => n.charAt(0)).join('').substring(0, 2).toUpperCase() : 'U';
+            return this.generateAvatarPlaceholder(initials, 32);
+        },
+
+        /**
+         * Generate avatar placeholder SVG
+         */
+        generateAvatarPlaceholder(initials, size = 32) {
+            const backgroundColor = '#3b82f6';
+            const textColor = '#ffffff';
+
+            const svg = `
+                <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+                    <rect width="${size}" height="${size}" fill="${backgroundColor}" rx="${size / 8}"/>
+                    <text x="50%" y="50%" dominant-baseline="central" text-anchor="middle" 
+                          font-family="system-ui, -apple-system, sans-serif" 
+                          font-size="${size / 2.5}" 
+                          font-weight="600" 
+                          fill="${textColor}">
+                        ${initials}
+                    </text>
+                </svg>
+            `.trim();
+
+            return `data:image/svg+xml;base64,${btoa(svg)}`;
         },
 
         /**
@@ -120,10 +159,16 @@ function navigationComponent() {
             const dashboardItem = this.navItems.find(item => item.id === 'dashboard');
             if (!dashboardItem) return;
 
-            // Check user roles
+            // Check user roles and superuser flag
             const roles = user.roles || [];
-            const isSuperAdmin = roles.some(role => role.name === 'superadmin');
+            const isSuperAdmin = user.is_superuser === true || roles.some(role => role.name === 'superadmin');
             const isPatient = roles.some(role => role.name === 'patient');
+
+            // Show/hide admin panel button for superusers
+            const adminPanelItem = this.navItems.find(item => item.id === 'admin-panel');
+            if (adminPanelItem) {
+                adminPanelItem.visible = isSuperAdmin;
+            }
 
             // Set appropriate dashboard
             if (isSuperAdmin) {
@@ -145,7 +190,7 @@ function navigationComponent() {
 
             // Map filenames to nav item IDs
             const pageMap = {
-                'superadmin-dashboard.html': 'dashboard',
+                'superadmin-dashboard.html': 'admin-panel',
                 'patient-dashboard.html': 'dashboard',
                 'index.html': 'dashboard',
                 'user-management.html': 'users',
