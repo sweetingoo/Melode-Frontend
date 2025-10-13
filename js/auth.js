@@ -76,6 +76,10 @@ class AuthManager {
      * Check if user is superadmin
      */
     isSuperadmin() {
+        // Check both is_superuser flag and superadmin role
+        if (this.user && this.user.is_superuser === true) {
+            return true;
+        }
         return this.hasRole('superadmin');
     }
 
@@ -112,6 +116,12 @@ class AuthManager {
      */
     getDisplayName() {
         if (!this.user) return 'Guest';
+
+        // Use backend's display_name if available, otherwise construct it
+        if (this.user.display_name) {
+            return this.user.display_name;
+        }
+
         return `${this.user.first_name || ''} ${this.user.last_name || ''}`.trim() || this.user.username || this.user.email;
     }
 
@@ -120,27 +130,27 @@ class AuthManager {
      */
     getInitials() {
         if (!this.user) return 'G';
-        
+
         // Try to get initials from first and last name
         if (this.user.first_name && this.user.last_name) {
             return (this.user.first_name.charAt(0) + this.user.last_name.charAt(0)).toUpperCase();
         }
-        
+
         // Try to get from first name only
         if (this.user.first_name) {
             return this.user.first_name.charAt(0).toUpperCase();
         }
-        
+
         // Fall back to username
         if (this.user.username) {
             return this.user.username.charAt(0).toUpperCase();
         }
-        
+
         // Fall back to email
         if (this.user.email) {
             return this.user.email.charAt(0).toUpperCase();
         }
-        
+
         return 'U';
     }
 
@@ -151,7 +161,7 @@ class AuthManager {
         const letters = initials || this.getInitials();
         const backgroundColor = '#3b82f6'; // Primary blue
         const textColor = '#ffffff';
-        
+
         const svg = `
             <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
                 <rect width="${size}" height="${size}" fill="${backgroundColor}" rx="${size / 8}"/>
@@ -164,7 +174,7 @@ class AuthManager {
                 </text>
             </svg>
         `.trim();
-        
+
         return `data:image/svg+xml;base64,${btoa(svg)}`;
     }
 
@@ -175,12 +185,12 @@ class AuthManager {
         if (!this.user) {
             return this.generateAvatarPlaceholder('G');
         }
-        
+
         // Use custom avatar URL if available
         if (this.user.avatar_url) {
             return this.user.avatar_url;
         }
-        
+
         // Generate placeholder with user's initials
         return this.generateAvatarPlaceholder();
     }
