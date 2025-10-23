@@ -5,6 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Profile - Melode Healthcare Management</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        // Suppress Tailwind CDN warning in development
+        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+            console.log('Using Tailwind CDN for development');
+        }
+    </script>
     <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
     <!-- Configuration -->
     <script src="js/config.js"></script>
@@ -13,7 +19,11 @@
     <script src="js/auth-utils.js"></script>
     <script src="js/permissions.js"></script>
     <script src="js/navigation.js"></script>
+    <script src="js/custom-fields.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        [x-cloak] { display: none !important; }
+    </style>
     <script>
         tailwind.config = {
             theme: {
@@ -397,17 +407,27 @@
                     </div>
                 </div>
             </div>
-        </div>
-    </main>
 
-    <!-- MFA Setup Modal -->
+            <!-- Custom Fields Section -->
+            <div class="bg-white shadow rounded-lg mt-6">
+                <div class="px-4 py-5 sm:p-6">
+                    <h2 class="text-lg font-medium text-gray-900 mb-6">Additional Information</h2>
+                    <p class="text-sm text-gray-600 mb-6">Complete your profile with organization-specific information.</p>
+                    
+                    <div id="custom-fields-container">
+                        <!-- Custom fields will be loaded here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- MFA Setup Modal -->
     <div x-show="showMFASetupModal" 
          x-cloak 
          class="fixed z-50 inset-0 overflow-y-auto" 
          aria-labelledby="modal-title" 
          role="dialog" 
-         aria-modal="true"
-         style="display: none;">
+         aria-modal="true">
         <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
             <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" @click="showMFASetupModal = false"></div>
 
@@ -542,11 +562,9 @@
             </div>
         </div>
     </div>
+    </main>
 
     <!-- Scripts -->
-    <script src="js/auth-utils.js"></script>
-    <script src="js/api.js"></script>
-    <script src="js/auth.js"></script>
     <script src="js/app.js"></script>
     <script src="js/profile.js"></script>
 </body>

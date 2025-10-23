@@ -1,0 +1,2224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Custom Fields Management - Melode Healthcare Management</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        // Suppress Tailwind CDN warning in development
+        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+            console.log('Using Tailwind CDN for development');
+        }
+    </script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <!-- Configuration -->
+    <script src="js/config.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/auth-utils.js"></script>
+    <script src="js/permissions.js"></script>
+    <script src="js/navigation.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        [x-cloak] { display: none !important; }
+        .modal-backdrop {
+            backdrop-filter: blur(4px);
+        }
+        .fade-in {
+            animation: fadeIn 0.2s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        .slide-up {
+            animation: slideUp 0.3s ease-out;
+        }
+        @keyframes slideUp {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+    </style>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            50: '#eff6ff',
+                            100: '#dbeafe',
+                            200: '#bfdbfe',
+                            300: '#93c5fd',
+                            400: '#60a5fa',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                            800: '#1e40af',
+                            900: '#1e3a8a',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen" x-data="customFieldsAdmin()" x-init="init()">
+    <!-- Unified Navigation -->
+    <nav class="bg-white shadow-lg border-b border-gray-200" x-data="navigationComponent()" x-init="init()">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <h1 class="text-2xl font-bold text-primary-600 cursor-pointer" @click="window.location.href = navItems.find(i => i.id === 'dashboard').href">Melode</h1>
+                    </div>
+                    <div class="hidden md:ml-6 md:flex md:space-x-4">
+                        <template x-for="item in navItems" :key="item.id">
+                            <a x-show="item.visible" 
+                               :href="item.href"
+                               :class="getNavLinkClasses(item.id)"
+                               class="px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200">
+                                <i :class="item.icon" class="mr-2"></i>
+                                <span x-text="item.label"></span>
+                            </a>
+                        </template>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <div class="relative" x-data="{ open: false }">
+                        <button @click="open = !open" class="flex items-center text-sm rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                            <span class="sr-only">Open user menu</span>
+                            <div class="h-8 w-8 rounded-full bg-primary-500 flex items-center justify-center">
+                                <span class="text-white font-medium text-sm" x-text="getUserInitials ? getUserInitials() : 'U'"></span>
+                            </div>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+        <!-- Header -->
+        <div class="mb-8">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-900">Custom Fields Management</h1>
+                    <p class="mt-2 text-gray-600">Configure custom fields for different entity types in your organization</p>
+                    <div class="mt-2 flex items-center space-x-4 text-sm text-gray-500">
+                        <span class="flex items-center">
+                            <i class="fas fa-memory mr-1"></i>
+                            State Persisted
+                        </span>
+                        <button @click="clearState()" 
+                                class="text-xs text-gray-400 hover:text-gray-600 transition-colors duration-200"
+                                title="Reset to defaults">
+                            <i class="fas fa-refresh mr-1"></i>
+                            Reset State
+                        </button>
+                    </div>
+                </div>
+                <div class="flex space-x-3">
+                    <button @click="showCreateSectionModal = true" 
+                            class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors duration-200">
+                        <i class="fas fa-plus mr-2"></i>
+                        Create Section
+                    </button>
+                    <button @click="openCreateFieldModal()" 
+                            class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors duration-200">
+                        <i class="fas fa-plus mr-2"></i>
+                        Create Field
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Entity Type Selector -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+            <div class="flex items-center space-x-4">
+                <label class="block text-sm font-medium text-gray-700">Entity Type:</label>
+                <select x-model="selectedEntityType" @change="changeEntityType($event.target.value)" 
+                        :disabled="isLoading"
+                                        class="mt-1 block w-64 border-2 border-gray-400 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed bg-white">
+                    <option value="user">Users</option>
+                    <option value="asset">Assets</option>
+                    <option value="location">Locations</option>
+                    <option value="task">Tasks</option>
+                    <option value="form">Forms</option>
+                    <option value="general">General</option>
+                </select>
+                <div x-show="isLoading" class="ml-2">
+                    <i class="fas fa-spinner fa-spin text-primary-500"></i>
+                </div>
+                <div class="text-sm text-gray-500">
+                    <i class="fas fa-info-circle mr-1"></i>
+                    Select the entity type to manage custom fields for
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+            <div class="border-b border-gray-200">
+                <div class="flex items-center justify-between px-6">
+                    <nav class="-mb-px flex space-x-8">
+                        <button @click="setActiveTab('sections')" 
+                                :class="activeTab === 'sections' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                                class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200">
+                            <i class="fas fa-folder mr-2"></i>
+                            Sections (<span x-text="getVisibleSections().length"></span>)
+                        </button>
+                        <button @click="setActiveTab('fields')" 
+                                :class="activeTab === 'fields' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                                class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200">
+                            <i class="fas fa-list mr-2"></i>
+                            Fields (<span x-text="getVisibleFields().length"></span>)
+                        </button>
+                        <button @click="setActiveTab('preview')" 
+                                :class="activeTab === 'preview' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                                class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200">
+                            <i class="fas fa-eye mr-2"></i>
+                            Preview
+                        </button>
+                    </nav>
+                    <div class="flex items-center space-x-4">
+                        <div class="flex items-center space-x-2">
+                            <span class="text-sm text-gray-600">Show Inactive:</span>
+                            <button @click="toggleInactiveItems()" 
+                                    class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
+                                    :class="showInactiveItems ? 'bg-primary-600' : 'bg-gray-200'">
+                                <span class="inline-block h-4 w-4 transform rounded-full bg-white transition duration-200 ease-in-out"
+                                      :class="showInactiveItems ? 'translate-x-6' : 'translate-x-1'"></span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content -->
+            <div class="p-6">
+                <!-- Sections Tab -->
+                <div x-show="activeTab === 'sections'" x-transition>
+                    <div class="flex items-center justify-between mb-6">
+                        <h3 class="text-lg font-medium text-gray-900">Custom Field Sections</h3>
+                        <button @click="showCreateSectionModal = true" 
+                                class="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                            <i class="fas fa-plus mr-2"></i>
+                            Add Section
+                        </button>
+                    </div>
+
+                    <div x-show="isLoading" class="text-center py-8">
+                        <i class="fas fa-spinner fa-spin text-2xl text-primary-500"></i>
+                        <p class="mt-2 text-gray-500">Loading sections...</p>
+                    </div>
+
+                    <div x-show="!isLoading && sections.length === 0" class="text-center py-12">
+                        <i class="fas fa-folder-open text-4xl text-gray-300 mb-4"></i>
+                        <h3 class="text-lg font-medium text-gray-900 mb-2">No sections found</h3>
+                        <p class="text-gray-500 mb-4">Create your first custom field section to get started.</p>
+                        <button @click="showCreateSectionModal = true" 
+                                class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700">
+                            <i class="fas fa-plus mr-2"></i>
+                            Create Section
+                        </button>
+                    </div>
+
+                    <div x-show="!isLoading && sections.length > 0" class="grid gap-4">
+                        <template x-for="section in getVisibleSections()" :key="section.id">
+                            <div class="bg-gray-50 rounded-lg p-4 border border-gray-200 hover:shadow-md transition-shadow duration-200">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex-1">
+                                        <h4 class="text-lg font-medium text-gray-900" x-text="section.section_label"></h4>
+                                        <p class="text-sm text-gray-500 mt-1" x-text="section.section_description || 'No description'"></p>
+                                        <div class="flex items-center mt-2 space-x-4 text-sm text-gray-500">
+                                            <span><i class="fas fa-tag mr-1"></i><span x-text="section.section_name"></span></span>
+                                            <span><i class="fas fa-sort mr-1"></i>Order: <span x-text="section.sort_order"></span></span>
+                                            <span><i class="fas fa-check-circle mr-1" :class="section.is_active ? 'text-green-500' : 'text-gray-400'"></i>
+                                                <span :class="section.is_active ? 'text-green-600' : 'text-gray-500'" x-text="section.is_active ? 'Active' : 'Inactive'"></span>
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center space-x-2">
+                                        <button @click="editSection(section)" 
+                                                class="p-2 text-gray-400 hover:text-primary-600 transition-colors duration-200"
+                                                title="Edit Section">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <button @click="toggleSectionStatus(section)" 
+                                                class="p-2 transition-colors duration-200"
+                                                :title="section.is_active ? 'Deactivate Section' : 'Activate Section'">
+                                            <div class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
+                                                 :class="section.is_active ? 'bg-primary-600' : 'bg-gray-200'">
+                                                <span class="inline-block h-4 w-4 transform rounded-full bg-white transition duration-200 ease-in-out"
+                                                      :class="section.is_active ? 'translate-x-6' : 'translate-x-1'"></span>
+                                            </div>
+                                        </button>
+                                        <div class="relative inline-block">
+                                            <button @click="showSectionDeleteMenu = showSectionDeleteMenu === section.id ? null : section.id" 
+                                                    class="p-2 text-gray-400 hover:text-red-600 transition-colors duration-200"
+                                                    title="Delete Section">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                            <div x-show="showSectionDeleteMenu === section.id" 
+                                                 x-cloak
+                                                 class="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-10 border border-gray-200">
+                                                <div class="py-1">
+                                                    <button @click="deleteSection(section.id); showSectionDeleteMenu = null" 
+                                                            class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                                        <i class="fas fa-eye-slash mr-2"></i>Deactivate (Reversible)
+                                                    </button>
+                                                    <button @click="hardDeleteSection(section.id); showSectionDeleteMenu = null" 
+                                                            class="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50">
+                                                        <i class="fas fa-trash mr-2"></i>Permanently Delete
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- Fields Tab -->
+                <div x-show="activeTab === 'fields'" x-transition>
+                    <div class="flex items-center justify-between mb-6">
+                        <h3 class="text-lg font-medium text-gray-900">Custom Fields</h3>
+                        <button @click="openCreateFieldModal()" 
+                                class="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                            <i class="fas fa-plus mr-2"></i>
+                            Add Field
+                        </button>
+                    </div>
+
+                    <div x-show="isLoading" class="text-center py-8">
+                        <i class="fas fa-spinner fa-spin text-2xl text-primary-500"></i>
+                        <p class="mt-2 text-gray-500">Loading fields...</p>
+                    </div>
+
+                    <div x-show="!isLoading && fields.length === 0" class="text-center py-12">
+                        <i class="fas fa-list text-4xl text-gray-300 mb-4"></i>
+                        <h3 class="text-lg font-medium text-gray-900 mb-2">No fields found</h3>
+                        <p class="text-gray-500 mb-4">Create your first custom field to get started.</p>
+                        <button @click="openCreateFieldModal()" 
+                                class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700">
+                            <i class="fas fa-plus mr-2"></i>
+                            Create Field
+                        </button>
+                        <button @click="createTestFieldWithRelationship()" 
+                                class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 ml-2">
+                            <i class="fas fa-flask mr-2"></i>
+                            Test Relationship
+                        </button>
+                    </div>
+
+                    <!-- Debug Information (Development Only) -->
+                    <div x-show="!isLoading && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')" 
+                         class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                        <h4 class="text-sm font-medium text-blue-800 mb-2">Debug Information</h4>
+                        <div class="text-xs text-blue-700 space-y-1">
+                            <div>Total sections: <span x-text="sections.length"></span> (Active: <span x-text="sections.filter(s => s.is_active).length"></span>, Inactive: <span x-text="sections.filter(s => !s.is_active).length"></span>)</div>
+                            <div>Total fields: <span x-text="fields.length"></span> (Active: <span x-text="fields.filter(f => f.is_active).length"></span>, Inactive: <span x-text="fields.filter(f => !f.is_active).length"></span>)</div>
+                            <div>Fields with sections: <span x-text="fields.filter(f => f.section_id).length"></span></div>
+                            <div>Fields without sections: <span x-text="fields.filter(f => !f.section_id).length"></span></div>
+                            <div>Show inactive: <span x-text="showInactiveItems"></span></div>
+                            <div class="mt-2 text-yellow-600" x-show="fields.filter(f => f.section_id).length > 0">
+                                <strong>Section-Field Relationships:</strong>
+                                <template x-for="field in fields.filter(f => f.section_id)" :key="field.id">
+                                    <div class="ml-2">• <span x-text="field.field_label"></span> → Section <span x-text="field.section_id"></span> (<span x-text="field.section_name || 'Unknown'"></span>)</div>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Fields without sections -->
+                    <div x-show="!isLoading && fields.filter(f => !f.section_id).length > 0" class="mb-6">
+                        <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                            <h4 class="text-sm font-medium text-yellow-800 mb-2">
+                                <i class="fas fa-exclamation-triangle mr-2"></i>
+                                Fields without sections (<span x-text="fields.filter(f => !f.section_id).length"></span>)
+                            </h4>
+                            <p class="text-xs text-yellow-700">These fields are not assigned to any section and may not appear on the profile page.</p>
+                        </div>
+                    </div>
+
+                    <!-- Debug: Show field count -->
+                    <div x-show="!isLoading" class="mb-4 p-2 bg-gray-100 rounded text-sm">
+                        <span>Fields to display: <span x-text="getVisibleFields().length"></span></span>
+                        <span class="ml-4">Total fields: <span x-text="fields.length"></span></span>
+                        <span class="ml-4">Show inactive: <span x-text="showInactiveItems"></span></span>
+                    </div>
+
+                    <div x-show="!isLoading && fields.length > 0" class="grid gap-4">
+                        <template x-for="field in getVisibleFields()" :key="field.id">
+                            <div class="bg-gray-50 rounded-lg p-4 border border-gray-200 hover:shadow-md transition-shadow duration-200">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex-1">
+                                        <div class="flex items-center space-x-2">
+                                            <h4 class="text-lg font-medium text-gray-900" x-text="field.field_label"></h4>
+                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary-100 text-primary-800" x-text="field.field_type"></span>
+                                            <span x-show="field.is_required" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                                Required
+                                            </span>
+                                            <span x-show="field.relationship_config" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                                                <i class="fas fa-link mr-1"></i>Related
+                                            </span>
+                                        </div>
+                                        <p class="text-sm text-gray-500 mt-1" x-text="field.field_description || 'No description'"></p>
+                                        <div class="flex items-center mt-2 space-x-4 text-sm text-gray-500">
+                                            <span><i class="fas fa-tag mr-1"></i><span x-text="field.field_name"></span></span>
+                                            <span x-show="field.section_id"><i class="fas fa-folder mr-1"></i>Section: <span x-text="getSectionName(field.section_id)"></span></span>
+                                            <span><i class="fas fa-check-circle mr-1" :class="field.is_active ? 'text-green-500' : 'text-gray-400'"></i>
+                                                <span :class="field.is_active ? 'text-green-600' : 'text-gray-500'" x-text="field.is_active ? 'Active' : 'Inactive'"></span>
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center space-x-2">
+                                        <button @click="editField(field)" 
+                                                class="p-2 text-gray-400 hover:text-primary-600 transition-colors duration-200"
+                                                title="Edit Field">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <div class="relative inline-block">
+                                            <button @click="showFieldDeleteMenu = showFieldDeleteMenu === field.id ? null : field.id" 
+                                                    class="p-2 text-gray-400 hover:text-red-600 transition-colors duration-200"
+                                                    title="Delete Field">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                            <div x-show="showFieldDeleteMenu === field.id" 
+                                                 x-cloak
+                                                 class="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-10 border border-gray-200">
+                                                <div class="py-1">
+                                                    <button @click="deleteField(field.id); showFieldDeleteMenu = null" 
+                                                            class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                                        <i class="fas fa-eye-slash mr-2"></i>Deactivate (Reversible)
+                                                    </button>
+                                                    <button @click="hardDeleteField(field.id); showFieldDeleteMenu = null" 
+                                                            class="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50">
+                                                        <i class="fas fa-trash mr-2"></i>Permanently Delete
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <button @click="toggleFieldStatus(field)" 
+                                                class="p-2 transition-colors duration-200"
+                                                :title="field.is_active ? 'Deactivate Field' : 'Activate Field'">
+                                            <div class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
+                                                 :class="field.is_active ? 'bg-primary-600' : 'bg-gray-200'">
+                                                <span class="inline-block h-4 w-4 transform rounded-full bg-white transition duration-200 ease-in-out"
+                                                      :class="field.is_active ? 'translate-x-6' : 'translate-x-1'"></span>
+                                            </div>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- Preview Tab -->
+                <div x-show="activeTab === 'preview'" x-transition>
+                    <div class="bg-white shadow rounded-lg p-6">
+                        <div class="flex items-center justify-between mb-6">
+                            <h3 class="text-lg font-medium text-gray-900">Preview Custom Fields</h3>
+                            <button @click="previewFields()" :disabled="isLoading"
+                                    class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50">
+                                <i class="fas fa-eye mr-2"></i>
+                                <span x-show="!isLoading">Load Preview</span>
+                                <span x-show="isLoading" class="flex items-center">
+                                    <i class="fas fa-spinner fa-spin mr-2"></i>
+                                    Loading...
+                                </span>
+                            </button>
+                        </div>
+                        
+                        <div class="space-y-6">
+                            <!-- Preview Information -->
+                            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                <div class="flex">
+                                    <div class="flex-shrink-0">
+                                        <i class="fas fa-info-circle text-blue-400"></i>
+                                    </div>
+                                    <div class="ml-3">
+                                        <h4 class="text-sm font-medium text-blue-800">Preview Information</h4>
+                                        <div class="mt-2 text-sm text-blue-700">
+                                            <p>This preview shows how the custom fields will appear to users on their profile page.</p>
+                                            <p class="mt-1">Click "Load Preview" to see the current field configuration.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Current Configuration -->
+                            <div class="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                                <h4 class="text-sm font-medium text-gray-800 mb-2">Current Configuration</h4>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                                    <div>
+                                        <span class="font-medium text-gray-600">Sections:</span>
+                                        <span class="ml-2 text-gray-900" x-text="sections.length"></span>
+                                    </div>
+                                    <div>
+                                        <span class="font-medium text-gray-600">Fields:</span>
+                                        <span class="ml-2 text-gray-900" x-text="fields.length"></span>
+                                    </div>
+                                    <div>
+                                        <span class="font-medium text-gray-600">Entity Type:</span>
+                                        <span class="ml-2 text-gray-900 capitalize" x-text="selectedEntityType"></span>
+                                    </div>
+                                    <div>
+                                        <span class="font-medium text-gray-600">Status:</span>
+                                        <span class="ml-2 text-green-600 font-medium">Active</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Preview Data Display -->
+                            <div x-show="showPreviewData" x-transition class="mt-6">
+                                <div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+                                    <div class="flex">
+                                        <div class="flex-shrink-0">
+                                            <i class="fas fa-check-circle text-green-400"></i>
+                                        </div>
+                                        <div class="ml-3">
+                                            <h4 class="text-sm font-medium text-green-800">Preview Loaded Successfully</h4>
+                                            <div class="mt-2 text-sm text-green-700">
+                                                <p>Below is how your custom fields will appear to users:</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Preview Content -->
+                                <div class="space-y-6">
+                                    <template x-for="section in previewData?.sections || []" :key="section.id">
+                                        <div x-html="renderPreviewSection(section)"></div>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Create Section Modal -->
+    <div x-show="showCreateSectionModal" 
+         x-cloak 
+         class="fixed z-50 inset-0 overflow-y-auto modal-backdrop"
+         x-transition:enter="transition ease-out duration-300"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-200"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0">
+        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" @click="showCreateSectionModal = false"></div>
+
+            <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full fade-in">
+                <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg leading-6 font-medium text-gray-900">Create Section</h3>
+                        <button @click="showCreateSectionModal = false" class="text-gray-400 hover:text-gray-600">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    
+                    <form @submit.prevent="createSection()">
+                        <div class="space-y-6">
+                            <!-- Entity Type is already selected at the top of the page -->
+                            <div class="bg-blue-50 border border-blue-200 rounded-md p-3">
+                                <div class="flex items-center">
+                                    <i class="fas fa-info-circle text-blue-500 mr-2"></i>
+                                    <span class="text-sm text-blue-700">
+                                        Creating section for: <strong x-text="selectedEntityType.charAt(0).toUpperCase() + selectedEntityType.slice(1)"></strong>
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Section Name</label>
+                                <input type="text" x-model="newSection.section_name" required
+                                       class="mt-1 block w-full border-2 border-gray-400 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm bg-white px-3 py-2">
+                            </div>
+                            <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Section Label</label>
+                                <input type="text" x-model="newSection.section_label" required
+                                       class="mt-1 block w-full border-2 border-gray-400 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm bg-white px-3 py-2">
+                            </div>
+                            <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                                <textarea x-model="newSection.section_description" rows="3"
+                                          class="mt-1 block w-full border-2 border-gray-400 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm bg-white px-3 py-2"></textarea>
+                            </div>
+                            <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Sort Order</label>
+                                <input type="number" x-model="newSection.sort_order"
+                                       class="mt-1 block w-full border-2 border-gray-400 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm bg-white px-3 py-2">
+                            </div>
+                        </div>
+
+                        <div class="mt-6 flex justify-end space-x-3">
+                            <button type="button" @click="showCreateSectionModal = false"
+                                    class="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                                Cancel
+                            </button>
+                            <button type="submit" :disabled="isLoading"
+                                    class="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50">
+                                <span x-show="!isLoading">Create Section</span>
+                                <span x-show="isLoading" class="flex items-center">
+                                    <i class="fas fa-spinner fa-spin mr-2"></i>
+                                    Creating...
+                                </span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Field Modal -->
+    <div x-show="showCreateFieldModal" 
+         x-cloak 
+         class="fixed z-50 inset-0 overflow-y-auto modal-backdrop"
+         x-transition:enter="transition ease-out duration-300"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-200"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0">
+        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" @click="showCreateFieldModal = false"></div>
+
+            <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full fade-in">
+                <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg leading-6 font-medium text-gray-900">Create Field</h3>
+                        <button @click="showCreateFieldModal = false" class="text-gray-400 hover:text-gray-600">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    
+                    <form @submit.prevent="createField()">
+                        <div class="space-y-6">
+                            <!-- Entity Type is already selected at the top of the page -->
+                            <div class="bg-blue-50 border border-blue-200 rounded-md p-3">
+                                <div class="flex items-center">
+                                    <i class="fas fa-info-circle text-blue-500 mr-2"></i>
+                                    <span class="text-sm text-blue-700">
+                                        Creating field for: <strong x-text="selectedEntityType.charAt(0).toUpperCase() + selectedEntityType.slice(1)"></strong>
+                                    </span>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Field Label</label>
+                                <input type="text" x-model="newFieldLabel" required
+                                       placeholder="e.g., Employee ID, Department, Emergency Contact"
+                                       class="mt-1 block w-full border-2 border-gray-400 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm bg-white px-3 py-2">
+                                <p class="mt-1 text-xs text-gray-500">
+                                    Field name will be auto-generated: <span class="font-mono text-primary-600" x-text="newField.field_name || 'field_name'"></span>
+                                </p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Field Type</label>
+                                <select x-model="newField.field_type" required
+                                        class="mt-1 block w-full border-2 border-gray-400 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm bg-white px-3 py-2">
+                                    <option value="text">Text</option>
+                                    <option value="number">Number</option>
+                                    <option value="email">Email</option>
+                                    <option value="phone">Phone</option>
+                                    <option value="date">Date</option>
+                                    <option value="datetime">Date & Time</option>
+                                    <option value="boolean">Boolean</option>
+                                    <option value="select">Select</option>
+                                    <option value="multiselect">Multi-Select</option>
+                                    <option value="textarea">Text Area</option>
+                                    <option value="file">File</option>
+                                </select>
+                            </div>
+                            
+                            <!-- Field Options (for select/multiselect) -->
+                            <div x-show="newField.field_type === 'select' || newField.field_type === 'multiselect'" 
+                                 x-transition:enter="transition ease-out duration-200"
+                                 x-transition:enter-start="opacity-0 transform scale-95"
+                                 x-transition:enter-end="opacity-100 transform scale-100"
+                                 x-transition:leave="transition ease-in duration-150"
+                                 x-transition:leave-start="opacity-100 transform scale-100"
+                                 x-transition:leave-end="opacity-0 transform scale-95">
+                                <label class="block text-sm font-medium text-gray-700">Field Options</label>
+                                <div class="mt-2 space-y-3">
+                                    <div class="flex items-center space-x-2">
+                                        <input type="text" 
+                                               x-model="newOptionValue" 
+                                               placeholder="Value (optional - auto-generated from label)"
+                                               class="flex-1 border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
+                                        <input type="text" 
+                                               x-model="newOptionLabel" 
+                                               placeholder="Option label (required)"
+                                               class="flex-1 border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
+                                        <button type="button" 
+                                                @click="addNewOption()"
+                                                class="px-3 py-2 bg-primary-600 text-white text-sm font-medium rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500">
+                                            <i class="fas fa-plus"></i>
+                                        </button>
+                                    </div>
+                                    
+                                    <!-- Options List -->
+                                    <div x-show="newField.field_options && newField.field_options.options && newField.field_options.options.length > 0" 
+                                         class="space-y-2 max-h-40 overflow-y-auto border border-gray-200 rounded-md p-3">
+                                        <template x-for="(option, index) in newField.field_options.options" :key="index">
+                                            <div class="flex items-center justify-between bg-gray-50 rounded-md p-2">
+                                                <div class="flex-1">
+                                                    <span class="text-sm font-medium text-gray-900" x-text="option.label"></span>
+                                                    <span class="text-xs text-gray-500 ml-2">(<span x-text="option.value"></span>)</span>
+                                                </div>
+                                                <button type="button" 
+                                                        @click="removeNewOption(index)"
+                                                        class="text-red-600 hover:text-red-800 text-sm">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            </div>
+                                        </template>
+                                    </div>
+                                    
+                                    <div x-show="!newField.field_options || !newField.field_options.options || newField.field_options.options.length === 0" 
+                                         class="text-sm text-gray-500 text-center py-4 border border-gray-200 rounded-md">
+                                        No options added yet. Add options above.
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Field Relationship Configuration -->
+                            <div class="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                                <div class="flex items-center justify-between mb-3">
+                                    <h4 class="text-sm font-medium text-gray-700">Field Relationship (Optional)</h4>
+                                    <button type="button" 
+                                            @click="toggleNewFieldRelationship()"
+                                            class="text-sm text-primary-600 hover:text-primary-800">
+                                        <span x-show="!newField.hasRelationship">Add Relationship</span>
+                                        <span x-show="newField.hasRelationship">Remove Relationship</span>
+                                    </button>
+                                </div>
+                                
+                                <div x-show="newField.hasRelationship && newField.relationship_config" 
+                                     x-transition:enter="transition ease-out duration-200"
+                                     x-transition:enter-start="opacity-0 transform scale-95"
+                                     x-transition:enter-end="opacity-100 transform scale-100"
+                                     x-transition:leave="transition ease-in duration-150"
+                                     x-transition:leave-start="opacity-100 transform scale-100"
+                                     x-transition:leave-end="opacity-0 transform scale-95"
+                                     class="space-y-4">
+                                    
+                                    <!-- Relationship Type -->
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700">Relationship Type</label>
+                                        <select x-model="newField.relationship_config.relationship_type"
+                                                class="mt-1 block w-full border-2 border-gray-400 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm bg-white px-3 py-2">
+                                            <option value="one_to_one">One to One</option>
+                                            <option value="one_to_many">One to Many</option>
+                                            <option value="many_to_one">Many to One</option>
+                                            <option value="many_to_many">Many to Many</option>
+                                        </select>
+                                        <p class="mt-1 text-xs text-gray-500">
+                                            Defines how this field relates to the target field
+                                        </p>
+                                    </div>
+                                    
+                                    <!-- Target Entity Type -->
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700">Target Entity Type</label>
+                                        <select x-model="newField.relationship_config.target_entity_type"
+                                                @change="loadTargetFields()"
+                                                class="mt-1 block w-full border-2 border-gray-400 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm bg-white px-3 py-2">
+                                            <option value="user">User</option>
+                                            <option value="asset">Asset</option>
+                                            <option value="location">Location</option>
+                                            <option value="task">Task</option>
+                                            <option value="form">Form</option>
+                                            <option value="general">General</option>
+                                        </select>
+                                        <p class="mt-1 text-xs text-gray-500">
+                                            The entity type that contains the target field
+                                        </p>
+                                    </div>
+                                    
+                                    <!-- Target Field -->
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700">Target Field</label>
+                                        <select x-model="newField.relationship_config.target_field_id"
+                                                @change="loadTargetFields()"
+                                                class="mt-1 block w-full border-2 border-gray-400 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm bg-white px-3 py-2">
+                                            <option value="">Select Target Field</option>
+                                            <template x-for="field in availableTargetFields" :key="field.id">
+                                                <option :value="field.id" x-text="field.field_label + ' (' + field.field_name + ')'"></option>
+                                            </template>
+                                        </select>
+                                        <p class="mt-1 text-xs text-gray-500">
+                                            The field this relationship points to
+                                        </p>
+                                    </div>
+                                    
+                                    <!-- Display Field -->
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700">Display Field</label>
+                                        <select x-model="newField.relationship_config.display_field"
+                                                class="mt-1 block w-full border-2 border-gray-400 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm bg-white px-3 py-2">
+                                            <option value="field_name">Field Name</option>
+                                            <option value="field_label">Field Label</option>
+                                            <option value="value">Value</option>
+                                        </select>
+                                        <p class="mt-1 text-xs text-gray-500">
+                                            Which field to display when showing the relationship
+                                        </p>
+                                    </div>
+                                    
+                                    <!-- Cascade Delete -->
+                                    <div class="flex items-center">
+                                        <input type="checkbox" x-model="newField.relationship_config.cascade_delete" 
+                                               class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-2 border-gray-400 rounded">
+                                        <label class="ml-2 block text-sm text-gray-900">Cascade Delete</label>
+                                        <p class="ml-2 text-xs text-gray-500">Delete this field when target is deleted</p>
+                                    </div>
+                                </div>
+                                
+                                <div x-show="!newField.hasRelationship" class="text-sm text-gray-500 text-center py-2">
+                                    This field will be independent (no relationships)
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Section</label>
+                                <select x-model="newField.section_id"
+                                        class="mt-1 block w-full border-2 border-gray-400 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm bg-white px-3 py-2">
+                                    <option value="">No Section</option>
+                                    <template x-for="section in sections" :key="section.id">
+                                        <option :value="section.id" x-text="section.section_name || section.section_label || 'Unnamed Section'"></option>
+                                    </template>
+                                </select>
+                                <p class="mt-1 text-xs text-gray-500">
+                                    Available sections: <span x-text="sections.length"></span>
+                                    <span x-show="sections.length > 0"> - <span x-text="sections.map(s => s.section_name || s.section_label).join(', ')"></span></span>
+                                </p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Description</label>
+                                <textarea x-model="newField.field_description" rows="3"
+                                          class="mt-1 block w-full border-2 border-gray-400 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm bg-white px-3 py-2"></textarea>
+                            </div>
+                            <div class="flex items-center">
+                                <input type="checkbox" x-model="newField.is_required" 
+                                       class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-2 border-gray-400 rounded">
+                                <label class="ml-2 block text-sm text-gray-900">Required field</label>
+                            </div>
+                        </div>
+
+                        <div class="mt-6 flex justify-end space-x-3">
+                            <button type="button" @click="showCreateFieldModal = false"
+                                    class="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                                Cancel
+                            </button>
+                            <button type="submit" :disabled="isLoading"
+                                    class="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50">
+                                <span x-show="!isLoading">Create Field</span>
+                                <span x-show="isLoading" class="flex items-center">
+                                    <i class="fas fa-spinner fa-spin mr-2"></i>
+                                    Creating...
+                                </span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Section Modal -->
+    <div x-show="showEditSectionModal" 
+         x-cloak 
+         class="fixed z-50 inset-0 overflow-y-auto modal-backdrop"
+         x-transition:enter="transition ease-out duration-300"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-200"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0">
+        <div class="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" @click="showEditSectionModal = false"></div>
+            <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full fade-in">
+                <form @submit.prevent="updateSection()">
+                    <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                        <div class="sm:flex sm:items-start">
+                            <div class="w-full">
+                                <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Edit Section</h3>
+                                <div class="space-y-6">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700">Section Name</label>
+                                        <input type="text" x-model="editingSection.section_name" required
+                                               class="mt-1 block w-full border-2 border-gray-400 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm bg-white px-3 py-2">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700">Section Label</label>
+                                        <input type="text" x-model="editingSection.section_label" required
+                                               class="mt-1 block w-full border-2 border-gray-400 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm bg-white px-3 py-2">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700">Description</label>
+                                        <textarea x-model="editingSection.section_description" rows="3"
+                                                  class="mt-1 block w-full border-2 border-gray-400 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm bg-white px-3 py-2"></textarea>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                        <button type="submit" :disabled="isLoading"
+                                class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-primary-600 text-base font-medium text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50">
+                            <span x-show="!isLoading">Update Section</span>
+                            <span x-show="isLoading" class="flex items-center">
+                                <i class="fas fa-spinner fa-spin mr-2"></i>
+                                Updating...
+                            </span>
+                        </button>
+                        <button type="button" @click="showEditSectionModal = false"
+                                class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                            Cancel
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Field Modal -->
+    <div x-show="showEditFieldModal" 
+         x-cloak 
+         class="fixed z-50 inset-0 overflow-y-auto modal-backdrop"
+         x-transition:enter="transition ease-out duration-300"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-200"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0">
+        <div class="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" @click="showEditFieldModal = false"></div>
+            <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full fade-in">
+                <form @submit.prevent="updateField()">
+                    <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                        <div class="sm:flex sm:items-start">
+                            <div class="w-full">
+                                <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Edit Field</h3>
+                                <div class="space-y-6">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700">Field Label</label>
+                                        <input type="text" x-model="editingFieldLabel" required
+                                               placeholder="e.g., Employee ID, Department, Emergency Contact"
+                                               class="mt-1 block w-full border-2 border-gray-400 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm bg-white px-3 py-2">
+                                        <p class="mt-1 text-xs text-gray-500">
+                                            Field name: <span class="font-mono text-primary-600" x-text="editingField?.field_name || ''"></span>
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700">Field Type</label>
+                                        <select x-model="editingField.field_type" required
+                                                class="mt-1 block w-full border-2 border-gray-400 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm bg-white px-3 py-2">
+                                            <option value="text">Text</option>
+                                            <option value="email">Email</option>
+                                            <option value="phone">Phone</option>
+                                            <option value="number">Number</option>
+                                            <option value="date">Date</option>
+                                            <option value="datetime">DateTime</option>
+                                            <option value="boolean">Boolean</option>
+                                            <option value="select">Select</option>
+                                            <option value="multiselect">Multi-Select</option>
+                                            <option value="textarea">Textarea</option>
+                                            <option value="file">File</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <!-- Field Options (for select/multiselect) -->
+                                    <div x-show="editingField.field_type === 'select' || editingField.field_type === 'multiselect'" 
+                                         x-transition:enter="transition ease-out duration-200"
+                                         x-transition:enter-start="opacity-0 transform scale-95"
+                                         x-transition:enter-end="opacity-100 transform scale-100"
+                                         x-transition:leave="transition ease-in duration-150"
+                                         x-transition:leave-start="opacity-100 transform scale-100"
+                                         x-transition:leave-end="opacity-0 transform scale-95">
+                                        <label class="block text-sm font-medium text-gray-700">Field Options</label>
+                                        <div class="mt-2 space-y-3">
+                                            <div class="flex items-center space-x-2">
+                                                <input type="text" 
+                                                       x-model="editOptionValue" 
+                                                       placeholder="Value (optional - auto-generated from label)"
+                                                       class="flex-1 border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
+                                                <input type="text" 
+                                                       x-model="editOptionLabel" 
+                                                       placeholder="Option label (required)"
+                                                       class="flex-1 border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
+                                                <button type="button" 
+                                                        @click="addEditOption()"
+                                                        class="px-3 py-2 bg-primary-600 text-white text-sm font-medium rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500">
+                                                    <i class="fas fa-plus"></i>
+                                                </button>
+                                            </div>
+                                            
+                                            <!-- Options List -->
+                                            <div x-show="editingField.field_options && editingField.field_options.options && editingField.field_options.options.length > 0" 
+                                                 class="space-y-2 max-h-40 overflow-y-auto border border-gray-200 rounded-md p-3">
+                                                <template x-for="(option, index) in editingField?.field_options?.options || []" :key="index">
+                                                    <div class="flex items-center justify-between bg-gray-50 rounded-md p-2">
+                                                        <div class="flex-1">
+                                                            <span class="text-sm font-medium text-gray-900" x-text="option.label"></span>
+                                                            <span class="text-xs text-gray-500 ml-2">(<span x-text="option.value"></span>)</span>
+                                                        </div>
+                                                        <button type="button" 
+                                                                @click="removeEditOption(index)"
+                                                                class="text-red-600 hover:text-red-800 text-sm">
+                                                            <i class="fas fa-trash"></i>
+                                                        </button>
+                                                    </div>
+                                                </template>
+                                            </div>
+                                            
+                                            <div x-show="!editingField.field_options || !editingField.field_options.options || editingField.field_options.options.length === 0" 
+                                                 class="text-sm text-gray-500 text-center py-4 border border-gray-200 rounded-md">
+                                                No options added yet. Add options above.
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700">Description</label>
+                                        <textarea x-model="editingField.field_description" rows="3"
+                                                  class="mt-1 block w-full border-2 border-gray-400 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm bg-white px-3 py-2"></textarea>
+                                    </div>
+                                    
+                                    <!-- Field Relationship Configuration -->
+                                    <div class="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                                        <div class="flex items-center justify-between mb-3">
+                                            <h4 class="text-sm font-medium text-gray-700">Field Relationship (Optional)</h4>
+                                            <button type="button" 
+                                                    @click="toggleEditFieldRelationship()"
+                                                    class="text-sm text-primary-600 hover:text-primary-800">
+                                                <span x-show="!editingField.hasRelationship">Add Relationship</span>
+                                                <span x-show="editingField.hasRelationship">Remove Relationship</span>
+                                            </button>
+                                        </div>
+                                        
+                                        <div x-show="editingField.hasRelationship" 
+                                             x-transition:enter="transition ease-out duration-200"
+                                             x-transition:enter-start="opacity-0 transform scale-95"
+                                             x-transition:enter-end="opacity-100 transform scale-100"
+                                             x-transition:leave="transition ease-in duration-150"
+                                             x-transition:leave-start="opacity-100 transform scale-100"
+                                             x-transition:leave-end="opacity-0 transform scale-95"
+                                             class="space-y-4">
+                                            
+                                            <!-- Relationship Type -->
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700">Relationship Type</label>
+                                                <select x-model="editingField.relationship_config.relationship_type"
+                                                        class="mt-1 block w-full border-2 border-gray-400 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm bg-white px-3 py-2">
+                                                    <option value="one_to_one">One to One</option>
+                                                    <option value="one_to_many">One to Many</option>
+                                                    <option value="many_to_one">Many to One</option>
+                                                    <option value="many_to_many">Many to Many</option>
+                                                </select>
+                                                <p class="mt-1 text-xs text-gray-500">
+                                                    Defines how this field relates to the target field
+                                                </p>
+                                            </div>
+                                            
+                                            <!-- Target Entity Type -->
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700">Target Entity Type</label>
+                                                <select x-model="editingField.relationship_config.target_entity_type"
+                                                        @change="loadTargetFields()"
+                                                        class="mt-1 block w-full border-2 border-gray-400 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm bg-white px-3 py-2">
+                                                    <option value="user">User</option>
+                                                    <option value="asset">Asset</option>
+                                                    <option value="location">Location</option>
+                                                    <option value="task">Task</option>
+                                                    <option value="form">Form</option>
+                                                    <option value="general">General</option>
+                                                </select>
+                                                <p class="mt-1 text-xs text-gray-500">
+                                                    The entity type that contains the target field
+                                                </p>
+                                            </div>
+                                            
+                                            <!-- Target Field -->
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700">Target Field</label>
+                                                <select x-model="editingField.relationship_config.target_field_id"
+                                                        @change="loadTargetFields()"
+                                                        class="mt-1 block w-full border-2 border-gray-400 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm bg-white px-3 py-2">
+                                                    <option value="">Select Target Field</option>
+                                                    <template x-for="field in availableTargetFields" :key="field.id">
+                                                        <option :value="field.id" x-text="field.field_label + ' (' + field.field_name + ')'"></option>
+                                                    </template>
+                                                </select>
+                                                <p class="mt-1 text-xs text-gray-500">
+                                                    The field this relationship points to
+                                                </p>
+                                            </div>
+                                            
+                                            <!-- Display Field -->
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700">Display Field</label>
+                                                <select x-model="editingField.relationship_config.display_field"
+                                                        class="mt-1 block w-full border-2 border-gray-400 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm bg-white px-3 py-2">
+                                                    <option value="field_name">Field Name</option>
+                                                    <option value="field_label">Field Label</option>
+                                                    <option value="value">Value</option>
+                                                </select>
+                                                <p class="mt-1 text-xs text-gray-500">
+                                                    Which field to display when showing the relationship
+                                                </p>
+                                            </div>
+                                            
+                                            <!-- Cascade Delete -->
+                                            <div class="flex items-center">
+                                                <input type="checkbox" x-model="editingField.relationship_config.cascade_delete" 
+                                                       class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-2 border-gray-400 rounded">
+                                                <label class="ml-2 block text-sm text-gray-900">Cascade Delete</label>
+                                                <p class="ml-2 text-xs text-gray-500">Delete this field when target is deleted</p>
+                                            </div>
+                                        </div>
+                                        
+                                        <div x-show="!editingField.hasRelationship" class="text-sm text-gray-500 text-center py-2">
+                                            This field will be independent (no relationships)
+                                        </div>
+                                    </div>
+                                    
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700">Section</label>
+                                        <select x-model="editingField.section_id" 
+                                                class="mt-1 block w-full border-2 border-gray-400 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm bg-white px-3 py-2">
+                                            <option value="">No Section</option>
+                                            <template x-for="section in getVisibleSections()" :key="section.id">
+                                                <option :value="section.id" x-text="section.section_name || section.section_label"></option>
+                                            </template>
+                                        </select>
+                                    </div>
+                                    <div class="flex items-center">
+                                        <input type="checkbox" x-model="editingField.is_required" 
+                                               class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-2 border-gray-400 rounded">
+                                        <label class="ml-2 block text-sm text-gray-900">Required</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                        <button type="submit" :disabled="isLoading"
+                                class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-primary-600 text-base font-medium text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50">
+                            <span x-show="!isLoading">Update Field</span>
+                            <span x-show="isLoading" class="flex items-center">
+                                <i class="fas fa-spinner fa-spin mr-2"></i>
+                                Updating...
+                            </span>
+                        </button>
+                        <button type="button" @click="showEditFieldModal = false"
+                                class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                            Cancel
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global fallback function
+        window.getUserInitials = window.getUserInitials || function() {
+            return 'U';
+        };
+
+        function customFieldsAdmin() {
+            return {
+                activeTab: localStorage.getItem('customFieldsAdmin_activeTab') || 'sections',
+                selectedEntityType: localStorage.getItem('customFieldsAdmin_entityType') || 'user',
+                isLoading: false,
+                sections: [],
+                fields: [],
+                showCreateSectionModal: false,
+                showCreateFieldModal: false,
+                showEditSectionModal: false,
+                showEditFieldModal: false,
+                showInactiveItems: false,
+                showFieldDeleteMenu: null,
+                showSectionDeleteMenu: null,
+                editingSection: {
+                    section_name: '',
+                    section_label: '',
+                    section_description: '',
+                    entity_type: 'user',
+                    sort_order: 0
+                },
+                editingField: {
+                    field_name: '',
+                    field_label: '',
+                    field_description: '',
+                    field_type: 'text',
+                    entity_type: 'user',
+                    is_required: false,
+                    section_id: null,
+                    field_options: {
+                        options: [],
+                        multiple: false
+                    },
+                    hasRelationship: false,
+                    relationship_config: {
+                        target_field_id: null,
+                        target_entity_type: 'user',
+                        relationship_type: 'one_to_one',
+                        display_field: 'field_label',
+                        cascade_delete: false
+                    }
+                },
+                newSection: {
+                    section_name: '',
+                    section_label: '',
+                    section_description: '',
+                    entity_type: 'user',
+                    sort_order: 0
+                },
+                newField: {
+                    field_name: '',
+                    field_label: '',
+                    field_description: '',
+                    field_type: 'text',
+                    entity_type: 'user',
+                    is_required: false,
+                    section_id: null,
+                    field_options: {
+                        options: [],
+                        multiple: false
+                    },
+                    hasRelationship: false,
+                    relationship_config: {
+                        target_field_id: null,
+                        target_entity_type: 'user',
+                        relationship_type: 'one_to_one',
+                        display_field: 'field_label',
+                        cascade_delete: false
+                    }
+                },
+                
+                // Option management variables
+                newOptionValue: '',
+                newOptionLabel: '',
+                editOptionValue: '',
+                editOptionLabel: '',
+                
+                // Relationship management variables
+                availableTargetFields: [],
+                
+                // Watchers for field type changes
+                get newFieldType() {
+                    return this.newField.field_type;
+                },
+                set newFieldType(value) {
+                    this.newField.field_type = value;
+                    if (value === 'multiselect') {
+                        this.newField.field_options.multiple = true;
+                    } else if (value === 'select') {
+                        this.newField.field_options.multiple = false;
+                    }
+                },
+                
+                get editingFieldType() {
+                    return this.editingField.field_type || 'text';
+                },
+                set editingFieldType(value) {
+                    this.editingField.field_type = value;
+                    if (value === 'multiselect') {
+                        this.editingField.field_options.multiple = true;
+                    } else if (value === 'select') {
+                        this.editingField.field_options.multiple = false;
+                    }
+                },
+                
+                // Auto-generate field name from label
+                get newFieldLabel() {
+                    return this.newField.field_label;
+                },
+                set newFieldLabel(value) {
+                    this.newField.field_label = value;
+                    // Auto-generate field name from label
+                    this.newField.field_name = this.generateFieldName(value);
+                },
+                
+                get editingFieldLabel() {
+                    return this.editingField.field_label || '';
+                },
+                set editingFieldLabel(value) {
+                    this.editingField.field_label = value;
+                    // Auto-generate field name from label
+                    this.editingField.field_name = this.generateFieldName(value);
+                },
+                
+                generateFieldName(label) {
+                    if (!label) return '';
+                    return label
+                        .toLowerCase()
+                        .replace(/[^a-z0-9\s]/g, '') // Remove special characters
+                        .replace(/\s+/g, '_') // Replace spaces with underscores
+                        .replace(/_+/g, '_') // Replace multiple underscores with single
+                        .replace(/^_|_$/g, ''); // Remove leading/trailing underscores
+                },
+
+                initialized: false,
+                
+                async init() {
+                    if (this.initialized) {
+                        console.log('Custom fields admin already initialized, skipping...');
+                        return;
+                    }
+                    
+                    console.log('Initializing custom fields admin...');
+                    this.initialized = true;
+                    
+                    // Ensure relationship_config is properly initialized
+                    if (!this.newField.relationship_config) {
+                        this.newField.relationship_config = {
+                            target_field_id: null,
+                            target_entity_type: 'user',
+                            relationship_type: 'one_to_one',
+                            display_field: 'field_label',
+                            cascade_delete: false
+                        };
+                    }
+                    
+                    this.loadState();
+                    await this.loadDataForEntity();
+                },
+
+                // State persistence methods
+                saveState() {
+                    localStorage.setItem('customFieldsAdmin_activeTab', this.activeTab);
+                    localStorage.setItem('customFieldsAdmin_entityType', this.selectedEntityType);
+                },
+
+                loadState() {
+                    const savedTab = localStorage.getItem('customFieldsAdmin_activeTab');
+                    const savedEntityType = localStorage.getItem('customFieldsAdmin_entityType');
+                    
+                    if (savedTab) {
+                        this.activeTab = savedTab;
+                        console.log('Restored active tab:', savedTab);
+                    }
+                    if (savedEntityType) {
+                        this.selectedEntityType = savedEntityType;
+                        console.log('Restored entity type:', savedEntityType);
+                    }
+                },
+
+                clearState() {
+                    localStorage.removeItem('customFieldsAdmin_activeTab');
+                    localStorage.removeItem('customFieldsAdmin_entityType');
+                    this.activeTab = 'sections';
+                    this.selectedEntityType = 'user';
+                },
+
+                // Filter methods
+                getVisibleSections() {
+                    return this.showInactiveItems ? this.sections : this.sections.filter(s => s.is_active);
+                },
+
+                getVisibleFields() {
+                    return this.showInactiveItems ? this.fields : this.fields.filter(f => f.is_active);
+                },
+
+                toggleInactiveItems() {
+                    this.showInactiveItems = !this.showInactiveItems;
+                },
+
+                async loadDataForEntity() {
+                    console.log('Loading data for entity type:', this.selectedEntityType);
+                    
+                    // Reset form objects for the new entity type
+                    this.newSection = {
+                        section_name: '',
+                        section_label: '', 
+                        section_description: '', 
+                        entity_type: this.selectedEntityType,
+                        sort_order: 0 
+                    };
+                    
+                    this.newField = {
+                        field_name: '',
+                        field_label: '',
+                        field_type: 'text',
+                        field_description: '',
+                        is_required: false,
+                        is_unique: false,
+                        max_length: null,
+                        min_value: null,
+                        max_value: null,
+                        field_options: { options: [], multiple: false },
+                        validation_rules: {},
+                        sort_order: 0,
+                        is_active: true,
+                        entity_type: this.selectedEntityType,
+                        section_id: null,
+                        hasRelationship: false,
+                        relationship_config: {
+                            target_field_id: null,
+                            target_entity_type: 'user',
+                            relationship_type: 'one_to_one',
+                            display_field: 'field_label',
+                            cascade_delete: false
+                        }
+                    };
+                    
+                    // Reset editing objects to default values
+                    this.editingSection = {
+                        section_name: '',
+                        section_label: '',
+                        section_description: '',
+                        entity_type: 'user',
+                        sort_order: 0
+                    };
+                    this.editingField = {
+                        field_name: '',
+                        field_label: '',
+                        field_description: '',
+                        field_type: 'text',
+                        entity_type: 'user',
+                        is_required: false,
+                        section_id: null,
+                        field_options: {
+                            options: [],
+                            multiple: false
+                        },
+                        hasRelationship: false,
+                        relationship_config: {
+                            target_field_id: null,
+                            target_entity_type: 'user',
+                            relationship_type: 'one_to_one',
+                            display_field: 'field_label',
+                            cascade_delete: false
+                        }
+                    };
+                    
+                    // Close any open modals
+                    this.showCreateSectionModal = false;
+                    this.showCreateFieldModal = false;
+                    this.showEditSectionModal = false;
+                    this.showEditFieldModal = false;
+                    
+                    await this.loadSections();
+                    await this.loadFields();
+                },
+
+                // Tab and entity type change handlers
+                setActiveTab(tab) {
+                    this.activeTab = tab;
+                    this.saveState();
+                },
+
+                async changeEntityType(entityType) {
+                    console.log('Changing entity type from', this.selectedEntityType, 'to', entityType);
+                    this.selectedEntityType = entityType;
+                    this.saveState();
+                    
+                    // Show loading state
+                    this.isLoading = true;
+                    
+                    try {
+                        await this.loadDataForEntity();
+                        console.log('Entity type changed successfully to:', entityType);
+                    } catch (error) {
+                        console.error('Failed to load data for entity type:', entityType, error);
+                        alert('Failed to load data for the selected entity type. Please try again.');
+                    } finally {
+                        this.isLoading = false;
+                    }
+                },
+
+                async loadSections() {
+                    try {
+                        this.isLoading = true;
+                        console.log('Loading sections for entity type:', this.selectedEntityType);
+                        
+                        // Use the sections management endpoint for CRUD operations
+                        const response = await window.apiClient.request(`/settings/custom-field-sections/?entity_type=${this.selectedEntityType}`);
+                        console.log('Raw sections API response:', response);
+                        
+                        // Handle different response formats
+                        if (response.sections) {
+                            this.sections = response.sections;
+                        } else if (Array.isArray(response)) {
+                            this.sections = response;
+                        } else {
+                            this.sections = [];
+                        }
+                        
+                        console.log('Processed sections:', this.sections);
+                        console.log('Sections count:', this.sections.length);
+                        console.log('Sections with details:', this.sections.map(s => ({
+                            id: s.id,
+                            section_name: s.section_name || s.section_label,
+                            section_label: s.section_label || s.section_name,
+                            entity_type: s.entity_type,
+                            is_active: s.is_active
+                        })));
+                    } catch (error) {
+                        console.error('Failed to load sections:', error);
+                        console.error('Error details:', error.message, error.status);
+                        this.sections = [];
+                    } finally {
+                        this.isLoading = false;
+                    }
+                },
+
+                async loadFields() {
+                    try {
+                        this.isLoading = true;
+                        // Use the fields management endpoint for CRUD operations
+                        const response = await window.apiClient.request(`/settings/custom-fields/?entity_type=${this.selectedEntityType}`);
+                        console.log('Raw API response:', response);
+                        
+                        // Handle different response structures
+                        if (response.fields) {
+                            this.fields = response.fields;
+                        } else if (Array.isArray(response)) {
+                            this.fields = response;
+                        } else {
+                            this.fields = [];
+                        }
+                        
+                        console.log('Loaded fields from management API:', this.fields);
+                        console.log('Fields with section info:', this.fields.map(f => ({
+                            id: f.id,
+                            field_name: f.field_name,
+                            field_label: f.field_label,
+                            section_id: f.section_id,
+                            section_name: f.section_name,
+                            field_type: f.field_type,
+                            is_required: f.is_required,
+                            is_active: f.is_active
+                        })));
+                        console.log('Fields with sections:', this.fields.filter(f => f.section_id).length);
+                        console.log('Fields without sections:', this.fields.filter(f => !f.section_id).length);
+                        
+                        // Debug relationship information
+                        const fieldsWithRelationships = this.fields.filter(f => f.relationship_config).length;
+                        console.log('Fields with relationships:', fieldsWithRelationships);
+                        this.fields.forEach((field, index) => {
+                            if (field.relationship_config) {
+                                console.log(`Field ${index} (${field.field_name}) has relationship:`, field.relationship_config);
+                            }
+                        });
+                        
+                        console.log('getVisibleFields() result:', this.getVisibleFields());
+                    } catch (error) {
+                        console.error('Failed to load fields:', error);
+                        this.fields = [];
+                    } finally {
+                        this.isLoading = false;
+                    }
+                },
+
+                async loadTargetFields() {
+                    try {
+                        // Determine which field object is being used based on which modal is open
+                        let targetEntityType = 'user';
+                        if (this.showCreateFieldModal && this.newField.relationship_config) {
+                            targetEntityType = this.newField.relationship_config.target_entity_type || 'user';
+                        } else if (this.showEditFieldModal && this.editingField.relationship_config) {
+                            targetEntityType = this.editingField.relationship_config.target_entity_type || 'user';
+                        }
+                        
+                        // Ensure relationship_config exists before proceeding
+                        if (this.showCreateFieldModal && !this.newField.relationship_config) {
+                            this.newField.relationship_config = {
+                                target_field_id: null,
+                                target_entity_type: 'user',
+                                relationship_type: 'one_to_one',
+                                display_field: 'field_label',
+                                cascade_delete: false
+                            };
+                        }
+                        if (this.showEditFieldModal && !this.editingField.relationship_config) {
+                            this.editingField.relationship_config = {
+                                target_field_id: null,
+                                target_entity_type: 'user',
+                                relationship_type: 'one_to_one',
+                                display_field: 'field_label',
+                                cascade_delete: false
+                            };
+                        }
+                        
+                        console.log('Loading target fields for entity type:', targetEntityType);
+                        
+                        const response = await window.apiClient.request(`/settings/custom-fields/?entity_type=${targetEntityType}`);
+                        console.log('Target fields API response:', response);
+                        
+                        if (response.fields) {
+                            this.availableTargetFields = response.fields.filter(field => field.is_active);
+                        } else if (Array.isArray(response)) {
+                            this.availableTargetFields = response.filter(field => field.is_active);
+                        } else {
+                            this.availableTargetFields = [];
+                        }
+                        
+                        console.log('Available target fields:', this.availableTargetFields);
+                    } catch (error) {
+                        console.error('Failed to load target fields:', error);
+                        this.availableTargetFields = [];
+                    }
+                },
+
+                async toggleNewFieldRelationship() {
+                    this.newField.hasRelationship = !this.newField.hasRelationship;
+                    
+                    // Always ensure relationship_config is properly initialized
+                    if (!this.newField.relationship_config) {
+                        this.newField.relationship_config = {
+                            target_field_id: null,
+                            target_entity_type: 'user',
+                            relationship_type: 'one_to_one',
+                            display_field: 'field_label',
+                            cascade_delete: false
+                        };
+                    }
+                    
+                    if (this.newField.hasRelationship) {
+                        // Load target fields when relationship is enabled
+                        await this.loadTargetFields();
+                    } else {
+                        // Clear relationship config when disabled
+                        this.newField.relationship_config = {
+                            target_field_id: null,
+                            target_entity_type: 'user',
+                            relationship_type: 'one_to_one',
+                            display_field: 'field_label',
+                            cascade_delete: false
+                        };
+                    }
+                },
+
+                async toggleEditFieldRelationship() {
+                    this.editingField.hasRelationship = !this.editingField.hasRelationship;
+                    if (this.editingField.hasRelationship) {
+                        // Ensure relationship_config is properly initialized
+                        if (!this.editingField.relationship_config) {
+                            this.editingField.relationship_config = {
+                                target_field_id: null,
+                                target_entity_type: 'user',
+                                relationship_type: 'one_to_one',
+                                display_field: 'field_label',
+                                cascade_delete: false
+                            };
+                        }
+                        // Load target fields when relationship is enabled
+                        await this.loadTargetFields();
+                    } else {
+                        // Clear relationship config when disabled
+                        this.editingField.relationship_config = {
+                            target_field_id: null,
+                            target_entity_type: 'user',
+                            relationship_type: 'one_to_one',
+                            display_field: 'field_label',
+                            cascade_delete: false
+                        };
+                    }
+                },
+
+                async createSection() {
+                    this.isLoading = true;
+                    try {
+                        const response = await window.apiClient.request('/settings/custom-field-sections/', {
+                            method: 'POST',
+                            body: JSON.stringify(this.newSection)
+                        });
+                        
+                        this.showCreateSectionModal = false;
+                        this.newSection = { 
+                            section_name: '', 
+                            section_label: '', 
+                            section_description: '', 
+                            entity_type: this.selectedEntityType,
+                            sort_order: 0 
+                        };
+                        await this.loadSections();
+                    } catch (error) {
+                        console.error('Failed to create section:', error);
+                        alert('Failed to create section: ' + error.message);
+                    } finally {
+                        this.isLoading = false;
+                    }
+                },
+
+                async createField() {
+                    this.isLoading = true;
+                    try {
+                        // Handle section_id conversion and relationship_config for create
+                        const createPayload = {
+                            ...this.newField,
+                            section_id: this.newField.section_id === "" ? null : this.newField.section_id,
+                            relationship_config: this.newField.hasRelationship && this.newField.relationship_config ? {
+                                ...this.newField.relationship_config,
+                                target_field_id: this.newField.relationship_config.target_field_id ? parseInt(this.newField.relationship_config.target_field_id) : null
+                            } : null
+                        };
+                        
+                        console.log('Creating field with payload:', createPayload);
+                        
+                        const response = await window.apiClient.request('/settings/custom-fields/', {
+                            method: 'POST',
+                            body: JSON.stringify(createPayload)
+                        });
+                        
+                        this.showCreateFieldModal = false;
+                        this.newField = { 
+                            field_name: '', 
+                            field_label: '', 
+                            field_description: '', 
+                            field_type: 'text',
+                            entity_type: this.selectedEntityType,
+                            is_required: false,
+                            section_id: null,
+                            field_options: {
+                                options: [],
+                                multiple: false
+                            },
+                            hasRelationship: false,
+                            relationship_config: {
+                                target_field_id: null,
+                                target_entity_type: 'user',
+                                relationship_type: 'one_to_one',
+                                display_field: 'field_label',
+                                cascade_delete: false
+                            }
+                        };
+                        await this.loadFields();
+                    } catch (error) {
+                        console.error('Failed to create field:', error);
+                        alert('Failed to create field: ' + error.message);
+                    } finally {
+                        this.isLoading = false;
+                    }
+                },
+
+                getSectionName(sectionId) {
+                    const section = this.sections.find(s => s.id === sectionId);
+                    return section ? (section.section_name || section.section_label) : 'Unknown';
+                },
+                
+                // Option management methods
+                addNewOption() {
+                    if (!this.newOptionLabel.trim()) {
+                        alert('Please enter a label for the option');
+                        return;
+                    }
+                    
+                    if (!this.newField.field_options) {
+                        this.newField.field_options = { options: [], multiple: false };
+                    }
+                    
+                    // Auto-generate value from label if not provided
+                    const value = this.newOptionValue.trim() || this.generateFieldName(this.newOptionLabel.trim());
+                    
+                    this.newField.field_options.options.push({
+                        value: value,
+                        label: this.newOptionLabel.trim()
+                    });
+                    
+                    this.newOptionValue = '';
+                    this.newOptionLabel = '';
+                },
+                
+                removeNewOption(index) {
+                    this.newField.field_options.options.splice(index, 1);
+                },
+                
+                addEditOption() {
+                    if (!this.editOptionLabel.trim()) {
+                        alert('Please enter a label for the option');
+                        return;
+                    }
+                    
+                    if (!this.editingField.field_options) {
+                        this.editingField.field_options = { options: [], multiple: false };
+                    }
+                    
+                    // Auto-generate value from label if not provided
+                    const value = this.editOptionValue.trim() || this.generateFieldName(this.editOptionLabel.trim());
+                    
+                    this.editingField.field_options.options.push({
+                        value: value,
+                        label: this.editOptionLabel.trim()
+                    });
+                    
+                    this.editOptionValue = '';
+                    this.editOptionLabel = '';
+                },
+                
+                removeEditOption(index) {
+                    this.editingField.field_options.options.splice(index, 1);
+                },
+                
+                async openCreateFieldModal() {
+                    // Ensure sections are loaded before opening the modal
+                    if (this.sections.length === 0) {
+                        await this.loadSections();
+                    }
+                    
+                    // If still no sections, show a helpful message
+                    if (this.sections.length === 0) {
+                        console.log('No sections found. User should create a section first.');
+                        alert('No sections available. Please create a section first before adding fields.');
+                        return;
+                    }
+                    
+                    // Ensure newField is properly initialized
+                    this.newField = {
+                        field_name: '',
+                        field_label: '',
+                        field_description: '',
+                        field_type: 'text',
+                        entity_type: this.selectedEntityType,
+                        is_required: false,
+                        section_id: null,
+                        field_options: {
+                            options: [],
+                            multiple: false
+                        },
+                        hasRelationship: false,
+                        relationship_config: {
+                            target_field_id: null,
+                            target_entity_type: 'user',
+                            relationship_type: 'one_to_one',
+                            display_field: 'field_label',
+                            cascade_delete: false
+                        }
+                    };
+                    
+                    this.showCreateFieldModal = true;
+                },
+
+                async createTestFieldWithRelationship() {
+                    // Create a test field with a relationship
+                    this.newField = {
+                        field_name: 'test_related_field',
+                        field_label: 'Test Related Field',
+                        field_description: 'This is a test field with a relationship',
+                        field_type: 'text',
+                        entity_type: this.selectedEntityType,
+                        is_required: false,
+                        section_id: this.sections.length > 0 ? this.sections[0].id : null,
+                        field_options: {
+                            options: [],
+                            multiple: false
+                        },
+                        hasRelationship: true,
+                        relationship_config: {
+                            target_field_id: this.fields.length > 0 ? this.fields[0].id.toString() : null,
+                            target_entity_type: 'user',
+                            relationship_type: 'one_to_one',
+                            display_field: 'field_label',
+                            cascade_delete: false
+                        }
+                    };
+                    
+                    this.showCreateFieldModal = true;
+                },
+
+                async editSection(section) {
+                    this.editingSection = { 
+                        ...this.editingSection,
+                        ...section,
+                        section_name: section.section_name || '',
+                        section_label: section.section_label || '',
+                        section_description: section.section_description || '',
+                        entity_type: section.entity_type || 'user',
+                        sort_order: section.sort_order || 0
+                    };
+                    this.showEditSectionModal = true;
+                },
+
+                async updateSection() {
+                    this.isLoading = true;
+                    try {
+                        await window.apiClient.request(`/settings/custom-field-sections/${this.editingSection.id}`, {
+                            method: 'PUT',
+                            body: JSON.stringify(this.editingSection)
+                        });
+                        
+                        this.showEditSectionModal = false;
+                        this.editingSection = {
+                            section_name: '',
+                            section_label: '',
+                            section_description: '',
+                            entity_type: 'user',
+                            sort_order: 0
+                        };
+                        await this.loadSections();
+                    } catch (error) {
+                        console.error('Failed to update section:', error);
+                        alert('Failed to update section: ' + error.message);
+                    } finally {
+                        this.isLoading = false;
+                    }
+                },
+
+                async deleteSection(sectionId) {
+                    if (confirm('Are you sure you want to deactivate this section? It will be hidden from users but can be reactivated later.')) {
+                        try {
+                            console.log('Attempting to soft delete section:', sectionId);
+                            const response = await window.apiClient.request(`/settings/custom-field-sections/${sectionId}`, {
+                                method: 'DELETE'
+                            });
+                            console.log('Section soft deleted successfully:', response);
+                            await this.loadSections();
+                        } catch (error) {
+                            console.error('Failed to delete section:', error);
+                            alert('Failed to delete section: ' + error.message);
+                        }
+                    }
+                },
+
+                async hardDeleteSection(sectionId) {
+                    if (confirm('⚠️ WARNING: This will PERMANENTLY DELETE this section and ALL associated fields and user data. This action cannot be undone!\n\nAre you absolutely sure?')) {
+                        try {
+                            console.log('Attempting to hard delete section:', sectionId);
+                            const response = await window.apiClient.request(`/settings/custom-field-sections/${sectionId}/hard`, {
+                                method: 'DELETE'
+                            });
+                            console.log('Section hard deleted successfully:', response);
+                            await this.loadSections();
+                        } catch (error) {
+                            console.error('Failed to hard delete section:', error);
+                            alert('Failed to hard delete section: ' + error.message);
+                        }
+                    }
+                },
+
+                async toggleSectionStatus(section) {
+                    const action = section.is_active ? 'deactivate' : 'activate';
+                    const confirmMessage = section.is_active 
+                        ? 'Are you sure you want to deactivate this section? It will be hidden from users but can be reactivated later.'
+                        : 'Are you sure you want to activate this section? It will be visible to users.';
+                    
+                    if (confirm(confirmMessage)) {
+                        try {
+                            console.log('Attempting to toggle section status:', section.id, 'from', section.is_active, 'to', !section.is_active);
+                            const response = await window.apiClient.request(`/settings/custom-field-sections/${section.id}`, {
+                                method: 'PUT',
+                                body: JSON.stringify({
+                                    ...section,
+                                    is_active: !section.is_active
+                                })
+                            });
+                            console.log('Toggle section response:', response);
+                            await this.loadSections();
+                        } catch (error) {
+                            console.error(`Failed to ${action} section:`, error);
+                            alert(`Failed to ${action} section: ` + error.message);
+                        }
+                    }
+                },
+
+                async editField(field) {
+                    console.log('Editing field:', field);
+                    console.log('Field relationship_config:', field.relationship_config);
+                    
+                    this.editingField = { 
+                        ...this.editingField,
+                        ...field,
+                        field_options: field.field_options || { options: [], multiple: false },
+                        hasRelationship: field.relationship_config ? true : false,
+                        relationship_config: field.relationship_config ? {
+                            target_field_id: field.relationship_config.target_field_id ? field.relationship_config.target_field_id.toString() : null,
+                            target_entity_type: field.relationship_config.target_entity_type || 'user',
+                            relationship_type: field.relationship_config.relationship_type || 'one_to_one',
+                            display_field: field.relationship_config.display_field || 'field_label',
+                            cascade_delete: field.relationship_config.cascade_delete || false
+                        } : {
+                            target_field_id: null,
+                            target_entity_type: 'user',
+                            relationship_type: 'one_to_one',
+                            display_field: 'field_label',
+                            cascade_delete: false
+                        }
+                    };
+                    
+                    console.log('Final editingField:', this.editingField);
+                    console.log('Final relationship_config:', this.editingField.relationship_config);
+                    
+                    this.showEditFieldModal = true;
+                    
+                    // Load target fields if relationship exists
+                    if (this.editingField.hasRelationship) {
+                        await this.loadTargetFields();
+                    }
+                },
+
+                async updateField() {
+                    this.isLoading = true;
+                    try {
+                        console.log('Updating field:', this.editingField.id);
+                        console.log('Field data being sent:', this.editingField);
+                        
+                        // Create a clean update payload with only the fields that can be updated
+                        const updatePayload = {
+                            field_type: this.editingField.field_type,
+                            field_label: this.editingField.field_label,
+                            field_description: this.editingField.field_description,
+                            is_required: this.editingField.is_required,
+                            is_unique: this.editingField.is_unique,
+                            max_length: this.editingField.max_length,
+                            min_value: this.editingField.min_value,
+                            max_value: this.editingField.max_value,
+                            field_options: this.editingField.field_options,
+                            validation_rules: this.editingField.validation_rules,
+                            sort_order: this.editingField.sort_order,
+                            is_active: this.editingField.is_active,
+                            section_id: this.editingField.section_id === "" ? null : this.editingField.section_id,
+                            relationship_config: this.editingField.hasRelationship && this.editingField.relationship_config ? {
+                                ...this.editingField.relationship_config,
+                                target_field_id: this.editingField.relationship_config.target_field_id ? parseInt(this.editingField.relationship_config.target_field_id) : null
+                            } : null
+                        };
+                        
+                        console.log('Clean update payload:', updatePayload);
+                        console.log('Field type in payload:', updatePayload.field_type);
+                        console.log('Section ID conversion:', {
+                            original: this.editingField.section_id,
+                            converted: updatePayload.section_id,
+                            type: typeof updatePayload.section_id
+                        });
+                        
+                        const response = await window.apiClient.request(`/settings/custom-fields/${this.editingField.id}`, {
+                            method: 'PUT',
+                            body: JSON.stringify(updatePayload)
+                        });
+                        
+                        console.log('Update field response:', response);
+                        this.showEditFieldModal = false;
+                        await this.loadFields();
+                        // Reset editingField after modal is closed
+                        setTimeout(() => {
+                            this.editingField = {
+                                field_name: '',
+                                field_label: '',
+                                field_description: '',
+                                field_type: 'text',
+                                is_required: false,
+                                is_unique: false,
+                                section_id: null
+                            };
+                        }, 100);
+                        console.log('Field updated successfully');
+                    } catch (error) {
+                        console.error('Failed to update field:', error);
+                        console.error('Error details:', {
+                            message: error.message,
+                            status: error.status,
+                            response: error.response
+                        });
+                        alert('Failed to update field: ' + error.message);
+                    } finally {
+                        this.isLoading = false;
+                    }
+                },
+
+                async deleteField(fieldId) {
+                    if (confirm('Are you sure you want to deactivate this field? It will be hidden from users but can be reactivated later.')) {
+                        try {
+                            console.log('Attempting to soft delete field:', fieldId);
+                            await window.apiClient.request(`/settings/custom-fields/${fieldId}`, {
+                                method: 'DELETE'
+                            });
+                            console.log('Field soft deleted successfully');
+                            await this.loadFields();
+                        } catch (error) {
+                            console.error('Failed to delete field:', error);
+                            alert('Failed to delete field: ' + error.message);
+                        }
+                    }
+                },
+
+                async hardDeleteField(fieldId) {
+                    if (confirm('⚠️ WARNING: This will PERMANENTLY DELETE this field and ALL associated user data. This action cannot be undone!\n\nAre you absolutely sure?')) {
+                        try {
+                            console.log('Attempting to hard delete field:', fieldId);
+                            await window.apiClient.request(`/settings/custom-fields/${fieldId}/hard`, {
+                                method: 'DELETE'
+                            });
+                            console.log('Field hard deleted successfully');
+                            await this.loadFields();
+                        } catch (error) {
+                            console.error('Failed to hard delete field:', error);
+                            alert('Failed to hard delete field: ' + error.message);
+                        }
+                    }
+                },
+
+                async toggleFieldStatus(field) {
+                    const action = field.is_active ? 'deactivate' : 'activate';
+                    const confirmMessage = field.is_active 
+                        ? 'Are you sure you want to deactivate this field? It will be hidden from users but can be reactivated later.'
+                        : 'Are you sure you want to activate this field? It will be visible to users.';
+                    
+                    if (confirm(confirmMessage)) {
+                        try {
+                            await window.apiClient.request(`/settings/custom-fields/${field.id}`, {
+                                method: 'PUT',
+                                body: JSON.stringify({
+                                    ...field,
+                                    is_active: !field.is_active
+                                })
+                            });
+                            await this.loadFields();
+                        } catch (error) {
+                            console.error(`Failed to ${action} field:`, error);
+                            alert(`Failed to ${action} field: ` + error.message);
+                        }
+                    }
+                },
+
+                previewData: null,
+                showPreviewData: false,
+
+                async previewFields() {
+                    try {
+                        this.isLoading = true;
+                        const response = await window.apiClient.getCustomFieldsHierarchy('user', 1);
+                        console.log('Preview data:', response);
+                        this.previewData = response;
+                        this.showPreviewData = true;
+                    } catch (error) {
+                        console.error('Failed to load preview:', error);
+                        alert('Failed to load preview: ' + error.message);
+                    } finally {
+                        this.isLoading = false;
+                    }
+                },
+
+                renderPreviewSection(section) {
+                    const subsections = section.subsections || [];
+                    const directFields = section.fields || [];
+                    const sectionId = `preview-section-${section.id}`;
+
+                    return `
+                        <div class="bg-white shadow rounded-lg mb-6">
+                            <div class="px-4 py-5 sm:p-6">
+                                <div class="flex items-center justify-between">
+                                    <h3 class="text-lg font-medium text-gray-900 flex items-center">
+                                        ${section.icon ? `<i class="${section.icon} mr-2"></i>` : ''}
+                                        ${section.section_name || section.section_label || 'Untitled Section'}
+                                    </h3>
+                                </div>
+                                ${section.section_description ? `<p class="mt-1 text-sm text-gray-600">${section.section_description}</p>` : ''}
+                                
+                                <div class="mt-6">
+                                    ${subsections.map(subsection => this.renderPreviewSubsection(subsection)).join('')}
+                                    ${directFields.map(field => this.renderPreviewField(field)).join('')}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                },
+
+                renderPreviewSubsection(subsection) {
+                    const fields = subsection.fields || [];
+                    return `
+                        <div class="mb-6 p-4 border border-gray-200 rounded-lg bg-gray-50">
+                            <h4 class="text-md font-medium text-gray-800 flex items-center mb-4 border-b border-gray-100 pb-2">
+                                ${subsection.icon ? `<i class="${subsection.icon} mr-2"></i>` : ''}
+                                ${subsection.section_name || subsection.subsection_label || 'Untitled Subsection'}
+                            </h4>
+                            ${subsection.section_description || subsection.subsection_description ? `<p class="text-sm text-gray-600 mb-4">${subsection.section_description || subsection.subsection_description}</p>` : ''}
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                ${fields.map(field => this.renderPreviewField(field)).join('')}
+                            </div>
+                        </div>
+                    `;
+                },
+
+                renderPreviewField(field) {
+                    return `
+                        <div class="space-y-1 p-3 border border-gray-200 rounded-lg bg-white">
+                            <label class="block text-sm font-medium text-gray-700">
+                                ${field.field_label}
+                                ${field.is_required ? '<span class="text-red-500">*</span>' : ''}
+                            </label>
+                            ${this.renderPreviewFieldInput(field)}
+                            ${field.field_description ? `<p class="text-xs text-gray-500 mt-1">${field.field_description}</p>` : ''}
+                        </div>
+                    `;
+                },
+
+                renderPreviewFieldInput(field) {
+                    const fieldId = `preview-${field.id}`;
+                    
+                    switch (field.field_type) {
+                        case 'text':
+                        case 'email':
+                        case 'phone':
+                            return `<input type="${field.field_type}" id="${fieldId}" disabled class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm bg-gray-50 text-gray-500 sm:text-sm px-3 py-2" placeholder="Preview ${field.field_type} input">`;
+
+                        case 'number':
+                            return `<input type="number" id="${fieldId}" disabled class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm bg-gray-50 text-gray-500 sm:text-sm px-3 py-2" placeholder="Preview number input">`;
+
+                        case 'textarea':
+                            return `<textarea id="${fieldId}" disabled rows="3" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm bg-gray-50 text-gray-500 sm:text-sm px-3 py-2" placeholder="Preview textarea"></textarea>`;
+
+                        case 'date':
+                        case 'datetime':
+                            return `<input type="${field.field_type === 'datetime' ? 'datetime-local' : 'date'}" id="${fieldId}" disabled class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm bg-gray-50 text-gray-500 sm:text-sm px-3 py-2">`;
+
+                        case 'boolean':
+                            return `
+                                <div class="mt-1">
+                                    <label class="inline-flex items-center">
+                                        <input type="checkbox" id="${fieldId}" disabled class="rounded border-gray-300 text-primary-600 shadow-sm bg-gray-50">
+                                        <span class="ml-2 text-sm text-gray-500">Preview checkbox</span>
+                                    </label>
+                                </div>
+                            `;
+
+                        case 'select':
+                            return `
+                                <select id="${fieldId}" disabled class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm bg-gray-50 text-gray-500 sm:text-sm px-3 py-2">
+                                    <option>Preview select option</option>
+                                </select>
+                            `;
+
+                        case 'multiselect':
+                            return `
+                                <div class="mt-1 space-y-2">
+                                    <label class="inline-flex items-center">
+                                        <input type="checkbox" disabled class="rounded border-gray-300 text-primary-600 shadow-sm bg-gray-50">
+                                        <span class="ml-2 text-sm text-gray-500">Preview option 1</span>
+                                    </label>
+                                    <label class="inline-flex items-center">
+                                        <input type="checkbox" disabled class="rounded border-gray-300 text-primary-600 shadow-sm bg-gray-50">
+                                        <span class="ml-2 text-sm text-gray-500">Preview option 2</span>
+                                    </label>
+                                </div>
+                            `;
+
+                        case 'file':
+                            return `
+                                <div class="mt-1">
+                                    <input type="file" id="${fieldId}" disabled class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-gray-50 file:text-gray-500">
+                                </div>
+                            `;
+
+                        default:
+                            return `<input type="text" id="${fieldId}" disabled class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm bg-gray-50 text-gray-500 sm:text-sm px-3 py-2" placeholder="Preview input">`;
+                    }
+                }
+            }
+        }
+    </script>
+</body>
+</html>

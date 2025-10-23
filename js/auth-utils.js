@@ -4,6 +4,8 @@
  */
 
 const AuthUtils = {
+    initialized: false,
+
     // Use configured API base URL, fall back to localhost if config not loaded
     get API_BASE_URL() {
         return window.getApiBaseUrl ? window.getApiBaseUrl() : 'http://127.0.0.1:8000/api/v1';
@@ -230,6 +232,10 @@ const AuthUtils = {
      * Call this on page load for authenticated pages
      */
     init() {
+        if (this.initialized) {
+            return true; // Already initialized
+        }
+
         // Check if user is authenticated
         const accessToken = this.getAccessToken();
         const isAuthenticated = localStorage.getItem('is_authenticated') === 'true';
@@ -248,6 +254,7 @@ const AuthUtils = {
 
         // Start automatic token refresh
         this.startTokenRefreshTimer();
+        this.initialized = true;
 
         return true;
     }
@@ -262,7 +269,8 @@ document.addEventListener('DOMContentLoaded', function () {
     const currentPage = window.location.pathname.split('/').pop();
     const publicPages = ['login.html', 'signup.html', 'reset-password.html', 'forgot-password.html', 'index.html', ''];
 
-    if (!publicPages.includes(currentPage) && localStorage.getItem('is_authenticated') === 'true') {
+    // Only initialize AuthUtils if not already initialized by app.js
+    if (!publicPages.includes(currentPage) && localStorage.getItem('is_authenticated') === 'true' && !window.AuthUtils.initialized) {
         AuthUtils.init();
     }
 });

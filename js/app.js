@@ -5,6 +5,7 @@
 class MelodeApp {
     constructor() {
         this.currentPage = this.getCurrentPage();
+        this.initialized = false;
         this.init();
     }
 
@@ -23,6 +24,10 @@ class MelodeApp {
      * Initialize the application
      */
     init() {
+        if (this.initialized) {
+            return; // Already initialized
+        }
+
         // Check authentication
         if (this.currentPage !== 'login' && !window.authManager.isAuthenticated) {
             console.log('User not authenticated, redirecting to login');
@@ -42,6 +47,8 @@ class MelodeApp {
 
         // Set up global event listeners
         this.setupEventListeners();
+
+        this.initialized = true;
     }
 
     /**

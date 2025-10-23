@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Setup Custom Fields - Melode Healthcare Management</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <!-- Configuration -->
+    <script src="js/config.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/auth-utils.js"></script>
+    <script src="js/permissions.js"></script>
+    <script src="js/navigation.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            50: '#eff6ff',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-50 min-h-screen" x-data="setupCustomFields()">
+    <!-- Navigation -->
+    <nav class="bg-white shadow-lg border-b border-gray-200" x-data="navigationComponent()" x-init="init()">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <h1 class="text-2xl font-bold text-primary-600 cursor-pointer" @click="window.location.href = navItems.find(i => i.id === 'dashboard').href">Melode</h1>
+                    </div>
+                </div>
+                <div class="flex items-center">
+                    <a href="profile.html" class="text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium">
+                        <i class="fas fa-user mr-2"></i>Profile
+                    </a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="max-w-4xl mx-auto py-6 sm:px-6 lg:px-8">
+        <div class="px-4 py-6 sm:px-0">
+            <!-- Header -->
+            <div class="mb-8">
+                <h1 class="text-3xl font-bold text-gray-900">Setup Custom Fields</h1>
+                <p class="mt-2 text-gray-600">Create example custom fields for your organization</p>
+            </div>
+
+            <!-- Setup Options -->
+            <div class="space-y-6">
+                <!-- Healthcare Example -->
+                <div class="bg-white shadow rounded-lg p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h3 class="text-lg font-medium text-gray-900">Healthcare Staff Example</h3>
+                            <p class="text-sm text-gray-600">Creates sections for Personal Details, Security Details, Contact Details, Accreditations, and Recruitment</p>
+                        </div>
+                        <button @click="createHealthcareExample()" 
+                                :disabled="isLoading"
+                                class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50">
+                            <span x-show="!isLoading">Create Example</span>
+                            <span x-show="isLoading" class="flex items-center">
+                                <i class="fas fa-spinner fa-spin mr-2"></i>
+                                Creating...
+                            </span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Simple Example -->
+                <div class="bg-white shadow rounded-lg p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h3 class="text-lg font-medium text-gray-900">Simple Example</h3>
+                            <p class="text-sm text-gray-600">Creates basic Personal Details section with common fields</p>
+                        </div>
+                        <button @click="createSimpleExample()" 
+                                :disabled="isLoading"
+                                class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50">
+                            <span x-show="!isLoading">Create Simple</span>
+                            <span x-show="isLoading" class="flex items-center">
+                                <i class="fas fa-spinner fa-spin mr-2"></i>
+                                Creating...
+                            </span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Status -->
+                <div x-show="status" class="bg-blue-50 border border-blue-200 rounded-md p-4">
+                    <div class="flex">
+                        <div class="flex-shrink-0">
+                            <i class="fas fa-info-circle text-blue-400"></i>
+                        </div>
+                        <div class="ml-3">
+                            <p class="text-sm text-blue-700" x-text="status"></p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Success -->
+                <div x-show="success" class="bg-green-50 border border-green-200 rounded-md p-4">
+                    <div class="flex">
+                        <div class="flex-shrink-0">
+                            <i class="fas fa-check-circle text-green-400"></i>
+                        </div>
+                        <div class="ml-3">
+                            <p class="text-sm text-green-700" x-text="success"></p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Error -->
+                <div x-show="error" class="bg-red-50 border border-red-200 rounded-md p-4">
+                    <div class="flex">
+                        <div class="flex-shrink-0">
+                            <i class="fas fa-exclamation-circle text-red-400"></i>
+                        </div>
+                        <div class="ml-3">
+                            <p class="text-sm text-red-700" x-text="error"></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Next Steps -->
+            <div class="mt-8 bg-white shadow rounded-lg p-6">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">Next Steps</h3>
+                <div class="space-y-3">
+                    <div class="flex items-center">
+                        <i class="fas fa-check-circle text-green-500 mr-3"></i>
+                        <span class="text-sm text-gray-700">1. Click one of the setup buttons above</span>
+                    </div>
+                    <div class="flex items-center">
+                        <i class="fas fa-arrow-right text-gray-400 mr-3"></i>
+                        <span class="text-sm text-gray-700">2. Go to your <a href="profile.html" class="text-primary-600 hover:text-primary-800">Profile page</a> to see the custom fields</span>
+                    </div>
+                    <div class="flex items-center">
+                        <i class="fas fa-arrow-right text-gray-400 mr-3"></i>
+                        <span class="text-sm text-gray-700">3. Use the <a href="custom-fields-admin.html" class="text-primary-600 hover:text-primary-800">Custom Fields Admin</a> to manage them</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        function setupCustomFields() {
+            return {
+                isLoading: false,
+                status: '',
+                success: '',
+                error: '',
+
+                async createHealthcareExample() {
+                    this.isLoading = true;
+                    this.clearMessages();
+                    this.status = 'Creating healthcare staff custom fields...';
+
+                    try {
+                        // Create sections
+                        const personalSection = await this.createSection({
+                            section_name: 'personal_details',
+                            section_label: 'Personal Details',
+                            section_description: 'Basic personal information',
+                            sort_order: 1
+                        });
+
+                        const securitySection = await this.createSection({
+                            section_name: 'security_details',
+                            section_label: 'Security Details',
+                            section_description: 'Security and access information',
+                            sort_order: 2
+                        });
+
+                        const contactSection = await this.createSection({
+                            section_name: 'contact_details',
+                            section_label: 'Contact Details',
+                            section_description: 'Contact information and preferences',
+                            sort_order: 3
+                        });
+
+                        const accreditationsSection = await this.createSection({
+                            section_name: 'accreditations',
+                            section_label: 'Accreditations',
+                            section_description: 'Professional qualifications and certifications',
+                            sort_order: 4
+                        });
+
+                        // Create fields
+                        await this.createField({
+                            field_name: 'photo',
+                            field_label: 'Profile Photo',
+                            field_description: 'Upload your profile photo',
+                            field_type: 'file',
+                            section_id: personalSection.id,
+                            is_required: false
+                        });
+
+                        await this.createField({
+                            field_name: 'dob',
+                            field_label: 'Date of Birth',
+                            field_description: 'Your date of birth',
+                            field_type: 'date',
+                            section_id: personalSection.id,
+                            is_required: true
+                        });
+
+                        await this.createField({
+                            field_name: 'door_fob_number',
+                            field_label: 'Door Fob Number',
+                            field_description: 'Your door access fob number',
+                            field_type: 'text',
+                            section_id: securitySection.id,
+                            is_required: false
+                        });
+
+                        await this.createField({
+                            field_name: 'active_status',
+                            field_label: 'Active Status',
+                            field_description: 'Are you currently active?',
+                            field_type: 'boolean',
+                            section_id: securitySection.id,
+                            is_required: true
+                        });
+
+                        await this.createField({
+                            field_name: 'work_email',
+                            field_label: 'Work Email',
+                            field_description: 'Your work email address',
+                            field_type: 'email',
+                            section_id: contactSection.id,
+                            is_required: true
+                        });
+
+                        await this.createField({
+                            field_name: 'personal_email',
+                            field_label: 'Personal Email',
+                            field_description: 'Your personal email address',
+                            field_type: 'email',
+                            section_id: contactSection.id,
+                            is_required: false
+                        });
+
+                        await this.createField({
+                            field_name: 'phone_number',
+                            field_label: 'Phone Number',
+                            field_description: 'Your contact phone number',
+                            field_type: 'phone',
+                            section_id: contactSection.id,
+                            is_required: true
+                        });
+
+                        this.success = 'Healthcare staff custom fields created successfully! You can now see them on your profile page.';
+                        this.status = '';
+
+                    } catch (error) {
+                        console.error('Failed to create healthcare example:', error);
+                        this.error = 'Failed to create healthcare example: ' + error.message;
+                        this.status = '';
+                    } finally {
+                        this.isLoading = false;
+                    }
+                },
+
+                async createSimpleExample() {
+                    this.isLoading = true;
+                    this.clearMessages();
+                    this.status = 'Creating simple custom fields...';
+
+                    try {
+                        // Create a simple section
+                        const section = await this.createSection({
+                            section_name: 'basic_info',
+                            section_label: 'Basic Information',
+                            section_description: 'Basic personal information',
+                            sort_order: 1
+                        });
+
+                        // Create simple fields
+                        await this.createField({
+                            field_name: 'bio',
+                            field_label: 'Bio',
+                            field_description: 'Tell us about yourself',
+                            field_type: 'textarea',
+                            section_id: section.id,
+                            is_required: false
+                        });
+
+                        await this.createField({
+                            field_name: 'department',
+                            field_label: 'Department',
+                            field_description: 'Which department do you work in?',
+                            field_type: 'select',
+                            section_id: section.id,
+                            is_required: true,
+                            field_options: {
+                                options: [
+                                    { value: 'it', label: 'IT' },
+                                    { value: 'hr', label: 'Human Resources' },
+                                    { value: 'finance', label: 'Finance' },
+                                    { value: 'operations', label: 'Operations' }
+                                ]
+                            }
+                        });
+
+                        this.success = 'Simple custom fields created successfully! You can now see them on your profile page.';
+                        this.status = '';
+
+                    } catch (error) {
+                        console.error('Failed to create simple example:', error);
+                        this.error = 'Failed to create simple example: ' + error.message;
+                        this.status = '';
+                    } finally {
+                        this.isLoading = false;
+                    }
+                },
+
+                async createSection(sectionData) {
+                    try {
+                        const response = await window.apiClient.request('/settings/custom-field-sections/', {
+                            method: 'POST',
+                            body: JSON.stringify(sectionData)
+                        });
+                        return response;
+                    } catch (error) {
+                        console.error('Failed to create section:', error);
+                        throw error;
+                    }
+                },
+
+                async createField(fieldData) {
+                    try {
+                        const response = await window.apiClient.request('/settings/custom-fields/', {
+                            method: 'POST',
+                            body: JSON.stringify(fieldData)
+                        });
+                        return response;
+                    } catch (error) {
+                        console.error('Failed to create field:', error);
+                        throw error;
+                    }
+                },
+
+                clearMessages() {
+                    this.status = '';
+                    this.success = '';
+                    this.error = '';
+                }
+            }
+        }
+    </script>
+</body>
+</html>

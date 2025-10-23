@@ -14,6 +14,9 @@
     <script src="js/permissions.js"></script>
     <script src="js/navigation.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        [x-cloak] { display: none !important; }
+    </style>
     <script>
         tailwind.config = {
             theme: {
@@ -46,6 +49,8 @@
     selectedRole: '',
     showEditUser: false,
     selectedUser: null,
+    showDeleteConfirm: false,
+    userToDelete: null,
     
     init() {
         this.loadUserData();
@@ -165,11 +170,93 @@
     
     async toggleUserStatus(user) {
         try {
-            // Mock API call - replace with actual implementation
-            console.log('Toggling user status:', user.id);
-            user.is_active = !user.is_active;
+            const token = localStorage.getItem('access_token');
+            if (!token) {
+                console.error('No access token found');
+                return;
+            }
+            
+            const apiUrl = window.getApiBaseUrl ? window.getApiBaseUrl() : 'http://127.0.0.1:8000/api/v1';
+            const newStatus = !user.is_active;
+            
+            console.log('Toggling user status:', user.id, 'to', newStatus);
+            
+            // Use the correct endpoint based on the action
+            const endpoint = newStatus ? 'activate' : 'deactivate';
+            const response = await fetch(`${apiUrl}/users/${user.id}/${endpoint}`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (response.ok) {
+                user.is_active = newStatus;
+                console.log('User status updated successfully');
+                // Show success message
+                const action = newStatus ? 'activated' : 'deactivated';
+                alert(`User ${action} successfully!`);
+            } else {
+                console.error('Failed to toggle user status:', response.status);
+                const errorData = await response.json();
+                console.error('Error details:', errorData);
+                alert('Failed to update user status: ' + (errorData.detail || 'Unknown error'));
+            }
         } catch (error) {
             console.error('Failed to toggle user status:', error);
+            alert('Failed to update user status: ' + error.message);
+        }
+    },
+    
+    confirmDeleteUser(user) {
+        this.userToDelete = user;
+        this.showDeleteConfirm = true;
+    },
+    
+    cancelDeleteUser() {
+        this.userToDelete = null;
+        this.showDeleteConfirm = false;
+    },
+    
+    async deleteUser() {
+        if (!this.userToDelete) return;
+        
+        try {
+            const token = localStorage.getItem('access_token');
+            if (!token) {
+                console.error('No access token found');
+                return;
+            }
+            
+            const apiUrl = window.getApiBaseUrl ? window.getApiBaseUrl() : 'http://127.0.0.1:8000/api/v1';
+            
+            console.log('Deleting user:', this.userToDelete.id);
+            
+            const response = await fetch(`${apiUrl}/users/${this.userToDelete.id}`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (response.ok) {
+                console.log('User deleted successfully');
+                // Remove user from the local array
+                this.users = this.users.filter(user => user.id !== this.userToDelete.id);
+                alert('User deleted successfully!');
+            } else {
+                console.error('Failed to delete user:', response.status);
+                const errorData = await response.json();
+                console.error('Error details:', errorData);
+                alert('Failed to delete user: ' + (errorData.detail || 'Unknown error'));
+            }
+        } catch (error) {
+            console.error('Failed to delete user:', error);
+            alert('Failed to delete user: ' + error.message);
+        } finally {
+            this.cancelDeleteUser();
         }
     },
     
@@ -320,6 +407,9 @@
                                                     <i class="fas fa-edit mr-1"></i>Edit
                                                 </a>
                                                 <button @click="toggleUserStatus(user)" :class="user.is_active ? 'text-red-600 hover:text-red-900' : 'text-green-600 hover:text-green-900'" x-text="user.is_active ? 'Deactivate' : 'Activate'"></button>
+                                                <button @click="confirmDeleteUser(user)" class="text-red-600 hover:text-red-900">
+                                                    <i class="fas fa-trash mr-1"></i>Delete
+                                                </button>
                                             </div>
                                         </td>
                                     </tr>
@@ -344,6 +434,32 @@
             </div>
         </div>
     </main>
+
+    <!-- Delete Confirmation Modal -->
+    <div x-show="showDeleteConfirm" x-cloak class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+        <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div class="mt-3 text-center">
+                <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100">
+                    <i class="fas fa-exclamation-triangle text-red-600"></i>
+                </div>
+                <h3 class="text-lg font-medium text-gray-900 mt-2">Delete User</h3>
+                <div class="mt-2 px-7 py-3">
+                    <p class="text-sm text-gray-500">
+                        Are you sure you want to delete <span x-text="userToDelete ? userToDelete.first_name + ' ' + userToDelete.last_name : ''" class="font-medium text-gray-900"></span>? 
+                        This action cannot be undone.
+                    </p>
+                </div>
+                <div class="items-center px-4 py-3">
+                    <button @click="deleteUser()" class="px-4 py-2 bg-red-500 text-white text-base font-medium rounded-md w-24 mr-2 shadow-sm hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-300">
+                        Delete
+                    </button>
+                    <button @click="cancelDeleteUser()" class="px-4 py-2 bg-gray-500 text-white text-base font-medium rounded-md w-24 shadow-sm hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-300">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- Scripts -->
     <script>

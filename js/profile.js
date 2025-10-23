@@ -5,7 +5,14 @@
 function profileApp() {
     return {
         // User data
-        user: null,
+        user: {
+            first_name: '',
+            last_name: '',
+            title: '',
+            phone_number: '',
+            email: '',
+            username: ''
+        },
         userName: '',
         userEmail: '',
         userUsername: '',
@@ -48,6 +55,7 @@ function profileApp() {
         async init() {
             await this.loadUserProfile();
             await this.loadMFAStatus();
+            await this.loadCustomFields();
             this.setupEventListeners();
         },
 
@@ -88,6 +96,26 @@ function profileApp() {
                 bio: this.user.bio || '',
                 avatar_url: this.user.avatar_url || ''
             };
+        },
+
+        /**
+         * Load custom fields for the user
+         */
+        async loadCustomFields() {
+            try {
+                if (this.user && this.user.id) {
+                    console.log('Loading custom fields for user ID:', this.user.id);
+                    // Only initialize if not already initialized to prevent infinite loops
+                    if (!window.customFieldsComponent.userId || window.customFieldsComponent.userId !== this.user.id) {
+                        await window.customFieldsComponent.init(this.user.id);
+                    }
+                } else {
+                    console.log('No user ID available for custom fields');
+                }
+            } catch (error) {
+                console.error('Failed to load custom fields:', error);
+                // Don't show error to user as custom fields are optional
+            }
         },
 
         /**
@@ -213,8 +241,7 @@ function profileApp() {
 
             // Create new message
             const messageDiv = document.createElement('div');
-            messageDiv.className = `message-toast fixed top-4 right-4 z-50 p-4 rounded-md shadow-lg ${type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                }`;
+            messageDiv.className = `message-toast fixed top-4 right-4 z-50 p-4 rounded-md shadow-lg ${type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`;
             messageDiv.textContent = message;
 
             document.body.appendChild(messageDiv);
@@ -238,10 +265,7 @@ function profileApp() {
          */
         async loadMFAStatus() {
             try {
-                const response = await window.AuthUtils.get('/mfa/status');
-                if (response.ok) {
-                    this.mfaData = await response.json();
-                }
+                this.mfaData = await window.apiClient.getMfaStatus();
             } catch (error) {
                 console.error('Failed to load MFA status:', error);
             }
@@ -253,18 +277,15 @@ function profileApp() {
         async setupMFA() {
             this.isLoading = true;
             try {
-                const response = await window.AuthUtils.post('/mfa/setup', {});
-
-                if (response.ok) {
-                    this.mfaSetup = await response.json();
-                    this.showMFASetupModal = true;
-                } else {
-                    const error = await response.json();
-                    this.showError('Failed to setup MFA: ' + (error.detail || 'Unknown error'));
-                }
+                console.log('Setting up MFA...');
+                this.mfaSetup = await window.apiClient.setupMfa();
+                console.log('MFA setup response:', this.mfaSetup);
+                console.log('Setting showMFASetupModal to true');
+                this.showMFASetupModal = true;
+                console.log('showMFASetupModal is now:', this.showMFASetupModal);
             } catch (error) {
                 console.error('Failed to setup MFA:', error);
-                this.showError('Failed to setup MFA');
+                this.showError('Failed to setup MFA: ' + (error.message || 'Unknown error'));
             } finally {
                 this.isLoading = false;
             }
@@ -281,20 +302,11 @@ function profileApp() {
 
             this.isLoading = true;
             try {
-                const response = await window.AuthUtils.post('/mfa/verify', {
-                    token: this.mfaVerificationToken
-                });
-
-                if (response.ok) {
-                    const result = await response.json();
-                    this.showSuccess(result.message || 'MFA enabled successfully');
-                    this.showMFASetupModal = false;
-                    this.mfaVerificationToken = '';
-                    await this.loadMFAStatus();
-                } else {
-                    const error = await response.json();
-                    this.showError(error.detail || 'Invalid verification code');
-                }
+                const result = await window.apiClient.verifyMfa(this.mfaVerificationToken);
+                this.showSuccess(result.message || 'MFA enabled successfully');
+                this.showMFASetupModal = false;
+                this.mfaVerificationToken = '';
+                await this.loadMFAStatus();
             } catch (error) {
                 console.error('Failed to verify MFA:', error);
                 this.showError('Failed to verify MFA');
@@ -318,21 +330,12 @@ function profileApp() {
 
             this.isLoading = true;
             try {
-                const response = await window.AuthUtils.post('/mfa/disable', {
-                    token: verificationToken
-                });
-
-                if (response.ok) {
-                    const result = await response.json();
-                    this.showSuccess(result.message || 'MFA disabled successfully');
-                    await this.loadMFAStatus();
-                } else {
-                    const error = await response.json();
-                    this.showError(error.detail || 'Failed to disable MFA');
-                }
+                const result = await window.apiClient.disableMfa(verificationToken);
+                this.showSuccess(result.message || 'MFA disabled successfully');
+                await this.loadMFAStatus();
             } catch (error) {
                 console.error('Failed to disable MFA:', error);
-                this.showError('Failed to disable MFA');
+                this.showError('Failed to disable MFA: ' + (error.message || 'Unknown error'));
             } finally {
                 this.isLoading = false;
             }

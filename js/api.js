@@ -48,12 +48,33 @@ class ApiClient {
     }
 
     /**
+     * Get authorization headers for FormData (no Content-Type)
+     */
+    getAuthHeadersForFormData() {
+        const headers = {};
+
+        if (this.token) {
+            headers['Authorization'] = `Bearer ${this.token}`;
+        }
+
+        return headers;
+    }
+
+    /**
      * Make HTTP request with error handling
      */
     async request(endpoint, options = {}) {
         const url = `${this.baseURL}${endpoint}`;
+
+        // Handle FormData differently - don't set Content-Type for FormData
+        const isFormData = options.body instanceof FormData;
+        const headers = isFormData ? this.getAuthHeadersForFormData() : this.getAuthHeaders();
+
         const config = {
-            headers: this.getAuthHeaders(),
+            headers: {
+                ...headers,
+                ...options.headers,
+            },
             ...options,
         };
 
@@ -65,7 +86,11 @@ class ApiClient {
                 const refreshed = await this.refreshAccessToken();
                 if (refreshed) {
                     // Retry the original request with new token
-                    config.headers = this.getAuthHeaders();
+                    const retryHeaders = isFormData ? this.getAuthHeadersForFormData() : this.getAuthHeaders();
+                    config.headers = {
+                        ...retryHeaders,
+                        ...options.headers,
+                    };
                     const retryResponse = await fetch(url, config);
                     return this.handleResponse(retryResponse);
                 }
@@ -194,6 +219,62 @@ class ApiClient {
         });
     }
 
+    // Custom Fields endpoints
+    async getCustomFieldsHierarchy(entityType, entityId) {
+        return this.request(`/settings/entities/${entityType}/${entityId}/custom-fields/hierarchy`);
+    }
+
+    async getUserCustomFields(entityType, entityId) {
+        return this.request(`/settings/entities/${entityType}/${entityId}/custom-fields`);
+    }
+
+    async setCustomFieldValue(entityType, entityId, fieldId, value, groupEntryId = null) {
+        // The API expects value_data to be a dictionary, so we wrap the value
+        const body = { value_data: value };
+        if (groupEntryId) {
+            body.group_entry_id = groupEntryId;
+        }
+        return this.request(`/settings/entities/${entityType}/${entityId}/custom-fields/${fieldId}`, {
+            method: 'PUT',
+            body: JSON.stringify(body),
+        });
+    }
+
+    async bulkUpdateCustomFields(entityType, entityId, values) {
+        return this.request(`/settings/entities/${entityType}/${entityId}/custom-fields/bulk`, {
+            method: 'PUT',
+            body: JSON.stringify({ values }),
+        });
+    }
+
+    async createGroupEntry(userId, entryData) {
+        return this.request(`/settings/users/${userId}/group-entries`, {
+            method: 'POST',
+            body: JSON.stringify(entryData),
+        });
+    }
+
+    async deleteGroupEntry(entryId) {
+        return this.request(`/settings/group-entries/${entryId}`, {
+            method: 'DELETE',
+        });
+    }
+
+    async uploadCustomFieldFile(file) {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        // Use the request method to ensure proper authentication and token refresh
+        return this.request('/settings/files/upload', {
+            method: 'POST',
+            body: formData,
+        });
+    }
+
+    async downloadCustomFieldFile(fileId) {
+        return this.request(`/settings/files/${fileId}/download`);
+    }
+
     // Invitation endpoints
     async getInvitations() {
         return this.request('/invitations/');
@@ -221,8 +302,15 @@ class ApiClient {
     }
 
     // MFA endpoints
+    async getMfaStatus() {
+        return this.request('/mfa/status');
+    }
+
     async setupMfa() {
-        return this.request('/mfa/setup', { method: 'POST' });
+        return this.request('/mfa/setup', {
+            method: 'POST',
+            body: JSON.stringify({})
+        });
     }
 
     async verifyMfa(token) {
@@ -232,8 +320,11 @@ class ApiClient {
         });
     }
 
-    async disableMfa() {
-        return this.request('/mfa/disable', { method: 'POST' });
+    async disableMfa(token) {
+        return this.request('/mfa/disable', {
+            method: 'POST',
+            body: JSON.stringify({ token })
+        });
     }
 
     // Health check

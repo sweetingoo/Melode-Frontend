@@ -48,6 +48,22 @@ function navigationComponent() {
                 visible: false
             },
             {
+                id: 'custom-fields',
+                label: 'Custom Fields',
+                icon: 'fas fa-list-alt',
+                href: 'custom-fields-admin.html',
+                permission: 'settings:write',
+                visible: false
+            },
+            {
+                id: 'setup-custom-fields',
+                label: 'Setup Custom Fields',
+                icon: 'fas fa-cog',
+                href: 'setup-custom-fields.html',
+                permission: 'settings:write',
+                visible: false
+            },
+            {
                 id: 'permissions',
                 label: 'Permissions',
                 icon: 'fas fa-key',
