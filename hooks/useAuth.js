@@ -17,6 +17,8 @@ export const authKeys = {
   refreshToken: () => [...authKeys.all, "refreshToken"],
   currentUser: () => [...authKeys.all, "currentUser"],
   updateProfile: () => [...authKeys.all, "updateProfile"],
+  hijackUser: () => [...authKeys.all, "hijackUser"],
+  returnToOriginalUser: () => [...authKeys.all, "returnToOriginalUser"],
 };
 
 // Login mutation
@@ -392,6 +394,107 @@ export const useUpdateProfile = () => {
           description: error.response?.data?.message || "Please try again",
         });
       }
+    },
+  });
+};
+
+// Hijack user mutation (Superuser Only)
+export const useHijackUser = () => {
+  const queryClient = useQueryClient();
+  const router = useRouter();
+
+  return useMutation({
+    mutationKey: authKeys.hijackUser(),
+    mutationFn: async (targetUserId) => {
+      const response = await authService.hijackUser(targetUserId);
+      return response.data;
+    },
+    onSuccess: (data) => {
+      // Store the hijacked user tokens
+      apiUtils.setAuthToken(data.access_token);
+      if (data.refresh_token) {
+        apiUtils.setRefreshToken(data.refresh_token);
+      }
+
+      // Store hijack session info in localStorage for reference
+      localStorage.setItem("hijackSession", JSON.stringify({
+        isHijacked: data.is_hijacked_session,
+        originalUser: data.original_user,
+        hijackedUser: data.hijacked_user,
+        hijackedAt: new Date().toISOString(),
+      }));
+
+      // Invalidate and refetch user data
+      queryClient.invalidateQueries({ queryKey: authKeys.currentUser() });
+
+      // Show success message
+      toast.success("User hijacked successfully!", {
+        description: `Now logged in as ${data.hijacked_user.first_name} ${data.hijacked_user.last_name}`,
+      });
+
+      // Redirect to admin page
+      if (typeof window !== "undefined") {
+        window.location.href = "/admin";
+      }
+    },
+    onError: (error) => {
+      console.error("Hijack user error:", error);
+
+      if (error.response?.status === 403) {
+        toast.error("Access Denied", {
+          description: "Only superusers can hijack user sessions",
+        });
+      } else if (error.response?.status === 404) {
+        toast.error("User Not Found", {
+          description: "The target user does not exist",
+        });
+      } else {
+        toast.error("Hijack Failed", {
+          description: error.response?.data?.message || "Failed to hijack user session",
+        });
+      }
+    },
+  });
+};
+
+// Return to original user mutation (Superuser Only)
+export const useReturnToOriginalUser = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationKey: authKeys.returnToOriginalUser(),
+    mutationFn: async () => {
+      const response = await authService.returnToOriginalUser();
+      return response.data;
+    },
+    onSuccess: (data) => {
+      // Store the original user tokens
+      apiUtils.setAuthToken(data.access_token);
+      if (data.refresh_token) {
+        apiUtils.setRefreshToken(data.refresh_token);
+      }
+
+      // Clear hijack session info
+      localStorage.removeItem("hijackSession");
+
+      // Invalidate and refetch user data
+      queryClient.invalidateQueries({ queryKey: authKeys.currentUser() });
+
+      // Show success message
+      toast.success("Successfully returned to original user", {
+        description: `Now logged in as ${data.user?.first_name} ${data.user?.last_name}`,
+      });
+
+      // Redirect to admin dashboard
+      if (typeof window !== "undefined") {
+        window.location.href = "/admin";
+      }
+    },
+    onError: (error) => {
+      console.error("Return to original user error:", error);
+      toast.error("Failed to return to original user", {
+        description: error.response?.data?.message || "Please try again",
+      });
     },
   });
 };

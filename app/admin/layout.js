@@ -49,7 +49,7 @@ import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { User, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { useAuth, useCurrentUser } from "@/hooks/useAuth";
+import { useAuth, useCurrentUser, useReturnToOriginalUser } from "@/hooks/useAuth";
 import { useTokenManager } from "@/hooks/useTokenManager";
 import { apiUtils } from "@/services/api-client";
 import AuthGuard from "@/components/AuthGuard";
@@ -112,6 +112,7 @@ export default function AdminLayout({ children }) {
   const pathname = usePathname();
   const { logout, isLoggingOut } = useAuth();
   const { data: currentUserData, isLoading: currentUserLoading, error: currentUserError } = useCurrentUser();
+  const returnToOriginalUserMutation = useReturnToOriginalUser();
   
   // Initialize token manager
   const { sessionModal } = useTokenManager();
@@ -398,6 +399,20 @@ export default function AdminLayout({ children }) {
                     </div>
                     <ChevronDown className="ml-auto h-4 w-4 opacity-50 group-data-[collapsible=icon]:hidden" />
                   </div>
+                  
+                  
+                  {/* Hijack Session Indicator */}
+                  {typeof window !== 'undefined' && localStorage.getItem('hijackSession') && (
+                    <div className="mt-2 p-2 bg-orange-100 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-md group-data-[collapsible=icon]:hidden">
+                      <div className="flex items-center gap-2 text-xs text-orange-800 dark:text-orange-200">
+                        <Shield className="h-3 w-3" />
+                        <span className="font-medium">Hijacked Session</span>
+                      </div>
+                      <div className="text-xs text-orange-600 dark:text-orange-300 mt-1">
+                        Acting as another user
+                      </div>
+                    </div>
+                  )}
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-56">
@@ -405,6 +420,19 @@ export default function AdminLayout({ children }) {
                   <User className="mr-2 h-4 w-4" />
                   <Link href="/admin/profile">Your Profile</Link>
                 </DropdownMenuItem>
+                
+                {/* Return to Original User - only show if hijacked */}
+                {typeof window !== 'undefined' && localStorage.getItem('hijackSession') && (
+                  <DropdownMenuItem 
+                    className="cursor-pointer text-orange-600"
+                    onClick={() => returnToOriginalUserMutation.mutate()}
+                    disabled={returnToOriginalUserMutation.isPending}
+                  >
+                    <Shield className="mr-2 h-4 w-4" />
+                    {returnToOriginalUserMutation.isPending ? "Returning..." : "Return to Original User"}
+                  </DropdownMenuItem>
+                )}
+                
                 <DropdownMenuItem
                   className="cursor-pointer text-red-600"
                   onClick={() => logout()}

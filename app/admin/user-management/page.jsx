@@ -58,6 +58,7 @@ import {
   CheckCircle,
   XCircle,
   AlertCircle,
+  UserCheck,
 } from "lucide-react";
 import {
   useUsers,
@@ -66,6 +67,7 @@ import {
   useActivateUser,
   userUtils,
 } from "@/hooks/useUsers";
+import { useHijackUser } from "@/hooks/useAuth";
 
 const UserManagementPage = () => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -77,6 +79,7 @@ const UserManagementPage = () => {
   const deleteUserMutation = useDeleteUser();
   const deactivateUserMutation = useDeactivateUser();
   const activateUserMutation = useActivateUser();
+  const hijackUserMutation = useHijackUser();
 
   // Extract users and pagination data from response
   const users = usersResponse?.users || [];
@@ -167,6 +170,14 @@ const UserManagementPage = () => {
       await activateUserMutation.mutateAsync(userId);
     } catch (error) {
       console.error("Failed to activate user:", error);
+    }
+  };
+
+  const handleHijackUser = async (userId) => {
+    try {
+      await hijackUserMutation.mutateAsync(userId);
+    } catch (error) {
+      console.error("Failed to hijack user:", error);
     }
   };
 
@@ -491,127 +502,173 @@ const UserManagementPage = () => {
                       </div>
                     </TableCell>
                     <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <Link href={`/admin/user-management/${user.id}`}>
-                          <Button variant="ghost" size="sm" title="Edit User">
-                            <Edit className="h-4 w-4" />
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                            <MoreHorizontal className="h-4 w-4" />
+                            <span className="sr-only">Open menu</span>
                           </Button>
-                        </Link>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-56">
+                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                          <DropdownMenuSeparator />
+                          
+                          {/* Edit User */}
+                          <DropdownMenuItem asChild>
+                            <Link href={`/admin/user-management/${user.id}`} className="flex items-center">
+                              <Edit className="mr-2 h-4 w-4" />
+                              Edit User
+                            </Link>
+                          </DropdownMenuItem>
 
-                        {/* Activate/Deactivate Button */}
-                        {user.isActive ? (
+                          {/* Activate/Deactivate User */}
+                          {user.isActive ? (
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <DropdownMenuItem 
+                                  className="text-orange-600 focus:text-orange-600"
+                                  disabled={deactivateUserMutation.isPending}
+                                  onSelect={(e) => e.preventDefault()}
+                                >
+                                  <UserX className="mr-2 h-4 w-4" />
+                                  Deactivate User
+                                </DropdownMenuItem>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>
+                                    Deactivate User
+                                  </AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Are you sure you want to deactivate this user?
+                                    They will not be able to log in to the system.
+                                    <br />
+                                    <strong>User:</strong> {user.name} ({user.email})
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => handleDeactivateUser(user.id)}
+                                    className="bg-orange-600 hover:bg-orange-700"
+                                  >
+                                    Deactivate User
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          ) : (
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <DropdownMenuItem 
+                                  className="text-green-600 focus:text-green-600"
+                                  disabled={activateUserMutation.isPending}
+                                  onSelect={(e) => e.preventDefault()}
+                                >
+                                  <CheckCircle className="mr-2 h-4 w-4" />
+                                  Activate User
+                                </DropdownMenuItem>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>
+                                    Activate User
+                                  </AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Are you sure you want to activate this user?
+                                    They will be able to log in to the system.
+                                    <br />
+                                    <strong>User:</strong> {user.name} ({user.email})
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => handleActivateUser(user.id)}
+                                    className="bg-green-600 hover:bg-green-700"
+                                  >
+                                    Activate User
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          )}
+
+                          {/* Hijack User */}
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-orange-600 hover:text-orange-700"
-                                title="Deactivate User"
-                                disabled={deactivateUserMutation.isPending}
+                              <DropdownMenuItem 
+                                className="text-blue-600 focus:text-blue-600"
+                                disabled={hijackUserMutation.isPending}
+                                onSelect={(e) => e.preventDefault()}
                               >
-                                <UserX className="h-4 w-4" />
-                              </Button>
+                                <UserCheck className="mr-2 h-4 w-4" />
+                                Hijack User Session
+                              </DropdownMenuItem>
                             </AlertDialogTrigger>
                             <AlertDialogContent>
                               <AlertDialogHeader>
-                                <AlertDialogTitle>
-                                  Deactivate User
-                                </AlertDialogTitle>
+                                <AlertDialogTitle>Hijack User Session</AlertDialogTitle>
                                 <AlertDialogDescription>
-                                  Are you sure you want to deactivate this user?
-                                  They will not be able to log in to the system.
+                                  Are you sure you want to hijack this user's session? 
+                                  You will be logged in as this user and can perform actions on their behalf.
                                   <br />
-                                  <strong>User:</strong> {user.name} (
-                                  {user.email})
+                                  <br />
+                                  <strong>Target User:</strong> {user.name} ({user.email})
+                                  <br />
+                                  <strong>Warning:</strong> This action will log you out of your current session and log you in as the target user.
                                 </AlertDialogDescription>
                               </AlertDialogHeader>
                               <AlertDialogFooter>
                                 <AlertDialogCancel>Cancel</AlertDialogCancel>
                                 <AlertDialogAction
-                                  onClick={() => handleDeactivateUser(user.id)}
-                                  className="bg-orange-600 hover:bg-orange-700"
+                                  onClick={() => handleHijackUser(user.id)}
+                                  className="bg-blue-600 hover:bg-blue-700"
                                 >
-                                  Deactivate User
+                                  Hijack User
                                 </AlertDialogAction>
                               </AlertDialogFooter>
                             </AlertDialogContent>
                           </AlertDialog>
-                        ) : (
+
+                          <DropdownMenuSeparator />
+                          
+                          {/* Delete User */}
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-green-600 hover:text-green-700"
-                                title="Activate User"
-                                disabled={activateUserMutation.isPending}
+                              <DropdownMenuItem 
+                                className="text-red-600 focus:text-red-600"
+                                disabled={deleteUserMutation.isPending}
+                                onSelect={(e) => e.preventDefault()}
                               >
-                                <CheckCircle className="h-4 w-4" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>
-                                  Activate User
-                                </AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Are you sure you want to activate this user?
-                                  They will be able to log in to the system.
-                                  <br />
-                                  <strong>User:</strong> {user.name} (
-                                  {user.email})
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() => handleActivateUser(user.id)}
-                                  className="bg-green-600 hover:bg-green-700"
-                                >
-                                  Activate User
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        )}
-
-                        {/* Delete Button */}
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="text-red-600 hover:text-red-700"
-                              title="Delete User"
-                              disabled={deleteUserMutation.isPending}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Delete User</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Are you sure you want to delete this user? This
-                                action cannot be undone and will permanently
-                                remove the user from the system.
-                                <br />
-                                <strong>User:</strong> {user.name} ({user.email}
-                                )
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              <AlertDialogAction
-                                onClick={() => handleDeleteUser(user.id)}
-                                className="bg-red-600 hover:bg-red-700"
-                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
                                 Delete User
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </div>
+                              </DropdownMenuItem>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Delete User</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Are you sure you want to delete this user? This
+                                  action cannot be undone and will permanently
+                                  remove the user from the system.
+                                  <br />
+                                  <strong>User:</strong> {user.name} ({user.email})
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => handleDeleteUser(user.id)}
+                                  className="bg-red-600 hover:bg-red-700"
+                                >
+                                  Delete User
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </TableCell>
                   </TableRow>
                 ))}

@@ -113,4 +113,26 @@ export const authService = {
       throw error;
     }
   },
+
+  // Hijack User (Superuser Only)
+  hijackUser: async (targetUserId) => {
+    try {
+      return await api.post("/auth/hijack-user", {
+        target_user_id: targetUserId,
+      });
+    } catch (error) {
+      console.error("Hijack user failed:", error);
+      throw error;
+    }
+  },
+
+  // Return to Original User (Superuser Only)
+  returnToOriginalUser: async () => {
+    try {
+      return await api.post("/auth/return-to-original-user");
+    } catch (error) {
+      console.error("Return to original user failed:", error);
+      throw error;
+    }
+  },
 };
