@@ -160,7 +160,7 @@ export const useResetPassword = () => {
   return useMutation({
     mutationKey: authKeys.resetPassword(),
     mutationFn: async ({ token, password }) => {
-      const response = await authAPI.resetPassword(token, password);
+      const response = await authService.resetPassword(token, password);
       return response.data;
     },
     onSuccess: () => {
@@ -284,7 +284,7 @@ export const useUpdateProfile = () => {
   return useMutation({
     mutationKey: authKeys.updateProfile(),
     mutationFn: async (userData) => {
-      const response = await authAPI.updateProfile(userData);
+      const response = await authService.updateProfile(userData);
       return response.data;
     },
     onSuccess: (data) => {

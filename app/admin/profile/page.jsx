@@ -96,6 +96,7 @@ export default function ProfilePage() {
   // Handle avatar upload success
   useEffect(() => {
     if (uploadAvatarMutation.isSuccess && uploadAvatarMutation.data) {
+      console.log('Avatar upload success, updating formData with:', uploadAvatarMutation.data);
       setFormData(prev => ({
         ...prev,
         avatar: uploadAvatarMutation.data
@@ -153,10 +154,17 @@ export default function ProfilePage() {
   // Update form data when profile data loads (only editable fields)
   useEffect(() => {
     if (profileData) {
-      setFormData({
-        bio: profileData.bio || "",
-        avatar: profileData.avatar || "",
+      console.log('Profile data loaded, avatar values:', {
+        profileData_avatar: profileData.avatar,
+        profileData_avatar_url: profileData.avatar_url,
+        current_formData_avatar: formData.avatar,
+        full_profileData: profileData
       });
+      setFormData(prev => ({
+        bio: profileData.bio || "",
+        // Only update avatar if we don't have a more recent one from upload
+        avatar: prev.avatar || profileData.avatar_url || profileData.avatar || "",
+      }));
     }
   }, [profileData]);
 
@@ -850,7 +858,16 @@ export default function ProfilePage() {
                 <div className="flex items-center gap-6">
                   <Avatar className="h-20 w-20">
                     <AvatarImage
-                      src={formData.avatar || profileData?.avatar || "/placeholder-avatar.jpg"}
+                      src={(() => {
+                        const avatarSrc = formData.avatar || profileData?.avatar_url || profileData?.avatar || "/placeholder-avatar.jpg";
+                        console.log('Avatar src calculation:', {
+                          formData_avatar: formData.avatar,
+                          profileData_avatar_url: profileData?.avatar_url,
+                          profileData_avatar: profileData?.avatar,
+                          final_src: avatarSrc
+                        });
+                        return avatarSrc;
+                      })()}
                     />
                     <AvatarFallback className="text-lg">
                       {profileData?.initials || "AU"}

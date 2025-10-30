@@ -55,7 +55,7 @@ export const authService = {
   // Reset password
   resetPassword: async (token, password) => {
     try {
-      return await api.post("/auth/reset-password", { token, password });
+      return await api.post("/auth/reset-password", { token, new_password: password });
     } catch (error) {
       console.error("Reset password failed:", error);
       throw error;

@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { profileService } from "@/services/profile";
+import { authKeys } from "@/hooks/useAuth";
 import { toast } from "sonner";
 
 // Query keys for profile
@@ -32,9 +33,8 @@ export const profileUtils = {
     createdAt: profile.created_at || profile.createdAt,
     updatedAt: profile.updated_at || profile.updatedAt,
     // Additional computed fields
-    fullName: `${profile.first_name || profile.firstName || ""} ${
-      profile.last_name || profile.lastName || ""
-    }`.trim(),
+    fullName: `${profile.first_name || profile.firstName || ""} ${profile.last_name || profile.lastName || ""
+      }`.trim(),
     initials: `${(profile.first_name || profile.firstName || "").charAt(0)}${(
       profile.last_name ||
       profile.lastName ||
@@ -302,10 +302,14 @@ export const useUploadAvatar = () => {
           return {
             ...oldData,
             avatar: data, // The API returns the avatar URL as a string
+            avatar_url: data, // Also update avatar_url for consistency
           };
         }
         return oldData;
       });
+
+      // Invalidate the current user query to refresh the sidebar and other components
+      queryClient.invalidateQueries({ queryKey: authKeys.currentUser() });
 
       toast.success("Avatar uploaded successfully!", {
         description: "Your profile picture has been updated.",
@@ -313,7 +317,7 @@ export const useUploadAvatar = () => {
     },
     onError: (error) => {
       console.error("Failed to upload avatar:", error);
-      
+
       if (error.response?.status === 422) {
         // Handle validation errors
         const errorData = error.response.data;
@@ -366,7 +370,7 @@ export const useSetupMFA = () => {
     },
     onError: (error) => {
       console.error("Failed to setup MFA:", error);
-      
+
       if (error.response?.status === 422) {
         const errorData = error.response.data;
         if (errorData?.detail && Array.isArray(errorData.detail)) {
@@ -402,14 +406,14 @@ export const useVerifyMFA = () => {
     onSuccess: () => {
       // Invalidate MFA status to refetch updated data
       queryClient.invalidateQueries({ queryKey: profileKeys.mfaStatus() });
-      
+
       toast.success("MFA enabled successfully!", {
         description: "Multi-factor authentication is now active on your account.",
       });
     },
     onError: (error) => {
       console.error("Failed to verify MFA:", error);
-      
+
       if (error.response?.status === 422) {
         const errorData = error.response.data;
         if (errorData?.detail && Array.isArray(errorData.detail)) {
@@ -445,14 +449,14 @@ export const useDisableMFA = () => {
     onSuccess: () => {
       // Invalidate MFA status to refetch updated data
       queryClient.invalidateQueries({ queryKey: profileKeys.mfaStatus() });
-      
+
       toast.success("MFA disabled successfully!", {
         description: "Multi-factor authentication has been disabled on your account.",
       });
     },
     onError: (error) => {
       console.error("Failed to disable MFA:", error);
-      
+
       if (error.response?.status === 422) {
         const errorData = error.response.data;
         if (errorData?.detail && Array.isArray(errorData.detail)) {
@@ -488,14 +492,14 @@ export const useRegenerateBackupCodes = () => {
     onSuccess: (data) => {
       // Invalidate MFA status to refetch updated data
       queryClient.invalidateQueries({ queryKey: profileKeys.mfaStatus() });
-      
+
       toast.success("Backup codes regenerated!", {
         description: "New backup codes have been generated. Please save them securely.",
       });
     },
     onError: (error) => {
       console.error("Failed to regenerate backup codes:", error);
-      
+
       if (error.response?.status === 422) {
         const errorData = error.response.data;
         if (errorData?.detail && Array.isArray(errorData.detail)) {
@@ -562,14 +566,14 @@ export const useUpdateUserCustomField = () => {
     onSuccess: (data, variables) => {
       // Invalidate user custom fields to refetch updated data
       queryClient.invalidateQueries({ queryKey: profileKeys.userCustomFields() });
-      
+
       toast.success("Custom field updated successfully!", {
         description: "Your custom field has been updated.",
       });
     },
     onError: (error) => {
       console.error("Failed to update custom field:", error);
-      
+
       if (error.response?.status === 422) {
         const errorData = error.response.data;
         if (errorData?.detail && Array.isArray(errorData.detail)) {
@@ -605,14 +609,14 @@ export const useBulkUpdateUserCustomFields = () => {
     onSuccess: () => {
       // Invalidate user custom fields to refetch updated data
       queryClient.invalidateQueries({ queryKey: profileKeys.userCustomFields() });
-      
+
       toast.success("Custom fields updated successfully!", {
         description: "Your custom field information has been updated.",
       });
     },
     onError: (error) => {
       console.error("Failed to update custom fields:", error);
-      
+
       if (error.response?.status === 422) {
         const errorData = error.response.data;
         if (errorData?.detail && Array.isArray(errorData.detail)) {
@@ -648,14 +652,14 @@ export const useAddUserGroupEntry = () => {
     onSuccess: () => {
       // Invalidate user custom fields to refetch updated data
       queryClient.invalidateQueries({ queryKey: profileKeys.userCustomFields() });
-      
+
       toast.success("Group entry added successfully!", {
         description: "New entry has been added to the group.",
       });
     },
     onError: (error) => {
       console.error("Failed to add group entry:", error);
-      
+
       if (error.response?.status === 422) {
         const errorData = error.response.data;
         if (errorData?.detail && Array.isArray(errorData.detail)) {
@@ -693,7 +697,7 @@ export const useUploadFile = () => {
     },
     onError: (error) => {
       console.error("Failed to upload file:", error);
-      
+
       if (error.response?.status === 422) {
         const errorData = error.response.data;
         if (errorData?.detail && Array.isArray(errorData.detail)) {
@@ -732,7 +736,7 @@ export const useDownloadFile = () => {
         } else if (data.download_url) {
           downloadUrl = data.download_url;
         }
-        
+
         if (downloadUrl) {
           // Create a temporary anchor element to trigger download
           const link = document.createElement('a');
