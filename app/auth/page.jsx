@@ -19,16 +19,19 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 const LoginPage = () => {
+  console.log("LoginPage component rendering");
+  
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
+  const [requiresMFA, setRequiresMFA] = useState(false);
   const [formData, setFormData] = useState({
     email: "",
     password: "",
-    mfa_token: "", // Optional MFA token
+    mfa_token: "", // MFA token for verification
   });
 
-  // Use the login mutation from our custom hook
+  // Use the login mutations from our custom hooks
   const loginMutation = useLogin();
 
   // Redirect if already authenticated
@@ -39,6 +42,23 @@ const LoginPage = () => {
     }
   }, [router]);
 
+  // Handle MFA requirement from error response
+  useEffect(() => {
+    console.log("Login mutation error changed:", loginMutation.error);
+    if (loginMutation.error?.response?.status === 400) {
+      const errorMessage = loginMutation.error.response.data?.detail || "";
+      console.log("400 error received, message:", errorMessage);
+      if (errorMessage.toLowerCase().includes("mfa") || errorMessage.toLowerCase().includes("token required")) {
+        console.log("MFA required from error response - switching to MFA mode");
+        setRequiresMFA(true);
+        setFormData(prev => ({ ...prev, mfa_token: "" }));
+        toast.info("MFA Required", {
+          description: "Please enter your MFA token to complete login",
+        });
+      }
+    }
+  }, [loginMutation.error]);
+
   const handleInputChange = (field, value) => {
     setFormData((prev) => ({
       ...prev,
@@ -47,7 +67,12 @@ const LoginPage = () => {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    
+    console.log("Form submitted", { formData, requiresMFA });
 
     // Basic validation
     if (!formData.email || !formData.password) {
@@ -62,18 +87,28 @@ const LoginPage = () => {
       return;
     }
 
-    // Prepare credentials for API call
+    if (requiresMFA) {
+      // MFA verification step
+      if (!formData.mfa_token) {
+        toast.error("Please enter your MFA token");
+        return;
+      }
+
+      // Validate MFA token format (6 digits)
+      if (!/^\d{6}$/.test(formData.mfa_token)) {
+        toast.error("Please enter a valid 6-digit MFA token");
+        return;
+      }
+    }
+
+    // Call login mutation with all credentials
     const credentials = {
       email: formData.email,
       password: formData.password,
+      ...(requiresMFA && formData.mfa_token && { mfa_token: formData.mfa_token }),
     };
 
-    // Add MFA token if provided
-    if (formData.mfa_token) {
-      credentials.mfa_token = formData.mfa_token;
-    }
-
-    // Call the login mutation
+    console.log("Calling login mutation with:", credentials);
     loginMutation.mutate(credentials);
   };
 
@@ -87,6 +122,12 @@ const LoginPage = () => {
 
   const handleMicrosoftLogin = () => {
     toast.info("Microsoft login functionality");
+  };
+
+  const handleBackToLogin = () => {
+    setRequiresMFA(false);
+    setTempToken(null);
+    setFormData(prev => ({ ...prev, mfa_token: "" }));
   };
 
   return (
@@ -122,16 +163,20 @@ const LoginPage = () => {
         <Card className="border-0 shadow-xl bg-card backdrop-blur-sm">
           <CardHeader className="space-y-1 pb-4">
             <CardTitle className="text-2xl font-bold text-center text-foreground">
-              Sign In
+              {requiresMFA ? "MFA Verification" : "Sign In"}
             </CardTitle>
             <p className="text-sm text-center text-muted-foreground">
-              Enter your credentials to access your account
+              {requiresMFA 
+                ? "Enter your MFA token to complete login"
+                : "Enter your credentials to access your account"
+              }
             </p>
           </CardHeader>
 
           <CardContent className="space-y-6">
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Email Field */}
+            <div className="space-y-4">
+              {/* Email Field - Only show when not in MFA mode */}
+              {!requiresMFA && (
               <div className="space-y-2">
                 <Label
                   htmlFor="email"
@@ -147,13 +192,16 @@ const LoginPage = () => {
                     placeholder="Enter your email"
                     value={formData.email}
                     onChange={(e) => handleInputChange("email", e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
                     className="pl-10 h-11 border-border focus:border-primary focus:ring-primary/20"
                     required
                   />
                 </div>
               </div>
+              )}
 
-              {/* Password Field */}
+              {/* Password Field - Only show when not in MFA mode */}
+              {!requiresMFA && (
               <div className="space-y-2">
                 <Label
                   htmlFor="password"
@@ -171,6 +219,7 @@ const LoginPage = () => {
                     onChange={(e) =>
                       handleInputChange("password", e.target.value)
                     }
+                    onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
                     className="pl-10 pr-10 h-11 border-border focus:border-primary focus:ring-primary/20"
                     required
                   />
@@ -187,8 +236,39 @@ const LoginPage = () => {
                   </button>
                 </div>
               </div>
+              )}
 
-              {/* Remember Me & Forgot Password */}
+              {/* MFA Token Field - Only show when MFA is required */}
+              {requiresMFA && (
+                <div className="space-y-2">
+                  <Label
+                    htmlFor="mfa_token"
+                    className="text-sm font-medium text-foreground"
+                  >
+                    MFA Token
+                  </Label>
+                  <div className="relative">
+                    <Shield className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="mfa_token"
+                      type="text"
+                      placeholder="Enter 6-digit MFA token"
+                      value={formData.mfa_token}
+                      onChange={(e) => handleInputChange("mfa_token", e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+                      className="pl-10 h-11 border-border focus:border-primary focus:ring-primary/20"
+                      maxLength={6}
+                      required
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Enter the 6-digit code from your authenticator app
+                  </p>
+                </div>
+              )}
+
+              {/* Remember Me & Forgot Password - Only show when not in MFA mode */}
+              {!requiresMFA && (
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
                   <Checkbox
@@ -211,21 +291,37 @@ const LoginPage = () => {
                   Forgot password?
                 </Link>
               </div>
+              )}
+
+              {/* Back to Login Button - Only show in MFA mode */}
+              {requiresMFA && (
+                <div className="flex items-center justify-center">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={handleBackToLogin}
+                    className="text-sm text-muted-foreground hover:text-foreground"
+                  >
+                    ← Back to login
+                  </Button>
+                </div>
+              )}
 
               {/* Submit Button */}
               <Button
-                type="submit"
+                type="button"
+                onClick={(e) => handleSubmit(e)}
                 className="w-full h-11 bg-primary hover:bg-primary/90 text-primary-foreground font-medium transition-all duration-200 shadow-lg hover:shadow-xl"
                 disabled={loginMutation.isPending}
               >
                 {loginMutation.isPending ? (
                   <div className="flex items-center gap-2">
                     <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    Signing in...
+                    {requiresMFA ? "Verifying MFA..." : "Signing in..."}
                   </div>
                 ) : (
                   <div className="flex items-center gap-2">
-                    Sign In
+                    {requiresMFA ? "Verify MFA" : "Sign In"}
                     <ArrowRight className="h-4 w-4" />
                   </div>
                 )}
@@ -239,7 +335,7 @@ const LoginPage = () => {
                   </button>
                 </p>
               </div>
-            </form>
+            </div>
           </CardContent>
         </Card>
 

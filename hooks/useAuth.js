@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 export const authKeys = {
   all: ["auth"],
   login: () => [...authKeys.all, "login"],
+  mfaLogin: () => [...authKeys.all, "mfaLogin"],
   logout: () => [...authKeys.all, "logout"],
   register: () => [...authKeys.all, "register"],
   signup: () => [...authKeys.all, "signup"],
@@ -30,6 +31,12 @@ export const useLogin = () => {
       return response.data;
     },
     onSuccess: (data) => {
+      // Check if MFA is required - if so, don't redirect
+      if (data.requires_mfa) {
+        return; // Let the component handle MFA flow
+      }
+
+      // Only handle successful login (no MFA required)
       // Store tokens
       apiUtils.setAuthToken(data.access_token);
       if (data.refresh_token) {
@@ -44,14 +51,31 @@ export const useLogin = () => {
         description: "Welcome back to Melode Admin",
       });
 
-      // Redirect to admin page
-      router.push("/admin");
+      // Redirect to admin page with a small delay
+      if (typeof window !== "undefined") {
+        setTimeout(() => {
+          window.location.href = "/admin";
+        }, 100);
+      }
     },
     onError: (error) => {
       console.error("Login error:", error);
 
       // Handle specific error cases
-      if (error.response?.status === 401) {
+      if (error.response?.status === 400) {
+        // Check if this is an MFA required error
+        const errorMessage = error.response.data?.detail || error.response.data?.message || "";
+        if (errorMessage.toLowerCase().includes("mfa") || errorMessage.toLowerCase().includes("token required")) {
+          // This should be handled by the component, not show an error
+          console.log("MFA required - should be handled by component");
+          console.log("Full error response:", error.response.data);
+          // Don't return here - let the error propagate to the component
+        } else {
+          toast.error("Login failed", {
+            description: errorMessage || "Please check your credentials",
+          });
+        }
+      } else if (error.response?.status === 401) {
         toast.error("Invalid credentials", {
           description: "Please check your email and password",
         });
@@ -76,6 +100,59 @@ export const useLogin = () => {
         toast.error("Login failed", {
           description:
             error.response?.data?.message || "An unexpected error occurred",
+        });
+      }
+    },
+  });
+};
+
+// MFA Login verification mutation
+export const useMFALogin = () => {
+  const queryClient = useQueryClient();
+  const router = useRouter();
+
+  return useMutation({
+    mutationKey: authKeys.mfaLogin(),
+    mutationFn: async ({ temp_token, mfa_token }) => {
+      const response = await authService.mfaLogin(temp_token, mfa_token);
+      return response.data;
+    },
+    onSuccess: (data) => {
+      // Store tokens
+      apiUtils.setAuthToken(data.access_token);
+      if (data.refresh_token) {
+        apiUtils.setRefreshToken(data.refresh_token);
+      }
+
+      // Invalidate and refetch user data
+      queryClient.invalidateQueries({ queryKey: authKeys.currentUser() });
+
+      // Show success message
+      toast.success("Login successful!", {
+        description: "Welcome back to Melode Admin",
+      });
+
+      // Redirect to admin page with a small delay
+      if (typeof window !== "undefined") {
+        setTimeout(() => {
+          window.location.href = "/admin";
+        }, 100);
+      }
+    },
+    onError: (error) => {
+      console.error("MFA Login error:", error);
+
+      if (error.response?.status === 401) {
+        toast.error("Invalid MFA token", {
+          description: "Please check your MFA token and try again",
+        });
+      } else if (error.response?.status === 422) {
+        toast.error("Invalid MFA token", {
+          description: "Please enter a valid 6-digit code",
+        });
+      } else {
+        toast.error("MFA verification failed", {
+          description: error.response?.data?.message || "Please try again",
         });
       }
     },
@@ -215,7 +292,9 @@ export const useSignup = () => {
       });
 
       // Redirect to dashboard
-      router.push("/admin");
+      if (typeof window !== "undefined") {
+        window.location.href = "/admin";
+      }
     },
     onError: (error) => {
       console.error("Signup error:", error);

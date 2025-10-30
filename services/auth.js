@@ -62,6 +62,16 @@ export const authService = {
     }
   },
 
+  // MFA Login verification
+  mfaLogin: async (temp_token, mfa_token) => {
+    try {
+      return await api.post("/auth/mfa-login", { temp_token, mfa_token });
+    } catch (error) {
+      console.error("MFA login failed:", error);
+      throw error;
+    }
+  },
+
   // Refresh token
   refreshToken: async () => {
     try {

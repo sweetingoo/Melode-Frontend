@@ -62,13 +62,19 @@ apiClient.interceptors.response.use(
     if (error.response) {
       // Server responded with error status
       const { status, data } = error.response;
+      const config = error.config;
 
       switch (status) {
         case 401:
           // Unauthorized - clear token and redirect to login
-          localStorage.removeItem("authToken");
-          if (typeof window !== "undefined") {
-            window.location.href = "/auth";
+          // But don't redirect if this is a login attempt (to avoid infinite redirects)
+          const isLoginAttempt = config?.url?.includes('/auth/login') || config?.url?.includes('/auth/mfa-login');
+          
+          if (!isLoginAttempt) {
+            localStorage.removeItem("authToken");
+            if (typeof window !== "undefined") {
+              window.location.href = "/auth";
+            }
           }
           break;
         case 403:
