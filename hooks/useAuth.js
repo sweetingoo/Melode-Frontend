@@ -177,6 +177,11 @@ export const useLogout = () => {
       apiUtils.clearAuthToken();
       queryClient.clear();
 
+      // Clear hijack session if exists
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("hijackSession");
+      }
+
       toast.success("Logged out successfully");
 
       // Redirect to login page
@@ -188,6 +193,11 @@ export const useLogout = () => {
       // Even if logout fails on server, clear local data
       apiUtils.clearAuthToken();
       queryClient.clear();
+
+      // Clear hijack session if exists
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("hijackSession");
+      }
 
       toast.error("Logout failed", {
         description: "You have been logged out locally",
@@ -410,6 +420,11 @@ export const useHijackUser = () => {
       return response.data;
     },
     onSuccess: (data) => {
+      // Get current user's tokens BEFORE storing hijacked tokens
+      // This is the original user's tokens we need to restore later
+      const originalAuthToken = typeof window !== "undefined" ? localStorage.getItem("authToken") : null;
+      const originalRefreshToken = typeof window !== "undefined" ? localStorage.getItem("refreshToken") : null;
+
       // Store the hijacked user tokens
       apiUtils.setAuthToken(data.access_token);
       if (data.refresh_token) {
@@ -417,11 +432,15 @@ export const useHijackUser = () => {
       }
 
       // Store hijack session info in localStorage for reference
+      // IMPORTANT: Store the original user's tokens so we can restore them later
       localStorage.setItem("hijackSession", JSON.stringify({
         isHijacked: data.is_hijacked_session,
         originalUser: data.original_user,
         hijackedUser: data.hijacked_user,
         hijackedAt: new Date().toISOString(),
+        // Store original user's tokens for restoration
+        originalAuthToken: originalAuthToken,
+        originalRefreshToken: originalRefreshToken,
       }));
 
       // Invalidate and refetch user data
@@ -464,25 +483,59 @@ export const useReturnToOriginalUser = () => {
   return useMutation({
     mutationKey: authKeys.returnToOriginalUser(),
     mutationFn: async () => {
-      const response = await authService.returnToOriginalUser();
-      return response.data;
-    },
-    onSuccess: (data) => {
-      // Store the original user tokens
-      apiUtils.setAuthToken(data.access_token);
-      if (data.refresh_token) {
-        apiUtils.setRefreshToken(data.refresh_token);
+      // No endpoint exists for this - use localStorage instead
+      // This function doesn't make an API call, it just prepares the data
+      // The actual restoration happens in onSuccess
+      if (typeof window === "undefined") {
+        throw new Error("Cannot restore original user session on server");
       }
 
-      // Clear hijack session info
-      localStorage.removeItem("hijackSession");
+      const hijackSessionStr = localStorage.getItem("hijackSession");
+      if (!hijackSessionStr) {
+        throw new Error("No hijack session found");
+      }
 
-      // Invalidate and refetch user data
+      const hijackSession = JSON.parse(hijackSessionStr);
+      if (!hijackSession.originalAuthToken) {
+        throw new Error("Original user tokens not found in hijack session");
+      }
+
+      // Return the stored data - we'll restore tokens in onSuccess
+      return {
+        access_token: hijackSession.originalAuthToken,
+        refresh_token: hijackSession.originalRefreshToken,
+        user: hijackSession.originalUser,
+      };
+    },
+    onSuccess: (data) => {
+      // Data comes from mutationFn which reads from localStorage
+      // Restore the original user's tokens
+      const accessToken = data.access_token;
+      const refreshToken = data.refresh_token;
+      
+      if (accessToken) {
+        apiUtils.setAuthToken(accessToken);
+      }
+      if (refreshToken) {
+        apiUtils.setRefreshToken(refreshToken);
+      }
+
+      // Clear hijack session info since we're back to original user
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("hijackSession");
+      }
+
+      // Invalidate and refetch user data to get original user info
       queryClient.invalidateQueries({ queryKey: authKeys.currentUser() });
 
       // Show success message
+      const user = data.user || data;
+      const userName = user?.first_name && user?.last_name
+        ? `${user.first_name} ${user.last_name}`
+        : user?.email || user?.username || "the original user";
+      
       toast.success("Successfully returned to original user", {
-        description: `Now logged in as ${data.user?.first_name} ${data.user?.last_name}`,
+        description: `Now logged in as ${userName}`,
       });
 
       // Redirect to admin dashboard
@@ -492,9 +545,21 @@ export const useReturnToOriginalUser = () => {
     },
     onError: (error) => {
       console.error("Return to original user error:", error);
-      toast.error("Failed to return to original user", {
-        description: error.response?.data?.message || "Please try again",
-      });
+      
+      // Handle different error types
+      if (error.message?.includes("No hijack session")) {
+        toast.error("No hijack session found", {
+          description: "You are not currently in a hijacked session.",
+        });
+      } else if (error.message?.includes("Original user tokens not found")) {
+        toast.error("Cannot restore session", {
+          description: "Original user tokens not found. Please logout and login again.",
+        });
+      } else {
+        toast.error("Failed to return to original user", {
+          description: error.message || "Please try again or logout and login again.",
+        });
+      }
     },
   });
 };

@@ -55,7 +55,10 @@ export const authService = {
   // Reset password
   resetPassword: async (token, password) => {
     try {
-      return await api.post("/auth/reset-password", { token, new_password: password });
+      return await api.post("/auth/reset-password", {
+        token,
+        new_password: password,
+      });
     } catch (error) {
       console.error("Reset password failed:", error);
       throw error;
@@ -96,7 +99,7 @@ export const authService = {
   refreshToken: async (refreshToken) => {
     try {
       return await api.post("/auth/refresh", {
-        refresh_token: refreshToken
+        refresh_token: refreshToken,
       });
     } catch (error) {
       console.error("Token refresh failed:", error);
@@ -127,12 +130,11 @@ export const authService = {
   },
 
   // Return to Original User (Superuser Only)
+  // NOTE: This endpoint doesn't exist in the API, so we use localStorage instead
+  // The actual restoration happens in the useReturnToOriginalUser hook
   returnToOriginalUser: async () => {
-    try {
-      return await api.post("/auth/return-to-original-user");
-    } catch (error) {
-      console.error("Return to original user failed:", error);
-      throw error;
-    }
+    // This is a placeholder - actual restoration uses localStorage
+    // Kept for backward compatibility but won't be called
+    throw new Error("Use localStorage-based restoration instead");
   },
 };
