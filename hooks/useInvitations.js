@@ -20,15 +20,12 @@ export const useInvitations = (params = {}) => {
         const response = await invitationsService.getInvitations(params);
         return response.data;
       } catch (error) {
-        console.error("Failed to fetch invitations:", error);
-
-        // If it's a network error, return demo data for development
+        // If it's a network error, return demo data for development silently
         if (
           error.code === "NETWORK_ERROR" ||
-          error.message?.includes("Network Error")
+          error.message?.includes("Network Error") ||
+          (error.request && !error.response)
         ) {
-          console.warn("Network error detected, returning demo data");
-
           // Return demo data when API is not available
           return [
             {
@@ -101,23 +98,9 @@ export const useInvitations = (params = {}) => {
       }
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
-    retry: (failureCount, error) => {
-      // Don't retry on 4xx errors
-      if (error?.response?.status >= 400 && error?.response?.status < 500) {
-        return false;
-      }
-
-      // Don't retry network errors more than once
-      if (
-        error?.code === "NETWORK_ERROR" ||
-        error?.message?.includes("Network Error")
-      ) {
-        return failureCount < 1;
-      }
-
-      return failureCount < 3;
-    },
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+    retry: false, // Disable retries to prevent multiple network error logs
+    refetchOnWindowFocus: false, // Don't refetch on window focus to avoid repeated errors
+    refetchOnReconnect: false, // Don't refetch on reconnect automatically
   });
 };
 
@@ -158,7 +141,7 @@ export const useCreateInvitation = () => {
 
       if (error.response?.status === 422) {
         const errorData = error.response.data;
-        
+
         // Handle the new API error format with detail array
         if (errorData?.detail && Array.isArray(errorData.detail)) {
           errorData.detail.forEach((errorItem) => {
@@ -175,8 +158,7 @@ export const useCreateInvitation = () => {
           });
         } else {
           toast.error("Validation error", {
-            description:
-              errorData?.message || "Please check your input",
+            description: errorData?.message || "Please check your input",
           });
         }
       } else if (error.response?.status === 409) {

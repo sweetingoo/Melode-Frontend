@@ -68,8 +68,10 @@ apiClient.interceptors.response.use(
         case 401:
           // Unauthorized - clear token and redirect to login
           // But don't redirect if this is a login attempt (to avoid infinite redirects)
-          const isLoginAttempt = config?.url?.includes('/auth/login') || config?.url?.includes('/auth/mfa-login');
-          
+          const isLoginAttempt =
+            config?.url?.includes("/auth/login") ||
+            config?.url?.includes("/auth/mfa-login");
+
           if (!isLoginAttempt) {
             localStorage.removeItem("authToken");
             if (typeof window !== "undefined") {
@@ -123,7 +125,15 @@ apiClient.interceptors.response.use(
       }
     } else if (error.request) {
       // Request was made but no response received
-      console.error("Network Error:", "No response received from server");
+      // Log as warning instead of error for better UX (network errors are often expected)
+      const url = error.config?.url || "unknown";
+      // Only log network errors for non-invitation endpoints to reduce noise
+      if (!url.includes("/invitations")) {
+        console.warn(
+          "Network Error:",
+          `No response received from server for ${url}`
+        );
+      }
 
       // Add network error code for better handling
       error.code = "NETWORK_ERROR";
@@ -143,7 +153,12 @@ export const api = {
     try {
       return await apiClient.get(url, config);
     } catch (error) {
-      console.error(`GET request failed for ${url}:`, error);
+      // Don't log network errors for invitations endpoint (handled gracefully in hook)
+      if (error.code === "NETWORK_ERROR" && url.includes("/invitations")) {
+        // Silently handle network errors for invitations
+      } else {
+        console.error(`GET request failed for ${url}:`, error);
+      }
       throw error;
     }
   },
@@ -251,10 +266,13 @@ export const apiUtils = {
   isAuthenticated: () => {
     if (typeof window !== "undefined") {
       const hasToken = !!localStorage.getItem("authToken");
-      console.log('isAuthenticated check:', { hasToken, token: localStorage.getItem("authToken") });
+      console.log("isAuthenticated check:", {
+        hasToken,
+        token: localStorage.getItem("authToken"),
+      });
       return hasToken;
     }
-    console.log('isAuthenticated check: window undefined, returning false');
+    console.log("isAuthenticated check: window undefined, returning false");
     return false;
   },
 

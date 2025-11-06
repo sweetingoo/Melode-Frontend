@@ -123,4 +123,8 @@ body {
   body {
     @apply bg-background text-foreground;
   }
+  input::placeholder,
+  textarea::placeholder {
+    @apply text-muted-foreground/50;
+  }
 }

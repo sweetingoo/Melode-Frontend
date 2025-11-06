@@ -7,7 +7,10 @@ export const invitationsService = {
     try {
       return await api.get("/invitations", { params });
     } catch (error) {
-      console.error("Get invitations failed:", error);
+      // Don't log network errors (handled gracefully in hook)
+      if (error.code !== "NETWORK_ERROR" && !(error.request && !error.response)) {
+        console.error("Get invitations failed:", error);
+      }
       throw error;
     }
   },

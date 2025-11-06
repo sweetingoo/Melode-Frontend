@@ -59,26 +59,63 @@ import {
   XCircle,
   AlertCircle,
   UserCheck,
+  Loader2,
 } from "lucide-react";
 import {
   useUsers,
   useDeleteUser,
   useDeactivateUser,
   useActivateUser,
+  useCreateUser,
+  useRoles,
   userUtils,
 } from "@/hooks/useUsers";
 import { useHijackUser } from "@/hooks/useAuth";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const UserManagementPage = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [userFormData, setUserFormData] = useState({
+    email: "",
+    username: "",
+    first_name: "",
+    last_name: "",
+    title: "",
+    phone_number: "",
+    password: "",
+    bio: "",
+    send_invite: true,
+    role_id: "",
+  });
+  const [validationErrors, setValidationErrors] = useState({});
   const itemsPerPage = 10;
 
   // API hooks
   const { data: usersResponse, isLoading, error, refetch } = useUsers();
+  const { data: rolesData, isLoading: rolesLoading } = useRoles();
+  const roles = rolesData || [];
   const deleteUserMutation = useDeleteUser();
   const deactivateUserMutation = useDeactivateUser();
   const activateUserMutation = useActivateUser();
+  const createUserMutation = useCreateUser();
   const hijackUserMutation = useHijackUser();
 
   // Extract users and pagination data from response
@@ -179,6 +216,119 @@ const UserManagementPage = () => {
     } catch (error) {
       console.error("Failed to hijack user:", error);
     }
+  };
+
+  const validateUserForm = () => {
+    const errors = {};
+
+    if (!userFormData.email) {
+      errors.email = "Email is required";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userFormData.email)) {
+      errors.email = "Please enter a valid email address";
+    }
+
+    if (!userFormData.first_name) {
+      errors.first_name = "First name is required";
+    }
+
+    if (!userFormData.last_name) {
+      errors.last_name = "Last name is required";
+    }
+
+    if (!userFormData.password) {
+      errors.password = "Password is required";
+    } else if (userFormData.password.length < 8) {
+      errors.password = "Password must be at least 8 characters";
+    }
+
+    if (
+      userFormData.phone_number &&
+      !/^\+?[\d\s-()]+$/.test(userFormData.phone_number)
+    ) {
+      errors.phone_number = "Please enter a valid phone number";
+    }
+
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleCreateUser = () => {
+    if (!validateUserForm()) {
+      return;
+    }
+
+    const userData = {
+      email: userFormData.email,
+      username: userFormData.username || undefined,
+      first_name: userFormData.first_name,
+      last_name: userFormData.last_name,
+      title: userFormData.title || undefined,
+      phone_number: userFormData.phone_number || undefined,
+      password: userFormData.password,
+      bio: userFormData.bio || undefined,
+      send_invite: userFormData.send_invite,
+      role_id: userFormData.role_id ? parseInt(userFormData.role_id) : 0,
+    };
+
+    createUserMutation.mutate(userData, {
+      onSuccess: () => {
+        setIsCreateModalOpen(false);
+        setUserFormData({
+          email: "",
+          username: "",
+          first_name: "",
+          last_name: "",
+          title: "",
+          phone_number: "",
+          password: "",
+          bio: "",
+          send_invite: true,
+          role_id: "",
+        });
+        setValidationErrors({});
+        // Refetch users to show all users in the table
+        refetch();
+      },
+      onError: (error) => {
+        // Handle API validation errors
+        if (error.response?.status === 422 || error.response?.status === 400) {
+          const errorData = error.response.data;
+          const newValidationErrors = {};
+
+          // Handle the API error format with detail array
+          if (errorData?.detail && Array.isArray(errorData.detail)) {
+            errorData.detail.forEach((errorItem) => {
+              if (errorItem.loc && errorItem.loc.length > 1) {
+                // Extract field name from location array (skip 'body' and get the field name)
+                const fieldName = errorItem.loc[1];
+                newValidationErrors[fieldName] = errorItem.msg;
+              }
+            });
+          }
+          // Fallback to old format for backward compatibility
+          else if (errorData?.errors) {
+            Object.assign(newValidationErrors, errorData.errors);
+          }
+          // Handle single error message
+          else if (errorData?.message) {
+            // Try to extract field name from message (e.g., "Email already exists")
+            const message = errorData.message.toLowerCase();
+            if (message.includes("email")) {
+              newValidationErrors.email = errorData.message;
+            } else if (message.includes("username")) {
+              newValidationErrors.username = errorData.message;
+            } else {
+              // If we can't determine the field, show as general error
+              newValidationErrors._general = errorData.message;
+            }
+          }
+
+          if (Object.keys(newValidationErrors).length > 0) {
+            setValidationErrors(newValidationErrors);
+          }
+        }
+      },
+    });
   };
 
   // Loading state
@@ -362,6 +512,11 @@ const UserManagementPage = () => {
               className="pl-10 w-80"
             />
           </div>
+          {/* Create User Button */}
+          <Button onClick={() => setIsCreateModalOpen(true)}>
+            <UserPlus className="mr-2 h-4 w-4" />
+            Create User
+          </Button>
         </div>
       </div>
 
@@ -504,7 +659,11 @@ const UserManagementPage = () => {
                     <TableCell className="text-right">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0"
+                          >
                             <MoreHorizontal className="h-4 w-4" />
                             <span className="sr-only">Open menu</span>
                           </Button>
@@ -512,10 +671,13 @@ const UserManagementPage = () => {
                         <DropdownMenuContent align="end" className="w-56">
                           <DropdownMenuLabel>Actions</DropdownMenuLabel>
                           <DropdownMenuSeparator />
-                          
+
                           {/* Edit User */}
                           <DropdownMenuItem asChild>
-                            <Link href={`/admin/user-management/${user.id}`} className="flex items-center">
+                            <Link
+                              href={`/admin/user-management/${user.id}`}
+                              className="flex items-center"
+                            >
                               <Edit className="mr-2 h-4 w-4" />
                               Edit User
                             </Link>
@@ -525,7 +687,7 @@ const UserManagementPage = () => {
                           {user.isActive ? (
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
-                                <DropdownMenuItem 
+                                <DropdownMenuItem
                                   className="text-orange-600 focus:text-orange-600"
                                   disabled={deactivateUserMutation.isPending}
                                   onSelect={(e) => e.preventDefault()}
@@ -540,16 +702,20 @@ const UserManagementPage = () => {
                                     Deactivate User
                                   </AlertDialogTitle>
                                   <AlertDialogDescription>
-                                    Are you sure you want to deactivate this user?
-                                    They will not be able to log in to the system.
+                                    Are you sure you want to deactivate this
+                                    user? They will not be able to log in to the
+                                    system.
                                     <br />
-                                    <strong>User:</strong> {user.name} ({user.email})
+                                    <strong>User:</strong> {user.name} (
+                                    {user.email})
                                   </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
                                   <AlertDialogCancel>Cancel</AlertDialogCancel>
                                   <AlertDialogAction
-                                    onClick={() => handleDeactivateUser(user.id)}
+                                    onClick={() =>
+                                      handleDeactivateUser(user.id)
+                                    }
                                     className="bg-orange-600 hover:bg-orange-700"
                                   >
                                     Deactivate User
@@ -560,7 +726,7 @@ const UserManagementPage = () => {
                           ) : (
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
-                                <DropdownMenuItem 
+                                <DropdownMenuItem
                                   className="text-green-600 focus:text-green-600"
                                   disabled={activateUserMutation.isPending}
                                   onSelect={(e) => e.preventDefault()}
@@ -578,7 +744,8 @@ const UserManagementPage = () => {
                                     Are you sure you want to activate this user?
                                     They will be able to log in to the system.
                                     <br />
-                                    <strong>User:</strong> {user.name} ({user.email})
+                                    <strong>User:</strong> {user.name} (
+                                    {user.email})
                                   </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
@@ -597,7 +764,7 @@ const UserManagementPage = () => {
                           {/* Hijack User */}
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
-                              <DropdownMenuItem 
+                              <DropdownMenuItem
                                 className="text-blue-600 focus:text-blue-600"
                                 disabled={hijackUserMutation.isPending}
                                 onSelect={(e) => e.preventDefault()}
@@ -608,15 +775,21 @@ const UserManagementPage = () => {
                             </AlertDialogTrigger>
                             <AlertDialogContent>
                               <AlertDialogHeader>
-                                <AlertDialogTitle>Hijack User Session</AlertDialogTitle>
+                                <AlertDialogTitle>
+                                  Hijack User Session
+                                </AlertDialogTitle>
                                 <AlertDialogDescription>
-                                  Are you sure you want to hijack this user's session? 
-                                  You will be logged in as this user and can perform actions on their behalf.
+                                  Are you sure you want to hijack this user's
+                                  session? You will be logged in as this user
+                                  and can perform actions on their behalf.
                                   <br />
                                   <br />
-                                  <strong>Target User:</strong> {user.name} ({user.email})
+                                  <strong>Target User:</strong> {user.name} (
+                                  {user.email})
                                   <br />
-                                  <strong>Warning:</strong> This action will log you out of your current session and log you in as the target user.
+                                  <strong>Warning:</strong> This action will log
+                                  you out of your current session and log you in
+                                  as the target user.
                                 </AlertDialogDescription>
                               </AlertDialogHeader>
                               <AlertDialogFooter>
@@ -632,11 +805,11 @@ const UserManagementPage = () => {
                           </AlertDialog>
 
                           <DropdownMenuSeparator />
-                          
+
                           {/* Delete User */}
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
-                              <DropdownMenuItem 
+                              <DropdownMenuItem
                                 className="text-red-600 focus:text-red-600"
                                 disabled={deleteUserMutation.isPending}
                                 onSelect={(e) => e.preventDefault()}
@@ -649,11 +822,12 @@ const UserManagementPage = () => {
                               <AlertDialogHeader>
                                 <AlertDialogTitle>Delete User</AlertDialogTitle>
                                 <AlertDialogDescription>
-                                  Are you sure you want to delete this user? This
-                                  action cannot be undone and will permanently
-                                  remove the user from the system.
+                                  Are you sure you want to delete this user?
+                                  This action cannot be undone and will
+                                  permanently remove the user from the system.
                                   <br />
-                                  <strong>User:</strong> {user.name} ({user.email})
+                                  <strong>User:</strong> {user.name} (
+                                  {user.email})
                                 </AlertDialogDescription>
                               </AlertDialogHeader>
                               <AlertDialogFooter>
@@ -714,6 +888,309 @@ const UserManagementPage = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* Create User Dialog */}
+      <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserPlus className="h-5 w-5" />
+              Create New User
+            </DialogTitle>
+            <DialogDescription>
+              Add a new user to the system. All required fields must be filled.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            {validationErrors._general && (
+              <div className="rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-3">
+                <p className="text-sm text-red-600 dark:text-red-400">
+                  {validationErrors._general}
+                </p>
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="email">
+                  Email <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="user@example.com"
+                  value={userFormData.email}
+                  onChange={(e) => {
+                    setUserFormData({ ...userFormData, email: e.target.value });
+                    if (validationErrors.email) {
+                      setValidationErrors({ ...validationErrors, email: "" });
+                    }
+                  }}
+                  className={validationErrors.email ? "border-red-500" : ""}
+                />
+                {validationErrors.email && (
+                  <p className="text-sm text-red-500">
+                    {validationErrors.email}
+                  </p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="username">Username</Label>
+                <Input
+                  id="username"
+                  placeholder="username"
+                  value={userFormData.username}
+                  onChange={(e) =>
+                    setUserFormData({
+                      ...userFormData,
+                      username: e.target.value,
+                    })
+                  }
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="first_name">
+                  First Name <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="first_name"
+                  placeholder="John"
+                  value={userFormData.first_name}
+                  onChange={(e) => {
+                    setUserFormData({
+                      ...userFormData,
+                      first_name: e.target.value,
+                    });
+                    if (validationErrors.first_name) {
+                      setValidationErrors({
+                        ...validationErrors,
+                        first_name: "",
+                      });
+                    }
+                  }}
+                  className={
+                    validationErrors.first_name ? "border-red-500" : ""
+                  }
+                />
+                {validationErrors.first_name && (
+                  <p className="text-sm text-red-500">
+                    {validationErrors.first_name}
+                  </p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="last_name">
+                  Last Name <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="last_name"
+                  placeholder="Doe"
+                  value={userFormData.last_name}
+                  onChange={(e) => {
+                    setUserFormData({
+                      ...userFormData,
+                      last_name: e.target.value,
+                    });
+                    if (validationErrors.last_name) {
+                      setValidationErrors({
+                        ...validationErrors,
+                        last_name: "",
+                      });
+                    }
+                  }}
+                  className={validationErrors.last_name ? "border-red-500" : ""}
+                />
+                {validationErrors.last_name && (
+                  <p className="text-sm text-red-500">
+                    {validationErrors.last_name}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="title">Title</Label>
+                <Select
+                  value={userFormData.title}
+                  onValueChange={(value) =>
+                    setUserFormData({ ...userFormData, title: value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select title" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Mr">Mr</SelectItem>
+                    <SelectItem value="Mrs">Mrs</SelectItem>
+                    <SelectItem value="Ms">Ms</SelectItem>
+                    <SelectItem value="Dr">Dr</SelectItem>
+                    <SelectItem value="Prof">Prof</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="phone_number">Phone Number</Label>
+                <Input
+                  id="phone_number"
+                  type="tel"
+                  placeholder="+44 20 7946 0958"
+                  value={userFormData.phone_number}
+                  onChange={(e) => {
+                    setUserFormData({
+                      ...userFormData,
+                      phone_number: e.target.value,
+                    });
+                    if (validationErrors.phone_number) {
+                      setValidationErrors({
+                        ...validationErrors,
+                        phone_number: "",
+                      });
+                    }
+                  }}
+                  className={
+                    validationErrors.phone_number ? "border-red-500" : ""
+                  }
+                />
+                {validationErrors.phone_number && (
+                  <p className="text-sm text-red-500">
+                    {validationErrors.phone_number}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="password">
+                Password <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="password"
+                type="password"
+                placeholder="Enter password"
+                value={userFormData.password}
+                onChange={(e) => {
+                  setUserFormData({
+                    ...userFormData,
+                    password: e.target.value,
+                  });
+                  if (validationErrors.password) {
+                    setValidationErrors({ ...validationErrors, password: "" });
+                  }
+                }}
+                className={validationErrors.password ? "border-red-500" : ""}
+              />
+              {validationErrors.password && (
+                <p className="text-sm text-red-500">
+                  {validationErrors.password}
+                </p>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Password must be at least 8 characters long
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="bio">Bio</Label>
+              <Textarea
+                id="bio"
+                placeholder="Brief description about the user"
+                value={userFormData.bio}
+                onChange={(e) =>
+                  setUserFormData({ ...userFormData, bio: e.target.value })
+                }
+                rows={3}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="role_id">Role</Label>
+                <Select
+                  value={userFormData.role_id || "__none__"}
+                  onValueChange={(value) =>
+                    setUserFormData({
+                      ...userFormData,
+                      role_id: value === "__none__" ? "" : value,
+                    })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select role" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">No Role</SelectItem>
+                    {rolesLoading ? (
+                      <SelectItem value="loading" disabled>
+                        Loading roles...
+                      </SelectItem>
+                    ) : roles.length === 0 ? (
+                      <SelectItem value="no-roles" disabled>
+                        No roles available
+                      </SelectItem>
+                    ) : (
+                      roles.map((role) => (
+                        <SelectItem key={role.id} value={role.id.toString()}>
+                          {role.display_name ||
+                            role.name ||
+                            role.role_name ||
+                            `Role ${role.id}`}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center space-x-2 pt-8">
+                <input
+                  type="checkbox"
+                  id="send_invite"
+                  checked={userFormData.send_invite}
+                  onChange={(e) =>
+                    setUserFormData({
+                      ...userFormData,
+                      send_invite: e.target.checked,
+                    })
+                  }
+                  className="rounded border-gray-300"
+                />
+                <Label htmlFor="send_invite" className="cursor-pointer">
+                  Send Invitation Email
+                </Label>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsCreateModalOpen(false);
+                setValidationErrors({});
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleCreateUser}
+              disabled={createUserMutation.isPending}
+            >
+              {createUserMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                <>
+                  <UserPlus className="mr-2 h-4 w-4" />
+                  Create User
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

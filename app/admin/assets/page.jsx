@@ -73,6 +73,19 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import {
+  useAssets,
+  useAssetStatistics,
+  useCreateAsset,
+  useUpdateAsset,
+  useDeleteAsset,
+  useAssignAsset,
+  useUpdateAssetAttributes,
+  useUpdateAssetSensorData,
+  useAssetsNeedingMaintenance,
+} from "@/hooks/useAssets";
+import { useLocations } from "@/hooks/useLocations";
+import { useUsers } from "@/hooks/useUsers";
 
 const AssetsPage = () => {
   // State management
@@ -87,141 +100,177 @@ const AssetsPage = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedLocation, setSelectedLocation] = useState("all");
   const [showMaintenanceNeeded, setShowMaintenanceNeeded] = useState(false);
+  const [assignData, setAssignData] = useState({
+    assigned_to_user_id: null,
+    assigned_to_role_id: null,
+    location_id: null,
+  });
+  const [attributesData, setAttributesData] = useState("");
+  const [sensorDataInput, setSensorDataInput] = useState("");
 
-  // Form data
+  // API hooks
+  const { data: assets = [], isLoading: assetsLoading } = useAssets();
+  const { data: statistics, isLoading: statisticsLoading } =
+    useAssetStatistics();
+  const { data: locations = [] } = useLocations();
+  const { data: maintenanceNeeded = [] } = useAssetsNeedingMaintenance();
+  const { data: usersResponse, isLoading: usersLoading } = useUsers();
+  const users = usersResponse?.users || [];
+  const createAssetMutation = useCreateAsset();
+  const updateAssetMutation = useUpdateAsset();
+  const deleteAssetMutation = useDeleteAsset();
+  const assignAssetMutation = useAssignAsset();
+  const updateAttributesMutation = useUpdateAssetAttributes();
+  const updateSensorDataMutation = useUpdateAssetSensorData();
+
+  const userList = useUsers();
+
+  // Form data - matching API schema
   const [assetFormData, setAssetFormData] = useState({
-    assetNumber: "",
-    assetName: "",
+    asset_number: "",
+    name: "",
     description: "",
+    asset_type: "",
     category: "",
-    locationId: "",
+    subcategory: "",
     status: "active",
-    purchaseDate: "",
-    purchasePrice: "",
-    warrantyExpiry: "",
-    notes: "",
+    condition: "",
+    location_id: null,
+    assigned_to_user_id: null,
+    assigned_to_role_id: null,
+    department: "",
+    purchase_date: "",
+    purchase_price: 0,
+    supplier: "",
+    warranty_expiry: "",
+    last_maintenance_date: "",
+    next_maintenance_date: "",
+    compliance_status: "",
+    has_sensors: false,
+    automation_enabled: false,
+    is_active: true,
+    display_name: "",
+    is_operational: true,
+    needs_maintenance: false,
+    is_compliant: true,
   });
 
-  // Mock data for demonstration (will be replaced with API later)
-  const mockStats = {
-    totalAssets: 150,
-    activeAssets: 120,
-    maintenanceNeeded: 15,
-    assignedAssets: 95,
-    totalValue: 1250000,
-    changePercentage: 5.2,
-  };
-
-  const mockAssets = [
-    {
-      id: 1,
-      assetNumber: "AST-001",
-      assetName: "Laptop Dell XPS 15",
-      category: "Electronics",
-      status: "active",
-      location: "Office A",
-      assignedTo: "John Doe",
-      purchaseDate: "2024-01-15",
-      purchasePrice: 1500,
-      lastMaintenance: "2024-10-01",
-      nextMaintenance: "2025-01-01",
-      needsMaintenance: false,
-    },
-    {
-      id: 2,
-      assetNumber: "AST-002",
-      assetName: "Office Chair Ergonomic",
-      category: "Furniture",
-      status: "active",
-      location: "Office B",
-      assignedTo: "Jane Smith",
-      purchaseDate: "2024-02-20",
-      purchasePrice: 350,
-      lastMaintenance: "2024-09-15",
-      nextMaintenance: "2024-12-15",
-      needsMaintenance: true,
-    },
-    {
-      id: 3,
-      assetNumber: "AST-003",
-      assetName: "Projector Epson",
-      category: "Electronics",
-      status: "active",
-      location: "Conference Room",
-      assignedTo: null,
-      purchaseDate: "2023-11-10",
-      purchasePrice: 800,
-      lastMaintenance: "2024-08-20",
-      nextMaintenance: "2024-11-20",
-      needsMaintenance: true,
-    },
-    {
-      id: 4,
-      assetNumber: "AST-004",
-      assetName: "Printer HP LaserJet",
-      category: "Electronics",
-      status: "inactive",
-      location: "Storage",
-      assignedTo: null,
-      purchaseDate: "2023-05-05",
-      purchasePrice: 450,
-      lastMaintenance: "2024-03-10",
-      nextMaintenance: null,
-      needsMaintenance: false,
-    },
-  ];
-
-  const mockLocations = [
-    "All",
-    "Office A",
-    "Office B",
-    "Conference Room",
-    "Storage",
-  ];
+  // Compute statistics from API data
+  const computedStats = React.useMemo(() => {
+    if (statistics) {
+      return {
+        totalAssets:
+          statistics.total_assets || statistics.total || assets.length || 0,
+        activeAssets:
+          statistics.active_assets ||
+          statistics.active ||
+          assets.filter((a) => a.status === "active" || a.isActive).length ||
+          0,
+        maintenanceNeeded:
+          statistics.maintenance_needed ||
+          statistics.maintenance ||
+          maintenanceNeeded.length ||
+          0,
+        assignedAssets:
+          statistics.assigned_assets ||
+          statistics.assigned ||
+          assets.filter((a) => a.assignedToUserId || a.assignedToRoleId)
+            .length ||
+          0,
+        totalValue: statistics.total_value || statistics.value || 0,
+        changePercentage: statistics.change_percentage || 0,
+      };
+    }
+    // Fallback to computed from assets
+    const active = assets.filter(
+      (a) => a.status === "active" || a.isActive
+    ).length;
+    const assigned = assets.filter(
+      (a) => a.assignedToUserId || a.assignedToRoleId
+    ).length;
+    return {
+      totalAssets: assets.length,
+      activeAssets: active,
+      maintenanceNeeded: maintenanceNeeded.length,
+      assignedAssets: assigned,
+      totalValue: 0,
+      changePercentage: 0,
+    };
+  }, [statistics, assets, maintenanceNeeded]);
 
   // Filter assets based on search and filters
   const filteredAssets = React.useMemo(() => {
-    let filtered = mockAssets;
+    let filtered = assets;
 
     // Search filter
     if (searchQuery) {
       filtered = filtered.filter(
         (asset) =>
-          asset.assetNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          asset.assetName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          asset.category.toLowerCase().includes(searchQuery.toLowerCase())
+          (asset.assetNumber || asset.asset_number || "")
+            .toLowerCase()
+            .includes(searchQuery.toLowerCase()) ||
+          (asset.name || asset.assetName || "")
+            .toLowerCase()
+            .includes(searchQuery.toLowerCase()) ||
+          (asset.category || "")
+            .toLowerCase()
+            .includes(searchQuery.toLowerCase()) ||
+          (asset.displayName || asset.display_name || "")
+            .toLowerCase()
+            .includes(searchQuery.toLowerCase())
       );
     }
 
     // Location filter
     if (selectedLocation !== "all") {
       filtered = filtered.filter(
-        (asset) => asset.location === selectedLocation
+        (asset) =>
+          (asset.locationId || asset.location_id)?.toString() ===
+            selectedLocation ||
+          (asset.currentLocation || asset.current_location) === selectedLocation
       );
     }
 
     // Maintenance filter
     if (showMaintenanceNeeded) {
-      filtered = filtered.filter((asset) => asset.needsMaintenance);
+      filtered = filtered.filter(
+        (asset) => asset.needsMaintenance || asset.needs_maintenance
+      );
     }
 
     return filtered;
-  }, [searchQuery, selectedLocation, showMaintenanceNeeded]);
+  }, [searchQuery, selectedLocation, showMaintenanceNeeded, assets]);
 
   // Handlers
   const handleCreateAsset = () => {
     // Reset form
     setAssetFormData({
-      assetNumber: "",
-      assetName: "",
+      asset_number: "",
+      name: "",
       description: "",
+      asset_type: "",
       category: "",
-      locationId: "",
+      subcategory: "",
       status: "active",
-      purchaseDate: "",
-      purchasePrice: "",
-      warrantyExpiry: "",
-      notes: "",
+      condition: "",
+      location_id: null,
+      assigned_to_user_id: null,
+      assigned_to_role_id: null,
+      department: "",
+      purchase_date: "",
+      purchase_price: 0,
+      supplier: "",
+      warranty_expiry: "",
+      last_maintenance_date: "",
+      next_maintenance_date: "",
+      compliance_status: "",
+      has_sensors: false,
+      automation_enabled: false,
+      is_active: true,
+      display_name: "",
+      is_operational: true,
+      needs_maintenance: false,
+      is_compliant: true,
     });
     setIsCreateModalOpen(true);
   };
@@ -229,16 +278,63 @@ const AssetsPage = () => {
   const handleEditAsset = (asset) => {
     setSelectedAsset(asset);
     setAssetFormData({
-      assetNumber: asset.assetNumber,
-      assetName: asset.assetName,
+      asset_number: asset.asset_number || asset.assetNumber || "",
+      name: asset.name || asset.assetName || "",
       description: asset.description || "",
-      category: asset.category,
-      locationId: asset.location,
-      status: asset.status,
-      purchaseDate: asset.purchaseDate,
-      purchasePrice: asset.purchasePrice?.toString() || "",
-      warrantyExpiry: asset.warrantyExpiry || "",
-      notes: asset.notes || "",
+      asset_type: asset.asset_type || asset.assetType || "",
+      category: asset.category || "",
+      subcategory: asset.subcategory || "",
+      status: asset.status || "active",
+      condition: asset.condition || "",
+      location_id: asset.location_id || asset.locationId || null,
+      assigned_to_user_id:
+        asset.assigned_to_user_id || asset.assignedToUserId || null,
+      assigned_to_role_id:
+        asset.assigned_to_role_id || asset.assignedToRoleId || null,
+      department: asset.department || "",
+      purchase_date: asset.purchase_date || asset.purchaseDate || "",
+      purchase_price: asset.purchase_price || asset.purchasePrice || 0,
+      supplier: asset.supplier || "",
+      warranty_expiry: asset.warranty_expiry || asset.warrantyExpiry || "",
+      last_maintenance_date:
+        asset.last_maintenance_date || asset.lastMaintenanceDate || "",
+      next_maintenance_date:
+        asset.next_maintenance_date || asset.nextMaintenanceDate || "",
+      compliance_status:
+        asset.compliance_status || asset.complianceStatus || "",
+      has_sensors:
+        asset.has_sensors !== undefined
+          ? asset.has_sensors
+          : asset.hasSensors || false,
+      automation_enabled:
+        asset.automation_enabled !== undefined
+          ? asset.automation_enabled
+          : asset.automationEnabled || false,
+      is_active:
+        asset.is_active !== undefined
+          ? asset.is_active
+          : asset.isActive !== undefined
+          ? asset.isActive
+          : true,
+      display_name: asset.display_name || asset.displayName || "",
+      is_operational:
+        asset.is_operational !== undefined
+          ? asset.is_operational
+          : asset.isOperational !== undefined
+          ? asset.isOperational
+          : true,
+      needs_maintenance:
+        asset.needs_maintenance !== undefined
+          ? asset.needs_maintenance
+          : asset.needsMaintenance !== undefined
+          ? asset.needsMaintenance
+          : false,
+      is_compliant:
+        asset.is_compliant !== undefined
+          ? asset.is_compliant
+          : asset.isCompliant !== undefined
+          ? asset.isCompliant
+          : true,
     });
     setIsEditModalOpen(true);
   };
@@ -250,16 +346,27 @@ const AssetsPage = () => {
 
   const handleAssignAsset = (asset) => {
     setSelectedAsset(asset);
+    setAssignData({
+      assigned_to_user_id:
+        asset.assigned_to_user_id || asset.assignedToUserId || null,
+      assigned_to_role_id:
+        asset.assigned_to_role_id || asset.assignedToRoleId || null,
+      location_id: asset.location_id || asset.locationId || null,
+    });
     setIsAssignModalOpen(true);
   };
 
   const handleUpdateAttributes = (asset) => {
     setSelectedAsset(asset);
+    setAttributesData(JSON.stringify(asset.attributes || {}, null, 2));
     setIsAttributesModalOpen(true);
   };
 
   const handleUpdateSensorData = (asset) => {
     setSelectedAsset(asset);
+    setSensorDataInput(
+      JSON.stringify(asset.sensor_data || asset.sensorData || {}, null, 2)
+    );
     setIsSensorDataModalOpen(true);
   };
 
@@ -269,40 +376,158 @@ const AssetsPage = () => {
   };
 
   const handleSubmitCreate = () => {
-    // TODO: Implement API call
-    toast.success("Asset created successfully!");
-    setIsCreateModalOpen(false);
+    if (
+      !assetFormData.asset_number ||
+      !assetFormData.name ||
+      !assetFormData.asset_type ||
+      assetFormData.asset_type.trim().length === 0
+    ) {
+      toast.error("Please fill in all required fields", {
+        description: "Asset number, name, and asset type are required.",
+      });
+      return;
+    }
+
+    createAssetMutation.mutate(assetFormData, {
+      onSuccess: () => {
+        setIsCreateModalOpen(false);
+        setAssetFormData({
+          asset_number: "",
+          name: "",
+          description: "",
+          asset_type: "",
+          category: "",
+          subcategory: "",
+          status: "active",
+          condition: "",
+          location_id: null,
+          assigned_to_user_id: null,
+          assigned_to_role_id: null,
+          department: "",
+          purchase_date: "",
+          purchase_price: 0,
+          supplier: "",
+          warranty_expiry: "",
+          last_maintenance_date: "",
+          next_maintenance_date: "",
+          compliance_status: "",
+          has_sensors: false,
+          automation_enabled: false,
+          is_active: true,
+          display_name: "",
+          is_operational: true,
+          needs_maintenance: false,
+          is_compliant: true,
+        });
+      },
+    });
   };
 
   const handleSubmitEdit = () => {
-    // TODO: Implement API call
-    toast.success("Asset updated successfully!");
-    setIsEditModalOpen(false);
+    if (!selectedAsset) return;
+
+    if (
+      !assetFormData.asset_number ||
+      !assetFormData.name ||
+      !assetFormData.asset_type ||
+      assetFormData.asset_type.trim().length === 0
+    ) {
+      toast.error("Please fill in all required fields", {
+        description: "Asset number, name, and asset type are required.",
+      });
+      return;
+    }
+
+    updateAssetMutation.mutate(
+      {
+        id: selectedAsset.id,
+        assetData: assetFormData,
+      },
+      {
+        onSuccess: () => {
+          setIsEditModalOpen(false);
+          setSelectedAsset(null);
+        },
+      }
+    );
   };
 
   const handleConfirmDelete = () => {
-    // TODO: Implement API call
-    toast.success("Asset deleted successfully!");
-    setIsDeleteDialogOpen(false);
-    setSelectedAsset(null);
+    if (!selectedAsset) return;
+
+    deleteAssetMutation.mutate(selectedAsset.id, {
+      onSuccess: () => {
+        setIsDeleteDialogOpen(false);
+        setSelectedAsset(null);
+      },
+    });
   };
 
   const handleAssign = () => {
-    // TODO: Implement API call
-    toast.success("Asset assigned successfully!");
-    setIsAssignModalOpen(false);
+    if (!selectedAsset) return;
+
+    assignAssetMutation.mutate(
+      {
+        id: selectedAsset.id,
+        assignData: assignData,
+      },
+      {
+        onSuccess: () => {
+          setIsAssignModalOpen(false);
+          setSelectedAsset(null);
+        },
+      }
+    );
   };
 
   const handleUpdateAttributesSubmit = () => {
-    // TODO: Implement API call
-    toast.success("Asset attributes updated successfully!");
-    setIsAttributesModalOpen(false);
+    if (!selectedAsset) return;
+
+    try {
+      const attributes = JSON.parse(attributesData);
+      updateAttributesMutation.mutate(
+        {
+          id: selectedAsset.id,
+          attributes: attributes,
+        },
+        {
+          onSuccess: () => {
+            setIsAttributesModalOpen(false);
+            setSelectedAsset(null);
+            setAttributesData("");
+          },
+        }
+      );
+    } catch (error) {
+      toast.error("Invalid JSON format", {
+        description: "Please enter valid JSON for attributes.",
+      });
+    }
   };
 
   const handleUpdateSensorDataSubmit = () => {
-    // TODO: Implement API call
-    toast.success("Sensor data updated successfully!");
-    setIsSensorDataModalOpen(false);
+    if (!selectedAsset) return;
+
+    try {
+      const sensorData = JSON.parse(sensorDataInput);
+      updateSensorDataMutation.mutate(
+        {
+          id: selectedAsset.id,
+          sensorData: sensorData,
+        },
+        {
+          onSuccess: () => {
+            setIsSensorDataModalOpen(false);
+            setSelectedAsset(null);
+            setSensorDataInput("");
+          },
+        }
+      );
+    } catch (error) {
+      toast.error("Invalid JSON format", {
+        description: "Please enter valid JSON for sensor data.",
+      });
+    }
   };
 
   const getStatusBadge = (status) => {
@@ -341,6 +566,30 @@ const AssetsPage = () => {
     }
   };
 
+  // Format date to show only date part (no time)
+  const formatDateOnly = (dateString) => {
+    if (!dateString) return "N/A";
+    try {
+      // Handle ISO datetime strings (e.g., "2025-11-03T08:22:40.368Z")
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) {
+        // If it's not a valid date, try to extract date part from string
+        if (dateString.includes("T")) {
+          return dateString.split("T")[0];
+        }
+        return dateString;
+      }
+      // Format as YYYY-MM-DD
+      return date.toISOString().split("T")[0];
+    } catch (error) {
+      // If it's already in YYYY-MM-DD format, return as is
+      if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        return dateString;
+      }
+      return dateString;
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -369,14 +618,22 @@ const AssetsPage = () => {
             <Package className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{mockStats.totalAssets}</div>
-            <div className="flex items-center space-x-2 text-xs text-muted-foreground mt-1">
-              <TrendingUp className="h-3 w-3 text-green-600" />
-              <span className="text-green-600">
-                {mockStats.changePercentage}%
-              </span>
-              <span>from last month</span>
+            <div className="text-2xl font-bold">
+              {statisticsLoading ? (
+                <Skeleton className="h-8 w-16" />
+              ) : (
+                computedStats.totalAssets
+              )}
             </div>
+            {!statisticsLoading && computedStats.changePercentage > 0 && (
+              <div className="flex items-center space-x-2 text-xs text-muted-foreground mt-1">
+                <TrendingUp className="h-3 w-3 text-green-600" />
+                <span className="text-green-600">
+                  {computedStats.changePercentage}%
+                </span>
+                <span>from last month</span>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -388,7 +645,13 @@ const AssetsPage = () => {
             <CheckCircle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{mockStats.activeAssets}</div>
+            <div className="text-2xl font-bold">
+              {statisticsLoading ? (
+                <Skeleton className="h-8 w-16" />
+              ) : (
+                computedStats.activeAssets
+              )}
+            </div>
             <p className="text-xs text-muted-foreground mt-1">
               Currently in use
             </p>
@@ -404,7 +667,11 @@ const AssetsPage = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-yellow-600">
-              {mockStats.maintenanceNeeded}
+              {statisticsLoading ? (
+                <Skeleton className="h-8 w-16" />
+              ) : (
+                computedStats.maintenanceNeeded
+              )}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
               Require attention
@@ -420,7 +687,13 @@ const AssetsPage = () => {
             <UserPlus className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{mockStats.assignedAssets}</div>
+            <div className="text-2xl font-bold">
+              {statisticsLoading ? (
+                <Skeleton className="h-8 w-16" />
+              ) : (
+                computedStats.assignedAssets
+              )}
+            </div>
             <p className="text-xs text-muted-foreground mt-1">
               Currently assigned
             </p>
@@ -458,12 +731,10 @@ const AssetsPage = () => {
                 <SelectValue placeholder="All Locations" />
               </SelectTrigger>
               <SelectContent>
-                {mockLocations.map((location) => (
-                  <SelectItem
-                    key={location}
-                    value={location === "All" ? "all" : location}
-                  >
-                    {location}
+                <SelectItem value="all">All Locations</SelectItem>
+                {locations.map((location) => (
+                  <SelectItem key={location.id} value={location.id.toString()}>
+                    {location.name || location.locationName}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -520,7 +791,54 @@ const AssetsPage = () => {
           </div>
         </CardHeader>
         <CardContent>
-          {filteredAssets.length === 0 ? (
+          {assetsLoading ? (
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Asset Number</TableHead>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Category</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Location</TableHead>
+                    <TableHead>Assigned To</TableHead>
+                    <TableHead>Maintenance</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {Array.from({ length: 5 }).map((_, index) => (
+                    <TableRow key={index}>
+                      <TableCell>
+                        <Skeleton className="h-4 w-20" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-32" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-5 w-16" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-5 w-16" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-24" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-24" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-5 w-16" />
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Skeleton className="h-8 w-8 rounded-md" />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          ) : filteredAssets.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12">
               <Package className="h-12 w-12 text-muted-foreground mb-4" />
               <h3 className="text-lg font-semibold mb-2">No assets found</h3>
@@ -556,106 +874,117 @@ const AssetsPage = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredAssets.map((asset) => (
-                    <TableRow key={asset.id}>
-                      <TableCell className="font-medium">
-                        {asset.assetNumber}
-                      </TableCell>
-                      <TableCell>{asset.assetName}</TableCell>
-                      <TableCell>
-                        <Badge variant="secondary">{asset.category}</Badge>
-                      </TableCell>
-                      <TableCell>{getStatusBadge(asset.status)}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1">
-                          <MapPin className="h-3 w-3 text-muted-foreground" />
-                          {asset.location}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {asset.assignedTo ? (
+                  {filteredAssets.map((asset) => {
+                    const locationName =
+                      locations.find(
+                        (l) => l.id === (asset.locationId || asset.location_id)
+                      )?.name ||
+                      asset.currentLocation ||
+                      asset.current_location ||
+                      "N/A";
+                    return (
+                      <TableRow key={asset.id}>
+                        <TableCell className="font-medium">
+                          {asset.assetNumber || asset.asset_number}
+                        </TableCell>
+                        <TableCell>{asset.name || asset.assetName}</TableCell>
+                        <TableCell>
+                          <Badge variant="secondary">
+                            {asset.category || "N/A"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{getStatusBadge(asset.status)}</TableCell>
+                        <TableCell>
                           <div className="flex items-center gap-1">
-                            <UserPlus className="h-3 w-3 text-muted-foreground" />
-                            {asset.assignedTo}
+                            <MapPin className="h-3 w-3 text-muted-foreground" />
+                            {locationName}
                           </div>
-                        ) : (
-                          <span className="text-muted-foreground">
-                            Unassigned
-                          </span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {asset.needsMaintenance ? (
-                          <Badge
-                            variant="outline"
-                            className="border-yellow-500/50 text-yellow-700 bg-yellow-500/10"
-                          >
-                            <Wrench className="h-3 w-3 mr-1" />
-                            Needed
-                          </Badge>
-                        ) : (
-                          <Badge
-                            variant="outline"
-                            className="border-green-500/50 text-green-700 bg-green-500/10"
-                          >
-                            <CheckCircle className="h-3 w-3 mr-1" />
-                            OK
-                          </Badge>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="sm">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                            <DropdownMenuItem
-                              onClick={() => handleViewAsset(asset)}
+                        </TableCell>
+                        <TableCell>
+                          {asset.assignedToUserId || asset.assignedToRoleId ? (
+                            <div className="flex items-center gap-1">
+                              <UserPlus className="h-3 w-3 text-muted-foreground" />
+                              {asset.assignedTo || "Assigned"}
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">
+                              Unassigned
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {asset.needsMaintenance || asset.needs_maintenance ? (
+                            <Badge
+                              variant="outline"
+                              className="border-yellow-500/50 text-yellow-700 bg-yellow-500/10"
                             >
-                              <Eye className="mr-2 h-4 w-4" />
-                              View Details
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => handleEditAsset(asset)}
+                              <Wrench className="h-3 w-3 mr-1" />
+                              Needed
+                            </Badge>
+                          ) : (
+                            <Badge
+                              variant="outline"
+                              className="border-green-500/50 text-green-700 bg-green-500/10"
                             >
-                              <Edit className="mr-2 h-4 w-4" />
-                              Edit Asset
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              onClick={() => handleAssignAsset(asset)}
-                            >
-                              <UserPlus className="mr-2 h-4 w-4" />
-                              Assign Asset
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => handleUpdateAttributes(asset)}
-                            >
-                              <Settings className="mr-2 h-4 w-4" />
-                              Update Attributes
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => handleUpdateSensorData(asset)}
-                            >
-                              <Activity className="mr-2 h-4 w-4" />
-                              Update Sensor Data
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              onClick={() => handleDeleteAsset(asset)}
-                              className="text-red-600"
-                            >
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              Delete Asset
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                              <CheckCircle className="h-3 w-3 mr-1" />
+                              OK
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="sm">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                              <DropdownMenuItem
+                                onClick={() => handleViewAsset(asset)}
+                              >
+                                <Eye className="mr-2 h-4 w-4" />
+                                View Details
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => handleEditAsset(asset)}
+                              >
+                                <Edit className="mr-2 h-4 w-4" />
+                                Edit Asset
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={() => handleAssignAsset(asset)}
+                              >
+                                <UserPlus className="mr-2 h-4 w-4" />
+                                Assign Asset
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => handleUpdateAttributes(asset)}
+                              >
+                                <Settings className="mr-2 h-4 w-4" />
+                                Update Attributes
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => handleUpdateSensorData(asset)}
+                              >
+                                <Activity className="mr-2 h-4 w-4" />
+                                Update Sensor Data
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={() => handleDeleteAsset(asset)}
+                                className="text-red-600"
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Delete Asset
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
@@ -679,11 +1008,11 @@ const AssetsPage = () => {
                 <Label htmlFor="asset-number">Asset Number *</Label>
                 <Input
                   id="asset-number"
-                  value={assetFormData.assetNumber}
+                  value={assetFormData.asset_number}
                   onChange={(e) =>
                     setAssetFormData({
                       ...assetFormData,
-                      assetNumber: e.target.value,
+                      asset_number: e.target.value,
                     })
                   }
                   placeholder="AST-001"
@@ -693,11 +1022,11 @@ const AssetsPage = () => {
                 <Label htmlFor="asset-name">Asset Name *</Label>
                 <Input
                   id="asset-name"
-                  value={assetFormData.assetName}
+                  value={assetFormData.name}
                   onChange={(e) =>
                     setAssetFormData({
                       ...assetFormData,
-                      assetName: e.target.value,
+                      name: e.target.value,
                     })
                   }
                   placeholder="Laptop Dell XPS 15"
@@ -721,6 +1050,33 @@ const AssetsPage = () => {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
+                <Label htmlFor="asset-type">Asset Type *</Label>
+                <Select
+                  value={assetFormData.asset_type}
+                  onValueChange={(value) =>
+                    setAssetFormData({
+                      ...assetFormData,
+                      asset_type: value,
+                    })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select asset type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="medical_device">
+                      Medical Device
+                    </SelectItem>
+                    <SelectItem value="fridge">Fridge</SelectItem>
+                    <SelectItem value="equipment">Equipment</SelectItem>
+                    <SelectItem value="furniture">Furniture</SelectItem>
+                    <SelectItem value="vehicle">Vehicle</SelectItem>
+                    <SelectItem value="building">Building</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
                 <Label htmlFor="category">Category *</Label>
                 <Select
                   value={assetFormData.category}
@@ -740,6 +1096,8 @@ const AssetsPage = () => {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="status">Status *</Label>
                 <Select
@@ -763,22 +1121,26 @@ const AssetsPage = () => {
               <div className="space-y-2">
                 <Label htmlFor="location">Location</Label>
                 <Select
-                  value={assetFormData.locationId}
+                  value={assetFormData.location_id?.toString() || ""}
                   onValueChange={(value) =>
-                    setAssetFormData({ ...assetFormData, locationId: value })
+                    setAssetFormData({
+                      ...assetFormData,
+                      location_id: value ? parseInt(value) : null,
+                    })
                   }
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select location" />
                   </SelectTrigger>
                   <SelectContent>
-                    {mockLocations
-                      .filter((l) => l !== "All")
-                      .map((location) => (
-                        <SelectItem key={location} value={location}>
-                          {location}
-                        </SelectItem>
-                      ))}
+                    {locations.map((location) => (
+                      <SelectItem
+                        key={location.id}
+                        value={location.id.toString()}
+                      >
+                        {location.name || location.locationName}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -787,11 +1149,11 @@ const AssetsPage = () => {
                 <Input
                   id="purchase-date"
                   type="date"
-                  value={assetFormData.purchaseDate}
+                  value={assetFormData.purchase_date}
                   onChange={(e) =>
                     setAssetFormData({
                       ...assetFormData,
-                      purchaseDate: e.target.value,
+                      purchase_date: e.target.value,
                     })
                   }
                 />
@@ -803,11 +1165,11 @@ const AssetsPage = () => {
                 <Input
                   id="purchase-price"
                   type="number"
-                  value={assetFormData.purchasePrice}
+                  value={assetFormData.purchase_price}
                   onChange={(e) =>
                     setAssetFormData({
                       ...assetFormData,
-                      purchasePrice: e.target.value,
+                      purchase_price: parseFloat(e.target.value) || 0,
                     })
                   }
                   placeholder="0.00"
@@ -818,27 +1180,15 @@ const AssetsPage = () => {
                 <Input
                   id="warranty-expiry"
                   type="date"
-                  value={assetFormData.warrantyExpiry}
+                  value={assetFormData.warranty_expiry}
                   onChange={(e) =>
                     setAssetFormData({
                       ...assetFormData,
-                      warrantyExpiry: e.target.value,
+                      warranty_expiry: e.target.value,
                     })
                   }
                 />
               </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="notes">Notes</Label>
-              <Textarea
-                id="notes"
-                value={assetFormData.notes}
-                onChange={(e) =>
-                  setAssetFormData({ ...assetFormData, notes: e.target.value })
-                }
-                placeholder="Additional notes..."
-                rows={2}
-              />
             </div>
           </div>
           <DialogFooter>
@@ -848,7 +1198,19 @@ const AssetsPage = () => {
             >
               Cancel
             </Button>
-            <Button onClick={handleSubmitCreate}>Create Asset</Button>
+            <Button
+              onClick={handleSubmitCreate}
+              disabled={createAssetMutation.isPending}
+            >
+              {createAssetMutation.isPending ? (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                "Create Asset"
+              )}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -868,11 +1230,11 @@ const AssetsPage = () => {
                 <Label htmlFor="edit-asset-number">Asset Number *</Label>
                 <Input
                   id="edit-asset-number"
-                  value={assetFormData.assetNumber}
+                  value={assetFormData.asset_number}
                   onChange={(e) =>
                     setAssetFormData({
                       ...assetFormData,
-                      assetNumber: e.target.value,
+                      asset_number: e.target.value,
                     })
                   }
                   placeholder="AST-001"
@@ -882,11 +1244,11 @@ const AssetsPage = () => {
                 <Label htmlFor="edit-asset-name">Asset Name *</Label>
                 <Input
                   id="edit-asset-name"
-                  value={assetFormData.assetName}
+                  value={assetFormData.name}
                   onChange={(e) =>
                     setAssetFormData({
                       ...assetFormData,
-                      assetName: e.target.value,
+                      name: e.target.value,
                     })
                   }
                   placeholder="Laptop Dell XPS 15"
@@ -910,6 +1272,33 @@ const AssetsPage = () => {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
+                <Label htmlFor="edit-asset-type">Asset Type *</Label>
+                <Select
+                  value={assetFormData.asset_type}
+                  onValueChange={(value) =>
+                    setAssetFormData({
+                      ...assetFormData,
+                      asset_type: value,
+                    })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select asset type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="medical_device">
+                      Medical Device
+                    </SelectItem>
+                    <SelectItem value="fridge">Fridge</SelectItem>
+                    <SelectItem value="equipment">Equipment</SelectItem>
+                    <SelectItem value="furniture">Furniture</SelectItem>
+                    <SelectItem value="vehicle">Vehicle</SelectItem>
+                    <SelectItem value="building">Building</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
                 <Label htmlFor="edit-category">Category *</Label>
                 <Select
                   value={assetFormData.category}
@@ -929,6 +1318,8 @@ const AssetsPage = () => {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="edit-status">Status *</Label>
                 <Select
@@ -952,22 +1343,26 @@ const AssetsPage = () => {
               <div className="space-y-2">
                 <Label htmlFor="edit-location">Location</Label>
                 <Select
-                  value={assetFormData.locationId}
+                  value={assetFormData.location_id?.toString() || ""}
                   onValueChange={(value) =>
-                    setAssetFormData({ ...assetFormData, locationId: value })
+                    setAssetFormData({
+                      ...assetFormData,
+                      location_id: value ? parseInt(value) : null,
+                    })
                   }
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select location" />
                   </SelectTrigger>
                   <SelectContent>
-                    {mockLocations
-                      .filter((l) => l !== "All")
-                      .map((location) => (
-                        <SelectItem key={location} value={location}>
-                          {location}
-                        </SelectItem>
-                      ))}
+                    {locations.map((location) => (
+                      <SelectItem
+                        key={location.id}
+                        value={location.id.toString()}
+                      >
+                        {location.name || location.locationName}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -976,11 +1371,11 @@ const AssetsPage = () => {
                 <Input
                   id="edit-purchase-date"
                   type="date"
-                  value={assetFormData.purchaseDate}
+                  value={assetFormData.purchase_date}
                   onChange={(e) =>
                     setAssetFormData({
                       ...assetFormData,
-                      purchaseDate: e.target.value,
+                      purchase_date: e.target.value,
                     })
                   }
                 />
@@ -992,11 +1387,11 @@ const AssetsPage = () => {
                 <Input
                   id="edit-purchase-price"
                   type="number"
-                  value={assetFormData.purchasePrice}
+                  value={assetFormData.purchase_price}
                   onChange={(e) =>
                     setAssetFormData({
                       ...assetFormData,
-                      purchasePrice: e.target.value,
+                      purchase_price: parseFloat(e.target.value) || 0,
                     })
                   }
                   placeholder="0.00"
@@ -1007,34 +1402,34 @@ const AssetsPage = () => {
                 <Input
                   id="edit-warranty-expiry"
                   type="date"
-                  value={assetFormData.warrantyExpiry}
+                  value={assetFormData.warranty_expiry}
                   onChange={(e) =>
                     setAssetFormData({
                       ...assetFormData,
-                      warrantyExpiry: e.target.value,
+                      warranty_expiry: e.target.value,
                     })
                   }
                 />
               </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-notes">Notes</Label>
-              <Textarea
-                id="edit-notes"
-                value={assetFormData.notes}
-                onChange={(e) =>
-                  setAssetFormData({ ...assetFormData, notes: e.target.value })
-                }
-                placeholder="Additional notes..."
-                rows={2}
-              />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsEditModalOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSubmitEdit}>Save Changes</Button>
+            <Button
+              onClick={handleSubmitEdit}
+              disabled={updateAssetMutation.isPending}
+            >
+              {updateAssetMutation.isPending ? (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                "Save Changes"
+              )}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1057,17 +1452,19 @@ const AssetsPage = () => {
                 <div>
                   <Label className="text-muted-foreground">Asset Number</Label>
                   <p className="font-medium mt-1">
-                    {selectedAsset.assetNumber}
+                    {selectedAsset.assetNumber || selectedAsset.asset_number}
                   </p>
                 </div>
                 <div>
                   <Label className="text-muted-foreground">Asset Name</Label>
-                  <p className="font-medium mt-1">{selectedAsset.assetName}</p>
+                  <p className="font-medium mt-1">
+                    {selectedAsset.name || selectedAsset.assetName}
+                  </p>
                 </div>
                 <div>
                   <Label className="text-muted-foreground">Category</Label>
                   <Badge variant="secondary" className="mt-1">
-                    {selectedAsset.category}
+                    {selectedAsset.category || "N/A"}
                   </Badge>
                 </div>
                 <div>
@@ -1080,19 +1477,32 @@ const AssetsPage = () => {
                   <Label className="text-muted-foreground">Location</Label>
                   <p className="font-medium mt-1 flex items-center gap-1">
                     <MapPin className="h-4 w-4 text-muted-foreground" />
-                    {selectedAsset.location}
+                    {locations.find(
+                      (l) =>
+                        l.id ===
+                        (selectedAsset.locationId || selectedAsset.location_id)
+                    )?.name ||
+                      selectedAsset.currentLocation ||
+                      selectedAsset.current_location ||
+                      "N/A"}
                   </p>
                 </div>
                 <div>
                   <Label className="text-muted-foreground">Assigned To</Label>
                   <p className="font-medium mt-1">
-                    {selectedAsset.assignedTo || "Unassigned"}
+                    {selectedAsset.assignedTo ||
+                      (selectedAsset.assignedToUserId ||
+                      selectedAsset.assignedToRoleId
+                        ? "Assigned"
+                        : "Unassigned")}
                   </p>
                 </div>
                 <div>
                   <Label className="text-muted-foreground">Purchase Date</Label>
                   <p className="font-medium mt-1">
-                    {selectedAsset.purchaseDate}
+                    {formatDateOnly(
+                      selectedAsset.purchaseDate || selectedAsset.purchase_date
+                    )}
                   </p>
                 </div>
                 <div>
@@ -1100,7 +1510,23 @@ const AssetsPage = () => {
                     Purchase Price
                   </Label>
                   <p className="font-medium mt-1">
-                    ${selectedAsset.purchasePrice?.toLocaleString()}
+                    $
+                    {(
+                      selectedAsset.purchasePrice ||
+                      selectedAsset.purchase_price ||
+                      0
+                    ).toLocaleString()}
+                  </p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground">
+                    Warranty Expiry
+                  </Label>
+                  <p className="font-medium mt-1">
+                    {formatDateOnly(
+                      selectedAsset.warrantyExpiry ||
+                        selectedAsset.warranty_expiry
+                    )}
                   </p>
                 </div>
                 <div>
@@ -1108,7 +1534,10 @@ const AssetsPage = () => {
                     Last Maintenance
                   </Label>
                   <p className="font-medium mt-1">
-                    {selectedAsset.lastMaintenance || "N/A"}
+                    {formatDateOnly(
+                      selectedAsset.lastMaintenanceDate ||
+                        selectedAsset.last_maintenance_date
+                    )}
                   </p>
                 </div>
                 <div>
@@ -1116,7 +1545,10 @@ const AssetsPage = () => {
                     Next Maintenance
                   </Label>
                   <p className="font-medium mt-1">
-                    {selectedAsset.nextMaintenance || "N/A"}
+                    {formatDateOnly(
+                      selectedAsset.nextMaintenanceDate ||
+                        selectedAsset.next_maintenance_date
+                    )}
                   </p>
                 </div>
               </div>
@@ -1153,15 +1585,74 @@ const AssetsPage = () => {
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="assign-to">Assign To</Label>
-              <Select>
+              <Label htmlFor="assign-to">Assign To User</Label>
+              <Select
+                value={assignData.assigned_to_user_id?.toString() || "__none__"}
+                onValueChange={(value) => {
+                  setAssignData({
+                    ...assignData,
+                    assigned_to_user_id:
+                      value === "__none__" ? null : parseInt(value),
+                    assigned_to_role_id: null,
+                  });
+                }}
+              >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select user or location" />
+                  <SelectValue placeholder="Select user" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="user1">John Doe</SelectItem>
-                  <SelectItem value="user2">Jane Smith</SelectItem>
-                  <SelectItem value="location1">Office A</SelectItem>
+                  <SelectItem value="__none__">Unassign</SelectItem>
+                  {usersLoading ? (
+                    <SelectItem value="loading" disabled>
+                      Loading users...
+                    </SelectItem>
+                  ) : users.length === 0 ? (
+                    <SelectItem value="no-users" disabled>
+                      No users available
+                    </SelectItem>
+                  ) : (
+                    users.map((user) => {
+                      const fullName =
+                        [user.first_name, user.last_name]
+                          .filter(Boolean)
+                          .join(" ") ||
+                        user.username ||
+                        user.email ||
+                        "User";
+                      return (
+                        <SelectItem key={user.id} value={user.id.toString()}>
+                          {fullName} {user.email && `(${user.email})`}
+                        </SelectItem>
+                      );
+                    })
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="assign-location">Location</Label>
+              <Select
+                value={assignData.location_id?.toString() || "__none__"}
+                onValueChange={(value) => {
+                  setAssignData({
+                    ...assignData,
+                    location_id: value === "__none__" ? null : parseInt(value),
+                  });
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select location" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">No location</SelectItem>
+                  {locations.map((location) => (
+                    <SelectItem
+                      key={location.id}
+                      value={location.id.toString()}
+                    >
+                      {location.name || location.locationName}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -1173,7 +1664,19 @@ const AssetsPage = () => {
             >
               Cancel
             </Button>
-            <Button onClick={handleAssign}>Assign</Button>
+            <Button
+              onClick={handleAssign}
+              disabled={assignAssetMutation.isPending}
+            >
+              {assignAssetMutation.isPending ? (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                  Assigning...
+                </>
+              ) : (
+                "Assign"
+              )}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1195,6 +1698,8 @@ const AssetsPage = () => {
               <Label htmlFor="attributes">Attributes (JSON)</Label>
               <Textarea
                 id="attributes"
+                value={attributesData}
+                onChange={(e) => setAttributesData(e.target.value)}
                 placeholder='{"key": "value"}'
                 rows={6}
               />
@@ -1207,8 +1712,18 @@ const AssetsPage = () => {
             >
               Cancel
             </Button>
-            <Button onClick={handleUpdateAttributesSubmit}>
-              Update Attributes
+            <Button
+              onClick={handleUpdateAttributesSubmit}
+              disabled={updateAttributesMutation.isPending}
+            >
+              {updateAttributesMutation.isPending ? (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                  Updating...
+                </>
+              ) : (
+                "Update Attributes"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1231,6 +1746,8 @@ const AssetsPage = () => {
               <Label htmlFor="sensor-data">Sensor Data (JSON)</Label>
               <Textarea
                 id="sensor-data"
+                value={sensorDataInput}
+                onChange={(e) => setSensorDataInput(e.target.value)}
                 placeholder='{"temperature": 25, "humidity": 50}'
                 rows={6}
               />
@@ -1243,8 +1760,18 @@ const AssetsPage = () => {
             >
               Cancel
             </Button>
-            <Button onClick={handleUpdateSensorDataSubmit}>
-              Update Sensor Data
+            <Button
+              onClick={handleUpdateSensorDataSubmit}
+              disabled={updateSensorDataMutation.isPending}
+            >
+              {updateSensorDataMutation.isPending ? (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                  Updating...
+                </>
+              ) : (
+                "Update Sensor Data"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1261,8 +1788,9 @@ const AssetsPage = () => {
             <AlertDialogDescription>
               This action cannot be undone. This will permanently delete the
               asset
-              {selectedAsset && ` "${selectedAsset.assetName}"`} from the
-              system.
+              {selectedAsset &&
+                ` "${selectedAsset.name || selectedAsset.assetName}"`}{" "}
+              from the system.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

@@ -774,7 +774,53 @@ const LocationsPage = () => {
               </TabsTrigger>
             </TabsList>
             <TabsContent value="list" className="mt-4">
-              {filteredLocations.length === 0 ? (
+              {locationsLoading ? (
+                <div className="rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Code</TableHead>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Type</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Address</TableHead>
+                        <TableHead>Parent</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {Array.from({ length: 5 }).map((_, index) => (
+                        <TableRow key={index}>
+                          <TableCell>
+                            <Skeleton className="h-4 w-20" />
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <Skeleton className="h-4 w-4 rounded" />
+                              <Skeleton className="h-4 w-32" />
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Skeleton className="h-5 w-16" />
+                          </TableCell>
+                          <TableCell>
+                            <Skeleton className="h-5 w-16" />
+                          </TableCell>
+                          <TableCell>
+                            <Skeleton className="h-4 w-40" />
+                          </TableCell>
+                          <TableCell>
+                            <Skeleton className="h-4 w-24" />
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Skeleton className="h-8 w-8 rounded-md" />
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              ) : filteredLocations.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12">
                   <MapPin className="h-12 w-12 text-muted-foreground mb-4" />
                   <h3 className="text-lg font-semibold mb-2">
@@ -909,7 +955,36 @@ const LocationsPage = () => {
               )}
             </TabsContent>
             <TabsContent value="tree" className="mt-4">
-              {rootLocations.length === 0 ? (
+              {rootLocationsLoading ? (
+                <div className="rounded-md border p-4 space-y-4">
+                  {Array.from({ length: 3 }).map((_, index) => (
+                    <div key={index} className="space-y-2">
+                      <div className="flex items-center gap-2 p-3">
+                        <Skeleton className="h-6 w-6 rounded" />
+                        <Skeleton className="h-4 w-4 rounded" />
+                        <div className="flex-1 space-y-2">
+                          <Skeleton className="h-5 w-48" />
+                          <Skeleton className="h-4 w-64" />
+                        </div>
+                        <Skeleton className="h-8 w-8 rounded-md" />
+                      </div>
+                      {index < 2 && (
+                        <div className="ml-8 space-y-2">
+                          <div className="flex items-center gap-2 p-3">
+                            <Skeleton className="h-6 w-6 rounded" />
+                            <Skeleton className="h-4 w-4 rounded" />
+                            <div className="flex-1 space-y-2">
+                              <Skeleton className="h-5 w-40" />
+                              <Skeleton className="h-4 w-56" />
+                            </div>
+                            <Skeleton className="h-8 w-8 rounded-md" />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : rootLocations.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12">
                   <FolderTree className="h-12 w-12 text-muted-foreground mb-4" />
                   <h3 className="text-lg font-semibold mb-2">

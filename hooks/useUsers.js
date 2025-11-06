@@ -174,8 +174,8 @@ export const useCreateUser = () => {
       return response.data;
     },
     onSuccess: (data) => {
-      // Invalidate and refetch users list
-      queryClient.invalidateQueries({ queryKey: userKeys.lists() });
+      // Invalidate and refetch users list to ensure all users are shown
+      queryClient.invalidateQueries({ queryKey: userKeys.all });
 
       toast.success("User created successfully", {
         description: `${data.first_name} ${data.last_name} has been added to the system.`,
@@ -620,21 +620,29 @@ export const userUtils = {
   // Get role display text
   getRole: (user) => {
     if (user.isSuperuser) return "Superuser";
-    
+
     // Check if user has roles assigned
     if (user.roles && user.roles.length > 0) {
       // Get the first role (assuming users have one primary role)
       const primaryRole = user.roles[0];
-      
+
       // Handle both object and string role formats
-      if (typeof primaryRole === 'object') {
-        return primaryRole.display_name || primaryRole.name || primaryRole.slug || 'User';
-      } else if (typeof primaryRole === 'string') {
+      if (typeof primaryRole === "object") {
+        return (
+          primaryRole.display_name ||
+          primaryRole.name ||
+          primaryRole.slug ||
+          "User"
+        );
+      } else if (typeof primaryRole === "string") {
         // Convert slug to display name (e.g., 'staff' -> 'Staff')
-        return primaryRole.charAt(0).toUpperCase() + primaryRole.slice(1).replace(/_/g, ' ');
+        return (
+          primaryRole.charAt(0).toUpperCase() +
+          primaryRole.slice(1).replace(/_/g, " ")
+        );
       }
     }
-    
+
     return "User"; // Default role
   },
 };
