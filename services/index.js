@@ -5,6 +5,9 @@ export { rolesService } from "./roles";
 export { permissionsService } from "./permissions";
 export { invitationsService } from "./invitations";
 export { customFieldsService } from "./customFields";
+export { employeesService } from "./employees";
+export { departmentsService } from "./departments";
+export { assignmentsService } from "./assignments";
 
 // Re-export the main API client and utilities
 export { api, apiUtils } from "./api-client";
