@@ -25,9 +25,7 @@ export const assignmentsService = {
   // Get assignments for a specific employee
   getEmployeeAssignments: async (employeeId) => {
     try {
-      return await api.get(`/employees/assignments`, {
-        params: { employee_id: employeeId },
-      });
+      return await api.get(`/employees/${employeeId}/departments`);
     } catch (error) {
       console.error(`Get employee assignments ${employeeId} failed:`, error);
       throw error;
@@ -37,9 +35,7 @@ export const assignmentsService = {
   // Get assignments for a specific department
   getDepartmentAssignments: async (departmentId) => {
     try {
-      return await api.get(`/employees/assignments`, {
-        params: { department_id: departmentId },
-      });
+      return await api.get(`/employees/departments/${departmentId}/employees`);
     } catch (error) {
       console.error(
         `Get department assignments ${departmentId} failed:`,
@@ -70,11 +66,16 @@ export const assignmentsService = {
   },
 
   // Delete assignment
-  deleteAssignment: async (id) => {
+  deleteAssignment: async (employeeId, departmentId) => {
     try {
-      return await api.delete(`/employees/assignments/${id}`);
+      return await api.delete(
+        `/employees/assignments/${employeeId}/${departmentId}`
+      );
     } catch (error) {
-      console.error(`Delete assignment ${id} failed:`, error);
+      console.error(
+        `Delete assignment ${employeeId}/${departmentId} failed:`,
+        error
+      );
       throw error;
     }
   },

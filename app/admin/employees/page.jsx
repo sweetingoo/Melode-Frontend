@@ -86,6 +86,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Switch } from "@/components/ui/switch";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 
@@ -104,9 +105,11 @@ const EmployeesPage = () => {
     employee_id: "",
     employee_number: "",
     hire_date: null,
+    termination_date: null,
     job_title: "",
     manager_id: "",
     employment_status: "active",
+    is_active: true,
   });
   const [validationErrors, setValidationErrors] = useState({});
   const itemsPerPage = 10;
@@ -116,7 +119,7 @@ const EmployeesPage = () => {
     page: currentPage,
     per_page: itemsPerPage,
     search: searchTerm || undefined,
-    status: statusFilter !== "all" ? statusFilter : undefined,
+    employment_status: statusFilter !== "all" ? statusFilter : undefined,
     department_id: departmentFilter !== "all" ? departmentFilter : undefined,
   });
   const { data: usersResponse } = useUsers();
@@ -196,9 +199,13 @@ const EmployeesPage = () => {
       employee_id: employee.employee_id || "",
       employee_number: employee.employee_number || "",
       hire_date: employee.hire_date ? new Date(employee.hire_date) : null,
+      termination_date: employee.termination_date
+        ? new Date(employee.termination_date)
+        : null,
       job_title: employee.job_title || "",
       manager_id: employee.manager_id?.toString() || "",
       employment_status: employee.employment_status || "active",
+      is_active: employee.is_active !== undefined ? employee.is_active : true,
     });
     setValidationErrors({});
     setIsEditModalOpen(true);
@@ -226,18 +233,7 @@ const EmployeesPage = () => {
       errors.user_id = "User selection is required";
     }
 
-    if (!employeeFormData.employee_id?.trim()) {
-      errors.employee_id = "Employee ID is required";
-    }
-
-    if (!employeeFormData.employee_number?.trim()) {
-      errors.employee_number = "Employee Number is required";
-    }
-
-    if (!employeeFormData.job_title?.trim()) {
-      errors.job_title = "Job Title is required";
-    }
-
+    // All other fields are optional according to API documentation
     setValidationErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -247,19 +243,58 @@ const EmployeesPage = () => {
       return;
     }
 
-    const employeeData = {
-      user_id: parseInt(employeeFormData.user_id),
-      employee_id: employeeFormData.employee_id.trim(),
-      employee_number: employeeFormData.employee_number.trim(),
-      hire_date: employeeFormData.hire_date
-        ? format(employeeFormData.hire_date, "yyyy-MM-dd")
-        : null,
-      job_title: employeeFormData.job_title.trim(),
-      manager_id: employeeFormData.manager_id
-        ? parseInt(employeeFormData.manager_id)
-        : null,
-      employment_status: employeeFormData.employment_status,
-    };
+    let employeeData;
+
+    if (selectedEmployee) {
+      // Update: Don't include user_id (not allowed in update per API docs)
+      employeeData = {
+        ...(employeeFormData.employee_id?.trim() && {
+          employee_id: employeeFormData.employee_id.trim(),
+        }),
+        ...(employeeFormData.employee_number?.trim() && {
+          employee_number: employeeFormData.employee_number.trim(),
+        }),
+        ...(employeeFormData.hire_date && {
+          hire_date: employeeFormData.hire_date.toISOString(),
+        }),
+        ...(employeeFormData.termination_date && {
+          termination_date: employeeFormData.termination_date.toISOString(),
+        }),
+        ...(employeeFormData.job_title?.trim() && {
+          job_title: employeeFormData.job_title.trim(),
+        }),
+        ...(employeeFormData.manager_id && {
+          manager_id: parseInt(employeeFormData.manager_id),
+        }),
+        employment_status: employeeFormData.employment_status,
+        is_active: employeeFormData.is_active,
+      };
+    } else {
+      // Create: Include user_id (required)
+      employeeData = {
+        user_id: parseInt(employeeFormData.user_id),
+        ...(employeeFormData.employee_id?.trim() && {
+          employee_id: employeeFormData.employee_id.trim(),
+        }),
+        ...(employeeFormData.employee_number?.trim() && {
+          employee_number: employeeFormData.employee_number.trim(),
+        }),
+        ...(employeeFormData.hire_date && {
+          hire_date: employeeFormData.hire_date.toISOString(),
+        }),
+        ...(employeeFormData.termination_date && {
+          termination_date: employeeFormData.termination_date.toISOString(),
+        }),
+        ...(employeeFormData.job_title?.trim() && {
+          job_title: employeeFormData.job_title.trim(),
+        }),
+        ...(employeeFormData.manager_id && {
+          manager_id: parseInt(employeeFormData.manager_id),
+        }),
+        employment_status: employeeFormData.employment_status,
+        is_active: employeeFormData.is_active,
+      };
+    }
 
     if (selectedEmployee) {
       updateEmployeeMutation.mutate(
@@ -273,9 +308,11 @@ const EmployeesPage = () => {
               employee_id: "",
               employee_number: "",
               hire_date: null,
+              termination_date: null,
               job_title: "",
               manager_id: "",
               employment_status: "active",
+              is_active: true,
             });
             setValidationErrors({});
             refetch();
@@ -314,9 +351,11 @@ const EmployeesPage = () => {
             employee_id: "",
             employee_number: "",
             hire_date: null,
+            termination_date: null,
             job_title: "",
             manager_id: "",
             employment_status: "active",
+            is_active: true,
           });
           setValidationErrors({});
           refetch();
@@ -832,9 +871,7 @@ const EmployeesPage = () => {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="employee_id">
-                  Employee ID <span className="text-red-500">*</span>
-                </Label>
+                <Label htmlFor="employee_id">Employee ID</Label>
                 <Input
                   id="employee_id"
                   value={employeeFormData.employee_id}
@@ -854,9 +891,7 @@ const EmployeesPage = () => {
                 )}
               </div>
               <div className="space-y-2">
-                <Label htmlFor="employee_number">
-                  Employee Number <span className="text-red-500">*</span>
-                </Label>
+                <Label htmlFor="employee_number">Employee Number</Label>
                 <Input
                   id="employee_number"
                   value={employeeFormData.employee_number}
@@ -879,9 +914,7 @@ const EmployeesPage = () => {
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="job_title">
-                Job Title <span className="text-red-500">*</span>
-              </Label>
+              <Label htmlFor="job_title">Job Title</Label>
               <Input
                 id="job_title"
                 value={employeeFormData.job_title}
@@ -935,6 +968,41 @@ const EmployeesPage = () => {
                 </Popover>
               </div>
               <div className="space-y-2">
+                <Label htmlFor="termination_date">Termination Date</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !employeeFormData.termination_date && "text-muted-foreground"
+                      )}
+                    >
+                      {employeeFormData.termination_date ? (
+                        format(employeeFormData.termination_date, "PPP")
+                      ) : (
+                        <span>Pick a date</span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <Calendar
+                      mode="single"
+                      selected={employeeFormData.termination_date}
+                      onSelect={(date) =>
+                        setEmployeeFormData({
+                          ...employeeFormData,
+                          termination_date: date,
+                        })
+                      }
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
                 <Label htmlFor="employment_status">Employment Status</Label>
                 <Select
                   value={employeeFormData.employment_status}
@@ -955,6 +1023,19 @@ const EmployeesPage = () => {
                     <SelectItem value="on_leave">On Leave</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="is_active">Active Status</Label>
+                <Switch
+                  id="is_active"
+                  checked={employeeFormData.is_active}
+                  onCheckedChange={(checked) =>
+                    setEmployeeFormData({
+                      ...employeeFormData,
+                      is_active: checked,
+                    })
+                  }
+                />
               </div>
             </div>
             <div className="space-y-2">
@@ -1072,9 +1153,7 @@ const EmployeesPage = () => {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="edit-employee_id">
-                  Employee ID <span className="text-red-500">*</span>
-                </Label>
+                <Label htmlFor="edit-employee_id">Employee ID</Label>
                 <Input
                   id="edit-employee_id"
                   value={employeeFormData.employee_id}
@@ -1094,9 +1173,7 @@ const EmployeesPage = () => {
                 )}
               </div>
               <div className="space-y-2">
-                <Label htmlFor="edit-employee_number">
-                  Employee Number <span className="text-red-500">*</span>
-                </Label>
+                <Label htmlFor="edit-employee_number">Employee Number</Label>
                 <Input
                   id="edit-employee_number"
                   value={employeeFormData.employee_number}
@@ -1119,9 +1196,7 @@ const EmployeesPage = () => {
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="edit-job_title">
-                Job Title <span className="text-red-500">*</span>
-              </Label>
+              <Label htmlFor="edit-job_title">Job Title</Label>
               <Input
                 id="edit-job_title"
                 value={employeeFormData.job_title}
@@ -1175,6 +1250,41 @@ const EmployeesPage = () => {
                 </Popover>
               </div>
               <div className="space-y-2">
+                <Label htmlFor="edit-termination_date">Termination Date</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !employeeFormData.termination_date && "text-muted-foreground"
+                      )}
+                    >
+                      {employeeFormData.termination_date ? (
+                        format(employeeFormData.termination_date, "PPP")
+                      ) : (
+                        <span>Pick a date</span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <Calendar
+                      mode="single"
+                      selected={employeeFormData.termination_date}
+                      onSelect={(date) =>
+                        setEmployeeFormData({
+                          ...employeeFormData,
+                          termination_date: date,
+                        })
+                      }
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
                 <Label htmlFor="edit-employment_status">Employment Status</Label>
                 <Select
                   value={employeeFormData.employment_status}
@@ -1195,6 +1305,19 @@ const EmployeesPage = () => {
                     <SelectItem value="on_leave">On Leave</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="edit-is_active">Active Status</Label>
+                <Switch
+                  id="edit-is_active"
+                  checked={employeeFormData.is_active}
+                  onCheckedChange={(checked) =>
+                    setEmployeeFormData({
+                      ...employeeFormData,
+                      is_active: checked,
+                    })
+                  }
+                />
               </div>
             </div>
             <div className="space-y-2">

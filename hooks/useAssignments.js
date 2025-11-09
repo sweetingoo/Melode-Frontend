@@ -132,12 +132,20 @@ export const useDeleteAssignment = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (id) => {
-      const response = await assignmentsService.deleteAssignment(id);
+    mutationFn: async ({ employeeId, departmentId }) => {
+      const response = await assignmentsService.deleteAssignment(
+        employeeId,
+        departmentId
+      );
       return response.data;
     },
-    onSuccess: (data, id) => {
-      queryClient.removeQueries({ queryKey: assignmentKeys.detail(id) });
+    onSuccess: (data, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: assignmentKeys.employee(variables.employeeId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: assignmentKeys.department(variables.departmentId),
+      });
       queryClient.invalidateQueries({ queryKey: assignmentKeys.lists() });
       toast.success("Assignment removed successfully", {
         description: "The assignment has been removed.",

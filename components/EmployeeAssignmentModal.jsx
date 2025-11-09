@@ -21,8 +21,15 @@ import {
 import { useCreateAssignment, useUpdateAssignment } from "@/hooks/useAssignments";
 import { useDepartments } from "@/hooks/useDepartments";
 import { useEmployees } from "@/hooks/useEmployees";
+import { useRoles } from "@/hooks/useRoles";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import { format } from "date-fns";
+import { cn } from "@/lib/utils";
 
 const EmployeeAssignmentModal = ({
   isOpen,
@@ -35,24 +42,34 @@ const EmployeeAssignmentModal = ({
   const [formData, setFormData] = useState({
     employee_id: employeeId?.toString() || "",
     department_id: departmentId?.toString() || "",
-    role: "",
+    role_id: "",
+    start_date: null,
+    end_date: null,
+    notes: "",
+    is_active: true,
   });
   const [validationErrors, setValidationErrors] = useState({});
 
   const { data: departmentsResponse } = useDepartments();
   const { data: employeesResponse } = useEmployees();
+  const { data: rolesData } = useRoles();
   const createAssignmentMutation = useCreateAssignment();
   const updateAssignmentMutation = useUpdateAssignment();
 
   const departments = departmentsResponse?.departments || departmentsResponse?.data || [];
   const employees = employeesResponse?.employees || employeesResponse?.data || [];
+  const roles = rolesData || [];
 
   useEffect(() => {
     if (isOpen) {
       setFormData({
         employee_id: employeeId?.toString() || "",
         department_id: departmentId?.toString() || "",
-        role: "",
+        role_id: "",
+        start_date: null,
+        end_date: null,
+        notes: "",
+        is_active: true,
       });
       setValidationErrors({});
     }
@@ -69,8 +86,8 @@ const EmployeeAssignmentModal = ({
       errors.department_id = "Department selection is required";
     }
 
-    if (!formData.role?.trim()) {
-      errors.role = "Role is required";
+    if (!formData.role_id) {
+      errors.role_id = "Role is required";
     }
 
     setValidationErrors(errors);
@@ -85,13 +102,36 @@ const EmployeeAssignmentModal = ({
     const assignmentData = {
       employee_id: parseInt(formData.employee_id),
       department_id: parseInt(formData.department_id),
-      role: formData.role.trim(),
+      role_id: parseInt(formData.role_id),
+      ...(formData.start_date && {
+        start_date: formData.start_date.toISOString(),
+      }),
+      ...(formData.end_date && {
+        end_date: formData.end_date.toISOString(),
+      }),
+      ...(formData.notes?.trim() && {
+        notes: formData.notes.trim(),
+      }),
+      is_active: formData.is_active,
     };
 
     if (assignmentId) {
-      // Update existing assignment
+      // Update existing assignment - don't include employee_id or department_id per API docs
+      const updateData = {
+        role_id: parseInt(formData.role_id),
+        ...(formData.start_date && {
+          start_date: formData.start_date.toISOString(),
+        }),
+        ...(formData.end_date && {
+          end_date: formData.end_date.toISOString(),
+        }),
+        ...(formData.notes?.trim() && {
+          notes: formData.notes.trim(),
+        }),
+        is_active: formData.is_active,
+      };
       updateAssignmentMutation.mutate(
-        { id: assignmentId, assignmentData },
+        { id: assignmentId, assignmentData: updateData },
         {
           onSuccess: () => {
             toast.success("Assignment updated successfully");
@@ -261,31 +301,121 @@ const EmployeeAssignmentModal = ({
             </div>
           )}
           <div className="space-y-2">
-            <Label htmlFor="role">
+            <Label htmlFor="role_id">
               Role <span className="text-red-500">*</span>
             </Label>
             <Select
-              value={formData.role}
+              value={formData.role_id}
               onValueChange={(value) =>
-                setFormData({ ...formData, role: value })
+                setFormData({ ...formData, role_id: value })
               }
             >
               <SelectTrigger
-                className={validationErrors.role ? "border-red-500" : ""}
+                className={validationErrors.role_id ? "border-red-500" : ""}
               >
                 <SelectValue placeholder="Select role" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="member">Member</SelectItem>
-                <SelectItem value="lead">Lead</SelectItem>
-                <SelectItem value="manager">Manager</SelectItem>
-                <SelectItem value="director">Director</SelectItem>
-                <SelectItem value="head">Head</SelectItem>
+                {roles.length === 0 ? (
+                  <SelectItem value="no-roles" disabled>
+                    No roles available
+                  </SelectItem>
+                ) : (
+                  roles.map((role) => (
+                    <SelectItem key={role.id} value={role.id.toString()}>
+                      {role.display_name || role.name || role.role_name || `Role ${role.id}`}
+                    </SelectItem>
+                  ))
+                )}
               </SelectContent>
             </Select>
-            {validationErrors.role && (
-              <p className="text-sm text-red-500">{validationErrors.role}</p>
+            {validationErrors.role_id && (
+              <p className="text-sm text-red-500">{validationErrors.role_id}</p>
             )}
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="start_date">Start Date</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !formData.start_date && "text-muted-foreground"
+                    )}
+                  >
+                    {formData.start_date ? (
+                      format(formData.start_date, "PPP")
+                    ) : (
+                      <span>Pick a date</span>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                  <Calendar
+                    mode="single"
+                    selected={formData.start_date}
+                    onSelect={(date) =>
+                      setFormData({ ...formData, start_date: date })
+                    }
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="end_date">End Date</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !formData.end_date && "text-muted-foreground"
+                    )}
+                  >
+                    {formData.end_date ? (
+                      format(formData.end_date, "PPP")
+                    ) : (
+                      <span>Pick a date</span>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                  <Calendar
+                    mode="single"
+                    selected={formData.end_date}
+                    onSelect={(date) =>
+                      setFormData({ ...formData, end_date: date })
+                    }
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="notes">Notes</Label>
+            <Textarea
+              id="notes"
+              value={formData.notes}
+              onChange={(e) =>
+                setFormData({ ...formData, notes: e.target.value })
+              }
+              placeholder="Additional notes about the assignment..."
+              rows={3}
+            />
+          </div>
+          <div className="flex items-center justify-between">
+            <Label htmlFor="is_active">Active Status</Label>
+            <Switch
+              id="is_active"
+              checked={formData.is_active}
+              onCheckedChange={(checked) =>
+                setFormData({ ...formData, is_active: checked })
+              }
+            />
           </div>
           {validationErrors._general && (
             <p className="text-sm text-red-500">
