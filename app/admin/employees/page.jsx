@@ -91,6 +91,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 const EmployeesPage = () => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -481,7 +482,15 @@ const EmployeesPage = () => {
                   const errorData = error.response.data;
                   const newValidationErrors = {};
 
-                  if (errorData?.detail && Array.isArray(errorData.detail)) {
+                  // Handle detail as string (e.g., "User with email 'xxx' already exists")
+                  if (errorData?.detail && typeof errorData.detail === "string") {
+                    newValidationErrors._general = errorData.detail;
+                    toast.error("Error", {
+                      description: errorData.detail,
+                    });
+                  }
+                  // Handle detail as array (validation errors)
+                  else if (errorData?.detail && Array.isArray(errorData.detail)) {
                     errorData.detail.forEach((errorItem) => {
                       if (errorItem.loc && errorItem.loc.length > 1) {
                         const fieldName = errorItem.loc[1];
@@ -492,11 +501,18 @@ const EmployeesPage = () => {
                     Object.assign(newValidationErrors, errorData.errors);
                   } else if (errorData?.message) {
                     newValidationErrors._general = errorData.message;
+                    toast.error("Error", {
+                      description: errorData.message,
+                    });
                   }
 
                   if (Object.keys(newValidationErrors).length > 0) {
                     setValidationErrors(newValidationErrors);
                   }
+                } else {
+                  toast.error("Error", {
+                    description: error.response?.data?.message || error.response?.data?.detail || "An unexpected error occurred",
+                  });
                 }
               },
             });
@@ -506,7 +522,21 @@ const EmployeesPage = () => {
               const errorData = error.response.data;
               const newValidationErrors = {};
 
-              if (errorData?.detail && Array.isArray(errorData.detail)) {
+              // Handle detail as string (e.g., "User with email 'xxx' already exists")
+              if (errorData?.detail && typeof errorData.detail === "string") {
+                // Try to map to a field if it mentions email
+                if (errorData.detail.toLowerCase().includes("email")) {
+                  newValidationErrors.email = errorData.detail;
+                } else {
+                  newValidationErrors._general = errorData.detail;
+                }
+                // Also show toast for visibility
+                toast.error("Error", {
+                  description: errorData.detail,
+                });
+              }
+              // Handle detail as array (validation errors)
+              else if (errorData?.detail && Array.isArray(errorData.detail)) {
                 errorData.detail.forEach((errorItem) => {
                   if (errorItem.loc && errorItem.loc.length > 1) {
                     const fieldName = errorItem.loc[1];
@@ -517,11 +547,18 @@ const EmployeesPage = () => {
                 Object.assign(newValidationErrors, errorData.errors);
               } else if (errorData?.message) {
                 newValidationErrors._general = errorData.message;
+                toast.error("Error", {
+                  description: errorData.message,
+                });
               }
 
               if (Object.keys(newValidationErrors).length > 0) {
                 setValidationErrors(newValidationErrors);
               }
+            } else {
+              toast.error("Error", {
+                description: error.response?.data?.message || error.response?.data?.detail || "An unexpected error occurred",
+              });
             }
           },
         });
@@ -555,7 +592,15 @@ const EmployeesPage = () => {
               const errorData = error.response.data;
               const newValidationErrors = {};
 
-              if (errorData?.detail && Array.isArray(errorData.detail)) {
+              // Handle detail as string (e.g., "User with email 'xxx' already exists")
+              if (errorData?.detail && typeof errorData.detail === "string") {
+                newValidationErrors._general = errorData.detail;
+                toast.error("Error", {
+                  description: errorData.detail,
+                });
+              }
+              // Handle detail as array (validation errors)
+              else if (errorData?.detail && Array.isArray(errorData.detail)) {
                 errorData.detail.forEach((errorItem) => {
                   if (errorItem.loc && errorItem.loc.length > 1) {
                     const fieldName = errorItem.loc[1];
@@ -566,11 +611,18 @@ const EmployeesPage = () => {
                 Object.assign(newValidationErrors, errorData.errors);
               } else if (errorData?.message) {
                 newValidationErrors._general = errorData.message;
+                toast.error("Error", {
+                  description: errorData.message,
+                });
               }
 
               if (Object.keys(newValidationErrors).length > 0) {
                 setValidationErrors(newValidationErrors);
               }
+            } else {
+              toast.error("Error", {
+                description: error.response?.data?.message || error.response?.data?.detail || "An unexpected error occurred",
+              });
             }
           },
         }
@@ -598,7 +650,15 @@ const EmployeesPage = () => {
             const errorData = error.response.data;
             const newValidationErrors = {};
 
-            if (errorData?.detail && Array.isArray(errorData.detail)) {
+            // Handle detail as string (e.g., "User with email 'xxx' already exists")
+            if (errorData?.detail && typeof errorData.detail === "string") {
+              newValidationErrors._general = errorData.detail;
+              toast.error("Error", {
+                description: errorData.detail,
+              });
+            }
+            // Handle detail as array (validation errors)
+            else if (errorData?.detail && Array.isArray(errorData.detail)) {
               errorData.detail.forEach((errorItem) => {
                 if (errorItem.loc && errorItem.loc.length > 1) {
                   const fieldName = errorItem.loc[1];
@@ -609,11 +669,18 @@ const EmployeesPage = () => {
               Object.assign(newValidationErrors, errorData.errors);
             } else if (errorData?.message) {
               newValidationErrors._general = errorData.message;
+              toast.error("Error", {
+                description: errorData.message,
+              });
             }
 
             if (Object.keys(newValidationErrors).length > 0) {
               setValidationErrors(newValidationErrors);
             }
+          } else {
+            toast.error("Error", {
+              description: error.response?.data?.message || error.response?.data?.detail || "An unexpected error occurred",
+            });
           }
         },
       });

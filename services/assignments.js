@@ -5,7 +5,7 @@ export const assignmentsService = {
   // Get all assignments
   getAssignments: async (params = {}) => {
     try {
-      return await api.get("/employees/assignments", { params });
+      return await api.get("/employees/assignments/", { params });
     } catch (error) {
       console.error("Get assignments failed:", error);
       throw error;

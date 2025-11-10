@@ -47,7 +47,9 @@ export const useCreateEmployee = () => {
       return response.data;
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: employeeKeys.all });
+      // Invalidate and refetch all employee list queries to refresh the list
+      queryClient.invalidateQueries({ queryKey: employeeKeys.lists() });
+      queryClient.refetchQueries({ queryKey: employeeKeys.lists() });
       toast.success("Employee created successfully", {
         description: `Employee has been created.`,
       });
