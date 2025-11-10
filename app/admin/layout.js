@@ -61,6 +61,7 @@ import {
 import { useTokenManager } from "@/hooks/useTokenManager";
 import { apiUtils } from "@/services/api-client";
 import AuthGuard from "@/components/AuthGuard";
+import DepartmentSelector from "@/components/DepartmentSelector";
 
 const menuItems = [
   {
@@ -512,6 +513,14 @@ export default function AdminLayout({ children }) {
                     <User className="mr-2 h-4 w-4" />
                     <Link href="/admin/profile">Your Profile</Link>
                   </DropdownMenuItem>
+
+                  {/* Department Selector */}
+                  <div className="px-2 py-1.5 border-t border-b">
+                    <div className="text-xs text-muted-foreground mb-1.5 px-1">
+                      Department Context
+                    </div>
+                    <DepartmentSelector variant="compact" showLabel={false} />
+                  </div>
 
                   {/* Return to Original User - only show if hijacked */}
                   {typeof window !== "undefined" &&

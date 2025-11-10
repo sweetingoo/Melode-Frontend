@@ -950,7 +950,6 @@ const EmployeesPage = () => {
                       <TableHead>Employee Number</TableHead>
                       <TableHead>Name</TableHead>
                       <TableHead>Job Title</TableHead>
-                      <TableHead>Department</TableHead>
                       <TableHead>Hire Date</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
@@ -963,7 +962,6 @@ const EmployeesPage = () => {
                         employee.user.email ||
                         "Unknown"
                         : "Unknown";
-                      const departments = employee.departments || [];
                       return (
                         <TableRow key={employee.id}>
                           <TableCell className="font-medium">
@@ -976,28 +974,6 @@ const EmployeesPage = () => {
                           </TableCell>
                           <TableCell>{userName}</TableCell>
                           <TableCell>{employee.job_title || "—"}</TableCell>
-                          <TableCell>
-                            {departments.length > 0 ? (
-                              <div className="flex flex-wrap gap-1">
-                                {departments.slice(0, 2).map((dept) => (
-                                  <Badge
-                                    key={dept.id}
-                                    variant="outline"
-                                    className="text-xs"
-                                  >
-                                    {dept.name}
-                                  </Badge>
-                                ))}
-                                {departments.length > 2 && (
-                                  <Badge variant="outline" className="text-xs">
-                                    +{departments.length - 2}
-                                  </Badge>
-                                )}
-                              </div>
-                            ) : (
-                              <span className="text-muted-foreground">—</span>
-                            )}
-                          </TableCell>
                           <TableCell>
                             {employee.hire_date
                               ? format(new Date(employee.hire_date), "MMM dd, yyyy")
