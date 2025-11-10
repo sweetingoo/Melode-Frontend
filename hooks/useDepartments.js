@@ -46,7 +46,9 @@ export const useCreateDepartment = () => {
       return response.data;
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: departmentKeys.all });
+      // Invalidate and refetch all department list queries to refresh the list
+      queryClient.invalidateQueries({ queryKey: departmentKeys.lists() });
+      queryClient.refetchQueries({ queryKey: departmentKeys.lists() });
       toast.success("Department created successfully", {
         description: `${data.name || "Department"} has been created.`,
       });

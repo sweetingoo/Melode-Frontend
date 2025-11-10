@@ -243,7 +243,7 @@ const DepartmentsPage = () => {
             is_active: true,
           });
           setValidationErrors({});
-          refetch();
+          // The hook will handle refetching via refetchQueries
         },
         onError: (error) => {
           if (error.response?.status === 422 || error.response?.status === 400) {
