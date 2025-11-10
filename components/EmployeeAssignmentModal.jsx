@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useCreateAssignment, useUpdateAssignment } from "@/hooks/useAssignments";
+import { useCreateAssignment, useUpdateAssignment, useAssignment } from "@/hooks/useAssignments";
 import { useDepartments } from "@/hooks/useDepartments";
 import { useEmployees } from "@/hooks/useEmployees";
 import { useRoles } from "@/hooks/useRoles";
@@ -53,6 +53,7 @@ const EmployeeAssignmentModal = ({
   const { data: departmentsResponse } = useDepartments();
   const { data: employeesResponse } = useEmployees();
   const { data: rolesData } = useRoles();
+  const { data: assignmentData } = useAssignment(assignmentId);
   const createAssignmentMutation = useCreateAssignment();
   const updateAssignmentMutation = useUpdateAssignment();
 
@@ -62,18 +63,32 @@ const EmployeeAssignmentModal = ({
 
   useEffect(() => {
     if (isOpen) {
-      setFormData({
-        employee_id: employeeId?.toString() || "",
-        department_id: departmentId?.toString() || "",
-        role_id: "",
-        start_date: null,
-        end_date: null,
-        notes: "",
-        is_active: true,
-      });
+      if (assignmentId && assignmentData) {
+        // Load existing assignment data for editing
+        setFormData({
+          employee_id: assignmentData.employee_id?.toString() || employeeId?.toString() || "",
+          department_id: assignmentData.department_id?.toString() || departmentId?.toString() || "",
+          role_id: assignmentData.role_id?.toString() || "",
+          start_date: assignmentData.start_date ? new Date(assignmentData.start_date) : null,
+          end_date: assignmentData.end_date ? new Date(assignmentData.end_date) : null,
+          notes: assignmentData.notes || "",
+          is_active: assignmentData.is_active !== undefined ? assignmentData.is_active : true,
+        });
+      } else {
+        // New assignment
+        setFormData({
+          employee_id: employeeId?.toString() || "",
+          department_id: departmentId?.toString() || "",
+          role_id: "",
+          start_date: null,
+          end_date: null,
+          notes: "",
+          is_active: true,
+        });
+      }
       setValidationErrors({});
     }
-  }, [isOpen, employeeId, departmentId]);
+  }, [isOpen, employeeId, departmentId, assignmentId, assignmentData]);
 
   const validateForm = () => {
     const errors = {};

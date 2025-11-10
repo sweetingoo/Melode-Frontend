@@ -10,7 +10,7 @@ const apiClient = axios.create({
   },
 });
 
-// Request interceptor to add auth token
+// Request interceptor to add auth token and department context
 apiClient.interceptors.request.use(
   (config) => {
     // Get token from localStorage or wherever you store it
@@ -20,6 +20,12 @@ apiClient.interceptors.request.use(
 
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
+      }
+
+      // Add department context header if available
+      const activeDepartmentId = localStorage.getItem("activeDepartmentId");
+      if (activeDepartmentId) {
+        config.headers["X-Department-ID"] = activeDepartmentId;
       }
     }
 
@@ -293,6 +299,33 @@ export const apiUtils = {
       return localStorage.getItem("refreshToken");
     }
     return null;
+  },
+
+  // Set active department ID
+  setActiveDepartmentId: (departmentId) => {
+    if (typeof window !== "undefined") {
+      if (departmentId) {
+        localStorage.setItem("activeDepartmentId", departmentId.toString());
+      } else {
+        localStorage.removeItem("activeDepartmentId");
+      }
+    }
+  },
+
+  // Get active department ID
+  getActiveDepartmentId: () => {
+    if (typeof window !== "undefined") {
+      const deptId = localStorage.getItem("activeDepartmentId");
+      return deptId ? parseInt(deptId) : null;
+    }
+    return null;
+  },
+
+  // Clear active department
+  clearActiveDepartment: () => {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("activeDepartmentId");
+    }
   },
 };
 

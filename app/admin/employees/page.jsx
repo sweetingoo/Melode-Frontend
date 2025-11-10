@@ -66,6 +66,7 @@ import { useUsers, useCreateUser } from "@/hooks/useUsers";
 import { useDepartments } from "@/hooks/useDepartments";
 import { useEmployeeAssignments, useDeleteAssignment } from "@/hooks/useAssignments";
 import EmployeeAssignmentModal from "@/components/EmployeeAssignmentModal";
+import ViewEmployeeAssignmentsModal from "@/components/ViewEmployeeAssignmentsModal";
 import Link from "next/link";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
@@ -101,8 +102,10 @@ const EmployeesPage = () => {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isAssignmentModalOpen, setIsAssignmentModalOpen] = useState(false);
+  const [isViewAssignmentsModalOpen, setIsViewAssignmentsModalOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [selectedEmployeeForAssignment, setSelectedEmployeeForAssignment] = useState(null);
+  const [selectedAssignment, setSelectedAssignment] = useState(null);
   const [userSelectionMode, setUserSelectionMode] = useState("existing"); // "existing" or "new"
   const [employeeFormData, setEmployeeFormData] = useState({
     user_id: "",
@@ -142,6 +145,7 @@ const EmployeesPage = () => {
   const createEmployeeMutation = useCreateEmployee();
   const updateEmployeeMutation = useUpdateEmployee();
   const createUserMutation = useCreateUser();
+  const deleteAssignmentMutation = useDeleteAssignment();
 
   const users = usersResponse?.users || [];
   const departments = departmentsResponse?.departments || departmentsResponse?.data || [];
@@ -1021,6 +1025,16 @@ const EmployeesPage = () => {
                                 <DropdownMenuItem
                                   onClick={() => {
                                     setSelectedEmployeeForAssignment(employee);
+                                    setIsViewAssignmentsModalOpen(true);
+                                  }}
+                                >
+                                  <Building2 className="mr-2 h-4 w-4" />
+                                  View Departments
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    setSelectedEmployeeForAssignment(employee);
+                                    setSelectedAssignment(null);
                                     setIsAssignmentModalOpen(true);
                                   }}
                                 >
@@ -1917,10 +1931,51 @@ const EmployeesPage = () => {
         onClose={() => {
           setIsAssignmentModalOpen(false);
           setSelectedEmployeeForAssignment(null);
+          setSelectedAssignment(null);
         }}
         employeeId={selectedEmployeeForAssignment?.id}
+        assignmentId={selectedAssignment?.id}
+        departmentId={selectedAssignment?.department_id}
         onSuccess={() => {
           refetch();
+          // If we were viewing assignments, reopen that modal
+          if (isViewAssignmentsModalOpen) {
+            // Keep it open - the modal will refresh automatically
+          }
+        }}
+      />
+
+      {/* View Assignments Modal */}
+      <ViewEmployeeAssignmentsModal
+        isOpen={isViewAssignmentsModalOpen}
+        onClose={() => {
+          setIsViewAssignmentsModalOpen(false);
+          setSelectedEmployeeForAssignment(null);
+          setSelectedAssignment(null);
+        }}
+        employeeId={selectedEmployeeForAssignment?.id}
+        onEdit={(assignment) => {
+          setSelectedAssignment(assignment);
+          setIsViewAssignmentsModalOpen(false);
+          setIsAssignmentModalOpen(true);
+        }}
+        onDelete={(assignment) => {
+          deleteAssignmentMutation.mutate(
+            {
+              employeeId: assignment.employee_id,
+              departmentId: assignment.department_id,
+            },
+            {
+              onSuccess: () => {
+                refetch();
+              },
+            }
+          );
+        }}
+        onAddNew={() => {
+          setSelectedAssignment(null);
+          setIsViewAssignmentsModalOpen(false);
+          setIsAssignmentModalOpen(true);
         }}
       />
     </div>
