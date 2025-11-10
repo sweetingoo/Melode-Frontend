@@ -62,11 +62,12 @@ import {
   useCreateEmployee,
   useUpdateEmployee,
 } from "@/hooks/useEmployees";
-import { useUsers } from "@/hooks/useUsers";
+import { useUsers, useCreateUser } from "@/hooks/useUsers";
 import { useDepartments } from "@/hooks/useDepartments";
 import { useEmployeeAssignments, useDeleteAssignment } from "@/hooks/useAssignments";
 import EmployeeAssignmentModal from "@/components/EmployeeAssignmentModal";
 import Link from "next/link";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Dialog,
   DialogContent,
@@ -87,6 +88,7 @@ import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 
@@ -100,6 +102,7 @@ const EmployeesPage = () => {
   const [isAssignmentModalOpen, setIsAssignmentModalOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [selectedEmployeeForAssignment, setSelectedEmployeeForAssignment] = useState(null);
+  const [userSelectionMode, setUserSelectionMode] = useState("existing"); // "existing" or "new"
   const [employeeFormData, setEmployeeFormData] = useState({
     user_id: "",
     employee_id: "",
@@ -110,6 +113,16 @@ const EmployeesPage = () => {
     manager_id: "",
     employment_status: "active",
     is_active: true,
+  });
+  const [userFormData, setUserFormData] = useState({
+    email: "",
+    username: "",
+    first_name: "",
+    last_name: "",
+    title: "",
+    phone_number: "",
+    password: "",
+    bio: "",
   });
   const [validationErrors, setValidationErrors] = useState({});
   const itemsPerPage = 10;
@@ -127,6 +140,7 @@ const EmployeesPage = () => {
   const deleteEmployeeMutation = useDeleteEmployee();
   const createEmployeeMutation = useCreateEmployee();
   const updateEmployeeMutation = useUpdateEmployee();
+  const createUserMutation = useCreateUser();
 
   const users = usersResponse?.users || [];
   const departments = departmentsResponse?.departments || departmentsResponse?.data || [];
@@ -213,14 +227,27 @@ const EmployeesPage = () => {
 
   const handleCreateEmployee = () => {
     setSelectedEmployee(null);
+    setUserSelectionMode("existing");
     setEmployeeFormData({
       user_id: "",
       employee_id: "",
       employee_number: "",
       hire_date: null,
+      termination_date: null,
       job_title: "",
       manager_id: "",
       employment_status: "active",
+      is_active: true,
+    });
+    setUserFormData({
+      email: "",
+      username: "",
+      first_name: "",
+      last_name: "",
+      title: "",
+      phone_number: "",
+      password: "",
+      bio: "",
     });
     setValidationErrors({});
     setIsCreateModalOpen(true);
@@ -229,11 +256,41 @@ const EmployeesPage = () => {
   const validateEmployeeForm = () => {
     const errors = {};
 
-    if (!employeeFormData.user_id) {
-      errors.user_id = "User selection is required";
+    if (userSelectionMode === "existing") {
+      if (!employeeFormData.user_id) {
+        errors.user_id = "User selection is required";
+      }
+    } else {
+      // Validate new user fields
+      if (!userFormData.email) {
+        errors.email = "Email is required";
+      } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userFormData.email)) {
+        errors.email = "Please enter a valid email address";
+      }
+
+      if (!userFormData.first_name) {
+        errors.first_name = "First name is required";
+      }
+
+      if (!userFormData.last_name) {
+        errors.last_name = "Last name is required";
+      }
+
+      if (!userFormData.password) {
+        errors.password = "Password is required";
+      } else if (userFormData.password.length < 8) {
+        errors.password = "Password must be at least 8 characters";
+      }
+
+      if (
+        userFormData.phone_number &&
+        !/^\+?[\d\s-()]+$/.test(userFormData.phone_number)
+      ) {
+        errors.phone_number = "Please enter a valid phone number";
+      }
     }
 
-    // All other fields are optional according to API documentation
+    // All employee fields are optional according to API documentation
     setValidationErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -270,30 +327,206 @@ const EmployeesPage = () => {
         is_active: employeeFormData.is_active,
       };
     } else {
-      // Create: Include user_id (required)
-      employeeData = {
-        user_id: parseInt(employeeFormData.user_id),
-        ...(employeeFormData.employee_id?.trim() && {
-          employee_id: employeeFormData.employee_id.trim(),
-        }),
-        ...(employeeFormData.employee_number?.trim() && {
-          employee_number: employeeFormData.employee_number.trim(),
-        }),
-        ...(employeeFormData.hire_date && {
-          hire_date: employeeFormData.hire_date.toISOString(),
-        }),
-        ...(employeeFormData.termination_date && {
-          termination_date: employeeFormData.termination_date.toISOString(),
-        }),
-        ...(employeeFormData.job_title?.trim() && {
-          job_title: employeeFormData.job_title.trim(),
-        }),
-        ...(employeeFormData.manager_id && {
-          manager_id: parseInt(employeeFormData.manager_id),
-        }),
-        employment_status: employeeFormData.employment_status,
-        is_active: employeeFormData.is_active,
-      };
+      // Create employee - handle both existing and new user modes
+      if (userSelectionMode === "existing") {
+        // Use existing user
+        employeeData = {
+          user_id: parseInt(employeeFormData.user_id),
+          ...(employeeFormData.employee_id?.trim() && {
+            employee_id: employeeFormData.employee_id.trim(),
+          }),
+          ...(employeeFormData.employee_number?.trim() && {
+            employee_number: employeeFormData.employee_number.trim(),
+          }),
+          ...(employeeFormData.hire_date && {
+            hire_date: employeeFormData.hire_date.toISOString(),
+          }),
+          ...(employeeFormData.termination_date && {
+            termination_date: employeeFormData.termination_date.toISOString(),
+          }),
+          ...(employeeFormData.job_title?.trim() && {
+            job_title: employeeFormData.job_title.trim(),
+          }),
+          ...(employeeFormData.manager_id && {
+            manager_id: parseInt(employeeFormData.manager_id),
+          }),
+          employment_status: employeeFormData.employment_status,
+          is_active: employeeFormData.is_active,
+        };
+
+        // Create employee with existing user
+        createEmployeeMutation.mutate(employeeData, {
+          onSuccess: () => {
+            setIsCreateModalOpen(false);
+            setEmployeeFormData({
+              user_id: "",
+              employee_id: "",
+              employee_number: "",
+              hire_date: null,
+              termination_date: null,
+              job_title: "",
+              manager_id: "",
+              employment_status: "active",
+              is_active: true,
+            });
+            setUserFormData({
+              email: "",
+              username: "",
+              first_name: "",
+              last_name: "",
+              title: "",
+              phone_number: "",
+              password: "",
+              bio: "",
+            });
+            setUserSelectionMode("existing");
+            setValidationErrors({});
+            refetch();
+          },
+          onError: (error) => {
+            if (error.response?.status === 422 || error.response?.status === 400) {
+              const errorData = error.response.data;
+              const newValidationErrors = {};
+
+              if (errorData?.detail && Array.isArray(errorData.detail)) {
+                errorData.detail.forEach((errorItem) => {
+                  if (errorItem.loc && errorItem.loc.length > 1) {
+                    const fieldName = errorItem.loc[1];
+                    newValidationErrors[fieldName] = errorItem.msg;
+                  }
+                });
+              } else if (errorData?.errors) {
+                Object.assign(newValidationErrors, errorData.errors);
+              } else if (errorData?.message) {
+                newValidationErrors._general = errorData.message;
+              }
+
+              if (Object.keys(newValidationErrors).length > 0) {
+                setValidationErrors(newValidationErrors);
+              }
+            }
+          },
+        });
+      } else {
+        // Create new user first, then create employee
+        const userData = {
+          email: userFormData.email,
+          username: userFormData.username || undefined,
+          first_name: userFormData.first_name,
+          last_name: userFormData.last_name,
+          title: userFormData.title || undefined,
+          phone_number: userFormData.phone_number || undefined,
+          password: userFormData.password,
+          bio: userFormData.bio || undefined,
+          send_invite: false, // Don't send invite when creating employee
+        };
+
+        createUserMutation.mutate(userData, {
+          onSuccess: (newUser) => {
+            // After user is created, create employee with the new user_id
+            const employeeData = {
+              user_id: newUser.id,
+              ...(employeeFormData.employee_id?.trim() && {
+                employee_id: employeeFormData.employee_id.trim(),
+              }),
+              ...(employeeFormData.employee_number?.trim() && {
+                employee_number: employeeFormData.employee_number.trim(),
+              }),
+              ...(employeeFormData.hire_date && {
+                hire_date: employeeFormData.hire_date.toISOString(),
+              }),
+              ...(employeeFormData.termination_date && {
+                termination_date: employeeFormData.termination_date.toISOString(),
+              }),
+              ...(employeeFormData.job_title?.trim() && {
+                job_title: employeeFormData.job_title.trim(),
+              }),
+              ...(employeeFormData.manager_id && {
+                manager_id: parseInt(employeeFormData.manager_id),
+              }),
+              employment_status: employeeFormData.employment_status,
+              is_active: employeeFormData.is_active,
+            };
+
+            createEmployeeMutation.mutate(employeeData, {
+              onSuccess: () => {
+                setIsCreateModalOpen(false);
+                setEmployeeFormData({
+                  user_id: "",
+                  employee_id: "",
+                  employee_number: "",
+                  hire_date: null,
+                  termination_date: null,
+                  job_title: "",
+                  manager_id: "",
+                  employment_status: "active",
+                  is_active: true,
+                });
+                setUserFormData({
+                  email: "",
+                  username: "",
+                  first_name: "",
+                  last_name: "",
+                  title: "",
+                  phone_number: "",
+                  password: "",
+                  bio: "",
+                });
+                setUserSelectionMode("existing");
+                setValidationErrors({});
+                refetch();
+              },
+              onError: (error) => {
+                if (error.response?.status === 422 || error.response?.status === 400) {
+                  const errorData = error.response.data;
+                  const newValidationErrors = {};
+
+                  if (errorData?.detail && Array.isArray(errorData.detail)) {
+                    errorData.detail.forEach((errorItem) => {
+                      if (errorItem.loc && errorItem.loc.length > 1) {
+                        const fieldName = errorItem.loc[1];
+                        newValidationErrors[fieldName] = errorItem.msg;
+                      }
+                    });
+                  } else if (errorData?.errors) {
+                    Object.assign(newValidationErrors, errorData.errors);
+                  } else if (errorData?.message) {
+                    newValidationErrors._general = errorData.message;
+                  }
+
+                  if (Object.keys(newValidationErrors).length > 0) {
+                    setValidationErrors(newValidationErrors);
+                  }
+                }
+              },
+            });
+          },
+          onError: (error) => {
+            if (error.response?.status === 422 || error.response?.status === 400) {
+              const errorData = error.response.data;
+              const newValidationErrors = {};
+
+              if (errorData?.detail && Array.isArray(errorData.detail)) {
+                errorData.detail.forEach((errorItem) => {
+                  if (errorItem.loc && errorItem.loc.length > 1) {
+                    const fieldName = errorItem.loc[1];
+                    newValidationErrors[fieldName] = errorItem.msg;
+                  }
+                });
+              } else if (errorData?.errors) {
+                Object.assign(newValidationErrors, errorData.errors);
+              } else if (errorData?.message) {
+                newValidationErrors._general = errorData.message;
+              }
+
+              if (Object.keys(newValidationErrors).length > 0) {
+                setValidationErrors(newValidationErrors);
+              }
+            }
+          },
+        });
+      }
+      return; // Exit early for create flow
     }
 
     if (selectedEmployee) {
@@ -656,8 +889,8 @@ const EmployeesPage = () => {
                     {filteredEmployees.map((employee) => {
                       const userName = employee.user
                         ? `${employee.user.first_name || ""} ${employee.user.last_name || ""}`.trim() ||
-                          employee.user.email ||
-                          "Unknown"
+                        employee.user.email ||
+                        "Unknown"
                         : "Unknown";
                       const departments = employee.departments || [];
                       return (
@@ -822,53 +1055,281 @@ const EmployeesPage = () => {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="user_id">
-                User <span className="text-red-500">*</span>
-              </Label>
-              <Select
-                value={employeeFormData.user_id}
-                onValueChange={(value) =>
-                  setEmployeeFormData({
-                    ...employeeFormData,
-                    user_id: value,
-                  })
-                }
+            {/* User Selection Mode Toggle */}
+            <div className="space-y-3">
+              <Label>User Selection</Label>
+              <RadioGroup
+                value={userSelectionMode}
+                onValueChange={setUserSelectionMode}
+                className="flex gap-6"
               >
-                <SelectTrigger
-                  className={validationErrors.user_id ? "border-red-500" : ""}
-                >
-                  <SelectValue placeholder="Select user" />
-                </SelectTrigger>
-                <SelectContent>
-                  {users.length === 0 ? (
-                    <SelectItem value="no-users" disabled>
-                      No users available
-                    </SelectItem>
-                  ) : (
-                    users.map((user) => {
-                      const fullName =
-                        [user.first_name, user.last_name]
-                          .filter(Boolean)
-                          .join(" ") ||
-                        user.username ||
-                        user.email ||
-                        "User";
-                      return (
-                        <SelectItem key={user.id} value={user.id.toString()}>
-                          {fullName} {user.email && `(${user.email})`}
-                        </SelectItem>
-                      );
-                    })
-                  )}
-                </SelectContent>
-              </Select>
-              {validationErrors.user_id && (
-                <p className="text-sm text-red-500">
-                  {validationErrors.user_id}
-                </p>
-              )}
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="existing" id="existing-user" />
+                  <Label htmlFor="existing-user" className="cursor-pointer">
+                    Select Existing User
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="new" id="new-user" />
+                  <Label htmlFor="new-user" className="cursor-pointer">
+                    Create New User
+                  </Label>
+                </div>
+              </RadioGroup>
             </div>
+
+            {/* Existing User Selection */}
+            {userSelectionMode === "existing" && (
+              <div className="space-y-2">
+                <Label htmlFor="user_id">
+                  User <span className="text-red-500">*</span>
+                </Label>
+                <Select
+                  value={employeeFormData.user_id}
+                  onValueChange={(value) =>
+                    setEmployeeFormData({
+                      ...employeeFormData,
+                      user_id: value,
+                    })
+                  }
+                >
+                  <SelectTrigger
+                    className={validationErrors.user_id ? "border-red-500" : ""}
+                  >
+                    <SelectValue placeholder="Select user" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {users.length === 0 ? (
+                      <SelectItem value="no-users" disabled>
+                        No users available
+                      </SelectItem>
+                    ) : (
+                      users.map((user) => {
+                        const fullName =
+                          [user.first_name, user.last_name]
+                            .filter(Boolean)
+                            .join(" ") ||
+                          user.username ||
+                          user.email ||
+                          "User";
+                        return (
+                          <SelectItem key={user.id} value={user.id.toString()}>
+                            {fullName} {user.email && `(${user.email})`}
+                          </SelectItem>
+                        );
+                      })
+                    )}
+                  </SelectContent>
+                </Select>
+                {validationErrors.user_id && (
+                  <p className="text-sm text-red-500">
+                    {validationErrors.user_id}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* New User Form */}
+            {userSelectionMode === "new" && (
+              <div className="space-y-4 border-t pt-4">
+                <h3 className="font-semibold">User Information</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="user_email">
+                      Email <span className="text-red-500">*</span>
+                    </Label>
+                    <Input
+                      id="user_email"
+                      type="email"
+                      placeholder="user@example.com"
+                      value={userFormData.email}
+                      onChange={(e) => {
+                        setUserFormData({ ...userFormData, email: e.target.value });
+                        if (validationErrors.email) {
+                          setValidationErrors({ ...validationErrors, email: "" });
+                        }
+                      }}
+                      className={validationErrors.email ? "border-red-500" : ""}
+                    />
+                    {validationErrors.email && (
+                      <p className="text-sm text-red-500">
+                        {validationErrors.email}
+                      </p>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="user_username">Username</Label>
+                    <Input
+                      id="user_username"
+                      placeholder="username"
+                      value={userFormData.username}
+                      onChange={(e) =>
+                        setUserFormData({
+                          ...userFormData,
+                          username: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="user_first_name">
+                      First Name <span className="text-red-500">*</span>
+                    </Label>
+                    <Input
+                      id="user_first_name"
+                      placeholder="John"
+                      value={userFormData.first_name}
+                      onChange={(e) => {
+                        setUserFormData({
+                          ...userFormData,
+                          first_name: e.target.value,
+                        });
+                        if (validationErrors.first_name) {
+                          setValidationErrors({
+                            ...validationErrors,
+                            first_name: "",
+                          });
+                        }
+                      }}
+                      className={
+                        validationErrors.first_name ? "border-red-500" : ""
+                      }
+                    />
+                    {validationErrors.first_name && (
+                      <p className="text-sm text-red-500">
+                        {validationErrors.first_name}
+                      </p>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="user_last_name">
+                      Last Name <span className="text-red-500">*</span>
+                    </Label>
+                    <Input
+                      id="user_last_name"
+                      placeholder="Doe"
+                      value={userFormData.last_name}
+                      onChange={(e) => {
+                        setUserFormData({
+                          ...userFormData,
+                          last_name: e.target.value,
+                        });
+                        if (validationErrors.last_name) {
+                          setValidationErrors({
+                            ...validationErrors,
+                            last_name: "",
+                          });
+                        }
+                      }}
+                      className={validationErrors.last_name ? "border-red-500" : ""}
+                    />
+                    {validationErrors.last_name && (
+                      <p className="text-sm text-red-500">
+                        {validationErrors.last_name}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="user_title">Title</Label>
+                    <Select
+                      value={userFormData.title}
+                      onValueChange={(value) =>
+                        setUserFormData({ ...userFormData, title: value })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select title" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Mr">Mr</SelectItem>
+                        <SelectItem value="Mrs">Mrs</SelectItem>
+                        <SelectItem value="Ms">Ms</SelectItem>
+                        <SelectItem value="Dr">Dr</SelectItem>
+                        <SelectItem value="Prof">Prof</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="user_phone_number">Phone Number</Label>
+                    <Input
+                      id="user_phone_number"
+                      type="tel"
+                      placeholder="+44 20 7946 0958"
+                      value={userFormData.phone_number}
+                      onChange={(e) => {
+                        setUserFormData({
+                          ...userFormData,
+                          phone_number: e.target.value,
+                        });
+                        if (validationErrors.phone_number) {
+                          setValidationErrors({
+                            ...validationErrors,
+                            phone_number: "",
+                          });
+                        }
+                      }}
+                      className={
+                        validationErrors.phone_number ? "border-red-500" : ""
+                      }
+                    />
+                    {validationErrors.phone_number && (
+                      <p className="text-sm text-red-500">
+                        {validationErrors.phone_number}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="user_password">
+                    Password <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="user_password"
+                    type="password"
+                    placeholder="Enter password"
+                    value={userFormData.password}
+                    onChange={(e) => {
+                      setUserFormData({
+                        ...userFormData,
+                        password: e.target.value,
+                      });
+                      if (validationErrors.password) {
+                        setValidationErrors({ ...validationErrors, password: "" });
+                      }
+                    }}
+                    className={validationErrors.password ? "border-red-500" : ""}
+                  />
+                  {validationErrors.password && (
+                    <p className="text-sm text-red-500">
+                      {validationErrors.password}
+                    </p>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    Password must be at least 8 characters long
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="user_bio">Bio</Label>
+                  <Textarea
+                    id="user_bio"
+                    placeholder="Brief description about the user"
+                    value={userFormData.bio}
+                    onChange={(e) =>
+                      setUserFormData({ ...userFormData, bio: e.target.value })
+                    }
+                    rows={3}
+                  />
+                </div>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="employee_id">Employee ID</Label>
@@ -1059,8 +1520,8 @@ const EmployeesPage = () => {
                     .map((emp) => {
                       const empName = emp.user
                         ? `${emp.user.first_name || ""} ${emp.user.last_name || ""}`.trim() ||
-                          emp.user.email ||
-                          "Unknown"
+                        emp.user.email ||
+                        "Unknown"
                         : "Unknown";
                       return (
                         <SelectItem key={emp.id} value={emp.id.toString()}>
@@ -1089,9 +1550,9 @@ const EmployeesPage = () => {
             </Button>
             <Button
               onClick={handleSubmitEmployee}
-              disabled={createEmployeeMutation.isPending}
+              disabled={createEmployeeMutation.isPending || createUserMutation.isPending}
             >
-              {createEmployeeMutation.isPending && (
+              {(createEmployeeMutation.isPending || createUserMutation.isPending) && (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               )}
               Create Employee
@@ -1341,8 +1802,8 @@ const EmployeesPage = () => {
                     .map((emp) => {
                       const empName = emp.user
                         ? `${emp.user.first_name || ""} ${emp.user.last_name || ""}`.trim() ||
-                          emp.user.email ||
-                          "Unknown"
+                        emp.user.email ||
+                        "Unknown"
                         : "Unknown";
                       return (
                         <SelectItem key={emp.id} value={emp.id.toString()}>
