@@ -1041,11 +1041,11 @@ const EmployeesPage = () => {
             <div className="space-y-2">
               <Label htmlFor="manager_id">Manager</Label>
               <Select
-                value={employeeFormData.manager_id}
+                value={employeeFormData.manager_id || "__none__"}
                 onValueChange={(value) =>
                   setEmployeeFormData({
                     ...employeeFormData,
-                    manager_id: value || "",
+                    manager_id: value === "__none__" ? "" : value,
                   })
                 }
               >
@@ -1053,7 +1053,7 @@ const EmployeesPage = () => {
                   <SelectValue placeholder="Select manager (optional)" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">No Manager</SelectItem>
+                  <SelectItem value="__none__">No Manager</SelectItem>
                   {employees
                     .filter((emp) => emp.id !== selectedEmployee?.id)
                     .map((emp) => {
@@ -1323,11 +1323,11 @@ const EmployeesPage = () => {
             <div className="space-y-2">
               <Label htmlFor="edit-manager_id">Manager</Label>
               <Select
-                value={employeeFormData.manager_id}
+                value={employeeFormData.manager_id || "__none__"}
                 onValueChange={(value) =>
                   setEmployeeFormData({
                     ...employeeFormData,
-                    manager_id: value || "",
+                    manager_id: value === "__none__" ? "" : value,
                   })
                 }
               >
@@ -1335,7 +1335,7 @@ const EmployeesPage = () => {
                   <SelectValue placeholder="Select manager (optional)" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">No Manager</SelectItem>
+                  <SelectItem value="__none__">No Manager</SelectItem>
                   {employees
                     .filter((emp) => emp.id !== selectedEmployee?.id)
                     .map((emp) => {
