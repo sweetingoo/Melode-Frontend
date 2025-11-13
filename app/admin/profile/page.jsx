@@ -59,7 +59,6 @@ import {
   useUploadFile,
 } from "@/hooks/useProfile";
 import CustomFieldRenderer from "@/components/CustomFieldRenderer";
-import DepartmentSelector from "@/components/DepartmentSelector";
 
 export default function ProfilePage() {
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
@@ -831,22 +830,6 @@ export default function ProfilePage() {
           </CardContent>
         </Card>
       )}
-
-      {/* Department Selector */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Building2 className="h-5 w-5" />
-            Department Context
-          </CardTitle>
-          <CardDescription>
-            Select your active department to view permissions and data in that context
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <DepartmentSelector variant="default" />
-        </CardContent>
-      </Card>
 
       <Tabs defaultValue="profile" className="space-y-6">
         <TabsList className="grid w-full grid-cols-4">

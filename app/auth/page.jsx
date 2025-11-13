@@ -34,6 +34,32 @@ const LoginPage = () => {
   // Use the login mutations from our custom hooks
   const loginMutation = useLogin();
 
+  // Check for role_id in URL params (from role selection page)
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const urlParams = new URLSearchParams(window.location.search);
+      const roleId = urlParams.get("role_id");
+      const email = urlParams.get("email");
+      
+      if (roleId && email) {
+        // Pre-fill email and attempt login with role_id
+        setFormData(prev => ({ ...prev, email: decodeURIComponent(email) }));
+        // Get password from localStorage if stored temporarily
+        const storedPassword = localStorage.getItem("pendingLoginPassword");
+        if (storedPassword) {
+          // Complete login with role_id
+          loginMutation.mutate({
+            email: decodeURIComponent(email),
+            password: storedPassword,
+            role_id: parseInt(roleId),
+          });
+          // Clear stored password
+          localStorage.removeItem("pendingLoginPassword");
+        }
+      }
+    }
+  }, []);
+
   // Redirect if already authenticated
   useEffect(() => {
     const isAuthenticated = apiUtils.isAuthenticated();
@@ -101,6 +127,12 @@ const LoginPage = () => {
       }
     }
 
+    // Store password temporarily if we might need it for role selection
+    // This is a security consideration - in production, consider using a temp token from backend
+    if (typeof window !== "undefined") {
+      localStorage.setItem("pendingLoginPassword", formData.password);
+    }
+
     // Call login mutation with all credentials
     const credentials = {
       email: formData.email,
@@ -124,11 +156,6 @@ const LoginPage = () => {
     toast.info("Microsoft login functionality");
   };
 
-  const handleBackToLogin = () => {
-    setRequiresMFA(false);
-    setTempToken(null);
-    setFormData(prev => ({ ...prev, mfa_token: "" }));
-  };
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
@@ -299,7 +326,10 @@ const LoginPage = () => {
                   <Button
                     type="button"
                     variant="ghost"
-                    onClick={handleBackToLogin}
+                    onClick={() => {
+                      setRequiresMFA(false);
+                      setFormData(prev => ({ ...prev, mfa_token: "" }));
+                    }}
                     className="text-sm text-muted-foreground hover:text-foreground"
                   >
                     ← Back to login

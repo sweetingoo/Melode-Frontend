@@ -12,15 +12,15 @@ export const departmentContextService = {
     }
   },
 
-  // Switch/validate active department
-  switchDepartment: async (departmentId) => {
+  // Switch/validate active role (previously department switching)
+  switchRole: async (roleId) => {
     try {
-      const response = await api.post("/profile/me/departments/switch", {
-        department_id: departmentId,
+      const response = await api.post("/profile/me/roles/switch", {
+        role_id: roleId,
       });
       return response.data || response;
     } catch (error) {
-      console.error("Switch department failed:", error);
+      console.error("Switch role failed:", error);
       throw error;
     }
   },

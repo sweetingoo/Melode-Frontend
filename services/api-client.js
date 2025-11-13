@@ -22,10 +22,10 @@ apiClient.interceptors.request.use(
         config.headers.Authorization = `Bearer ${token}`;
       }
 
-      // Add department context header if available
-      const activeDepartmentId = localStorage.getItem("activeDepartmentId");
-      if (activeDepartmentId) {
-        config.headers["X-Department-ID"] = activeDepartmentId;
+      // Add role context header if available (previously X-Department-ID)
+      const activeRoleId = localStorage.getItem("activeRoleId");
+      if (activeRoleId) {
+        config.headers["X-Role-ID"] = activeRoleId;
       }
     }
 
@@ -301,7 +301,36 @@ export const apiUtils = {
     return null;
   },
 
-  // Set active department ID
+  // Set active role ID (previously department ID)
+  setActiveRoleId: (roleId) => {
+    if (typeof window !== "undefined") {
+      if (roleId) {
+        localStorage.setItem("activeRoleId", roleId.toString());
+      } else {
+        localStorage.removeItem("activeRoleId");
+      }
+    }
+  },
+
+  // Get active role ID (previously department ID)
+  getActiveRoleId: () => {
+    if (typeof window !== "undefined") {
+      const roleId = localStorage.getItem("activeRoleId");
+      return roleId ? parseInt(roleId) : null;
+    }
+    return null;
+  },
+
+  // Clear active role (previously department)
+  clearActiveRole: () => {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("activeRoleId");
+      // Also clear legacy department ID for migration
+      localStorage.removeItem("activeDepartmentId");
+    }
+  },
+
+  // Legacy support - Set active department ID (for backward compatibility)
   setActiveDepartmentId: (departmentId) => {
     if (typeof window !== "undefined") {
       if (departmentId) {
@@ -312,7 +341,7 @@ export const apiUtils = {
     }
   },
 
-  // Get active department ID
+  // Legacy support - Get active department ID (for backward compatibility)
   getActiveDepartmentId: () => {
     if (typeof window !== "undefined") {
       const deptId = localStorage.getItem("activeDepartmentId");
@@ -321,7 +350,7 @@ export const apiUtils = {
     return null;
   },
 
-  // Clear active department
+  // Legacy support - Clear active department (for backward compatibility)
   clearActiveDepartment: () => {
     if (typeof window !== "undefined") {
       localStorage.removeItem("activeDepartmentId");

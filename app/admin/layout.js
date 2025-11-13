@@ -45,7 +45,6 @@ import {
   Images,
   MapPin,
   Building2,
-  Briefcase,
 } from "lucide-react";
 import { assets } from "../assets/assets";
 import Image from "next/image";
@@ -61,7 +60,7 @@ import {
 import { useTokenManager } from "@/hooks/useTokenManager";
 import { apiUtils } from "@/services/api-client";
 import AuthGuard from "@/components/AuthGuard";
-import DepartmentSelector from "@/components/DepartmentSelector";
+import RoleSelector from "@/components/RoleSelector";
 
 const menuItems = [
   {
@@ -77,9 +76,9 @@ const menuItems = [
     permission: "invitation:create", // Permission to create invitations
   },
   {
-    title: "Manage users",
+    title: "Manage employees",
     icon: Users,
-    url: "/admin/user-management",
+    url: "/admin/employee-management",
     permission: "users:read", // Permission to read users
   },
   {
@@ -119,12 +118,6 @@ const menuItems = [
     icon: Building2,
     url: "/admin/departments",
     permission: "departments:read", // Permission to read departments
-  },
-  {
-    title: "Employees",
-    icon: Briefcase,
-    url: "/admin/employees",
-    permission: "employees:read", // Permission to read employees
   },
 ];
 
@@ -426,6 +419,11 @@ export default function AdminLayout({ children }) {
             </SidebarContent>
 
             <SidebarFooter>
+              {/* Role Switcher - Before Profile */}
+              <div className="px-2 py-2 border-b">
+                <RoleSelector variant="compact" showLabel={false} />
+              </div>
+
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -514,13 +512,6 @@ export default function AdminLayout({ children }) {
                     <Link href="/admin/profile">Your Profile</Link>
                   </DropdownMenuItem>
 
-                  {/* Department Selector */}
-                  <div className="px-2 py-1.5 border-t border-b">
-                    <div className="text-xs text-muted-foreground mb-1.5 px-1">
-                      Department Context
-                    </div>
-                    <DepartmentSelector variant="compact" showLabel={false} />
-                  </div>
 
                   {/* Return to Original User - only show if hijacked */}
                   {typeof window !== "undefined" &&

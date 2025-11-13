@@ -369,7 +369,7 @@ const UserEditPage = () => {
 
     try {
       await deleteUserMutation.mutateAsync(transformedUser.id);
-      router.push("/admin/user-management");
+      router.push("/admin/employee-management");
     } catch (error) {
       console.error("Failed to delete user:", error);
     }
@@ -477,8 +477,8 @@ const UserEditPage = () => {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Edit User</h1>
-            <p className="text-muted-foreground mt-1">Loading user data...</p>
+            <h1 className="text-3xl font-bold tracking-tight">Edit Employee</h1>
+            <p className="text-muted-foreground mt-1">Loading employee data...</p>
           </div>
         </div>
         <div className="animate-pulse space-y-6">
@@ -500,9 +500,9 @@ const UserEditPage = () => {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Edit User</h1>
+            <h1 className="text-3xl font-bold tracking-tight">Edit Employee</h1>
             <p className="text-muted-foreground mt-1">
-              {is404Error ? "User not found" : "Error loading user"}
+              {is404Error ? "Employee not found" : "Error loading employee"}
             </p>
           </div>
         </div>
@@ -511,19 +511,19 @@ const UserEditPage = () => {
             <div className="text-center">
               <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
               <h3 className="text-lg font-semibold mb-2">
-                {is404Error ? "User not found" : "Error loading user"}
+                {is404Error ? "Employee not found" : "Error loading employee"}
               </h3>
               <p className="text-muted-foreground mb-4">
                 {is404Error
-                  ? "The user you're looking for doesn't exist in the system."
-                  : "There was an error loading the user data. Please try again."}
+                  ? "The employee you're looking for doesn't exist in the system."
+                  : "There was an error loading the employee data. Please try again."}
               </p>
               <div className="flex gap-2 justify-center">
                 <Button
-                  onClick={() => router.push("/admin/user-management")}
+                  onClick={() => router.push("/admin/employee-management")}
                   variant="outline"
                 >
-                  Back to User Management
+                  Back to Employee Management
                 </Button>
                 {!is404Error && (
                   <Button
@@ -547,7 +547,7 @@ const UserEditPage = () => {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Edit User</h1>
+            <h1 className="text-3xl font-bold tracking-tight">Edit Employee</h1>
             <p className="text-muted-foreground mt-1">
               {transformedUser.email}
             </p>
@@ -584,7 +584,7 @@ const UserEditPage = () => {
         <TabsContent value="basic" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>User Information</CardTitle>
+              <CardTitle>Employee Information</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -759,7 +759,7 @@ const UserEditPage = () => {
               <div className="space-y-4">
                 {userRoles.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
-                    No roles assigned to this user.
+                    No roles assigned to this employee.
                   </div>
                 ) : (
                   userRoles.map((role) => (
@@ -800,9 +800,9 @@ const UserEditPage = () => {
                             <AlertDialogTitle>Remove Role</AlertDialogTitle>
                             <AlertDialogDescription>
                               Are you sure you want to remove the "{role.name}"
-                              role from this user?
+                              role from this employee?
                               <br />
-                              <strong>User:</strong> {transformedUser.name} (
+                              <strong>Employee:</strong> {transformedUser.name} (
                               {transformedUser.email})
                             </AlertDialogDescription>
                           </AlertDialogHeader>
@@ -906,7 +906,7 @@ const UserEditPage = () => {
                             colSpan={3}
                             className="text-center py-8 text-muted-foreground"
                           >
-                            No permissions assigned to this user.
+                            No permissions assigned to this employee.
                           </TableCell>
                         </TableRow>
                       ) : (
@@ -1041,8 +1041,8 @@ const UserEditPage = () => {
                   </h3>
                   <p className="text-sm text-muted-foreground mb-4">
                     {transformedUser.isActive
-                      ? "User can log in and access the system"
-                      : "User cannot log in to the system"}
+                      ? "Employee can log in and access the system"
+                      : "Employee cannot log in to the system"}
                   </p>
                   {transformedUser.isActive ? (
                     <AlertDialog>
@@ -1236,18 +1236,18 @@ const UserEditPage = () => {
                       <Trash2 className="h-4 w-4" />
                       {deleteUserMutation.isPending
                         ? "Deleting..."
-                        : "Delete User Account"}
+                        : "Delete Employee Account"}
                     </Button>
                   </AlertDialogTrigger>
                   <AlertDialogContent>
                     <AlertDialogHeader>
-                      <AlertDialogTitle>Delete User Account</AlertDialogTitle>
+                      <AlertDialogTitle>Delete Employee Account</AlertDialogTitle>
                       <AlertDialogDescription>
-                        Are you sure you want to delete this user account? This
+                        Are you sure you want to delete this employee account? This
                         action cannot be undone and will permanently remove the
-                        user from the system.
+                        employee from the system.
                         <br />
-                        <strong>User:</strong> {transformedUser.name} (
+                        <strong>Employee:</strong> {transformedUser.name} (
                         {transformedUser.email})
                       </AlertDialogDescription>
                     </AlertDialogHeader>
@@ -1257,7 +1257,7 @@ const UserEditPage = () => {
                         onClick={handleDelete}
                         className="bg-red-600 hover:bg-red-700"
                       >
-                        Delete User Account
+                        Delete Employee Account
                       </AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>
@@ -1316,7 +1316,7 @@ const UserEditPage = () => {
                         <span className="text-sm font-medium text-yellow-800">Wildcard Permissions</span>
                       </div>
                       <p className="text-sm text-yellow-700">
-                        This user has wildcard direct permissions (*) - they have access to all permissions directly.
+                        This employee has wildcard direct permissions (*) - they have access to all permissions directly.
                       </p>
                     </div>
                   ) : filteredAssignedPermissions.length > 0 ? (
@@ -1455,7 +1455,7 @@ const UserEditPage = () => {
                         <span className="text-sm font-medium text-yellow-800">Wildcard Role Permissions</span>
                       </div>
                       <p className="text-sm text-yellow-700">
-                        This user has wildcard role permissions (*) - they have access to all permissions through their roles.
+                        This employee has wildcard role permissions (*) - they have access to all permissions through their roles.
                       </p>
                     </div>
                   </div>
@@ -1468,7 +1468,7 @@ const UserEditPage = () => {
                       <div className="space-y-2">
                         <AlertCircle className="h-8 w-8 mx-auto text-muted-foreground" />
                         <p className="font-medium">No Permission to Assign</p>
-                        <p className="text-sm">You don't have permission to assign any permissions to users.</p>
+                        <p className="text-sm">You don't have permission to assign any permissions to employees.</p>
                       </div>
                     ) : (
                       "No permissions found matching your search."
@@ -1488,12 +1488,12 @@ const UserEditPage = () => {
                   About Direct Permissions
                 </h4>
                 <p className="text-sm text-blue-700 mb-2">
-                  Direct permissions are assigned directly to the user, independent of their roles. 
+                  Direct permissions are assigned directly to the employee, independent of their roles. 
                   They provide granular access control for specific use cases.
                 </p>
                 <p className="text-sm text-blue-700">
                   <strong>Note:</strong> Permissions already assigned through roles are not shown here 
-                  to prevent conflicts. Only permissions not available through the user's current roles 
+                  to prevent conflicts. Only permissions not available through the employee's current roles 
                   can be assigned directly.
                 </p>
               </div>

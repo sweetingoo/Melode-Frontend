@@ -20,21 +20,24 @@ export const useUserDepartments = () => {
   });
 };
 
-// Switch department mutation
+// Switch role mutation (previously department switching)
 export const useSwitchDepartment = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (departmentId) => {
-      const response = await departmentContextService.switchDepartment(
-        departmentId
-      );
+    mutationFn: async (roleId) => {
+      const response = await departmentContextService.switchRole(roleId);
       return response;
     },
-    onSuccess: (data, departmentId) => {
-      // Store active department in localStorage
+    onSuccess: (data, roleId) => {
+      // Store active role ID in localStorage
       if (typeof window !== "undefined") {
-        localStorage.setItem("activeDepartmentId", departmentId.toString());
+        localStorage.setItem("activeRoleId", roleId.toString());
+        // Keep backward compatibility - also store as activeDepartmentId for migration period
+        // This can be removed after full migration
+        if (data.department?.id) {
+          localStorage.setItem("activeDepartmentId", data.department.id.toString());
+        }
       }
 
       // The API client interceptor will automatically pick up the new value from localStorage
@@ -48,26 +51,69 @@ export const useSwitchDepartment = () => {
       queryClient.invalidateQueries({ queryKey: ["profile"] });
       queryClient.invalidateQueries({ queryKey: ["permissions"] });
 
-      toast.success("Department switched successfully", {
+      toast.success("Role switched successfully", {
         description: `Now viewing as ${data.role?.display_name || data.role?.name || "member"} in ${data.department?.name || "department"}.`,
       });
     },
     onError: (error) => {
-      console.error("Switch department error:", error);
+      console.error("Switch role error:", error);
+      
+      // Handle 403 error when role switching is disabled
+      if (error?.response?.status === 403) {
+        const errorMessage =
+          error?.response?.data?.message ||
+          error?.response?.data?.detail ||
+          "Role switching is disabled. Please logout and login again to switch roles.";
+        toast.error("Role Switching Disabled", {
+          description: errorMessage,
+          duration: 5000,
+        });
+        return;
+      }
+      
       const errorMessage =
         error?.response?.data?.message ||
         error?.response?.data?.detail ||
-        "Failed to switch department";
-      toast.error("Failed to switch department", {
+        "Failed to switch role";
+      toast.error("Failed to switch role", {
         description: errorMessage,
       });
     },
   });
 };
 
-// Utility functions for department context
+// Utility functions for department context (now role-based)
 export const departmentContextUtils = {
-  // Get active department ID from localStorage
+  // Get active role ID from localStorage
+  getActiveRoleId: () => {
+    if (typeof window !== "undefined") {
+      const roleId = localStorage.getItem("activeRoleId");
+      return roleId ? parseInt(roleId) : null;
+    }
+    return null;
+  },
+
+  // Set active role ID in localStorage
+  setActiveRoleId: (roleId) => {
+    if (typeof window !== "undefined") {
+      if (roleId) {
+        localStorage.setItem("activeRoleId", roleId.toString());
+      } else {
+        localStorage.removeItem("activeRoleId");
+      }
+    }
+  },
+
+  // Clear active role
+  clearActiveRole: () => {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("activeRoleId");
+      // Also clear legacy department ID
+      localStorage.removeItem("activeDepartmentId");
+    }
+  },
+
+  // Legacy support - Get active department ID (for backward compatibility)
   getActiveDepartmentId: () => {
     if (typeof window !== "undefined") {
       const deptId = localStorage.getItem("activeDepartmentId");
@@ -76,7 +122,7 @@ export const departmentContextUtils = {
     return null;
   },
 
-  // Set active department ID in localStorage
+  // Legacy support - Set active department ID (for backward compatibility)
   setActiveDepartmentId: (departmentId) => {
     if (typeof window !== "undefined") {
       if (departmentId) {
@@ -87,7 +133,7 @@ export const departmentContextUtils = {
     }
   },
 
-  // Clear active department
+  // Legacy support - Clear active department (for backward compatibility)
   clearActiveDepartment: () => {
     if (typeof window !== "undefined") {
       localStorage.removeItem("activeDepartmentId");

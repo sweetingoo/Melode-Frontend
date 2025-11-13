@@ -536,13 +536,13 @@ const Dashboard = () => {
                     </Link>
                   )}
                   {canManageUsers && (
-                    <Link href="/admin/user-management">
+                    <Link href="/admin/employee-management">
                       <Button
                         className="w-full justify-start cursor-pointer"
                         variant="outline"
                       >
                         <Users className="mr-2 h-4 w-4" />
-                        Manage Users
+                        Manage Employees
                       </Button>
                     </Link>
                   )}

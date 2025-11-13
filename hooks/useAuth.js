@@ -38,11 +38,39 @@ export const useLogin = () => {
         return; // Let the component handle MFA flow
       }
 
-      // Only handle successful login (no MFA required)
+      // Check if role selection is required - redirect to role selection page
+      if (data.available_roles && Array.isArray(data.available_roles) && data.available_roles.length > 0) {
+        // Store temporary token and available roles for role selection page
+        if (typeof window !== "undefined") {
+          // Store a temporary token if provided (some backends might return a temp token)
+          if (data.temp_token) {
+            localStorage.setItem("tempAuthToken", data.temp_token);
+          }
+          // Store available roles
+          localStorage.setItem("availableRoles", JSON.stringify(data.available_roles));
+          // Store email for role selection page (get from request if not in response)
+          const requestEmail = data.email || "";
+          if (requestEmail) {
+            localStorage.setItem("pendingLoginEmail", requestEmail);
+          }
+        }
+        // Redirect to role selection page
+        if (typeof window !== "undefined") {
+          router.push("/auth/select-role");
+        }
+        return;
+      }
+
+      // Only handle successful login (no MFA or role selection required)
       // Store tokens
       apiUtils.setAuthToken(data.access_token);
       if (data.refresh_token) {
         apiUtils.setRefreshToken(data.refresh_token);
+      }
+
+      // Store selected role ID if provided
+      if (data.selected_role_id && typeof window !== "undefined") {
+        localStorage.setItem("activeRoleId", data.selected_role_id.toString());
       }
 
       // Invalidate and refetch user data
@@ -65,8 +93,30 @@ export const useLogin = () => {
 
       // Handle specific error cases
       if (error.response?.status === 400) {
+        const errorData = error.response.data;
+        const errorMessage = errorData?.detail || errorData?.message || "";
+        
+        // Check if role selection is required
+        if (errorData?.available_roles && Array.isArray(errorData.available_roles) && errorData.available_roles.length > 0) {
+          // Store available roles and redirect to role selection page
+          if (typeof window !== "undefined") {
+            localStorage.setItem("availableRoles", JSON.stringify(errorData.available_roles));
+            // Try to get email from the request if available
+            try {
+              const requestData = error.config?.data ? JSON.parse(error.config.data) : null;
+              const requestEmail = requestData?.email || null;
+              if (requestEmail) {
+                localStorage.setItem("pendingLoginEmail", requestEmail);
+              }
+            } catch (e) {
+              console.error("Error parsing request data:", e);
+            }
+            router.push("/auth/select-role");
+          }
+          return; // Don't show error toast
+        }
+        
         // Check if this is an MFA required error
-        const errorMessage = error.response.data?.detail || error.response.data?.message || "";
         if (errorMessage.toLowerCase().includes("mfa") || errorMessage.toLowerCase().includes("token required")) {
           // This should be handled by the component, not show an error
           console.log("MFA required - should be handled by component");
