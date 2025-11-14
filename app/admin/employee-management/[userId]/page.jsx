@@ -60,6 +60,7 @@ import {
   Trash2,
   Search,
   AlertCircle,
+  Building2,
 } from "lucide-react";
 import {
   useUser,
@@ -80,6 +81,14 @@ import {
 } from "@/hooks/useUsers";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useCurrentUser } from "@/hooks/useAuth";
+import {
+  useEmployeeAssignments,
+  useCreateAssignment,
+  useDeleteAssignment,
+} from "@/hooks/useAssignments";
+import { useDepartments } from "@/hooks/useDepartments";
+import { useQueryClient } from "@tanstack/react-query";
+import { userKeys } from "@/hooks/useUsers";
 
 const UserEditPage = () => {
   const params = useParams();
@@ -91,6 +100,15 @@ const UserEditPage = () => {
     useState(false);
   const [searchPermissionTerm, setSearchPermissionTerm] = useState("");
   const [selectedRoleId, setSelectedRoleId] = useState("");
+  const [isAssignDepartmentModalOpen, setIsAssignDepartmentModalOpen] =
+    useState(false);
+  const [isAddRoleToDepartmentModalOpen, setIsAddRoleToDepartmentModalOpen] =
+    useState(false);
+  const [selectedDepartmentId, setSelectedDepartmentId] = useState("");
+  const [selectedDepartmentForRole, setSelectedDepartmentForRole] =
+    useState(null);
+  const [selectedRoleForDepartment, setSelectedRoleForDepartment] =
+    useState("");
 
   const {
     data: userData,
@@ -113,10 +131,65 @@ const UserEditPage = () => {
   const assignRoleMutation = useAssignRole();
   const removeRoleMutation = useRemoveRole();
 
+  // Department and Assignment hooks
+  const { data: departmentsData, isLoading: departmentsLoading } =
+    useDepartments();
+  // Handle different response structures - could be array or object with departments property
+  const departments = React.useMemo(() => {
+    if (!departmentsData) return [];
+    if (Array.isArray(departmentsData)) return departmentsData;
+    if (
+      departmentsData.departments &&
+      Array.isArray(departmentsData.departments)
+    ) {
+      return departmentsData.departments;
+    }
+    return [];
+  }, [departmentsData]);
+  const {
+    data: employeeAssignmentsData,
+    isLoading: assignmentsLoading,
+    refetch: refetchAssignments,
+  } = useEmployeeAssignments(userId);
+  const createAssignmentMutation = useCreateAssignment();
+  const deleteAssignmentMutation = useDeleteAssignment();
+  const queryClient = useQueryClient();
+
   // Transform user data
   const transformedUser = React.useMemo(() => {
     return userData ? userUtils.transformUser(userData) : null;
   }, [userData]);
+
+  // Group assignments by department
+  const assignmentsByDepartment = React.useMemo(() => {
+    if (!employeeAssignmentsData || !Array.isArray(employeeAssignmentsData)) {
+      return [];
+    }
+
+    // Group assignments by department_id
+    const grouped = {};
+    employeeAssignmentsData.forEach((assignment) => {
+      const deptId = assignment.department_id || assignment.department?.id;
+      if (!grouped[deptId]) {
+        grouped[deptId] = {
+          department: assignment.department || {
+            id: deptId,
+            name: assignment.department_name || "Unknown Department",
+            code: assignment.department_code || "",
+          },
+          roles: [],
+        };
+      }
+      if (assignment.role) {
+        grouped[deptId].roles.push({
+          ...assignment.role,
+          assignment_id: assignment.assignment_id || assignment.id,
+        });
+      }
+    });
+
+    return Object.values(grouped);
+  }, [employeeAssignmentsData]);
 
   const [formData, setFormData] = useState({
     email: "",
@@ -162,63 +235,100 @@ const UserEditPage = () => {
   }, [rolesData]);
 
   // Get all permissions from API
-  const { data: allPermissionsData, isLoading: permissionsLoading } = usePermissions();
-  
+  const { data: allPermissionsData, isLoading: permissionsLoading } =
+    usePermissions();
+
   // Get current user (admin) data to check what permissions they can assign
-  const { data: currentUserData, isLoading: currentUserLoading } = useCurrentUser();
-  
+  const { data: currentUserData, isLoading: currentUserLoading } =
+    useCurrentUser();
+
   // Get current user's permissions to determine what they can assign
   const currentUserPermissions = currentUserData?.permissions || [];
-  const currentUserDirectPermissions = currentUserData?.direct_permissions || [];
-  
+  const currentUserDirectPermissions =
+    currentUserData?.direct_permissions || [];
+
   // Check if current user has wildcard permissions
   const currentUserHasWildcardPermissions = React.useMemo(() => {
-    const rolePermissions = currentUserPermissions.some(p => 
-      p === '*' || p.id === '*' || p.permission_id === '*' || 
-      (typeof p === 'object' && (p.permission === '*' || p.name === '*'))
+    const rolePermissions = currentUserPermissions.some(
+      (p) =>
+        p === "*" ||
+        p.id === "*" ||
+        p.permission_id === "*" ||
+        (typeof p === "object" && (p.permission === "*" || p.name === "*"))
     );
-    const directPermissions = currentUserDirectPermissions.some(p => 
-      p === '*' || p.id === '*' || p.permission_id === '*' || 
-      (typeof p === 'object' && (p.permission === '*' || p.name === '*'))
+    const directPermissions = currentUserDirectPermissions.some(
+      (p) =>
+        p === "*" ||
+        p.id === "*" ||
+        p.permission_id === "*" ||
+        (typeof p === "object" && (p.permission === "*" || p.name === "*"))
     );
     return { rolePermissions, directPermissions };
   }, [currentUserPermissions, currentUserDirectPermissions]);
-  
+
   // Get current user's permission IDs (what they can assign)
   const currentUserPermissionIds = React.useMemo(() => {
     // If current user has wildcard permissions, they can assign all permissions
-    if (currentUserHasWildcardPermissions.rolePermissions || currentUserHasWildcardPermissions.directPermissions) {
-      console.log('Current user has wildcard permissions - can assign all permissions');
-      return allPermissionsData?.map(p => p.id) || [];
+    if (
+      currentUserHasWildcardPermissions.rolePermissions ||
+      currentUserHasWildcardPermissions.directPermissions
+    ) {
+      console.log(
+        "Current user has wildcard permissions - can assign all permissions"
+      );
+      return allPermissionsData?.map((p) => p.id) || [];
     }
-    
+
     // Otherwise, get their specific permission IDs
-    const roleIds = currentUserPermissions.map(p => 
-      p.id || p.permission_id || (typeof p === 'object' && p.permission?.id) || (typeof p === 'string' ? parseInt(p) : null)
-    ).filter(Boolean);
-    
-    const directIds = currentUserDirectPermissions.map(p => 
-      p.id || p.permission_id || (typeof p === 'object' && p.permission?.id) || (typeof p === 'string' ? parseInt(p) : null)
-    ).filter(Boolean);
-    
+    const roleIds = currentUserPermissions
+      .map(
+        (p) =>
+          p.id ||
+          p.permission_id ||
+          (typeof p === "object" && p.permission?.id) ||
+          (typeof p === "string" ? parseInt(p) : null)
+      )
+      .filter(Boolean);
+
+    const directIds = currentUserDirectPermissions
+      .map(
+        (p) =>
+          p.id ||
+          p.permission_id ||
+          (typeof p === "object" && p.permission?.id) ||
+          (typeof p === "string" ? parseInt(p) : null)
+      )
+      .filter(Boolean);
+
     // Combine and deduplicate
     const allIds = [...new Set([...roleIds, ...directIds])];
-    console.log('Current user permission IDs (can assign):', allIds);
+    console.log("Current user permission IDs (can assign):", allIds);
     return allIds;
-  }, [currentUserPermissions, currentUserDirectPermissions, currentUserHasWildcardPermissions, allPermissionsData]);
-  
+  }, [
+    currentUserPermissions,
+    currentUserDirectPermissions,
+    currentUserHasWildcardPermissions,
+    allPermissionsData,
+  ]);
+
   // Check if user has wildcard permissions (e.g., superuser with "*")
   const hasWildcardPermissions = React.useMemo(() => {
-    const rolePermissions = userPermissions.some(p => 
-      p === '*' || p.id === '*' || p.permission_id === '*' || 
-      (typeof p === 'object' && (p.permission === '*' || p.name === '*'))
+    const rolePermissions = userPermissions.some(
+      (p) =>
+        p === "*" ||
+        p.id === "*" ||
+        p.permission_id === "*" ||
+        (typeof p === "object" && (p.permission === "*" || p.name === "*"))
     );
-    const directPermissions = userDirectPermissions.some(p => 
-      p === '*' || p.id === '*' || p.permission_id === '*' || 
-      (typeof p === 'object' && (p.permission === '*' || p.name === '*'))
+    const directPermissions = userDirectPermissions.some(
+      (p) =>
+        p === "*" ||
+        p.id === "*" ||
+        p.permission_id === "*" ||
+        (typeof p === "object" && (p.permission === "*" || p.name === "*"))
     );
-    console.log('Has wildcard role permissions:', rolePermissions);
-    console.log('Has wildcard direct permissions:', directPermissions);
+    console.log("Has wildcard role permissions:", rolePermissions);
+    console.log("Has wildcard direct permissions:", directPermissions);
     return { rolePermissions, directPermissions };
   }, [userPermissions, userDirectPermissions]);
 
@@ -226,59 +336,92 @@ const UserEditPage = () => {
   const userRolePermissionIds = React.useMemo(() => {
     // If user has wildcard permissions, they have all permissions
     if (hasWildcardPermissions.rolePermissions) {
-      console.log('User has wildcard role permissions - treating as having all permissions');
-      return allPermissionsData?.map(p => p.id) || [];
+      console.log(
+        "User has wildcard role permissions - treating as having all permissions"
+      );
+      return allPermissionsData?.map((p) => p.id) || [];
     }
-    
-    const ids = userPermissions.map(p => {
-      // Try multiple ways to get the permission ID
-      return p.id || p.permission_id || (typeof p === 'object' && p.permission?.id) || (typeof p === 'string' ? parseInt(p) : null);
-    }).filter(Boolean);
-    console.log('User role permission IDs:', ids);
-    console.log('User permissions data:', userPermissions);
+
+    const ids = userPermissions
+      .map((p) => {
+        // Try multiple ways to get the permission ID
+        return (
+          p.id ||
+          p.permission_id ||
+          (typeof p === "object" && p.permission?.id) ||
+          (typeof p === "string" ? parseInt(p) : null)
+        );
+      })
+      .filter(Boolean);
+    console.log("User role permission IDs:", ids);
+    console.log("User permissions data:", userPermissions);
     return ids;
-  }, [userPermissions, hasWildcardPermissions.rolePermissions, allPermissionsData]);
+  }, [
+    userPermissions,
+    hasWildcardPermissions.rolePermissions,
+    allPermissionsData,
+  ]);
 
   // Get user's current direct permissions (to mark as already assigned)
   const userDirectPermissionIds = React.useMemo(() => {
     // If user has wildcard direct permissions, they have all permissions
     if (hasWildcardPermissions.directPermissions) {
-      console.log('User has wildcard direct permissions - treating as having all permissions');
-      return allPermissionsData?.map(p => p.id) || [];
+      console.log(
+        "User has wildcard direct permissions - treating as having all permissions"
+      );
+      return allPermissionsData?.map((p) => p.id) || [];
     }
-    
-    const ids = userDirectPermissions.map(p => {
-      // Try multiple ways to get the permission ID
-      return p.id || p.permission_id || (typeof p === 'object' && p.permission?.id) || (typeof p === 'string' ? parseInt(p) : null);
-    }).filter(Boolean);
-    console.log('User direct permission IDs:', ids);
-    console.log('User direct permissions data:', userDirectPermissions);
+
+    const ids = userDirectPermissions
+      .map((p) => {
+        // Try multiple ways to get the permission ID
+        return (
+          p.id ||
+          p.permission_id ||
+          (typeof p === "object" && p.permission?.id) ||
+          (typeof p === "string" ? parseInt(p) : null)
+        );
+      })
+      .filter(Boolean);
+    console.log("User direct permission IDs:", ids);
+    console.log("User direct permissions data:", userDirectPermissions);
     return ids;
-  }, [userDirectPermissions, hasWildcardPermissions.directPermissions, allPermissionsData]);
+  }, [
+    userDirectPermissions,
+    hasWildcardPermissions.directPermissions,
+    allPermissionsData,
+  ]);
 
   // Filter available permissions (exclude those already assigned through roles)
   // Only show permissions that the current user can actually assign
   // Split into assigned direct permissions and available to assign
   const { assignedPermissions, availablePermissions } = React.useMemo(() => {
-    if (!allPermissionsData || !currentUserPermissionIds) return { assignedPermissions: [], availablePermissions: [] };
-    
-    console.log('All permissions data:', allPermissionsData);
-    console.log('Current user can assign permission IDs:', currentUserPermissionIds);
-    console.log('Matching against direct permission IDs:', userDirectPermissionIds);
-    
+    if (!allPermissionsData || !currentUserPermissionIds)
+      return { assignedPermissions: [], availablePermissions: [] };
+
+    console.log("All permissions data:", allPermissionsData);
+    console.log(
+      "Current user can assign permission IDs:",
+      currentUserPermissionIds
+    );
+    console.log(
+      "Matching against direct permission IDs:",
+      userDirectPermissionIds
+    );
+
     // First filter to only permissions the current user can assign
-    const assignablePermissions = allPermissionsData.filter(permission => 
+    const assignablePermissions = allPermissionsData.filter((permission) =>
       currentUserPermissionIds.includes(permission.id)
     );
-    
-    console.log('Assignable permissions count:', assignablePermissions.length);
-    
+
+    console.log("Assignable permissions count:", assignablePermissions.length);
+
     const allMapped = assignablePermissions
-      .map(permission => {
+      .map((permission) => {
         const permId = permission.id;
         const isAdded = userDirectPermissionIds.includes(permId);
         const isFromRole = userRolePermissionIds.includes(permId);
-        
+
         return {
           id: permId,
           permission: permission.display_name || permission.name,
@@ -289,22 +432,27 @@ const UserEditPage = () => {
           isFromRole: isFromRole,
         };
       })
-      .filter(permission => !permission.isFromRole); // Exclude permissions already from roles
-    
-    const assigned = allMapped.filter(p => {
+      .filter((permission) => !permission.isFromRole); // Exclude permissions already from roles
+
+    const assigned = allMapped.filter((p) => {
       const isMatch = p.isAdded;
       if (isMatch) {
-        console.log('Found assigned direct permission:', p);
+        console.log("Found assigned direct permission:", p);
       }
       return isMatch;
     });
-    const available = allMapped.filter(p => !p.isAdded);
-    
-    console.log('Assigned direct permissions count:', assigned.length);
-    console.log('Available permissions count:', available.length);
-    
+    const available = allMapped.filter((p) => !p.isAdded);
+
+    console.log("Assigned direct permissions count:", assigned.length);
+    console.log("Available permissions count:", available.length);
+
     return { assignedPermissions: assigned, availablePermissions: available };
-  }, [allPermissionsData, currentUserPermissionIds, userRolePermissionIds, userDirectPermissionIds]);
+  }, [
+    allPermissionsData,
+    currentUserPermissionIds,
+    userRolePermissionIds,
+    userDirectPermissionIds,
+  ]);
 
   const handleInputChange = (field, value) => {
     setFormData((prev) => ({
@@ -383,7 +531,8 @@ const UserEditPage = () => {
       // Check if permission is already assigned through a role
       if (permission.isFromRole) {
         toast.error("Permission already assigned through role", {
-          description: "This permission is already available to the user through their assigned roles and cannot be assigned directly.",
+          description:
+            "This permission is already available to the user through their assigned roles and cannot be assigned directly.",
         });
         return;
       }
@@ -391,7 +540,8 @@ const UserEditPage = () => {
       // Check if permission is already assigned directly
       if (permission.isAdded) {
         toast.error("Permission already assigned", {
-          description: "This permission is already assigned directly to the user.",
+          description:
+            "This permission is already assigned directly to the user.",
         });
         return;
       }
@@ -457,6 +607,82 @@ const UserEditPage = () => {
     }
   };
 
+  const handleAssignDepartment = async () => {
+    if (!userId || !selectedDepartmentId || !selectedRoleForDepartment) return;
+
+    try {
+      await createAssignmentMutation.mutateAsync({
+        user_id: parseInt(userId),
+        department_id: parseInt(selectedDepartmentId),
+        role_id: parseInt(selectedRoleForDepartment),
+      });
+      setIsAssignDepartmentModalOpen(false);
+      setSelectedDepartmentId("");
+      setSelectedRoleForDepartment("");
+      refetchAssignments();
+      // Invalidate user query to refresh permissions
+      queryClient.invalidateQueries({ queryKey: userKeys.detail(userId) });
+    } catch (error) {
+      console.error("Failed to assign department:", error);
+    }
+  };
+
+  const handleAddRoleToDepartment = async () => {
+    if (!userId || !selectedDepartmentForRole || !selectedRoleForDepartment)
+      return;
+
+    try {
+      await createAssignmentMutation.mutateAsync({
+        user_id: parseInt(userId),
+        department_id: selectedDepartmentForRole.department.id,
+        role_id: parseInt(selectedRoleForDepartment),
+      });
+      setIsAddRoleToDepartmentModalOpen(false);
+      setSelectedDepartmentForRole(null);
+      setSelectedRoleForDepartment("");
+      refetchAssignments();
+      // Invalidate user query to refresh permissions
+      queryClient.invalidateQueries({ queryKey: userKeys.detail(userId) });
+    } catch (error) {
+      console.error("Failed to add role to department:", error);
+    }
+  };
+
+  const handleRemoveAssignment = async (departmentId, assignmentId) => {
+    if (!userId) return;
+
+    try {
+      await deleteAssignmentMutation.mutateAsync({
+        employeeId: userId,
+        departmentId: departmentId,
+      });
+      refetchAssignments();
+      // Invalidate user query to refresh permissions
+      queryClient.invalidateQueries({ queryKey: userKeys.detail(userId) });
+    } catch (error) {
+      console.error("Failed to remove assignment:", error);
+    }
+  };
+
+  // Get available departments (not already assigned)
+  const availableDepartments = React.useMemo(() => {
+    const assignedDeptIds = assignmentsByDepartment.map(
+      (dept) => dept.department.id
+    );
+    return departments.filter((dept) => !assignedDeptIds.includes(dept.id));
+  }, [departments, assignmentsByDepartment]);
+
+  // Get available roles for a department (not already assigned in that department)
+  const getAvailableRolesForDepartment = (departmentId) => {
+    const departmentAssignments = assignmentsByDepartment.find(
+      (dept) => dept.department.id === departmentId
+    );
+    const assignedRoleIds = (departmentAssignments?.roles || []).map(
+      (role) => role.id
+    );
+    return availableRoles.filter((role) => !assignedRoleIds.includes(role.id));
+  };
+
   // Filter permissions based on search term (for both assigned and available)
   const filterPermission = (permission) => {
     const searchLower = searchPermissionTerm.toLowerCase();
@@ -468,8 +694,10 @@ const UserEditPage = () => {
     );
   };
 
-  const filteredAssignedPermissions = assignedPermissions.filter(filterPermission);
-  const filteredAvailablePermissions = availablePermissions.filter(filterPermission);
+  const filteredAssignedPermissions =
+    assignedPermissions.filter(filterPermission);
+  const filteredAvailablePermissions =
+    availablePermissions.filter(filterPermission);
 
   // Loading state
   if (userLoading || currentUserLoading) {
@@ -478,7 +706,9 @@ const UserEditPage = () => {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Edit Employee</h1>
-            <p className="text-muted-foreground mt-1">Loading employee data...</p>
+            <p className="text-muted-foreground mt-1">
+              Loading employee data...
+            </p>
           </div>
         </div>
         <div className="animate-pulse space-y-6">
@@ -745,118 +975,150 @@ const UserEditPage = () => {
             </Card>
           </div>
 
-          {/* Assigned Roles */}
+          {/* Departments & Roles */}
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
-                <CardTitle>Assigned Roles</CardTitle>
-                <span className="text-sm text-muted-foreground">
-                  {userRoles.length} role(s)
-                </span>
+                <CardTitle>Departments & Roles</CardTitle>
+                <Button
+                  onClick={() => setIsAssignDepartmentModalOpen(true)}
+                  size="sm"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Assign Department
+                </Button>
               </div>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {userRoles.length === 0 ? (
+              <div className="space-y-6">
+                {assignmentsLoading ? (
                   <div className="text-center py-8 text-muted-foreground">
-                    No roles assigned to this employee.
+                    Loading assignments...
+                  </div>
+                ) : assignmentsByDepartment.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    No departments assigned to this employee.
                   </div>
                 ) : (
-                  userRoles.map((role) => (
+                  assignmentsByDepartment.map((deptGroup) => (
                     <div
-                      key={role.id}
-                      className="flex items-center justify-between p-4 border rounded-lg"
+                      key={deptGroup.department.id}
+                      className="border rounded-lg p-4 space-y-4"
                     >
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                          <Shield className="h-5 w-5 text-primary" />
-                        </div>
-                        <div>
-                          <h3 className="font-medium">{role.name}</h3>
-                          <p className="text-sm text-muted-foreground">
-                            {role.description || "No description available"}
-                          </p>
-                          <div className="flex items-center gap-1 mt-1">
-                            <Key className="h-3 w-3 text-muted-foreground" />
-                            <span className="text-xs text-muted-foreground">
-                              {role.permissions_count || 0} permissions
-                            </span>
+                      {/* Department Header */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-blue-100">
+                            <Building2 className="h-6 w-6 text-blue-600" />
+                          </div>
+                          <div>
+                            <h3 className="font-semibold text-lg">
+                              {deptGroup.department.name}
+                            </h3>
+                            {deptGroup.department.code && (
+                              <p className="text-sm text-muted-foreground">
+                                Code: {deptGroup.department.code}
+                              </p>
+                            )}
                           </div>
                         </div>
+                        <Button
+                          onClick={() => {
+                            setSelectedDepartmentForRole(deptGroup);
+                            setIsAddRoleToDepartmentModalOpen(true);
+                          }}
+                          variant="outline"
+                          size="sm"
+                        >
+                          <Plus className="h-4 w-4 mr-2" />
+                          Add Role
+                        </Button>
                       </div>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-red-600 hover:text-red-700"
-                            disabled={removeRoleMutation.isPending}
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Remove Role</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Are you sure you want to remove the "{role.name}"
-                              role from this employee?
-                              <br />
-                              <strong>Employee:</strong> {transformedUser.name} (
-                              {transformedUser.email})
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={() => handleRemoveRole(role.id)}
-                              className="bg-red-600 hover:bg-red-700"
+
+                      {/* Roles in this Department */}
+                      <div className="ml-16 space-y-3">
+                        {deptGroup.roles.length === 0 ? (
+                          <div className="text-sm text-muted-foreground py-2">
+                            No roles assigned in this department.
+                          </div>
+                        ) : (
+                          deptGroup.roles.map((role) => (
+                            <div
+                              key={role.assignment_id || role.id}
+                              className="flex items-center justify-between p-3 border rounded-lg bg-muted/30"
                             >
-                              Remove Role
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
+                              <div className="flex items-center gap-3">
+                                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+                                  <Shield className="h-4 w-4 text-primary" />
+                                </div>
+                                <div>
+                                  <h4 className="font-medium">
+                                    {role.display_name || role.name}
+                                  </h4>
+                                  <p className="text-xs text-muted-foreground">
+                                    {role.description || "No description"}
+                                  </p>
+                                  <div className="flex items-center gap-1 mt-1">
+                                    <Key className="h-3 w-3 text-muted-foreground" />
+                                    <span className="text-xs text-muted-foreground">
+                                      {role.permissions_count || 0} permissions
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="text-red-600 hover:text-red-700"
+                                    disabled={
+                                      deleteAssignmentMutation.isPending
+                                    }
+                                  >
+                                    <X className="h-4 w-4" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>
+                                      Remove Role
+                                    </AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Are you sure you want to remove the "
+                                      {role.display_name || role.name}" role
+                                      from {deptGroup.department.name}?
+                                      <br />
+                                      <strong>Employee:</strong>{" "}
+                                      {transformedUser.name} (
+                                      {transformedUser.email})
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>
+                                      Cancel
+                                    </AlertDialogCancel>
+                                    <AlertDialogAction
+                                      onClick={() =>
+                                        handleRemoveAssignment(
+                                          deptGroup.department.id,
+                                          role.assignment_id
+                                        )
+                                      }
+                                      className="bg-red-600 hover:bg-red-700"
+                                    >
+                                      Remove Role
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </div>
+                          ))
+                        )}
+                      </div>
                     </div>
                   ))
                 )}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Assign New Role */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Assign New Role</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-3">
-                <div className="flex-1">
-                  <select
-                    value={selectedRoleId || ""}
-                    onChange={(e) => {
-                      console.log("Role selected:", e.target.value);
-                      setSelectedRoleId(e.target.value);
-                    }}
-                    disabled={assignRoleMutation.isPending || rolesLoading}
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <option value="">Select a role...</option>
-                    {availableRoles.map((role) => (
-                      <option key={role.id} value={role.id}>
-                        {role.display_name || role.name} -{" "}
-                        {role.description || "No description"}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <Button
-                  onClick={handleAssignRole}
-                  disabled={!selectedRoleId || assignRoleMutation.isPending}
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  {assignRoleMutation.isPending ? "Assigning..." : "Assign"}
-                </Button>
               </div>
             </CardContent>
           </Card>
@@ -1241,11 +1503,13 @@ const UserEditPage = () => {
                   </AlertDialogTrigger>
                   <AlertDialogContent>
                     <AlertDialogHeader>
-                      <AlertDialogTitle>Delete Employee Account</AlertDialogTitle>
+                      <AlertDialogTitle>
+                        Delete Employee Account
+                      </AlertDialogTitle>
                       <AlertDialogDescription>
-                        Are you sure you want to delete this employee account? This
-                        action cannot be undone and will permanently remove the
-                        employee from the system.
+                        Are you sure you want to delete this employee account?
+                        This action cannot be undone and will permanently remove
+                        the employee from the system.
                         <br />
                         <strong>Employee:</strong> {transformedUser.name} (
                         {transformedUser.email})
@@ -1306,17 +1570,21 @@ const UserEditPage = () => {
                   <div className="flex items-center gap-2 px-2">
                     <Check className="h-4 w-4 text-green-600" />
                     <h3 className="text-sm font-semibold text-green-700">
-                      Currently Assigned Direct Permissions ({filteredAssignedPermissions.length})
+                      Currently Assigned Direct Permissions (
+                      {filteredAssignedPermissions.length})
                     </h3>
                   </div>
                   {hasWildcardPermissions.directPermissions ? (
                     <div className="border rounded-lg bg-yellow-50/50 p-4 text-center">
                       <div className="flex items-center justify-center gap-2 mb-2">
                         <Crown className="h-5 w-5 text-yellow-600" />
-                        <span className="text-sm font-medium text-yellow-800">Wildcard Permissions</span>
+                        <span className="text-sm font-medium text-yellow-800">
+                          Wildcard Permissions
+                        </span>
                       </div>
                       <p className="text-sm text-yellow-700">
-                        This employee has wildcard direct permissions (*) - they have access to all permissions directly.
+                        This employee has wildcard direct permissions (*) - they
+                        have access to all permissions directly.
                       </p>
                     </div>
                   ) : filteredAssignedPermissions.length > 0 ? (
@@ -1327,7 +1595,9 @@ const UserEditPage = () => {
                           className="flex items-center justify-between p-4 border-b last:border-b-0 hover:bg-green-50/80"
                         >
                           <div className="flex-1">
-                            <h3 className="font-medium">{permission.permission}</h3>
+                            <h3 className="font-medium">
+                              {permission.permission}
+                            </h3>
                             <p className="text-sm text-muted-foreground mt-1">
                               {permission.description}
                             </p>
@@ -1367,19 +1637,22 @@ const UserEditPage = () => {
                     </div>
                   ) : (
                     <div className="border rounded-lg bg-green-50/30 p-4 text-center text-sm text-muted-foreground">
-                      No direct permissions assigned. All permissions are from roles.
+                      No direct permissions assigned. All permissions are from
+                      roles.
                     </div>
                   )}
                 </div>
 
                 {/* Available Permissions Section */}
-                {!hasWildcardPermissions.rolePermissions && !hasWildcardPermissions.directPermissions && (
-                  filteredAvailablePermissions.length > 0 ? (
+                {!hasWildcardPermissions.rolePermissions &&
+                  !hasWildcardPermissions.directPermissions &&
+                  (filteredAvailablePermissions.length > 0 ? (
                     <div className="space-y-2">
                       <div className="flex items-center gap-2 px-2">
                         <Plus className="h-4 w-4 text-blue-600" />
                         <h3 className="text-sm font-semibold text-blue-700">
-                          Available to Assign ({filteredAvailablePermissions.length})
+                          Available to Assign (
+                          {filteredAvailablePermissions.length})
                         </h3>
                       </div>
                       <div className="border rounded-lg">
@@ -1389,7 +1662,9 @@ const UserEditPage = () => {
                             className="flex items-center justify-between p-4 border-b last:border-b-0 hover:bg-muted/50"
                           >
                             <div className="flex-1">
-                              <h3 className="font-medium">{permission.permission}</h3>
+                              <h3 className="font-medium">
+                                {permission.permission}
+                              </h3>
                               <p className="text-sm text-muted-foreground mt-1">
                                 {permission.description}
                               </p>
@@ -1415,7 +1690,9 @@ const UserEditPage = () => {
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => handleAddCustomPermission(permission.id)}
+                                onClick={() =>
+                                  handleAddCustomPermission(permission.id)
+                                }
                               >
                                 <Plus className="h-4 w-4 mr-1" />
                                 Add
@@ -1434,11 +1711,11 @@ const UserEditPage = () => {
                         </h3>
                       </div>
                       <div className="border rounded-lg bg-blue-50/30 p-4 text-center text-sm text-muted-foreground">
-                        No additional permissions available to assign. All permissions are already available through roles.
+                        No additional permissions available to assign. All
+                        permissions are already available through roles.
                       </div>
                     </div>
-                  )
-                )}
+                  ))}
 
                 {/* Wildcard Role Permissions Message */}
                 {hasWildcardPermissions.rolePermissions && (
@@ -1452,29 +1729,36 @@ const UserEditPage = () => {
                     <div className="border rounded-lg bg-yellow-50/50 p-4 text-center">
                       <div className="flex items-center justify-center gap-2 mb-2">
                         <Crown className="h-5 w-5 text-yellow-600" />
-                        <span className="text-sm font-medium text-yellow-800">Wildcard Role Permissions</span>
+                        <span className="text-sm font-medium text-yellow-800">
+                          Wildcard Role Permissions
+                        </span>
                       </div>
                       <p className="text-sm text-yellow-700">
-                        This employee has wildcard role permissions (*) - they have access to all permissions through their roles.
+                        This employee has wildcard role permissions (*) - they
+                        have access to all permissions through their roles.
                       </p>
                     </div>
                   </div>
                 )}
 
                 {/* No Results */}
-                {filteredAssignedPermissions.length === 0 && filteredAvailablePermissions.length === 0 && (
-                  <div className="p-8 text-center text-muted-foreground border rounded-lg">
-                    {currentUserPermissionIds.length === 0 ? (
-                      <div className="space-y-2">
-                        <AlertCircle className="h-8 w-8 mx-auto text-muted-foreground" />
-                        <p className="font-medium">No Permission to Assign</p>
-                        <p className="text-sm">You don't have permission to assign any permissions to employees.</p>
-                      </div>
-                    ) : (
-                      "No permissions found matching your search."
-                    )}
-                  </div>
-                )}
+                {filteredAssignedPermissions.length === 0 &&
+                  filteredAvailablePermissions.length === 0 && (
+                    <div className="p-8 text-center text-muted-foreground border rounded-lg">
+                      {currentUserPermissionIds.length === 0 ? (
+                        <div className="space-y-2">
+                          <AlertCircle className="h-8 w-8 mx-auto text-muted-foreground" />
+                          <p className="font-medium">No Permission to Assign</p>
+                          <p className="text-sm">
+                            You don't have permission to assign any permissions
+                            to employees.
+                          </p>
+                        </div>
+                      ) : (
+                        "No permissions found matching your search."
+                      )}
+                    </div>
+                  )}
               </>
             )}
           </div>
@@ -1488,12 +1772,14 @@ const UserEditPage = () => {
                   About Direct Permissions
                 </h4>
                 <p className="text-sm text-blue-700 mb-2">
-                  Direct permissions are assigned directly to the employee, independent of their roles. 
-                  They provide granular access control for specific use cases.
+                  Direct permissions are assigned directly to the employee,
+                  independent of their roles. They provide granular access
+                  control for specific use cases.
                 </p>
                 <p className="text-sm text-blue-700">
-                  <strong>Note:</strong> Permissions already assigned through roles are not shown here 
-                  to prevent conflicts. Only permissions not available through the employee's current roles 
+                  <strong>Note:</strong> Permissions already assigned through
+                  roles are not shown here to prevent conflicts. Only
+                  permissions not available through the employee's current roles
                   can be assigned directly.
                 </p>
               </div>
@@ -1506,6 +1792,152 @@ const UserEditPage = () => {
               onClick={() => setIsCustomPermissionModalOpen(false)}
             >
               Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Assign Department Modal */}
+      <Dialog
+        open={isAssignDepartmentModalOpen}
+        onOpenChange={setIsAssignDepartmentModalOpen}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Assign Department & Role</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="department">Department</Label>
+              <Select
+                value={selectedDepartmentId}
+                onValueChange={setSelectedDepartmentId}
+                disabled={
+                  departmentsLoading || createAssignmentMutation.isPending
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a department..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableDepartments.map((dept) => (
+                    <SelectItem key={dept.id} value={dept.id.toString()}>
+                      {dept.name} {dept.code && `(${dept.code})`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="role">Role</Label>
+              <Select
+                value={selectedRoleForDepartment}
+                onValueChange={setSelectedRoleForDepartment}
+                disabled={
+                  !selectedDepartmentId ||
+                  rolesLoading ||
+                  createAssignmentMutation.isPending
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a role..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableRoles.map((role) => (
+                    <SelectItem key={role.id} value={role.id.toString()}>
+                      {role.display_name || role.name} -{" "}
+                      {role.description || "No description"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsAssignDepartmentModalOpen(false);
+                setSelectedDepartmentId("");
+                setSelectedRoleForDepartment("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleAssignDepartment}
+              disabled={
+                !selectedDepartmentId ||
+                !selectedRoleForDepartment ||
+                createAssignmentMutation.isPending
+              }
+            >
+              {createAssignmentMutation.isPending ? "Assigning..." : "Assign"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Role to Department Modal */}
+      <Dialog
+        open={isAddRoleToDepartmentModalOpen}
+        onOpenChange={setIsAddRoleToDepartmentModalOpen}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Add Role to {selectedDepartmentForRole?.department.name}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="role">Role</Label>
+              <Select
+                value={selectedRoleForDepartment}
+                onValueChange={setSelectedRoleForDepartment}
+                disabled={
+                  !selectedDepartmentForRole ||
+                  rolesLoading ||
+                  createAssignmentMutation.isPending
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a role..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {selectedDepartmentForRole &&
+                    getAvailableRolesForDepartment(
+                      selectedDepartmentForRole.department.id
+                    ).map((role) => (
+                      <SelectItem key={role.id} value={role.id.toString()}>
+                        {role.display_name || role.name} -{" "}
+                        {role.description || "No description"}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsAddRoleToDepartmentModalOpen(false);
+                setSelectedDepartmentForRole(null);
+                setSelectedRoleForDepartment("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleAddRoleToDepartment}
+              disabled={
+                !selectedDepartmentForRole ||
+                !selectedRoleForDepartment ||
+                createAssignmentMutation.isPending
+              }
+            >
+              {createAssignmentMutation.isPending ? "Adding..." : "Add Role"}
             </Button>
           </DialogFooter>
         </DialogContent>

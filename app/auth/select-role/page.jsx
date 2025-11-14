@@ -12,11 +12,13 @@ import { assets } from "../../assets/assets";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { useLogin } from "@/hooks/useAuth";
 import { apiUtils } from "@/services/api-client";
+import { departmentContextService } from "@/services/departmentContext";
 
 const SelectRolePage = () => {
   const router = useRouter();
-  const [selectedRoleId, setSelectedRoleId] = useState("");
-  const [availableRoles, setAvailableRoles] = useState([]);
+  const [selectedAssignmentId, setSelectedAssignmentId] = useState("");
+  const [availableAssignments, setAvailableAssignments] = useState([]);
+  const [assignmentsByDepartment, setAssignmentsByDepartment] = useState([]);
   const [pendingEmail, setPendingEmail] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const loginMutation = useLogin();
@@ -28,34 +30,163 @@ const SelectRolePage = () => {
       return;
     }
 
-    // Get available roles from localStorage
-    const storedRoles = typeof window !== "undefined" ? localStorage.getItem("availableRoles") : null;
-    const storedEmail = typeof window !== "undefined" ? localStorage.getItem("pendingLoginEmail") : null;
+    // Get available assignments from localStorage (preferred) or availableRoles (backward compatibility)
+    const storedAssignments =
+      typeof window !== "undefined"
+        ? localStorage.getItem("availableAssignments")
+        : null;
+    const storedRoles =
+      typeof window !== "undefined"
+        ? localStorage.getItem("availableRoles")
+        : null;
+    const storedEmail =
+      typeof window !== "undefined"
+        ? localStorage.getItem("pendingLoginEmail")
+        : null;
 
-    if (!storedRoles) {
-      toast.error("No roles available", {
-        description: "Please login again",
+    const needsFetch =
+      typeof window !== "undefined"
+        ? localStorage.getItem("needsAssignmentFetch") === "true"
+        : false;
+
+    // If we have a token and need to fetch assignments, do it now
+    if (
+      needsFetch &&
+      apiUtils.isAuthenticated() &&
+      !storedAssignments &&
+      !storedRoles
+    ) {
+      const fetchAssignments = async () => {
+        try {
+          setIsLoading(true);
+          const response = await departmentContextService.getUserDepartments();
+          const departments = response?.departments || [];
+
+          // Convert departments format to assignments format
+          const assignments = departments.map((dept) => ({
+            assignment_id: dept.assignment_id,
+            role_id: dept.role?.id,
+            role_name: dept.role?.name,
+            role_display_name: dept.role?.display_name || dept.role?.name,
+            department_id: dept.department?.id,
+            department_name: dept.department?.name,
+          }));
+
+          if (assignments.length > 0) {
+            setAvailableAssignments(assignments);
+            localStorage.setItem(
+              "availableAssignments",
+              JSON.stringify(assignments)
+            );
+            localStorage.removeItem("needsAssignmentFetch");
+
+            // Group assignments by department
+            const grouped = {};
+            assignments.forEach((assignment) => {
+              const deptId = assignment.department_id;
+              const deptName =
+                assignment.department_name || "Unknown Department";
+
+              if (!grouped[deptId]) {
+                grouped[deptId] = {
+                  department_id: deptId,
+                  department_name: deptName,
+                  assignments: [],
+                };
+              }
+
+              grouped[deptId].assignments.push(assignment);
+            });
+
+            setAssignmentsByDepartment(Object.values(grouped));
+            setIsLoading(false);
+          } else {
+            throw new Error("No assignments found");
+          }
+        } catch (error) {
+          console.error("Error fetching assignments:", error);
+          toast.error("Failed to load assignments", {
+            description: "Please try logging in again",
+          });
+          setIsLoading(false);
+          setTimeout(() => {
+            router.push("/auth");
+          }, 2000);
+        }
+      };
+
+      fetchAssignments();
+      return;
+    }
+
+    if (!storedAssignments && !storedRoles && !needsFetch) {
+      // If no assignments found and we don't need to fetch, show error
+      console.warn(
+        "No assignments found in localStorage. This might indicate the API didn't include assignments in the error response."
+      );
+      toast.error("Assignment selection required", {
+        description: "Please contact support or try logging in again",
       });
-      router.push("/auth");
+      // Still allow user to go back to login
+      setTimeout(() => {
+        router.push("/auth");
+      }, 2000);
       return;
     }
 
     try {
-      const roles = JSON.parse(storedRoles);
-      setAvailableRoles(roles);
+      let assignments = [];
+
+      // Try to parse assignments first (new format)
+      if (storedAssignments) {
+        assignments = JSON.parse(storedAssignments);
+      } else if (storedRoles) {
+        // Backward compatibility: convert roles to assignments format
+        const roles = JSON.parse(storedRoles);
+        assignments = roles.map((role) => ({
+          assignment_id: role.assignment_id || role.id,
+          role_id: role.role_id || role.id,
+          role_name: role.role_name || role.name,
+          role_display_name:
+            role.role_display_name || role.display_name || role.name,
+          department_id: role.department_id,
+          department_name: role.department_name,
+        }));
+      }
+
+      setAvailableAssignments(assignments);
       setPendingEmail(storedEmail || "");
+
+      // Group assignments by department
+      const grouped = {};
+      assignments.forEach((assignment) => {
+        const deptId = assignment.department_id;
+        const deptName = assignment.department_name || "Unknown Department";
+
+        if (!grouped[deptId]) {
+          grouped[deptId] = {
+            department_id: deptId,
+            department_name: deptName,
+            assignments: [],
+          };
+        }
+
+        grouped[deptId].assignments.push(assignment);
+      });
+
+      setAssignmentsByDepartment(Object.values(grouped));
       setIsLoading(false);
     } catch (error) {
-      console.error("Error parsing available roles:", error);
-      toast.error("Invalid role data", {
+      console.error("Error parsing available assignments:", error);
+      toast.error("Invalid assignment data", {
         description: "Please login again",
       });
       router.push("/auth");
     }
   }, [router]);
 
-  const handleRoleSelect = (roleId) => {
-    setSelectedRoleId(roleId);
+  const handleAssignmentSelect = (assignmentId) => {
+    setSelectedAssignmentId(assignmentId);
   };
 
   const handleSubmit = async (e) => {
@@ -64,7 +195,7 @@ const SelectRolePage = () => {
       e.stopPropagation();
     }
 
-    if (!selectedRoleId) {
+    if (!selectedAssignmentId) {
       toast.error("Please select a role");
       return;
     }
@@ -79,14 +210,18 @@ const SelectRolePage = () => {
     }
 
     // Get stored password from localStorage
-    const storedPassword = typeof window !== "undefined" ? localStorage.getItem("pendingLoginPassword") : null;
-    
+    const storedPassword =
+      typeof window !== "undefined"
+        ? localStorage.getItem("pendingLoginPassword")
+        : null;
+
     if (!storedPassword) {
       toast.error("Session expired", {
         description: "Please login again",
       });
       // Clear stored data
       if (typeof window !== "undefined") {
+        localStorage.removeItem("availableAssignments");
         localStorage.removeItem("availableRoles");
         localStorage.removeItem("pendingLoginEmail");
         localStorage.removeItem("tempAuthToken");
@@ -95,11 +230,11 @@ const SelectRolePage = () => {
       return;
     }
 
-    // Call login with email, password, and selected role_id
+    // Call login with email, password, and selected assignment_id
     const credentials = {
       email: email,
       password: storedPassword,
-      role_id: parseInt(selectedRoleId),
+      assignment_id: parseInt(selectedAssignmentId),
     };
 
     loginMutation.mutate(credentials);
@@ -108,6 +243,7 @@ const SelectRolePage = () => {
   const handleBack = () => {
     // Clear stored data
     if (typeof window !== "undefined") {
+      localStorage.removeItem("availableAssignments");
       localStorage.removeItem("availableRoles");
       localStorage.removeItem("pendingLoginEmail");
       localStorage.removeItem("tempAuthToken");
@@ -121,6 +257,7 @@ const SelectRolePage = () => {
     if (loginMutation.isSuccess && loginMutation.data) {
       // Clear stored data
       if (typeof window !== "undefined") {
+        localStorage.removeItem("availableAssignments");
         localStorage.removeItem("availableRoles");
         localStorage.removeItem("pendingLoginEmail");
         localStorage.removeItem("tempAuthToken");
@@ -146,7 +283,9 @@ const SelectRolePage = () => {
     );
   }
 
-  const selectedRole = availableRoles.find((role) => role.id === parseInt(selectedRoleId));
+  const selectedAssignment = availableAssignments.find(
+    (assignment) => assignment.assignment_id === parseInt(selectedAssignmentId)
+  );
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
@@ -190,56 +329,75 @@ const SelectRolePage = () => {
 
           <CardContent className="space-y-6">
             <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Role Selection */}
-              <div className="space-y-3">
-                {availableRoles.map((role) => {
-                  const isSelected = selectedRoleId === role.id.toString();
-                  return (
-                    <button
-                      key={role.id}
-                      type="button"
-                      onClick={() => handleRoleSelect(role.id.toString())}
-                      className={`w-full p-4 rounded-lg border-2 transition-all text-left ${
-                        isSelected
-                          ? "border-primary bg-primary/10"
-                          : "border-border hover:border-primary/50 hover:bg-muted/50"
-                      }`}
-                    >
-                      <div className="flex items-start gap-3">
-                        <div
-                          className={`mt-1 h-5 w-5 rounded-full border-2 flex items-center justify-center ${
-                            isSelected
-                              ? "border-primary bg-primary"
-                              : "border-muted-foreground"
-                          }`}
-                        >
-                          {isSelected && (
-                            <div className="h-2 w-2 rounded-full bg-primary-foreground" />
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <Shield className="h-4 w-4 text-primary" />
-                            <span className="font-semibold text-foreground">
-                              {role.display_name || role.name}
-                            </span>
-                          </div>
-                          {role.department_name && (
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                              <Building2 className="h-3 w-3" />
-                              <span>{role.department_name}</span>
+              {/* Assignment Selection - Grouped by Department */}
+              <div className="space-y-4">
+                {assignmentsByDepartment.map((deptGroup) => (
+                  <div key={deptGroup.department_id} className="space-y-2">
+                    {/* Department Label */}
+                    <div className="flex items-center gap-2 px-2 py-1">
+                      <Building2 className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm font-semibold text-muted-foreground">
+                        {deptGroup.department_name}
+                      </span>
+                    </div>
+
+                    {/* Roles within Department */}
+                    <div className="space-y-2 pl-6">
+                      {deptGroup.assignments.map((assignment) => {
+                        const isSelected =
+                          selectedAssignmentId ===
+                          assignment.assignment_id.toString();
+                        return (
+                          <button
+                            key={assignment.assignment_id}
+                            type="button"
+                            onClick={() =>
+                              handleAssignmentSelect(
+                                assignment.assignment_id.toString()
+                              )
+                            }
+                            className={`w-full p-4 rounded-lg border-2 transition-all text-left ${
+                              isSelected
+                                ? "border-primary bg-primary/10"
+                                : "border-border hover:border-primary/50 hover:bg-muted/50"
+                            }`}
+                          >
+                            <div className="flex items-start gap-3">
+                              <div
+                                className={`mt-1 h-5 w-5 rounded-full border-2 flex items-center justify-center ${
+                                  isSelected
+                                    ? "border-primary bg-primary"
+                                    : "border-muted-foreground"
+                                }`}
+                              >
+                                {isSelected && (
+                                  <div className="h-2 w-2 rounded-full bg-primary-foreground" />
+                                )}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <Shield className="h-4 w-4 text-primary" />
+                                  <span className="font-semibold text-foreground">
+                                    {assignment.role_display_name ||
+                                      assignment.role_name ||
+                                      "Role"}
+                                  </span>
+                                </div>
+                                {assignment.role_name &&
+                                  assignment.role_name !==
+                                    assignment.role_display_name && (
+                                    <p className="text-xs text-muted-foreground">
+                                      {assignment.role_name}
+                                    </p>
+                                  )}
+                              </div>
                             </div>
-                          )}
-                          {role.description && (
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {role.description}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
 
               {/* Back Button */}
@@ -259,7 +417,7 @@ const SelectRolePage = () => {
               <Button
                 type="submit"
                 className="w-full h-11 bg-primary hover:bg-primary/90 text-primary-foreground font-medium transition-all duration-200 shadow-lg hover:shadow-xl"
-                disabled={!selectedRoleId || loginMutation.isPending}
+                disabled={!selectedAssignmentId || loginMutation.isPending}
               >
                 {loginMutation.isPending ? (
                   <div className="flex items-center gap-2">
@@ -282,4 +440,3 @@ const SelectRolePage = () => {
 };
 
 export default SelectRolePage;
-

@@ -22,10 +22,10 @@ apiClient.interceptors.request.use(
         config.headers.Authorization = `Bearer ${token}`;
       }
 
-      // Add role context header if available (previously X-Department-ID)
-      const activeRoleId = localStorage.getItem("activeRoleId");
-      if (activeRoleId) {
-        config.headers["X-Role-ID"] = activeRoleId;
+      // Add assignment context header (X-Assignment-ID)
+      const assignmentId = localStorage.getItem("assignment_id");
+      if (assignmentId) {
+        config.headers["X-Assignment-ID"] = assignmentId;
       }
     }
 

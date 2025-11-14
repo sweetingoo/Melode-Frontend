@@ -12,11 +12,11 @@ export const departmentContextService = {
     }
   },
 
-  // Switch/validate active role (previously department switching)
-  switchRole: async (roleId) => {
+  // Switch/validate active role using assignment_id
+  switchRole: async (assignmentId) => {
     try {
       const response = await api.post("/profile/me/roles/switch", {
-        role_id: roleId,
+        assignment_id: assignmentId,
       });
       return response.data || response;
     } catch (error) {

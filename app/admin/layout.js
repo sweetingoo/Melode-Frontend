@@ -26,6 +26,8 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -45,6 +47,8 @@ import {
   Images,
   MapPin,
   Building2,
+  Check,
+  Loader2,
 } from "lucide-react";
 import { assets } from "../assets/assets";
 import Image from "next/image";
@@ -60,7 +64,10 @@ import {
 import { useTokenManager } from "@/hooks/useTokenManager";
 import { apiUtils } from "@/services/api-client";
 import AuthGuard from "@/components/AuthGuard";
-import RoleSelector from "@/components/RoleSelector";
+import {
+  useUserDepartments,
+  useSwitchDepartment,
+} from "@/hooks/useDepartmentContext";
 
 const menuItems = [
   {
@@ -148,6 +155,11 @@ export default function AdminLayout({ children }) {
 
   // Initialize token manager
   const { sessionModal } = useTokenManager();
+
+  // Role switching hooks
+  const { data: departmentsData, isLoading: departmentsLoading } =
+    useUserDepartments();
+  const switchDepartmentMutation = useSwitchDepartment();
 
   // Client-side state to prevent hydration mismatch
   const [isClient, setIsClient] = React.useState(false);
@@ -307,6 +319,64 @@ export default function AdminLayout({ children }) {
     });
   }, [userPermissionNames, currentUserLoading]);
 
+  // Group assignments by department for role switcher
+  const assignments = departmentsData?.departments || [];
+
+  // Get current assignment ID from localStorage (preferred) or API response (fallback)
+  const currentAssignmentId = React.useMemo(() => {
+    if (typeof window !== "undefined") {
+      const storedAssignmentId = localStorage.getItem("assignment_id");
+      if (storedAssignmentId) {
+        return parseInt(storedAssignmentId);
+      }
+    }
+    // Fallback to API response
+    return departmentsData?.current_assignment_id;
+  }, [departmentsData?.current_assignment_id]);
+
+  const assignmentsByDepartment = React.useMemo(() => {
+    if (!assignments || !Array.isArray(assignments)) return [];
+
+    const grouped = {};
+    assignments.forEach((assignment) => {
+      const deptId = assignment.department?.id;
+      if (!deptId) return;
+
+      if (!grouped[deptId]) {
+        grouped[deptId] = {
+          department: assignment.department,
+          roles: [],
+        };
+      }
+
+      if (assignment.assignment_id && assignment.role) {
+        grouped[deptId].roles.push({
+          assignment_id: assignment.assignment_id,
+          role: assignment.role,
+          is_active: assignment.is_active,
+        });
+      }
+    });
+
+    return Object.values(grouped);
+  }, [assignments]);
+
+  // Find current assignment
+  const currentAssignment = assignments.find(
+    (a) => a.assignment_id === currentAssignmentId
+  );
+  const currentDepartment = currentAssignment?.department;
+  const currentRole = currentAssignment?.role;
+
+  // Handle role switch
+  const handleRoleSwitch = async (assignmentId) => {
+    try {
+      await switchDepartmentMutation.mutateAsync(assignmentId);
+    } catch (error) {
+      // Error is handled by the mutation's onError
+    }
+  };
+
   return (
     <AuthGuard>
       <SidebarProvider>
@@ -420,9 +490,86 @@ export default function AdminLayout({ children }) {
 
             <SidebarFooter>
               {/* Role Switcher - Before Profile */}
-              <div className="px-2 py-2 border-b">
-                <RoleSelector variant="compact" showLabel={false} />
-              </div>
+              {assignmentsByDepartment.length > 0 && (
+                <div className="px-2 py-2 border-b">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        className="w-full justify-start px-2 py-2 h-auto group-data-[collapsible=icon]:w-auto group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:justify-center"
+                        disabled={
+                          switchDepartmentMutation.isPending ||
+                          departmentsLoading
+                        }
+                      >
+                        <Building2 className="h-4 w-4 shrink-0" />
+                        <span className=" truncate min-w-0  block group-data-[collapsible=icon]:hidden">
+                          {currentDepartment?.name || "Select role"}
+                        </span>
+                        {currentRole && (
+                          <span className="text-xs flex-1 text-right text-muted-foreground  block group-data-[collapsible=icon]:hidden">
+                            {currentRole.display_name ||
+                              currentRole.name ||
+                              currentRole.role_name}
+                          </span>
+                        )}
+                        {switchDepartmentMutation.isPending && (
+                          <Loader2 className="ml-2 h-4 w-4 animate-spin shrink-0" />
+                        )}
+                        <ChevronDown className="ml-auto h-4 w-4 opacity-50 group-data-[collapsible=icon]:hidden" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent className="w-56" align="start">
+                      <DropdownMenuLabel>Switch Role</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      {assignmentsByDepartment.map((deptGroup) => (
+                        <div key={deptGroup.department.id}>
+                          <DropdownMenuLabel className="text-xs font-semibold text-muted-foreground px-2 py-1.5">
+                            {deptGroup.department.name}
+                          </DropdownMenuLabel>
+                          {deptGroup.roles.map((roleAssignment) => {
+                            const isActive =
+                              roleAssignment.assignment_id ===
+                              currentAssignmentId;
+                            return (
+                              <DropdownMenuItem
+                                key={roleAssignment.assignment_id}
+                                className={`cursor-pointer pl-6 ${
+                                  isActive ? "bg-accent" : ""
+                                }`}
+                                onClick={() =>
+                                  handleRoleSwitch(roleAssignment.assignment_id)
+                                }
+                                disabled={
+                                  switchDepartmentMutation.isPending || isActive
+                                }
+                              >
+                                <div className="flex items-center justify-between w-full">
+                                  <div className="flex items-center gap-2">
+                                    <Shield className="h-3 w-3 text-muted-foreground" />
+                                    <span className="text-sm">
+                                      {roleAssignment.role.display_name ||
+                                        roleAssignment.role.name ||
+                                        roleAssignment.role.role_name}
+                                    </span>
+                                  </div>
+                                  {isActive && (
+                                    <Check className="h-3 w-3 text-primary" />
+                                  )}
+                                </div>
+                              </DropdownMenuItem>
+                            );
+                          })}
+                          {assignmentsByDepartment.indexOf(deptGroup) <
+                            assignmentsByDepartment.length - 1 && (
+                            <DropdownMenuSeparator />
+                          )}
+                        </div>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              )}
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -511,7 +658,6 @@ export default function AdminLayout({ children }) {
                     <User className="mr-2 h-4 w-4" />
                     <Link href="/admin/profile">Your Profile</Link>
                   </DropdownMenuItem>
-
 
                   {/* Return to Original User - only show if hijacked */}
                   {typeof window !== "undefined" &&

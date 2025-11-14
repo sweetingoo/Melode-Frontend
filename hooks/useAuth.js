@@ -38,16 +38,57 @@ export const useLogin = () => {
         return; // Let the component handle MFA flow
       }
 
-      // Check if role selection is required - redirect to role selection page
-      if (data.available_roles && Array.isArray(data.available_roles) && data.available_roles.length > 0) {
-        // Store temporary token and available roles for role selection page
+      // Check if assignment selection is required - redirect to role selection page
+      // Check for available_assignments first (new format), then available_roles (backward compatibility)
+      // Also check if the message indicates multiple assignments
+      const errorMessage = data.detail || data.message || "";
+      const isMultipleAssignmentsMessage =
+        errorMessage.toLowerCase().includes("multiple") &&
+        (errorMessage.toLowerCase().includes("assignment") ||
+          errorMessage.toLowerCase().includes("role"));
+
+      const hasMultipleAssignments =
+        isMultipleAssignmentsMessage ||
+        (data.available_assignments &&
+          Array.isArray(data.available_assignments) &&
+          data.available_assignments.length > 1 &&
+          !data.selected_assignment_id) ||
+        (data.available_roles &&
+          Array.isArray(data.available_roles) &&
+          data.available_roles.length > 0 &&
+          !data.selected_assignment_id &&
+          !data.selected_role_id);
+
+      if (hasMultipleAssignments) {
+        // Store tokens if provided (even if we need to select assignment)
+        if (data.access_token) {
+          apiUtils.setAuthToken(data.access_token);
+          if (data.refresh_token) {
+            apiUtils.setRefreshToken(data.refresh_token);
+          }
+          // Set flag to fetch departments if assignments not in response
+          if (!data.available_assignments && !data.available_roles) {
+            localStorage.setItem("needsAssignmentFetch", "true");
+          }
+        }
+        // Store temporary token and available assignments/roles for role selection page
         if (typeof window !== "undefined") {
           // Store a temporary token if provided (some backends might return a temp token)
           if (data.temp_token) {
             localStorage.setItem("tempAuthToken", data.temp_token);
           }
-          // Store available roles
-          localStorage.setItem("availableRoles", JSON.stringify(data.available_roles));
+          // Store available assignments (preferred) or roles (backward compatibility)
+          if (data.available_assignments) {
+            localStorage.setItem(
+              "availableAssignments",
+              JSON.stringify(data.available_assignments)
+            );
+          } else if (data.available_roles) {
+            localStorage.setItem(
+              "availableRoles",
+              JSON.stringify(data.available_roles)
+            );
+          }
           // Store email for role selection page (get from request if not in response)
           const requestEmail = data.email || "";
           if (requestEmail) {
@@ -68,9 +109,23 @@ export const useLogin = () => {
         apiUtils.setRefreshToken(data.refresh_token);
       }
 
-      // Store selected role ID if provided
+      // Store selected assignment_id if provided (preferred)
+      if (data.selected_assignment_id && typeof window !== "undefined") {
+        localStorage.setItem(
+          "assignment_id",
+          data.selected_assignment_id.toString()
+        );
+      }
+      // Also store selected_role_id for backward compatibility
       if (data.selected_role_id && typeof window !== "undefined") {
         localStorage.setItem("activeRoleId", data.selected_role_id.toString());
+        // If no assignment_id was provided, use role_id as fallback
+        if (!data.selected_assignment_id) {
+          localStorage.setItem(
+            "assignment_id",
+            data.selected_role_id.toString()
+          );
+        }
       }
 
       // Invalidate and refetch user data
@@ -95,15 +150,77 @@ export const useLogin = () => {
       if (error.response?.status === 400) {
         const errorData = error.response.data;
         const errorMessage = errorData?.detail || errorData?.message || "";
-        
-        // Check if role selection is required
-        if (errorData?.available_roles && Array.isArray(errorData.available_roles) && errorData.available_roles.length > 0) {
-          // Store available roles and redirect to role selection page
+
+        // Check if the error message indicates multiple assignments are available
+        const isMultipleAssignmentsError =
+          errorMessage.toLowerCase().includes("multiple") &&
+          (errorMessage.toLowerCase().includes("assignment") ||
+            errorMessage.toLowerCase().includes("role"));
+
+        // Check if assignment selection is required
+        // Look for assignments in various possible fields (check nested structures too)
+        const availableAssignments =
+          errorData?.available_assignments ||
+          errorData?.assignments ||
+          errorData?.available_assignments_list ||
+          errorData?.data?.available_assignments ||
+          errorData?.data?.assignments;
+        const availableRoles =
+          errorData?.available_roles ||
+          errorData?.roles ||
+          errorData?.data?.available_roles ||
+          errorData?.data?.roles;
+
+        const hasMultipleAssignments =
+          isMultipleAssignmentsError ||
+          (availableAssignments &&
+            Array.isArray(availableAssignments) &&
+            availableAssignments.length > 0) ||
+          (availableRoles &&
+            Array.isArray(availableRoles) &&
+            availableRoles.length > 0);
+
+        if (hasMultipleAssignments || isMultipleAssignmentsError) {
+          // Store available assignments/roles and redirect to role selection page
           if (typeof window !== "undefined") {
-            localStorage.setItem("availableRoles", JSON.stringify(errorData.available_roles));
+            // Check if tokens are in the error response (some APIs return tokens even with 400)
+            const accessToken =
+              errorData?.access_token || errorData?.data?.access_token;
+            const refreshToken =
+              errorData?.refresh_token || errorData?.data?.refresh_token;
+
+            if (accessToken) {
+              // Store tokens so we can fetch departments
+              apiUtils.setAuthToken(accessToken);
+              if (refreshToken) {
+                apiUtils.setRefreshToken(refreshToken);
+              }
+              // Set a flag to fetch departments on the select-role page
+              localStorage.setItem("needsAssignmentFetch", "true");
+            }
+
+            if (availableAssignments && Array.isArray(availableAssignments)) {
+              localStorage.setItem(
+                "availableAssignments",
+                JSON.stringify(availableAssignments)
+              );
+            } else if (availableRoles && Array.isArray(availableRoles)) {
+              localStorage.setItem(
+                "availableRoles",
+                JSON.stringify(availableRoles)
+              );
+            } else if (isMultipleAssignmentsError) {
+              // If we detected the error message but don't have assignments,
+              // the select-role page will fetch them using the stored token
+              console.log(
+                "Multiple assignments error detected. Will fetch assignments from API."
+              );
+            }
             // Try to get email from the request if available
             try {
-              const requestData = error.config?.data ? JSON.parse(error.config.data) : null;
+              const requestData = error.config?.data
+                ? JSON.parse(error.config.data)
+                : null;
               const requestEmail = requestData?.email || null;
               if (requestEmail) {
                 localStorage.setItem("pendingLoginEmail", requestEmail);
@@ -115,9 +232,12 @@ export const useLogin = () => {
           }
           return; // Don't show error toast
         }
-        
+
         // Check if this is an MFA required error
-        if (errorMessage.toLowerCase().includes("mfa") || errorMessage.toLowerCase().includes("token required")) {
+        if (
+          errorMessage.toLowerCase().includes("mfa") ||
+          errorMessage.toLowerCase().includes("token required")
+        ) {
           // This should be handled by the component, not show an error
           console.log("MFA required - should be handled by component");
           console.log("Full error response:", error.response.data);
@@ -367,7 +487,7 @@ export const useSignup = () => {
         });
       } else if (error.response?.status === 422) {
         const errorData = error.response.data;
-        
+
         // Handle validation errors
         if (errorData?.detail && Array.isArray(errorData.detail)) {
           errorData.detail.forEach((errorItem) => {
@@ -393,22 +513,26 @@ export const useSignup = () => {
 // Get current user query
 export const useCurrentUser = () => {
   const isAuthenticated = apiUtils.isAuthenticated();
-  
+
   // Debug logging
-  console.log('useCurrentUser - isAuthenticated:', isAuthenticated);
-  
+  console.log("useCurrentUser - isAuthenticated:", isAuthenticated);
+
   return useQuery({
     queryKey: authKeys.currentUser(),
     queryFn: async () => {
-      console.log('useCurrentUser - Fetching user data...');
+      console.log("useCurrentUser - Fetching user data...");
       const response = await authService.getCurrentUser();
-      console.log('useCurrentUser - User data received:', response.data);
+      console.log("useCurrentUser - User data received:", response.data);
       return response.data;
     },
     enabled: isAuthenticated,
     staleTime: 5 * 60 * 1000, // 5 minutes
     retry: (failureCount, error) => {
-      console.log('useCurrentUser - Retry attempt:', failureCount, error?.response?.status);
+      console.log(
+        "useCurrentUser - Retry attempt:",
+        failureCount,
+        error?.response?.status
+      );
       // Don't retry on 401 (unauthorized)
       if (error?.response?.status === 401) {
         return false;
@@ -472,8 +596,14 @@ export const useHijackUser = () => {
     onSuccess: (data) => {
       // Get current user's tokens BEFORE storing hijacked tokens
       // This is the original user's tokens we need to restore later
-      const originalAuthToken = typeof window !== "undefined" ? localStorage.getItem("authToken") : null;
-      const originalRefreshToken = typeof window !== "undefined" ? localStorage.getItem("refreshToken") : null;
+      const originalAuthToken =
+        typeof window !== "undefined"
+          ? localStorage.getItem("authToken")
+          : null;
+      const originalRefreshToken =
+        typeof window !== "undefined"
+          ? localStorage.getItem("refreshToken")
+          : null;
 
       // Store the hijacked user tokens
       apiUtils.setAuthToken(data.access_token);
@@ -483,15 +613,18 @@ export const useHijackUser = () => {
 
       // Store hijack session info in localStorage for reference
       // IMPORTANT: Store the original user's tokens so we can restore them later
-      localStorage.setItem("hijackSession", JSON.stringify({
-        isHijacked: data.is_hijacked_session,
-        originalUser: data.original_user,
-        hijackedUser: data.hijacked_user,
-        hijackedAt: new Date().toISOString(),
-        // Store original user's tokens for restoration
-        originalAuthToken: originalAuthToken,
-        originalRefreshToken: originalRefreshToken,
-      }));
+      localStorage.setItem(
+        "hijackSession",
+        JSON.stringify({
+          isHijacked: data.is_hijacked_session,
+          originalUser: data.original_user,
+          hijackedUser: data.hijacked_user,
+          hijackedAt: new Date().toISOString(),
+          // Store original user's tokens for restoration
+          originalAuthToken: originalAuthToken,
+          originalRefreshToken: originalRefreshToken,
+        })
+      );
 
       // Invalidate and refetch user data
       queryClient.invalidateQueries({ queryKey: authKeys.currentUser() });
@@ -519,7 +652,8 @@ export const useHijackUser = () => {
         });
       } else {
         toast.error("Hijack Failed", {
-          description: error.response?.data?.message || "Failed to hijack user session",
+          description:
+            error.response?.data?.message || "Failed to hijack user session",
         });
       }
     },
@@ -562,7 +696,7 @@ export const useReturnToOriginalUser = () => {
       // Restore the original user's tokens
       const accessToken = data.access_token;
       const refreshToken = data.refresh_token;
-      
+
       if (accessToken) {
         apiUtils.setAuthToken(accessToken);
       }
@@ -580,10 +714,11 @@ export const useReturnToOriginalUser = () => {
 
       // Show success message
       const user = data.user || data;
-      const userName = user?.first_name && user?.last_name
-        ? `${user.first_name} ${user.last_name}`
-        : user?.email || user?.username || "the original user";
-      
+      const userName =
+        user?.first_name && user?.last_name
+          ? `${user.first_name} ${user.last_name}`
+          : user?.email || user?.username || "the original user";
+
       toast.success("Successfully returned to original user", {
         description: `Now logged in as ${userName}`,
       });
@@ -595,7 +730,7 @@ export const useReturnToOriginalUser = () => {
     },
     onError: (error) => {
       console.error("Return to original user error:", error);
-      
+
       // Handle different error types
       if (error.message?.includes("No hijack session")) {
         toast.error("No hijack session found", {
@@ -603,11 +738,13 @@ export const useReturnToOriginalUser = () => {
         });
       } else if (error.message?.includes("Original user tokens not found")) {
         toast.error("Cannot restore session", {
-          description: "Original user tokens not found. Please logout and login again.",
+          description:
+            "Original user tokens not found. Please logout and login again.",
         });
       } else {
         toast.error("Failed to return to original user", {
-          description: error.message || "Please try again or logout and login again.",
+          description:
+            error.message || "Please try again or logout and login again.",
         });
       }
     },

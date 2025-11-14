@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import {
   Select,
   SelectContent,
@@ -10,6 +10,14 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Popover,
   PopoverContent,
@@ -21,6 +29,7 @@ import {
   Check,
   Loader2,
   AlertCircle,
+  Shield,
 } from "lucide-react";
 import { useUserDepartments, useSwitchDepartment, departmentContextUtils } from "@/hooks/useDepartmentContext";
 import { cn } from "@/lib/utils";
@@ -39,7 +48,7 @@ const RoleSelector = ({
 }) => {
   const { data: departmentsData, isLoading, error } = useUserDepartments();
   const switchDepartmentMutation = useSwitchDepartment();
-  const [activeRoleId, setActiveRoleId] = useState(null);
+  const [activeAssignmentId, setActiveAssignmentId] = useState(null);
 
   // Debug: Log the API response to understand the structure
   useEffect(() => {
@@ -48,75 +57,104 @@ const RoleSelector = ({
     }
   }, [departmentsData]);
 
-  const departments = departmentsData?.departments || [];
-  const currentRoleId = departmentsData?.current_role_id;
+  const assignments = departmentsData?.departments || [];
+  const currentAssignmentId = departmentsData?.current_assignment_id;
 
-  // Initialize active role from localStorage or API response
+  // Group assignments by department
+  const assignmentsByDepartment = useMemo(() => {
+    if (!assignments || !Array.isArray(assignments)) return [];
+
+    const grouped = {};
+    assignments.forEach((assignment) => {
+      const deptId = assignment.department?.id;
+      if (!deptId) return;
+
+      if (!grouped[deptId]) {
+        grouped[deptId] = {
+          department: assignment.department,
+          roles: [],
+        };
+      }
+
+      if (assignment.assignment_id && assignment.role) {
+        grouped[deptId].roles.push({
+          assignment_id: assignment.assignment_id,
+          role: assignment.role,
+          is_active: assignment.is_active,
+        });
+      }
+    });
+
+    return Object.values(grouped);
+  }, [assignments]);
+
+  // Initialize active assignment from localStorage or API response
   useEffect(() => {
-    if (!departments || departments.length === 0) return;
+    if (!assignments || assignments.length === 0) return;
 
-    const savedRoleId = departmentContextUtils.getActiveRoleId();
+    const savedAssignmentId = typeof window !== "undefined" 
+      ? localStorage.getItem("assignment_id") 
+      : null;
     
-    // Priority: savedRoleId > currentRoleId > first department's role
-    if (savedRoleId) {
-      // Verify saved role still exists in user's departments
-      const roleExists = departments.some(
-        (d) => d.role?.id === savedRoleId
+    // Priority: savedAssignmentId > currentAssignmentId > first assignment
+    if (savedAssignmentId) {
+      const assignmentId = parseInt(savedAssignmentId);
+      // Verify saved assignment still exists
+      const assignmentExists = assignments.some(
+        (a) => a.assignment_id === assignmentId
       );
-      if (roleExists) {
-        setActiveRoleId(savedRoleId);
+      if (assignmentExists) {
+        setActiveAssignmentId(assignmentId);
         return;
       }
     }
 
-    // Use current role from API if available
-    if (currentRoleId) {
-      setActiveRoleId(currentRoleId);
-      departmentContextUtils.setActiveRoleId(currentRoleId);
+    // Use current assignment from API if available
+    if (currentAssignmentId) {
+      setActiveAssignmentId(currentAssignmentId);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("assignment_id", currentAssignmentId.toString());
+      }
       return;
     }
 
-    // Auto-select first department's role if none is selected
-    const firstRoleId = departments[0]?.role?.id;
-    if (firstRoleId) {
-      setActiveRoleId(firstRoleId);
-      departmentContextUtils.setActiveRoleId(firstRoleId);
+    // Auto-select first assignment if none is selected
+    const firstAssignmentId = assignments[0]?.assignment_id;
+    if (firstAssignmentId) {
+      setActiveAssignmentId(firstAssignmentId);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("assignment_id", firstAssignmentId.toString());
+      }
     }
-  }, [departments, currentRoleId]);
+  }, [assignments, currentAssignmentId]);
 
-  const handleDepartmentChange = async (departmentId) => {
-    // Find the department and get its role_id
-    const selectedDept = departments.find(
-      (d) => d.department?.id === parseInt(departmentId)
-    );
-    
-    if (!selectedDept?.role?.id) {
-      console.error("No role found for selected department");
-      return;
-    }
-
-    const roleId = selectedDept.role.id;
-    setActiveRoleId(roleId);
+  const handleRoleSwitch = async (assignmentId) => {
+    setActiveAssignmentId(assignmentId);
     
     try {
-      await switchDepartmentMutation.mutateAsync(roleId);
+      await switchDepartmentMutation.mutateAsync(assignmentId);
       if (onDepartmentChange) {
-        onDepartmentChange(parseInt(departmentId));
+        onDepartmentChange(assignmentId);
       }
     } catch (error) {
       // Error is handled by the mutation's onError
       // Revert the selection on error
-      const previousRoleId = departmentContextUtils.getActiveRoleId();
-      setActiveRoleId(previousRoleId);
+      const previousAssignmentId = typeof window !== "undefined"
+        ? localStorage.getItem("assignment_id")
+        : null;
+      if (previousAssignmentId) {
+        setActiveAssignmentId(parseInt(previousAssignmentId));
+      }
     }
   };
 
-  // Find current department based on active role
-  const currentDepartment = departments.find(
-    (d) => d.role?.id === activeRoleId || d.role?.id === currentRoleId
+  // Find current assignment
+  const currentAssignment = assignments.find(
+    (a) => a.assignment_id === activeAssignmentId || a.assignment_id === currentAssignmentId
   );
 
-  const currentRole = currentDepartment?.role;
+  const currentDepartment = currentAssignment?.department;
+  const currentRole = currentAssignment?.role;
 
   if (isLoading) {
     return (
@@ -136,7 +174,7 @@ const RoleSelector = ({
     );
   }
 
-  if (departments.length === 0) {
+  if (assignments.length === 0) {
     return (
       <div className={cn("flex items-center gap-2 text-muted-foreground", className)}>
         <Building2 className="h-4 w-4" />
@@ -145,9 +183,9 @@ const RoleSelector = ({
     );
   }
 
-  if (departments.length === 1) {
-    // Only one role - show it as read-only
-    const dept = departments[0];
+  // If only one assignment, show it as read-only
+  if (assignments.length === 1) {
+    const assignment = assignments[0];
     return (
       <div className={cn("flex items-center gap-2", className)}>
         <Building2 className="h-4 w-4 text-muted-foreground" />
@@ -156,10 +194,10 @@ const RoleSelector = ({
             <span className="text-xs text-muted-foreground">Role</span>
           )}
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium">{dept.department?.name}</span>
-            {dept.role && (
+            <span className="text-sm font-medium">{assignment.department?.name}</span>
+            {assignment.role && (
               <Badge variant="outline" className="text-xs">
-                {dept.role.display_name || dept.role.name || dept.role.role_name}
+                {assignment.role.display_name || assignment.role.name || assignment.role.role_name}
               </Badge>
             )}
           </div>
@@ -171,17 +209,15 @@ const RoleSelector = ({
   // Multiple departments - show selector
   if (variant === "compact") {
     // Determine what to display
-    const displayDepartment = currentDepartment || departments[0];
-    const displayRole = currentRole || departments[0]?.role;
-    const displayText = displayDepartment?.department?.name || departments[0]?.department?.name || "Select role";
-    const roleText = displayRole?.display_name || displayRole?.name || displayRole?.role_name || departments[0]?.role?.display_name || departments[0]?.role?.name || departments[0]?.role?.role_name;
+    const displayText = currentDepartment?.name || assignmentsByDepartment[0]?.department?.name || "Select role";
+    const roleText = currentRole?.display_name || currentRole?.name || currentRole?.role_name || "";
 
     return (
-      <Popover>
+      <DropdownMenu>
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
-              <PopoverTrigger asChild>
+              <DropdownMenuTrigger asChild>
                 <Button
                   variant="ghost"
                   className={cn(
@@ -206,7 +242,7 @@ const RoleSelector = ({
                     <Loader2 className="ml-2 h-4 w-4 animate-spin shrink-0" />
                   )}
                 </Button>
-              </PopoverTrigger>
+              </DropdownMenuTrigger>
             </TooltipTrigger>
             <TooltipContent 
               side="right"
@@ -214,64 +250,71 @@ const RoleSelector = ({
             >
               <div className="flex flex-col gap-1">
                 <span className="font-medium">
-                  {displayDepartment?.department?.name || departments[0]?.department?.name || "Select role"}
+                  {displayText}
                 </span>
-                {displayRole && (
+                {currentRole && (
                   <span className="text-xs text-muted-foreground">
-                    {displayRole.display_name || displayRole.name || displayRole.role_name}
+                    {currentRole.display_name || currentRole.name || currentRole.role_name}
                   </span>
                 )}
               </div>
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
-        <PopoverContent className="w-[280px]" align="start">
-          <div className="space-y-2">
-            <div className="font-semibold text-sm mb-3">Switch Role</div>
-            {departments.map((dept) => {
-              const isActive = dept.role?.id === activeRoleId || dept.role?.id === currentRoleId;
-              return (
-                <Button
-                  key={dept.department?.id}
-                  variant={isActive ? "default" : "ghost"}
-                  className="w-full justify-start"
-                  onClick={() => handleDepartmentChange(dept.department?.id)}
-                  disabled={switchDepartmentMutation.isPending || isActive}
-                >
-                  <div className="flex items-center justify-between w-full">
-                    <div className="flex items-center gap-2">
-                      <Building2 className="h-4 w-4" />
-                      <div className="flex flex-col items-start">
-                        <span className="font-medium">{dept.department?.name}</span>
-                        {dept.role && (
-                          <span className="text-xs text-muted-foreground">
-                            {dept.role.display_name || dept.role.name || dept.role.role_name}
-                          </span>
-                        )}
+        <DropdownMenuContent className="w-56" align="start">
+          <DropdownMenuLabel>Switch Role</DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          {assignmentsByDepartment.map((deptGroup) => (
+            <div key={deptGroup.department.id}>
+              <DropdownMenuLabel className="text-xs font-semibold text-muted-foreground px-2 py-1.5">
+                {deptGroup.department.name}
+              </DropdownMenuLabel>
+              {deptGroup.roles.map((roleAssignment) => {
+                const isActive = roleAssignment.assignment_id === activeAssignmentId || 
+                                 roleAssignment.assignment_id === currentAssignmentId;
+                return (
+                  <DropdownMenuItem
+                    key={roleAssignment.assignment_id}
+                    className={cn(
+                      "cursor-pointer pl-6",
+                      isActive && "bg-accent"
+                    )}
+                    onClick={() => handleRoleSwitch(roleAssignment.assignment_id)}
+                    disabled={switchDepartmentMutation.isPending || isActive}
+                  >
+                    <div className="flex items-center justify-between w-full">
+                      <div className="flex items-center gap-2">
+                        <Shield className="h-3 w-3 text-muted-foreground" />
+                        <span className="text-sm">
+                          {roleAssignment.role.display_name || roleAssignment.role.name || roleAssignment.role.role_name}
+                        </span>
                       </div>
+                      {isActive && <Check className="h-3 w-3 text-primary" />}
                     </div>
-                    {isActive && <Check className="h-4 w-4" />}
-                  </div>
-                </Button>
-              );
-            })}
-          </div>
-        </PopoverContent>
-      </Popover>
+                  </DropdownMenuItem>
+                );
+              })}
+              {assignmentsByDepartment.indexOf(deptGroup) < assignmentsByDepartment.length - 1 && (
+                <DropdownMenuSeparator />
+              )}
+            </div>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
     );
   }
 
   if (variant === "dropdown") {
     return (
-      <Popover>
-        <PopoverTrigger asChild>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
           <Button
             variant="outline"
             className={cn("justify-start", className)}
             disabled={switchDepartmentMutation.isPending}
           >
             <Building2 className="mr-2 h-4 w-4" />
-            {currentDepartment?.department?.name || "Select department"}
+            {currentDepartment?.name || "Select department"}
             {currentRole && (
               <Badge variant="secondary" className="ml-2">
                 {currentRole.display_name || currentRole.name || currentRole.role_name}
@@ -281,40 +324,47 @@ const RoleSelector = ({
               <Loader2 className="ml-2 h-4 w-4 animate-spin" />
             )}
           </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-[300px]" align="start">
-          <div className="space-y-2">
-            <div className="font-semibold text-sm mb-3">Switch Role</div>
-            {departments.map((dept) => {
-              const isActive = dept.role?.id === activeRoleId || dept.role?.id === currentRoleId;
-              return (
-                <Button
-                  key={dept.department?.id}
-                  variant={isActive ? "default" : "ghost"}
-                  className="w-full justify-start"
-                  onClick={() => handleDepartmentChange(dept.department?.id)}
-                  disabled={switchDepartmentMutation.isPending || isActive}
-                >
-                  <div className="flex items-center justify-between w-full">
-                    <div className="flex items-center gap-2">
-                      <Building2 className="h-4 w-4" />
-                      <div className="flex flex-col items-start">
-                        <span className="font-medium">{dept.department?.name}</span>
-                        {dept.role && (
-                          <span className="text-xs text-muted-foreground">
-                            {dept.role.display_name || dept.role.name || dept.role.role_name}
-                          </span>
-                        )}
+        </DropdownMenuTrigger>
+        <DropdownMenuContent className="w-56" align="start">
+          <DropdownMenuLabel>Switch Role</DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          {assignmentsByDepartment.map((deptGroup) => (
+            <div key={deptGroup.department.id}>
+              <DropdownMenuLabel className="text-xs font-semibold text-muted-foreground px-2 py-1.5">
+                {deptGroup.department.name}
+              </DropdownMenuLabel>
+              {deptGroup.roles.map((roleAssignment) => {
+                const isActive = roleAssignment.assignment_id === activeAssignmentId || 
+                                 roleAssignment.assignment_id === currentAssignmentId;
+                return (
+                  <DropdownMenuItem
+                    key={roleAssignment.assignment_id}
+                    className={cn(
+                      "cursor-pointer pl-6",
+                      isActive && "bg-accent"
+                    )}
+                    onClick={() => handleRoleSwitch(roleAssignment.assignment_id)}
+                    disabled={switchDepartmentMutation.isPending || isActive}
+                  >
+                    <div className="flex items-center justify-between w-full">
+                      <div className="flex items-center gap-2">
+                        <Shield className="h-3 w-3 text-muted-foreground" />
+                        <span className="text-sm">
+                          {roleAssignment.role.display_name || roleAssignment.role.name || roleAssignment.role.role_name}
+                        </span>
                       </div>
+                      {isActive && <Check className="h-3 w-3 text-primary" />}
                     </div>
-                    {isActive && <Check className="h-4 w-4" />}
-                  </div>
-                </Button>
-              );
-            })}
-          </div>
-        </PopoverContent>
-      </Popover>
+                  </DropdownMenuItem>
+                );
+              })}
+              {assignmentsByDepartment.indexOf(deptGroup) < assignmentsByDepartment.length - 1 && (
+                <DropdownMenuSeparator />
+              )}
+            </div>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
     );
   }
 
@@ -324,44 +374,58 @@ const RoleSelector = ({
       {showLabel && (
         <label className="text-sm font-medium">Active Role</label>
       )}
-      <Select
-        value={currentDepartment?.department?.id?.toString() || ""}
-        onValueChange={handleDepartmentChange}
-        disabled={switchDepartmentMutation.isPending}
-      >
-        <SelectTrigger>
-          <SelectValue placeholder="Select department">
-            <div className="flex items-center gap-2">
-              <Building2 className="h-4 w-4" />
-              {currentDepartment?.department?.name || "Select department"}
-            </div>
-          </SelectValue>
-        </SelectTrigger>
-        <SelectContent>
-          {departments.map((dept) => {
-            const isActive = dept.role?.id === activeRoleId || dept.role?.id === currentRoleId;
-            return (
-              <SelectItem
-                key={dept.department?.id}
-                value={dept.department?.id?.toString()}
-              >
-                <div className="flex items-center justify-between w-full">
-                  <div className="flex items-center gap-2">
-                    <Building2 className="h-4 w-4" />
-                    <span>{dept.department?.name}</span>
-                    {dept.role && (
-                      <Badge variant="outline" className="text-xs ml-2">
-                        {dept.role.display_name || dept.role.name || dept.role.role_name}
-                      </Badge>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="outline" className="w-full justify-start" disabled={switchDepartmentMutation.isPending}>
+            <Building2 className="mr-2 h-4 w-4" />
+            {currentDepartment?.name || "Select role"}
+            {currentRole && (
+              <Badge variant="secondary" className="ml-2">
+                {currentRole.display_name || currentRole.name || currentRole.role_name}
+              </Badge>
+            )}
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent className="w-56" align="start">
+          <DropdownMenuLabel>Switch Role</DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          {assignmentsByDepartment.map((deptGroup) => (
+            <div key={deptGroup.department.id}>
+              <DropdownMenuLabel className="text-xs font-semibold text-muted-foreground px-2 py-1.5">
+                {deptGroup.department.name}
+              </DropdownMenuLabel>
+              {deptGroup.roles.map((roleAssignment) => {
+                const isActive = roleAssignment.assignment_id === activeAssignmentId || 
+                                 roleAssignment.assignment_id === currentAssignmentId;
+                return (
+                  <DropdownMenuItem
+                    key={roleAssignment.assignment_id}
+                    className={cn(
+                      "cursor-pointer pl-6",
+                      isActive && "bg-accent"
                     )}
-                  </div>
-                  {isActive && <Check className="h-4 w-4 text-primary" />}
-                </div>
-              </SelectItem>
-            );
-          })}
-        </SelectContent>
-      </Select>
+                    onClick={() => handleRoleSwitch(roleAssignment.assignment_id)}
+                    disabled={switchDepartmentMutation.isPending || isActive}
+                  >
+                    <div className="flex items-center justify-between w-full">
+                      <div className="flex items-center gap-2">
+                        <Shield className="h-3 w-3 text-muted-foreground" />
+                        <span className="text-sm">
+                          {roleAssignment.role.display_name || roleAssignment.role.name || roleAssignment.role.role_name}
+                        </span>
+                      </div>
+                      {isActive && <Check className="h-3 w-3 text-primary" />}
+                    </div>
+                  </DropdownMenuItem>
+                );
+              })}
+              {assignmentsByDepartment.indexOf(deptGroup) < assignmentsByDepartment.length - 1 && (
+                <DropdownMenuSeparator />
+              )}
+            </div>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
       {currentRole && (
         <p className="text-xs text-muted-foreground">
           Current role: <span className="font-medium">{currentRole.display_name || currentRole.name || currentRole.role_name}</span>

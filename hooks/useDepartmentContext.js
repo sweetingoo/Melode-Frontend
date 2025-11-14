@@ -20,24 +20,21 @@ export const useUserDepartments = () => {
   });
 };
 
-// Switch role mutation (previously department switching)
+// Switch role mutation using assignment_id - just updates localStorage, no API call
 export const useSwitchDepartment = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (roleId) => {
-      const response = await departmentContextService.switchRole(roleId);
-      return response;
+    mutationFn: async (assignmentId) => {
+      // No API call - just return the assignmentId
+      return assignmentId;
     },
-    onSuccess: (data, roleId) => {
-      // Store active role ID in localStorage
+    onSuccess: (assignmentId) => {
+      // Store active assignment_id in localStorage (this is what we use for X-Assignment-ID header)
       if (typeof window !== "undefined") {
-        localStorage.setItem("activeRoleId", roleId.toString());
-        // Keep backward compatibility - also store as activeDepartmentId for migration period
-        // This can be removed after full migration
-        if (data.department?.id) {
-          localStorage.setItem("activeDepartmentId", data.department.id.toString());
-        }
+        localStorage.setItem("assignment_id", assignmentId.toString());
+        // Also store for backward compatibility
+        localStorage.setItem("activeRoleId", assignmentId.toString());
       }
 
       // The API client interceptor will automatically pick up the new value from localStorage
@@ -50,33 +47,17 @@ export const useSwitchDepartment = () => {
       // Invalidate profile and permissions queries to refresh with new context
       queryClient.invalidateQueries({ queryKey: ["profile"] });
       queryClient.invalidateQueries({ queryKey: ["permissions"] });
+      queryClient.invalidateQueries({ queryKey: ["auth", "currentUser"] });
+      queryClient.invalidateQueries({ queryKey: ["users", "detail"] });
 
       toast.success("Role switched successfully", {
-        description: `Now viewing as ${data.role?.display_name || data.role?.name || "member"} in ${data.department?.name || "department"}.`,
+        description: "Your role context has been updated.",
       });
     },
     onError: (error) => {
       console.error("Switch role error:", error);
-      
-      // Handle 403 error when role switching is disabled
-      if (error?.response?.status === 403) {
-        const errorMessage =
-          error?.response?.data?.message ||
-          error?.response?.data?.detail ||
-          "Role switching is disabled. Please logout and login again to switch roles.";
-        toast.error("Role Switching Disabled", {
-          description: errorMessage,
-          duration: 5000,
-        });
-        return;
-      }
-      
-      const errorMessage =
-        error?.response?.data?.message ||
-        error?.response?.data?.detail ||
-        "Failed to switch role";
       toast.error("Failed to switch role", {
-        description: errorMessage,
+        description: "An error occurred while switching roles.",
       });
     },
   });
@@ -140,4 +121,3 @@ export const departmentContextUtils = {
     }
   },
 };
-
