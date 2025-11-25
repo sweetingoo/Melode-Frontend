@@ -204,18 +204,82 @@ const TasksPage = () => {
   };
 
   const currentTasksResponse = getCurrentTasks();
-  const tasks = currentTasksResponse?.tasks || currentTasksResponse || [];
+  // Handle different API response structures
+  let tasks = [];
+  if (currentTasksResponse) {
+    if (Array.isArray(currentTasksResponse)) {
+      tasks = currentTasksResponse;
+    } else if (currentTasksResponse.tasks && Array.isArray(currentTasksResponse.tasks)) {
+      tasks = currentTasksResponse.tasks;
+    } else if (currentTasksResponse.data && Array.isArray(currentTasksResponse.data)) {
+      tasks = currentTasksResponse.data;
+    } else if (currentTasksResponse.results && Array.isArray(currentTasksResponse.results)) {
+      tasks = currentTasksResponse.results;
+    }
+  }
+  
   const pagination = {
-    page: currentTasksResponse?.page || 1,
+    page: currentTasksResponse?.page || currentPage,
     per_page: currentTasksResponse?.per_page || itemsPerPage,
-    total: currentTasksResponse?.total || tasks.length,
-    total_pages: currentTasksResponse?.total_pages || 1,
+    total: currentTasksResponse?.total || (Array.isArray(currentTasksResponse) ? currentTasksResponse.length : 0),
+    total_pages: currentTasksResponse?.total_pages || Math.ceil((currentTasksResponse?.total || 0) / itemsPerPage) || 1,
   };
 
-  const users = usersResponse?.users || usersResponse || [];
-  const locations = Array.isArray(locationsData) ? locationsData : [];
-  const assets = Array.isArray(assetsData) ? assetsData : [];
-  const roles = rolesData || [];
+  // Extract users from response - handle different response structures
+  let users = [];
+  if (usersResponse) {
+    if (Array.isArray(usersResponse)) {
+      users = usersResponse;
+    } else if (usersResponse.users && Array.isArray(usersResponse.users)) {
+      users = usersResponse.users;
+    } else if (usersResponse.data && Array.isArray(usersResponse.data)) {
+      users = usersResponse.data;
+    } else if (usersResponse.results && Array.isArray(usersResponse.results)) {
+      users = usersResponse.results;
+    }
+  }
+
+  // Extract locations from response
+  let locations = [];
+  if (locationsData) {
+    if (Array.isArray(locationsData)) {
+      locations = locationsData;
+    } else if (locationsData.locations && Array.isArray(locationsData.locations)) {
+      locations = locationsData.locations;
+    } else if (locationsData.data && Array.isArray(locationsData.data)) {
+      locations = locationsData.data;
+    } else if (locationsData.results && Array.isArray(locationsData.results)) {
+      locations = locationsData.results;
+    }
+  }
+
+  // Extract assets from response
+  let assets = [];
+  if (assetsData) {
+    if (Array.isArray(assetsData)) {
+      assets = assetsData;
+    } else if (assetsData.assets && Array.isArray(assetsData.assets)) {
+      assets = assetsData.assets;
+    } else if (assetsData.data && Array.isArray(assetsData.data)) {
+      assets = assetsData.data;
+    } else if (assetsData.results && Array.isArray(assetsData.results)) {
+      assets = assetsData.results;
+    }
+  }
+
+  // Extract roles from response
+  let roles = [];
+  if (rolesData) {
+    if (Array.isArray(rolesData)) {
+      roles = rolesData;
+    } else if (rolesData.roles && Array.isArray(rolesData.roles)) {
+      roles = rolesData.roles;
+    } else if (rolesData.data && Array.isArray(rolesData.data)) {
+      roles = rolesData.data;
+    } else if (rolesData.results && Array.isArray(rolesData.results)) {
+      roles = rolesData.results;
+    }
+  }
 
   // Filter tasks by search term
   const filteredTasks = tasks.filter((task) => {
@@ -430,7 +494,7 @@ const TasksPage = () => {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {statsData.total_tasks || 0}
+                {statsData.total_tasks ?? statsData.total ?? 0}
               </div>
             </CardContent>
           </Card>
@@ -441,7 +505,7 @@ const TasksPage = () => {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {statsData.pending_count || 0}
+                {statsData.pending_count ?? statsData.pending ?? 0}
               </div>
             </CardContent>
           </Card>
@@ -452,7 +516,7 @@ const TasksPage = () => {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-red-600">
-                {statsData.overdue_count || 0}
+                {statsData.overdue_count ?? statsData.overdue ?? 0}
               </div>
             </CardContent>
           </Card>
@@ -463,7 +527,7 @@ const TasksPage = () => {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-green-600">
-                {statsData.completed_count || 0}
+                {statsData.completed_count ?? statsData.completed ?? 0}
               </div>
             </CardContent>
           </Card>
@@ -527,16 +591,16 @@ const TasksPage = () => {
               />
             </div>
             <Select
-              value={filters.status}
+              value={filters.status || "all"}
               onValueChange={(value) =>
-                setFilters({ ...filters, status: value })
+                setFilters({ ...filters, status: value === "all" ? "" : value })
               }
             >
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Statuses</SelectItem>
+                <SelectItem value="all">All Statuses</SelectItem>
                 <SelectItem value="pending">Pending</SelectItem>
                 <SelectItem value="in_progress">In Progress</SelectItem>
                 <SelectItem value="completed">Completed</SelectItem>
@@ -544,32 +608,32 @@ const TasksPage = () => {
               </SelectContent>
             </Select>
             <Select
-              value={filters.priority}
+              value={filters.priority || "all"}
               onValueChange={(value) =>
-                setFilters({ ...filters, priority: value })
+                setFilters({ ...filters, priority: value === "all" ? "" : value })
               }
             >
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Priority" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Priorities</SelectItem>
+                <SelectItem value="all">All Priorities</SelectItem>
                 <SelectItem value="high">High</SelectItem>
                 <SelectItem value="medium">Medium</SelectItem>
                 <SelectItem value="low">Low</SelectItem>
               </SelectContent>
             </Select>
             <Select
-              value={filters.task_type}
+              value={filters.task_type || "all"}
               onValueChange={(value) =>
-                setFilters({ ...filters, task_type: value })
+                setFilters({ ...filters, task_type: value === "all" ? "" : value })
               }
             >
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Task Type" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Types</SelectItem>
+                <SelectItem value="all">All Types</SelectItem>
                 <SelectItem value="ad_hoc">Ad Hoc</SelectItem>
                 <SelectItem value="maintenance">Maintenance</SelectItem>
                 <SelectItem value="compliance">Compliance</SelectItem>
@@ -930,16 +994,16 @@ const TasksPage = () => {
             <div>
               <Label>Location</Label>
               <Select
-                value={taskFormData.location_id}
+                value={taskFormData.location_id || "none"}
                 onValueChange={(value) =>
-                  setTaskFormData({ ...taskFormData, location_id: value })
+                  setTaskFormData({ ...taskFormData, location_id: value === "none" ? "" : value })
                 }
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select location" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">None</SelectItem>
+                  <SelectItem value="none">None</SelectItem>
                   {locations.map((location) => (
                     <SelectItem key={location.id} value={location.id.toString()}>
                       {location.name}
@@ -978,11 +1042,11 @@ const TasksPage = () => {
               <div>
                 <Label>Assign to Role</Label>
                 <Select
-                  value={taskFormData.assigned_to_role_id}
+                  value={taskFormData.assigned_to_role_id || "none"}
                   onValueChange={(value) =>
                     setTaskFormData({
                       ...taskFormData,
-                      assigned_to_role_id: value,
+                      assigned_to_role_id: value === "none" ? "" : value,
                     })
                   }
                 >
@@ -990,7 +1054,7 @@ const TasksPage = () => {
                     <SelectValue placeholder="Select role" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">None</SelectItem>
+                    <SelectItem value="none">None</SelectItem>
                     {roles.map((role) => (
                       <SelectItem key={role.id} value={role.id.toString()}>
                         {role.display_name || role.name}
@@ -1002,11 +1066,11 @@ const TasksPage = () => {
               <div>
                 <Label>Assign to Asset</Label>
                 <Select
-                  value={taskFormData.assigned_to_asset_id}
+                  value={taskFormData.assigned_to_asset_id || "none"}
                   onValueChange={(value) =>
                     setTaskFormData({
                       ...taskFormData,
-                      assigned_to_asset_id: value,
+                      assigned_to_asset_id: value === "none" ? "" : value,
                     })
                   }
                 >
@@ -1014,7 +1078,7 @@ const TasksPage = () => {
                     <SelectValue placeholder="Select asset" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">None</SelectItem>
+                    <SelectItem value="none">None</SelectItem>
                     {assets.map((asset) => (
                       <SelectItem key={asset.id} value={asset.id.toString()}>
                         {asset.name || asset.asset_number}
@@ -1259,11 +1323,11 @@ const TasksPage = () => {
               <div>
                 <Label>Assign to Role</Label>
                 <Select
-                  value={assignmentData.assigned_to_role_id}
+                  value={assignmentData.assigned_to_role_id || "none"}
                   onValueChange={(value) =>
                     setAssignmentData({
                       ...assignmentData,
-                      assigned_to_role_id: value,
+                      assigned_to_role_id: value === "none" ? "" : value,
                     })
                   }
                 >
@@ -1271,7 +1335,7 @@ const TasksPage = () => {
                     <SelectValue placeholder="Select role" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">None</SelectItem>
+                    <SelectItem value="none">None</SelectItem>
                     {roles.map((role) => (
                       <SelectItem key={role.id} value={role.id.toString()}>
                         {role.display_name || role.name}
@@ -1283,11 +1347,11 @@ const TasksPage = () => {
               <div>
                 <Label>Assign to Asset</Label>
                 <Select
-                  value={assignmentData.assigned_to_asset_id}
+                  value={assignmentData.assigned_to_asset_id || "none"}
                   onValueChange={(value) =>
                     setAssignmentData({
                       ...assignmentData,
-                      assigned_to_asset_id: value,
+                      assigned_to_asset_id: value === "none" ? "" : value,
                     })
                   }
                 >
@@ -1295,7 +1359,7 @@ const TasksPage = () => {
                     <SelectValue placeholder="Select asset" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">None</SelectItem>
+                    <SelectItem value="none">None</SelectItem>
                     {assets.map((asset) => (
                       <SelectItem key={asset.id} value={asset.id.toString()}>
                         {asset.name || asset.asset_number}

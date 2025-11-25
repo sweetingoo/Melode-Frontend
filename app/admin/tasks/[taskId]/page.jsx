@@ -770,11 +770,11 @@ const TaskDetailPage = () => {
               <div>
                 <Label>Assign to Role</Label>
                 <Select
-                  value={assignmentData.assigned_to_role_id}
+                  value={assignmentData.assigned_to_role_id || "none"}
                   onValueChange={(value) =>
                     setAssignmentData({
                       ...assignmentData,
-                      assigned_to_role_id: value,
+                      assigned_to_role_id: value === "none" ? "" : value,
                     })
                   }
                 >
@@ -782,7 +782,7 @@ const TaskDetailPage = () => {
                     <SelectValue placeholder="Select role" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">None</SelectItem>
+                    <SelectItem value="none">None</SelectItem>
                     {roles.map((role) => (
                       <SelectItem key={role.id} value={role.id.toString()}>
                         {role.display_name || role.name}
@@ -794,11 +794,11 @@ const TaskDetailPage = () => {
               <div>
                 <Label>Assign to Asset</Label>
                 <Select
-                  value={assignmentData.assigned_to_asset_id}
+                  value={assignmentData.assigned_to_asset_id || "none"}
                   onValueChange={(value) =>
                     setAssignmentData({
                       ...assignmentData,
-                      assigned_to_asset_id: value,
+                      assigned_to_asset_id: value === "none" ? "" : value,
                     })
                   }
                 >
@@ -806,7 +806,7 @@ const TaskDetailPage = () => {
                     <SelectValue placeholder="Select asset" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">None</SelectItem>
+                    <SelectItem value="none">None</SelectItem>
                     {assets.map((asset) => (
                       <SelectItem key={asset.id} value={asset.id.toString()}>
                         {asset.name || asset.asset_number}
