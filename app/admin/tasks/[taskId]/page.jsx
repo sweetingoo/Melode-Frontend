@@ -51,6 +51,7 @@ import { useUsers } from "@/hooks/useUsers";
 import { useLocations } from "@/hooks/useLocations";
 import { useAssets } from "@/hooks/useAssets";
 import { useRoles } from "@/hooks/useRoles";
+import { useActiveTaskTypes } from "@/hooks/useTaskTypes";
 import { format } from "date-fns";
 import {
   AlertDialog,
@@ -95,6 +96,7 @@ const TaskDetailPage = () => {
   const { data: locationsData } = useLocations();
   const { data: assetsData } = useAssets();
   const { data: rolesData } = useRoles();
+  const { data: activeTaskTypes } = useActiveTaskTypes();
 
   const updateTaskMutation = useUpdateTask();
   const deleteTaskMutation = useDeleteTask();
@@ -105,6 +107,20 @@ const TaskDetailPage = () => {
   const locations = Array.isArray(locationsData) ? locationsData : [];
   const assets = Array.isArray(assetsData) ? assetsData : [];
   const roles = rolesData || [];
+  
+  // Extract task types from response
+  let taskTypes = [];
+  if (activeTaskTypes) {
+    if (Array.isArray(activeTaskTypes)) {
+      taskTypes = activeTaskTypes;
+    } else if (activeTaskTypes.task_types && Array.isArray(activeTaskTypes.task_types)) {
+      taskTypes = activeTaskTypes.task_types;
+    } else if (activeTaskTypes.data && Array.isArray(activeTaskTypes.data)) {
+      taskTypes = activeTaskTypes.data;
+    } else if (activeTaskTypes.results && Array.isArray(activeTaskTypes.results)) {
+      taskTypes = activeTaskTypes.results;
+    }
+  }
 
   const getStatusColor = (status) => {
     switch (status?.toLowerCase()) {
@@ -340,7 +356,23 @@ const TaskDetailPage = () => {
                 <div>
                   <Label className="text-muted-foreground">Task Type</Label>
                   <div className="mt-1">
-                    <Badge variant="outline">{task.task_type || "N/A"}</Badge>
+                    {(() => {
+                      const taskType = taskTypes.find(tt => tt.name === task.task_type);
+                      return taskType ? (
+                        <Badge 
+                          variant="outline"
+                          style={{ 
+                            borderColor: taskType.color || undefined,
+                            color: taskType.color || undefined 
+                          }}
+                        >
+                          {taskType.icon && <span className="mr-1">{taskType.icon}</span>}
+                          {taskType.display_name || task.task_type}
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline">{task.task_type || "N/A"}</Badge>
+                      );
+                    })()}
                   </div>
                 </div>
                 <div>
@@ -597,11 +629,18 @@ const TaskDetailPage = () => {
                     <SelectValue placeholder="Select task type" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="ad_hoc">Ad Hoc</SelectItem>
-                    <SelectItem value="maintenance">Maintenance</SelectItem>
-                    <SelectItem value="compliance">Compliance</SelectItem>
-                    <SelectItem value="inspection">Inspection</SelectItem>
-                    <SelectItem value="repair">Repair</SelectItem>
+                    {taskTypes.length === 0 ? (
+                      <SelectItem value="none" disabled>Loading task types...</SelectItem>
+                    ) : (
+                      taskTypes.map((taskType) => (
+                        <SelectItem key={taskType.id} value={taskType.name}>
+                          <div className="flex items-center gap-2">
+                            {taskType.icon && <span>{taskType.icon}</span>}
+                            <span>{taskType.display_name || taskType.name}</span>
+                          </div>
+                        </SelectItem>
+                      ))
+                    )}
                   </SelectContent>
                 </Select>
               </div>

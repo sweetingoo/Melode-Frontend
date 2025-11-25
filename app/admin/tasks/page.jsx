@@ -97,6 +97,7 @@ import { useUsers } from "@/hooks/useUsers";
 import { useLocations } from "@/hooks/useLocations";
 import { useAssets } from "@/hooks/useAssets";
 import { useRoles } from "@/hooks/useRoles";
+import { useActiveTaskTypes } from "@/hooks/useTaskTypes";
 import { format } from "date-fns";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -147,37 +148,67 @@ const TasksPage = () => {
 
   const itemsPerPage = 20;
 
-  // API hooks
+  // Clean filters - remove empty strings and convert to proper types
+  const cleanFilters = React.useMemo(() => {
+    const cleaned = {};
+    if (filters.status) cleaned.status = filters.status;
+    if (filters.priority) cleaned.priority = filters.priority;
+    if (filters.task_type) cleaned.task_type = filters.task_type;
+    if (filters.assigned_to_user_id) {
+      const userId = parseInt(filters.assigned_to_user_id);
+      if (!isNaN(userId)) cleaned.assigned_to_user_id = userId;
+    }
+    if (filters.is_overdue !== "") {
+      if (filters.is_overdue === "true") cleaned.is_overdue = true;
+      else if (filters.is_overdue === "false") cleaned.is_overdue = false;
+    }
+    return cleaned;
+  }, [filters]);
+
+  // API hooks - only enable the one needed for current view mode
   const { data: tasksResponse, isLoading, error, refetch } = useTasks({
     page: currentPage,
     per_page: itemsPerPage,
-    ...filters,
+    ...cleanFilters,
+  }, {
+    enabled: viewMode === "all",
   });
   const { data: myTasksResponse } = useMyTasks({
     page: currentPage,
     per_page: itemsPerPage,
+  }, {
+    enabled: viewMode === "my-tasks",
   });
   const { data: overdueTasksResponse } = useOverdueTasks({
     page: currentPage,
     per_page: itemsPerPage,
+  }, {
+    enabled: viewMode === "overdue",
   });
   const { data: dueSoonTasksResponse } = useDueSoonTasks({
     page: currentPage,
     per_page: itemsPerPage,
+  }, {
+    enabled: viewMode === "due-soon",
   });
   const { data: complianceTasksResponse } = useComplianceTasks({
     page: currentPage,
     per_page: itemsPerPage,
+  }, {
+    enabled: viewMode === "compliance",
   });
   const { data: automatedTasksResponse } = useAutomatedTasks({
     page: currentPage,
     per_page: itemsPerPage,
+  }, {
+    enabled: viewMode === "automated",
   });
-  const { data: statsData } = useTaskStats();
+  const { data: statsData, isLoading: statsLoading, error: statsError } = useTaskStats();
   const { data: usersResponse } = useUsers();
   const { data: locationsData } = useLocations();
   const { data: assetsData } = useAssets();
   const { data: rolesData } = useRoles();
+  const { data: activeTaskTypes } = useActiveTaskTypes();
 
   const deleteTaskMutation = useDeleteTask();
   const createTaskMutation = useCreateTask();
@@ -218,11 +249,14 @@ const TasksPage = () => {
     }
   }
   
+  // Only calculate pagination from actual API response, not from array length
   const pagination = {
-    page: currentTasksResponse?.page || currentPage,
-    per_page: currentTasksResponse?.per_page || itemsPerPage,
-    total: currentTasksResponse?.total || (Array.isArray(currentTasksResponse) ? currentTasksResponse.length : 0),
-    total_pages: currentTasksResponse?.total_pages || Math.ceil((currentTasksResponse?.total || 0) / itemsPerPage) || 1,
+    page: currentTasksResponse?.page ?? currentPage,
+    per_page: currentTasksResponse?.per_page ?? itemsPerPage,
+    total: typeof currentTasksResponse?.total === 'number' ? currentTasksResponse.total : 
+           (currentTasksResponse && !isLoading ? tasks.length : 0),
+    total_pages: typeof currentTasksResponse?.total_pages === 'number' ? currentTasksResponse.total_pages : 
+                 (typeof currentTasksResponse?.total === 'number' ? Math.ceil(currentTasksResponse.total / itemsPerPage) : 1),
   };
 
   // Extract users from response - handle different response structures
@@ -278,6 +312,20 @@ const TasksPage = () => {
       roles = rolesData.data;
     } else if (rolesData.results && Array.isArray(rolesData.results)) {
       roles = rolesData.results;
+    }
+  }
+
+  // Extract task types from response
+  let taskTypes = [];
+  if (activeTaskTypes) {
+    if (Array.isArray(activeTaskTypes)) {
+      taskTypes = activeTaskTypes;
+    } else if (activeTaskTypes.task_types && Array.isArray(activeTaskTypes.task_types)) {
+      taskTypes = activeTaskTypes.task_types;
+    } else if (activeTaskTypes.data && Array.isArray(activeTaskTypes.data)) {
+      taskTypes = activeTaskTypes.data;
+    } else if (activeTaskTypes.results && Array.isArray(activeTaskTypes.results)) {
+      taskTypes = activeTaskTypes.results;
     }
   }
 
@@ -485,7 +533,7 @@ const TasksPage = () => {
       </div>
 
       {/* Statistics Cards */}
-      {statsData && (
+      {!statsLoading && !statsError && statsData && (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -494,7 +542,8 @@ const TasksPage = () => {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {statsData.total_tasks ?? statsData.total ?? 0}
+                {typeof statsData.total_tasks === 'number' ? statsData.total_tasks : 
+                 typeof statsData.total === 'number' ? statsData.total : 0}
               </div>
             </CardContent>
           </Card>
@@ -505,7 +554,8 @@ const TasksPage = () => {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {statsData.pending_count ?? statsData.pending ?? 0}
+                {typeof statsData.pending_count === 'number' ? statsData.pending_count : 
+                 typeof statsData.pending === 'number' ? statsData.pending : 0}
               </div>
             </CardContent>
           </Card>
@@ -516,7 +566,8 @@ const TasksPage = () => {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-red-600">
-                {statsData.overdue_count ?? statsData.overdue ?? 0}
+                {typeof statsData.overdue_count === 'number' ? statsData.overdue_count : 
+                 typeof statsData.overdue === 'number' ? statsData.overdue : 0}
               </div>
             </CardContent>
           </Card>
@@ -527,10 +578,27 @@ const TasksPage = () => {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-green-600">
-                {statsData.completed_count ?? statsData.completed ?? 0}
+                {typeof statsData.completed_count === 'number' ? statsData.completed_count : 
+                 typeof statsData.completed === 'number' ? statsData.completed : 0}
               </div>
             </CardContent>
           </Card>
+        </div>
+      )}
+      {statsLoading && (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {[1, 2, 3, 4].map((i) => (
+            <Card key={i}>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Loading...</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  <Loader2 className="h-6 w-6 animate-spin" />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
         </div>
       )}
 
@@ -634,11 +702,14 @@ const TasksPage = () => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Types</SelectItem>
-                <SelectItem value="ad_hoc">Ad Hoc</SelectItem>
-                <SelectItem value="maintenance">Maintenance</SelectItem>
-                <SelectItem value="compliance">Compliance</SelectItem>
-                <SelectItem value="inspection">Inspection</SelectItem>
-                <SelectItem value="repair">Repair</SelectItem>
+                {taskTypes.map((taskType) => (
+                  <SelectItem key={taskType.id} value={taskType.name}>
+                    <div className="flex items-center gap-2">
+                      {taskType.icon && <span>{taskType.icon}</span>}
+                      <span>{taskType.display_name || taskType.name}</span>
+                    </div>
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             {(filters.status || filters.priority || filters.task_type) && (
@@ -714,7 +785,23 @@ const TasksPage = () => {
                         </Link>
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline">{task.task_type || "N/A"}</Badge>
+                        {(() => {
+                          const taskType = taskTypes.find(tt => tt.name === task.task_type);
+                          return taskType ? (
+                            <Badge 
+                              variant="outline"
+                              style={{ 
+                                borderColor: taskType.color || undefined,
+                                color: taskType.color || undefined 
+                              }}
+                            >
+                              {taskType.icon && <span className="mr-1">{taskType.icon}</span>}
+                              {taskType.display_name || task.task_type}
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline">{task.task_type || "N/A"}</Badge>
+                          );
+                        })()}
                       </TableCell>
                       <TableCell>
                         <Badge className={getStatusColor(task.status)}>
@@ -924,11 +1011,18 @@ const TasksPage = () => {
                     <SelectValue placeholder="Select task type" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="ad_hoc">Ad Hoc</SelectItem>
-                    <SelectItem value="maintenance">Maintenance</SelectItem>
-                    <SelectItem value="compliance">Compliance</SelectItem>
-                    <SelectItem value="inspection">Inspection</SelectItem>
-                    <SelectItem value="repair">Repair</SelectItem>
+                    {taskTypes.length === 0 ? (
+                      <SelectItem value="none" disabled>Loading task types...</SelectItem>
+                    ) : (
+                      taskTypes.map((taskType) => (
+                        <SelectItem key={taskType.id} value={taskType.name}>
+                          <div className="flex items-center gap-2">
+                            {taskType.icon && <span>{taskType.icon}</span>}
+                            <span>{taskType.display_name || taskType.name}</span>
+                          </div>
+                        </SelectItem>
+                      ))
+                    )}
                   </SelectContent>
                 </Select>
               </div>

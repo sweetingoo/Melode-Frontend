@@ -21,7 +21,7 @@ export const taskKeys = {
 };
 
 // Get all tasks query
-export const useTasks = (params = {}) => {
+export const useTasks = (params = {}, options = {}) => {
   return useQuery({
     queryKey: taskKeys.list(params),
     queryFn: async () => {
@@ -29,6 +29,7 @@ export const useTasks = (params = {}) => {
       return response.data;
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
+    ...options,
   });
 };
 
@@ -221,7 +222,7 @@ export const useSearchTasks = () => {
 };
 
 // Get my tasks query
-export const useMyTasks = (params = {}) => {
+export const useMyTasks = (params = {}, options = {}) => {
   return useQuery({
     queryKey: taskKeys.myTasks(params),
     queryFn: async () => {
@@ -229,6 +230,7 @@ export const useMyTasks = (params = {}) => {
       return response.data;
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
+    ...options,
   });
 };
 
@@ -259,7 +261,7 @@ export const useTasksByAsset = (assetId, params = {}) => {
 };
 
 // Get overdue tasks query
-export const useOverdueTasks = (params = {}) => {
+export const useOverdueTasks = (params = {}, options = {}) => {
   return useQuery({
     queryKey: taskKeys.overdue(params),
     queryFn: async () => {
@@ -267,11 +269,12 @@ export const useOverdueTasks = (params = {}) => {
       return response.data;
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
+    ...options,
   });
 };
 
 // Get due soon tasks query
-export const useDueSoonTasks = (params = {}) => {
+export const useDueSoonTasks = (params = {}, options = {}) => {
   return useQuery({
     queryKey: taskKeys.dueSoon(params),
     queryFn: async () => {
@@ -279,11 +282,12 @@ export const useDueSoonTasks = (params = {}) => {
       return response.data;
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
+    ...options,
   });
 };
 
 // Get compliance tasks query
-export const useComplianceTasks = (params = {}) => {
+export const useComplianceTasks = (params = {}, options = {}) => {
   return useQuery({
     queryKey: taskKeys.compliance(params),
     queryFn: async () => {
@@ -291,11 +295,12 @@ export const useComplianceTasks = (params = {}) => {
       return response.data;
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
+    ...options,
   });
 };
 
 // Get automated tasks query
-export const useAutomatedTasks = (params = {}) => {
+export const useAutomatedTasks = (params = {}, options = {}) => {
   return useQuery({
     queryKey: taskKeys.automated(params),
     queryFn: async () => {
@@ -303,6 +308,7 @@ export const useAutomatedTasks = (params = {}) => {
       return response.data;
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
+    ...options,
   });
 };
 
