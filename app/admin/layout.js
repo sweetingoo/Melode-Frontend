@@ -49,6 +49,7 @@ import {
   Building2,
   Check,
   Loader2,
+  CheckSquare,
 } from "lucide-react";
 import { assets } from "../assets/assets";
 import Image from "next/image";
@@ -125,6 +126,12 @@ const menuItems = [
     icon: Building2,
     url: "/admin/departments",
     permission: "departments:read", // Permission to read departments
+  },
+  {
+    title: "Tasks",
+    icon: CheckSquare,
+    url: "/admin/tasks",
+    permission: "tasks:read", // Permission to read tasks
   },
 ];
 
