@@ -327,7 +327,7 @@ const RoleManagementPage = () => {
 
       {/* Loading State */}
       {rolesLoading && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {[...Array(3)].map((_, i) => (
             <Card key={i} className="bg-card">
               <CardHeader className="pb-4">
@@ -386,7 +386,7 @@ const RoleManagementPage = () => {
 
       {/* Role Cards Grid */}
       {!rolesLoading && !rolesError && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 auto-rows-fr">
           {roles.length === 0 ? (
             <div className="col-span-full">
               <Card>
@@ -417,33 +417,33 @@ const RoleManagementPage = () => {
               return (
                 <Card
                   key={role.id}
-                  className="bg-card hover:shadow-lg transition-shadow duration-200"
+                  className="bg-card hover:shadow-lg transition-shadow duration-200 flex flex-col h-full"
                 >
                   <CardHeader className="pb-4">
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-3">
                         <div
-                          className={`flex h-10 w-10 items-center justify-center rounded-lg ${iconClasses}`}
+                          className={`flex h-8 w-8 items-center justify-center rounded-lg ${iconClasses}`}
                         >
-                          <IconComponent className="h-5 w-5" />
+                          <IconComponent className="h-4 w-4" />
                         </div>
                         <div>
-                          <CardTitle className="text-lg">{role.name}</CardTitle>
-                          <p className="text-sm text-muted-foreground font-mono">
+                          <CardTitle className="text-base">{role.name}</CardTitle>
+                          <p className="text-xs text-muted-foreground font-mono">
                             {role.slug}
                           </p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
                         {role.isSystem && (
-                          <Badge variant="secondary" className="text-xs">
+                          <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
                             System
                           </Badge>
                         )}
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-6 w-6 p-0"
+                          className="h-5 w-5 p-0"
                           onClick={() => handleEditRole(role.id)}
                           title="Edit role"
                         >
@@ -455,7 +455,7 @@ const RoleManagementPage = () => {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                className="h-6 w-6 p-0 text-red-600 hover:text-red-700"
+                                className="h-5 w-5 p-0 text-red-600 hover:text-red-700"
                                 title="Delete role"
                               >
                                 <AlertCircle className="h-3 w-3" />
@@ -488,53 +488,53 @@ const RoleManagementPage = () => {
                     </div>
                   </CardHeader>
 
-                  <CardContent className="space-y-4">
+                  <CardContent className="space-y-3 flex-1 flex flex-col">
                     {/* Description */}
-                    <p className="text-sm text-muted-foreground">
-                      {role.description}
+                    <p className="text-xs text-muted-foreground line-clamp-2">
+                      {role.description || "No description"}
                     </p>
 
                     {/* Role Stats */}
-                    <div className="flex items-center gap-4 text-sm">
+                    <div className="flex items-center gap-3 text-xs">
                       <div className="flex items-center gap-1">
-                        <Key className="h-4 w-4 text-muted-foreground" />
+                        <Key className="h-3 w-3 text-muted-foreground" />
                         <span className="font-medium">Priority:</span>
                         <span className="text-foreground">{role.priority}</span>
                       </div>
                       <div className="flex items-center gap-1">
-                        <Users className="h-4 w-4 text-muted-foreground" />
+                        <Users className="h-3 w-3 text-muted-foreground" />
                         <span className="font-medium">Users:</span>
                         <span className="text-foreground">
-                          {role.userCount}
+                          {role.userCount || 0}
                         </span>
                       </div>
                     </div>
 
                     {/* Permissions Section */}
-                    <div className="space-y-3">
+                    <div className="space-y-2 flex-1">
                       <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <h4 className="text-sm font-medium">
+                        <div className="flex items-center gap-1.5">
+                          <h4 className="text-xs font-medium">
                             Permissions
                           </h4>
                           <Badge 
                             variant={getRolePermissions(role).length > 0 ? "default" : "secondary"}
-                            className="text-xs"
+                            className="text-[10px] px-1.5 py-0"
                           >
-                            {getRolePermissions(role).length} assigned
+                            {getRolePermissions(role).length}
                           </Badge>
                         </div>
                         {role.isSystem ? (
-                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                            <Shield className="h-3 w-3" />
-                            <span>System role - cannot modify</span>
+                          <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                            <Shield className="h-2.5 w-2.5" />
+                            <span>System</span>
                           </div>
                         ) : (
                           <Button
                             variant="outline"
                             size="sm"
                             onClick={() => handleManagePermissions(role.id)}
-                            className="flex items-center gap-1"
+                            className="flex items-center gap-1 h-6 text-xs px-2"
                           >
                             <Settings className="h-3 w-3" />
                             Manage
@@ -547,24 +547,30 @@ const RoleManagementPage = () => {
                         {getRolePermissions(role).length > 0 ? (
                           <>
                             {getRolePermissions(role)
-                              .slice(0, 3)
-                              .map((permission, index) => (
-                                <Badge
-                                  key={index}
-                                  variant="secondary"
-                                  className="text-xs"
-                                >
-                                  {permission.name || permission}
-                                </Badge>
-                              ))}
-                            {getRolePermissions(role).length > 3 && (
-                              <Badge variant="outline" className="text-xs">
-                                +{getRolePermissions(role).length - 3} more
+                              .slice(0, 2)
+                              .map((permission, index) => {
+                                // Handle both object and string permissions
+                                const permissionName = typeof permission === 'object' 
+                                  ? (permission.name || permission.display_name || permission.slug || 'Unknown')
+                                  : permission;
+                                return (
+                                  <Badge
+                                    key={index}
+                                    variant="secondary"
+                                    className="text-[10px] px-1.5 py-0"
+                                  >
+                                    {permissionName}
+                                  </Badge>
+                                );
+                              })}
+                            {getRolePermissions(role).length > 2 && (
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                                +{getRolePermissions(role).length - 2} more
                               </Badge>
                             )}
                           </>
                         ) : (
-                          <div className="text-xs text-muted-foreground italic">
+                          <div className="text-[10px] text-muted-foreground italic">
                             No permissions assigned
                           </div>
                         )}
