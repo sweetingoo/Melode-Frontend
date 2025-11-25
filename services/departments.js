@@ -5,7 +5,7 @@ export const departmentsService = {
   // Get all departments
   getDepartments: async (params = {}) => {
     try {
-      return await api.get("/employees/departments", { params });
+      return await api.get("/departments", { params });
     } catch (error) {
       console.error("Get departments failed:", error);
       throw error;
@@ -15,7 +15,7 @@ export const departmentsService = {
   // Get department by ID
   getDepartment: async (id) => {
     try {
-      return await api.get(`/employees/departments/${id}`);
+      return await api.get(`/departments/${id}`);
     } catch (error) {
       console.error(`Get department ${id} failed:`, error);
       throw error;
@@ -25,7 +25,7 @@ export const departmentsService = {
   // Create department
   createDepartment: async (departmentData) => {
     try {
-      return await api.post("/employees/departments", departmentData);
+      return await api.post("/departments", departmentData);
     } catch (error) {
       console.error("Create department failed:", error);
       throw error;
@@ -35,7 +35,7 @@ export const departmentsService = {
   // Update department
   updateDepartment: async (id, departmentData) => {
     try {
-      return await api.put(`/employees/departments/${id}`, departmentData);
+      return await api.put(`/departments/${id}`, departmentData);
     } catch (error) {
       console.error(`Update department ${id} failed:`, error);
       throw error;
@@ -45,7 +45,7 @@ export const departmentsService = {
   // Delete department
   deleteDepartment: async (id) => {
     try {
-      return await api.delete(`/employees/departments/${id}`);
+      return await api.delete(`/departments/${id}`);
     } catch (error) {
       console.error(`Delete department ${id} failed:`, error);
       throw error;

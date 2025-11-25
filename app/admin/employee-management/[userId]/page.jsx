@@ -61,6 +61,7 @@ import {
   Search,
   AlertCircle,
   Building2,
+  Network,
 } from "lucide-react";
 import {
   useUser,
@@ -89,6 +90,7 @@ import {
 import { useDepartments } from "@/hooks/useDepartments";
 import { useQueryClient } from "@tanstack/react-query";
 import { userKeys } from "@/hooks/useUsers";
+import { useHierarchyImage } from "@/hooks/useEmployees";
 
 const UserEditPage = () => {
   const params = useParams();
@@ -239,8 +241,10 @@ const UserEditPage = () => {
     usePermissions();
 
   // Get current user (admin) data to check what permissions they can assign
-  const { data: currentUserData, isLoading: currentUserLoading } =
-    useCurrentUser();
+  const { data: currentUserData, isLoading: currentUserLoading } = useCurrentUser();
+
+  // Get hierarchy image
+  const { data: hierarchyImageUrl, isLoading: hierarchyLoading, error: hierarchyError } = useHierarchyImage();
 
   // Get current user's permissions to determine what they can assign
   const currentUserPermissions = currentUserData?.permissions || [];
@@ -795,7 +799,7 @@ const UserEditPage = () => {
 
       {/* Tabs Section */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="basic" className="flex items-center gap-2">
             <User className="h-4 w-4" />
             Basic Information
@@ -803,6 +807,10 @@ const UserEditPage = () => {
           <TabsTrigger value="roles" className="flex items-center gap-2">
             <Shield className="h-4 w-4" />
             Roles & Permissions
+          </TabsTrigger>
+          <TabsTrigger value="hierarchy" className="flex items-center gap-2">
+            <Network className="h-4 w-4" />
+            Hierarchy
           </TabsTrigger>
           <TabsTrigger value="status" className="flex items-center gap-2">
             <Eye className="h-4 w-4" />
@@ -1162,7 +1170,7 @@ const UserEditPage = () => {
                     <TableBody>
                       {/* Show message when no permissions exist at all */}
                       {userPermissions.length === 0 &&
-                      userDirectPermissions.length === 0 ? (
+                        userDirectPermissions.length === 0 ? (
                         <TableRow>
                           <TableCell
                             colSpan={3}
@@ -1277,6 +1285,79 @@ const UserEditPage = () => {
                   </Button>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Hierarchy Tab */}
+        <TabsContent value="hierarchy" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Network className="h-5 w-5" />
+                Department Hierarchy
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {hierarchyLoading ? (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
+                  <p className="text-muted-foreground">Loading hierarchy image...</p>
+                </div>
+              ) : hierarchyError ? (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <AlertCircle className="h-12 w-12 text-red-500 mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">Error Loading Hierarchy</h3>
+                  <p className="text-muted-foreground mb-4">
+                    {hierarchyError?.response?.data?.message || "Failed to load hierarchy image. Please try again."}
+                  </p>
+                  <Button
+                    variant="outline"
+                    onClick={() => window.location.reload()}
+                  >
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Retry
+                  </Button>
+                </div>
+              ) : hierarchyImageUrl ? (
+                <div className="space-y-4">
+                  <div className="rounded-lg border bg-muted/50 p-4">
+                    <p className="text-sm text-muted-foreground mb-4">
+                      This visualization shows the organizational hierarchy structure for all departments.
+                    </p>
+                    <div className="w-full overflow-auto border rounded-lg bg-white">
+                      <img
+                        src={hierarchyImageUrl}
+                        alt="Department Hierarchy"
+                        className="w-full h-auto"
+                        style={{ maxWidth: "100%" }}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between pt-4 border-t">
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Info className="h-4 w-4" />
+                      <span>Hierarchy image is automatically generated from department structure</span>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => window.open(hierarchyImageUrl, "_blank")}
+                    >
+                      <Eye className="h-4 w-4 mr-2" />
+                      Open in New Tab
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <Network className="h-12 w-12 text-muted-foreground mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">No Hierarchy Available</h3>
+                  <p className="text-muted-foreground">
+                    No hierarchy image is available at this time.
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

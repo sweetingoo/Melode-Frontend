@@ -56,11 +56,9 @@ export const employeesService = {
   },
 
   // Get hierarchy image
-  // Note: This endpoint might still be under /employees/hierarchy/image
-  // If it's been moved, update this endpoint accordingly
   getHierarchyImage: async () => {
     try {
-      return await api.get("/employees/hierarchy/image", {
+      return await api.get("/departments/hierarchy/image", {
         responseType: "blob",
       });
     } catch (error) {

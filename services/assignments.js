@@ -5,7 +5,7 @@ export const assignmentsService = {
   // Get all assignments
   getAssignments: async (params = {}) => {
     try {
-      return await api.get("/employees/assignments", { params });
+      return await api.get("/departments/assignments", { params });
     } catch (error) {
       console.error("Get assignments failed:", error);
       throw error;
@@ -15,7 +15,7 @@ export const assignmentsService = {
   // Get assignment by ID
   getAssignment: async (id) => {
     try {
-      return await api.get(`/employees/assignments/${id}`);
+      return await api.get(`/departments/assignments/${id}`);
     } catch (error) {
       console.error(`Get assignment ${id} failed:`, error);
       throw error;
@@ -25,7 +25,7 @@ export const assignmentsService = {
   // Get assignments for a specific employee
   getEmployeeAssignments: async (employeeId) => {
     try {
-      return await api.get(`/employees/${employeeId}/departments`);
+      return await api.get(`/departments/users/${employeeId}/departments`);
     } catch (error) {
       console.error(`Get employee assignments ${employeeId} failed:`, error);
       throw error;
@@ -35,7 +35,7 @@ export const assignmentsService = {
   // Get assignments for a specific department
   getDepartmentAssignments: async (departmentId) => {
     try {
-      return await api.get(`/employees/departments/${departmentId}/employees`);
+      return await api.get(`/departments/${departmentId}/users`);
     } catch (error) {
       console.error(
         `Get department assignments ${departmentId} failed:`,
@@ -48,9 +48,19 @@ export const assignmentsService = {
   // Create assignment
   createAssignment: async (assignmentData) => {
     try {
-      return await api.post("/employees/assignments", assignmentData);
+      return await api.post("/departments/assignments", assignmentData);
     } catch (error) {
       console.error("Create assignment failed:", error);
+      throw error;
+    }
+  },
+
+  // Create bulk assignments
+  createBulkAssignments: async (assignmentsData) => {
+    try {
+      return await api.post("/departments/assignments/bulk", assignmentsData);
+    } catch (error) {
+      console.error("Create bulk assignments failed:", error);
       throw error;
     }
   },
@@ -58,7 +68,7 @@ export const assignmentsService = {
   // Update assignment
   updateAssignment: async (id, assignmentData) => {
     try {
-      return await api.put(`/employees/assignments/${id}`, assignmentData);
+      return await api.put(`/departments/assignments/${id}`, assignmentData);
     } catch (error) {
       console.error(`Update assignment ${id} failed:`, error);
       throw error;
@@ -69,7 +79,7 @@ export const assignmentsService = {
   deleteAssignment: async (employeeId, departmentId) => {
     try {
       return await api.delete(
-        `/employees/assignments/${employeeId}/${departmentId}`
+        `/departments/assignments/${employeeId}/${departmentId}`
       );
     } catch (error) {
       console.error(
