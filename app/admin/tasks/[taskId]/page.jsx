@@ -186,11 +186,60 @@ const TaskDetailPage = () => {
 
   const handleUpdateTask = async () => {
     try {
-      const taskData = {
-        ...taskFormData,
-        due_date: dueDate ? format(dueDate, "yyyy-MM-dd'T'HH:mm:ss") : taskFormData.due_date,
-        assigned_user_ids: selectedUserIds.length > 0 ? selectedUserIds : undefined,
-      };
+      // Build task data object, only including fields with actual values
+      const taskData = {};
+      
+      // Include required/always-updated fields
+      if (taskFormData.title) taskData.title = taskFormData.title;
+      if (taskFormData.task_type) taskData.task_type = taskFormData.task_type;
+      if (taskFormData.description) taskData.description = taskFormData.description;
+      if (taskFormData.priority) taskData.priority = taskFormData.priority;
+      if (taskFormData.status) taskData.status = taskFormData.status;
+      
+      // Only include due_date if it's set
+      if (dueDate) {
+        taskData.due_date = format(dueDate, "yyyy-MM-dd'T'HH:mm:ss");
+      } else if (taskFormData.due_date) {
+        taskData.due_date = taskFormData.due_date;
+      }
+      
+      // Only include location_id if it has a value
+      if (taskFormData.location_id && taskFormData.location_id !== "" && taskFormData.location_id !== "none") {
+        const locationId = parseInt(taskFormData.location_id);
+        if (!isNaN(locationId)) {
+          taskData.location_id = locationId;
+        }
+      }
+      
+      // Only include assigned_user_ids if there are selected users
+      if (selectedUserIds.length > 0) {
+        taskData.assigned_user_ids = selectedUserIds;
+      }
+      
+      // Only include assigned_to_user_id if it has a value
+      if (taskFormData.assigned_to_user_id && taskFormData.assigned_to_user_id !== "" && taskFormData.assigned_to_user_id !== "none") {
+        const userId = parseInt(taskFormData.assigned_to_user_id);
+        if (!isNaN(userId)) {
+          taskData.assigned_to_user_id = userId;
+        }
+      }
+      
+      // Only include assigned_to_role_id if it has a value
+      if (taskFormData.assigned_to_role_id && taskFormData.assigned_to_role_id !== "" && taskFormData.assigned_to_role_id !== "none") {
+        const roleId = parseInt(taskFormData.assigned_to_role_id);
+        if (!isNaN(roleId)) {
+          taskData.assigned_to_role_id = roleId;
+        }
+      }
+      
+      // Only include assigned_to_asset_id if it has a value
+      if (taskFormData.assigned_to_asset_id && taskFormData.assigned_to_asset_id !== "" && taskFormData.assigned_to_asset_id !== "none") {
+        const assetId = parseInt(taskFormData.assigned_to_asset_id);
+        if (!isNaN(assetId)) {
+          taskData.assigned_to_asset_id = assetId;
+        }
+      }
+      
       await updateTaskMutation.mutateAsync({
         id: taskId,
         taskData,
@@ -212,10 +261,38 @@ const TaskDetailPage = () => {
 
   const handleAssignTask = async () => {
     try {
-      const assignment = {
-        ...assignmentData,
-        assigned_user_ids: selectedUserIds.length > 0 ? selectedUserIds : undefined,
-      };
+      // Build assignment object, only including fields with actual values
+      const assignment = {};
+      
+      // Only include assigned_user_ids if there are selected users
+      if (selectedUserIds.length > 0) {
+        assignment.assigned_user_ids = selectedUserIds;
+      }
+      
+      // Only include assigned_to_user_id if it has a value
+      if (assignmentData.assigned_to_user_id && assignmentData.assigned_to_user_id !== "" && assignmentData.assigned_to_user_id !== "none") {
+        const userId = parseInt(assignmentData.assigned_to_user_id);
+        if (!isNaN(userId)) {
+          assignment.assigned_to_user_id = userId;
+        }
+      }
+      
+      // Only include assigned_to_role_id if it has a value
+      if (assignmentData.assigned_to_role_id && assignmentData.assigned_to_role_id !== "" && assignmentData.assigned_to_role_id !== "none") {
+        const roleId = parseInt(assignmentData.assigned_to_role_id);
+        if (!isNaN(roleId)) {
+          assignment.assigned_to_role_id = roleId;
+        }
+      }
+      
+      // Only include assigned_to_asset_id if it has a value
+      if (assignmentData.assigned_to_asset_id && assignmentData.assigned_to_asset_id !== "" && assignmentData.assigned_to_asset_id !== "none") {
+        const assetId = parseInt(assignmentData.assigned_to_asset_id);
+        if (!isNaN(assetId)) {
+          assignment.assigned_to_asset_id = assetId;
+        }
+      }
+      
       await assignTaskMutation.mutateAsync({
         id: taskId,
         assignmentData: assignment,
