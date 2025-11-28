@@ -98,6 +98,7 @@ import { useLocations } from "@/hooks/useLocations";
 import { useAssets } from "@/hooks/useAssets";
 import { useRoles } from "@/hooks/useRoles";
 import { useActiveTaskTypes } from "@/hooks/useTaskTypes";
+import { useForms } from "@/hooks/useForms";
 import { format } from "date-fns";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -131,6 +132,8 @@ const TasksPage = () => {
     assigned_user_ids: [],
     assigned_to_role_id: "",
     assigned_to_asset_id: "",
+    form_id: "",
+    form_submission_id: "",
   });
   const [completionData, setCompletionData] = useState({
     completion_data: {},
@@ -209,6 +212,21 @@ const TasksPage = () => {
   const { data: assetsData } = useAssets();
   const { data: rolesData } = useRoles();
   const { data: activeTaskTypes } = useActiveTaskTypes();
+  const { data: formsResponse } = useForms();
+
+  // Handle different API response structures for forms
+  let forms = [];
+  if (formsResponse) {
+    if (Array.isArray(formsResponse)) {
+      forms = formsResponse;
+    } else if (formsResponse.forms && Array.isArray(formsResponse.forms)) {
+      forms = formsResponse.forms;
+    } else if (formsResponse.data && Array.isArray(formsResponse.data)) {
+      forms = formsResponse.data;
+    } else if (formsResponse.results && Array.isArray(formsResponse.results)) {
+      forms = formsResponse.results;
+    }
+  }
 
   const deleteTaskMutation = useDeleteTask();
   const createTaskMutation = useCreateTask();
@@ -372,10 +390,73 @@ const TasksPage = () => {
   const handleCreateTask = async () => {
     try {
       const taskData = {
-        ...taskFormData,
-        due_date: dueDate ? format(dueDate, "yyyy-MM-dd'T'HH:mm:ss") : null,
-        assigned_user_ids: selectedUserIds.length > 0 ? selectedUserIds : undefined,
+        title: taskFormData.title,
+        task_type: taskFormData.task_type,
+        status: taskFormData.status || "pending",
       };
+      
+      // Only include optional fields if they have valid values
+      if (taskFormData.description) {
+        taskData.description = taskFormData.description;
+      }
+      
+      if (dueDate) {
+        taskData.due_date = format(dueDate, "yyyy-MM-dd'T'HH:mm:ss");
+      }
+      
+      if (taskFormData.priority) {
+        taskData.priority = taskFormData.priority;
+      }
+      
+      if (selectedUserIds.length > 0) {
+        taskData.assigned_user_ids = selectedUserIds;
+      }
+      
+      // Only include location_id if it has a valid value
+      if (taskFormData.location_id && taskFormData.location_id !== "" && taskFormData.location_id !== "none") {
+        const locationId = parseInt(taskFormData.location_id);
+        if (!isNaN(locationId)) {
+          taskData.location_id = locationId;
+        }
+      }
+      
+      // Only include assigned_to_role_id if it has a valid value (not empty string)
+      const roleIdValue = taskFormData.assigned_to_role_id;
+      if (roleIdValue && roleIdValue !== "" && roleIdValue !== "none") {
+        const roleId = parseInt(roleIdValue);
+        if (!isNaN(roleId)) {
+          taskData.assigned_to_role_id = roleId;
+        }
+      }
+      
+      // Only include assigned_to_asset_id if it has a valid value (not empty string)
+      const assetIdValue = taskFormData.assigned_to_asset_id;
+      if (assetIdValue && assetIdValue !== "" && assetIdValue !== "none") {
+        const assetId = parseInt(assetIdValue);
+        if (!isNaN(assetId)) {
+          taskData.assigned_to_asset_id = assetId;
+        }
+      }
+      
+      // Only include form_id if it has a value (API accepts form_id: number | null)
+      if (taskFormData.form_id && taskFormData.form_id !== "" && taskFormData.form_id !== "none") {
+        const formId = parseInt(taskFormData.form_id);
+        if (!isNaN(formId)) {
+          taskData.form_id = formId;
+        }
+      }
+      
+      // Only include form_submission_id if it has a value (API accepts form_submission_id: number | null)
+      if (taskFormData.form_submission_id && taskFormData.form_submission_id !== "" && taskFormData.form_submission_id !== "none") {
+        const submissionId = parseInt(taskFormData.form_submission_id);
+        if (!isNaN(submissionId)) {
+          taskData.form_submission_id = submissionId;
+        }
+      }
+      
+      // Note: assigned_to_user_id is not used in create modal (only assigned_user_ids for multiple selection)
+      // So we never include it in the request
+      
       await createTaskMutation.mutateAsync(taskData);
       setIsCreateModalOpen(false);
       resetForm();
@@ -438,6 +519,28 @@ const TasksPage = () => {
         if (!isNaN(assetId)) {
           taskData.assigned_to_asset_id = assetId;
         }
+      }
+      
+      // Only include form_id if it has a value (API accepts form_id: number | null)
+      if (taskFormData.form_id && taskFormData.form_id !== "" && taskFormData.form_id !== "none") {
+        const formId = parseInt(taskFormData.form_id);
+        if (!isNaN(formId)) {
+          taskData.form_id = formId;
+        }
+      } else if (taskFormData.hasOwnProperty('form_id')) {
+        // If form_id was explicitly set to empty/none, send null to clear it
+        taskData.form_id = null;
+      }
+      
+      // Only include form_submission_id if it has a value (API accepts form_submission_id: number | null)
+      if (taskFormData.form_submission_id && taskFormData.form_submission_id !== "" && taskFormData.form_submission_id !== "none") {
+        const submissionId = parseInt(taskFormData.form_submission_id);
+        if (!isNaN(submissionId)) {
+          taskData.form_submission_id = submissionId;
+        }
+      } else if (taskFormData.hasOwnProperty('form_submission_id')) {
+        // If form_submission_id was explicitly set to empty, send null to clear it
+        taskData.form_submission_id = null;
       }
       
       await updateTaskMutation.mutateAsync({
@@ -543,6 +646,8 @@ const TasksPage = () => {
       assigned_user_ids: [],
       assigned_to_role_id: "",
       assigned_to_asset_id: "",
+      form_id: "",
+      form_submission_id: "",
     });
     setSelectedUserIds([]);
     setDueDate(null);
@@ -562,6 +667,8 @@ const TasksPage = () => {
       assigned_user_ids: task.assigned_user_ids || [],
       assigned_to_role_id: task.assigned_to_role_id || "",
       assigned_to_asset_id: task.assigned_to_asset_id || "",
+      form_id: task.form_id || "",
+      form_submission_id: task.form_submission_id || "",
     });
     setSelectedUserIds(task.assigned_user_ids || []);
     setDueDate(task.due_date ? new Date(task.due_date) : null);
@@ -854,12 +961,26 @@ const TasksPage = () => {
                   {filteredTasks.map((task) => (
                     <TableRow key={task.id}>
                       <TableCell className="font-medium">
-                        <Link
-                          href={`/admin/tasks/${task.id}`}
-                          className="hover:underline"
-                        >
-                          {task.title}
-                        </Link>
+                        <div className="flex items-center gap-2">
+                          <Link
+                            href={`/admin/tasks/${task.id}`}
+                            className="hover:underline"
+                          >
+                            {task.title}
+                          </Link>
+                          {task.form_id && (
+                            <Badge variant="outline" className="text-xs">
+                              <FileText className="mr-1 h-3 w-3" />
+                              From Form
+                            </Badge>
+                          )}
+                          {task.form_id && task.form_submission_id && (
+                            <Badge variant="secondary" className="text-xs">
+                              <Users className="mr-1 h-3 w-3" />
+                              Individual
+                            </Badge>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell>
                         {(() => {
@@ -1213,7 +1334,7 @@ const TasksPage = () => {
               <div>
                 <Label>Assign to Role</Label>
                 <Select
-                  value={taskFormData.assigned_to_role_id || "none"}
+                  value={taskFormData.assigned_to_role_id || undefined}
                   onValueChange={(value) =>
                     setTaskFormData({
                       ...taskFormData,
@@ -1222,7 +1343,7 @@ const TasksPage = () => {
                   }
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select role" />
+                    <SelectValue placeholder="Select role (optional)" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">None</SelectItem>
@@ -1237,7 +1358,7 @@ const TasksPage = () => {
               <div>
                 <Label>Assign to Asset</Label>
                 <Select
-                  value={taskFormData.assigned_to_asset_id || "none"}
+                  value={taskFormData.assigned_to_asset_id || undefined}
                   onValueChange={(value) =>
                     setTaskFormData({
                       ...taskFormData,
@@ -1246,7 +1367,7 @@ const TasksPage = () => {
                   }
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select asset" />
+                    <SelectValue placeholder="Select asset (optional)" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">None</SelectItem>
@@ -1257,6 +1378,49 @@ const TasksPage = () => {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Link to Form</Label>
+                <Select
+                  value={taskFormData.form_id || "none"}
+                  onValueChange={(value) =>
+                    setTaskFormData({
+                      ...taskFormData,
+                      form_id: value === "none" ? "" : value,
+                      // Clear form_submission_id when form changes
+                      form_submission_id: value === "none" ? "" : taskFormData.form_submission_id,
+                    })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select form" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {forms.map((form) => (
+                      <SelectItem key={form.id} value={form.id.toString()}>
+                        {form.form_title || form.form_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Form Submission ID</Label>
+                <Input
+                  type="number"
+                  value={taskFormData.form_submission_id || ""}
+                  onChange={(e) =>
+                    setTaskFormData({
+                      ...taskFormData,
+                      form_submission_id: e.target.value,
+                    })
+                  }
+                  placeholder="Optional submission ID"
+                  disabled={!taskFormData.form_id || taskFormData.form_id === "none"}
+                />
               </div>
             </div>
           </div>
@@ -1427,6 +1591,49 @@ const TasksPage = () => {
                     ))}
                   </div>
                 )}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Link to Form</Label>
+                <Select
+                  value={taskFormData.form_id || "none"}
+                  onValueChange={(value) =>
+                    setTaskFormData({
+                      ...taskFormData,
+                      form_id: value === "none" ? "" : value,
+                      // Clear form_submission_id when form changes
+                      form_submission_id: value === "none" ? "" : taskFormData.form_submission_id,
+                    })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select form" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {forms.map((form) => (
+                      <SelectItem key={form.id} value={form.id.toString()}>
+                        {form.form_title || form.form_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Form Submission ID</Label>
+                <Input
+                  type="number"
+                  value={taskFormData.form_submission_id || ""}
+                  onChange={(e) =>
+                    setTaskFormData({
+                      ...taskFormData,
+                      form_submission_id: e.target.value,
+                    })
+                  }
+                  placeholder="Optional submission ID"
+                  disabled={!taskFormData.form_id || taskFormData.form_id === "none"}
+                />
               </div>
             </div>
           </div>

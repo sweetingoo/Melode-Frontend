@@ -51,6 +51,7 @@ import {
   Loader2,
   CheckSquare,
   Type,
+  FileText,
 } from "lucide-react";
 import { assets } from "../assets/assets";
 import Image from "next/image";
@@ -139,6 +140,12 @@ const menuItems = [
     icon: Type,
     url: "/admin/task-types",
     permission: "task_types:read", // Permission to read task types
+  },
+  {
+    title: "Forms",
+    icon: FileText,
+    url: "/admin/forms",
+    permission: "forms:read", // Permission to read forms
   },
 ];
 

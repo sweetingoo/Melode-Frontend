@@ -161,5 +161,28 @@ export const tasksService = {
       throw error;
     }
   },
+
+  // Get recurring task history
+  getRecurringTaskHistory: async (taskId) => {
+    try {
+      return await api.get(`/tasks/${taskId}/recurring-history`);
+    } catch (error) {
+      console.error(`Get recurring task history for ${taskId} failed:`, error);
+      throw error;
+    }
+  },
+
+  // Bulk create tasks for role
+  bulkCreateTasksForRole: async (roleId, taskTemplate) => {
+    try {
+      return await api.post("/tasks/bulk-create-for-role", {
+        role_id: roleId,
+        task_template: taskTemplate,
+      });
+    } catch (error) {
+      console.error(`Bulk create tasks for role ${roleId} failed:`, error);
+      throw error;
+    }
+  },
 };
 

@@ -39,6 +39,8 @@ import {
   Building2,
   Image as ImageIcon,
   Loader2,
+  History,
+  Link as LinkIcon,
 } from "lucide-react";
 import {
   useTask,
@@ -52,7 +54,9 @@ import { useLocations } from "@/hooks/useLocations";
 import { useAssets } from "@/hooks/useAssets";
 import { useRoles } from "@/hooks/useRoles";
 import { useActiveTaskTypes } from "@/hooks/useTaskTypes";
+import { useForms } from "@/hooks/useForms";
 import { format } from "date-fns";
+import RecurringTaskHistory from "@/components/RecurringTaskHistory";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -90,6 +94,7 @@ const TaskDetailPage = () => {
   });
   const [selectedUserIds, setSelectedUserIds] = useState([]);
   const [dueDate, setDueDate] = useState(null);
+  const [showHistory, setShowHistory] = useState(false);
 
   const { data: task, isLoading, error } = useTask(taskId);
   const { data: usersResponse } = useUsers();
@@ -97,6 +102,21 @@ const TaskDetailPage = () => {
   const { data: assetsData } = useAssets();
   const { data: rolesData } = useRoles();
   const { data: activeTaskTypes } = useActiveTaskTypes();
+  const { data: formsResponse } = useForms();
+
+  // Handle different API response structures for forms
+  let forms = [];
+  if (formsResponse) {
+    if (Array.isArray(formsResponse)) {
+      forms = formsResponse;
+    } else if (formsResponse.forms && Array.isArray(formsResponse.forms)) {
+      forms = formsResponse.forms;
+    } else if (formsResponse.data && Array.isArray(formsResponse.data)) {
+      forms = formsResponse.data;
+    } else if (formsResponse.results && Array.isArray(formsResponse.results)) {
+      forms = formsResponse.results;
+    }
+  }
 
   const updateTaskMutation = useUpdateTask();
   const deleteTaskMutation = useDeleteTask();
@@ -164,6 +184,8 @@ const TaskDetailPage = () => {
         assigned_user_ids: task.assigned_user_ids || [],
         assigned_to_role_id: task.assigned_to_role_id || "",
         assigned_to_asset_id: task.assigned_to_asset_id || "",
+        form_id: task.form_id || "",
+        form_submission_id: task.form_submission_id || "",
       });
       setSelectedUserIds(task.assigned_user_ids || []);
       setDueDate(task.due_date ? new Date(task.due_date) : null);
@@ -238,6 +260,28 @@ const TaskDetailPage = () => {
         if (!isNaN(assetId)) {
           taskData.assigned_to_asset_id = assetId;
         }
+      }
+      
+      // Only include form_id if it has a value (API accepts form_id: number | null)
+      if (taskFormData.form_id && taskFormData.form_id !== "" && taskFormData.form_id !== "none") {
+        const formId = parseInt(taskFormData.form_id);
+        if (!isNaN(formId)) {
+          taskData.form_id = formId;
+        }
+      } else if (taskFormData.hasOwnProperty('form_id')) {
+        // If form_id was explicitly set to empty/none, send null to clear it
+        taskData.form_id = null;
+      }
+      
+      // Only include form_submission_id if it has a value (API accepts form_submission_id: number | null)
+      if (taskFormData.form_submission_id && taskFormData.form_submission_id !== "" && taskFormData.form_submission_id !== "none") {
+        const submissionId = parseInt(taskFormData.form_submission_id);
+        if (!isNaN(submissionId)) {
+          taskData.form_submission_id = submissionId;
+        }
+      } else if (taskFormData.hasOwnProperty('form_submission_id')) {
+        // If form_submission_id was explicitly set to empty, send null to clear it
+        taskData.form_submission_id = null;
       }
       
       await updateTaskMutation.mutateAsync({
@@ -377,6 +421,15 @@ const TaskDetailPage = () => {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {(task.is_recurring || task.parent_task_id) && (
+            <Button
+              variant="outline"
+              onClick={() => setShowHistory(true)}
+            >
+              <History className="mr-2 h-4 w-4" />
+              View History
+            </Button>
+          )}
           {task.status !== "completed" && (
             <Button onClick={() => setIsCompleteModalOpen(true)}>
               <CheckCircle className="mr-2 h-4 w-4" />
@@ -489,6 +542,65 @@ const TaskDetailPage = () => {
                 <div>
                   <Label className="text-muted-foreground">Notes</Label>
                   <p className="mt-1 whitespace-pre-wrap">{task.notes}</p>
+                </div>
+              )}
+              {/* Form Links */}
+              {(task.form_id || task.form_submission_id) && (
+                <div className="pt-4 border-t">
+                  <div className="flex items-center justify-between mb-2">
+                    <Label className="text-muted-foreground flex items-center gap-2">
+                      <LinkIcon className="h-4 w-4" />
+                      Created from Form
+                    </Label>
+                    {task.form_id && task.form_submission_id && (
+                      <Badge variant="secondary" className="text-xs">
+                        <Users className="mr-1 h-3 w-3" />
+                        Individual Task
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="mt-2 space-y-2">
+                    {task.form_id && (
+                      <div className="flex items-center gap-2 p-2 border rounded-md">
+                        <FileText className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm">
+                          Form ID: {task.form_id}
+                        </span>
+                        <Link
+                          href={`/admin/forms/${task.form_id}`}
+                          className="ml-auto"
+                        >
+                          <Button variant="ghost" size="sm">
+                            View Form
+                          </Button>
+                        </Link>
+                      </div>
+                    )}
+                    {task.form_submission_id && (
+                      <div className="flex items-center gap-2 p-2 border rounded-md">
+                        <FileText className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm">
+                          Submission ID: {task.form_submission_id}
+                        </span>
+                        <Link
+                          href={`/admin/forms/${task.form_id || ''}/submissions/${task.form_submission_id}`}
+                          className="ml-auto"
+                        >
+                          <Button variant="ghost" size="sm">
+                            View Submission
+                          </Button>
+                        </Link>
+                      </div>
+                    )}
+                    {task.form_id && task.form_submission_id && (
+                      <div className="p-2 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-md">
+                        <p className="text-xs text-blue-800 dark:text-blue-200">
+                          This is an individual task created from bulk task creation. Other users in
+                          the role may have received similar tasks from the same form submission.
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </CardContent>
@@ -667,6 +779,19 @@ const TaskDetailPage = () => {
                     : "N/A"}
                 </p>
               </div>
+              {task.parent_task_id && (
+                <div>
+                  <Label className="text-muted-foreground">Parent Task ID</Label>
+                  <div className="flex items-center gap-2 mt-1">
+                    <p>{task.parent_task_id}</p>
+                    <Link href={`/admin/tasks/${task.parent_task_id}`}>
+                      <Button variant="ghost" size="sm">
+                        View Parent
+                      </Button>
+                    </Link>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -823,6 +948,49 @@ const TaskDetailPage = () => {
                     ))}
                   </div>
                 )}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Link to Form</Label>
+                <Select
+                  value={taskFormData.form_id || "none"}
+                  onValueChange={(value) =>
+                    setTaskFormData({
+                      ...taskFormData,
+                      form_id: value === "none" ? "" : value,
+                      // Clear form_submission_id when form changes
+                      form_submission_id: value === "none" ? "" : taskFormData.form_submission_id,
+                    })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select form" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {forms.map((form) => (
+                      <SelectItem key={form.id} value={form.id.toString()}>
+                        {form.form_title || form.form_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Form Submission ID</Label>
+                <Input
+                  type="number"
+                  value={taskFormData.form_submission_id || ""}
+                  onChange={(e) =>
+                    setTaskFormData({
+                      ...taskFormData,
+                      form_submission_id: e.target.value,
+                    })
+                  }
+                  placeholder="Optional submission ID"
+                  disabled={!taskFormData.form_id || taskFormData.form_id === "none"}
+                />
               </div>
             </div>
           </div>
@@ -1014,6 +1182,13 @@ const TaskDetailPage = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Recurring Task History Modal */}
+      <RecurringTaskHistory
+        taskId={taskId}
+        isOpen={showHistory}
+        onClose={() => setShowHistory(false)}
+      />
     </div>
   );
 };

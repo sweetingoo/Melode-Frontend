@@ -18,6 +18,8 @@ export const taskKeys = {
   automated: (params) => [...taskKeys.all, "automated", params],
   stats: () => [...taskKeys.all, "stats"],
   search: (params) => [...taskKeys.all, "search", params],
+  recurringHistory: (taskId) => [...taskKeys.all, "recurring-history", taskId],
+  bulkCreate: (roleId) => [...taskKeys.all, "bulk-create", roleId],
 };
 
 // Get all tasks query
@@ -321,6 +323,51 @@ export const useTaskStats = () => {
       return response.data;
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+};
+
+// Get recurring task history query
+export const useRecurringTaskHistory = (taskId, options = {}) => {
+  return useQuery({
+    queryKey: taskKeys.recurringHistory(taskId),
+    queryFn: async () => {
+      const response = await tasksService.getRecurringTaskHistory(taskId);
+      return response.data;
+    },
+    enabled: !!taskId,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    ...options,
+  });
+};
+
+// Bulk create tasks for role mutation
+export const useBulkCreateTasksForRole = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ roleId, taskTemplate }) => {
+      const response = await tasksService.bulkCreateTasksForRole(roleId, taskTemplate);
+      return response.data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: taskKeys.stats() });
+      toast.success("Tasks created successfully", {
+        description: `${data.tasks_created || 0} individual tasks created for ${data.total_users || 0} users.`,
+      });
+    },
+    onError: (error) => {
+      console.error("Bulk create tasks error:", error);
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.response?.data?.detail ||
+        "Failed to create tasks";
+      toast.error("Failed to create tasks", {
+        description: Array.isArray(errorMessage)
+          ? errorMessage.map((e) => e.msg || e).join(", ")
+          : errorMessage,
+      });
+    },
   });
 };
 
