@@ -85,7 +85,7 @@ const menuItems = [
     permission: "invitation:create", // Permission to create invitations
   },
   {
-    title: "Manage employees",
+    title: "Manage people",
     icon: Users,
     url: "/admin/employee-management",
     permission: "users:read", // Permission to read users

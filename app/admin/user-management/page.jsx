@@ -338,10 +338,10 @@ const UserManagementPage = () => {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">
-              User Management
+              People Management
             </h1>
             <p className="text-muted-foreground mt-1">
-              Manage users, roles, and permissions for your organization.
+              Manage people, roles, and permissions for your organization.
             </p>
           </div>
         </div>
@@ -380,10 +380,10 @@ const UserManagementPage = () => {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">
-              User Management
+              People Management
             </h1>
             <p className="text-muted-foreground mt-1">
-              Manage users, roles, and permissions for your organization.
+              Manage people, roles, and permissions for your organization.
             </p>
           </div>
         </div>
@@ -496,9 +496,9 @@ const UserManagementPage = () => {
       {/* Header Section */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Employee Management</h1>
+          <h1 className="text-3xl font-bold tracking-tight">People Management</h1>
           <p className="text-muted-foreground mt-1">
-            Manage employees, roles, and permissions for your organization.
+            Manage people, roles, and permissions for your organization.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -506,16 +506,16 @@ const UserManagementPage = () => {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder="Search employees..."
+              placeholder="Search people..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10 w-80"
             />
           </div>
-          {/* Create Employee Button */}
+          {/* Create Person Button */}
           <Button onClick={() => setIsCreateModalOpen(true)}>
             <UserPlus className="mr-2 h-4 w-4" />
-            Create Employee
+            Create Person
           </Button>
         </div>
       </div>
@@ -530,7 +530,7 @@ const UserManagementPage = () => {
               </div>
               <div>
                 <p className="text-sm font-medium text-muted-foreground">
-                  Total Employees
+                  Total People
                 </p>
                 <p className="text-2xl font-bold">{pagination.total}</p>
               </div>
@@ -546,7 +546,7 @@ const UserManagementPage = () => {
               </div>
               <div>
                 <p className="text-sm font-medium text-muted-foreground">
-                  Active Employees
+                  Active People
                 </p>
                 <p className="text-2xl font-bold">
                   {transformedUsers.filter((user) => user.isActive).length}
@@ -564,7 +564,7 @@ const UserManagementPage = () => {
               </div>
               <div>
                 <p className="text-sm font-medium text-muted-foreground">
-                  Inactive Employees
+                  Inactive People
                 </p>
                 <p className="text-2xl font-bold">
                   {transformedUsers.filter((user) => !user.isActive).length}
@@ -598,7 +598,7 @@ const UserManagementPage = () => {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Users className="h-5 w-5" />
-            All Employees
+            All People
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -606,7 +606,7 @@ const UserManagementPage = () => {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Employee</TableHead>
+                  <TableHead>Person</TableHead>
                   <TableHead>Role</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Last Login</TableHead>
@@ -679,7 +679,7 @@ const UserManagementPage = () => {
                               className="flex items-center"
                             >
                               <Edit className="mr-2 h-4 w-4" />
-                              Edit Employee
+                              Edit Person
                             </Link>
                           </DropdownMenuItem>
 
@@ -693,20 +693,20 @@ const UserManagementPage = () => {
                                   onSelect={(e) => e.preventDefault()}
                                 >
                                   <UserX className="mr-2 h-4 w-4" />
-                                  Deactivate Employee
+                                  Deactivate Person
                                 </DropdownMenuItem>
                               </AlertDialogTrigger>
                               <AlertDialogContent>
                                 <AlertDialogHeader>
                                   <AlertDialogTitle>
-                                    Deactivate Employee
+                                    Deactivate Person
                                   </AlertDialogTitle>
                                   <AlertDialogDescription>
                                     Are you sure you want to deactivate this
-                                    employee? They will not be able to log in to the
+                                    person? They will not be able to log in to the
                                     system.
                                     <br />
-                                    <strong>Employee:</strong> {user.name} (
+                                    <strong>Person:</strong> {user.name} (
                                     {user.email})
                                   </AlertDialogDescription>
                                 </AlertDialogHeader>
@@ -718,7 +718,7 @@ const UserManagementPage = () => {
                                     }
                                     className="bg-orange-600 hover:bg-orange-700"
                                   >
-                                    Deactivate Employee
+                                    Deactivate Person
                                   </AlertDialogAction>
                                 </AlertDialogFooter>
                               </AlertDialogContent>
@@ -732,19 +732,19 @@ const UserManagementPage = () => {
                                   onSelect={(e) => e.preventDefault()}
                                 >
                                   <CheckCircle className="mr-2 h-4 w-4" />
-                                  Activate Employee
+                                  Activate Person
                                 </DropdownMenuItem>
                               </AlertDialogTrigger>
                               <AlertDialogContent>
                                 <AlertDialogHeader>
                                   <AlertDialogTitle>
-                                    Activate Employee
+                                    Activate Person
                                   </AlertDialogTitle>
                                   <AlertDialogDescription>
-                                    Are you sure you want to activate this employee?
+                                    Are you sure you want to activate this person?
                                     They will be able to log in to the system.
                                     <br />
-                                    <strong>Employee:</strong> {user.name} (
+                                    <strong>Person:</strong> {user.name} (
                                     {user.email})
                                   </AlertDialogDescription>
                                 </AlertDialogHeader>
@@ -754,7 +754,7 @@ const UserManagementPage = () => {
                                     onClick={() => handleActivateUser(user.id)}
                                     className="bg-green-600 hover:bg-green-700"
                                   >
-                                    Activate Employee
+                                    Activate Person
                                   </AlertDialogAction>
                                 </AlertDialogFooter>
                               </AlertDialogContent>
@@ -815,18 +815,18 @@ const UserManagementPage = () => {
                                 onSelect={(e) => e.preventDefault()}
                               >
                                 <Trash2 className="mr-2 h-4 w-4" />
-                                Delete Employee
+                                Delete Person
                               </DropdownMenuItem>
                             </AlertDialogTrigger>
                             <AlertDialogContent>
                               <AlertDialogHeader>
-                                <AlertDialogTitle>Delete Employee</AlertDialogTitle>
+                                <AlertDialogTitle>Delete Person</AlertDialogTitle>
                                 <AlertDialogDescription>
-                                  Are you sure you want to delete this employee?
+                                  Are you sure you want to delete this person?
                                   This action cannot be undone and will
-                                  permanently remove the employee from the system.
+                                  permanently remove the person from the system.
                                   <br />
-                                  <strong>Employee:</strong> {user.name} (
+                                  <strong>Person:</strong> {user.name} (
                                   {user.email})
                                 </AlertDialogDescription>
                               </AlertDialogHeader>
@@ -836,7 +836,7 @@ const UserManagementPage = () => {
                                   onClick={() => handleDeleteUser(user.id)}
                                   className="bg-red-600 hover:bg-red-700"
                                 >
-                                  Delete Employee
+                                  Delete Person
                                 </AlertDialogAction>
                               </AlertDialogFooter>
                             </AlertDialogContent>
@@ -895,10 +895,10 @@ const UserManagementPage = () => {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <UserPlus className="h-5 w-5" />
-              Create New Employee
+              Create New Person
             </DialogTitle>
             <DialogDescription>
-              Add a new employee to the system. All required fields must be filled.
+              Add a new person to the system. All required fields must be filled.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">

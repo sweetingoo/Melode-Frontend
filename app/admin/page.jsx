@@ -542,7 +542,7 @@ const Dashboard = () => {
                         variant="outline"
                       >
                         <Users className="mr-2 h-4 w-4" />
-                        Manage Employees
+                        Manage People
                       </Button>
                     </Link>
                   )}

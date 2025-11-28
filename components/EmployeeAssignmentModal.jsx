@@ -94,7 +94,7 @@ const EmployeeAssignmentModal = ({
     const errors = {};
 
     if (!formData.employee_id) {
-      errors.employee_id = "Employee selection is required";
+      errors.employee_id = "Person selection is required";
     }
 
     if (!formData.department_id) {
@@ -218,19 +218,19 @@ const EmployeeAssignmentModal = ({
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>
-            {assignmentId ? "Edit Assignment" : "Assign Employee to Department"}
+            {assignmentId ? "Edit Assignment" : "Assign Person to Department"}
           </DialogTitle>
           <DialogDescription>
             {assignmentId
-              ? "Update the employee's department assignment."
-              : "Assign an employee to a department with a specific role."}
+              ? "Update the person's department assignment."
+              : "Assign a person to a department with a specific role."}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-4">
           {!employeeId && (
             <div className="space-y-2">
               <Label htmlFor="employee_id">
-                Employee <span className="text-red-500">*</span>
+                Person <span className="text-red-500">*</span>
               </Label>
               <Select
                 value={formData.employee_id}
@@ -243,12 +243,12 @@ const EmployeeAssignmentModal = ({
                     validationErrors.employee_id ? "border-red-500" : ""
                   }
                 >
-                  <SelectValue placeholder="Select employee" />
+                  <SelectValue placeholder="Select person" />
                 </SelectTrigger>
                 <SelectContent>
                   {employees.length === 0 ? (
                     <SelectItem value="no-employees" disabled>
-                      No employees available
+                      No people available
                     </SelectItem>
                   ) : (
                     employees.map((employee) => {

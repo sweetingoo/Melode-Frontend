@@ -1,6 +1,6 @@
 import { api } from "./api-client";
 
-// Employee-Department Assignments API service
+// Person-Department Assignments API service
 export const assignmentsService = {
   // Get all assignments
   getAssignments: async (params = {}) => {
@@ -22,12 +22,12 @@ export const assignmentsService = {
     }
   },
 
-  // Get assignments for a specific employee
+  // Get assignments for a specific person
   getEmployeeAssignments: async (employeeId) => {
     try {
       return await api.get(`/departments/users/${employeeId}/departments`);
     } catch (error) {
-      console.error(`Get employee assignments ${employeeId} failed:`, error);
+      console.error(`Get person assignments ${employeeId} failed:`, error);
       throw error;
     }
   },

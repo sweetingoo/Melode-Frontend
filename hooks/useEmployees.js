@@ -50,15 +50,15 @@ export const useCreateEmployee = () => {
       // Invalidate and refetch all employee list queries to refresh the list
       queryClient.invalidateQueries({ queryKey: employeeKeys.lists() });
       queryClient.refetchQueries({ queryKey: employeeKeys.lists() });
-      toast.success("Employee created successfully", {
-        description: `Employee has been created.`,
+      toast.success("Person created successfully", {
+        description: `Person has been created.`,
       });
     },
     onError: (error) => {
       console.error("Create employee error:", error);
       const errorMessage =
-        error?.response?.data?.message || "Failed to create employee";
-      toast.error("Failed to create employee", {
+        error?.response?.data?.message || "Failed to create person";
+      toast.error("Failed to create person", {
         description: errorMessage,
       });
     },
@@ -80,15 +80,15 @@ export const useUpdateEmployee = () => {
     onSuccess: (data, variables) => {
       queryClient.setQueryData(employeeKeys.detail(variables.id), data);
       queryClient.invalidateQueries({ queryKey: employeeKeys.lists() });
-      toast.success("Employee updated successfully", {
-        description: `Employee has been updated.`,
+      toast.success("Person updated successfully", {
+        description: `Person has been updated.`,
       });
     },
     onError: (error) => {
       console.error("Update employee error:", error);
       const errorMessage =
-        error?.response?.data?.message || "Failed to update employee";
-      toast.error("Failed to update employee", {
+        error?.response?.data?.message || "Failed to update person";
+      toast.error("Failed to update person", {
         description: errorMessage,
       });
     },
@@ -107,15 +107,15 @@ export const useDeleteEmployee = () => {
     onSuccess: (data, id) => {
       queryClient.removeQueries({ queryKey: employeeKeys.detail(id) });
       queryClient.invalidateQueries({ queryKey: employeeKeys.lists() });
-      toast.success("Employee deleted successfully", {
-        description: "The employee has been removed.",
+      toast.success("Person deleted successfully", {
+        description: "The person has been removed.",
       });
     },
     onError: (error) => {
       console.error("Delete employee error:", error);
       const errorMessage =
-        error?.response?.data?.message || "Failed to delete employee";
-      toast.error("Failed to delete employee", {
+        error?.response?.data?.message || "Failed to delete person";
+      toast.error("Failed to delete person", {
         description: errorMessage,
       });
     },

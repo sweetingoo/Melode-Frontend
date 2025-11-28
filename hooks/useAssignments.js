@@ -83,7 +83,7 @@ export const useCreateAssignment = () => {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: assignmentKeys.all });
       toast.success("Assignment created successfully", {
-        description: "Employee has been assigned to department.",
+        description: "Person has been assigned to department.",
       });
     },
     onError: (error) => {

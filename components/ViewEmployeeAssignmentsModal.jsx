@@ -57,7 +57,7 @@ const ViewEmployeeAssignmentsModal = ({
             Department Assignments
           </DialogTitle>
           <DialogDescription>
-            View and manage all department assignments for this employee.
+            View and manage all department assignments for this person.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-4">
@@ -75,7 +75,7 @@ const ViewEmployeeAssignmentsModal = ({
             <div className="text-center py-8">
               <Building2 className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <p className="text-sm text-muted-foreground mb-4">
-                This employee is not assigned to any departments yet.
+                This person is not assigned to any departments yet.
               </p>
               <Button onClick={onAddNew} size="sm">
                 <Plus className="mr-2 h-4 w-4" />
@@ -163,7 +163,7 @@ const ViewEmployeeAssignmentsModal = ({
                                   Remove Assignment?
                                 </AlertDialogTitle>
                                 <AlertDialogDescription>
-                                  Are you sure you want to remove this employee
+                                  Are you sure you want to remove this person
                                   from{" "}
                                   <strong>
                                     {assignment.department?.name || "this department"}

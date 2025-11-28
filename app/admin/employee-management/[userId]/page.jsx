@@ -709,9 +709,9 @@ const UserEditPage = () => {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Edit Employee</h1>
+            <h1 className="text-3xl font-bold tracking-tight">Edit Person</h1>
             <p className="text-muted-foreground mt-1">
-              Loading employee data...
+              Loading person data...
             </p>
           </div>
         </div>
@@ -734,9 +734,9 @@ const UserEditPage = () => {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Edit Employee</h1>
+            <h1 className="text-3xl font-bold tracking-tight">Edit Person</h1>
             <p className="text-muted-foreground mt-1">
-              {is404Error ? "Employee not found" : "Error loading employee"}
+              {is404Error ? "Person not found" : "Error loading person"}
             </p>
           </div>
         </div>
@@ -745,19 +745,19 @@ const UserEditPage = () => {
             <div className="text-center">
               <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
               <h3 className="text-lg font-semibold mb-2">
-                {is404Error ? "Employee not found" : "Error loading employee"}
+                {is404Error ? "Person not found" : "Error loading person"}
               </h3>
               <p className="text-muted-foreground mb-4">
                 {is404Error
-                  ? "The employee you're looking for doesn't exist in the system."
-                  : "There was an error loading the employee data. Please try again."}
+                  ? "The person you're looking for doesn't exist in the system."
+                  : "There was an error loading the person data. Please try again."}
               </p>
               <div className="flex gap-2 justify-center">
                 <Button
                   onClick={() => router.push("/admin/employee-management")}
                   variant="outline"
                 >
-                  Back to Employee Management
+                  Back to People Management
                 </Button>
                 {!is404Error && (
                   <Button
@@ -781,7 +781,7 @@ const UserEditPage = () => {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Edit Employee</h1>
+            <h1 className="text-3xl font-bold tracking-tight">Edit Person</h1>
             <p className="text-muted-foreground mt-1">
               {transformedUser.email}
             </p>
@@ -822,7 +822,7 @@ const UserEditPage = () => {
         <TabsContent value="basic" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Employee Information</CardTitle>
+              <CardTitle>Person Information</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1005,7 +1005,7 @@ const UserEditPage = () => {
                   </div>
                 ) : assignmentsByDepartment.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
-                    No departments assigned to this employee.
+                    No departments assigned to this person.
                   </div>
                 ) : (
                   assignmentsByDepartment.map((deptGroup) => (
@@ -1097,7 +1097,7 @@ const UserEditPage = () => {
                                       {role.display_name || role.name}" role
                                       from {deptGroup.department.name}?
                                       <br />
-                                      <strong>Employee:</strong>{" "}
+                                      <strong>Person:</strong>{" "}
                                       {transformedUser.name} (
                                       {transformedUser.email})
                                     </AlertDialogDescription>
@@ -1176,7 +1176,7 @@ const UserEditPage = () => {
                             colSpan={3}
                             className="text-center py-8 text-muted-foreground"
                           >
-                            No permissions assigned to this employee.
+                            No permissions assigned to this person.
                           </TableCell>
                         </TableRow>
                       ) : (
@@ -1384,8 +1384,8 @@ const UserEditPage = () => {
                   </h3>
                   <p className="text-sm text-muted-foreground mb-4">
                     {transformedUser.isActive
-                      ? "Employee can log in and access the system"
-                      : "Employee cannot log in to the system"}
+                      ? "Person can log in and access the system"
+                      : "Person cannot log in to the system"}
                   </p>
                   {transformedUser.isActive ? (
                     <AlertDialog>
@@ -1579,20 +1579,20 @@ const UserEditPage = () => {
                       <Trash2 className="h-4 w-4" />
                       {deleteUserMutation.isPending
                         ? "Deleting..."
-                        : "Delete Employee Account"}
+                        : "Delete Person Account"}
                     </Button>
                   </AlertDialogTrigger>
                   <AlertDialogContent>
                     <AlertDialogHeader>
                       <AlertDialogTitle>
-                        Delete Employee Account
+                        Delete Person Account
                       </AlertDialogTitle>
                       <AlertDialogDescription>
-                        Are you sure you want to delete this employee account?
+                        Are you sure you want to delete this person account?
                         This action cannot be undone and will permanently remove
-                        the employee from the system.
+                        the person from the system.
                         <br />
-                        <strong>Employee:</strong> {transformedUser.name} (
+                        <strong>Person:</strong> {transformedUser.name} (
                         {transformedUser.email})
                       </AlertDialogDescription>
                     </AlertDialogHeader>
@@ -1602,7 +1602,7 @@ const UserEditPage = () => {
                         onClick={handleDelete}
                         className="bg-red-600 hover:bg-red-700"
                       >
-                        Delete Employee Account
+                        Delete Person Account
                       </AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>
@@ -1664,7 +1664,7 @@ const UserEditPage = () => {
                         </span>
                       </div>
                       <p className="text-sm text-yellow-700">
-                        This employee has wildcard direct permissions (*) - they
+                        This person has wildcard direct permissions (*) - they
                         have access to all permissions directly.
                       </p>
                     </div>
@@ -1815,7 +1815,7 @@ const UserEditPage = () => {
                         </span>
                       </div>
                       <p className="text-sm text-yellow-700">
-                        This employee has wildcard role permissions (*) - they
+                        This person has wildcard role permissions (*) - they
                         have access to all permissions through their roles.
                       </p>
                     </div>
@@ -1832,7 +1832,7 @@ const UserEditPage = () => {
                           <p className="font-medium">No Permission to Assign</p>
                           <p className="text-sm">
                             You don't have permission to assign any permissions
-                            to employees.
+                            to people.
                           </p>
                         </div>
                       ) : (
@@ -1853,14 +1853,14 @@ const UserEditPage = () => {
                   About Direct Permissions
                 </h4>
                 <p className="text-sm text-blue-700 mb-2">
-                  Direct permissions are assigned directly to the employee,
+                  Direct permissions are assigned directly to the person,
                   independent of their roles. They provide granular access
                   control for specific use cases.
                 </p>
                 <p className="text-sm text-blue-700">
                   <strong>Note:</strong> Permissions already assigned through
                   roles are not shown here to prevent conflicts. Only
-                  permissions not available through the employee's current roles
+                  permissions not available through the person's current roles
                   can be assigned directly.
                 </p>
               </div>
