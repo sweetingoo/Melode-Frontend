@@ -62,6 +62,9 @@ export const useCreateTask = () => {
       // Using taskKeys.all invalidates all queries starting with ["tasks"]
       await queryClient.invalidateQueries({ queryKey: taskKeys.all });
       
+      // Also explicitly refetch to ensure immediate update
+      await queryClient.refetchQueries({ queryKey: taskKeys.all });
+      
       // Check if task was assigned to a role
       if (taskData.assigned_to_role_id) {
         toast.success("Task created successfully", {

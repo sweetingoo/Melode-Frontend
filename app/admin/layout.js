@@ -149,6 +149,12 @@ const menuItems = [
     permission: "task_types:read", // Permission to read task types
   },
   {
+    title: "Audit Logs",
+    icon: FileText,
+    url: "/admin/audit-logs",
+    permission: "SYSTEM_MONITOR", // Permission to view audit logs
+  },
+  {
     title: "Forms",
     icon: FileText,
     url: "/admin/forms",

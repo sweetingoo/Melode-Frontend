@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import React, { useState, useEffect } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -58,6 +58,8 @@ import { useActiveTaskTypes } from "@/hooks/useTaskTypes";
 import { useForms } from "@/hooks/useForms";
 import { format } from "date-fns";
 import RecurringTaskHistory from "@/components/RecurringTaskHistory";
+import ResourceAuditLogs from "@/components/ResourceAuditLogs";
+import SimpleAuditLogs from "@/components/SimpleAuditLogs";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -76,7 +78,11 @@ import { cn } from "@/lib/utils";
 const TaskDetailPage = () => {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const taskId = params.taskId;
+  
+  // Check if we're coming from "My Tasks" (simplified view) or admin "Tasks" (full view)
+  const isFromMyTasks = searchParams?.get("from") === "my-tasks";
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
@@ -823,6 +829,21 @@ const TaskDetailPage = () => {
           </Card>
         </div>
       </div>
+
+      {/* Activity History / Audit Logs */}
+      {isFromMyTasks ? (
+        <SimpleAuditLogs
+          resource="task"
+          resourceId={taskId}
+          title="Recent Activity"
+        />
+      ) : (
+        <ResourceAuditLogs
+          resource="task"
+          resourceId={taskId}
+          title="Activity History"
+        />
+      )}
 
       {/* Edit Task Modal */}
       <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>

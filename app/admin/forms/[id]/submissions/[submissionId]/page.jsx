@@ -10,6 +10,7 @@ import { Loader2, ArrowLeft, FileText, CheckCircle } from "lucide-react";
 import { useFormSubmission, useForm } from "@/hooks/useForms";
 import { useUsers } from "@/hooks/useUsers";
 import { format } from "date-fns";
+import ResourceAuditLogs from "@/components/ResourceAuditLogs";
 
 const FormSubmissionDetailPage = () => {
   const params = useParams();
@@ -354,6 +355,13 @@ const FormSubmissionDetailPage = () => {
           </Card>
         </div>
       </div>
+
+      {/* Activity History */}
+      <ResourceAuditLogs
+        resource="form_submission"
+        resourceId={submissionId}
+        title="Activity History"
+      />
     </div>
   );
 };

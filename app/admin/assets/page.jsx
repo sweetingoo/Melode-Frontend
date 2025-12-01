@@ -90,6 +90,7 @@ import {
 import { useLocations } from "@/hooks/useLocations";
 import { useUsers } from "@/hooks/useUsers";
 import { useRoles } from "@/hooks/useRoles";
+import ResourceAuditLogs from "@/components/ResourceAuditLogs";
 
 const AssetsPage = () => {
   // State management
@@ -1576,6 +1577,15 @@ const AssetsPage = () => {
                     )}
                   </p>
                 </div>
+              </div>
+              
+              {/* Activity History */}
+              <div className="pt-6 border-t">
+                <ResourceAuditLogs
+                  resource="asset"
+                  resourceId={selectedAsset.id?.toString()}
+                  title="Activity History"
+                />
               </div>
             </div>
           )}

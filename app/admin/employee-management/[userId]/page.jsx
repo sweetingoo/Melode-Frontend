@@ -91,6 +91,7 @@ import { useDepartments } from "@/hooks/useDepartments";
 import { useQueryClient } from "@tanstack/react-query";
 import { userKeys } from "@/hooks/useUsers";
 import { useHierarchyImage } from "@/hooks/useEmployees";
+import UserAuditLogs from "@/components/UserAuditLogs";
 
 const UserEditPage = () => {
   const params = useParams();
@@ -815,6 +816,10 @@ const UserEditPage = () => {
           <TabsTrigger value="status" className="flex items-center gap-2">
             <Eye className="h-4 w-4" />
             Account Status
+          </TabsTrigger>
+          <TabsTrigger value="activity" className="flex items-center gap-2">
+            <Info className="h-4 w-4" />
+            Activity History
           </TabsTrigger>
         </TabsList>
 
@@ -1610,6 +1615,11 @@ const UserEditPage = () => {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* Activity History Tab */}
+        <TabsContent value="activity" className="space-y-6">
+          <UserAuditLogs userId={userId} title="User Activity History" />
         </TabsContent>
       </Tabs>
 

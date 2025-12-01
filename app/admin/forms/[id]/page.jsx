@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Loader2, ArrowLeft, Edit, FileText, CheckCircle, XCircle } from "lucide-react";
 import { useForm } from "@/hooks/useForms";
 import { format } from "date-fns";
+import ResourceAuditLogs from "@/components/ResourceAuditLogs";
 
 const FormDetailPage = () => {
   const params = useParams();
@@ -254,6 +255,13 @@ const FormDetailPage = () => {
           </Card>
         </div>
       </div>
+
+      {/* Activity History */}
+      <ResourceAuditLogs
+        resource="form"
+        resourceId={formId}
+        title="Activity History"
+      />
     </div>
   );
 };

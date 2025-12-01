@@ -642,6 +642,8 @@ const TasksPage = () => {
       await createTaskMutation.mutateAsync(taskData);
       setIsCreateModalOpen(false);
       resetForm();
+      // Reset to first page to see the newly created task
+      setCurrentPage(1);
     } catch (error) {
       console.error("Failed to create task:", error);
     }

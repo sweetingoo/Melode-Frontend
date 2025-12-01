@@ -432,7 +432,7 @@ const MyTasksPage = () => {
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                               <DropdownMenuItem asChild>
-                                <Link href={`/admin/tasks/${task.id}`}>
+                                <Link href={`/admin/tasks/${task.id}?from=my-tasks`}>
                                   <Eye className="mr-2 h-4 w-4" />
                                   View Details
                                 </Link>
