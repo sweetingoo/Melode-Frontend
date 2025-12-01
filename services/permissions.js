@@ -45,7 +45,7 @@ export const permissionsService = {
   // Delete permission
   deletePermission: async (id) => {
     try {
-      return await api.delete(`/roles/permissions/${id}`);
+      return await api.delete(`/permissions/${id}`);
     } catch (error) {
       console.error(`Delete permission ${id} failed:`, error);
       throw error;

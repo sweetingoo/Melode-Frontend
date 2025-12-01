@@ -55,14 +55,23 @@ export const useCreateTask = () => {
   return useMutation({
     mutationFn: async (taskData) => {
       const response = await tasksService.createTask(taskData);
-      return response.data;
+      return { data: response.data, taskData }; // Return both response and original taskData
     },
-    onSuccess: (data) => {
+    onSuccess: ({ data, taskData }) => {
       queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: taskKeys.myTasks() });
       queryClient.invalidateQueries({ queryKey: taskKeys.stats() });
-      toast.success("Task created successfully", {
-        description: `Task "${data.title}" has been created.`,
-      });
+      
+      // Check if task was assigned to a role
+      if (taskData.assigned_to_role_id) {
+        toast.success("Task created successfully", {
+          description: `Individual tasks have been created for all active users in the role. Each user will see their task in "My Tasks".`,
+        });
+      } else {
+        toast.success("Task created successfully", {
+          description: `Task "${data.title}" has been created.`,
+        });
+      }
     },
     onError: (error) => {
       console.error("Create task error:", error);
@@ -189,9 +198,25 @@ export const useCompleteTask = () => {
       queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
       queryClient.invalidateQueries({ queryKey: taskKeys.myTasks() });
       queryClient.invalidateQueries({ queryKey: taskKeys.stats() });
-      toast.success("Task completed successfully", {
-        description: `Task "${data.title}" has been marked as completed.`,
-      });
+      
+      // Check if this is a recurring task and if next occurrence info is available
+      const isRecurring = data.is_recurring || data.parent_task_id;
+      const nextOccurrence = data.next_occurrence_date || data.next_occurrence;
+      
+      if (isRecurring && nextOccurrence) {
+        const nextDate = new Date(nextOccurrence);
+        toast.success("Task completed successfully", {
+          description: `Task "${data.title}" has been marked as completed. Next occurrence scheduled for ${nextDate.toLocaleDateString()}.`,
+        });
+      } else if (isRecurring) {
+        toast.success("Task completed successfully", {
+          description: `Task "${data.title}" has been marked as completed. The next occurrence will be created automatically.`,
+        });
+      } else {
+        toast.success("Task completed successfully", {
+          description: `Task "${data.title}" has been marked as completed.`,
+        });
+      }
     },
     onError: (error) => {
       console.error("Complete task error:", error);

@@ -41,6 +41,7 @@ import {
   Loader2,
   History,
   Link as LinkIcon,
+  Repeat,
 } from "lucide-react";
 import {
   useTask,
@@ -416,7 +417,33 @@ const TaskDetailPage = () => {
             </Button>
           </Link>
           <div>
-            <h1 className="text-3xl font-bold">{task.title}</h1>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-3xl font-bold">{task.title}</h1>
+              {task.is_recurring && (
+                <Badge variant="outline" className="border-purple-500/50 text-purple-700 dark:text-purple-400">
+                  <Repeat className="mr-1 h-3 w-3" />
+                  Recurring
+                </Badge>
+              )}
+              {task.assigned_to_role_id && (
+                <Badge variant="outline" className="text-xs border-blue-500/50 text-blue-700 dark:text-blue-400">
+                  <Users className="mr-1 h-3 w-3" />
+                  From Role
+                </Badge>
+              )}
+              {task.create_individual_tasks && task.assigned_user_ids?.length > 0 && (
+                <Badge variant="secondary" className="text-xs">
+                  <Users className="mr-1 h-3 w-3" />
+                  Individual Tasks
+                </Badge>
+              )}
+              {!task.create_individual_tasks && task.assigned_user_ids?.length > 1 && (
+                <Badge variant="outline" className="text-xs border-green-500/50 text-green-700 dark:text-green-400">
+                  <Users className="mr-1 h-3 w-3" />
+                  Collaborative
+                </Badge>
+              )}
+            </div>
             <p className="text-muted-foreground">Task Details</p>
           </div>
         </div>

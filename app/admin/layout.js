@@ -52,6 +52,7 @@ import {
   CheckSquare,
   Type,
   FileText,
+  ClipboardList,
 } from "lucide-react";
 import { assets } from "../assets/assets";
 import Image from "next/image";
@@ -78,6 +79,12 @@ const menuItems = [
     icon: LayoutDashboard,
     url: "/admin",
     permission: null, // Dashboard is always visible
+  },
+  {
+    title: "My Tasks",
+    icon: ClipboardList,
+    url: "/admin/my-tasks",
+    permission: null, // My Tasks is visible to all users
   },
   {
     title: "Create invitation",
@@ -295,8 +302,11 @@ export default function AdminLayout({ children }) {
     if (currentUserLoading) return menuItems; // Show all while loading
 
     return menuItems.filter((item) => {
-      // Dashboard is always visible
-      if (!item.permission) return true;
+      // Items with null or undefined permission are always visible (Dashboard, My Tasks, etc.)
+      // This ensures these items are visible to ALL users regardless of roles/permissions
+      if (item.permission === null || item.permission === undefined) {
+        return true;
+      }
 
       // If user has wildcard permissions, show all
       if (userPermissionNames.includes("*")) return true;
