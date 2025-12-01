@@ -235,17 +235,17 @@ const TasksPage = () => {
   const { data: formsResponse } = useForms();
   const { data: currentUserData } = useCurrentUser();
   const isMobile = useIsMobile();
-  
+
   // Get users for selected role (for role assignment info)
-  const selectedRoleId = taskFormData.assigned_to_role_id 
-    ? parseInt(taskFormData.assigned_to_role_id) 
+  const selectedRoleId = taskFormData.assigned_to_role_id
+    ? parseInt(taskFormData.assigned_to_role_id)
     : null;
   const { data: roleUsersData } = useRoleUsers(selectedRoleId);
 
   // Permission checking
   const currentUserPermissions = currentUserData?.permissions || [];
   const currentUserDirectPermissions = currentUserData?.direct_permissions || [];
-  
+
   // Extract permission names
   const userPermissionNames = React.useMemo(() => {
     const allPermissions = [...currentUserPermissions, ...currentUserDirectPermissions];
@@ -335,15 +335,15 @@ const TasksPage = () => {
       tasks = currentTasksResponse.results;
     }
   }
-  
+
   // Only calculate pagination from actual API response, not from array length
   const pagination = {
     page: currentTasksResponse?.page ?? currentPage,
     per_page: currentTasksResponse?.per_page ?? itemsPerPage,
-    total: typeof currentTasksResponse?.total === 'number' ? currentTasksResponse.total : 
-           (currentTasksResponse && !isLoading ? tasks.length : 0),
-    total_pages: typeof currentTasksResponse?.total_pages === 'number' ? currentTasksResponse.total_pages : 
-                 (typeof currentTasksResponse?.total === 'number' ? Math.ceil(currentTasksResponse.total / itemsPerPage) : 1),
+    total: typeof currentTasksResponse?.total === 'number' ? currentTasksResponse.total :
+      (currentTasksResponse && !isLoading ? tasks.length : 0),
+    total_pages: typeof currentTasksResponse?.total_pages === 'number' ? currentTasksResponse.total_pages :
+      (typeof currentTasksResponse?.total === 'number' ? Math.ceil(currentTasksResponse.total / itemsPerPage) : 1),
   };
 
   // Extract users from response - handle different response structures
@@ -475,19 +475,19 @@ const TasksPage = () => {
 
   const validateForm = () => {
     const errors = {};
-    
+
     // Title validation
     if (!taskFormData.title || taskFormData.title.trim().length === 0) {
       errors.title = "Title is required";
     } else if (taskFormData.title.trim().length > 255) {
       errors.title = "Title must be 255 characters or less";
     }
-    
+
     // Task type validation
     if (!taskFormData.task_type) {
       errors.task_type = "Task type is required";
     }
-    
+
     // Assignment validation
     if (assignmentMode === "multiple-users" && selectedUserIds.length === 0) {
       errors.assignment = "At least one user must be selected";
@@ -498,7 +498,7 @@ const TasksPage = () => {
     } else if (assignmentMode === "asset" && (!taskFormData.assigned_to_asset_id || taskFormData.assigned_to_asset_id === "none")) {
       errors.assignment = "An asset must be selected";
     }
-    
+
     // Recurring task validation
     if (isRecurring) {
       if (!recurrencePattern.frequency) {
@@ -514,7 +514,7 @@ const TasksPage = () => {
         errors.recurrence = "At least one time must be specified for daily/weekly recurrence";
       }
     }
-    
+
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -524,27 +524,27 @@ const TasksPage = () => {
     if (!validateForm()) {
       return;
     }
-    
+
     try {
       const taskData = {
         title: taskFormData.title.trim(),
         task_type: taskFormData.task_type,
         status: taskFormData.status || "pending",
       };
-      
+
       // Only include optional fields if they have valid values
       if (taskFormData.description) {
         taskData.description = taskFormData.description;
       }
-      
+
       if (dueDate) {
         taskData.due_date = format(dueDate, "yyyy-MM-dd'T'HH:mm:ss");
       }
-      
+
       if (taskFormData.priority) {
         taskData.priority = taskFormData.priority;
       }
-      
+
       // Handle assignment based on mode
       if (assignmentMode === "user") {
         // Single user assignment
@@ -556,8 +556,8 @@ const TasksPage = () => {
         }
       } else if (assignmentMode === "multiple-users") {
         // Multiple users assignment
-      if (selectedUserIds.length > 0) {
-        taskData.assigned_user_ids = selectedUserIds;
+        if (selectedUserIds.length > 0) {
+          taskData.assigned_user_ids = selectedUserIds;
           // Add create_individual_tasks flag for multiple users
           if (createIndividualTasks) {
             taskData.create_individual_tasks = true;
@@ -567,20 +567,20 @@ const TasksPage = () => {
         // Role assignment
         if (taskFormData.assigned_to_role_id && taskFormData.assigned_to_role_id !== "none") {
           const roleId = parseInt(taskFormData.assigned_to_role_id);
-        if (!isNaN(roleId)) {
-          taskData.assigned_to_role_id = roleId;
+          if (!isNaN(roleId)) {
+            taskData.assigned_to_role_id = roleId;
+          }
         }
-      }
       } else if (assignmentMode === "asset") {
         // Asset assignment
         if (taskFormData.assigned_to_asset_id && taskFormData.assigned_to_asset_id !== "none") {
           const assetId = parseInt(taskFormData.assigned_to_asset_id);
-        if (!isNaN(assetId)) {
-          taskData.assigned_to_asset_id = assetId;
+          if (!isNaN(assetId)) {
+            taskData.assigned_to_asset_id = assetId;
           }
         }
       }
-      
+
       // Only include location_id if it has a valid value
       if (taskFormData.location_id && taskFormData.location_id !== "" && taskFormData.location_id !== "none") {
         const locationId = parseInt(taskFormData.location_id);
@@ -588,7 +588,7 @@ const TasksPage = () => {
           taskData.location_id = locationId;
         }
       }
-      
+
       // Only include form_id if it has a value (API accepts form_id: number | null)
       if (taskFormData.form_id && taskFormData.form_id !== "" && taskFormData.form_id !== "none") {
         const formId = parseInt(taskFormData.form_id);
@@ -596,7 +596,7 @@ const TasksPage = () => {
           taskData.form_id = formId;
         }
       }
-      
+
       // Only include form_submission_id if it has a value (API accepts form_submission_id: number | null)
       if (taskFormData.form_submission_id && taskFormData.form_submission_id !== "" && taskFormData.form_submission_id !== "none") {
         const submissionId = parseInt(taskFormData.form_submission_id);
@@ -604,7 +604,7 @@ const TasksPage = () => {
           taskData.form_submission_id = submissionId;
         }
       }
-      
+
       // Recurring task configuration
       if (isRecurring) {
         taskData.is_recurring = true;
@@ -619,7 +619,7 @@ const TasksPage = () => {
           taskData.recurrence_pattern.times = recurrencePattern.times;
         }
       }
-      
+
       await createTaskMutation.mutateAsync(taskData);
       setIsCreateModalOpen(false);
       resetForm();
@@ -632,21 +632,21 @@ const TasksPage = () => {
     try {
       // Build task data object, only including fields with actual values
       const taskData = {};
-      
+
       // Include required/always-updated fields
       if (taskFormData.title) taskData.title = taskFormData.title;
       if (taskFormData.task_type) taskData.task_type = taskFormData.task_type;
       if (taskFormData.description) taskData.description = taskFormData.description;
       if (taskFormData.priority) taskData.priority = taskFormData.priority;
       if (taskFormData.status) taskData.status = taskFormData.status;
-      
+
       // Only include due_date if it's set
       if (dueDate) {
         taskData.due_date = format(dueDate, "yyyy-MM-dd'T'HH:mm:ss");
       } else if (taskFormData.due_date) {
         taskData.due_date = taskFormData.due_date;
       }
-      
+
       // Only include location_id if it has a value
       if (taskFormData.location_id && taskFormData.location_id !== "" && taskFormData.location_id !== "none") {
         const locationId = parseInt(taskFormData.location_id);
@@ -654,12 +654,12 @@ const TasksPage = () => {
           taskData.location_id = locationId;
         }
       }
-      
+
       // Only include assigned_user_ids if there are selected users
       if (selectedUserIds.length > 0) {
         taskData.assigned_user_ids = selectedUserIds;
       }
-      
+
       // Only include assigned_to_user_id if it has a value
       if (taskFormData.assigned_to_user_id && taskFormData.assigned_to_user_id !== "" && taskFormData.assigned_to_user_id !== "none") {
         const userId = parseInt(taskFormData.assigned_to_user_id);
@@ -667,7 +667,7 @@ const TasksPage = () => {
           taskData.assigned_to_user_id = userId;
         }
       }
-      
+
       // Only include assigned_to_role_id if it has a value
       if (taskFormData.assigned_to_role_id && taskFormData.assigned_to_role_id !== "" && taskFormData.assigned_to_role_id !== "none") {
         const roleId = parseInt(taskFormData.assigned_to_role_id);
@@ -675,7 +675,7 @@ const TasksPage = () => {
           taskData.assigned_to_role_id = roleId;
         }
       }
-      
+
       // Only include assigned_to_asset_id if it has a value
       if (taskFormData.assigned_to_asset_id && taskFormData.assigned_to_asset_id !== "" && taskFormData.assigned_to_asset_id !== "none") {
         const assetId = parseInt(taskFormData.assigned_to_asset_id);
@@ -683,7 +683,7 @@ const TasksPage = () => {
           taskData.assigned_to_asset_id = assetId;
         }
       }
-      
+
       // Only include form_id if it has a value (API accepts form_id: number | null)
       if (taskFormData.form_id && taskFormData.form_id !== "" && taskFormData.form_id !== "none") {
         const formId = parseInt(taskFormData.form_id);
@@ -694,7 +694,7 @@ const TasksPage = () => {
         // If form_id was explicitly set to empty/none, send null to clear it
         taskData.form_id = null;
       }
-      
+
       // Only include form_submission_id if it has a value (API accepts form_submission_id: number | null)
       if (taskFormData.form_submission_id && taskFormData.form_submission_id !== "" && taskFormData.form_submission_id !== "none") {
         const submissionId = parseInt(taskFormData.form_submission_id);
@@ -705,7 +705,7 @@ const TasksPage = () => {
         // If form_submission_id was explicitly set to empty, send null to clear it
         taskData.form_submission_id = null;
       }
-      
+
       await updateTaskMutation.mutateAsync({
         id: selectedTask.id,
         taskData,
@@ -730,12 +730,12 @@ const TasksPage = () => {
     try {
       // Build assignment object, only including fields with actual values
       const assignment = {};
-      
+
       // Only include assigned_user_ids if there are selected users
       if (selectedUserIds.length > 0) {
         assignment.assigned_user_ids = selectedUserIds;
       }
-      
+
       // Only include assigned_to_user_id if it has a value
       if (assignmentData.assigned_to_user_id && assignmentData.assigned_to_user_id !== "" && assignmentData.assigned_to_user_id !== "none") {
         const userId = parseInt(assignmentData.assigned_to_user_id);
@@ -743,7 +743,7 @@ const TasksPage = () => {
           assignment.assigned_to_user_id = userId;
         }
       }
-      
+
       // Only include assigned_to_role_id if it has a value
       if (assignmentData.assigned_to_role_id && assignmentData.assigned_to_role_id !== "" && assignmentData.assigned_to_role_id !== "none") {
         const roleId = parseInt(assignmentData.assigned_to_role_id);
@@ -751,7 +751,7 @@ const TasksPage = () => {
           assignment.assigned_to_role_id = roleId;
         }
       }
-      
+
       // Only include assigned_to_asset_id if it has a value
       if (assignmentData.assigned_to_asset_id && assignmentData.assigned_to_asset_id !== "" && assignmentData.assigned_to_asset_id !== "none") {
         const assetId = parseInt(assignmentData.assigned_to_asset_id);
@@ -759,7 +759,7 @@ const TasksPage = () => {
           assignment.assigned_to_asset_id = assetId;
         }
       }
-      
+
       await assignTaskMutation.mutateAsync({
         id: selectedTask.id,
         assignmentData: assignment,
@@ -846,7 +846,7 @@ const TasksPage = () => {
     });
     setSelectedUserIds(task.assigned_user_ids || []);
     setDueDate(task.due_date ? new Date(task.due_date) : null);
-    
+
     // Determine assignment mode based on task data
     if (task.assigned_to_role_id) {
       setEditAssignmentMode("role");
@@ -857,7 +857,7 @@ const TasksPage = () => {
     } else {
       setEditAssignmentMode("multiple-users");
     }
-    
+
     setIsEditModalOpen(true);
   };
 
@@ -898,9 +898,9 @@ const TasksPage = () => {
         </div>
         {canCreateTask && (
           <Button onClick={() => setIsCreateModalOpen(true)} className="w-full sm:w-auto">
-          <Plus className="mr-2 h-4 w-4" />
-          Create Task
-        </Button>
+            <Plus className="mr-2 h-4 w-4" />
+            Create Task
+          </Button>
         )}
       </div>
 
@@ -914,8 +914,8 @@ const TasksPage = () => {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {typeof statsData.total_tasks === 'number' ? statsData.total_tasks : 
-                 typeof statsData.total === 'number' ? statsData.total : 0}
+                {typeof statsData.total_tasks === 'number' ? statsData.total_tasks :
+                  typeof statsData.total === 'number' ? statsData.total : 0}
               </div>
             </CardContent>
           </Card>
@@ -926,8 +926,8 @@ const TasksPage = () => {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {typeof statsData.pending_count === 'number' ? statsData.pending_count : 
-                 typeof statsData.pending === 'number' ? statsData.pending : 0}
+                {typeof statsData.pending_count === 'number' ? statsData.pending_count :
+                  typeof statsData.pending === 'number' ? statsData.pending : 0}
               </div>
             </CardContent>
           </Card>
@@ -938,8 +938,8 @@ const TasksPage = () => {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-red-600">
-                {typeof statsData.overdue_count === 'number' ? statsData.overdue_count : 
-                 typeof statsData.overdue === 'number' ? statsData.overdue : 0}
+                {typeof statsData.overdue_count === 'number' ? statsData.overdue_count :
+                  typeof statsData.overdue === 'number' ? statsData.overdue : 0}
               </div>
             </CardContent>
           </Card>
@@ -950,8 +950,8 @@ const TasksPage = () => {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-green-600">
-                {typeof statsData.completed_count === 'number' ? statsData.completed_count : 
-                 typeof statsData.completed === 'number' ? statsData.completed : 0}
+                {typeof statsData.completed_count === 'number' ? statsData.completed_count :
+                  typeof statsData.completed === 'number' ? statsData.completed : 0}
               </div>
             </CardContent>
           </Card>
@@ -977,48 +977,48 @@ const TasksPage = () => {
       {/* View Mode Tabs */}
       <div className="flex gap-2 border-b overflow-x-auto pb-0">
         <div className="flex gap-2 min-w-max pb-2">
-        <Button
-          variant={viewMode === "all" ? "default" : "ghost"}
-          onClick={() => setViewMode("all")}
+          <Button
+            variant={viewMode === "all" ? "default" : "ghost"}
+            onClick={() => setViewMode("all")}
             className="whitespace-nowrap"
-        >
-          All Tasks
-        </Button>
-        <Button
-          variant={viewMode === "my-tasks" ? "default" : "ghost"}
-          onClick={() => setViewMode("my-tasks")}
+          >
+            All Tasks
+          </Button>
+          <Button
+            variant={viewMode === "my-tasks" ? "default" : "ghost"}
+            onClick={() => setViewMode("my-tasks")}
             className="whitespace-nowrap"
-        >
-          My Tasks
-        </Button>
-        <Button
-          variant={viewMode === "overdue" ? "default" : "ghost"}
-          onClick={() => setViewMode("overdue")}
+          >
+            My Tasks
+          </Button>
+          <Button
+            variant={viewMode === "overdue" ? "default" : "ghost"}
+            onClick={() => setViewMode("overdue")}
             className="whitespace-nowrap"
-        >
-          Overdue
-        </Button>
-        <Button
-          variant={viewMode === "due-soon" ? "default" : "ghost"}
-          onClick={() => setViewMode("due-soon")}
+          >
+            Overdue
+          </Button>
+          <Button
+            variant={viewMode === "due-soon" ? "default" : "ghost"}
+            onClick={() => setViewMode("due-soon")}
             className="whitespace-nowrap"
-        >
-          Due Soon
-        </Button>
-        <Button
-          variant={viewMode === "compliance" ? "default" : "ghost"}
-          onClick={() => setViewMode("compliance")}
+          >
+            Due Soon
+          </Button>
+          <Button
+            variant={viewMode === "compliance" ? "default" : "ghost"}
+            onClick={() => setViewMode("compliance")}
             className="whitespace-nowrap"
-        >
-          Compliance
-        </Button>
-        <Button
-          variant={viewMode === "automated" ? "default" : "ghost"}
-          onClick={() => setViewMode("automated")}
+          >
+            Compliance
+          </Button>
+          <Button
+            variant={viewMode === "automated" ? "default" : "ghost"}
+            onClick={() => setViewMode("automated")}
             className="whitespace-nowrap"
-        >
-          Automated
-        </Button>
+          >
+            Automated
+          </Button>
         </div>
       </div>
 
@@ -1039,78 +1039,78 @@ const TasksPage = () => {
               />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Select
-              value={filters.status || "all"}
-              onValueChange={(value) =>
-                setFilters({ ...filters, status: value === "all" ? "" : value })
-              }
-            >
-                <SelectTrigger className="w-full">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Statuses</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="in_progress">In Progress</SelectItem>
-                <SelectItem value="completed">Completed</SelectItem>
-                <SelectItem value="cancelled">Cancelled</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select
-              value={filters.priority || "all"}
-              onValueChange={(value) =>
-                setFilters({ ...filters, priority: value === "all" ? "" : value })
-              }
-            >
-                <SelectTrigger className="w-full">
-                <SelectValue placeholder="Priority" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Priorities</SelectItem>
-                <SelectItem value="high">High</SelectItem>
-                <SelectItem value="medium">Medium</SelectItem>
-                <SelectItem value="low">Low</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select
-              value={filters.task_type || "all"}
-              onValueChange={(value) =>
-                setFilters({ ...filters, task_type: value === "all" ? "" : value })
-              }
-            >
-                <SelectTrigger className="w-full">
-                <SelectValue placeholder="Task Type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Types</SelectItem>
-                {taskTypes.map((taskType) => (
-                  <SelectItem key={taskType.id} value={taskType.name}>
-                    <div className="flex items-center gap-2">
-                      {taskType.icon && <span>{taskType.icon}</span>}
-                      <span>{taskType.display_name || taskType.name}</span>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {(filters.status || filters.priority || filters.task_type) && (
-              <Button
-                variant="outline"
-                onClick={() =>
-                  setFilters({
-                    status: "",
-                    priority: "",
-                    task_type: "",
-                    assigned_to_user_id: "",
-                    is_overdue: "",
-                  })
+              <Select
+                value={filters.status || "all"}
+                onValueChange={(value) =>
+                  setFilters({ ...filters, status: value === "all" ? "" : value })
                 }
-                  className="w-full sm:w-auto"
               >
-                <X className="mr-2 h-4 w-4" />
-                Clear
-              </Button>
-            )}
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Statuses</SelectItem>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="in_progress">In Progress</SelectItem>
+                  <SelectItem value="completed">Completed</SelectItem>
+                  <SelectItem value="cancelled">Cancelled</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select
+                value={filters.priority || "all"}
+                onValueChange={(value) =>
+                  setFilters({ ...filters, priority: value === "all" ? "" : value })
+                }
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Priority" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Priorities</SelectItem>
+                  <SelectItem value="high">High</SelectItem>
+                  <SelectItem value="medium">Medium</SelectItem>
+                  <SelectItem value="low">Low</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select
+                value={filters.task_type || "all"}
+                onValueChange={(value) =>
+                  setFilters({ ...filters, task_type: value === "all" ? "" : value })
+                }
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Task Type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Types</SelectItem>
+                  {taskTypes.map((taskType) => (
+                    <SelectItem key={taskType.id} value={taskType.name}>
+                      <div className="flex items-center gap-2">
+                        {taskType.icon && <span>{taskType.icon}</span>}
+                        <span>{taskType.display_name || taskType.name}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {(filters.status || filters.priority || filters.task_type) && (
+                <Button
+                  variant="outline"
+                  onClick={() =>
+                    setFilters({
+                      status: "",
+                      priority: "",
+                      task_type: "",
+                      assigned_to_user_id: "",
+                      is_overdue: "",
+                    })
+                  }
+                  className="w-full sm:w-auto"
+                >
+                  <X className="mr-2 h-4 w-4" />
+                  Clear
+                </Button>
+              )}
             </div>
           </div>
         </CardContent>
@@ -1123,14 +1123,14 @@ const TasksPage = () => {
             {viewMode === "all"
               ? "All Tasks"
               : viewMode === "my-tasks"
-              ? "My Tasks"
-              : viewMode === "overdue"
-              ? "Overdue Tasks"
-              : viewMode === "due-soon"
-              ? "Due Soon Tasks"
-              : viewMode === "compliance"
-              ? "Compliance Tasks"
-              : "Automated Tasks"}
+                ? "My Tasks"
+                : viewMode === "overdue"
+                  ? "Overdue Tasks"
+                  : viewMode === "due-soon"
+                    ? "Due Soon Tasks"
+                    : viewMode === "compliance"
+                      ? "Compliance Tasks"
+                      : "Automated Tasks"}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -1267,12 +1267,12 @@ const TasksPage = () => {
                           {(() => {
                             const taskType = taskTypes.find(tt => tt.name === task.task_type);
                             return taskType ? (
-                              <Badge 
+                              <Badge
                                 variant="outline"
                                 className="text-xs"
-                                style={{ 
+                                style={{
                                   borderColor: taskType.color || undefined,
-                                  color: taskType.color || undefined 
+                                  color: taskType.color || undefined
                                 }}
                               >
                                 {taskType.icon && <span className="mr-1">{taskType.icon}</span>}
@@ -1404,11 +1404,11 @@ const TasksPage = () => {
                         {(() => {
                           const taskType = taskTypes.find(tt => tt.name === task.task_type);
                           return taskType ? (
-                            <Badge 
+                            <Badge
                               variant="outline"
-                              style={{ 
+                              style={{
                                 borderColor: taskType.color || undefined,
-                                color: taskType.color || undefined 
+                                color: taskType.color || undefined
                               }}
                             >
                               {taskType.icon && <span className="mr-1">{taskType.icon}</span>}
@@ -1476,20 +1476,20 @@ const TasksPage = () => {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             {canUpdateTask && (
-                            <DropdownMenuItem
-                              onClick={() => openEditModal(task)}
-                            >
-                              <Edit className="mr-2 h-4 w-4" />
-                              Edit
-                            </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => openEditModal(task)}
+                              >
+                                <Edit className="mr-2 h-4 w-4" />
+                                Edit
+                              </DropdownMenuItem>
                             )}
                             {canAssignTask && (
-                            <DropdownMenuItem
-                              onClick={() => openAssignModal(task)}
-                            >
-                              <User className="mr-2 h-4 w-4" />
-                              Assign
-                            </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => openAssignModal(task)}
+                              >
+                                <User className="mr-2 h-4 w-4" />
+                                Assign
+                              </DropdownMenuItem>
                             )}
                             {task.status !== "completed" && (
                               <DropdownMenuItem
@@ -1501,36 +1501,36 @@ const TasksPage = () => {
                             )}
                             {canDeleteTask && (
                               <>
-                            <DropdownMenuSeparator />
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <DropdownMenuItem
-                                  onSelect={(e) => e.preventDefault()}
-                                  className="text-red-600"
-                                >
-                                  <Trash2 className="mr-2 h-4 w-4" />
-                                  Delete
-                                </DropdownMenuItem>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Delete Task</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    Are you sure you want to delete this task? This
-                                    action cannot be undone.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                  <AlertDialogAction
-                                    onClick={() => handleDeleteTask(task.id)}
-                                    className="bg-red-600 hover:bg-red-700"
-                                  >
-                                    Delete
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
+                                <DropdownMenuSeparator />
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <DropdownMenuItem
+                                      onSelect={(e) => e.preventDefault()}
+                                      className="text-red-600"
+                                    >
+                                      <Trash2 className="mr-2 h-4 w-4" />
+                                      Delete
+                                    </DropdownMenuItem>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>Delete Task</AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                        Are you sure you want to delete this task? This
+                                        action cannot be undone.
+                                      </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                      <AlertDialogAction
+                                        onClick={() => handleDeleteTask(task.id)}
+                                        className="bg-red-600 hover:bg-red-700"
+                                      >
+                                        Delete
+                                      </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
                               </>
                             )}
                           </DropdownMenuContent>
@@ -1774,13 +1774,13 @@ const TasksPage = () => {
                     <div className="flex items-start gap-2">
                       <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
                       <div className="flex-1">
-                      <p className="text-xs text-blue-700 dark:text-blue-300">
+                        <p className="text-xs text-blue-700 dark:text-blue-300">
                           {createIndividualTasks
                             ? "Each selected user will receive their own individual task to complete separately."
                             : "All selected users will share the same collaborative task."}
-                      </p>
+                        </p>
+                      </div>
                     </div>
-                  </div>
                   </div>
                   <div className="flex items-center space-x-2">
                     <Checkbox
@@ -1968,7 +1968,7 @@ const TasksPage = () => {
                 </TabsContent>
               </Tabs>
             </div>
-            
+
             {/* Recurring Task Configuration */}
             <div className="space-y-3">
               <div className="flex items-center space-x-2">
@@ -1987,7 +1987,7 @@ const TasksPage = () => {
                   This is a recurring task
                 </Label>
               </div>
-              
+
               {isRecurring && (
                 <div className="border rounded-md p-4 space-y-4 bg-muted/50">
                   <div className="grid grid-cols-2 gap-4">
@@ -2037,7 +2037,7 @@ const TasksPage = () => {
                       />
                     </div>
                   </div>
-                  
+
                   {recurrencePattern.frequency === "weekly" && (
                     <div>
                       <Label>Days of Week *</Label>
@@ -2065,7 +2065,7 @@ const TasksPage = () => {
                       </div>
                     </div>
                   )}
-                  
+
                   {(recurrencePattern.frequency === "daily" || recurrencePattern.frequency === "weekly") && (
                     <div>
                       <Label>Times * (HH:mm format)</Label>
@@ -2118,14 +2118,14 @@ const TasksPage = () => {
                       )}
                     </div>
                   )}
-                  
+
                   {formErrors.recurrence && (
                     <p className="text-sm text-red-600">{formErrors.recurrence}</p>
                   )}
                 </div>
               )}
             </div>
-            
+
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label>Link to Form</Label>
