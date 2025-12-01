@@ -51,6 +51,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Plus,
   Search,
@@ -71,6 +72,8 @@ import {
   CheckCircle,
   Filter,
   X,
+  User,
+  Shield,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -86,6 +89,7 @@ import {
 } from "@/hooks/useAssets";
 import { useLocations } from "@/hooks/useLocations";
 import { useUsers } from "@/hooks/useUsers";
+import { useRoles } from "@/hooks/useRoles";
 
 const AssetsPage = () => {
   // State management
@@ -105,6 +109,7 @@ const AssetsPage = () => {
     assigned_to_role_id: null,
     location_id: null,
   });
+  const [assignToType, setAssignToType] = useState("user"); // "user" or "role"
   const [attributesData, setAttributesData] = useState("");
   const [sensorDataInput, setSensorDataInput] = useState("");
 
@@ -115,7 +120,9 @@ const AssetsPage = () => {
   const { data: locations = [] } = useLocations();
   const { data: maintenanceNeeded = [] } = useAssetsNeedingMaintenance();
   const { data: usersResponse, isLoading: usersLoading } = useUsers();
+  const { data: rolesData } = useRoles();
   const users = usersResponse?.users || [];
+  const roles = rolesData?.roles || rolesData || [];
   const createAssetMutation = useCreateAsset();
   const updateAssetMutation = useUpdateAsset();
   const deleteAssetMutation = useDeleteAsset();
@@ -346,13 +353,19 @@ const AssetsPage = () => {
 
   const handleAssignAsset = (asset) => {
     setSelectedAsset(asset);
+    const existingUserId = asset.assigned_to_user_id || asset.assignedToUserId;
+    const existingRoleId = asset.assigned_to_role_id || asset.assignedToRoleId;
     setAssignData({
-      assigned_to_user_id:
-        asset.assigned_to_user_id || asset.assignedToUserId || null,
-      assigned_to_role_id:
-        asset.assigned_to_role_id || asset.assignedToRoleId || null,
+      assigned_to_user_id: existingUserId || null,
+      assigned_to_role_id: existingRoleId || null,
       location_id: asset.location_id || asset.locationId || null,
     });
+    // Set assignToType based on existing assignment
+    if (existingRoleId) {
+      setAssignToType("role");
+    } else {
+      setAssignToType("user");
+    }
     setIsAssignModalOpen(true);
   };
 
@@ -466,6 +479,12 @@ const AssetsPage = () => {
   const handleAssign = () => {
     if (!selectedAsset) return;
 
+    // Validate that either user or role is selected
+    if (!assignData.assigned_to_user_id && !assignData.assigned_to_role_id) {
+      toast.error("Please select either a user or role to assign the asset to");
+      return;
+    }
+
     assignAssetMutation.mutate(
       {
         id: selectedAsset.id,
@@ -475,6 +494,12 @@ const AssetsPage = () => {
         onSuccess: () => {
           setIsAssignModalOpen(false);
           setSelectedAsset(null);
+          setAssignData({
+            assigned_to_user_id: null,
+            assigned_to_role_id: null,
+            location_id: null,
+          });
+          setAssignToType("user");
         },
       }
     );
@@ -1584,50 +1609,91 @@ const AssetsPage = () => {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="assign-to">Assign To User</Label>
-              <Select
-                value={assignData.assigned_to_user_id?.toString() || "__none__"}
-                onValueChange={(value) => {
-                  setAssignData({
-                    ...assignData,
-                    assigned_to_user_id:
-                      value === "__none__" ? null : parseInt(value),
-                    assigned_to_role_id: null,
-                  });
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select user" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">Unassign</SelectItem>
-                  {usersLoading ? (
-                    <SelectItem value="loading" disabled>
-                      Loading users...
-                    </SelectItem>
-                  ) : users.length === 0 ? (
-                    <SelectItem value="no-users" disabled>
-                      No users available
-                    </SelectItem>
-                  ) : (
-                    users.map((user) => {
-                      const fullName =
-                        [user.first_name, user.last_name]
-                          .filter(Boolean)
-                          .join(" ") ||
-                        user.username ||
-                        user.email ||
-                        "User";
-                      return (
-                        <SelectItem key={user.id} value={user.id.toString()}>
-                          {fullName} {user.email && `(${user.email})`}
+            <div className="space-y-3">
+              <Label>Assign To (User or Role) *</Label>
+              <Tabs value={assignToType} onValueChange={setAssignToType} className="w-full">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="user">
+                    <User className="mr-2 h-4 w-4" />
+                    User
+                  </TabsTrigger>
+                  <TabsTrigger value="role">
+                    <Shield className="mr-2 h-4 w-4" />
+                    Role
+                  </TabsTrigger>
+                </TabsList>
+                <TabsContent value="user" className="mt-3">
+                  <Select
+                    value={assignData.assigned_to_user_id?.toString() || undefined}
+                    onValueChange={(value) => {
+                      setAssignData({
+                        ...assignData,
+                        assigned_to_user_id: value ? parseInt(value) : null,
+                        assigned_to_role_id: null, // Clear role when user is selected
+                      });
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select user" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {usersLoading ? (
+                        <SelectItem value="loading" disabled>
+                          Loading users...
                         </SelectItem>
-                      );
-                    })
-                  )}
-                </SelectContent>
-              </Select>
+                      ) : users.length === 0 ? (
+                        <SelectItem value="no-users" disabled>
+                          No users available
+                        </SelectItem>
+                      ) : (
+                        users.map((user) => {
+                          const fullName =
+                            [user.first_name, user.last_name]
+                              .filter(Boolean)
+                              .join(" ") ||
+                            user.username ||
+                            user.email ||
+                            "User";
+                          return (
+                            <SelectItem key={user.id} value={user.id.toString()}>
+                              {fullName} {user.email && `(${user.email})`}
+                            </SelectItem>
+                          );
+                        })
+                      )}
+                    </SelectContent>
+                  </Select>
+                </TabsContent>
+                <TabsContent value="role" className="mt-3">
+                  <Select
+                    value={assignData.assigned_to_role_id?.toString() || undefined}
+                    onValueChange={(value) => {
+                      setAssignData({
+                        ...assignData,
+                        assigned_to_role_id: value ? parseInt(value) : null,
+                        assigned_to_user_id: null, // Clear user when role is selected
+                      });
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select role" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {roles.length === 0 ? (
+                        <SelectItem value="no-roles" disabled>
+                          No roles available
+                        </SelectItem>
+                      ) : (
+                        roles.map((role) => (
+                          <SelectItem key={role.id} value={role.id.toString()}>
+                            {role.display_name || role.name}
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                </TabsContent>
+              </Tabs>
             </div>
             <div className="space-y-2">
               <Label htmlFor="assign-location">Location</Label>

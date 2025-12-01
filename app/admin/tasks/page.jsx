@@ -158,6 +158,7 @@ const TasksPage = () => {
   const [dueDate, setDueDate] = useState(null);
   const [assignmentMode, setAssignmentMode] = useState("multiple-users"); // "role", "user", "asset", "multiple-users"
   const [editAssignmentMode, setEditAssignmentMode] = useState("multiple-users");
+  const [assetAssignmentType, setAssetAssignmentType] = useState("user"); // "user" or "role" for asset assignment
   const [isRecurring, setIsRecurring] = useState(false);
   const [createIndividualTasks, setCreateIndividualTasks] = useState(false);
   const [recurrencePattern, setRecurrencePattern] = useState({
@@ -495,8 +496,14 @@ const TasksPage = () => {
       errors.assignment = "A user must be selected";
     } else if (assignmentMode === "role" && (!taskFormData.assigned_to_role_id || taskFormData.assigned_to_role_id === "none")) {
       errors.assignment = "A role must be selected";
-    } else if (assignmentMode === "asset" && (!taskFormData.assigned_to_asset_id || taskFormData.assigned_to_asset_id === "none")) {
-      errors.assignment = "An asset must be selected";
+    } else if (assignmentMode === "asset") {
+      if (!taskFormData.assigned_to_asset_id || taskFormData.assigned_to_asset_id === "none") {
+        errors.asset_assignment = "An asset must be selected";
+      } else if (assetAssignmentType === "user" && (!taskFormData.assigned_to_user_id || taskFormData.assigned_to_user_id === "")) {
+        errors.asset_assignment = "A user must be selected when assigning to an asset";
+      } else if (assetAssignmentType === "role" && (!taskFormData.assigned_to_role_id || taskFormData.assigned_to_role_id === "")) {
+        errors.asset_assignment = "A role must be selected when assigning to an asset";
+      }
     }
 
     // Recurring task validation
@@ -572,11 +579,23 @@ const TasksPage = () => {
           }
         }
       } else if (assignmentMode === "asset") {
-        // Asset assignment
+        // Asset assignment - requires both asset and either user or role
         if (taskFormData.assigned_to_asset_id && taskFormData.assigned_to_asset_id !== "none") {
           const assetId = parseInt(taskFormData.assigned_to_asset_id);
           if (!isNaN(assetId)) {
             taskData.assigned_to_asset_id = assetId;
+          }
+        }
+        // Include user_id or role_id based on assetAssignmentType
+        if (assetAssignmentType === "user" && taskFormData.assigned_to_user_id && taskFormData.assigned_to_user_id !== "") {
+          const userId = parseInt(taskFormData.assigned_to_user_id);
+          if (!isNaN(userId)) {
+            taskData.assigned_to_user_id = userId;
+          }
+        } else if (assetAssignmentType === "role" && taskFormData.assigned_to_role_id && taskFormData.assigned_to_role_id !== "") {
+          const roleId = parseInt(taskFormData.assigned_to_role_id);
+          if (!isNaN(roleId)) {
+            taskData.assigned_to_role_id = roleId;
           }
         }
       }
@@ -815,6 +834,7 @@ const TasksPage = () => {
     setSelectedUserIds([]);
     setDueDate(null);
     setAssignmentMode("multiple-users");
+    setAssetAssignmentType("user");
     setIsRecurring(false);
     setCreateIndividualTasks(false);
     setRecurrencePattern({
@@ -852,6 +872,12 @@ const TasksPage = () => {
       setEditAssignmentMode("role");
     } else if (task.assigned_to_asset_id) {
       setEditAssignmentMode("asset");
+      // Set asset assignment type based on existing assignment
+      if (task.assigned_to_user_id) {
+        setAssetAssignmentType("user");
+      } else if (task.assigned_to_role_id) {
+        setAssetAssignmentType("role");
+      }
     } else if (task.assigned_to_user_id && !task.assigned_user_ids?.length) {
       setEditAssignmentMode("user");
     } else {
@@ -1936,35 +1962,124 @@ const TasksPage = () => {
                     <div className="flex items-start gap-2">
                       <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
                       <p className="text-xs text-blue-700 dark:text-blue-300">
-                        Assign this task to an asset. One task will be created for this asset.
+                        Assign this task to an asset. You must also select either a user or role to be responsible for this task.
                       </p>
                     </div>
                   </div>
-                  <Select
-                    value={taskFormData.assigned_to_asset_id && taskFormData.assigned_to_asset_id !== "" ? taskFormData.assigned_to_asset_id : undefined}
-                    onValueChange={(value) => {
-                      setTaskFormData({
-                        ...taskFormData,
-                        assigned_to_asset_id: value,
-                        // Clear other assignment types when asset is selected
-                        assigned_to_user_id: "",
-                        assigned_to_role_id: "",
-                        assigned_user_ids: [],
-                      });
-                      setSelectedUserIds([]);
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select asset" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {assets.map((asset) => (
-                        <SelectItem key={asset.id} value={asset.id.toString()}>
-                          {asset.name || asset.asset_number}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div>
+                    <Label>Asset *</Label>
+                    <Select
+                      value={taskFormData.assigned_to_asset_id && taskFormData.assigned_to_asset_id !== "" ? taskFormData.assigned_to_asset_id : undefined}
+                      onValueChange={(value) => {
+                        setTaskFormData({
+                          ...taskFormData,
+                          assigned_to_asset_id: value,
+                        });
+                        if (formErrors.asset_assignment) {
+                          setFormErrors({ ...formErrors, asset_assignment: null });
+                        }
+                      }}
+                    >
+                      <SelectTrigger className={formErrors.asset_assignment ? "border-red-500" : ""}>
+                        <SelectValue placeholder="Select asset" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {assets.map((asset) => (
+                          <SelectItem key={asset.id} value={asset.id.toString()}>
+                            {asset.name || asset.asset_number}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-3">
+                    <Label>Assign to (User or Role) *</Label>
+                    <Tabs value={assetAssignmentType} onValueChange={setAssetAssignmentType} className="w-full">
+                      <TabsList className="grid w-full grid-cols-2">
+                        <TabsTrigger value="user">
+                          <User className="mr-2 h-4 w-4" />
+                          User
+                        </TabsTrigger>
+                        <TabsTrigger value="role">
+                          <Shield className="mr-2 h-4 w-4" />
+                          Role
+                        </TabsTrigger>
+                      </TabsList>
+                      <TabsContent value="user" className="mt-3">
+                        <Select
+                          value={taskFormData.assigned_to_user_id && taskFormData.assigned_to_user_id !== "" ? taskFormData.assigned_to_user_id : undefined}
+                          onValueChange={(value) => {
+                            setTaskFormData({
+                              ...taskFormData,
+                              assigned_to_user_id: value,
+                              assigned_to_role_id: "", // Clear role when user is selected
+                            });
+                            if (formErrors.asset_assignment) {
+                              setFormErrors({ ...formErrors, asset_assignment: null });
+                            }
+                          }}
+                        >
+                          <SelectTrigger className={formErrors.asset_assignment ? "border-red-500" : ""}>
+                            <SelectValue placeholder="Select user" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {users.map((user) => (
+                              <SelectItem key={user.id} value={user.id.toString()}>
+                                {user.display_name ||
+                                  `${user.first_name || ""} ${user.last_name || ""}`.trim() ||
+                                  user.email}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </TabsContent>
+                      <TabsContent value="role" className="mt-3">
+                        <Select
+                          value={taskFormData.assigned_to_role_id && taskFormData.assigned_to_role_id !== "" ? taskFormData.assigned_to_role_id : undefined}
+                          onValueChange={(value) => {
+                            setTaskFormData({
+                              ...taskFormData,
+                              assigned_to_role_id: value,
+                              assigned_to_user_id: "", // Clear user when role is selected
+                            });
+                            if (formErrors.asset_assignment) {
+                              setFormErrors({ ...formErrors, asset_assignment: null });
+                            }
+                          }}
+                        >
+                          <SelectTrigger className={formErrors.asset_assignment ? "border-red-500" : ""}>
+                            <SelectValue placeholder="Select role" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {roles.map((role) => (
+                              <SelectItem key={role.id} value={role.id.toString()}>
+                                {role.display_name || role.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {taskFormData.assigned_to_role_id && taskFormData.assigned_to_role_id !== "" && selectedRoleId && (
+                          <div className="p-3 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-md mt-3">
+                            <p className="text-xs font-medium text-green-800 dark:text-green-200">
+                              {activeRoleUsersCount > 0 ? (
+                                <span>
+                                  <Badge variant="outline" className="mr-2">
+                                    {activeRoleUsersCount}
+                                  </Badge>
+                                  active {activeRoleUsersCount === 1 ? 'user' : 'users'} in this role will receive {activeRoleUsersCount === 1 ? 'a task' : 'tasks'}.
+                                </span>
+                              ) : (
+                                <span className="text-amber-600 dark:text-amber-400">No active users found in this role.</span>
+                              )}
+                            </p>
+                          </div>
+                        )}
+                      </TabsContent>
+                    </Tabs>
+                  </div>
+                  {formErrors.asset_assignment && (
+                    <p className="text-sm text-red-600">{formErrors.asset_assignment}</p>
+                  )}
                 </TabsContent>
               </Tabs>
             </div>
@@ -2482,35 +2597,112 @@ const TasksPage = () => {
                     <div className="flex items-start gap-2">
                       <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
                       <p className="text-xs text-blue-700 dark:text-blue-300">
-                        Assign this task to an asset. One task will be created for this asset.
+                        Assign this task to an asset. You must also select either a user or role to be responsible for this task.
                       </p>
                     </div>
                   </div>
-                  <Select
-                    value={taskFormData.assigned_to_asset_id && taskFormData.assigned_to_asset_id !== "" ? taskFormData.assigned_to_asset_id : undefined}
-                    onValueChange={(value) => {
-                      setTaskFormData({
-                        ...taskFormData,
-                        assigned_to_asset_id: value,
-                        // Clear other assignment types when asset is selected
-                        assigned_to_user_id: "",
-                        assigned_to_role_id: "",
-                        assigned_user_ids: [],
-                      });
-                      setSelectedUserIds([]);
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select asset" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {assets.map((asset) => (
-                        <SelectItem key={asset.id} value={asset.id.toString()}>
-                          {asset.name || asset.asset_number}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div>
+                    <Label>Asset *</Label>
+                    <Select
+                      value={taskFormData.assigned_to_asset_id && taskFormData.assigned_to_asset_id !== "" ? taskFormData.assigned_to_asset_id : undefined}
+                      onValueChange={(value) => {
+                        setTaskFormData({
+                          ...taskFormData,
+                          assigned_to_asset_id: value,
+                        });
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select asset" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {assets.map((asset) => (
+                          <SelectItem key={asset.id} value={asset.id.toString()}>
+                            {asset.name || asset.asset_number}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-3">
+                    <Label>Assign to (User or Role) *</Label>
+                    <Tabs value={assetAssignmentType} onValueChange={setAssetAssignmentType} className="w-full">
+                      <TabsList className="grid w-full grid-cols-2">
+                        <TabsTrigger value="user">
+                          <User className="mr-2 h-4 w-4" />
+                          User
+                        </TabsTrigger>
+                        <TabsTrigger value="role">
+                          <Shield className="mr-2 h-4 w-4" />
+                          Role
+                        </TabsTrigger>
+                      </TabsList>
+                      <TabsContent value="user" className="mt-3">
+                        <Select
+                          value={taskFormData.assigned_to_user_id && taskFormData.assigned_to_user_id !== "" ? taskFormData.assigned_to_user_id : undefined}
+                          onValueChange={(value) => {
+                            setTaskFormData({
+                              ...taskFormData,
+                              assigned_to_user_id: value,
+                              assigned_to_role_id: "", // Clear role when user is selected
+                            });
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select user" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {users.map((user) => (
+                              <SelectItem key={user.id} value={user.id.toString()}>
+                                {user.display_name ||
+                                  `${user.first_name || ""} ${user.last_name || ""}`.trim() ||
+                                  user.email}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </TabsContent>
+                      <TabsContent value="role" className="mt-3">
+                        <Select
+                          value={taskFormData.assigned_to_role_id && taskFormData.assigned_to_role_id !== "" ? taskFormData.assigned_to_role_id : undefined}
+                          onValueChange={(value) => {
+                            setTaskFormData({
+                              ...taskFormData,
+                              assigned_to_role_id: value,
+                              assigned_to_user_id: "", // Clear user when role is selected
+                            });
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select role" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {roles.map((role) => (
+                              <SelectItem key={role.id} value={role.id.toString()}>
+                                {role.display_name || role.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {taskFormData.assigned_to_role_id && taskFormData.assigned_to_role_id !== "" && selectedRoleId && (
+                          <div className="p-3 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-md mt-3">
+                            <p className="text-xs font-medium text-green-800 dark:text-green-200">
+                              {activeRoleUsersCount > 0 ? (
+                                <span>
+                                  <Badge variant="outline" className="mr-2">
+                                    {activeRoleUsersCount}
+                                  </Badge>
+                                  active {activeRoleUsersCount === 1 ? 'user' : 'users'} in this role will receive {activeRoleUsersCount === 1 ? 'a task' : 'tasks'}.
+                                </span>
+                              ) : (
+                                <span className="text-amber-600 dark:text-amber-400">No active users found in this role.</span>
+                              )}
+                            </p>
+                          </div>
+                        )}
+                      </TabsContent>
+                    </Tabs>
+                  </div>
                 </TabsContent>
               </Tabs>
             </div>

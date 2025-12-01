@@ -57,15 +57,35 @@ export const useCreateTask = () => {
       const response = await tasksService.createTask(taskData);
       return { data: response.data, taskData }; // Return both response and original taskData
     },
-    onSuccess: ({ data, taskData }) => {
-      queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
-      queryClient.invalidateQueries({ queryKey: taskKeys.myTasks() });
-      queryClient.invalidateQueries({ queryKey: taskKeys.stats() });
+    onSuccess: async ({ data, taskData }) => {
+      // Invalidate all task-related queries to ensure the UI refreshes
+      // Using taskKeys.all invalidates all queries starting with ["tasks"]
+      await queryClient.invalidateQueries({ queryKey: taskKeys.all });
       
       // Check if task was assigned to a role
       if (taskData.assigned_to_role_id) {
         toast.success("Task created successfully", {
           description: `Individual tasks have been created for all active users in the role. Each user will see their task in "My Tasks".`,
+        });
+      } else if (taskData.assigned_user_ids?.length > 0 && taskData.create_individual_tasks) {
+        toast.success("Tasks created successfully", {
+          description: `${taskData.assigned_user_ids.length} individual tasks have been created.`,
+        });
+      } else if (taskData.assigned_user_ids?.length > 0) {
+        toast.success("Collaborative task created successfully", {
+          description: `A collaborative task has been created for ${taskData.assigned_user_ids.length} users.`,
+        });
+      } else if (taskData.assigned_to_user_id) {
+        toast.success("Task created successfully", {
+          description: `Task "${data.title}" has been created for the assigned user.`,
+        });
+      } else if (taskData.assigned_to_asset_id) {
+        toast.success("Task created successfully", {
+          description: `Task "${data.title}" has been created for the assigned asset.`,
+        });
+      } else if (taskData.is_recurring) {
+        toast.success("Recurring task created successfully", {
+          description: `Recurring task "${data.title}" has been set up. The next occurrence will be scheduled.`,
         });
       } else {
         toast.success("Task created successfully", {
