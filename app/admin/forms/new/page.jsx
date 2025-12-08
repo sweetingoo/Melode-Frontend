@@ -18,6 +18,59 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Loader2, Plus, Trash2, Info } from "lucide-react";
+
+// Predefined file type categories for easy selection
+const FILE_TYPE_CATEGORIES = {
+  images: {
+    label: "Images",
+    types: [
+      { value: "image/jpeg", label: "JPEG (.jpg, .jpeg)" },
+      { value: "image/png", label: "PNG (.png)" },
+      { value: "image/gif", label: "GIF (.gif)" },
+      { value: "image/webp", label: "WebP (.webp)" },
+      { value: "image/svg+xml", label: "SVG (.svg)" },
+    ],
+  },
+  documents: {
+    label: "Documents",
+    types: [
+      { value: "application/pdf", label: "PDF (.pdf)" },
+      { value: "application/msword", label: "Word (.doc)" },
+      { value: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", label: "Word (.docx)" },
+      { value: "application/vnd.ms-excel", label: "Excel (.xls)" },
+      { value: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", label: "Excel (.xlsx)" },
+      { value: "text/plain", label: "Text (.txt)" },
+      { value: "application/rtf", label: "RTF (.rtf)" },
+    ],
+  },
+  archives: {
+    label: "Archives",
+    types: [
+      { value: "application/zip", label: "ZIP (.zip)" },
+      { value: "application/x-rar-compressed", label: "RAR (.rar)" },
+      { value: "application/x-tar", label: "TAR (.tar)" },
+      { value: "application/gzip", label: "GZIP (.gz)" },
+    ],
+  },
+  videos: {
+    label: "Videos",
+    types: [
+      { value: "video/mp4", label: "MP4 (.mp4)" },
+      { value: "video/quicktime", label: "QuickTime (.mov)" },
+      { value: "video/x-msvideo", label: "AVI (.avi)" },
+      { value: "video/webm", label: "WebM (.webm)" },
+    ],
+  },
+  audio: {
+    label: "Audio",
+    types: [
+      { value: "audio/mpeg", label: "MP3 (.mp3)" },
+      { value: "audio/wav", label: "WAV (.wav)" },
+      { value: "audio/ogg", label: "OGG (.ogg)" },
+      { value: "audio/mp4", label: "M4A (.m4a)" },
+    ],
+  },
+};
 import { useCreateForm } from "@/hooks/useForms";
 import { useRoles } from "@/hooks/useRoles";
 import { toast } from "sonner";
@@ -27,10 +80,14 @@ const fieldTypes = [
   { value: "textarea", label: "Textarea" },
   { value: "number", label: "Number" },
   { value: "email", label: "Email" },
+  { value: "phone", label: "Phone" },
   { value: "date", label: "Date" },
-  { value: "select", label: "Select" },
-  { value: "checkbox", label: "Checkbox" },
-  { value: "radio", label: "Radio" },
+  { value: "datetime", label: "Date & Time" },
+  { value: "boolean", label: "Boolean/Checkbox" },
+  { value: "select", label: "Select (Single)" },
+  { value: "multiselect", label: "Multi-Select" },
+  { value: "file", label: "File Upload" },
+  { value: "json", label: "JSON" },
 ];
 
 const formTypes = [
@@ -87,20 +144,41 @@ const NewFormPage = () => {
     field_type: "text",
     label: "",
     required: false,
+    placeholder: "",
+    help_text: "",
     options: [],
+    validation: {
+      min: "",
+      max: "",
+      min_length: "",
+      max_length: "",
+      pattern: "",
+    },
+    // File field specific
+    allowed_types: "",
+    max_size_mb: "",
+    // JSON field specific
+    json_schema: "",
   });
-  const [newOption, setNewOption] = useState("");
+  const [newOption, setNewOption] = useState({ value: "", label: "" });
+  const [allowAllFileTypes, setAllowAllFileTypes] = useState(false);
 
   const handleAddOption = () => {
-    if (!newOption.trim()) {
+    if (!newOption.value.trim()) {
       toast.error("Option value is required");
       return;
     }
     setNewField({
       ...newField,
-      options: [...newField.options, newOption.trim()],
+      options: [
+        ...newField.options,
+        {
+          value: newOption.value.trim(),
+          label: newOption.label.trim() || newOption.value.trim(),
+        },
+      ],
     });
-    setNewOption("");
+    setNewOption({ value: "", label: "" });
   };
 
   const handleRemoveOption = (index) => {
@@ -118,9 +196,16 @@ const NewFormPage = () => {
       return;
     }
 
-    // For select and radio, require at least one option
-    if ((newField.field_type === "select" || newField.field_type === "radio") && newField.options.length === 0) {
-      toast.error(`${newField.field_type === "select" ? "Select" : "Radio"} fields require at least one option`);
+    // For select, radio, and multiselect, require at least one option
+    if (
+      (newField.field_type === "select" ||
+        newField.field_type === "radio" ||
+        newField.field_type === "multiselect") &&
+      newField.options.length === 0
+    ) {
+      toast.error(
+        `${newField.field_type === "select" ? "Select" : newField.field_type === "multiselect" ? "Multi-select" : "Radio"} fields require at least one option`
+      );
       return;
     }
 
@@ -132,14 +217,74 @@ const NewFormPage = () => {
       required: newField.required,
     };
 
-    // Add options for select and radio fields
-    if ((newField.field_type === "select" || newField.field_type === "radio") && newField.options.length > 0) {
-      field.field_options = {
-        options: newField.options.map(opt => ({
-          value: opt,
-          label: opt,
-        })),
-      };
+    // Add placeholder if provided
+    if (newField.placeholder) {
+      field.placeholder = newField.placeholder;
+    }
+
+    // Add help_text if provided
+    if (newField.help_text) {
+      field.help_text = newField.help_text;
+    }
+
+    // Add validation if any validation rules are provided
+    const validation = {};
+    if (newField.validation.min) validation.min = newField.validation.min;
+    if (newField.validation.max) validation.max = newField.validation.max;
+    if (newField.validation.min_length)
+      validation.min_length = parseInt(newField.validation.min_length);
+    if (newField.validation.max_length)
+      validation.max_length = parseInt(newField.validation.max_length);
+    if (newField.validation.pattern) validation.pattern = newField.validation.pattern;
+
+    if (Object.keys(validation).length > 0) {
+      field.validation = validation;
+    }
+
+    // Add options for select, radio, and multiselect fields
+    if (
+      (newField.field_type === "select" ||
+        newField.field_type === "radio" ||
+        newField.field_type === "multiselect") &&
+      newField.options.length > 0
+    ) {
+      field.options = newField.options;
+    }
+
+    // Add file field specific configuration
+    if (newField.field_type === "file") {
+      const fileValidation = {};
+      // If allowAllFileTypes is true or allowed_types is empty, don't set allowed_types
+      // (backend will use default validation or allow all)
+      if (!allowAllFileTypes && newField.allowed_types) {
+        const types = newField.allowed_types
+          .split(",")
+          .map((t) => t.trim())
+          .filter((t) => t);
+        if (types.length > 0) {
+          fileValidation.allowed_types = types;
+        }
+      }
+      if (newField.max_size_mb) {
+        fileValidation.max_size_mb = parseInt(newField.max_size_mb);
+      }
+      if (Object.keys(fileValidation).length > 0) {
+        field.validation = { ...field.validation, ...fileValidation };
+      }
+    }
+
+    // Add JSON field specific configuration
+    if (newField.field_type === "json" && newField.json_schema) {
+      try {
+        const schema = JSON.parse(newField.json_schema);
+        field.validation = {
+          ...field.validation,
+          schema: schema,
+        };
+      } catch (e) {
+        toast.error("Invalid JSON schema. Please check the format.");
+        return;
+      }
     }
 
     setFormData({
@@ -156,9 +301,22 @@ const NewFormPage = () => {
       field_type: "text",
       label: "",
       required: false,
+      placeholder: "",
+      help_text: "",
       options: [],
+      validation: {
+        min: "",
+        max: "",
+        min_length: "",
+        max_length: "",
+        pattern: "",
+      },
+      allowed_types: "",
+      max_size_mb: "",
+      json_schema: "",
     });
-    setNewOption("");
+    setNewOption({ value: "", label: "" });
+    setAllowAllFileTypes(false);
   };
 
   const handleRemoveField = (index) => {
@@ -369,16 +527,47 @@ const NewFormPage = () => {
                     />
                     <Label htmlFor="field_required">Required</Label>
                   </div>
-                  
-                  {/* Options for select and radio fields */}
-                  {(newField.field_type === "select" || newField.field_type === "radio") && (
+
+                  {/* Placeholder */}
+                  <div>
+                    <Label htmlFor="field_placeholder">Placeholder</Label>
+                    <Input
+                      id="field_placeholder"
+                      value={newField.placeholder}
+                      onChange={(e) =>
+                        setNewField({ ...newField, placeholder: e.target.value })
+                      }
+                      placeholder="Enter placeholder text"
+                    />
+                  </div>
+
+                  {/* Help Text */}
+                  <div>
+                    <Label htmlFor="field_help_text">Help Text</Label>
+                    <Textarea
+                      id="field_help_text"
+                      value={newField.help_text}
+                      onChange={(e) =>
+                        setNewField({ ...newField, help_text: e.target.value })
+                      }
+                      placeholder="Enter help text or instructions"
+                      rows={2}
+                    />
+                  </div>
+
+                  {/* Options for select, radio, and multiselect fields */}
+                  {(newField.field_type === "select" ||
+                    newField.field_type === "radio" ||
+                    newField.field_type === "multiselect") && (
                     <div className="space-y-2 pt-2 border-t">
-                      <Label>Options</Label>
-                      <div className="flex gap-2">
+                      <Label>Options *</Label>
+                      <div className="grid grid-cols-2 gap-2">
                         <Input
-                          value={newOption}
-                          onChange={(e) => setNewOption(e.target.value)}
-                          placeholder="Enter option value"
+                          value={newOption.value}
+                          onChange={(e) =>
+                            setNewOption({ ...newOption, value: e.target.value })
+                          }
+                          placeholder="Option value"
                           onKeyDown={(e) => {
                             if (e.key === "Enter") {
                               e.preventDefault();
@@ -386,14 +575,29 @@ const NewFormPage = () => {
                             }
                           }}
                         />
-                        <Button
-                          type="button"
-                          onClick={handleAddOption}
-                          variant="outline"
-                        >
-                          <Plus className="h-4 w-4" />
-                        </Button>
+                        <Input
+                          value={newOption.label}
+                          onChange={(e) =>
+                            setNewOption({ ...newOption, label: e.target.value })
+                          }
+                          placeholder="Option label (optional)"
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              handleAddOption();
+                            }
+                          }}
+                        />
                       </div>
+                      <Button
+                        type="button"
+                        onClick={handleAddOption}
+                        variant="outline"
+                        size="sm"
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add Option
+                      </Button>
                       {newField.options.length > 0 && (
                         <div className="space-y-1">
                           {newField.options.map((option, index) => (
@@ -401,7 +605,9 @@ const NewFormPage = () => {
                               key={index}
                               className="flex items-center justify-between p-2 bg-muted rounded-md"
                             >
-                              <span className="text-sm">{option}</span>
+                              <span className="text-sm">
+                                {option.label || option.value} ({option.value})
+                              </span>
                               <Button
                                 type="button"
                                 variant="ghost"
@@ -415,6 +621,350 @@ const NewFormPage = () => {
                           ))}
                         </div>
                       )}
+                    </div>
+                  )}
+
+                  {/* Validation Options */}
+                  <div className="space-y-2 pt-2 border-t">
+                    <Label className="text-sm font-medium">Validation</Label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {(newField.field_type === "text" ||
+                        newField.field_type === "textarea" ||
+                        newField.field_type === "email" ||
+                        newField.field_type === "phone") && (
+                        <>
+                          <div>
+                            <Label htmlFor="min_length" className="text-xs">
+                              Min Length
+                            </Label>
+                            <Input
+                              id="min_length"
+                              type="number"
+                              value={newField.validation.min_length}
+                              onChange={(e) =>
+                                setNewField({
+                                  ...newField,
+                                  validation: {
+                                    ...newField.validation,
+                                    min_length: e.target.value,
+                                  },
+                                })
+                              }
+                              placeholder="Min length"
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="max_length" className="text-xs">
+                              Max Length
+                            </Label>
+                            <Input
+                              id="max_length"
+                              type="number"
+                              value={newField.validation.max_length}
+                              onChange={(e) =>
+                                setNewField({
+                                  ...newField,
+                                  validation: {
+                                    ...newField.validation,
+                                    max_length: e.target.value,
+                                  },
+                                })
+                              }
+                              placeholder="Max length"
+                            />
+                          </div>
+                        </>
+                      )}
+                      {(newField.field_type === "number") && (
+                        <>
+                          <div>
+                            <Label htmlFor="min_value" className="text-xs">
+                              Min Value
+                            </Label>
+                            <Input
+                              id="min_value"
+                              type="number"
+                              value={newField.validation.min}
+                              onChange={(e) =>
+                                setNewField({
+                                  ...newField,
+                                  validation: {
+                                    ...newField.validation,
+                                    min: e.target.value,
+                                  },
+                                })
+                              }
+                              placeholder="Min value"
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="max_value" className="text-xs">
+                              Max Value
+                            </Label>
+                            <Input
+                              id="max_value"
+                              type="number"
+                              value={newField.validation.max}
+                              onChange={(e) =>
+                                setNewField({
+                                  ...newField,
+                                  validation: {
+                                    ...newField.validation,
+                                    max: e.target.value,
+                                  },
+                                })
+                              }
+                              placeholder="Max value"
+                            />
+                          </div>
+                        </>
+                      )}
+                      {(newField.field_type === "date") && (
+                        <>
+                          <div>
+                            <Label htmlFor="min_date" className="text-xs">
+                              Min Date
+                            </Label>
+                            <Input
+                              id="min_date"
+                              type="date"
+                              value={newField.validation.min}
+                              onChange={(e) =>
+                                setNewField({
+                                  ...newField,
+                                  validation: {
+                                    ...newField.validation,
+                                    min: e.target.value,
+                                  },
+                                })
+                              }
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="max_date" className="text-xs">
+                              Max Date
+                            </Label>
+                            <Input
+                              id="max_date"
+                              type="date"
+                              value={newField.validation.max}
+                              onChange={(e) =>
+                                setNewField({
+                                  ...newField,
+                                  validation: {
+                                    ...newField.validation,
+                                    max: e.target.value,
+                                  },
+                                })
+                              }
+                            />
+                          </div>
+                        </>
+                      )}
+                    </div>
+                    {(newField.field_type === "text" ||
+                      newField.field_type === "email" ||
+                      newField.field_type === "phone") && (
+                      <div>
+                        <Label htmlFor="pattern" className="text-xs">
+                          Pattern (Regex)
+                        </Label>
+                        <Input
+                          id="pattern"
+                          value={newField.validation.pattern}
+                          onChange={(e) =>
+                            setNewField({
+                              ...newField,
+                              validation: {
+                                ...newField.validation,
+                                pattern: e.target.value,
+                              },
+                            })
+                          }
+                          placeholder="e.g., ^[A-Za-z\\s]+$"
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Regular expression pattern for validation
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* File Field Configuration */}
+                  {newField.field_type === "file" && (
+                    <div className="space-y-4 pt-2 border-t">
+                      <Label className="text-sm font-medium">
+                        File Configuration
+                      </Label>
+                      
+                      {/* Allow All File Types Option */}
+                      <div className="flex items-center space-x-2">
+                        <Checkbox
+                          id="allow_all_file_types"
+                          checked={allowAllFileTypes}
+                          onCheckedChange={(checked) => {
+                            setAllowAllFileTypes(checked);
+                            if (checked) {
+                              setNewField({
+                                ...newField,
+                                allowed_types: "",
+                              });
+                            }
+                          }}
+                        />
+                        <Label htmlFor="allow_all_file_types" className="text-sm font-normal cursor-pointer">
+                          Allow all file types (no restrictions)
+                        </Label>
+                      </div>
+
+                      {/* File Type Selection */}
+                      {!allowAllFileTypes && (
+                        <div className="space-y-3">
+                          <Label className="text-xs font-medium">
+                            Allowed File Types
+                          </Label>
+                          <div className="space-y-3 max-h-64 overflow-y-auto border rounded-md p-3">
+                            {Object.entries(FILE_TYPE_CATEGORIES).map(([categoryKey, category]) => {
+                              const selectedTypes = newField.allowed_types
+                                ? newField.allowed_types.split(",").map((t) => t.trim())
+                                : [];
+                              
+                              const categoryTypes = category.types.map((t) => t.value);
+                              const allCategorySelected = categoryTypes.every((type) =>
+                                selectedTypes.includes(type)
+                              );
+                              const someCategorySelected = categoryTypes.some((type) =>
+                                selectedTypes.includes(type)
+                              );
+
+                              const handleCategoryToggle = (checked) => {
+                                let newTypes = [...selectedTypes];
+                                if (checked) {
+                                  // Add all category types
+                                  categoryTypes.forEach((type) => {
+                                    if (!newTypes.includes(type)) {
+                                      newTypes.push(type);
+                                    }
+                                  });
+                                } else {
+                                  // Remove all category types
+                                  newTypes = newTypes.filter((type) => !categoryTypes.includes(type));
+                                }
+                                setNewField({
+                                  ...newField,
+                                  allowed_types: newTypes.join(", "),
+                                });
+                              };
+
+                              const handleTypeToggle = (typeValue, checked) => {
+                                let newTypes = [...selectedTypes];
+                                if (checked) {
+                                  if (!newTypes.includes(typeValue)) {
+                                    newTypes.push(typeValue);
+                                  }
+                                } else {
+                                  newTypes = newTypes.filter((t) => t !== typeValue);
+                                }
+                                setNewField({
+                                  ...newField,
+                                  allowed_types: newTypes.join(", "),
+                                });
+                              };
+
+                              return (
+                                <div key={categoryKey} className="space-y-2">
+                                  <div className="flex items-center space-x-2">
+                                    <Checkbox
+                                      id={`category-${categoryKey}`}
+                                      checked={allCategorySelected}
+                                      onCheckedChange={handleCategoryToggle}
+                                    />
+                                    <Label
+                                      htmlFor={`category-${categoryKey}`}
+                                      className="text-sm font-medium cursor-pointer"
+                                    >
+                                      {category.label}
+                                    </Label>
+                                  </div>
+                                  <div className="ml-6 space-y-1.5">
+                                    {category.types.map((type) => (
+                                      <div key={type.value} className="flex items-center space-x-2">
+                                        <Checkbox
+                                          id={`type-${type.value}`}
+                                          checked={selectedTypes.includes(type.value)}
+                                          onCheckedChange={(checked) =>
+                                            handleTypeToggle(type.value, checked)
+                                          }
+                                        />
+                                        <Label
+                                          htmlFor={`type-${type.value}`}
+                                          className="text-xs font-normal cursor-pointer"
+                                        >
+                                          {type.label}
+                                        </Label>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                          {newField.allowed_types && (
+                            <div className="text-xs text-muted-foreground">
+                              Selected: {newField.allowed_types.split(",").length} type(s)
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Max File Size */}
+                      <div>
+                        <Label htmlFor="max_size_mb" className="text-xs">
+                          Max File Size (MB)
+                        </Label>
+                        <Input
+                          id="max_size_mb"
+                          type="number"
+                          min="0"
+                          step="0.1"
+                          value={newField.max_size_mb}
+                          onChange={(e) =>
+                            setNewField({
+                              ...newField,
+                              max_size_mb: e.target.value,
+                            })
+                          }
+                          placeholder="e.g., 5 (leave empty for no limit)"
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Maximum file size in megabytes. Leave empty for no size limit.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* JSON Field Configuration */}
+                  {newField.field_type === "json" && (
+                    <div className="space-y-2 pt-2 border-t">
+                      <Label className="text-sm font-medium">
+                        JSON Schema Validation
+                      </Label>
+                      <Textarea
+                        id="json_schema"
+                        value={newField.json_schema}
+                        onChange={(e) =>
+                          setNewField({
+                            ...newField,
+                            json_schema: e.target.value,
+                          })
+                        }
+                        placeholder='{"type": "object", "properties": {"key1": {"type": "string"}}}'
+                        rows={6}
+                        className="font-mono text-sm"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Enter JSON schema for validation (optional)
+                      </p>
                     </div>
                   )}
                   

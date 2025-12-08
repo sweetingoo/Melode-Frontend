@@ -684,38 +684,85 @@ export const useAddUserGroupEntry = () => {
   });
 };
 
-export const useUploadFile = () => {
+export const useUploadFile = (options = {}) => {
   return useMutation({
-    mutationFn: async (file) => {
-      const response = await profileService.uploadFile(file);
+    mutationFn: async (params) => {
+      // params can be a file or an object with { file, form_id, field_id, organization_id }
+      let file;
+      let uploadOptions = { ...options };
+      
+      if (params instanceof File) {
+        // Backward compatibility: if just a file is passed
+        file = params;
+      } else if (params && params.file) {
+        // New format: object with file and options
+        file = params.file;
+        // Explicitly extract form_id, field_id, and organization_id
+        uploadOptions = {
+          ...options,
+          form_id: params.form_id,
+          field_id: params.field_id,
+          organization_id: params.organization_id,
+        };
+        // Remove undefined values
+        Object.keys(uploadOptions).forEach(key => {
+          if (uploadOptions[key] === undefined || uploadOptions[key] === null) {
+            delete uploadOptions[key];
+          }
+        });
+      } else {
+        throw new Error("Invalid parameters: expected File or { file, ...options }");
+      }
+      
+      // Debug logging in development
+      if (process.env.NODE_ENV === 'development') {
+        console.log('useUploadFile - Uploading file with options:', {
+          fileName: file?.name,
+          fileSize: file?.size,
+          form_id: uploadOptions.form_id,
+          field_id: uploadOptions.field_id,
+          organization_id: uploadOptions.organization_id,
+        });
+      }
+      
+      const response = await profileService.uploadFile(file, uploadOptions);
       return response;
     },
-    onSuccess: (data) => {
-      toast.success("File uploaded successfully!", {
-        description: `File "${data.file_name}" has been uploaded.`,
-      });
+    onSuccess: (data, variables, context) => {
+      // Only show toast if not silent (for form submissions, we might want to suppress)
+      if (!options.silent) {
+        toast.success("File uploaded successfully!", {
+          description: `File "${data.file_name || data.name || 'file'}" has been uploaded.`,
+        });
+      }
     },
     onError: (error) => {
       console.error("Failed to upload file:", error);
 
-      if (error.response?.status === 422) {
-        const errorData = error.response.data;
-        if (errorData?.detail && Array.isArray(errorData.detail)) {
-          const firstError = errorData.detail[0];
-          toast.error(`File Upload Error: ${firstError.loc?.join('.') || 'file'}`, {
-            description: firstError.msg || "Please check your file",
-          });
+      // Only show toast if not silent
+      if (!options.silent) {
+        if (error.response?.status === 422) {
+          const errorData = error.response.data;
+          // Backend returns detail as string for file upload errors
+          if (errorData?.detail) {
+            const errorMessage = typeof errorData.detail === 'string' 
+              ? errorData.detail 
+              : Array.isArray(errorData.detail) 
+                ? errorData.detail[0]?.msg || errorData.detail[0]?.detail || "File validation failed"
+                : errorData.detail;
+            toast.error("File Upload Error", {
+              description: errorMessage,
+            });
+          } else {
+            toast.error("File Upload Error", {
+              description: errorData?.message || "Please check your file",
+            });
+          }
         } else {
           toast.error("File Upload Error", {
-            description: errorData?.message || "Please check your file",
+            description: error.response?.data?.message || error.message || "Failed to upload file",
           });
         }
-      } else {
-        toast.error("Failed to upload file", {
-          description:
-            error.response?.data?.message ||
-            "An error occurred while uploading your file.",
-        });
       }
     },
   });

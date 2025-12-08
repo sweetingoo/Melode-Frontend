@@ -13,6 +13,11 @@ const apiClient = axios.create({
 // Request interceptor to add auth token and department context
 apiClient.interceptors.request.use(
   (config) => {
+    // If data is FormData, remove Content-Type header to let axios set it with boundary
+    if (config.data instanceof FormData) {
+      delete config.headers['Content-Type'];
+    }
+    
     // Get token from localStorage or wherever you store it
     // Check if we're in browser environment
     if (typeof window !== "undefined") {

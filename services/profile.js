@@ -271,17 +271,37 @@ export const profileService = {
     }
   },
 
-  // Upload file for custom fields
-  uploadFile: async (file) => {
+  // Upload file for custom fields or form submissions
+  uploadFile: async (file, options = {}) => {
     try {
       const formData = new FormData();
       formData.append('file', file);
       
-      const response = await api.post('/settings/files/upload', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
+      // Add form_id and field_id for form-based validation
+      if (options.form_id !== undefined && options.form_id !== null) {
+        formData.append('form_id', options.form_id.toString());
+      }
+      if (options.field_id !== undefined && options.field_id !== null) {
+        formData.append('field_id', options.field_id.toString());
+      }
+      if (options.organization_id !== undefined && options.organization_id !== null) {
+        formData.append('organization_id', options.organization_id.toString());
+      }
+      
+      // Debug logging in development
+      if (process.env.NODE_ENV === 'development') {
+        console.log('File upload with options:', {
+          hasFile: !!file,
+          fileName: file?.name,
+          form_id: options.form_id,
+          field_id: options.field_id,
+          organization_id: options.organization_id,
+        });
+      }
+      
+      // Don't set Content-Type header - let axios set it automatically with boundary
+      // This is important for FormData to work correctly
+      const response = await api.post('/settings/files/upload', formData);
       return response.data || response;
     } catch (error) {
       console.error("File upload failed:", error);

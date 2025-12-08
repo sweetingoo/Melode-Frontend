@@ -349,17 +349,23 @@ const FileFieldRenderer = ({ field, value, onChange, error, fieldId }) => {
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Validate file size if specified
-      const maxSize = field.field_options?.maxSize ? field.field_options.maxSize * 1024 * 1024 : null;
+      // Get max size from field_options or validation
+      const maxSizeMB = field.field_options?.maxSize || field.validation?.max_size_mb;
+      const maxSize = maxSizeMB ? maxSizeMB * 1024 * 1024 : null;
+      
       if (maxSize && file.size > maxSize) {
-        alert(`File size must be less than ${field.field_options.maxSize}MB`);
+        alert(`File size must be less than ${maxSizeMB}MB`);
         return;
       }
       
-      // Validate file type if specified
-      const acceptTypes = field.field_options?.accept;
+      // Get allowed types from field_options or validation
+      const acceptTypes = field.field_options?.accept || field.validation?.allowed_types;
       if (acceptTypes && acceptTypes !== "*/*") {
-        const allowedTypes = acceptTypes.split(',').map(type => type.trim());
+        // Handle both array and comma-separated string formats
+        const allowedTypes = Array.isArray(acceptTypes)
+          ? acceptTypes
+          : acceptTypes.split(',').map(type => type.trim());
+        
         const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
         const mimeType = file.type;
         
@@ -371,7 +377,10 @@ const FileFieldRenderer = ({ field, value, onChange, error, fieldId }) => {
         );
         
         if (!isAllowed) {
-          alert(`File type not allowed. Accepted types: ${acceptTypes}`);
+          const typesDisplay = Array.isArray(acceptTypes) 
+            ? acceptTypes.join(', ') 
+            : acceptTypes;
+          alert(`File type not allowed. Accepted types: ${typesDisplay}`);
           return;
         }
       }
@@ -466,7 +475,12 @@ const FileFieldRenderer = ({ field, value, onChange, error, fieldId }) => {
           id={fieldId}
           type="file"
           onChange={handleFileChange}
-          accept={field.field_options?.accept || "*/*"}
+          accept={(() => {
+            const acceptTypes = field.field_options?.accept || field.validation?.allowed_types;
+            if (!acceptTypes || acceptTypes === "*/*") return "*/*";
+            // Convert array to comma-separated string if needed
+            return Array.isArray(acceptTypes) ? acceptTypes.join(',') : acceptTypes;
+          })()}
           className="hidden"
         />
         
@@ -480,8 +494,26 @@ const FileFieldRenderer = ({ field, value, onChange, error, fieldId }) => {
               {isDragOver ? 'Drop file here' : 'Click to upload or drag and drop'}
             </p>
             <p className="text-xs text-muted-foreground">
-              {field.field_options?.accept || 'Any file type'}
-              {field.field_options?.maxSize && ` • Max ${field.field_options.maxSize}MB`}
+              {(() => {
+                const acceptTypes = field.field_options?.accept || field.validation?.allowed_types;
+                const maxSize = field.field_options?.maxSize || field.validation?.max_size_mb;
+                
+                let message = '';
+                if (acceptTypes) {
+                  const types = Array.isArray(acceptTypes) 
+                    ? acceptTypes.join(', ') 
+                    : acceptTypes;
+                  message = `Allowed: ${types}`;
+                } else {
+                  message = 'Any file type';
+                }
+                
+                if (maxSize) {
+                  message += ` • Max ${maxSize}MB`;
+                }
+                
+                return message;
+              })()}
             </p>
           </div>
         </div>

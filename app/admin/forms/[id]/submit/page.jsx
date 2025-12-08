@@ -5,21 +5,11 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, ArrowLeft, CheckCircle } from "lucide-react";
 import { useForm, useCreateFormSubmission } from "@/hooks/useForms";
-import { format } from "date-fns";
+import { useUploadFile } from "@/hooks/useProfile";
+import CustomFieldRenderer from "@/components/CustomFieldRenderer";
+import { toast } from "sonner";
 
 const FormSubmitPage = () => {
   const params = useParams();
@@ -28,33 +18,180 @@ const FormSubmitPage = () => {
 
   const { data: form, isLoading: formLoading } = useForm(formId);
   const createSubmissionMutation = useCreateFormSubmission();
+  // Use silent mode for form submissions to avoid multiple toasts
+  const uploadFileMutation = useUploadFile({ silent: true });
 
   const [submissionData, setSubmissionData] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState({});
 
   const handleFieldChange = (fieldId, value) => {
     setSubmissionData({
       ...submissionData,
       [fieldId]: value,
     });
+    // Clear error for this field when user makes changes
+    if (fieldErrors[fieldId]) {
+      setFieldErrors({
+        ...fieldErrors,
+        [fieldId]: null,
+      });
+    }
+  };
+
+  // Format field value for API submission
+  const formatFieldValueForAPI = (field, value) => {
+    if (value === null || value === undefined || value === "") {
+      return null;
+    }
+
+    const fieldType = field.field_type?.toLowerCase();
+
+    switch (fieldType) {
+      case "text":
+      case "textarea":
+      case "email":
+      case "phone":
+        return String(value);
+
+      case "number":
+        return parseFloat(value) || 0;
+
+      case "boolean":
+      case "checkbox":
+        return Boolean(value);
+
+      case "date":
+        return value instanceof Date
+          ? value.toISOString().split("T")[0]
+          : String(value);
+
+      case "datetime":
+      case "date_time":
+        return value instanceof Date ? value.toISOString() : String(value);
+
+      case "select":
+      case "radio":
+        return String(value);
+
+      case "multiselect":
+        return Array.isArray(value) ? value : [String(value)];
+
+      case "file":
+        // File should already be uploaded and converted to file_id
+        return typeof value === "number" ? value : null;
+
+      case "json":
+        try {
+          return typeof value === "string" ? JSON.parse(value) : value;
+        } catch {
+          return value;
+        }
+
+      default:
+        return String(value);
+    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
+    setFieldErrors({});
 
     try {
+      // Validate required fields
+      const fields = form.form_fields?.fields || [];
+      const errors = {};
+      let hasErrors = false;
+
+      for (const field of fields) {
+        const fieldId = field.field_id || field.field_name;
+        const value = submissionData[fieldId];
+
+        if (field.required) {
+          if (
+            value === null ||
+            value === undefined ||
+            value === "" ||
+            (Array.isArray(value) && value.length === 0)
+          ) {
+            errors[fieldId] = `${field.label || fieldId} is required`;
+            hasErrors = true;
+          }
+        }
+      }
+
+      if (hasErrors) {
+        setFieldErrors(errors);
+        setIsSubmitting(false);
+        toast.error("Please fill in all required fields");
+        return;
+      }
+
+      // Upload files first and replace File objects with file_ids
+      const processedSubmissionData = {};
+      const fileUploadPromises = [];
+
+      for (const field of fields) {
+        const fieldId = field.field_id || field.field_name;
+        const value = submissionData[fieldId];
+
+        if (field.field_type?.toLowerCase() === "file" && value instanceof File) {
+          // Upload file with form-based validation
+          fileUploadPromises.push(
+            uploadFileMutation
+              .mutateAsync({
+                file: value,
+                form_id: parseInt(formId),
+                field_id: fieldId, // Use field_id from the field configuration
+              })
+              .then((uploadResult) => {
+                processedSubmissionData[fieldId] = uploadResult.id || uploadResult.file_id;
+              })
+              .catch((error) => {
+                console.error(`Failed to upload file for field ${fieldId}:`, error);
+                // Extract error message from backend response
+                const errorMessage = error.response?.data?.detail || 
+                                   error.response?.data?.message || 
+                                   "Failed to upload file";
+                errors[fieldId] = errorMessage;
+                // Show toast for file upload errors
+                toast.error("File Upload Failed", {
+                  description: `${field.label || fieldId}: ${errorMessage}`,
+                });
+                throw error;
+              })
+          );
+        } else {
+          // Format and add non-file fields
+          const formattedValue = formatFieldValueForAPI(field, value);
+          if (formattedValue !== null) {
+            processedSubmissionData[fieldId] = formattedValue;
+          }
+        }
+      }
+
+      // Wait for all file uploads to complete
+      if (fileUploadPromises.length > 0) {
+        await Promise.all(fileUploadPromises);
+      }
+
+      // Submit the form with processed data
       const result = await createSubmissionMutation.mutateAsync({
         form_id: parseInt(formId),
-        submission_data: submissionData,
+        submission_data: processedSubmissionData,
         status: "submitted",
       });
 
       // If tasks were created, handle individual vs collaborative tasks
       if (result.processing_result?.task_creation?.created) {
         const taskInfo = result.processing_result.task_creation;
-        
-        if (taskInfo.individual_tasks && taskInfo.task_ids && taskInfo.task_ids.length > 0) {
+
+        if (
+          taskInfo.individual_tasks &&
+          taskInfo.task_ids &&
+          taskInfo.task_ids.length > 0
+        ) {
           // Individual tasks created - show success and navigate to submissions page
           // The toast notification will show the count from the hook
           router.push(`/admin/forms/${formId}/submissions/${result.id}`);
@@ -73,190 +210,6 @@ const FormSubmitPage = () => {
     }
   };
 
-  const renderField = (field) => {
-    const fieldId = field.field_id || field.field_name;
-    const value = submissionData[fieldId] || "";
-
-    switch (field.field_type) {
-      case "textarea":
-        return (
-          <div key={fieldId}>
-            <Label htmlFor={fieldId}>
-              {field.label}
-              {field.required && <span className="text-red-500"> *</span>}
-            </Label>
-            <Textarea
-              id={fieldId}
-              value={value}
-              onChange={(e) => handleFieldChange(fieldId, e.target.value)}
-              required={field.required}
-              rows={4}
-            />
-          </div>
-        );
-
-      case "number":
-        return (
-          <div key={fieldId}>
-            <Label htmlFor={fieldId}>
-              {field.label}
-              {field.required && <span className="text-red-500"> *</span>}
-            </Label>
-            <Input
-              id={fieldId}
-              type="number"
-              value={value}
-              onChange={(e) =>
-                handleFieldChange(fieldId, parseFloat(e.target.value) || "")
-              }
-              required={field.required}
-            />
-          </div>
-        );
-
-      case "email":
-        return (
-          <div key={fieldId}>
-            <Label htmlFor={fieldId}>
-              {field.label}
-              {field.required && <span className="text-red-500"> *</span>}
-            </Label>
-            <Input
-              id={fieldId}
-              type="email"
-              value={value}
-              onChange={(e) => handleFieldChange(fieldId, e.target.value)}
-              required={field.required}
-            />
-          </div>
-        );
-
-      case "date":
-        return (
-          <div key={fieldId}>
-            <Label htmlFor={fieldId}>
-              {field.label}
-              {field.required && <span className="text-red-500"> *</span>}
-            </Label>
-            <Input
-              id={fieldId}
-              type="date"
-              value={value}
-              onChange={(e) => handleFieldChange(fieldId, e.target.value)}
-              required={field.required}
-            />
-          </div>
-        );
-
-      case "checkbox":
-        return (
-          <div key={fieldId} className="flex items-center space-x-2">
-            <Checkbox
-              id={fieldId}
-              checked={value === true || value === "true" || value === true}
-              onCheckedChange={(checked) =>
-                handleFieldChange(fieldId, checked)
-              }
-              required={field.required}
-            />
-            <Label htmlFor={fieldId} className="cursor-pointer">
-              {field.label}
-              {field.required && <span className="text-red-500"> *</span>}
-            </Label>
-          </div>
-        );
-
-      case "select":
-        const selectOptions = field.field_options?.options || field.options || field.choices || field.validation?.options || [];
-        return (
-          <div key={fieldId}>
-            <Label htmlFor={fieldId}>
-              {field.label}
-              {field.required && <span className="text-red-500"> *</span>}
-            </Label>
-            {selectOptions.length > 0 ? (
-              <Select
-                value={value || undefined}
-                onValueChange={(newValue) => handleFieldChange(fieldId, newValue)}
-                required={field.required}
-              >
-                <SelectTrigger id={fieldId}>
-                  <SelectValue placeholder="Select an option" />
-                </SelectTrigger>
-                <SelectContent>
-                  {selectOptions.map((option, index) => {
-                    const optionValue = typeof option === "string" ? option : option.value || option.label || option;
-                    const optionLabel = typeof option === "string" ? option : option.label || option.value || option;
-                    // Ensure value is not empty string
-                    const safeValue = String(optionValue).trim() || `option-${index}`;
-                    return (
-                      <SelectItem key={index} value={safeValue}>
-                        {String(optionLabel)}
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
-            ) : (
-              <div className="p-2 border rounded-md bg-muted text-sm text-muted-foreground">
-                No options available for this field
-              </div>
-            )}
-          </div>
-        );
-
-      case "radio":
-        const radioOptions = field.field_options?.options || field.options || field.choices || field.validation?.options || [];
-        return (
-          <div key={fieldId}>
-            <Label>
-              {field.label}
-              {field.required && <span className="text-red-500"> *</span>}
-            </Label>
-            <RadioGroup
-              value={value || ""}
-              onValueChange={(newValue) => handleFieldChange(fieldId, newValue)}
-              required={field.required}
-              className="mt-2"
-            >
-              {radioOptions.length > 0 ? (
-                radioOptions.map((option, index) => {
-                  const optionValue = typeof option === "string" ? option : option.value || option.label || option;
-                  const optionLabel = typeof option === "string" ? option : option.label || option.value || option;
-                  return (
-                    <div key={index} className="flex items-center space-x-2">
-                      <RadioGroupItem value={String(optionValue)} id={`${fieldId}-${index}`} />
-                      <Label htmlFor={`${fieldId}-${index}`} className="cursor-pointer font-normal">
-                        {String(optionLabel)}
-                      </Label>
-                    </div>
-                  );
-                })
-              ) : (
-                <p className="text-sm text-muted-foreground">No options available</p>
-              )}
-            </RadioGroup>
-          </div>
-        );
-
-      default:
-        return (
-          <div key={fieldId}>
-            <Label htmlFor={fieldId}>
-              {field.label}
-              {field.required && <span className="text-red-500"> *</span>}
-            </Label>
-            <Input
-              id={fieldId}
-              type="text"
-              value={value}
-              onChange={(e) => handleFieldChange(fieldId, e.target.value)}
-              required={field.required}
-            />
-          </div>
-        );
-    }
-  };
 
   if (formLoading) {
     return (
@@ -318,8 +271,45 @@ const FormSubmitPage = () => {
                 This form has no fields defined.
               </p>
             ) : (
-              <div className="space-y-4">
-                {fields.map((field) => renderField(field))}
+              <div className="space-y-6">
+                {fields.map((field) => {
+                  const fieldId = field.field_id || field.field_name;
+                  const value = submissionData[fieldId];
+                  const error = fieldErrors[fieldId];
+
+                  // Map field structure for CustomFieldRenderer
+                  const mappedField = {
+                    ...field,
+                    id: fieldId,
+                    field_label: field.label,
+                    field_description: field.help_text,
+                    field_type: field.field_type,
+                    is_required: field.required,
+                    required: field.required,
+                    // Preserve validation object for file fields
+                    validation: field.validation,
+                    field_options: {
+                      options: field.options || [],
+                      // For file fields, also map validation to field_options for backward compatibility
+                      accept: field.validation?.allowed_types
+                        ? Array.isArray(field.validation.allowed_types)
+                          ? field.validation.allowed_types.join(",")
+                          : field.validation.allowed_types
+                        : undefined,
+                      maxSize: field.validation?.max_size_mb,
+                    },
+                  };
+
+                  return (
+                    <CustomFieldRenderer
+                      key={fieldId}
+                      field={mappedField}
+                      value={value}
+                      onChange={handleFieldChange}
+                      error={error}
+                    />
+                  );
+                })}
               </div>
             )}
 

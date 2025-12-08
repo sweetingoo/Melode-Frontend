@@ -191,3 +191,9 @@ const SimpleAuditLogs = ({ resource, resourceId, title = "Recent Activity" }) =>
 
 export default SimpleAuditLogs;
 
+
+
+
+
+
+

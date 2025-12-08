@@ -494,3 +494,9 @@ const UserAuditLogs = ({ userId, title = "Activity History" }) => {
 
 export default UserAuditLogs;
 
+
+
+
+
+
+
