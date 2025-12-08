@@ -345,48 +345,104 @@ const FileFieldRenderer = ({ field, value, onChange, error, fieldId }) => {
   const downloadFileMutation = useDownloadFile();
   const [isDragOver, setIsDragOver] = React.useState(false);
   const fileInputRef = React.useRef(null);
+  
+  // Check if multiple files are allowed
+  const allowMultiple = field.field_options?.allowMultiple || false;
+  
+  // Normalize value to array for easier handling
+  const currentFiles = React.useMemo(() => {
+    if (!value) return [];
+    if (Array.isArray(value)) return value;
+    return [value];
+  }, [value]);
+
+  const validateFile = (file) => {
+    // Get max size from field_options or validation
+    const maxSizeMB = field.field_options?.maxSize || field.validation?.max_size_mb;
+    const maxSize = maxSizeMB ? maxSizeMB * 1024 * 1024 : null;
+    
+    if (maxSize && file.size > maxSize) {
+      return { valid: false, error: `File size must be less than ${maxSizeMB}MB` };
+    }
+    
+    // Get allowed types from field_options or validation
+    const acceptTypes = field.field_options?.accept || field.validation?.allowed_types;
+    if (acceptTypes && acceptTypes !== "*/*") {
+      // Handle both array and comma-separated string formats
+      const allowedTypes = Array.isArray(acceptTypes)
+        ? acceptTypes
+        : acceptTypes.split(',').map(type => type.trim());
+      
+      const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
+      const mimeType = file.type;
+      
+      const isAllowed = allowedTypes.some(type => 
+        type === mimeType || 
+        type === fileExtension ||
+        (type.startsWith('.') && fileExtension === type) ||
+        (type.includes('*') && mimeType.startsWith(type.replace('*', '')))
+      );
+      
+      if (!isAllowed) {
+        const typesDisplay = Array.isArray(acceptTypes) 
+          ? acceptTypes.join(', ') 
+          : acceptTypes;
+        return { valid: false, error: `File type not allowed. Accepted types: ${typesDisplay}` };
+      }
+    }
+    
+    return { valid: true };
+  };
 
   const handleFileChange = (e) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      // Get max size from field_options or validation
-      const maxSizeMB = field.field_options?.maxSize || field.validation?.max_size_mb;
-      const maxSize = maxSizeMB ? maxSizeMB * 1024 * 1024 : null;
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    
+    const validatedFiles = [];
+    const errors = [];
+    
+    files.forEach((file) => {
+      // Check for duplicates in existing files
+      const isDuplicate = currentFiles.some(
+        (existingFile) => 
+          existingFile instanceof File && 
+          existingFile.name === file.name && 
+          existingFile.size === file.size &&
+          existingFile.lastModified === file.lastModified
+      );
       
-      if (maxSize && file.size > maxSize) {
-        alert(`File size must be less than ${maxSizeMB}MB`);
+      if (isDuplicate) {
+        errors.push(`File "${file.name}" is already selected`);
         return;
       }
       
-      // Get allowed types from field_options or validation
-      const acceptTypes = field.field_options?.accept || field.validation?.allowed_types;
-      if (acceptTypes && acceptTypes !== "*/*") {
-        // Handle both array and comma-separated string formats
-        const allowedTypes = Array.isArray(acceptTypes)
-          ? acceptTypes
-          : acceptTypes.split(',').map(type => type.trim());
-        
-        const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
-        const mimeType = file.type;
-        
-        const isAllowed = allowedTypes.some(type => 
-          type === mimeType || 
-          type === fileExtension ||
-          (type.startsWith('.') && fileExtension === type) ||
-          (type.includes('*') && mimeType.startsWith(type.replace('*', '')))
-        );
-        
-        if (!isAllowed) {
-          const typesDisplay = Array.isArray(acceptTypes) 
-            ? acceptTypes.join(', ') 
-            : acceptTypes;
-          alert(`File type not allowed. Accepted types: ${typesDisplay}`);
-          return;
-        }
+      const validation = validateFile(file);
+      if (validation.valid) {
+        validatedFiles.push(file);
+      } else {
+        errors.push(`${file.name}: ${validation.error}`);
       }
-      
-      // Store the file object for upload
-      onChange(file);
+    });
+    
+    if (errors.length > 0) {
+      // Use alert for now since toast might not be available in all contexts
+      errors.forEach(error => alert(error));
+    }
+    
+    if (validatedFiles.length > 0) {
+      if (allowMultiple) {
+        // Add to existing files array (avoid duplicates)
+        const newFiles = [...currentFiles, ...validatedFiles];
+        onChange(newFiles);
+      } else {
+        // Single file mode - replace with first file
+        onChange(validatedFiles[0]);
+      }
+    }
+    
+    // Reset input to allow selecting the same file again
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
   };
 
@@ -404,14 +460,22 @@ const FileFieldRenderer = ({ field, value, onChange, error, fieldId }) => {
     e.preventDefault();
     setIsDragOver(false);
     
-    const files = e.dataTransfer.files;
+    const files = Array.from(e.dataTransfer.files);
     if (files.length > 0) {
-      const file = files[0];
       // Create a fake event object to reuse the existing handler
       const fakeEvent = {
-        target: { files: [file] }
+        target: { files }
       };
       handleFileChange(fakeEvent);
+    }
+  };
+  
+  const removeFile = (indexToRemove) => {
+    if (allowMultiple) {
+      const newFiles = currentFiles.filter((_, index) => index !== indexToRemove);
+      onChange(newFiles.length === 0 ? null : newFiles);
+    } else {
+      onChange(null);
     }
   };
 
@@ -474,6 +538,7 @@ const FileFieldRenderer = ({ field, value, onChange, error, fieldId }) => {
           ref={fileInputRef}
           id={fieldId}
           type="file"
+          multiple={allowMultiple}
           onChange={handleFileChange}
           accept={(() => {
             const acceptTypes = field.field_options?.accept || field.validation?.allowed_types;
@@ -491,7 +556,10 @@ const FileFieldRenderer = ({ field, value, onChange, error, fieldId }) => {
           
           <div className="space-y-1">
             <p className="text-sm font-medium">
-              {isDragOver ? 'Drop file here' : 'Click to upload or drag and drop'}
+              {isDragOver 
+                ? `Drop ${allowMultiple ? 'files' : 'file'} here` 
+                : `Click to upload or drag and drop ${allowMultiple ? 'files' : 'file'}`
+              }
             </p>
             <p className="text-xs text-muted-foreground">
               {(() => {
@@ -512,6 +580,10 @@ const FileFieldRenderer = ({ field, value, onChange, error, fieldId }) => {
                   message += ` • Max ${maxSize}MB`;
                 }
                 
+                if (allowMultiple && currentFiles.length > 0) {
+                  message += ` • ${currentFiles.length} file${currentFiles.length !== 1 ? 's' : ''} selected`;
+                }
+                
                 return message;
               })()}
             </p>
@@ -519,53 +591,77 @@ const FileFieldRenderer = ({ field, value, onChange, error, fieldId }) => {
         </div>
       </div>
       
-      {/* Selected File Preview */}
-      {value && typeof value === 'object' && value.name && (
-        <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg border">
-          <div className="flex items-center space-x-3">
-            <span className="text-2xl">{getFileIcon(value.name)}</span>
-            <div>
-              <p className="text-sm font-medium">{value.name}</p>
-              <p className="text-xs text-muted-foreground">
-                {formatFileSize(value.size)}
-              </p>
-            </div>
-          </div>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => onChange(null)}
-            className="text-muted-foreground hover:text-destructive"
-          >
-            ✕
-          </Button>
-        </div>
-      )}
-      
-      {/* Existing File Info with Download */}
-      {value && typeof value === 'number' && (
-        <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg border">
-          <div className="flex items-center space-x-3">
-            <span className="text-2xl">📎</span>
-            <div>
-              <p className="text-sm font-medium">File ID: {value}</p>
-              <p className="text-xs text-muted-foreground">
-                Click download to view the file
-              </p>
-            </div>
-          </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={handleDownload}
-            disabled={downloadFileMutation.isPending}
-            className="flex items-center space-x-2"
-          >
-            <Download className="h-4 w-4" />
-            <span>Download</span>
-          </Button>
+      {/* Selected Files Preview */}
+      {currentFiles.length > 0 && (
+        <div className="space-y-2">
+          {currentFiles.map((file, index) => {
+            // Handle File objects
+            if (file && typeof file === 'object' && file.name) {
+              return (
+                <div key={index} className="flex items-center justify-between p-4 bg-muted/50 rounded-lg border">
+                  <div className="flex items-center space-x-3">
+                    <span className="text-2xl">{getFileIcon(file.name)}</span>
+                    <div>
+                      <p className="text-sm font-medium">{file.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatFileSize(file.size)}
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => removeFile(index)}
+                    className="text-muted-foreground hover:text-destructive"
+                  >
+                    ✕
+                  </Button>
+                </div>
+              );
+            }
+            // Handle file IDs (numbers)
+            if (typeof file === 'number') {
+              return (
+                <div key={index} className="flex items-center justify-between p-4 bg-muted/50 rounded-lg border">
+                  <div className="flex items-center space-x-3">
+                    <span className="text-2xl">📎</span>
+                    <div>
+                      <p className="text-sm font-medium">File ID: {file}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Click download to view the file
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => downloadFileMutation.mutate(file)}
+                      disabled={downloadFileMutation.isPending}
+                      className="flex items-center space-x-2"
+                    >
+                      <Download className="h-4 w-4" />
+                      <span>Download</span>
+                    </Button>
+                    {allowMultiple && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeFile(index)}
+                        className="text-muted-foreground hover:text-destructive"
+                      >
+                        ✕
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              );
+            }
+            return null;
+          })}
         </div>
       )}
       

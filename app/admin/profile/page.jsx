@@ -59,6 +59,8 @@ import {
   useUploadFile,
 } from "@/hooks/useProfile";
 import CustomFieldRenderer from "@/components/CustomFieldRenderer";
+import MultiFileUpload from "@/components/MultiFileUpload";
+import FileAttachmentList from "@/components/FileAttachmentList";
 
 export default function ProfilePage() {
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
@@ -832,11 +834,12 @@ export default function ProfilePage() {
       )}
 
       <Tabs defaultValue="profile" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="profile">Profile Information</TabsTrigger>
           <TabsTrigger value="password">Change Password</TabsTrigger>
           <TabsTrigger value="mfa">Multi-Factor Auth</TabsTrigger>
           <TabsTrigger value="additional">Additional Info</TabsTrigger>
+          <TabsTrigger value="files">Files</TabsTrigger>
         </TabsList>
 
         {/* Profile Information Tab */}
@@ -1846,6 +1849,28 @@ export default function ProfilePage() {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* Files Tab */}
+        <TabsContent value="files" className="space-y-6">
+          {profileData?.id && (
+            <div className="space-y-4">
+              <FileAttachmentList
+                entityType="user"
+                entityId={profileData.id}
+                showTitle={true}
+              />
+              <MultiFileUpload
+                entityType="user"
+                entityId={profileData.id}
+                maxFiles={10}
+                maxSizeMB={10}
+                onUploadComplete={() => {
+                  // Files will be refreshed automatically via query invalidation
+                }}
+              />
+            </div>
+          )}
         </TabsContent>
       </Tabs>
     </div>

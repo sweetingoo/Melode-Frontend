@@ -60,6 +60,8 @@ import { format } from "date-fns";
 import RecurringTaskHistory from "@/components/RecurringTaskHistory";
 import ResourceAuditLogs from "@/components/ResourceAuditLogs";
 import SimpleAuditLogs from "@/components/SimpleAuditLogs";
+import MultiFileUpload from "@/components/MultiFileUpload";
+import FileAttachmentList from "@/components/FileAttachmentList";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -80,7 +82,7 @@ const TaskDetailPage = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const taskId = params.taskId;
-  
+
   // Check if we're coming from "My Tasks" (simplified view) or admin "Tasks" (full view)
   const isFromMyTasks = searchParams?.get("from") === "my-tasks";
 
@@ -134,7 +136,7 @@ const TaskDetailPage = () => {
   const locations = Array.isArray(locationsData) ? locationsData : [];
   const assets = Array.isArray(assetsData) ? assetsData : [];
   const roles = rolesData || [];
-  
+
   // Extract task types from response
   let taskTypes = [];
   if (activeTaskTypes) {
@@ -217,21 +219,21 @@ const TaskDetailPage = () => {
     try {
       // Build task data object, only including fields with actual values
       const taskData = {};
-      
+
       // Include required/always-updated fields
       if (taskFormData.title) taskData.title = taskFormData.title;
       if (taskFormData.task_type) taskData.task_type = taskFormData.task_type;
       if (taskFormData.description) taskData.description = taskFormData.description;
       if (taskFormData.priority) taskData.priority = taskFormData.priority;
       if (taskFormData.status) taskData.status = taskFormData.status;
-      
+
       // Only include due_date if it's set
       if (dueDate) {
         taskData.due_date = format(dueDate, "yyyy-MM-dd'T'HH:mm:ss");
       } else if (taskFormData.due_date) {
         taskData.due_date = taskFormData.due_date;
       }
-      
+
       // Only include location_id if it has a value
       if (taskFormData.location_id && taskFormData.location_id !== "" && taskFormData.location_id !== "none") {
         const locationId = parseInt(taskFormData.location_id);
@@ -239,12 +241,12 @@ const TaskDetailPage = () => {
           taskData.location_id = locationId;
         }
       }
-      
+
       // Only include assigned_user_ids if there are selected users
       if (selectedUserIds.length > 0) {
         taskData.assigned_user_ids = selectedUserIds;
       }
-      
+
       // Only include assigned_to_user_id if it has a value
       if (taskFormData.assigned_to_user_id && taskFormData.assigned_to_user_id !== "" && taskFormData.assigned_to_user_id !== "none") {
         const userId = parseInt(taskFormData.assigned_to_user_id);
@@ -252,7 +254,7 @@ const TaskDetailPage = () => {
           taskData.assigned_to_user_id = userId;
         }
       }
-      
+
       // Only include assigned_to_role_id if it has a value
       if (taskFormData.assigned_to_role_id && taskFormData.assigned_to_role_id !== "" && taskFormData.assigned_to_role_id !== "none") {
         const roleId = parseInt(taskFormData.assigned_to_role_id);
@@ -260,7 +262,7 @@ const TaskDetailPage = () => {
           taskData.assigned_to_role_id = roleId;
         }
       }
-      
+
       // Only include assigned_to_asset_id if it has a value
       if (taskFormData.assigned_to_asset_id && taskFormData.assigned_to_asset_id !== "" && taskFormData.assigned_to_asset_id !== "none") {
         const assetId = parseInt(taskFormData.assigned_to_asset_id);
@@ -268,7 +270,7 @@ const TaskDetailPage = () => {
           taskData.assigned_to_asset_id = assetId;
         }
       }
-      
+
       // Only include form_id if it has a value (API accepts form_id: number | null)
       if (taskFormData.form_id && taskFormData.form_id !== "" && taskFormData.form_id !== "none") {
         const formId = parseInt(taskFormData.form_id);
@@ -279,7 +281,7 @@ const TaskDetailPage = () => {
         // If form_id was explicitly set to empty/none, send null to clear it
         taskData.form_id = null;
       }
-      
+
       // Only include form_submission_id if it has a value (API accepts form_submission_id: number | null)
       if (taskFormData.form_submission_id && taskFormData.form_submission_id !== "" && taskFormData.form_submission_id !== "none") {
         const submissionId = parseInt(taskFormData.form_submission_id);
@@ -290,7 +292,7 @@ const TaskDetailPage = () => {
         // If form_submission_id was explicitly set to empty, send null to clear it
         taskData.form_submission_id = null;
       }
-      
+
       await updateTaskMutation.mutateAsync({
         id: taskId,
         taskData,
@@ -314,12 +316,12 @@ const TaskDetailPage = () => {
     try {
       // Build assignment object, only including fields with actual values
       const assignment = {};
-      
+
       // Only include assigned_user_ids if there are selected users
       if (selectedUserIds.length > 0) {
         assignment.assigned_user_ids = selectedUserIds;
       }
-      
+
       // Only include assigned_to_user_id if it has a value
       if (assignmentData.assigned_to_user_id && assignmentData.assigned_to_user_id !== "" && assignmentData.assigned_to_user_id !== "none") {
         const userId = parseInt(assignmentData.assigned_to_user_id);
@@ -327,7 +329,7 @@ const TaskDetailPage = () => {
           assignment.assigned_to_user_id = userId;
         }
       }
-      
+
       // Only include assigned_to_role_id if it has a value
       if (assignmentData.assigned_to_role_id && assignmentData.assigned_to_role_id !== "" && assignmentData.assigned_to_role_id !== "none") {
         const roleId = parseInt(assignmentData.assigned_to_role_id);
@@ -335,7 +337,7 @@ const TaskDetailPage = () => {
           assignment.assigned_to_role_id = roleId;
         }
       }
-      
+
       // Only include assigned_to_asset_id if it has a value
       if (assignmentData.assigned_to_asset_id && assignmentData.assigned_to_asset_id !== "" && assignmentData.assigned_to_asset_id !== "none") {
         const assetId = parseInt(assignmentData.assigned_to_asset_id);
@@ -343,7 +345,7 @@ const TaskDetailPage = () => {
           assignment.assigned_to_asset_id = assetId;
         }
       }
-      
+
       await assignTaskMutation.mutateAsync({
         id: taskId,
         assignmentData: assignment,
@@ -505,6 +507,24 @@ const TaskDetailPage = () => {
       <div className="grid gap-6 md:grid-cols-3">
         {/* Main Content */}
         <div className="md:col-span-2 space-y-6">
+          {/* File Attachments */}
+          <div className="space-y-4">
+            <FileAttachmentList
+              entityType="task"
+              entityId={parseInt(taskId)}
+              showTitle={true}
+            />
+            <MultiFileUpload
+              entityType="task"
+              entityId={parseInt(taskId)}
+              maxFiles={10}
+              maxSizeMB={10}
+              onUploadComplete={() => {
+                // Files will be refreshed automatically via query invalidation
+              }}
+            />
+          </div>
+
           {/* Task Information */}
           <Card>
             <CardHeader>
@@ -522,11 +542,11 @@ const TaskDetailPage = () => {
                     {(() => {
                       const taskType = taskTypes.find(tt => tt.name === task.task_type);
                       return taskType ? (
-                        <Badge 
+                        <Badge
                           variant="outline"
-                          style={{ 
+                          style={{
                             borderColor: taskType.color || undefined,
-                            color: taskType.color || undefined 
+                            color: taskType.color || undefined
                           }}
                         >
                           {taskType.icon && <span className="mr-1">{taskType.icon}</span>}

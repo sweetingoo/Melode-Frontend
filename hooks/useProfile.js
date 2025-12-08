@@ -731,9 +731,9 @@ export const useUploadFile = (options = {}) => {
     onSuccess: (data, variables, context) => {
       // Only show toast if not silent (for form submissions, we might want to suppress)
       if (!options.silent) {
-        toast.success("File uploaded successfully!", {
+      toast.success("File uploaded successfully!", {
           description: `File "${data.file_name || data.name || 'file'}" has been uploaded.`,
-        });
+      });
       }
     },
     onError: (error) => {
@@ -741,8 +741,8 @@ export const useUploadFile = (options = {}) => {
 
       // Only show toast if not silent
       if (!options.silent) {
-        if (error.response?.status === 422) {
-          const errorData = error.response.data;
+      if (error.response?.status === 422) {
+        const errorData = error.response.data;
           // Backend returns detail as string for file upload errors
           if (errorData?.detail) {
             const errorMessage = typeof errorData.detail === 'string' 
@@ -752,16 +752,16 @@ export const useUploadFile = (options = {}) => {
                 : errorData.detail;
             toast.error("File Upload Error", {
               description: errorMessage,
-            });
-          } else {
-            toast.error("File Upload Error", {
-              description: errorData?.message || "Please check your file",
-            });
-          }
+          });
         } else {
           toast.error("File Upload Error", {
-            description: error.response?.data?.message || error.message || "Failed to upload file",
+            description: errorData?.message || "Please check your file",
           });
+        }
+      } else {
+          toast.error("File Upload Error", {
+            description: error.response?.data?.message || error.message || "Failed to upload file",
+        });
         }
       }
     },

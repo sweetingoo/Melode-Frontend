@@ -37,6 +37,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Plus,
   Folder,
@@ -69,6 +70,59 @@ import {
   customFieldsUtils,
 } from "@/hooks/useCustomFieldsFields";
 
+// Predefined file type categories for easy selection
+const FILE_TYPE_CATEGORIES = {
+  images: {
+    label: "Images",
+    types: [
+      { value: "image/jpeg", label: "JPEG (.jpg, .jpeg)" },
+      { value: "image/png", label: "PNG (.png)" },
+      { value: "image/gif", label: "GIF (.gif)" },
+      { value: "image/webp", label: "WebP (.webp)" },
+      { value: "image/svg+xml", label: "SVG (.svg)" },
+    ],
+  },
+  documents: {
+    label: "Documents",
+    types: [
+      { value: "application/pdf", label: "PDF (.pdf)" },
+      { value: "application/msword", label: "Word (.doc)" },
+      { value: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", label: "Word (.docx)" },
+      { value: "application/vnd.ms-excel", label: "Excel (.xls)" },
+      { value: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", label: "Excel (.xlsx)" },
+      { value: "text/plain", label: "Text (.txt)" },
+      { value: "application/rtf", label: "RTF (.rtf)" },
+    ],
+  },
+  archives: {
+    label: "Archives",
+    types: [
+      { value: "application/zip", label: "ZIP (.zip)" },
+      { value: "application/x-rar-compressed", label: "RAR (.rar)" },
+      { value: "application/x-tar", label: "TAR (.tar)" },
+      { value: "application/gzip", label: "GZIP (.gz)" },
+    ],
+  },
+  videos: {
+    label: "Videos",
+    types: [
+      { value: "video/mp4", label: "MP4 (.mp4)" },
+      { value: "video/quicktime", label: "QuickTime (.mov)" },
+      { value: "video/x-msvideo", label: "AVI (.avi)" },
+      { value: "video/webm", label: "WebM (.webm)" },
+    ],
+  },
+  audio: {
+    label: "Audio",
+    types: [
+      { value: "audio/mpeg", label: "MP3 (.mp3)" },
+      { value: "audio/wav", label: "WAV (.wav)" },
+      { value: "audio/ogg", label: "OGG (.ogg)" },
+      { value: "audio/mp4", label: "M4A (.m4a)" },
+    ],
+  },
+};
+
 const CustomFieldsAdminPage = () => {
   const [showInactive, setShowInactive] = useState(false);
   const [selectedEntityType, setSelectedEntityType] = useState("user");
@@ -80,6 +134,7 @@ const CustomFieldsAdminPage = () => {
   const [previewData, setPreviewData] = useState(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState(null);
+  const [allowAllFileTypes, setAllowAllFileTypes] = useState(false);
   const [sectionFormData, setSectionFormData] = useState({
     sectionName: "",
     sectionDescription: "",
@@ -154,6 +209,7 @@ const CustomFieldsAdminPage = () => {
   // Populate form data when editing field is loaded
   React.useEffect(() => {
     if (editingField && editingFieldId) {
+      const fieldOptions = editingField.field_options || {};
       setFieldFormData({
         field_name: editingField.field_name || "",
         field_label: editingField.field_label || "",
@@ -164,7 +220,7 @@ const CustomFieldsAdminPage = () => {
         max_length: editingField.max_length || null,
         min_value: editingField.min_value || null,
         max_value: editingField.max_value || null,
-        field_options: editingField.field_options || {},
+        field_options: fieldOptions,
         validation_rules: editingField.validation_rules || {},
         relationship_config: editingField.relationship_config || null,
         entity_type: editingField.entity_type || selectedEntityType,
@@ -173,6 +229,11 @@ const CustomFieldsAdminPage = () => {
         section_id: editingField.section_id || 0,
         is_active: editingField.is_active !== undefined ? editingField.is_active : true,
       });
+      // Set allowAllFileTypes based on accept field
+      if (editingField.field_type === 'file') {
+        const accept = fieldOptions.accept || '';
+        setAllowAllFileTypes(!accept || accept === '' || accept === '*/*');
+      }
     }
   }, [editingField, editingFieldId, selectedEntityType]);
 
@@ -335,6 +396,7 @@ const CustomFieldsAdminPage = () => {
   const handleCreateField = () => {
     setEditingFieldId(null); // Reset editing state
     setIsCreateFieldModalOpen(true);
+    setAllowAllFileTypes(false); // Reset file type settings
 
     // Set default section to first available section
     const defaultSectionId =
@@ -1645,40 +1707,164 @@ const CustomFieldsAdminPage = () => {
 
             {/* File Upload Options */}
             {fieldFormData.field_type === 'file' && (
-              <div className="space-y-3">
-                <div className="border rounded-lg p-4 bg-muted/50">
-                  <h4 className="text-sm font-medium mb-3">File Upload Settings</h4>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="acceptTypes">Accepted File Types</Label>
-                      <Input
-                        id="acceptTypes"
-                        placeholder="e.g., .pdf,.doc,.docx,image/*"
-                        value={fieldFormData.field_options?.accept || ''}
-                        onChange={(e) => {
+              <div className="space-y-4 pt-2 border-t">
+                <Label className="text-sm font-medium">
+                  File Configuration
+                </Label>
+                
+                {/* Allow Multiple Files Option */}
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="allow_multiple_files"
+                    checked={fieldFormData.field_options?.allowMultiple || false}
+                    onCheckedChange={(checked) => {
+                      handleFieldInputChange("field_options", {
+                        ...fieldFormData.field_options,
+                        allowMultiple: checked,
+                      });
+                    }}
+                  />
+                  <Label htmlFor="allow_multiple_files" className="text-sm font-normal cursor-pointer">
+                    Allow multiple file uploads
+                  </Label>
+                </div>
+                
+                {/* Allow All File Types Option */}
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="allow_all_file_types"
+                    checked={allowAllFileTypes}
+                    onCheckedChange={(checked) => {
+                      setAllowAllFileTypes(checked);
+                      if (checked) {
+                        handleFieldInputChange("field_options", {
+                          ...fieldFormData.field_options,
+                          accept: "",
+                        });
+                      }
+                    }}
+                  />
+                  <Label htmlFor="allow_all_file_types" className="text-sm font-normal cursor-pointer">
+                    Allow all file types (no restrictions)
+                  </Label>
+                </div>
+
+                {/* File Type Selection */}
+                {!allowAllFileTypes && (
+                  <div className="space-y-3">
+                    <Label className="text-xs font-medium">
+                      Allowed File Types
+                    </Label>
+                    <div className="space-y-3 max-h-64 overflow-y-auto border rounded-md p-3">
+                      {Object.entries(FILE_TYPE_CATEGORIES).map(([categoryKey, category]) => {
+                        const selectedTypes = fieldFormData.field_options?.accept
+                          ? fieldFormData.field_options.accept.split(",").map((t) => t.trim())
+                          : [];
+                        
+                        const categoryTypes = category.types.map((t) => t.value);
+                        const allCategorySelected = categoryTypes.every((type) =>
+                          selectedTypes.includes(type)
+                        );
+                        const someCategorySelected = categoryTypes.some((type) =>
+                          selectedTypes.includes(type)
+                        );
+
+                        const handleCategoryToggle = (checked) => {
+                          let newTypes = [...selectedTypes];
+                          if (checked) {
+                            // Add all category types
+                            categoryTypes.forEach((type) => {
+                              if (!newTypes.includes(type)) {
+                                newTypes.push(type);
+                              }
+                            });
+                          } else {
+                            // Remove all category types
+                            newTypes = newTypes.filter((type) => !categoryTypes.includes(type));
+                          }
                           handleFieldInputChange("field_options", {
                             ...fieldFormData.field_options,
-                            accept: e.target.value
+                            accept: newTypes.join(", "),
                           });
-                        }}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="maxFileSize">Max File Size (MB)</Label>
-                      <Input
-                        id="maxFileSize"
-                        type="number"
-                        placeholder="10"
-                        value={fieldFormData.field_options?.maxSize || ''}
-                        onChange={(e) => {
+                        };
+
+                        const handleTypeToggle = (typeValue, checked) => {
+                          let newTypes = [...selectedTypes];
+                          if (checked) {
+                            if (!newTypes.includes(typeValue)) {
+                              newTypes.push(typeValue);
+                            }
+                          } else {
+                            newTypes = newTypes.filter((t) => t !== typeValue);
+                          }
                           handleFieldInputChange("field_options", {
                             ...fieldFormData.field_options,
-                            maxSize: parseInt(e.target.value) || null
+                            accept: newTypes.join(", "),
                           });
-                        }}
-                      />
+                        };
+
+                        return (
+                          <div key={categoryKey} className="space-y-2">
+                            <div className="flex items-center space-x-2">
+                              <Checkbox
+                                id={`category-${categoryKey}`}
+                                checked={allCategorySelected}
+                                onCheckedChange={handleCategoryToggle}
+                              />
+                              <Label
+                                htmlFor={`category-${categoryKey}`}
+                                className="text-sm font-medium cursor-pointer"
+                              >
+                                {category.label}
+                              </Label>
+                            </div>
+                            <div className="ml-6 space-y-1.5">
+                              {category.types.map((type) => {
+                                const isSelected = selectedTypes.includes(type.value);
+                                return (
+                                  <div key={type.value} className="flex items-center space-x-2">
+                                    <Checkbox
+                                      id={`type-${categoryKey}-${type.value}`}
+                                      checked={isSelected}
+                                      onCheckedChange={(checked) =>
+                                        handleTypeToggle(type.value, checked)
+                                      }
+                                    />
+                                    <Label
+                                      htmlFor={`type-${categoryKey}-${type.value}`}
+                                      className="text-xs text-muted-foreground cursor-pointer"
+                                    >
+                                      {type.label}
+                                    </Label>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
+                )}
+
+                {/* Max File Size */}
+                <div className="space-y-2">
+                  <Label htmlFor="maxFileSize">Max File Size (MB)</Label>
+                  <Input
+                    id="maxFileSize"
+                    type="number"
+                    placeholder="10"
+                    value={fieldFormData.field_options?.maxSize || ''}
+                    onChange={(e) => {
+                      handleFieldInputChange("field_options", {
+                        ...fieldFormData.field_options,
+                        maxSize: parseInt(e.target.value) || null
+                      });
+                    }}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Maximum file size in megabytes. Leave empty for no size limit.
+                  </p>
                 </div>
               </div>
             )}

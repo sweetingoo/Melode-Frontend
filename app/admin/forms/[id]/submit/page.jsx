@@ -136,32 +136,66 @@ const FormSubmitPage = () => {
         const fieldId = field.field_id || field.field_name;
         const value = submissionData[fieldId];
 
-        if (field.field_type?.toLowerCase() === "file" && value instanceof File) {
-          // Upload file with form-based validation
-          fileUploadPromises.push(
-            uploadFileMutation
-              .mutateAsync({
-                file: value,
-                form_id: parseInt(formId),
-                field_id: fieldId, // Use field_id from the field configuration
+        if (field.field_type?.toLowerCase() === "file") {
+          // Handle single file
+          if (value instanceof File) {
+            fileUploadPromises.push(
+              uploadFileMutation
+                .mutateAsync({
+                  file: value,
+                  form_id: parseInt(formId),
+                  field_id: fieldId,
+                })
+                .then((uploadResult) => {
+                  processedSubmissionData[fieldId] = uploadResult.id || uploadResult.file_id;
+                })
+                .catch((error) => {
+                  console.error(`Failed to upload file for field ${fieldId}:`, error);
+                  const errorMessage = error.response?.data?.detail || 
+                                     error.response?.data?.message || 
+                                     "Failed to upload file";
+                  errors[fieldId] = errorMessage;
+                  toast.error("File Upload Failed", {
+                    description: `${field.label || fieldId}: ${errorMessage}`,
+                  });
+                  throw error;
+                })
+            );
+          }
+          // Handle multiple files (array)
+          else if (Array.isArray(value) && value.length > 0 && value[0] instanceof File) {
+            // Upload all files and collect their IDs
+            const fileUploads = value.map((file, index) =>
+              uploadFileMutation
+                .mutateAsync({
+                  file: file,
+                  form_id: parseInt(formId),
+                  field_id: fieldId,
+                })
+                .then((uploadResult) => uploadResult.id || uploadResult.file_id)
+                .catch((error) => {
+                  console.error(`Failed to upload file ${index + 1} for field ${fieldId}:`, error);
+                  const errorMessage = error.response?.data?.detail || 
+                                     error.response?.data?.message || 
+                                     `Failed to upload file: ${file.name}`;
+                  errors[fieldId] = errorMessage;
+                  toast.error("File Upload Failed", {
+                    description: `${field.label || fieldId}: ${errorMessage}`,
+                  });
+                  throw error;
+                })
+            );
+            
+            fileUploadPromises.push(
+              Promise.all(fileUploads).then((fileIds) => {
+                processedSubmissionData[fieldId] = fileIds;
               })
-              .then((uploadResult) => {
-                processedSubmissionData[fieldId] = uploadResult.id || uploadResult.file_id;
-              })
-              .catch((error) => {
-                console.error(`Failed to upload file for field ${fieldId}:`, error);
-                // Extract error message from backend response
-                const errorMessage = error.response?.data?.detail || 
-                                   error.response?.data?.message || 
-                                   "Failed to upload file";
-                errors[fieldId] = errorMessage;
-                // Show toast for file upload errors
-                toast.error("File Upload Failed", {
-                  description: `${field.label || fieldId}: ${errorMessage}`,
-                });
-                throw error;
-              })
-          );
+            );
+          }
+          // Handle existing file IDs (already uploaded, from edit mode)
+          else if (typeof value === 'number' || (Array.isArray(value) && value.every(v => typeof v === 'number'))) {
+            processedSubmissionData[fieldId] = value;
+          }
         } else {
           // Format and add non-file fields
           const formattedValue = formatFieldValueForAPI(field, value);
@@ -289,14 +323,17 @@ const FormSubmitPage = () => {
                     // Preserve validation object for file fields
                     validation: field.validation,
                     field_options: {
+                      ...(field.field_options || {}), // Preserve all original field_options
                       options: field.options || [],
                       // For file fields, also map validation to field_options for backward compatibility
-                      accept: field.validation?.allowed_types
+                      accept: field.field_options?.accept || (field.validation?.allowed_types
                         ? Array.isArray(field.validation.allowed_types)
                           ? field.validation.allowed_types.join(",")
                           : field.validation.allowed_types
-                        : undefined,
-                      maxSize: field.validation?.max_size_mb,
+                        : undefined),
+                      maxSize: field.field_options?.maxSize || field.validation?.max_size_mb,
+                      // Preserve allowMultiple setting
+                      allowMultiple: field.field_options?.allowMultiple || false,
                     },
                   };
 

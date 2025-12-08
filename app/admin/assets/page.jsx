@@ -91,6 +91,8 @@ import { useLocations } from "@/hooks/useLocations";
 import { useUsers } from "@/hooks/useUsers";
 import { useRoles } from "@/hooks/useRoles";
 import ResourceAuditLogs from "@/components/ResourceAuditLogs";
+import MultiFileUpload from "@/components/MultiFileUpload";
+import FileAttachmentList from "@/components/FileAttachmentList";
 
 const AssetsPage = () => {
   // State management
@@ -1577,6 +1579,24 @@ const AssetsPage = () => {
                     )}
                   </p>
                 </div>
+              </div>
+              
+              {/* File Attachments */}
+              <div className="pt-6 border-t space-y-4">
+                <FileAttachmentList
+                  entityType="asset"
+                  entityId={selectedAsset.id}
+                  showTitle={true}
+                />
+                <MultiFileUpload
+                  entityType="asset"
+                  entityId={selectedAsset.id}
+                  maxFiles={10}
+                  maxSizeMB={10}
+                  onUploadComplete={() => {
+                    // Files will be refreshed automatically via query invalidation
+                  }}
+                />
               </div>
               
               {/* Activity History */}

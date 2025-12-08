@@ -59,13 +59,22 @@ import {
   useForms,
   useDeleteForm,
 } from "@/hooks/useForms";
+import { useRoles } from "@/hooks/useRoles";
+import { useUsers } from "@/hooks/useUsers";
 import { format } from "date-fns";
+import { Shield, Users, User } from "lucide-react";
 
 const FormsPage = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [formTypeFilter, setFormTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [assignmentFilter, setAssignmentFilter] = useState("all"); // "all", "role", "users", "none"
+  
+  const { data: rolesData } = useRoles();
+  const { data: usersResponse } = useUsers();
+  const roles = rolesData || [];
+  const users = usersResponse?.users || usersResponse || [];
 
   const { data: formsResponse, isLoading } = useForms({
     page: currentPage,
@@ -111,7 +120,13 @@ const FormsPage = () => {
       (statusFilter === "active" && form.is_active) ||
       (statusFilter === "inactive" && !form.is_active);
 
-    return matchesSearch && matchesType && matchesStatus;
+    const matchesAssignment =
+      assignmentFilter === "all" ||
+      (assignmentFilter === "role" && form.assigned_to_role_id) ||
+      (assignmentFilter === "users" && form.assigned_user_ids && form.assigned_user_ids.length > 0) ||
+      (assignmentFilter === "none" && !form.assigned_to_role_id && (!form.assigned_user_ids || form.assigned_user_ids.length === 0));
+
+    return matchesSearch && matchesType && matchesStatus && matchesAssignment;
   });
 
   const formTypes = [
@@ -210,6 +225,16 @@ const FormsPage = () => {
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>
               </select>
+              <select
+                value={assignmentFilter}
+                onChange={(e) => setAssignmentFilter(e.target.value)}
+                className="px-3 py-2 border rounded-md text-sm"
+              >
+                <option value="all">All Assignments</option>
+                <option value="role">Assigned to Role</option>
+                <option value="users">Assigned to Users</option>
+                <option value="none">Not Assigned</option>
+              </select>
             </div>
           </div>
         </CardContent>
@@ -247,6 +272,7 @@ const FormsPage = () => {
                     <TableHead>Name</TableHead>
                     <TableHead>Type</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Assignment</TableHead>
                     <TableHead>Template</TableHead>
                     <TableHead>Created</TableHead>
                     <TableHead>Actions</TableHead>
@@ -286,6 +312,30 @@ const FormsPage = () => {
                             <XCircle className="mr-1 h-3 w-3" />
                             Inactive
                           </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {form.assigned_to_role_id ? (
+                          <div className="flex items-center gap-1.5">
+                            <Shield className="h-3 w-3 text-muted-foreground" />
+                            <span className="text-xs text-muted-foreground">
+                              {roles.find(r => r.id === form.assigned_to_role_id)?.display_name || 
+                               roles.find(r => r.id === form.assigned_to_role_id)?.name || 
+                               "Role"}
+                            </span>
+                          </div>
+                        ) : form.assigned_user_ids && form.assigned_user_ids.length > 0 ? (
+                          <div className="flex items-center gap-1.5">
+                            <Users className="h-3 w-3 text-muted-foreground" />
+                            <span className="text-xs text-muted-foreground">
+                              {form.assigned_user_ids.length} user{form.assigned_user_ids.length !== 1 ? 's' : ''}
+                              {form.create_individual_assignments && (
+                                <span className="ml-1">(Individual)</span>
+                              )}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">—</span>
                         )}
                       </TableCell>
                       <TableCell>

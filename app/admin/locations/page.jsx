@@ -86,6 +86,8 @@ import {
   useMoveLocation,
   locationsUtils,
 } from "@/hooks/useLocations";
+import MultiFileUpload from "@/components/MultiFileUpload";
+import FileAttachmentList from "@/components/FileAttachmentList";
 
 const LocationsPage = () => {
   const router = useRouter();
@@ -1341,6 +1343,24 @@ const LocationsPage = () => {
                     </p>
                   </div>
                 )}
+              </div>
+              
+              {/* File Attachments */}
+              <div className="pt-6 border-t space-y-4">
+                <FileAttachmentList
+                  entityType="location"
+                  entityId={selectedLocation.id}
+                  showTitle={true}
+                />
+                <MultiFileUpload
+                  entityType="location"
+                  entityId={selectedLocation.id}
+                  maxFiles={10}
+                  maxSizeMB={10}
+                  onUploadComplete={() => {
+                    // Files will be refreshed automatically via query invalidation
+                  }}
+                />
               </div>
             </div>
           )}

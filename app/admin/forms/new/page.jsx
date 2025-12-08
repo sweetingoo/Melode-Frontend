@@ -73,7 +73,10 @@ const FILE_TYPE_CATEGORIES = {
 };
 import { useCreateForm } from "@/hooks/useForms";
 import { useRoles } from "@/hooks/useRoles";
+import { useUsers } from "@/hooks/useUsers";
 import { toast } from "sonner";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { User, Users, Shield } from "lucide-react";
 
 const fieldTypes = [
   { value: "text", label: "Text" },
@@ -102,7 +105,9 @@ const NewFormPage = () => {
   const router = useRouter();
   const createFormMutation = useCreateForm();
   const { data: rolesData } = useRoles();
+  const { data: usersResponse } = useUsers();
   const roles = rolesData || [];
+  const users = usersResponse?.users || usersResponse || [];
 
   const [formData, setFormData] = useState({
     form_name: "",
@@ -162,6 +167,20 @@ const NewFormPage = () => {
   });
   const [newOption, setNewOption] = useState({ value: "", label: "" });
   const [allowAllFileTypes, setAllowAllFileTypes] = useState(false);
+  
+  // Assignment state
+  const [assignmentMode, setAssignmentMode] = useState("none"); // "none", "role", "users"
+  const [assignedToRoleId, setAssignedToRoleId] = useState("");
+  const [selectedUserIds, setSelectedUserIds] = useState([]);
+  const [createIndividualAssignments, setCreateIndividualAssignments] = useState(false);
+  
+  const toggleUserSelection = (userId) => {
+    setSelectedUserIds((prev) =>
+      prev.includes(userId)
+        ? prev.filter((id) => id !== userId)
+        : [...prev, userId]
+    );
+  };
 
   const handleAddOption = () => {
     if (!newOption.value.trim()) {
@@ -271,6 +290,11 @@ const NewFormPage = () => {
       if (Object.keys(fileValidation).length > 0) {
         field.validation = { ...field.validation, ...fileValidation };
       }
+      
+      // Save field_options for file fields (including allowMultiple)
+      if (newField.field_options) {
+        field.field_options = newField.field_options;
+      }
     }
 
     // Add JSON field specific configuration
@@ -340,7 +364,17 @@ const NewFormPage = () => {
     }
 
     try {
-      const result = await createFormMutation.mutateAsync(formData);
+      const submitData = { ...formData };
+      
+      // Add assignment fields based on mode
+      if (assignmentMode === "role" && assignedToRoleId) {
+        submitData.assigned_to_role_id = parseInt(assignedToRoleId);
+      } else if (assignmentMode === "users" && selectedUserIds.length > 0) {
+        submitData.assigned_user_ids = selectedUserIds;
+        submitData.create_individual_assignments = createIndividualAssignments;
+      }
+      
+      const result = await createFormMutation.mutateAsync(submitData);
       toast.success("Form created successfully");
       router.push(`/admin/forms/${result.id}`);
     } catch (error) {
@@ -797,6 +831,26 @@ const NewFormPage = () => {
                         File Configuration
                       </Label>
                       
+                      {/* Allow Multiple Files Option */}
+                      <div className="flex items-center space-x-2">
+                        <Checkbox
+                          id="allow_multiple_files"
+                          checked={newField.field_options?.allowMultiple || false}
+                          onCheckedChange={(checked) => {
+                            setNewField({
+                              ...newField,
+                              field_options: {
+                                ...newField.field_options,
+                                allowMultiple: checked,
+                              },
+                            });
+                          }}
+                        />
+                        <Label htmlFor="allow_multiple_files" className="text-sm font-normal cursor-pointer">
+                          Allow multiple file uploads
+                        </Label>
+                      </div>
+                      
                       {/* Allow All File Types Option */}
                       <div className="flex items-center space-x-2">
                         <Checkbox
@@ -1088,6 +1142,125 @@ const NewFormPage = () => {
                     }
                   />
                   <Label htmlFor="auto_save">Auto-save</Label>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Form Assignment */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Form Assignment</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-3">
+                  <Label>Assign Form To</Label>
+                  <Tabs value={assignmentMode} onValueChange={setAssignmentMode} className="w-full">
+                    <TabsList className="grid w-full grid-cols-3">
+                      <TabsTrigger value="none">
+                        None
+                      </TabsTrigger>
+                      <TabsTrigger value="role">
+                        <Shield className="mr-2 h-4 w-4" />
+                        Role
+                      </TabsTrigger>
+                      <TabsTrigger value="users">
+                        <Users className="mr-2 h-4 w-4" />
+                        Users
+                      </TabsTrigger>
+                    </TabsList>
+                    
+                    {/* Role Assignment */}
+                    <TabsContent value="role" className="space-y-3 mt-3">
+                      <div className="p-3 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-md">
+                        <div className="flex items-start gap-2">
+                          <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+                          <div className="flex-1">
+                            <p className="text-xs text-blue-700 dark:text-blue-300">
+                              All users in the selected role will be able to access this form.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                      <Select
+                        value={assignedToRoleId}
+                        onValueChange={(value) => {
+                          setAssignedToRoleId(value);
+                          setSelectedUserIds([]);
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select role" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {roles.map((role) => (
+                            <SelectItem key={role.id} value={role.id.toString()}>
+                              {role.display_name || role.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </TabsContent>
+                    
+                    {/* Multiple Users Assignment */}
+                    <TabsContent value="users" className="space-y-3 mt-3">
+                      <div className="p-3 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-md">
+                        <div className="flex items-start gap-2">
+                          <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+                          <div className="flex-1">
+                            <p className="text-xs text-blue-700 dark:text-blue-300">
+                              {createIndividualAssignments
+                                ? "Each selected user will get their own form instance to complete individually."
+                                : "All selected users will share one form instance for collaborative completion."}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Checkbox
+                          id="create_individual_assignments"
+                          checked={createIndividualAssignments}
+                          onCheckedChange={(checked) => setCreateIndividualAssignments(checked)}
+                        />
+                        <Label htmlFor="create_individual_assignments" className="cursor-pointer">
+                          Create individual assignments
+                        </Label>
+                      </div>
+                      {createIndividualAssignments ? (
+                        <div className="p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-md">
+                          <p className="text-xs font-medium text-amber-800 dark:text-amber-200">
+                            Individual Mode: Each user gets their own form instance
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="p-3 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-md">
+                          <p className="text-xs font-medium text-green-800 dark:text-green-200">
+                            Collaborative Mode: All users share the same form instance
+                          </p>
+                        </div>
+                      )}
+                      <div className="border rounded-md p-4 max-h-48 overflow-y-auto">
+                        {users.length === 0 ? (
+                          <p className="text-sm text-muted-foreground">No users available</p>
+                        ) : (
+                          <div className="space-y-2">
+                            {users.map((user) => (
+                              <div key={user.id} className="flex items-center space-x-2">
+                                <Checkbox
+                                  checked={selectedUserIds.includes(user.id)}
+                                  onCheckedChange={() => toggleUserSelection(user.id)}
+                                />
+                                <Label className="text-sm cursor-pointer">
+                                  {user.display_name ||
+                                    `${user.first_name || ""} ${user.last_name || ""}`.trim() ||
+                                    user.email}
+                                </Label>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </TabsContent>
+                  </Tabs>
                 </div>
               </CardContent>
             </Card>

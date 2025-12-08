@@ -8,8 +8,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, ArrowLeft, Edit, FileText, CheckCircle, XCircle } from "lucide-react";
 import { useForm } from "@/hooks/useForms";
+import { useRoles } from "@/hooks/useRoles";
+import { useUsers } from "@/hooks/useUsers";
 import { format } from "date-fns";
 import ResourceAuditLogs from "@/components/ResourceAuditLogs";
+import { Shield, Users, User } from "lucide-react";
 
 const FormDetailPage = () => {
   const params = useParams();
@@ -17,6 +20,10 @@ const FormDetailPage = () => {
   const formId = params.id;
 
   const { data: form, isLoading, error } = useForm(formId);
+  const { data: rolesData } = useRoles();
+  const { data: usersResponse } = useUsers();
+  const roles = rolesData || [];
+  const users = usersResponse?.users || usersResponse || [];
 
   const getFormTypeColor = (type) => {
     switch (type) {
@@ -149,6 +156,58 @@ const FormDetailPage = () => {
                   <p className="mt-1 text-sm font-mono">{form.form_name}</p>
                 </div>
               </div>
+              
+              {/* Assignment Information */}
+              {(form.assigned_to_role_id || (form.assigned_user_ids && form.assigned_user_ids.length > 0)) && (
+                <div className="pt-4 border-t">
+                  <label className="text-sm font-medium text-muted-foreground mb-2 block">Assignment</label>
+                  {form.assigned_to_role_id ? (
+                    <div className="flex items-center gap-2">
+                      <Shield className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm">
+                        Assigned to role: {roles.find(r => r.id === form.assigned_to_role_id)?.display_name || roles.find(r => r.id === form.assigned_to_role_id)?.name || `Role #${form.assigned_to_role_id}`}
+                      </span>
+                    </div>
+                  ) : form.assigned_user_ids && form.assigned_user_ids.length > 0 ? (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Users className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm font-medium">
+                          Assigned to {form.assigned_user_ids.length} user{form.assigned_user_ids.length !== 1 ? 's' : ''}
+                        </span>
+                      </div>
+                      {form.create_individual_assignments ? (
+                        <Badge variant="outline" className="bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200">
+                          Individual Assignments
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800 text-green-800 dark:text-green-200">
+                          Collaborative Assignment
+                        </Badge>
+                      )}
+                      <div className="mt-2 space-y-1">
+                        {form.assigned_user_ids.slice(0, 5).map((userId) => {
+                          const user = users.find(u => u.id === userId);
+                          return (
+                            <div key={userId} className="flex items-center gap-2 text-sm text-muted-foreground">
+                              <User className="h-3 w-3" />
+                              {user?.display_name || 
+                               (user ? `${user.first_name || ""} ${user.last_name || ""}`.trim() : "") || 
+                               user?.email || 
+                               `User #${userId}`}
+                            </div>
+                          );
+                        })}
+                        {form.assigned_user_ids.length > 5 && (
+                          <p className="text-xs text-muted-foreground">
+                            +{form.assigned_user_ids.length - 5} more user{form.assigned_user_ids.length - 5 !== 1 ? 's' : ''}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              )}
             </CardContent>
           </Card>
 

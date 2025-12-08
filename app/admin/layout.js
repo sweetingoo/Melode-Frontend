@@ -73,7 +73,8 @@ import {
   useSwitchDepartment,
 } from "@/hooks/useDepartmentContext";
 
-const menuItems = [
+// Main navigation items (always visible, no grouping)
+const mainMenuItems = [
   {
     title: "Dashboard",
     icon: LayoutDashboard,
@@ -86,6 +87,22 @@ const menuItems = [
     url: "/admin/my-tasks",
     permission: null, // My Tasks is visible to all users
   },
+  {
+    title: "Tasks",
+    icon: CheckSquare,
+    url: "/admin/tasks",
+    permission: "tasks:read", // Permission to read tasks
+  },
+  {
+    title: "Forms",
+    icon: FileText,
+    url: "/admin/forms",
+    permission: "forms:read", // Permission to read forms
+  },
+];
+
+// People & Access Management group
+const peopleAndAccessItems = [
   {
     title: "Create invitation",
     icon: UserPlus,
@@ -110,20 +127,16 @@ const menuItems = [
     url: "/admin/permissions-management",
     permission: "permissions:read", // Permission to read permissions
   },
-  {
-    title: "Configure",
-    icon: Settings,
-    url: "/admin/configure",
-    permission: "system:configure", // Permission to configure system
-  },
+];
 
+// Organization Management group
+const organizationItems = [
   {
     title: "Locations",
     icon: MapPin,
     url: "/admin/locations",
     permission: "locations:read", // Permission to read locations
   },
-
   {
     title: "Assets",
     icon: Images,
@@ -136,12 +149,10 @@ const menuItems = [
     url: "/admin/departments",
     permission: "departments:read", // Permission to read departments
   },
-  {
-    title: "Tasks",
-    icon: CheckSquare,
-    url: "/admin/tasks",
-    permission: "tasks:read", // Permission to read tasks
-  },
+];
+
+// Settings group
+const settingsItems = [
   {
     title: "Task Types",
     icon: Type,
@@ -149,16 +160,16 @@ const menuItems = [
     permission: "task_types:read", // Permission to read task types
   },
   {
+    title: "Configure",
+    icon: Settings,
+    url: "/admin/configure",
+    permission: "system:configure", // Permission to configure system
+  },
+  {
     title: "Audit Logs",
     icon: FileText,
     url: "/admin/audit-logs",
     permission: "SYSTEM_MONITOR", // Permission to view audit logs
-  },
-  {
-    title: "Forms",
-    icon: FileText,
-    url: "/admin/forms",
-    permission: "forms:read", // Permission to read forms
   },
 ];
 
@@ -303,11 +314,11 @@ export default function AdminLayout({ children }) {
     hasWildcardPermissions,
   ]);
 
-  // Filter menu items based on permissions
-  const visibleMenuItems = React.useMemo(() => {
-    if (currentUserLoading) return menuItems; // Show all while loading
+  // Helper function to filter items based on permissions
+  const filterItemsByPermission = (items) => {
+    if (currentUserLoading) return items; // Show all while loading
 
-    return menuItems.filter((item) => {
+    return items.filter((item) => {
       // Items with null or undefined permission are always visible (Dashboard, My Tasks, etc.)
       // This ensures these items are visible to ALL users regardless of roles/permissions
       if (item.permission === null || item.permission === undefined) {
@@ -337,7 +348,28 @@ export default function AdminLayout({ children }) {
         return perm.includes(itemResource);
       });
     });
-  }, [userPermissionNames, currentUserLoading]);
+  };
+
+  // Filter all menu groups based on permissions
+  const visibleMainMenuItems = React.useMemo(
+    () => filterItemsByPermission(mainMenuItems),
+    [userPermissionNames, currentUserLoading]
+  );
+
+  const visiblePeopleAndAccessItems = React.useMemo(
+    () => filterItemsByPermission(peopleAndAccessItems),
+    [userPermissionNames, currentUserLoading]
+  );
+
+  const visibleOrganizationItems = React.useMemo(
+    () => filterItemsByPermission(organizationItems),
+    [userPermissionNames, currentUserLoading]
+  );
+
+  const visibleSettingsItems = React.useMemo(
+    () => filterItemsByPermission(settingsItems),
+    [userPermissionNames, currentUserLoading]
+  );
 
   // Filter quick setup items based on permissions
   const visibleQuickSetupItems = React.useMemo(() => {
@@ -463,7 +495,8 @@ export default function AdminLayout({ children }) {
                 <SidebarGroupLabel>Navigation</SidebarGroupLabel>
                 <SidebarGroupContent>
                   <SidebarMenu>
-                    {visibleMenuItems.map((item) => {
+                    {/* Main Navigation Items */}
+                    {visibleMainMenuItems.map((item) => {
                       const isActive = pathname === item.url;
                       return (
                         <SidebarMenuItem key={item.title}>
@@ -483,6 +516,122 @@ export default function AdminLayout({ children }) {
                         </SidebarMenuItem>
                       );
                     })}
+
+                    {/* People & Access Management - Collapsible */}
+                    {visiblePeopleAndAccessItems.length > 0 && (
+                      <Collapsible defaultOpen className="group/collapsible">
+                        <SidebarMenuItem>
+                          <CollapsibleTrigger asChild>
+                            <SidebarMenuButton tooltip="People & Access">
+                              <Users className="h-4 w-4" />
+                              <span>People & Access</span>
+                              <ChevronDown className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-180" />
+                            </SidebarMenuButton>
+                          </CollapsibleTrigger>
+                          <CollapsibleContent>
+                            <SidebarMenuSub>
+                              {visiblePeopleAndAccessItems.map((item) => {
+                                const isActive = pathname === item.url;
+                                return (
+                                  <SidebarMenuSubItem key={item.title}>
+                                    <SidebarMenuSubButton
+                                      asChild
+                                      isActive={isActive}
+                                    >
+                                      <Link
+                                        href={item.url}
+                                        className="flex items-center gap-2"
+                                      >
+                                        <item.icon className="h-4 w-4" />
+                                        <span>{item.title}</span>
+                                      </Link>
+                                    </SidebarMenuSubButton>
+                                  </SidebarMenuSubItem>
+                                );
+                              })}
+                            </SidebarMenuSub>
+                          </CollapsibleContent>
+                        </SidebarMenuItem>
+                      </Collapsible>
+                    )}
+
+                    {/* Organization Management - Collapsible */}
+                    {visibleOrganizationItems.length > 0 && (
+                      <Collapsible defaultOpen className="group/collapsible">
+                        <SidebarMenuItem>
+                          <CollapsibleTrigger asChild>
+                            <SidebarMenuButton tooltip="Organization">
+                              <Building2 className="h-4 w-4" />
+                              <span>Organization</span>
+                              <ChevronDown className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-180" />
+                            </SidebarMenuButton>
+                          </CollapsibleTrigger>
+                          <CollapsibleContent>
+                            <SidebarMenuSub>
+                              {visibleOrganizationItems.map((item) => {
+                                const isActive = pathname === item.url;
+                                return (
+                                  <SidebarMenuSubItem key={item.title}>
+                                    <SidebarMenuSubButton
+                                      asChild
+                                      isActive={isActive}
+                                    >
+                                      <Link
+                                        href={item.url}
+                                        className="flex items-center gap-2"
+                                      >
+                                        <item.icon className="h-4 w-4" />
+                                        <span>{item.title}</span>
+                                      </Link>
+                                    </SidebarMenuSubButton>
+                                  </SidebarMenuSubItem>
+                                );
+                              })}
+                            </SidebarMenuSub>
+                          </CollapsibleContent>
+                        </SidebarMenuItem>
+                      </Collapsible>
+                    )}
+
+                    {/* Settings - Collapsible */}
+                    {visibleSettingsItems.length > 0 && (
+                      <Collapsible defaultOpen className="group/collapsible">
+                        <SidebarMenuItem>
+                          <CollapsibleTrigger asChild>
+                            <SidebarMenuButton tooltip="Settings">
+                              <Settings className="h-4 w-4" />
+                              <span>Settings</span>
+                              <ChevronDown className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-180" />
+                            </SidebarMenuButton>
+                          </CollapsibleTrigger>
+                          <CollapsibleContent>
+                            <SidebarMenuSub>
+                              {visibleSettingsItems.map((item) => {
+                                const isActive = pathname === item.url;
+                                return (
+                                  <SidebarMenuSubItem key={item.title}>
+                                    <SidebarMenuSubButton
+                                      asChild
+                                      isActive={isActive}
+                                    >
+                                      <Link
+                                        href={item.url}
+                                        className="flex items-center gap-2"
+                                      >
+                                        <item.icon className="h-4 w-4" />
+                                        <span>{item.title}</span>
+                                      </Link>
+                                    </SidebarMenuSubButton>
+                                  </SidebarMenuSubItem>
+                                );
+                              })}
+                            </SidebarMenuSub>
+                          </CollapsibleContent>
+                        </SidebarMenuItem>
+                      </Collapsible>
+                    )}
+
+                    {/* Custom Fields (existing collapsible) */}
 
                     {visibleQuickSetupItems.length > 0 && (
                       <Collapsible defaultOpen className="group/collapsible">
