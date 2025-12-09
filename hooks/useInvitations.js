@@ -18,7 +18,11 @@ export const useInvitations = (params = {}) => {
     queryFn: async () => {
       try {
         const response = await invitationsService.getInvitations(params);
-        return response.data;
+        // The axios response has a 'data' property, so response.data contains the actual API response
+        // Handle both cases: if response.data exists, use it; otherwise use response directly
+        const apiData = response?.data || response;
+        // If the API response itself has a 'data' key, extract it
+        return apiData?.data || apiData;
       } catch (error) {
         // If it's a network error, return demo data for development silently
         if (
@@ -101,6 +105,10 @@ export const useInvitations = (params = {}) => {
     retry: false, // Disable retries to prevent multiple network error logs
     refetchOnWindowFocus: false, // Don't refetch on window focus to avoid repeated errors
     refetchOnReconnect: false, // Don't refetch on reconnect automatically
+    keepPreviousData: (previousData) => {
+      // Only keep previous data if it exists and is an array with items
+      return previousData && Array.isArray(previousData) && previousData.length > 0;
+    },
   });
 };
 
@@ -129,8 +137,13 @@ export const useCreateInvitation = () => {
       return response.data;
     },
     onSuccess: (data) => {
-      // Invalidate and refetch invitations list
-      queryClient.invalidateQueries({ queryKey: invitationKeys.all });
+      // Invalidate only the specific invitations list query that's currently active
+      // This is more targeted and won't affect other queries
+      queryClient.invalidateQueries({
+        queryKey: invitationKeys.lists(),
+        exact: false, // Match all queries that start with this key (e.g., list with different params)
+        refetchType: 'active', // Only refetch active queries
+      });
 
       toast.success("Invitation created successfully!", {
         description: `Invitation sent to ${data.email}`,
@@ -398,7 +411,7 @@ export const invitationUtils = {
       phoneNumber: apiInvitation.suggested_phone_number,
       expiresIn: Math.ceil(
         (new Date(apiInvitation.expires_at) - new Date()) /
-          (1000 * 60 * 60 * 24)
+        (1000 * 60 * 60 * 24)
       ),
       // Additional fields from API
       token: apiInvitation.token,

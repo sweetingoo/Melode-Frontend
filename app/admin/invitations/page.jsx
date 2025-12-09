@@ -103,7 +103,7 @@ const InvitationPage = () => {
   const [validationErrors, setValidationErrors] = useState({});
 
   // API hooks
-  const { data: invitations = [], isLoading, error } = useInvitations();
+  const { data: invitations = [], isLoading, error, refetch } = useInvitations();
   const { data: roles = [], isLoading: rolesLoading } = useRoles();
   const { data: selectedInvitation, isLoading: isViewLoading } = useInvitation(selectedInvitationId);
   const createInvitationMutation = useCreateInvitation();
@@ -338,6 +338,7 @@ const InvitationPage = () => {
             suggested_phone_number: "",
           });
           setValidationErrors({});
+          // Don't call refetch here - the mutation hook handles it via invalidateQueries/refetchQueries
         },
         onError: (error) => {
           console.error("Failed to create invitation:", error);
@@ -531,461 +532,461 @@ const InvitationPage = () => {
         </div>
 
         <Dialog open={isModalOpen} onOpenChange={handleModalClose}>
-              <DialogTrigger asChild>
-                <Button>
-                  <PlusCircle className="mr-2 h-4 w-4" />
-                  Create Invitation
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[600px]">
-                <DialogHeader>
-                  <DialogTitle>Create New Invitation</DialogTitle>
-                  <DialogDescription>
-                    Send an invitation to a new user to join your organization.
-                  </DialogDescription>
-                </DialogHeader>
+          <DialogTrigger asChild>
+            <Button>
+              <PlusCircle className="mr-2 h-4 w-4" />
+              Create Invitation
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[600px]">
+            <DialogHeader>
+              <DialogTitle>Create New Invitation</DialogTitle>
+              <DialogDescription>
+                Send an invitation to a new user to join your organization.
+              </DialogDescription>
+            </DialogHeader>
 
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <label htmlFor="email" className="text-sm font-medium">
-                        Email *
-                      </label>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label htmlFor="email" className="text-sm font-medium">
+                    Email *
+                  </label>
 
-                      <Input
-                        id="email"
-                        type="email"
-                        placeholder="user@company.com"
-                        value={formData.email}
-                        onChange={(e) =>
-                          handleInputChange("email", e.target.value)
-                        }
-                        className={
-                          validationErrors.email
-                            ? "border-red-500 focus:border-red-500"
-                            : ""
-                        }
-                        required
-                      />
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="user@company.com"
+                    value={formData.email}
+                    onChange={(e) =>
+                      handleInputChange("email", e.target.value)
+                    }
+                    className={
+                      validationErrors.email
+                        ? "border-red-500 focus:border-red-500"
+                        : ""
+                    }
+                    required
+                  />
 
-                      {validationErrors.email && (
-                        <p className="text-xs text-red-600">
-                          {validationErrors.email}
-                        </p>
-                      )}
-                    </div>
-                    <div className="space-y-2">
-                      <label htmlFor="role_id" className="text-sm font-medium">
-                        Role *
-                      </label>
+                  {validationErrors.email && (
+                    <p className="text-xs text-red-600">
+                      {validationErrors.email}
+                    </p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <label htmlFor="role_id" className="text-sm font-medium">
+                    Role *
+                  </label>
 
-                      <Select
-                        value={formData.role_id}
-                        onValueChange={(value) =>
-                          handleInputChange("role_id", value)
-                        }
-                        disabled={rolesLoading}
-                      >
-                        <SelectTrigger
-                          className={
-                            validationErrors.role_id
-                              ? "border-red-500 focus:border-red-500"
-                              : ""
-                          }
-                        >
-                          <SelectValue placeholder={rolesLoading ? "Loading roles..." : "Select role"} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {roles.map((role) => (
-                            <SelectItem key={role.id} value={role.id.toString()}>
-                              {role.display_name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-
-                      {validationErrors.role_id && (
-                        <p className="text-xs text-red-600">
-                          {validationErrors.role_id}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <label
-                        htmlFor="expires_in_days"
-                        className="text-sm font-medium"
-                      >
-                        Expires In (Days) *
-                      </label>
-
-                      <Select
-                        value={formData.expires_in_days}
-                        onValueChange={(value) =>
-                          handleInputChange("expires_in_days", value)
-                        }
-                      >
-                        <SelectTrigger
-                          className={
-                            validationErrors.expires_in_days
-                              ? "border-red-500 focus:border-red-500"
-                              : ""
-                          }
-                        >
-                          <SelectValue placeholder="Select days" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="1">1 Day</SelectItem>
-                          <SelectItem value="3">3 Days</SelectItem>
-                          <SelectItem value="7">7 Days</SelectItem>
-                          <SelectItem value="14">14 Days</SelectItem>
-                          <SelectItem value="30">30 Days</SelectItem>
-                        </SelectContent>
-                      </Select>
-
-                      {validationErrors.expires_in_days && (
-                        <p className="text-xs text-red-600">
-                          {validationErrors.expires_in_days}
-                        </p>
-                      )}
-                    </div>
-                    <div className="space-y-2">
-                      <label
-                        htmlFor="suggested_username"
-                        className="text-sm font-medium"
-                      >
-                        Suggested Username
-                      </label>
-
-                      <Input
-                        id="suggested_username"
-                        placeholder="john.doe"
-                        value={formData.suggested_username}
-                        onChange={(e) =>
-                          handleInputChange("suggested_username", e.target.value)
-                        }
-                        className={
-                          validationErrors.suggested_username
-                            ? "border-red-500 focus:border-red-500"
-                            : ""
-                        }
-                      />
-
-                      {validationErrors.suggested_username && (
-                        <p className="text-xs text-red-600">
-                          {validationErrors.suggested_username}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <label
-                      htmlFor="suggested_title"
-                      className="text-sm font-medium"
-                    >
-                      Title
-                    </label>
-                    <Select
-                      value={formData.suggested_title}
-                      onValueChange={(value) =>
-                        handleInputChange("suggested_title", value)
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select title" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="mr">Mr.</SelectItem>
-                        <SelectItem value="mrs">Mrs.</SelectItem>
-                        <SelectItem value="ms">Ms.</SelectItem>
-                        <SelectItem value="dr">Dr.</SelectItem>
-                        <SelectItem value="prof">Prof.</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <label
-                        htmlFor="suggested_first_name"
-                        className="text-sm font-medium"
-                      >
-                        First Name *
-                      </label>
-
-                      <Input
-                        id="suggested_first_name"
-                        placeholder="John"
-                        value={formData.suggested_first_name}
-                        onChange={(e) =>
-                          handleInputChange(
-                            "suggested_first_name",
-                            e.target.value
-                          )
-                        }
-                        className={
-                          validationErrors.suggested_first_name
-                            ? "border-red-500 focus:border-red-500"
-                            : ""
-                        }
-                        required
-                      />
-
-                      {validationErrors.suggested_first_name && (
-                        <p className="text-xs text-red-600">
-                          {validationErrors.suggested_first_name}
-                        </p>
-                      )}
-                    </div>
-                    <div className="space-y-2">
-                      <label
-                        htmlFor="suggested_last_name"
-                        className="text-sm font-medium"
-                      >
-                        Last Name *
-                      </label>
-
-                      <Input
-                        id="suggested_last_name"
-                        placeholder="Doe"
-                        value={formData.suggested_last_name}
-                        onChange={(e) =>
-                          handleInputChange("suggested_last_name", e.target.value)
-                        }
-                        className={
-                          validationErrors.suggested_last_name
-                            ? "border-red-500 focus:border-red-500"
-                            : ""
-                        }
-                        required
-                      />
-
-                      {validationErrors.suggested_last_name && (
-                        <p className="text-xs text-red-600">
-                          {validationErrors.suggested_last_name}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <label
-                      htmlFor="suggested_phone_number"
-                      className="text-sm font-medium"
-                    >
-                      UK Phone Number
-                    </label>
-
-                    <Input
-                      id="suggested_phone_number"
-                      type="tel"
-                      placeholder="+44 (555) 123-4567"
-                      value={formData.suggested_phone_number}
-                      onChange={(e) =>
-                        handleInputChange(
-                          "suggested_phone_number",
-                          e.target.value
-                        )
-                      }
+                  <Select
+                    value={formData.role_id}
+                    onValueChange={(value) =>
+                      handleInputChange("role_id", value)
+                    }
+                    disabled={rolesLoading}
+                  >
+                    <SelectTrigger
                       className={
-                        validationErrors.suggested_phone_number
+                        validationErrors.role_id
                           ? "border-red-500 focus:border-red-500"
                           : ""
                       }
-                    />
-
-                    {validationErrors.suggested_phone_number && (
-                      <p className="text-xs text-red-600">
-                        {validationErrors.suggested_phone_number}
-                      </p>
-                    )}
-                  </div>
-
-                  <DialogFooter>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => handleModalClose(false)}
-                      disabled={createInvitationMutation.isPending}
                     >
-                      Cancel
-                    </Button>
-                    <Button
-                      type="submit"
-                      disabled={createInvitationMutation.isPending}
+                      <SelectValue placeholder={rolesLoading ? "Loading roles..." : "Select role"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {roles.map((role) => (
+                        <SelectItem key={role.id} value={role.id.toString()}>
+                          {role.display_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
+                  {validationErrors.role_id && (
+                    <p className="text-xs text-red-600">
+                      {validationErrors.role_id}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label
+                    htmlFor="expires_in_days"
+                    className="text-sm font-medium"
+                  >
+                    Expires In (Days) *
+                  </label>
+
+                  <Select
+                    value={formData.expires_in_days}
+                    onValueChange={(value) =>
+                      handleInputChange("expires_in_days", value)
+                    }
+                  >
+                    <SelectTrigger
+                      className={
+                        validationErrors.expires_in_days
+                          ? "border-red-500 focus:border-red-500"
+                          : ""
+                      }
                     >
-                      {createInvitationMutation.isPending ? (
-                        <div className="flex items-center gap-2">
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          Creating...
-                        </div>
-                      ) : (
-                        "Send Invitation"
-                      )}
-                    </Button>
-                  </DialogFooter>
-                </form>
-              </DialogContent>
-            </Dialog>
+                      <SelectValue placeholder="Select days" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="1">1 Day</SelectItem>
+                      <SelectItem value="3">3 Days</SelectItem>
+                      <SelectItem value="7">7 Days</SelectItem>
+                      <SelectItem value="14">14 Days</SelectItem>
+                      <SelectItem value="30">30 Days</SelectItem>
+                    </SelectContent>
+                  </Select>
 
-            {/* View Invitation Modal */}
-            <Dialog open={isViewModalOpen} onOpenChange={handleViewModalClose}>
-              <DialogContent className="sm:max-w-[600px]">
-                <DialogHeader>
-                  <DialogTitle>Invitation Details</DialogTitle>
-                  <DialogDescription>
-                    View detailed information about this invitation.
-                  </DialogDescription>
-                </DialogHeader>
+                  {validationErrors.expires_in_days && (
+                    <p className="text-xs text-red-600">
+                      {validationErrors.expires_in_days}
+                    </p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <label
+                    htmlFor="suggested_username"
+                    className="text-sm font-medium"
+                  >
+                    Suggested Username
+                  </label>
 
-                {isViewLoading ? (
-                  <div className="flex items-center justify-center py-8">
+                  <Input
+                    id="suggested_username"
+                    placeholder="john.doe"
+                    value={formData.suggested_username}
+                    onChange={(e) =>
+                      handleInputChange("suggested_username", e.target.value)
+                    }
+                    className={
+                      validationErrors.suggested_username
+                        ? "border-red-500 focus:border-red-500"
+                        : ""
+                    }
+                  />
+
+                  {validationErrors.suggested_username && (
+                    <p className="text-xs text-red-600">
+                      {validationErrors.suggested_username}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label
+                  htmlFor="suggested_title"
+                  className="text-sm font-medium"
+                >
+                  Title
+                </label>
+                <Select
+                  value={formData.suggested_title}
+                  onValueChange={(value) =>
+                    handleInputChange("suggested_title", value)
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select title" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="mr">Mr.</SelectItem>
+                    <SelectItem value="mrs">Mrs.</SelectItem>
+                    <SelectItem value="ms">Ms.</SelectItem>
+                    <SelectItem value="dr">Dr.</SelectItem>
+                    <SelectItem value="prof">Prof.</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label
+                    htmlFor="suggested_first_name"
+                    className="text-sm font-medium"
+                  >
+                    First Name *
+                  </label>
+
+                  <Input
+                    id="suggested_first_name"
+                    placeholder="John"
+                    value={formData.suggested_first_name}
+                    onChange={(e) =>
+                      handleInputChange(
+                        "suggested_first_name",
+                        e.target.value
+                      )
+                    }
+                    className={
+                      validationErrors.suggested_first_name
+                        ? "border-red-500 focus:border-red-500"
+                        : ""
+                    }
+                    required
+                  />
+
+                  {validationErrors.suggested_first_name && (
+                    <p className="text-xs text-red-600">
+                      {validationErrors.suggested_first_name}
+                    </p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <label
+                    htmlFor="suggested_last_name"
+                    className="text-sm font-medium"
+                  >
+                    Last Name *
+                  </label>
+
+                  <Input
+                    id="suggested_last_name"
+                    placeholder="Doe"
+                    value={formData.suggested_last_name}
+                    onChange={(e) =>
+                      handleInputChange("suggested_last_name", e.target.value)
+                    }
+                    className={
+                      validationErrors.suggested_last_name
+                        ? "border-red-500 focus:border-red-500"
+                        : ""
+                    }
+                    required
+                  />
+
+                  {validationErrors.suggested_last_name && (
+                    <p className="text-xs text-red-600">
+                      {validationErrors.suggested_last_name}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label
+                  htmlFor="suggested_phone_number"
+                  className="text-sm font-medium"
+                >
+                  UK Phone Number
+                </label>
+
+                <Input
+                  id="suggested_phone_number"
+                  type="tel"
+                  placeholder="+44 (555) 123-4567"
+                  value={formData.suggested_phone_number}
+                  onChange={(e) =>
+                    handleInputChange(
+                      "suggested_phone_number",
+                      e.target.value
+                    )
+                  }
+                  className={
+                    validationErrors.suggested_phone_number
+                      ? "border-red-500 focus:border-red-500"
+                      : ""
+                  }
+                />
+
+                {validationErrors.suggested_phone_number && (
+                  <p className="text-xs text-red-600">
+                    {validationErrors.suggested_phone_number}
+                  </p>
+                )}
+              </div>
+
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => handleModalClose(false)}
+                  disabled={createInvitationMutation.isPending}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={createInvitationMutation.isPending}
+                >
+                  {createInvitationMutation.isPending ? (
                     <div className="flex items-center gap-2">
                       <Loader2 className="h-4 w-4 animate-spin" />
-                      <span>Loading invitation details...</span>
+                      Creating...
                     </div>
+                  ) : (
+                    "Send Invitation"
+                  )}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+
+        {/* View Invitation Modal */}
+        <Dialog open={isViewModalOpen} onOpenChange={handleViewModalClose}>
+          <DialogContent className="sm:max-w-[600px]">
+            <DialogHeader>
+              <DialogTitle>Invitation Details</DialogTitle>
+              <DialogDescription>
+                View detailed information about this invitation.
+              </DialogDescription>
+            </DialogHeader>
+
+            {isViewLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Loading invitation details...</span>
+                </div>
+              </div>
+            ) : selectedInvitation ? (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-muted-foreground">
+                      Email
+                    </label>
+                    <p className="text-sm">{selectedInvitation.email}</p>
                   </div>
-                ) : selectedInvitation ? (
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-muted-foreground">
-                          Email
-                        </label>
-                        <p className="text-sm">{selectedInvitation.email}</p>
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-muted-foreground">
-                          Role
-                        </label>
-                        <p className="text-sm">
-                          {roles.find(r => r.id === selectedInvitation.role_id)?.display_name || `Role ${selectedInvitation.role_id}`}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-muted-foreground">
-                          First Name
-                        </label>
-                        <p className="text-sm">{selectedInvitation.suggested_first_name || "Not provided"}</p>
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-muted-foreground">
-                          Last Name
-                        </label>
-                        <p className="text-sm">{selectedInvitation.suggested_last_name || "Not provided"}</p>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-muted-foreground">
-                          Username
-                        </label>
-                        <p className="text-sm">{selectedInvitation.suggested_username || "Not provided"}</p>
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-muted-foreground">
-                          Title
-                        </label>
-                        <p className="text-sm">{selectedInvitation.suggested_title || "Not provided"}</p>
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-muted-foreground">
-                        Phone Number
-                      </label>
-                      <p className="text-sm">{selectedInvitation.suggested_phone_number || "Not provided"}</p>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-muted-foreground">
-                          Status
-                        </label>
-                        <p className="text-sm">
-                          <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${selectedInvitation.is_used
-                            ? "bg-green-100 text-green-800"
-                            : new Date(selectedInvitation.expires_at) < new Date()
-                              ? "bg-red-100 text-red-800"
-                              : "bg-yellow-100 text-yellow-800"
-                            }`}>
-                            {selectedInvitation.is_used ? "Accepted" : new Date(selectedInvitation.expires_at) < new Date() ? "Expired" : "Pending"}
-                          </span>
-                        </p>
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-muted-foreground">
-                          Invitation ID
-                        </label>
-                        <p className="text-sm font-mono">{selectedInvitation.id}</p>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-muted-foreground">
-                          Created At
-                        </label>
-                        <p className="text-sm">
-                          {new Date(selectedInvitation.created_at).toLocaleString()}
-                        </p>
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-muted-foreground">
-                          Expires At
-                        </label>
-                        <p className="text-sm">
-                          {new Date(selectedInvitation.expires_at).toLocaleString()}
-                        </p>
-                      </div>
-                    </div>
-
-                    {selectedInvitation.is_used && selectedInvitation.used_at && (
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-muted-foreground">
-                          Used At
-                        </label>
-                        <p className="text-sm">
-                          {new Date(selectedInvitation.used_at).toLocaleString()}
-                        </p>
-                      </div>
-                    )}
-
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-muted-foreground">
-                        Invitation Token
-                      </label>
-                      <p className="text-sm font-mono break-all bg-muted p-2 rounded">
-                        {selectedInvitation.token}
-                      </p>
-                    </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-muted-foreground">
+                      Role
+                    </label>
+                    <p className="text-sm">
+                      {roles.find(r => r.id === selectedInvitation.role_id)?.display_name || `Role ${selectedInvitation.role_id}`}
+                    </p>
                   </div>
-                ) : (
-                  <div className="flex items-center justify-center py-8">
-                    <div className="text-center">
-                      <p className="text-muted-foreground">Failed to load invitation details</p>
-                    </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-muted-foreground">
+                      First Name
+                    </label>
+                    <p className="text-sm">{selectedInvitation.suggested_first_name || "Not provided"}</p>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-muted-foreground">
+                      Last Name
+                    </label>
+                    <p className="text-sm">{selectedInvitation.suggested_last_name || "Not provided"}</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-muted-foreground">
+                      Username
+                    </label>
+                    <p className="text-sm">{selectedInvitation.suggested_username || "Not provided"}</p>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-muted-foreground">
+                      Title
+                    </label>
+                    <p className="text-sm">{selectedInvitation.suggested_title || "Not provided"}</p>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-muted-foreground">
+                    Phone Number
+                  </label>
+                  <p className="text-sm">{selectedInvitation.suggested_phone_number || "Not provided"}</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-muted-foreground">
+                      Status
+                    </label>
+                    <p className="text-sm">
+                      <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${selectedInvitation.is_used
+                        ? "bg-green-100 text-green-800"
+                        : new Date(selectedInvitation.expires_at) < new Date()
+                          ? "bg-red-100 text-red-800"
+                          : "bg-yellow-100 text-yellow-800"
+                        }`}>
+                        {selectedInvitation.is_used ? "Accepted" : new Date(selectedInvitation.expires_at) < new Date() ? "Expired" : "Pending"}
+                      </span>
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-muted-foreground">
+                      Invitation ID
+                    </label>
+                    <p className="text-sm font-mono">{selectedInvitation.id}</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-muted-foreground">
+                      Created At
+                    </label>
+                    <p className="text-sm">
+                      {new Date(selectedInvitation.created_at).toLocaleString()}
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-muted-foreground">
+                      Expires At
+                    </label>
+                    <p className="text-sm">
+                      {new Date(selectedInvitation.expires_at).toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+
+                {selectedInvitation.is_used && selectedInvitation.used_at && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-muted-foreground">
+                      Used At
+                    </label>
+                    <p className="text-sm">
+                      {new Date(selectedInvitation.used_at).toLocaleString()}
+                    </p>
                   </div>
                 )}
 
-                <DialogFooter>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => handleViewModalClose(false)}
-                  >
-                    Close
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-muted-foreground">
+                    Invitation Token
+                  </label>
+                  <p className="text-sm font-mono break-all bg-muted p-2 rounded">
+                    {selectedInvitation.token}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-center py-8">
+                <div className="text-center">
+                  <p className="text-muted-foreground">Failed to load invitation details</p>
+                </div>
+              </div>
+            )}
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => handleViewModalClose(false)}
+              >
+                Close
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Stats Cards */}
         <div className="grid gap-4 md:grid-cols-4">

@@ -169,4 +169,14 @@ export const usersService = {
       throw error;
     }
   },
+
+  // Send invitation to existing user
+  sendInvitationToUser: async (userId, options = {}) => {
+    try {
+      return await api.post(`/users/${userId}/send-invitation`, options);
+    } catch (error) {
+      console.error(`Send invitation to user ${userId} failed:`, error);
+      throw error;
+    }
+  },
 };

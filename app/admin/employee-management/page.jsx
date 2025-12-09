@@ -60,6 +60,7 @@ import {
   AlertCircle,
   UserCheck,
   Loader2,
+  Mail,
 } from "lucide-react";
 import {
   useUsers,
@@ -68,6 +69,7 @@ import {
   useActivateUser,
   useCreateUser,
   useRoles,
+  useSendInvitationToUser,
   userUtils,
 } from "@/hooks/useUsers";
 import { useHijackUser } from "@/hooks/useAuth";
@@ -117,6 +119,7 @@ const UserManagementPage = () => {
   const activateUserMutation = useActivateUser();
   const createUserMutation = useCreateUser();
   const hijackUserMutation = useHijackUser();
+  const sendInvitationMutation = useSendInvitationToUser();
 
   // Extract users and pagination data from response
   const users = usersResponse?.users || [];
@@ -215,6 +218,28 @@ const UserManagementPage = () => {
       await hijackUserMutation.mutateAsync(userId);
     } catch (error) {
       console.error("Failed to hijack user:", error);
+    }
+  };
+
+  const handleSendInvitation = async (user) => {
+    try {
+      // Use the new user-specific endpoint
+      sendInvitationMutation.mutate(
+        {
+          userId: user.id,
+          options: {
+            expires_in_days: 7, // Default to 7 days
+          },
+        },
+        {
+          onSuccess: () => {
+            // Refetch users to update the list
+            refetch();
+          },
+        }
+      );
+    } catch (error) {
+      console.error("Unexpected error in handleSendInvitation:", error);
     }
   };
 
@@ -787,6 +812,66 @@ const UserManagementPage = () => {
                                   className="bg-blue-600 hover:bg-blue-700"
                                 >
                                   Hijack User
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+
+                          <DropdownMenuSeparator />
+
+                          {/* Invite to Set Password - Available for all users to allow password setup via invitation */}
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <DropdownMenuItem
+                                className="text-purple-600 focus:text-purple-600"
+                                disabled={sendInvitationMutation.isPending}
+                                onSelect={(e) => e.preventDefault()}
+                              >
+                                <Mail className="mr-2 h-4 w-4" />
+                                Invite to Set Password
+                              </DropdownMenuItem>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>
+                                  Invite to Set Password
+                                </AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Send an invitation email to this user so they can set their password and access their account.
+                                  <br />
+                                  <br />
+                                  <strong>User:</strong> {user.name} ({user.email})
+                                  <br />
+                                  {!user.isVerified ? (
+                                    <>
+                                      <strong>Status:</strong> User needs to set password
+                                      <br />
+                                      <strong>Note:</strong> The user account is active. They will receive an email with a link to set their password.
+                                    </>
+                                  ) : (
+                                    <>
+                                      <strong>Status:</strong> User is verified
+                                      <br />
+                                      <strong>Note:</strong> This will send an invitation email. If the user already has an active invitation, it will be replaced with a new one.
+                                    </>
+                                  )}
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => handleSendInvitation(user)}
+                                  className="bg-purple-600 hover:bg-purple-700"
+                                  disabled={sendInvitationMutation.isPending}
+                                >
+                                  {sendInvitationMutation.isPending ? (
+                                    <>
+                                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                      Sending...
+                                    </>
+                                  ) : (
+                                    "Send Invitation"
+                                  )}
                                 </AlertDialogAction>
                               </AlertDialogFooter>
                             </AlertDialogContent>

@@ -469,7 +469,7 @@ export const useSignup = () => {
         apiUtils.setRefreshToken(data.refresh_token);
       }
 
-      toast.success("Account created successfully!", {
+      toast.success("Password set successfully!", {
         description: "Welcome to Melode! You can now access your account.",
       });
 
@@ -502,7 +502,7 @@ export const useSignup = () => {
           });
         }
       } else {
-        toast.error("Failed to create account", {
+        toast.error("Failed to set password", {
           description: error.response?.data?.message || "Please try again",
         });
       }

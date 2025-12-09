@@ -127,19 +127,19 @@ const SignupContent = () => {
             </div>
           </div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-            Create Your Account
+            Set Your Password
           </h1>
           <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-            Complete your account setup using your invitation
+            Your account has been created. Set your password to access your account.
           </p>
         </div>
 
         {/* Signup Form */}
         <Card className="shadow-xl">
           <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl text-center">Sign Up</CardTitle>
+            <CardTitle className="text-2xl text-center">Set Password</CardTitle>
             <p className="text-sm text-center text-muted-foreground">
-              Enter your invitation details to get started
+              Enter your invitation token and create a password to access your account
             </p>
           </CardHeader>
           <CardContent>
@@ -157,11 +157,10 @@ const SignupContent = () => {
                     onChange={(e) =>
                       handleInputChange("invitation_token", e.target.value)
                     }
-                    className={`pl-10 ${
-                      validationErrors.invitation_token
+                    className={`pl-10 ${validationErrors.invitation_token
                         ? "border-red-500 focus:border-red-500"
                         : ""
-                    }`}
+                      }`}
                     required
                   />
                 </div>
@@ -180,16 +179,15 @@ const SignupContent = () => {
                   <Input
                     id="password"
                     type={showPassword ? "text" : "password"}
-                    placeholder="Create a strong password"
+                    placeholder="Set a strong password"
                     value={formData.password}
                     onChange={(e) =>
                       handleInputChange("password", e.target.value)
                     }
-                    className={`pl-10 pr-10 ${
-                      validationErrors.password
+                    className={`pl-10 pr-10 ${validationErrors.password
                         ? "border-red-500 focus:border-red-500"
                         : ""
-                    }`}
+                      }`}
                     required
                   />
                   <Button
@@ -229,11 +227,10 @@ const SignupContent = () => {
                     onChange={(e) =>
                       handleInputChange("confirmPassword", e.target.value)
                     }
-                    className={`pl-10 ${
-                      validationErrors.confirmPassword
+                    className={`pl-10 ${validationErrors.confirmPassword
                         ? "border-red-500 focus:border-red-500"
                         : ""
-                    }`}
+                      }`}
                     required
                   />
                 </div>
@@ -253,12 +250,12 @@ const SignupContent = () => {
                 {signupMutation.isPending ? (
                   <div className="flex items-center gap-2">
                     <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                    Creating Account...
+                    Setting Password...
                   </div>
                 ) : (
                   <div className="flex items-center gap-2">
-                    <User className="h-4 w-4" />
-                    Create Account
+                    <Lock className="h-4 w-4" />
+                    Set Password
                     <ArrowRight className="h-4 w-4" />
                   </div>
                 )}

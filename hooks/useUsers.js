@@ -43,8 +43,21 @@ export const useUsers = (params = {}) => {
     queryFn: async () => {
       try {
         const response = await usersService.getUsers(params);
-        // Return the full response object with pagination metadata
-        return response.data;
+        console.log("🔍 [useUsers] Raw axios response:", response);
+        console.log("🔍 [useUsers] response.data:", response?.data);
+        console.log("🔍 [useUsers] response.data?.data:", response?.data?.data);
+
+        // The axios response has a 'data' property, so response.data contains the actual API response
+        // Handle both cases: if response.data exists, use it; otherwise use response directly
+        const apiData = response?.data || response;
+        console.log("🔍 [useUsers] apiData:", apiData);
+
+        // If the API response itself has a 'data' key, extract it
+        const finalData = apiData?.data || apiData;
+        console.log("🔍 [useUsers] finalData to return:", finalData);
+        console.log("🔍 [useUsers] finalData?.users:", finalData?.users);
+
+        return finalData;
       } catch (error) {
         console.error("Failed to fetch users:", error);
 
@@ -122,6 +135,10 @@ export const useUsers = (params = {}) => {
       }
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
+    keepPreviousData: (previousData) => {
+      // Only keep previous data if it exists and has users
+      return previousData && previousData.users && previousData.users.length > 0;
+    },
     retry: (failureCount, error) => {
       // Don't retry on 4xx errors
       if (error?.response?.status >= 400 && error?.response?.status < 500) {
@@ -174,8 +191,12 @@ export const useCreateUser = () => {
       return response.data;
     },
     onSuccess: (data) => {
-      // Invalidate and refetch users list to ensure all users are shown
-      queryClient.invalidateQueries({ queryKey: userKeys.all });
+      // Invalidate users list queries - this will trigger a refetch automatically
+      queryClient.invalidateQueries({
+        queryKey: userKeys.lists(),
+        exact: false, // Match all queries that start with this key
+        refetchType: 'active', // Only refetch active queries
+      });
 
       toast.success("User created successfully", {
         description: `${data.first_name} ${data.last_name} has been added to the system.`,
@@ -563,6 +584,40 @@ export const useSearchUsers = () => {
   });
 };
 
+// Send invitation to existing user mutation
+export const useSendInvitationToUser = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ userId, options = {} }) => {
+      const response = await usersService.sendInvitationToUser(userId, options);
+      return response.data;
+    },
+    onSuccess: (data, variables) => {
+      // Invalidate user queries to refresh data
+      queryClient.invalidateQueries({
+        queryKey: userKeys.detail(variables.userId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: userKeys.lists(),
+      });
+
+      toast.success("Invitation sent successfully!", {
+        description: `Invitation email sent. The user can now set their password.`,
+      });
+    },
+    onError: (error) => {
+      console.error("Send invitation to user error:", error);
+
+      const errorMessage =
+        error?.response?.data?.message || "Failed to send invitation";
+      toast.error("Failed to send invitation", {
+        description: errorMessage,
+      });
+    },
+  });
+};
+
 // Utility functions for data transformation
 export const userUtils = {
   // Transform API user data to display format
@@ -593,9 +648,8 @@ export const userUtils = {
         ? new Date(apiUser.updated_at).toLocaleString()
         : "Unknown",
       initials:
-        `${apiUser.first_name?.[0] || ""}${
-          apiUser.last_name?.[0] || ""
-        }`.toUpperCase() || "U",
+        `${apiUser.first_name?.[0] || ""}${apiUser.last_name?.[0] || ""
+          }`.toUpperCase() || "U",
       // Additional fields from the API response
       mfaEnabled: apiUser.mfa_enabled,
       roles: apiUser.roles || [],

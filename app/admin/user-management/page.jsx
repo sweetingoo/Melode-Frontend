@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -60,6 +61,7 @@ import {
   AlertCircle,
   UserCheck,
   Loader2,
+  Mail,
 } from "lucide-react";
 import {
   useUsers,
@@ -68,6 +70,7 @@ import {
   useActivateUser,
   useCreateUser,
   useRoles,
+  useSendInvitationToUser,
   userUtils,
 } from "@/hooks/useUsers";
 import { useHijackUser } from "@/hooks/useAuth";
@@ -117,18 +120,45 @@ const UserManagementPage = () => {
   const activateUserMutation = useActivateUser();
   const createUserMutation = useCreateUser();
   const hijackUserMutation = useHijackUser();
+  const sendInvitationMutation = useSendInvitationToUser();
+
+  // Debug logging
+  console.log("🔍 [UserManagement] usersResponse:", usersResponse);
+  console.log("🔍 [UserManagement] usersResponse type:", typeof usersResponse);
+  console.log("🔍 [UserManagement] usersResponse?.data:", usersResponse?.data);
+  console.log("🔍 [UserManagement] usersResponse?.users:", usersResponse?.users);
 
   // Extract users and pagination data from response
-  const users = usersResponse?.users || [];
+  // Handle both cases: direct data or data wrapped in a 'data' key
+  const responseData = usersResponse?.data || usersResponse;
+  console.log("🔍 [UserManagement] responseData:", responseData);
+  console.log("🔍 [UserManagement] responseData?.users:", responseData?.users);
+
+  const users = responseData?.users || [];
+  console.log("🔍 [UserManagement] users array:", users);
+  console.log("🔍 [UserManagement] users length:", users.length);
+
   const pagination = {
-    page: usersResponse?.page || 1,
-    per_page: usersResponse?.per_page || 20,
-    total: usersResponse?.total || 0,
-    total_pages: usersResponse?.total_pages || 1,
+    page: responseData?.page || 1,
+    per_page: responseData?.per_page || 20,
+    total: responseData?.total || 0,
+    total_pages: responseData?.total_pages || 1,
   };
 
   // Transform API data to display format
-  const transformedUsers = users.map(userUtils.transformUser);
+  const transformedUsers = users.map((user) => {
+    try {
+      const transformed = userUtils.transformUser(user);
+      console.log("🔍 [UserManagement] Transformed user:", transformed);
+      return transformed;
+    } catch (error) {
+      console.error("❌ [UserManagement] Error transforming user:", error, user);
+      return null;
+    }
+  }).filter(Boolean); // Remove any null values from failed transformations
+
+  console.log("🔍 [UserManagement] transformedUsers:", transformedUsers);
+  console.log("🔍 [UserManagement] transformedUsers length:", transformedUsers.length);
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -166,15 +196,19 @@ const UserManagementPage = () => {
 
   // Filter users based on search term (client-side filtering for demo)
   // In production, you'd want to implement server-side search
-  const filteredUsers = transformedUsers.filter(
-    (user) =>
-      user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      userUtils.getStatus(user).toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredUsers = searchTerm
+    ? transformedUsers.filter(
+      (user) =>
+        (user.name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (user.email || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (user.username || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (userUtils.getStatus(user) || "").toLowerCase().includes(searchTerm.toLowerCase())
+    )
+    : transformedUsers;
 
-  console.log(filteredUsers);
+  console.log("🔍 [UserManagement] searchTerm:", searchTerm);
+  console.log("🔍 [UserManagement] filteredUsers:", filteredUsers);
+  console.log("🔍 [UserManagement] filteredUsers length:", filteredUsers.length);
 
   // Use API pagination data
   const totalPages = pagination.total_pages;
@@ -215,6 +249,28 @@ const UserManagementPage = () => {
       await hijackUserMutation.mutateAsync(userId);
     } catch (error) {
       console.error("Failed to hijack user:", error);
+    }
+  };
+
+  const handleSendInvitation = async (user) => {
+    try {
+      // Use the new user-specific endpoint
+      sendInvitationMutation.mutate(
+        {
+          userId: user.id,
+          options: {
+            expires_in_days: 7, // Default to 7 days
+          },
+        },
+        {
+          onSuccess: () => {
+            // Refetch users to update the list
+            refetch();
+          },
+        }
+      );
+    } catch (error) {
+      console.error("Unexpected error in handleSendInvitation:", error);
     }
   };
 
@@ -760,6 +816,66 @@ const UserManagementPage = () => {
                               </AlertDialogContent>
                             </AlertDialog>
                           )}
+
+                          <DropdownMenuSeparator />
+
+                          {/* Invite to Set Password - Available for all users to allow password setup via invitation */}
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <DropdownMenuItem
+                                className="text-purple-600 focus:text-purple-600"
+                                disabled={sendInvitationMutation.isPending}
+                                onSelect={(e) => e.preventDefault()}
+                              >
+                                <Mail className="mr-2 h-4 w-4" />
+                                Invite to Set Password
+                              </DropdownMenuItem>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>
+                                  Invite to Set Password
+                                </AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Send an invitation email to this user so they can set their password and access their account.
+                                  <br />
+                                  <br />
+                                  <strong>User:</strong> {user.name} ({user.email})
+                                  <br />
+                                  {!user.isVerified ? (
+                                    <>
+                                      <strong>Status:</strong> User needs to set password
+                                      <br />
+                                      <strong>Note:</strong> The user account is active. They will receive an email with a link to set their password.
+                                    </>
+                                  ) : (
+                                    <>
+                                      <strong>Status:</strong> User is verified
+                                      <br />
+                                      <strong>Note:</strong> This will send an invitation email. If the user already has an active invitation, it will be replaced with a new one.
+                                    </>
+                                  )}
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => handleSendInvitation(user)}
+                                  className="bg-purple-600 hover:bg-purple-700"
+                                  disabled={sendInvitationMutation.isPending}
+                                >
+                                  {sendInvitationMutation.isPending ? (
+                                    <>
+                                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                      Sending...
+                                    </>
+                                  ) : (
+                                    "Send Invitation"
+                                  )}
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
 
                           {/* Hijack User */}
                           <AlertDialog>
