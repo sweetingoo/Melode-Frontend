@@ -921,7 +921,7 @@ const TasksPage = () => {
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold">Tasks</h1>
           <p className="text-sm sm:text-base text-muted-foreground">
-            Manage and track all tasks across your organization
+            Manage and track all tasks across your organisation
           </p>
         </div>
         {canCreateTask && (
@@ -1777,24 +1777,28 @@ const TasksPage = () => {
             <div>
               <Label className="mb-3 block">Task Assignment</Label>
               <Tabs value={assignmentMode} onValueChange={setAssignmentMode} className="w-full">
-                <TabsList className="grid w-full grid-cols-4">
-                  <TabsTrigger value="multiple-users">
-                    <Users className="mr-2 h-4 w-4" />
-                    Multiple Users
-                  </TabsTrigger>
-                  <TabsTrigger value="role">
-                    <Shield className="mr-2 h-4 w-4" />
-                    Role
-                  </TabsTrigger>
-                  <TabsTrigger value="user">
-                    <User className="mr-2 h-4 w-4" />
-                    Single User
-                  </TabsTrigger>
-                  <TabsTrigger value="asset">
-                    <ImageIcon className="mr-2 h-4 w-4" />
-                    Asset
-                  </TabsTrigger>
-                </TabsList>
+                <div className="overflow-x-auto scrollbar-hide">
+                  <TabsList className="inline-flex w-auto flex-nowrap gap-1 sm:gap-0 lg:grid lg:w-full lg:grid-cols-4">
+                    <TabsTrigger value="multiple-users" className="whitespace-nowrap">
+                      <Users className="mr-2 h-4 w-4" />
+                      <span className="hidden sm:inline">Multiple Users</span>
+                      <span className="sm:hidden">Multiple</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="role" className="whitespace-nowrap">
+                      <Shield className="mr-2 h-4 w-4" />
+                      Role
+                    </TabsTrigger>
+                    <TabsTrigger value="user" className="whitespace-nowrap">
+                      <User className="mr-2 h-4 w-4" />
+                      <span className="hidden sm:inline">Single User</span>
+                      <span className="sm:hidden">Single</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="asset" className="whitespace-nowrap">
+                      <ImageIcon className="mr-2 h-4 w-4" />
+                      Asset
+                    </TabsTrigger>
+                  </TabsList>
+                </div>
 
                 {/* Multiple Users Tab */}
                 <TabsContent value="multiple-users" className="space-y-3">
@@ -1997,16 +2001,18 @@ const TasksPage = () => {
                   <div className="space-y-3">
                     <Label>Assign to (User or Role) *</Label>
                     <Tabs value={assetAssignmentType} onValueChange={setAssetAssignmentType} className="w-full">
-                      <TabsList className="grid w-full grid-cols-2">
-                        <TabsTrigger value="user">
-                          <User className="mr-2 h-4 w-4" />
-                          User
-                        </TabsTrigger>
-                        <TabsTrigger value="role">
-                          <Shield className="mr-2 h-4 w-4" />
-                          Role
-                        </TabsTrigger>
-                      </TabsList>
+                      <div className="overflow-x-auto scrollbar-hide">
+                        <TabsList className="inline-flex w-auto flex-nowrap gap-1 sm:gap-0 lg:grid lg:w-full lg:grid-cols-2">
+                          <TabsTrigger value="user" className="whitespace-nowrap">
+                            <User className="mr-2 h-4 w-4" />
+                            User
+                          </TabsTrigger>
+                          <TabsTrigger value="role" className="whitespace-nowrap">
+                            <Shield className="mr-2 h-4 w-4" />
+                            Role
+                          </TabsTrigger>
+                        </TabsList>
+                      </div>
                       <TabsContent value="user" className="mt-3">
                         <Select
                           value={taskFormData.assigned_to_user_id && taskFormData.assigned_to_user_id !== "" ? taskFormData.assigned_to_user_id : undefined}
@@ -2442,24 +2448,28 @@ const TasksPage = () => {
             <div>
               <Label className="mb-3 block">Task Assignment</Label>
               <Tabs value={editAssignmentMode} onValueChange={setEditAssignmentMode} className="w-full">
-                <TabsList className="grid w-full grid-cols-4">
-                  <TabsTrigger value="multiple-users">
-                    <Users className="mr-2 h-4 w-4" />
-                    Multiple Users
-                  </TabsTrigger>
-                  <TabsTrigger value="role">
-                    <Shield className="mr-2 h-4 w-4" />
-                    Role
-                  </TabsTrigger>
-                  <TabsTrigger value="user">
-                    <User className="mr-2 h-4 w-4" />
-                    Single User
-                  </TabsTrigger>
-                  <TabsTrigger value="asset">
-                    <ImageIcon className="mr-2 h-4 w-4" />
-                    Asset
-                  </TabsTrigger>
-                </TabsList>
+                <div className="overflow-x-auto scrollbar-hide">
+                  <TabsList className="inline-flex w-auto flex-nowrap gap-1 sm:gap-0 lg:grid lg:w-full lg:grid-cols-4">
+                    <TabsTrigger value="multiple-users" className="whitespace-nowrap">
+                      <Users className="mr-2 h-4 w-4" />
+                      <span className="hidden sm:inline">Multiple Users</span>
+                      <span className="sm:hidden">Multiple</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="role" className="whitespace-nowrap">
+                      <Shield className="mr-2 h-4 w-4" />
+                      Role
+                    </TabsTrigger>
+                    <TabsTrigger value="user" className="whitespace-nowrap">
+                      <User className="mr-2 h-4 w-4" />
+                      <span className="hidden sm:inline">Single User</span>
+                      <span className="sm:hidden">Single</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="asset" className="whitespace-nowrap">
+                      <ImageIcon className="mr-2 h-4 w-4" />
+                      Asset
+                    </TabsTrigger>
+                  </TabsList>
+                </div>
 
                 {/* Multiple Users Tab */}
                 <TabsContent value="multiple-users" className="space-y-3">
@@ -2629,16 +2639,18 @@ const TasksPage = () => {
                   <div className="space-y-3">
                     <Label>Assign to (User or Role) *</Label>
                     <Tabs value={assetAssignmentType} onValueChange={setAssetAssignmentType} className="w-full">
-                      <TabsList className="grid w-full grid-cols-2">
-                        <TabsTrigger value="user">
-                          <User className="mr-2 h-4 w-4" />
-                          User
-                        </TabsTrigger>
-                        <TabsTrigger value="role">
-                          <Shield className="mr-2 h-4 w-4" />
-                          Role
-                        </TabsTrigger>
-                      </TabsList>
+                      <div className="overflow-x-auto scrollbar-hide">
+                        <TabsList className="inline-flex w-auto flex-nowrap gap-1 sm:gap-0 lg:grid lg:w-full lg:grid-cols-2">
+                          <TabsTrigger value="user" className="whitespace-nowrap">
+                            <User className="mr-2 h-4 w-4" />
+                            User
+                          </TabsTrigger>
+                          <TabsTrigger value="role" className="whitespace-nowrap">
+                            <Shield className="mr-2 h-4 w-4" />
+                            Role
+                          </TabsTrigger>
+                        </TabsList>
+                      </div>
                       <TabsContent value="user" className="mt-3">
                         <Select
                           value={taskFormData.assigned_to_user_id && taskFormData.assigned_to_user_id !== "" ? taskFormData.assigned_to_user_id : undefined}

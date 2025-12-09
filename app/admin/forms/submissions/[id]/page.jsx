@@ -6,11 +6,11 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, ArrowLeft, FileText, CheckCircle, Download, Check, X, Mail, Phone, Link as LinkIcon, Calendar, Clock, Eye } from "lucide-react";
+import { Loader2, ArrowLeft, FileText, CheckCircle, Download, Check, X, Mail, Phone, Link as LinkIcon, Calendar, Clock, Eye, AlertCircle, CheckCircle2 } from "lucide-react";
 import { useFormSubmission, useForm } from "@/hooks/useForms";
 import { useUsers } from "@/hooks/useUsers";
 import { useDownloadFile } from "@/hooks/useProfile";
-import { format } from "date-fns";
+import { format, formatDistance, formatDistanceToNow, differenceInHours, differenceInDays, differenceInMinutes } from "date-fns";
 
 const FormSubmissionDetailPage = () => {
   const params = useParams();
@@ -98,6 +98,52 @@ const FormSubmissionDetailPage = () => {
         return "bg-muted text-muted-foreground";
     }
   };
+
+  // Calculate duration/delay from due date
+  const calculateSubmissionTiming = () => {
+    if (!submission) return null;
+    
+    const submissionDate = submission.submitted_at 
+      ? new Date(submission.submitted_at) 
+      : submission.created_at 
+        ? new Date(submission.created_at) 
+        : null;
+    
+    const dueDate = submission.due_date ? new Date(submission.due_date) : null;
+    
+    if (!submissionDate || !dueDate) return null;
+    
+    const diffMinutes = differenceInMinutes(submissionDate, dueDate);
+    const diffHours = differenceInHours(submissionDate, dueDate);
+    const diffDays = differenceInDays(submissionDate, dueDate);
+    
+    const isLate = diffMinutes > 0;
+    const isEarly = diffMinutes < 0;
+    const isOnTime = diffMinutes === 0;
+    
+    let durationText = "";
+    if (Math.abs(diffDays) >= 1) {
+      durationText = `${Math.abs(diffDays)} day${Math.abs(diffDays) !== 1 ? 's' : ''}`;
+    } else if (Math.abs(diffHours) >= 1) {
+      durationText = `${Math.abs(diffHours)} hour${Math.abs(diffHours) !== 1 ? 's' : ''}`;
+    } else {
+      durationText = `${Math.abs(diffMinutes)} minute${Math.abs(diffMinutes) !== 1 ? 's' : ''}`;
+    }
+    
+    return {
+      isLate,
+      isEarly,
+      isOnTime,
+      diffMinutes,
+      diffHours,
+      diffDays,
+      durationText,
+      submissionDate,
+      dueDate,
+    };
+  };
+
+  const timingInfo = calculateSubmissionTiming();
 
   if (submissionLoading || formLoading) {
     return (
@@ -753,6 +799,62 @@ const FormSubmissionDetailPage = () => {
                     </Link>
                   </div>
                 </div>
+              )}
+              
+              {/* Due Date and Timing Information */}
+              {submission.due_date && (
+                <>
+                  <div>
+                    <label className="text-muted-foreground">Due Date</label>
+                    <div className="mt-1 flex items-center gap-2">
+                      <Calendar className="h-4 w-4 text-muted-foreground" />
+                      <p>
+                        {format(new Date(submission.due_date), "MMM dd, yyyy HH:mm")}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  {timingInfo && (
+                    <div>
+                      <label className="text-muted-foreground">Submission Timing</label>
+                      <div className="mt-1">
+                        {timingInfo.isOnTime ? (
+                          <div className="flex items-center gap-2 p-2 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-md">
+                            <CheckCircle2 className="h-4 w-4 text-green-600" />
+                            <span className="text-sm font-medium text-green-800 dark:text-green-200">
+                              Submitted on time
+                            </span>
+                          </div>
+                        ) : timingInfo.isEarly ? (
+                          <div className="flex items-center gap-2 p-2 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-md">
+                            <Clock className="h-4 w-4 text-blue-600" />
+                            <div className="flex-1">
+                              <span className="text-sm font-medium text-blue-800 dark:text-blue-200">
+                                Submitted {timingInfo.durationText} early
+                              </span>
+                              <p className="text-xs text-blue-700 dark:text-blue-300 mt-0.5">
+                                Due: {format(timingInfo.dueDate, "MMM dd, yyyy HH:mm")}
+                              </p>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2 p-2 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 rounded-md">
+                            <AlertCircle className="h-4 w-4 text-red-600" />
+                            <div className="flex-1">
+                              <span className="text-sm font-medium text-red-800 dark:text-red-200">
+                                Submitted {timingInfo.durationText} late
+                              </span>
+                              <p className="text-xs text-red-700 dark:text-red-300 mt-0.5">
+                                Due: {format(timingInfo.dueDate, "MMM dd, yyyy HH:mm")} • 
+                                Submitted: {format(timingInfo.submissionDate, "MMM dd, yyyy HH:mm")}
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </CardContent>
           </Card>

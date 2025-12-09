@@ -859,21 +859,28 @@ const CustomFieldsAdminPage = () => {
 
       {/* Tabs */}
       <Tabs defaultValue="sections" className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="sections" className="flex items-center gap-2">
-            <Folder className="h-4 w-4" />
-            Sections (
-            {Array.isArray(filteredSections) ? filteredSections.length : 0})
-          </TabsTrigger>
-          <TabsTrigger value="fields" className="flex items-center gap-2">
-            <List className="h-4 w-4" />
-            Fields ({fields.length})
-          </TabsTrigger>
-          <TabsTrigger value="preview" className="flex items-center gap-2">
-            <Eye className="h-4 w-4" />
-            Preview
-          </TabsTrigger>
-        </TabsList>
+        <div className="overflow-x-auto scrollbar-hide">
+          <TabsList className="inline-flex w-auto flex-nowrap gap-1 sm:gap-0 lg:grid lg:w-full lg:grid-cols-3">
+            <TabsTrigger value="sections" className="flex items-center gap-2 whitespace-nowrap">
+              <Folder className="h-4 w-4" />
+              <span className="hidden sm:inline">
+                Sections ({Array.isArray(filteredSections) ? filteredSections.length : 0})
+              </span>
+              <span className="sm:hidden">
+                Sections ({Array.isArray(filteredSections) ? filteredSections.length : 0})
+              </span>
+            </TabsTrigger>
+            <TabsTrigger value="fields" className="flex items-center gap-2 whitespace-nowrap">
+              <List className="h-4 w-4" />
+              <span className="hidden sm:inline">Fields ({fields.length})</span>
+              <span className="sm:hidden">Fields ({fields.length})</span>
+            </TabsTrigger>
+            <TabsTrigger value="preview" className="flex items-center gap-2 whitespace-nowrap">
+              <Eye className="h-4 w-4" />
+              Preview
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
         {/* Sections Tab */}
         <TabsContent value="sections" className="space-y-6">

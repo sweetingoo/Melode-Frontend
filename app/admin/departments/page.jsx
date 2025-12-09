@@ -279,9 +279,6 @@ const DepartmentsPage = () => {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Departments</h1>
-            <p className="text-muted-foreground mt-1">
-              Manage departments and organizational structure.
-            </p>
           </div>
         </div>
         <Card>
@@ -304,9 +301,6 @@ const DepartmentsPage = () => {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Departments</h1>
-            <p className="text-muted-foreground mt-1">
-              Manage departments and organizational structure.
-            </p>
           </div>
         </div>
         <Card>
@@ -411,38 +405,25 @@ const DepartmentsPage = () => {
   return (
     <div className="space-y-6">
       {/* Header Section */}
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold tracking-tight">Departments</h1>
-          <p className="text-muted-foreground mt-1">
-            Manage departments and organizational structure.
-          </p>
+          <Button onClick={handleCreateDepartment}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add Department
+          </Button>
         </div>
-        <Button onClick={handleCreateDepartment}>
-          <Plus className="mr-2 h-4 w-4" />
-          Add Department
-        </Button>
+        {/* Search Input */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+          <Input
+            placeholder="Search departments by name, code, or description..."
+            value={searchTerm}
+            onChange={(e) => handleSearch(e.target.value)}
+            className="pl-10"
+          />
+        </div>
       </div>
-
-      {/* Search and Filters */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Search & Filter</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex gap-4">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-              <Input
-                placeholder="Search departments by name, code, or description..."
-                value={searchTerm}
-                onChange={(e) => handleSearch(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Departments Table */}
       <Card>

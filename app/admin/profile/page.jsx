@@ -104,6 +104,8 @@ export default function ProfilePage() {
         ...prev,
         avatar: uploadAvatarMutation.data
       }));
+      // Clear preview after successful upload (server URL will be used)
+      setAvatarPreview(null);
     }
   }, [uploadAvatarMutation.isSuccess, uploadAvatarMutation.data]);
 
@@ -128,6 +130,7 @@ export default function ProfilePage() {
     avatar: "",
   });
   const [isDragOver, setIsDragOver] = useState(false);
+  const [avatarPreview, setAvatarPreview] = useState(null);
 
   // Password Change State
   const [passwordData, setPasswordData] = useState({
@@ -706,7 +709,62 @@ export default function ProfilePage() {
     processAvatarFile(file);
   };
 
-  const processAvatarFile = (file) => {
+  const compressImage = (file, maxWidth = 800, maxHeight = 800, quality = 0.8) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target.result;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+
+          // Calculate new dimensions
+          if (width > height) {
+            if (width > maxWidth) {
+              height = Math.round((height * maxWidth) / width);
+              width = maxWidth;
+            }
+          } else {
+            if (height > maxHeight) {
+              width = Math.round((width * maxHeight) / height);
+              height = maxHeight;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+
+          // Convert to blob with compression
+          canvas.toBlob(
+            (blob) => {
+              if (blob) {
+                // Create a new File object with the original name
+                const compressedFile = new File([blob], file.name, {
+                  type: 'image/jpeg',
+                  lastModified: Date.now(),
+                });
+                resolve(compressedFile);
+              } else {
+                reject(new Error('Failed to compress image'));
+              }
+            },
+            'image/jpeg',
+            quality
+          );
+        };
+        img.onerror = reject;
+      };
+      reader.onerror = reject;
+    });
+  };
+
+  const processAvatarFile = async (file) => {
     // Validate file type
     const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
     if (!allowedTypes.includes(file.type)) {
@@ -725,7 +783,36 @@ export default function ProfilePage() {
       return;
     }
 
-    uploadAvatarMutation.mutate(file);
+    // Create preview immediately
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setAvatarPreview(e.target.result);
+    };
+    reader.readAsDataURL(file);
+
+    try {
+      // Compress the image before uploading
+      const compressedFile = await compressImage(file, 800, 800, 0.85);
+      
+      // Show compression info if file was significantly reduced
+      const originalSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+      const compressedSizeMB = (compressedFile.size / (1024 * 1024)).toFixed(2);
+      const reduction = ((1 - compressedFile.size / file.size) * 100).toFixed(0);
+      
+      if (reduction > 10) {
+        toast.info("Image compressed", {
+          description: `Reduced from ${originalSizeMB}MB to ${compressedSizeMB}MB (${reduction}% smaller)`,
+        });
+      }
+
+      uploadAvatarMutation.mutate(compressedFile);
+    } catch (error) {
+      console.error("Image compression failed:", error);
+      toast.error("Failed to process image", {
+        description: "Please try again with a different image.",
+      });
+      setAvatarPreview(null);
+    }
   };
 
   const handleDragOver = (e) => {
@@ -789,9 +876,6 @@ export default function ProfilePage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Profile Settings</h1>
-          <p className="text-muted-foreground mt-1">
-            Manage your account settings and preferences
-          </p>
         </div>
         <Badge variant="outline" className="flex items-center gap-2">
           <CheckCircle className="h-4 w-4 text-green-600" />
@@ -834,13 +918,27 @@ export default function ProfilePage() {
       )}
 
       <Tabs defaultValue="profile" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-5">
-          <TabsTrigger value="profile">Profile Information</TabsTrigger>
-          <TabsTrigger value="password">Change Password</TabsTrigger>
-          <TabsTrigger value="mfa">Multi-Factor Auth</TabsTrigger>
-          <TabsTrigger value="additional">Additional Info</TabsTrigger>
-          <TabsTrigger value="files">Files</TabsTrigger>
-        </TabsList>
+        <div className="overflow-x-auto scrollbar-hide">
+          <TabsList className="inline-flex w-auto flex-nowrap gap-1 sm:gap-0 lg:grid lg:w-full lg:grid-cols-5">
+            <TabsTrigger value="profile" className="whitespace-nowrap">
+              <span className="hidden sm:inline">Profile Information</span>
+              <span className="sm:hidden">Profile</span>
+            </TabsTrigger>
+            <TabsTrigger value="password" className="whitespace-nowrap">
+              <span className="hidden sm:inline">Change Password</span>
+              <span className="sm:hidden">Password</span>
+            </TabsTrigger>
+            <TabsTrigger value="mfa" className="whitespace-nowrap">
+              <span className="hidden sm:inline">Multi-Factor Auth</span>
+              <span className="sm:hidden">MFA</span>
+            </TabsTrigger>
+            <TabsTrigger value="additional" className="whitespace-nowrap">
+              <span className="hidden sm:inline">Additional Info</span>
+              <span className="sm:hidden">Additional</span>
+            </TabsTrigger>
+            <TabsTrigger value="files" className="whitespace-nowrap">Files</TabsTrigger>
+          </TabsList>
+        </div>
 
         {/* Profile Information Tab */}
         <TabsContent value="profile" className="space-y-6">
@@ -862,16 +960,13 @@ export default function ProfilePage() {
                 <div className="flex items-center gap-6">
                   <Avatar className="h-20 w-20">
                     <AvatarImage
-                      src={(() => {
-                        const avatarSrc = formData.avatar || profileData?.avatar_url || profileData?.avatar || "/placeholder-avatar.jpg";
-                        console.log('Avatar src calculation:', {
-                          formData_avatar: formData.avatar,
-                          profileData_avatar_url: profileData?.avatar_url,
-                          profileData_avatar: profileData?.avatar,
-                          final_src: avatarSrc
-                        });
-                        return avatarSrc;
-                      })()}
+                      src={
+                        avatarPreview || 
+                        formData.avatar || 
+                        profileData?.avatar_url || 
+                        profileData?.avatar || 
+                        "/placeholder-avatar.jpg"
+                      }
                     />
                     <AvatarFallback className="text-lg">
                       {profileData?.initials || "AU"}
@@ -907,7 +1002,7 @@ export default function ProfilePage() {
                             {isDragOver ? 'Drop image here' : 'Click to upload or drag and drop'}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            JPG, PNG, GIF or WebP • Max 10MB
+                            JPG, PNG, GIF or WebP • Max 10MB • Auto-compressed
                           </p>
                         </div>
                       </div>

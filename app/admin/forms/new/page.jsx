@@ -76,7 +76,8 @@ import { useRoles } from "@/hooks/useRoles";
 import { useUsers } from "@/hooks/useUsers";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { User, Users, Shield } from "lucide-react";
+import { Users, Shield } from "lucide-react";
+import UserMentionSelector from "@/components/UserMentionSelector";
 
 const fieldTypes = [
   { value: "text", label: "Text" },
@@ -174,12 +175,8 @@ const NewFormPage = () => {
   const [selectedUserIds, setSelectedUserIds] = useState([]);
   const [createIndividualAssignments, setCreateIndividualAssignments] = useState(false);
   
-  const toggleUserSelection = (userId) => {
-    setSelectedUserIds((prev) =>
-      prev.includes(userId)
-        ? prev.filter((id) => id !== userId)
-        : [...prev, userId]
-    );
+  const handleUserSelectionChange = (newSelection) => {
+    setSelectedUserIds(newSelection);
   };
 
   const handleAddOption = () => {
@@ -1155,19 +1152,21 @@ const NewFormPage = () => {
                 <div className="space-y-3">
                   <Label>Assign Form To</Label>
                   <Tabs value={assignmentMode} onValueChange={setAssignmentMode} className="w-full">
-                    <TabsList className="grid w-full grid-cols-3">
-                      <TabsTrigger value="none">
-                        None
-                      </TabsTrigger>
-                      <TabsTrigger value="role">
-                        <Shield className="mr-2 h-4 w-4" />
-                        Role
-                      </TabsTrigger>
-                      <TabsTrigger value="users">
-                        <Users className="mr-2 h-4 w-4" />
-                        Users
-                      </TabsTrigger>
-                    </TabsList>
+                    <div className="overflow-x-auto scrollbar-hide">
+                      <TabsList className="inline-flex w-auto flex-nowrap gap-1 sm:gap-0 lg:grid lg:w-full lg:grid-cols-3">
+                        <TabsTrigger value="none" className="whitespace-nowrap">
+                          None
+                        </TabsTrigger>
+                        <TabsTrigger value="role" className="whitespace-nowrap">
+                          <Shield className="mr-2 h-4 w-4" />
+                          Role
+                        </TabsTrigger>
+                        <TabsTrigger value="users" className="whitespace-nowrap">
+                          <Users className="mr-2 h-4 w-4" />
+                          Users
+                        </TabsTrigger>
+                      </TabsList>
+                    </div>
                     
                     {/* Role Assignment */}
                     <TabsContent value="role" className="space-y-3 mt-3">
@@ -1238,27 +1237,13 @@ const NewFormPage = () => {
                           </p>
                         </div>
                       )}
-                      <div className="border rounded-md p-4 max-h-48 overflow-y-auto">
-                        {users.length === 0 ? (
-                          <p className="text-sm text-muted-foreground">No users available</p>
-                        ) : (
-                          <div className="space-y-2">
-                            {users.map((user) => (
-                              <div key={user.id} className="flex items-center space-x-2">
-                                <Checkbox
-                                  checked={selectedUserIds.includes(user.id)}
-                                  onCheckedChange={() => toggleUserSelection(user.id)}
-                                />
-                                <Label className="text-sm cursor-pointer">
-                                  {user.display_name ||
-                                    `${user.first_name || ""} ${user.last_name || ""}`.trim() ||
-                                    user.email}
-                                </Label>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
+                      <UserMentionSelector
+                        users={users}
+                        selectedUserIds={selectedUserIds}
+                        onSelectionChange={handleUserSelectionChange}
+                        placeholder="Type to search and mention users..."
+                        className="w-full"
+                      />
                     </TabsContent>
                   </Tabs>
                 </div>

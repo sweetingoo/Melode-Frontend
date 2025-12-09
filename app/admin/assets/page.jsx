@@ -621,19 +621,26 @@ const AssetsPage = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold tracking-tight">
             Assets Management
           </h1>
-          <p className="text-muted-foreground">
-            Manage and track all organizational assets efficiently.
-          </p>
+          <Button onClick={handleCreateAsset}>
+            <Plus className="mr-2 h-4 w-4" />
+            Create Asset
+          </Button>
         </div>
-        <Button onClick={handleCreateAsset}>
-          <Plus className="mr-2 h-4 w-4" />
-          Create Asset
-        </Button>
+        {/* Search Input */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search by asset number, name, or category..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10"
+          />
+        </div>
       </div>
 
       {/* Statistics Cards */}
@@ -729,27 +736,16 @@ const AssetsPage = () => {
         </Card>
       </div>
 
-      {/* Filters and Search */}
+      {/* Filters */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Filter className="h-5 w-5" />
-            Filters & Search
+            Filters
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col sm:flex-row gap-4">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search by asset number, name, or category..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9"
-                />
-              </div>
-            </div>
             <Select
               value={selectedLocation}
               onValueChange={setSelectedLocation}
@@ -1538,7 +1534,7 @@ const AssetsPage = () => {
                     Purchase Price
                   </Label>
                   <p className="font-medium mt-1">
-                    $
+                    £
                     {(
                       selectedAsset.purchasePrice ||
                       selectedAsset.purchase_price ||
@@ -1642,16 +1638,18 @@ const AssetsPage = () => {
             <div className="space-y-3">
               <Label>Assign To (User or Role) *</Label>
               <Tabs value={assignToType} onValueChange={setAssignToType} className="w-full">
-                <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="user">
-                    <User className="mr-2 h-4 w-4" />
-                    User
-                  </TabsTrigger>
-                  <TabsTrigger value="role">
-                    <Shield className="mr-2 h-4 w-4" />
-                    Role
-                  </TabsTrigger>
-                </TabsList>
+                <div className="overflow-x-auto scrollbar-hide">
+                  <TabsList className="inline-flex w-auto flex-nowrap gap-1 sm:gap-0 lg:grid lg:w-full lg:grid-cols-2">
+                    <TabsTrigger value="user" className="whitespace-nowrap">
+                      <User className="mr-2 h-4 w-4" />
+                      User
+                    </TabsTrigger>
+                    <TabsTrigger value="role" className="whitespace-nowrap">
+                      <Shield className="mr-2 h-4 w-4" />
+                      Role
+                    </TabsTrigger>
+                  </TabsList>
+                </div>
                 <TabsContent value="user" className="mt-3">
                   <Select
                     value={assignData.assigned_to_user_id?.toString() || undefined}

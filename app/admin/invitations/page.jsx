@@ -474,27 +474,11 @@ const InvitationPage = () => {
     <TooltipProvider>
       <div className="space-y-6">
         {/* Header Section */}
-        <div className="flex flex-col md:flex-row gap-4 md:gap-0 items-center justify-between">
-          <div>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
             <h1 className="text-3xl font-bold tracking-tight">
               User Invitations
             </h1>
-            <p className="text-muted-foreground mt-1">
-              Create and manage user invitations for your organization.
-            </p>
-          </div>
-          <div className="flex flex-col md:flex-row gap-4 items-center">
-            {/* Search Input */}
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Search invitations..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 w-80"
-              />
-            </div>
-
             {/* Actions Dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -533,8 +517,20 @@ const InvitationPage = () => {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+          </div>
+          {/* Search Input */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search invitations..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+        </div>
 
-            <Dialog open={isModalOpen} onOpenChange={handleModalClose}>
+        <Dialog open={isModalOpen} onOpenChange={handleModalClose}>
               <DialogTrigger asChild>
                 <Button>
                   <PlusCircle className="mr-2 h-4 w-4" />

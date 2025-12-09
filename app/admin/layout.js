@@ -21,6 +21,7 @@ import {
   SidebarProvider,
   SidebarRail,
   SidebarTrigger,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import {
   DropdownMenu,
@@ -129,7 +130,7 @@ const peopleAndAccessItems = [
   },
 ];
 
-// Organization Management group
+// Organisation Management group
 const organizationItems = [
   {
     title: "Locations",
@@ -187,6 +188,78 @@ const quickSetupItems = [
     permission: "custom_fields:read", // Permission to read custom fields
   },
 ];
+
+// Helper component for collapsible menu items that work in both expanded and collapsed states
+function CollapsibleMenuItem({ title, icon: Icon, items, pathname }) {
+  const { state } = useSidebar();
+  const isCollapsed = state === "collapsed";
+
+  if (isCollapsed) {
+    // When collapsed, show a dropdown menu
+    return (
+      <SidebarMenuItem>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <SidebarMenuButton tooltip={title}>
+              <Icon className="h-4 w-4" />
+              <span>{title}</span>
+            </SidebarMenuButton>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent side="right" align="start" className="w-56">
+            <DropdownMenuLabel>{title}</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {items.map((item) => {
+              const isActive = pathname === item.url;
+              return (
+                <DropdownMenuItem key={item.title} asChild>
+                  <Link
+                    href={item.url}
+                    className="flex items-center gap-2 w-full"
+                  >
+                    <item.icon className="h-4 w-4" />
+                    <span>{item.title}</span>
+                  </Link>
+                </DropdownMenuItem>
+              );
+            })}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </SidebarMenuItem>
+    );
+  }
+
+  // When expanded, show the normal collapsible
+  return (
+    <Collapsible defaultOpen className="group/collapsible">
+      <SidebarMenuItem>
+        <CollapsibleTrigger asChild>
+          <SidebarMenuButton tooltip={title}>
+            <Icon className="h-4 w-4" />
+            <span>{title}</span>
+            <ChevronDown className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-180" />
+          </SidebarMenuButton>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <SidebarMenuSub>
+            {items.map((item) => {
+              const isActive = pathname === item.url;
+              return (
+                <SidebarMenuSubItem key={item.title}>
+                  <SidebarMenuSubButton asChild isActive={isActive}>
+                    <Link href={item.url} className="flex items-center gap-2">
+                      <item.icon className="h-4 w-4" />
+                      <span>{item.title}</span>
+                    </Link>
+                  </SidebarMenuSubButton>
+                </SidebarMenuSubItem>
+              );
+            })}
+          </SidebarMenuSub>
+        </CollapsibleContent>
+      </SidebarMenuItem>
+    </Collapsible>
+  );
+}
 
 export default function AdminLayout({ children }) {
   const pathname = usePathname();
@@ -519,155 +592,42 @@ export default function AdminLayout({ children }) {
 
                     {/* People & Access Management - Collapsible */}
                     {visiblePeopleAndAccessItems.length > 0 && (
-                      <Collapsible defaultOpen className="group/collapsible">
-                        <SidebarMenuItem>
-                          <CollapsibleTrigger asChild>
-                            <SidebarMenuButton tooltip="People & Access">
-                              <Users className="h-4 w-4" />
-                              <span>People & Access</span>
-                              <ChevronDown className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-180" />
-                            </SidebarMenuButton>
-                          </CollapsibleTrigger>
-                          <CollapsibleContent>
-                            <SidebarMenuSub>
-                              {visiblePeopleAndAccessItems.map((item) => {
-                                const isActive = pathname === item.url;
-                                return (
-                                  <SidebarMenuSubItem key={item.title}>
-                                    <SidebarMenuSubButton
-                                      asChild
-                                      isActive={isActive}
-                                    >
-                                      <Link
-                                        href={item.url}
-                                        className="flex items-center gap-2"
-                                      >
-                                        <item.icon className="h-4 w-4" />
-                                        <span>{item.title}</span>
-                                      </Link>
-                                    </SidebarMenuSubButton>
-                                  </SidebarMenuSubItem>
-                                );
-                              })}
-                            </SidebarMenuSub>
-                          </CollapsibleContent>
-                        </SidebarMenuItem>
-                      </Collapsible>
+                      <CollapsibleMenuItem
+                        title="People & Access"
+                        icon={Users}
+                        items={visiblePeopleAndAccessItems}
+                        pathname={pathname}
+                      />
                     )}
 
-                    {/* Organization Management - Collapsible */}
+                    {/* Organisation Management - Collapsible */}
                     {visibleOrganizationItems.length > 0 && (
-                      <Collapsible defaultOpen className="group/collapsible">
-                        <SidebarMenuItem>
-                          <CollapsibleTrigger asChild>
-                            <SidebarMenuButton tooltip="Organization">
-                              <Building2 className="h-4 w-4" />
-                              <span>Organization</span>
-                              <ChevronDown className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-180" />
-                            </SidebarMenuButton>
-                          </CollapsibleTrigger>
-                          <CollapsibleContent>
-                            <SidebarMenuSub>
-                              {visibleOrganizationItems.map((item) => {
-                                const isActive = pathname === item.url;
-                                return (
-                                  <SidebarMenuSubItem key={item.title}>
-                                    <SidebarMenuSubButton
-                                      asChild
-                                      isActive={isActive}
-                                    >
-                                      <Link
-                                        href={item.url}
-                                        className="flex items-center gap-2"
-                                      >
-                                        <item.icon className="h-4 w-4" />
-                                        <span>{item.title}</span>
-                                      </Link>
-                                    </SidebarMenuSubButton>
-                                  </SidebarMenuSubItem>
-                                );
-                              })}
-                            </SidebarMenuSub>
-                          </CollapsibleContent>
-                        </SidebarMenuItem>
-                      </Collapsible>
+                      <CollapsibleMenuItem
+                        title="Organisation"
+                        icon={Building2}
+                        items={visibleOrganizationItems}
+                        pathname={pathname}
+                      />
                     )}
 
                     {/* Settings - Collapsible */}
                     {visibleSettingsItems.length > 0 && (
-                      <Collapsible defaultOpen className="group/collapsible">
-                        <SidebarMenuItem>
-                          <CollapsibleTrigger asChild>
-                            <SidebarMenuButton tooltip="Settings">
-                              <Settings className="h-4 w-4" />
-                              <span>Settings</span>
-                              <ChevronDown className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-180" />
-                            </SidebarMenuButton>
-                          </CollapsibleTrigger>
-                          <CollapsibleContent>
-                            <SidebarMenuSub>
-                              {visibleSettingsItems.map((item) => {
-                                const isActive = pathname === item.url;
-                                return (
-                                  <SidebarMenuSubItem key={item.title}>
-                                    <SidebarMenuSubButton
-                                      asChild
-                                      isActive={isActive}
-                                    >
-                                      <Link
-                                        href={item.url}
-                                        className="flex items-center gap-2"
-                                      >
-                                        <item.icon className="h-4 w-4" />
-                                        <span>{item.title}</span>
-                                      </Link>
-                                    </SidebarMenuSubButton>
-                                  </SidebarMenuSubItem>
-                                );
-                              })}
-                            </SidebarMenuSub>
-                          </CollapsibleContent>
-                        </SidebarMenuItem>
-                      </Collapsible>
+                      <CollapsibleMenuItem
+                        title="Settings"
+                        icon={Settings}
+                        items={visibleSettingsItems}
+                        pathname={pathname}
+                      />
                     )}
 
                     {/* Custom Fields (existing collapsible) */}
-
                     {visibleQuickSetupItems.length > 0 && (
-                      <Collapsible defaultOpen className="group/collapsible">
-                        <SidebarMenuItem>
-                          <CollapsibleTrigger asChild>
-                            <SidebarMenuButton tooltip="Custom Fields">
-                              <Zap className="h-4 w-4" />
-                              <span>Custom Fields</span>
-                              <ChevronDown className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-180" />
-                            </SidebarMenuButton>
-                          </CollapsibleTrigger>
-                          <CollapsibleContent>
-                            <SidebarMenuSub>
-                              {visibleQuickSetupItems.map((item) => {
-                                const isActive = pathname === item.url;
-                                return (
-                                  <SidebarMenuSubItem key={item.title}>
-                                    <SidebarMenuSubButton
-                                      asChild
-                                      isActive={isActive}
-                                    >
-                                      <Link
-                                        href={item.url}
-                                        className="flex items-center gap-2"
-                                      >
-                                        <item.icon className="h-4 w-4" />
-                                        <span>{item.title}</span>
-                                      </Link>
-                                    </SidebarMenuSubButton>
-                                  </SidebarMenuSubItem>
-                                );
-                              })}
-                            </SidebarMenuSub>
-                          </CollapsibleContent>
-                        </SidebarMenuItem>
-                      </Collapsible>
+                      <CollapsibleMenuItem
+                        title="Custom Fields"
+                        icon={Zap}
+                        items={visibleQuickSetupItems}
+                        pathname={pathname}
+                      />
                     )}
                   </SidebarMenu>
                 </SidebarGroupContent>
@@ -892,7 +852,7 @@ export default function AdminLayout({ children }) {
               </div>
             </header>
 
-            <main className="flex-1 p-4">{children}</main>
+            <main className="flex-1 p-4 overflow-x-hidden">{children}</main>
           </SidebarInset>
         </div>
 

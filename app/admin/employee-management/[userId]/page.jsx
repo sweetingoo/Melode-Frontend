@@ -800,28 +800,35 @@ const UserEditPage = () => {
 
       {/* Tabs Section */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="basic" className="flex items-center gap-2">
-            <User className="h-4 w-4" />
-            Basic Information
-          </TabsTrigger>
-          <TabsTrigger value="roles" className="flex items-center gap-2">
-            <Shield className="h-4 w-4" />
-            Roles & Permissions
-          </TabsTrigger>
-          <TabsTrigger value="hierarchy" className="flex items-center gap-2">
-            <Network className="h-4 w-4" />
-            Hierarchy
-          </TabsTrigger>
-          <TabsTrigger value="status" className="flex items-center gap-2">
-            <Eye className="h-4 w-4" />
-            Account Status
-          </TabsTrigger>
-          <TabsTrigger value="activity" className="flex items-center gap-2">
-            <Info className="h-4 w-4" />
-            Activity History
-          </TabsTrigger>
-        </TabsList>
+        <div className="overflow-x-auto scrollbar-hide">
+          <TabsList className="inline-flex w-auto flex-nowrap gap-1 sm:gap-0 lg:grid lg:w-full lg:grid-cols-5">
+            <TabsTrigger value="basic" className="flex items-center gap-2 whitespace-nowrap">
+              <User className="h-4 w-4" />
+              <span className="hidden sm:inline">Basic Information</span>
+              <span className="sm:hidden">Basic</span>
+            </TabsTrigger>
+            <TabsTrigger value="roles" className="flex items-center gap-2 whitespace-nowrap">
+              <Shield className="h-4 w-4" />
+              <span className="hidden sm:inline">Roles & Permissions</span>
+              <span className="sm:hidden">Roles</span>
+            </TabsTrigger>
+            <TabsTrigger value="hierarchy" className="flex items-center gap-2 whitespace-nowrap">
+              <Network className="h-4 w-4" />
+              <span className="hidden sm:inline">Hierarchy</span>
+              <span className="sm:hidden">Hierarchy</span>
+            </TabsTrigger>
+            <TabsTrigger value="status" className="flex items-center gap-2 whitespace-nowrap">
+              <Eye className="h-4 w-4" />
+              <span className="hidden sm:inline">Account Status</span>
+              <span className="sm:hidden">Status</span>
+            </TabsTrigger>
+            <TabsTrigger value="activity" className="flex items-center gap-2 whitespace-nowrap">
+              <Info className="h-4 w-4" />
+              <span className="hidden sm:inline">Activity History</span>
+              <span className="sm:hidden">Activity</span>
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
         {/* Basic Information Tab */}
         <TabsContent value="basic" className="space-y-6">
@@ -1328,7 +1335,7 @@ const UserEditPage = () => {
                 <div className="space-y-4">
                   <div className="rounded-lg border bg-muted/50 p-4">
                     <p className="text-sm text-muted-foreground mb-4">
-                      This visualization shows the organizational hierarchy structure for all departments.
+                      This visualization shows the organisational hierarchy structure for all departments.
                     </p>
                     <div className="w-full overflow-auto border rounded-lg bg-white">
                       <img

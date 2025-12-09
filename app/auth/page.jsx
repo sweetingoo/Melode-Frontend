@@ -20,7 +20,7 @@ import { useRouter } from "next/navigation";
 
 const LoginPage = () => {
   console.log("LoginPage component rendering");
-  
+
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
@@ -40,7 +40,7 @@ const LoginPage = () => {
       const urlParams = new URLSearchParams(window.location.search);
       const roleId = urlParams.get("role_id");
       const email = urlParams.get("email");
-      
+
       if (roleId && email) {
         // Pre-fill email and attempt login with role_id
         setFormData(prev => ({ ...prev, email: decodeURIComponent(email) }));
@@ -97,7 +97,7 @@ const LoginPage = () => {
       e.preventDefault();
       e.stopPropagation();
     }
-    
+
     console.log("Form submitted", { formData, requiresMFA });
 
     // Basic validation
@@ -181,88 +181,85 @@ const LoginPage = () => {
           <h1 className="text-3xl font-bold text-foreground mb-2">
             Welcome Back
           </h1>
-          <p className="text-muted-foreground">
-            Sign in to your Melode Admin account
-          </p>
         </div>
 
         {/* Login Card */}
         <Card className="border-0 shadow-xl bg-card backdrop-blur-sm">
           <CardHeader className="space-y-1 pb-4">
-            <CardTitle className="text-2xl font-bold text-center text-foreground">
-              {requiresMFA ? "MFA Verification" : "Sign In"}
-            </CardTitle>
-            <p className="text-sm text-center text-muted-foreground">
-              {requiresMFA 
-                ? "Enter your MFA token to complete login"
-                : "Enter your credentials to access your account"
-              }
-            </p>
+            {requiresMFA ? (
+              <CardTitle className="text-2xl font-bold text-center text-foreground">
+                MFA Verification
+              </CardTitle>
+            ) : (
+              <p className="text-sm text-center text-muted-foreground">
+                Enter your credentials to access your account
+              </p>
+            )}
           </CardHeader>
 
           <CardContent className="space-y-6">
             <div className="space-y-4">
               {/* Email Field - Only show when not in MFA mode */}
               {!requiresMFA && (
-              <div className="space-y-2">
-                <Label
-                  htmlFor="email"
-                  className="text-sm font-medium text-foreground"
-                >
-                  Email Address
-                </Label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="Enter your email"
-                    value={formData.email}
-                    onChange={(e) => handleInputChange("email", e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
-                    className="pl-10 h-11 border-border focus:border-primary focus:ring-primary/20"
-                    required
-                  />
+                <div className="space-y-2">
+                  <Label
+                    htmlFor="email"
+                    className="text-sm font-medium text-foreground"
+                  >
+                    Email Address
+                  </Label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="Enter your email"
+                      value={formData.email}
+                      onChange={(e) => handleInputChange("email", e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+                      className="pl-10 h-11 border-border focus:border-primary focus:ring-primary/20"
+                      required
+                    />
+                  </div>
                 </div>
-              </div>
               )}
 
               {/* Password Field - Only show when not in MFA mode */}
               {!requiresMFA && (
-              <div className="space-y-2">
-                <Label
-                  htmlFor="password"
-                  className="text-sm font-medium text-foreground"
-                >
-                  Password
-                </Label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="password"
-                    type={showPassword ? "text" : "password"}
-                    placeholder="Enter your password"
-                    value={formData.password}
-                    onChange={(e) =>
-                      handleInputChange("password", e.target.value)
-                    }
-                    onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
-                    className="pl-10 pr-10 h-11 border-border focus:border-primary focus:ring-primary/20"
-                    required
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                <div className="space-y-2">
+                  <Label
+                    htmlFor="password"
+                    className="text-sm font-medium text-foreground"
                   >
-                    {showPassword ? (
-                      <EyeOff className="h-4 w-4" />
-                    ) : (
-                      <Eye className="h-4 w-4" />
-                    )}
-                  </button>
+                    Password
+                  </Label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="password"
+                      type={showPassword ? "text" : "password"}
+                      placeholder="Enter your password"
+                      value={formData.password}
+                      onChange={(e) =>
+                        handleInputChange("password", e.target.value)
+                      }
+                      onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+                      className="pl-10 pr-10 h-11 border-border focus:border-primary focus:ring-primary/20"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      {showPassword ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </button>
+                  </div>
                 </div>
-              </div>
               )}
 
               {/* MFA Token Field - Only show when MFA is required */}
@@ -296,28 +293,28 @@ const LoginPage = () => {
 
               {/* Remember Me & Forgot Password - Only show when not in MFA mode */}
               {!requiresMFA && (
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="remember"
-                    checked={rememberMe}
-                    onCheckedChange={setRememberMe}
-                    className="border-border data-[state=checked]:bg-primary data-[state=checked]:border-primary"
-                  />
-                  <Label
-                    htmlFor="remember"
-                    className="text-sm text-muted-foreground cursor-pointer"
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="remember"
+                      checked={rememberMe}
+                      onCheckedChange={setRememberMe}
+                      className="border-border data-[state=checked]:bg-primary data-[state=checked]:border-primary"
+                    />
+                    <Label
+                      htmlFor="remember"
+                      className="text-sm text-muted-foreground cursor-pointer"
+                    >
+                      Remember me
+                    </Label>
+                  </div>
+                  <Link
+                    href="/auth/forget-password"
+                    className="text-sm text-primary hover:text-primary/80 font-medium transition-colors"
                   >
-                    Remember me
-                  </Label>
+                    Forgot password?
+                  </Link>
                 </div>
-                <Link
-                  href="/auth/forget-password"
-                  className="text-sm text-primary hover:text-primary/80 font-medium transition-colors"
-                >
-                  Forgot password?
-                </Link>
-              </div>
               )}
 
               {/* Back to Login Button - Only show in MFA mode */}
