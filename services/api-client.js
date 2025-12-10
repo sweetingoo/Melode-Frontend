@@ -2,7 +2,7 @@ import axios from "axios";
 
 // Create axios instance with base configuration
 const apiClient = axios.create({
-  baseURL: "https://melode-api-staging.onrender.com/api/v1",
+  baseURL: "https://melode.onrender.com/api/v1",
   timeout: 10000, // 10 seconds timeout
   headers: {
     "Content-Type": "application/json",
@@ -17,7 +17,7 @@ apiClient.interceptors.request.use(
     if (config.data instanceof FormData) {
       delete config.headers['Content-Type'];
     }
-    
+
     // Get token from localStorage or wherever you store it
     // Check if we're in browser environment
     if (typeof window !== "undefined") {
