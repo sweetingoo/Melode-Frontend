@@ -1484,117 +1484,123 @@ const NewFormPage = () => {
           </Button>
         </div>
       </form>
+
+      {/* Create Role Modal */}
+      <Dialog open={isCreateRoleModalOpen} onOpenChange={setIsCreateRoleModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Create New Role</DialogTitle>
+            <DialogDescription>
+              Create a new role for your organization.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="role-display-name">
+                Display Name <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="role-display-name"
+                placeholder="e.g., Senior Doctor"
+                value={roleFormData.displayName}
+                onChange={(e) =>
+                  setRoleFormData({
+                    ...roleFormData,
+                    displayName: e.target.value,
+                  })
+                }
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="role-name">
+                Role Name <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="role-name"
+                placeholder="e.g., senior_doctor"
+                value={roleFormData.roleName}
+                onChange={(e) =>
+                  setRoleFormData({
+                    ...roleFormData,
+                    roleName: e.target.value.toLowerCase().replace(/\s+/g, "_"),
+                  })
+                }
+              />
+              <p className="text-xs text-muted-foreground">
+                Lowercase with underscores only. Cannot be changed after creation.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="role-description">Description</Label>
+              <Textarea
+                id="role-description"
+                placeholder="Describe this role's purpose and responsibilities"
+                value={roleFormData.description}
+                onChange={(e) =>
+                  setRoleFormData({
+                    ...roleFormData,
+                    description: e.target.value,
+                  })
+                }
+                className="resize-none"
+                rows={3}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="role-priority">Priority</Label>
+              <Input
+                id="role-priority"
+                type="number"
+                value={roleFormData.priority}
+                onChange={(e) =>
+                  setRoleFormData({
+                    ...roleFormData,
+                    priority: parseInt(e.target.value) || 50,
+                  })
+                }
+                min="1"
+                max="100"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsCreateRoleModalOpen(false);
+                setRoleFormData({
+                  displayName: "",
+                  roleName: "",
+                  description: "",
+                  priority: 50,
+                });
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleCreateRole}
+              disabled={
+                createRoleMutation.isPending ||
+                !roleFormData.displayName ||
+                !roleFormData.roleName
+              }
+            >
+              {createRoleMutation.isPending && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
+              Create Role
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
 
-{/* Create Role Modal */ }
-<Dialog open={isCreateRoleModalOpen} onOpenChange={setIsCreateRoleModalOpen}>
-  <DialogContent className="max-w-md">
-    <DialogHeader>
-      <DialogTitle>Create New Role</DialogTitle>
-      <DialogDescription>
-        Create a new role for your organization.
-      </DialogDescription>
-    </DialogHeader>
-    <div className="space-y-4">
-      <div className="space-y-2">
-        <Label htmlFor="role-display-name">
-          Display Name <span className="text-red-500">*</span>
-        </Label>
-        <Input
-          id="role-display-name"
-          placeholder="e.g., Senior Doctor"
-          value={roleFormData.displayName}
-          onChange={(e) =>
-            setRoleFormData({
-              ...roleFormData,
-              displayName: e.target.value,
-            })
-          }
-        />
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="role-name">
-          Role Name <span className="text-red-500">*</span>
-        </Label>
-        <Input
-          id="role-name"
-          placeholder="e.g., senior_doctor"
-          value={roleFormData.roleName}
-          onChange={(e) =>
-            setRoleFormData({
-              ...roleFormData,
-              roleName: e.target.value.toLowerCase().replace(/\s+/g, "_"),
-            })
-          }
-        />
-        <p className="text-xs text-muted-foreground">
-          Lowercase with underscores only. Cannot be changed after creation.
-        </p>
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="role-description">Description</Label>
-        <Textarea
-          id="role-description"
-          placeholder="Describe this role's purpose and responsibilities"
-          value={roleFormData.description}
-          onChange={(e) =>
-            setRoleFormData({
-              ...roleFormData,
-              description: e.target.value,
-            })
-          }
-          className="resize-none"
-          rows={3}
-        />
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="role-priority">Priority</Label>
-        <Input
-          id="role-priority"
-          type="number"
-          value={roleFormData.priority}
-          onChange={(e) =>
-            setRoleFormData({
-              ...roleFormData,
-              priority: parseInt(e.target.value) || 50,
-            })
-          }
-          min="1"
-          max="100"
-        />
-      </div>
-    </div>
-    <DialogFooter>
-      <Button
-        variant="outline"
-        onClick={() => {
-          setIsCreateRoleModalOpen(false);
-          setRoleFormData({
-            displayName: "",
-            roleName: "",
-            description: "",
-            priority: 50,
-          });
-        }}
-      >
-        Cancel
-      </Button>
-      <Button
-        onClick={handleCreateRole}
-        disabled={
-          createRoleMutation.isPending ||
-          !roleFormData.displayName ||
-          !roleFormData.roleName
-        }
-      >
-        {createRoleMutation.isPending && (
-          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-        )}
-        Create Role
-      </Button>
-    </DialogFooter>
-  </DialogContent>
-</Dialog>
+export default NewFormPage;
+    </div >
+  );
+};
 
+export default NewFormPage;
