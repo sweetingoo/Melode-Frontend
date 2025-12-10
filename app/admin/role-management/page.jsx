@@ -47,6 +47,10 @@ import {
   UserCog,
   AlertCircle,
   Search,
+  Building2,
+  Network,
+  RefreshCw,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -61,21 +65,50 @@ import {
   usePermissions as usePermissionsList,
   permissionUtils,
 } from "@/hooks/usePermissions";
+import { useDepartments, useCreateDepartment } from "@/hooks/useDepartments";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const RoleManagementPage = () => {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isPermissionsModalOpen, setIsPermissionsModalOpen] = useState(false);
+  const [isQuickCreateDepartmentOpen, setIsQuickCreateDepartmentOpen] = useState(false);
+  const [isQuickCreateRoleOpen, setIsQuickCreateRoleOpen] = useState(false);
+  const [selectedDepartmentFilter, setSelectedDepartmentFilter] = useState(null);
+  const [selectedRoleTypeFilter, setSelectedRoleTypeFilter] = useState(null);
   const [editingRole, setEditingRole] = useState(null);
   const [managingRole, setManagingRole] = useState(null);
   const [searchPermissionTerm, setSearchPermissionTerm] = useState("");
   const [selectedPermissions, setSelectedPermissions] = useState(new Set());
+  const [quickCreateDepartmentData, setQuickCreateDepartmentData] = useState({
+    name: "",
+    code: "",
+    description: "",
+  });
+  const [quickCreateRoleData, setQuickCreateRoleData] = useState({
+    displayName: "",
+    roleName: "",
+    description: "",
+    priority: 50,
+    departmentId: null,
+  });
+  const [isQuickRoleNameManuallyEdited, setIsQuickRoleNameManuallyEdited] = useState(false);
   const [formData, setFormData] = useState({
     displayName: "",
     roleName: "",
     description: "",
     priority: 50,
+    roleType: "job_role",
+    departmentId: null,
+    parentRoleId: null,
   });
+  const [isRoleNameManuallyEdited, setIsRoleNameManuallyEdited] = useState(false);
 
   // API hooks
   const {
@@ -85,16 +118,42 @@ const RoleManagementPage = () => {
   } = useRoles();
   const { data: permissionsData, isLoading: permissionsLoading } =
     usePermissionsList();
+  const { data: departmentsData } = useDepartments();
   const createRoleMutation = useCreateRole();
   const updateRoleMutation = useUpdateRole();
   const deleteRoleMutation = useDeleteRole();
   const assignPermissionsMutation = useAssignPermissionsToRole();
+  const createDepartmentMutation = useCreateDepartment();
 
   // Transform API data
-  const roles = rolesData ? rolesData.map(roleUtils.transformRole) : [];
+  const allRoles = rolesData ? rolesData.map(roleUtils.transformRole) : [];
   const allPermissions = permissionsData
     ? permissionsData.map(permissionUtils.transformPermission)
     : [];
+  const departments = departmentsData?.departments || departmentsData?.data || departmentsData || [];
+
+  // Filter roles based on selected filters
+  const roles = React.useMemo(() => {
+    let filtered = allRoles;
+
+    // Filter by department
+    if (selectedDepartmentFilter) {
+      filtered = filtered.filter((role) => role.departmentId === selectedDepartmentFilter);
+    }
+
+    // Filter by role type
+    if (selectedRoleTypeFilter) {
+      filtered = filtered.filter((role) => role.roleType === selectedRoleTypeFilter);
+    }
+
+    return filtered;
+  }, [allRoles, selectedDepartmentFilter, selectedRoleTypeFilter]);
+
+  // Filter job roles for parent role selection (only job roles can be parents)
+  // Include roles with roleType === "job_role" or roles without roleType (legacy roles default to job_role)
+  const jobRoles = allRoles.filter(
+    (role) => role.roleType === "job_role" || !role.roleType
+  );
 
   const getRoleIconClasses = (color) => {
     const iconMap = {
@@ -126,11 +185,15 @@ const RoleManagementPage = () => {
 
   const handleCreateRole = () => {
     setIsCreateModalOpen(true);
+    setIsRoleNameManuallyEdited(false);
     setFormData({
       displayName: "",
       roleName: "",
       description: "",
       priority: 50,
+      roleType: "job_role",
+      departmentId: null,
+      parentRoleId: null,
     });
   };
 
@@ -138,11 +201,15 @@ const RoleManagementPage = () => {
     const role = roles.find((r) => r.id === roleId);
     if (role) {
       setEditingRole(role);
+      setIsRoleNameManuallyEdited(true); // In edit mode, role name is already set
       setFormData({
         displayName: role.name,
         roleName: role.slug,
         description: role.description,
         priority: role.priority,
+        roleType: role.roleType || "job_role",
+        departmentId: role.departmentId || null,
+        parentRoleId: role.parentRoleId || null,
       });
       setIsEditModalOpen(true);
     }
@@ -163,7 +230,7 @@ const RoleManagementPage = () => {
       // Debug: Log the role permissions data structure
       console.log('Role permissions:', role.permissions);
       console.log('All permissions:', allPermissions.slice(0, 3)); // Show first 3 for debugging
-      
+
       // Initialize selected permissions based on role's current permissions
       // Try to match by permission name first, then by slug
       const rolePermissionIds = role.permissions
@@ -173,39 +240,108 @@ const RoleManagementPage = () => {
             return p.id;
           }
           // If p is a string, try to find matching permission by name or slug
-          const permission = allPermissions.find((ap) => 
+          const permission = allPermissions.find((ap) =>
             ap.name === p || ap.slug === p || ap.display_name === p
           );
           return permission?.id;
         })
         .filter(Boolean);
-      
+
       console.log('Matched permission IDs:', rolePermissionIds);
       setSelectedPermissions(new Set(rolePermissionIds));
       setIsPermissionsModalOpen(true);
     }
   };
 
+  // Utility function to generate slug from display name
+  const generateSlug = (text) => {
+    if (!text) return "";
+    return text
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, "") // Remove special characters
+      .replace(/\s+/g, "_") // Replace spaces with underscores
+      .replace(/_+/g, "_") // Replace multiple underscores with single
+      .replace(/^_|_$/g, ""); // Remove leading/trailing underscores
+  };
+
   const handleInputChange = (field, value) => {
-    setFormData((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
+    setFormData((prev) => {
+      const newData = {
+        ...prev,
+        [field]: value,
+      };
+
+      // Auto-generate role name from display name if not manually edited
+      if (field === "displayName" && !isRoleNameManuallyEdited && !editingRole) {
+        newData.roleName = generateSlug(value);
+      }
+
+      return newData;
+    });
   };
 
   const handleSubmit = async () => {
     try {
+      // Validation
+      if (formData.roleType === "job_role" && !formData.departmentId) {
+        toast.error("Department is required for Job Role", {
+          description: "Please select a department for this job role.",
+        });
+        return;
+      }
+
+      if (formData.roleType === "shift_role" && !formData.parentRoleId) {
+        toast.error("Parent Role is required for Shift Role", {
+          description: "Please select a parent job role for this shift role.",
+        });
+        return;
+      }
+
       const roleData = {
         display_name: formData.displayName,
         name: formData.roleName,
         description: formData.description,
         priority: formData.priority,
+        role_type: formData.roleType,
       };
 
+      // Add fields based on role type
+      if (formData.roleType === "job_role") {
+        roleData.department_id = formData.departmentId;
+        if (formData.parentRoleId) {
+          roleData.parent_role_id = formData.parentRoleId;
+        }
+      } else if (formData.roleType === "shift_role") {
+        roleData.parent_role_id = formData.parentRoleId;
+        // department_id is not sent for shift roles (auto-set from parent)
+      }
+
       if (editingRole) {
+        // For updates, only send fields that can be updated
+        const updateData = {
+          display_name: formData.displayName,
+          description: formData.description,
+          priority: formData.priority,
+        };
+
+        // For Job Role, department_id can be updated
+        if (formData.roleType === "job_role") {
+          updateData.department_id = formData.departmentId;
+          if (formData.parentRoleId) {
+            updateData.parent_role_id = formData.parentRoleId;
+          } else {
+            updateData.parent_role_id = null;
+          }
+        }
+
+        // For Shift Role, only parent_role_id can be updated (department_id is ignored)
+        if (formData.roleType === "shift_role") {
+          updateData.parent_role_id = formData.parentRoleId;
+        }
+
         await updateRoleMutation.mutateAsync({
           id: editingRole.id,
-          roleData,
+          roleData: updateData,
         });
       } else {
         await createRoleMutation.mutateAsync(roleData);
@@ -219,6 +355,9 @@ const RoleManagementPage = () => {
         roleName: "",
         description: "",
         priority: 50,
+        roleType: "job_role",
+        departmentId: null,
+        parentRoleId: null,
       });
     } catch (error) {
       console.error("Failed to submit role:", error);
@@ -229,12 +368,90 @@ const RoleManagementPage = () => {
     setIsCreateModalOpen(false);
     setIsEditModalOpen(false);
     setEditingRole(null);
+    setIsRoleNameManuallyEdited(false);
     setFormData({
       displayName: "",
       roleName: "",
       description: "",
       priority: 50,
+      roleType: "job_role",
+      departmentId: null,
+      parentRoleId: null,
     });
+  };
+
+  const handleQuickCreateDepartment = async () => {
+    if (!quickCreateDepartmentData.name || !quickCreateDepartmentData.code) {
+      toast.error("Name and code are required", {
+        description: "Please fill in all required fields.",
+      });
+      return;
+    }
+
+    try {
+      const result = await createDepartmentMutation.mutateAsync({
+        name: quickCreateDepartmentData.name,
+        code: quickCreateDepartmentData.code.toUpperCase(),
+        description: quickCreateDepartmentData.description || "",
+        is_active: true,
+      });
+
+      setIsQuickCreateDepartmentOpen(false);
+      setQuickCreateDepartmentData({ name: "", code: "", description: "" });
+
+      // Auto-select the newly created department
+      if (result && result.id) {
+        handleInputChange("departmentId", result.id);
+      }
+    } catch (error) {
+      console.error("Failed to create department:", error);
+    }
+  };
+
+  const handleQuickCreateRole = async () => {
+    if (!quickCreateRoleData.displayName || !quickCreateRoleData.roleName) {
+      toast.error("Display name and role name are required", {
+        description: "Please fill in all required fields.",
+      });
+      return;
+    }
+
+    if (!quickCreateRoleData.departmentId) {
+      toast.error("Department is required", {
+        description: "Please select a department for this job role.",
+      });
+      return;
+    }
+
+    try {
+      const roleData = {
+        display_name: quickCreateRoleData.displayName,
+        name: quickCreateRoleData.roleName,
+        description: quickCreateRoleData.description || "",
+        priority: quickCreateRoleData.priority,
+        role_type: "job_role",
+        department_id: quickCreateRoleData.departmentId,
+      };
+
+      const result = await createRoleMutation.mutateAsync(roleData);
+
+      setIsQuickCreateRoleOpen(false);
+      setIsQuickRoleNameManuallyEdited(false);
+      setQuickCreateRoleData({
+        displayName: "",
+        roleName: "",
+        description: "",
+        priority: 50,
+        departmentId: null,
+      });
+
+      // Auto-select the newly created role as parent
+      if (result && result.id) {
+        handleInputChange("parentRoleId", result.id);
+      }
+    } catch (error) {
+      console.error("Failed to create role:", error);
+    }
   };
 
   const handlePermissionToggle = (permissionId) => {
@@ -325,6 +542,67 @@ const RoleManagementPage = () => {
         </Button>
       </div>
 
+      {/* Filters Section */}
+      <div className="flex flex-wrap items-center gap-4">
+        <div className="flex items-center gap-2">
+          <Label htmlFor="departmentFilter" className="text-sm font-medium">
+            Filter by Department:
+          </Label>
+          <Select
+            value={selectedDepartmentFilter?.toString() || "all"}
+            onValueChange={(value) =>
+              setSelectedDepartmentFilter(value === "all" ? null : parseInt(value))
+            }
+          >
+            <SelectTrigger className="w-[200px]">
+              <SelectValue placeholder="All departments" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All departments</SelectItem>
+              {departments.map((dept) => (
+                <SelectItem key={dept.id} value={dept.id.toString()}>
+                  {dept.name} {dept.code && `(${dept.code})`}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Label htmlFor="roleTypeFilter" className="text-sm font-medium">
+            Filter by Type:
+          </Label>
+          <Select
+            value={selectedRoleTypeFilter || "all"}
+            onValueChange={(value) =>
+              setSelectedRoleTypeFilter(value === "all" ? null : value)
+            }
+          >
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="All types" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All types</SelectItem>
+              <SelectItem value="job_role">Job Roles</SelectItem>
+              <SelectItem value="shift_role">Shift Roles</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {(selectedDepartmentFilter || selectedRoleTypeFilter) && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setSelectedDepartmentFilter(null);
+              setSelectedRoleTypeFilter(null);
+            }}
+          >
+            Clear Filters
+          </Button>
+        )}
+      </div>
+
       {/* Loading State */}
       {rolesLoading && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -397,12 +675,31 @@ const RoleManagementPage = () => {
                       No roles found
                     </h3>
                     <p className="text-muted-foreground mb-4">
-                      Get started by creating your first role.
+                      {(selectedDepartmentFilter || selectedRoleTypeFilter) ? (
+                        <>
+                          No roles match the selected filters.{" "}
+                          <Button
+                            variant="link"
+                            className="p-0 h-auto"
+                            onClick={() => {
+                              setSelectedDepartmentFilter(null);
+                              setSelectedRoleTypeFilter(null);
+                            }}
+                          >
+                            Clear filters
+                          </Button>{" "}
+                          to see all roles.
+                        </>
+                      ) : (
+                        "Get started by creating your first role."
+                      )}
                     </p>
-                    <Button onClick={handleCreateRole}>
-                      <Plus className="h-4 w-4 mr-2" />
-                      Create Role
-                    </Button>
+                    {!(selectedDepartmentFilter || selectedRoleTypeFilter) && (
+                      <Button onClick={handleCreateRole}>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Create Role
+                      </Button>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -435,6 +732,21 @@ const RoleManagementPage = () => {
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
+                        <Badge
+                          variant={
+                            role.roleType === "job_role"
+                              ? "default"
+                              : "secondary"
+                          }
+                          className="text-[10px] px-1.5 py-0"
+                        >
+                          {role.roleType === "job_role" ? "Job Role" : "Shift Role"}
+                        </Badge>
+                        {role.roleType === "job_role" && role.parentRoleId && (
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                            Line Manager
+                          </Badge>
+                        )}
                         {role.isSystem && (
                           <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
                             System
@@ -494,6 +806,47 @@ const RoleManagementPage = () => {
                       {role.description || "No description"}
                     </p>
 
+                    {/* Hierarchy Info */}
+                    <div className="space-y-1.5">
+                      {role.roleType === "job_role" && role.department && (
+                        <div className="flex items-center gap-1.5 text-xs">
+                          <Building2 className="h-3 w-3 text-muted-foreground" />
+                          <span className="text-muted-foreground">Department:</span>
+                          <span className="font-medium text-foreground">
+                            {role.department.name}
+                            {role.department.code && ` (${role.department.code})`}
+                          </span>
+                        </div>
+                      )}
+                      {role.roleType === "job_role" && role.parentRole && (
+                        <div className="flex items-center gap-1.5 text-xs">
+                          <Network className="h-3 w-3 text-blue-600 dark:text-blue-400" />
+                          <span className="text-muted-foreground">Line Manager:</span>
+                          <span className="font-medium text-foreground">
+                            {role.parentRole.display_name || role.parentRole.name}
+                          </span>
+                        </div>
+                      )}
+                      {role.roleType === "shift_role" && role.parentRole && (
+                        <div className="flex items-center gap-1.5 text-xs">
+                          <Network className="h-3 w-3 text-muted-foreground" />
+                          <span className="text-muted-foreground">Parent:</span>
+                          <span className="font-medium text-foreground">
+                            {role.parentRole.display_name || role.parentRole.name}
+                          </span>
+                        </div>
+                      )}
+                      {role.roleType === "job_role" && role.shiftRoles && role.shiftRoles.length > 0 && (
+                        <div className="flex items-center gap-1.5 text-xs">
+                          <Users className="h-3 w-3 text-muted-foreground" />
+                          <span className="text-muted-foreground">Shift Roles:</span>
+                          <span className="font-medium text-foreground">
+                            {role.shiftRoles.length}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
                     {/* Role Stats */}
                     <div className="flex items-center gap-3 text-xs">
                       <div className="flex items-center gap-1">
@@ -517,7 +870,7 @@ const RoleManagementPage = () => {
                           <h4 className="text-xs font-medium">
                             Permissions
                           </h4>
-                          <Badge 
+                          <Badge
                             variant={getRolePermissions(role).length > 0 ? "default" : "secondary"}
                             className="text-[10px] px-1.5 py-0"
                           >
@@ -550,7 +903,7 @@ const RoleManagementPage = () => {
                               .slice(0, 2)
                               .map((permission, index) => {
                                 // Handle both object and string permissions
-                                const permissionName = typeof permission === 'object' 
+                                const permissionName = typeof permission === 'object'
                                   ? (permission.name || permission.display_name || permission.slug || 'Unknown')
                                   : permission;
                                 return (
@@ -586,12 +939,44 @@ const RoleManagementPage = () => {
 
       {/* Create Role Modal */}
       <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[90vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>Create New Role</DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-4">
+          <div className="space-y-4 overflow-y-auto flex-1 pr-2">
+            {/* Role Type */}
+            <div className="space-y-2">
+              <Label htmlFor="roleType">
+                Role Type <span className="text-red-500">*</span>
+              </Label>
+              <Select
+                value={formData.roleType}
+                onValueChange={(value) => {
+                  handleInputChange("roleType", value);
+                  // Reset dependent fields when role type changes
+                  if (value === "shift_role") {
+                    handleInputChange("departmentId", null);
+                  } else {
+                    handleInputChange("parentRoleId", null);
+                  }
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select role type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="job_role">Job Role</SelectItem>
+                  <SelectItem value="shift_role">Shift Role</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {formData.roleType === "job_role"
+                  ? "Base role that belongs to a department"
+                  : "Task-specific role that belongs under a Job Role"}
+              </p>
+            </div>
+
             {/* Display Name */}
             <div className="space-y-2">
               <Label htmlFor="displayName">
@@ -612,15 +997,178 @@ const RoleManagementPage = () => {
               <Label htmlFor="roleName">
                 Role Name <span className="text-red-500">*</span>
               </Label>
-              <Input
-                id="roleName"
-                placeholder="e.g., senior_doctor"
-                value={formData.roleName}
-                onChange={(e) => handleInputChange("roleName", e.target.value)}
-              />
+              <div className="flex gap-2">
+                <Input
+                  id="roleName"
+                  placeholder="e.g., senior_doctor"
+                  value={formData.roleName}
+                  onChange={(e) => {
+                    setIsRoleNameManuallyEdited(true);
+                    handleInputChange("roleName", e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "").replace(/\s+/g, "_"));
+                  }}
+                  className="flex-1"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={() => {
+                    const generated = generateSlug(formData.displayName);
+                    handleInputChange("roleName", generated);
+                    setIsRoleNameManuallyEdited(false);
+                  }}
+                  title="Auto-generate from display name"
+                  disabled={!formData.displayName}
+                >
+                  <RefreshCw className="h-4 w-4" />
+                </Button>
+              </div>
               <p className="text-xs text-muted-foreground">
                 Lowercase with underscores only. Cannot be changed after
-                creation.
+                creation. {!isRoleNameManuallyEdited && formData.displayName && (
+                  <span className="text-blue-600 dark:text-blue-400">Auto-generated from display name.</span>
+                )}
+              </p>
+            </div>
+
+            {/* Department (for Job Role) */}
+            {formData.roleType === "job_role" && (
+              <div className="space-y-2">
+                <Label htmlFor="departmentId">
+                  Department <span className="text-red-500">*</span>
+                </Label>
+                <div className="flex gap-2">
+                  <Select
+                    value={formData.departmentId?.toString() || ""}
+                    onValueChange={(value) =>
+                      handleInputChange("departmentId", parseInt(value))
+                    }
+                  >
+                    <SelectTrigger className="flex-1">
+                      <SelectValue placeholder="Select a department" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {departments.length === 0 ? (
+                        <SelectItem value="no-options" disabled>
+                          No options available
+                        </SelectItem>
+                      ) : (
+                        departments.map((dept) => (
+                          <SelectItem key={dept.id} value={dept.id.toString()}>
+                            {dept.name} {dept.code && `(${dept.code})`}
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setIsQuickCreateDepartmentOpen(true)}
+                    title="Create new department"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Parent Role (for Shift Role - required, for Job Role - optional) */}
+            <div className="space-y-2">
+              <Label htmlFor="parentRoleId">
+                {formData.roleType === "job_role"
+                  ? "Line Manager Role"
+                  : "Parent Job Role"}
+                {formData.roleType === "shift_role" && (
+                  <span className="text-red-500">*</span>
+                )}
+              </Label>
+              <div className="flex gap-2">
+                <Select
+                  value={formData.parentRoleId?.toString() || (formData.roleType === "job_role" ? "none" : undefined)}
+                  onValueChange={(value) => {
+                    if (value === "none") {
+                      handleInputChange("parentRoleId", null);
+                    } else {
+                      handleInputChange("parentRoleId", parseInt(value));
+                    }
+                  }}
+                >
+                  <SelectTrigger className="flex-1">
+                    <SelectValue placeholder={formData.roleType === "job_role" ? "Select a line manager role (optional)" : "Select a parent job role"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(() => {
+                      // Filter out the current role being edited (if any)
+                      const filteredJobRoles = editingRole
+                        ? jobRoles.filter((role) => role.id !== editingRole.id)
+                        : jobRoles;
+
+                      // Add "No Parent Job Role" option for Job Roles (optional)
+                      if (formData.roleType === "job_role") {
+                        return (
+                          <>
+                            <SelectItem value="none">
+                              No Line Manager
+                            </SelectItem>
+                            {filteredJobRoles.length === 0 ? (
+                              <SelectItem value="no-options" disabled>
+                                No job roles available
+                              </SelectItem>
+                            ) : (
+                              filteredJobRoles.map((role) => (
+                                <SelectItem key={role.id} value={role.id.toString()}>
+                                  {role.name}
+                                </SelectItem>
+                              ))
+                            )}
+                          </>
+                        );
+                      }
+
+                      // For Shift Roles, no "none" option (required)
+                      return filteredJobRoles.length === 0 ? (
+                        <SelectItem value="no-options" disabled>
+                          No job roles available
+                        </SelectItem>
+                      ) : (
+                        filteredJobRoles.map((role) => (
+                          <SelectItem key={role.id} value={role.id.toString()}>
+                            {role.name}
+                          </SelectItem>
+                        ))
+                      );
+                    })()}
+                  </SelectContent>
+                </Select>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={() => {
+                    // Pre-fill department if creating from job role form
+                    setIsQuickRoleNameManuallyEdited(false);
+                    setQuickCreateRoleData({
+                      displayName: "",
+                      roleName: "",
+                      description: "",
+                      priority: 50,
+                      departmentId: formData.roleType === "job_role" ? formData.departmentId : null,
+                    });
+                    setIsQuickCreateRoleOpen(true);
+                  }}
+                  title="Create new job role"
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {formData.roleType === "shift_role"
+                  ? "Required: Must be a Job Role. Department will be inherited from parent."
+                  : formData.parentRoleId
+                    ? "This role reports to the selected Line Manager Role."
+                    : "Optional: Select a Job Role that will be the Line Manager for this role."}
               </p>
             </div>
 
@@ -666,12 +1214,28 @@ const RoleManagementPage = () => {
 
       {/* Edit Role Modal */}
       <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[90vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>Edit Role</DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-4">
+          <div className="space-y-4 overflow-y-auto flex-1 pr-2">
+            {/* Role Type - Read Only for Edit */}
+            <div className="space-y-2">
+              <Label htmlFor="editRoleType">Role Type</Label>
+              <Input
+                id="editRoleType"
+                value={
+                  formData.roleType === "job_role" ? "Job Role" : "Shift Role"
+                }
+                disabled
+                className="bg-muted"
+              />
+              <p className="text-xs text-muted-foreground">
+                Role type cannot be changed after creation.
+              </p>
+            </div>
+
             {/* Display Name */}
             <div className="space-y-2">
               <Label htmlFor="editDisplayName">
@@ -701,6 +1265,206 @@ const RoleManagementPage = () => {
               <p className="text-xs text-muted-foreground">
                 Role name cannot be changed after creation.
               </p>
+            </div>
+
+            {/* Department (for Job Role) */}
+            {formData.roleType === "job_role" && (
+              <div className="space-y-2">
+                <Label htmlFor="editDepartmentId">
+                  Department <span className="text-red-500">*</span>
+                </Label>
+                <div className="flex gap-2">
+                  <Select
+                    value={formData.departmentId?.toString() || ""}
+                    onValueChange={(value) =>
+                      handleInputChange("departmentId", parseInt(value))
+                    }
+                  >
+                    <SelectTrigger className="flex-1">
+                      <SelectValue placeholder="Select a department" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {departments.length === 0 ? (
+                        <SelectItem value="no-options" disabled>
+                          No options available
+                        </SelectItem>
+                      ) : (
+                        departments.map((dept) => (
+                          <SelectItem key={dept.id} value={dept.id.toString()}>
+                            {dept.name} {dept.code && `(${dept.code})`}
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setIsQuickCreateDepartmentOpen(true)}
+                    title="Create new department"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Department (for Shift Role - disabled, shows inherited value) */}
+            {formData.roleType === "shift_role" && editingRole && (
+              <div className="space-y-2">
+                <Label htmlFor="editDepartmentId">Department</Label>
+                <Input
+                  id="editDepartmentId"
+                  value={
+                    editingRole.department?.name ||
+                    "Inherited from parent role"
+                  }
+                  disabled
+                  className="bg-muted"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Department is automatically inherited from the parent role and
+                  cannot be changed directly.
+                </p>
+              </div>
+            )}
+
+            {/* Parent Role */}
+            <div className="space-y-2">
+              <Label htmlFor="editParentRoleId">
+                {formData.roleType === "job_role"
+                  ? "Line Manager Role"
+                  : "Parent Job Role"}
+                {formData.roleType === "shift_role" && (
+                  <span className="text-red-500">*</span>
+                )}
+              </Label>
+              <div className="flex gap-2">
+                <Select
+                  value={formData.parentRoleId?.toString() || (formData.roleType === "job_role" ? "none" : undefined)}
+                  onValueChange={(value) => {
+                    if (value === "none") {
+                      handleInputChange("parentRoleId", null);
+                    } else {
+                      if (
+                        formData.roleType === "shift_role" &&
+                        formData.parentRoleId &&
+                        parseInt(value) !== formData.parentRoleId
+                      ) {
+                        // Show warning if changing parent for Shift Role
+                        toast.warning("Changing parent role", {
+                          description:
+                            "The department will automatically update to match the new parent role.",
+                        });
+                      }
+                      handleInputChange("parentRoleId", parseInt(value));
+                    }
+                  }}
+                >
+                  <SelectTrigger className="flex-1">
+                    <SelectValue placeholder={formData.roleType === "job_role" ? "Select a line manager role" : "Select a parent job role"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(() => {
+                      // Filter out the current role being edited (if any)
+                      const filteredJobRoles = editingRole
+                        ? jobRoles.filter((role) => role.id !== editingRole.id)
+                        : jobRoles;
+
+                      // Add "No Parent Job Role" option for Job Roles (optional)
+                      if (formData.roleType === "job_role") {
+                        return (
+                          <>
+                            <SelectItem value="none">
+                              No Line Manager
+                            </SelectItem>
+                            {filteredJobRoles.length === 0 ? (
+                              <SelectItem value="no-options" disabled>
+                                No job roles available
+                              </SelectItem>
+                            ) : (
+                              filteredJobRoles.map((role) => (
+                                <SelectItem key={role.id} value={role.id.toString()}>
+                                  {role.name}
+                                </SelectItem>
+                              ))
+                            )}
+                          </>
+                        );
+                      }
+
+                      // For Shift Roles, no "none" option (required)
+                      return filteredJobRoles.length === 0 ? (
+                        <SelectItem value="no-options" disabled>
+                          No job roles available
+                        </SelectItem>
+                      ) : (
+                        filteredJobRoles.map((role) => (
+                          <SelectItem key={role.id} value={role.id.toString()}>
+                            {role.name}
+                          </SelectItem>
+                        ))
+                      );
+                    })()}
+                  </SelectContent>
+                </Select>
+                {formData.parentRoleId && formData.roleType === "job_role" && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={() => handleInputChange("parentRoleId", null)}
+                    title="Clear parent role"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={() => {
+                    // Pre-fill department if creating from job role form
+                    setIsQuickRoleNameManuallyEdited(false);
+                    setQuickCreateRoleData({
+                      displayName: "",
+                      roleName: "",
+                      description: "",
+                      priority: 50,
+                      departmentId: formData.roleType === "job_role" ? formData.departmentId : null,
+                    });
+                    setIsQuickCreateRoleOpen(true);
+                  }}
+                  title="Create new job role"
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {formData.roleType === "shift_role"
+                  ? "Required: Must be a Job Role. Department will be inherited from parent."
+                  : formData.parentRoleId
+                    ? "This role reports to the selected Line Manager Role."
+                    : "Optional: Select a Job Role that will be the Line Manager for this role."}
+              </p>
+              {formData.roleType === "shift_role" && (
+                <div className="flex items-start gap-2 rounded-md bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 p-2">
+                  <AlertCircle className="h-4 w-4 text-yellow-600 dark:text-yellow-400 mt-0.5 flex-shrink-0" />
+                  <p className="text-xs text-yellow-800 dark:text-yellow-200">
+                    Changing the parent role will automatically update the
+                    department to match the new parent.
+                  </p>
+                </div>
+              )}
+              {formData.roleType === "job_role" && formData.parentRoleId && (
+                <div className="flex items-start gap-2 rounded-md bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-2">
+                  <Network className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+                  <p className="text-xs text-blue-800 dark:text-blue-200">
+                    This role reports to the selected <strong>Line Manager Role</strong>.
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Description */}
@@ -767,7 +1531,7 @@ const RoleManagementPage = () => {
                   )}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Currently selected: {selectedPermissions.size} permission(s) • 
+                  Currently selected: {selectedPermissions.size} permission(s) •
                   Total available: {allPermissions.length} permission(s)
                 </p>
               </div>
@@ -852,7 +1616,7 @@ const RoleManagementPage = () => {
                       getFilteredPermissions().map((permission) => {
                         const isSelected = selectedPermissions.has(permission.id);
                         return (
-                          <TableRow 
+                          <TableRow
                             key={permission.id}
                             className={isSelected ? "bg-muted/50" : ""}
                           >
@@ -903,11 +1667,271 @@ const RoleManagementPage = () => {
             <Button variant="outline" onClick={handleCancelPermissions}>
               Cancel
             </Button>
-            <Button 
+            <Button
               onClick={handleSavePermissions}
               disabled={managingRole?.isSystem}
             >
               {managingRole?.isSystem ? "Cannot modify system role" : "Save Permissions"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Quick Create Department Modal */}
+      <Dialog
+        open={isQuickCreateDepartmentOpen}
+        onOpenChange={setIsQuickCreateDepartmentOpen}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Create Department</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="quickDeptName">
+                Name <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="quickDeptName"
+                placeholder="e.g., Engineering"
+                value={quickCreateDepartmentData.name}
+                onChange={(e) =>
+                  setQuickCreateDepartmentData({
+                    ...quickCreateDepartmentData,
+                    name: e.target.value,
+                  })
+                }
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="quickDeptCode">
+                Code <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="quickDeptCode"
+                placeholder="e.g., ENG"
+                value={quickCreateDepartmentData.code}
+                onChange={(e) =>
+                  setQuickCreateDepartmentData({
+                    ...quickCreateDepartmentData,
+                    code: e.target.value.toUpperCase(),
+                  })
+                }
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="quickDeptDescription">Description</Label>
+              <Textarea
+                id="quickDeptDescription"
+                placeholder="Department description..."
+                value={quickCreateDepartmentData.description}
+                onChange={(e) =>
+                  setQuickCreateDepartmentData({
+                    ...quickCreateDepartmentData,
+                    description: e.target.value,
+                  })
+                }
+                rows={3}
+                className="resize-none"
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsQuickCreateDepartmentOpen(false);
+                setQuickCreateDepartmentData({
+                  name: "",
+                  code: "",
+                  description: "",
+                });
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleQuickCreateDepartment}
+              disabled={createDepartmentMutation.isPending}
+            >
+              {createDepartmentMutation.isPending ? "Creating..." : "Create"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Quick Create Role Modal */}
+      <Dialog
+        open={isQuickCreateRoleOpen}
+        onOpenChange={setIsQuickCreateRoleOpen}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Create Job Role</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="quickRoleDisplayName">
+                Display Name <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="quickRoleDisplayName"
+                placeholder="e.g., Senior Doctor"
+                value={quickCreateRoleData.displayName}
+                onChange={(e) => {
+                  const newDisplayName = e.target.value;
+                  setQuickCreateRoleData((prev) => {
+                    const newData = {
+                      ...prev,
+                      displayName: newDisplayName,
+                    };
+                    // Auto-generate role name if not manually edited
+                    if (!isQuickRoleNameManuallyEdited) {
+                      newData.roleName = generateSlug(newDisplayName);
+                    }
+                    return newData;
+                  });
+                }}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="quickRoleName">
+                Role Name <span className="text-red-500">*</span>
+              </Label>
+              <div className="flex gap-2">
+                <Input
+                  id="quickRoleName"
+                  placeholder="e.g., senior_doctor"
+                  value={quickCreateRoleData.roleName}
+                  onChange={(e) => {
+                    setIsQuickRoleNameManuallyEdited(true);
+                    setQuickCreateRoleData({
+                      ...quickCreateRoleData,
+                      roleName: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "").replace(/\s+/g, "_"),
+                    });
+                  }}
+                  className="flex-1"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={() => {
+                    const generated = generateSlug(quickCreateRoleData.displayName);
+                    setQuickCreateRoleData({
+                      ...quickCreateRoleData,
+                      roleName: generated,
+                    });
+                    setIsQuickRoleNameManuallyEdited(false);
+                  }}
+                  title="Auto-generate from display name"
+                  disabled={!quickCreateRoleData.displayName}
+                >
+                  <RefreshCw className="h-4 w-4" />
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Lowercase with underscores only. {!isQuickRoleNameManuallyEdited && quickCreateRoleData.displayName && (
+                  <span className="text-blue-600 dark:text-blue-400">Auto-generated from display name.</span>
+                )}
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="quickRoleDepartment">
+                Department <span className="text-red-500">*</span>
+              </Label>
+              <Select
+                value={quickCreateRoleData.departmentId?.toString() || ""}
+                onValueChange={(value) =>
+                  setQuickCreateRoleData({
+                    ...quickCreateRoleData,
+                    departmentId: parseInt(value),
+                  })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a department" />
+                </SelectTrigger>
+                <SelectContent>
+                  {departments.length === 0 ? (
+                    <SelectItem value="no-options" disabled>
+                      No options available
+                    </SelectItem>
+                  ) : (
+                    departments.map((dept) => (
+                      <SelectItem key={dept.id} value={dept.id.toString()}>
+                        {dept.name} {dept.code && `(${dept.code})`}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="quickRoleDescription">Description</Label>
+              <Textarea
+                id="quickRoleDescription"
+                placeholder="Role description..."
+                value={quickCreateRoleData.description}
+                onChange={(e) =>
+                  setQuickCreateRoleData({
+                    ...quickCreateRoleData,
+                    description: e.target.value,
+                  })
+                }
+                rows={3}
+                className="resize-none"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="quickRolePriority">Priority</Label>
+              <Input
+                id="quickRolePriority"
+                type="number"
+                value={quickCreateRoleData.priority}
+                onChange={(e) =>
+                  setQuickCreateRoleData({
+                    ...quickCreateRoleData,
+                    priority: parseInt(e.target.value) || 50,
+                  })
+                }
+                min="1"
+                max="100"
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsQuickCreateRoleOpen(false);
+                setIsQuickRoleNameManuallyEdited(false);
+                setQuickCreateRoleData({
+                  displayName: "",
+                  roleName: "",
+                  description: "",
+                  priority: 50,
+                  departmentId: null,
+                });
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleQuickCreateRole}
+              disabled={createRoleMutation.isPending}
+            >
+              {createRoleMutation.isPending ? "Creating..." : "Create"}
             </Button>
           </DialogFooter>
         </DialogContent>

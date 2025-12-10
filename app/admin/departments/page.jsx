@@ -52,6 +52,11 @@ import {
   AlertCircle,
   CheckCircle2,
   XCircle,
+  ChevronDown,
+  ChevronRight,
+  Shield,
+  Network,
+  Users,
 } from "lucide-react";
 import {
   useDepartments,
@@ -59,6 +64,7 @@ import {
   useCreateDepartment,
   useUpdateDepartment,
 } from "@/hooks/useDepartments";
+import { useRoles, roleUtils } from "@/hooks/useRoles";
 import {
   Dialog,
   DialogContent,
@@ -85,6 +91,7 @@ const DepartmentsPage = () => {
     is_active: true,
   });
   const [validationErrors, setValidationErrors] = useState({});
+  const [expandedDepartments, setExpandedDepartments] = useState(new Set());
   const itemsPerPage = 10;
 
   // API hooks
@@ -96,6 +103,60 @@ const DepartmentsPage = () => {
   const deleteDepartmentMutation = useDeleteDepartment();
   const createDepartmentMutation = useCreateDepartment();
   const updateDepartmentMutation = useUpdateDepartment();
+
+  // Fetch all roles for hierarchy display
+  const { data: rolesData } = useRoles();
+  const allRoles = rolesData ? rolesData.map(roleUtils.transformRole) : [];
+
+  // Group roles by department and job role
+  const rolesByDepartment = React.useMemo(() => {
+    const grouped = {};
+
+    allRoles.forEach((role) => {
+      if (role.roleType === "job_role" && role.departmentId) {
+        const deptId = role.departmentId;
+        if (!grouped[deptId]) {
+          grouped[deptId] = {};
+        }
+        if (!grouped[deptId][role.id]) {
+          grouped[deptId][role.id] = {
+            jobRole: role,
+            shiftRoles: [],
+          };
+        }
+      } else if (role.roleType === "shift_role" && role.parentRoleId) {
+        // Find the department of the parent job role
+        const parentJobRole = allRoles.find((r) => r.id === role.parentRoleId && r.roleType === "job_role");
+        if (parentJobRole && parentJobRole.departmentId) {
+          const deptId = parentJobRole.departmentId;
+          if (!grouped[deptId]) {
+            grouped[deptId] = {};
+          }
+          if (!grouped[deptId][role.parentRoleId]) {
+            grouped[deptId][role.parentRoleId] = {
+              jobRole: parentJobRole,
+              shiftRoles: [],
+            };
+          }
+          grouped[deptId][role.parentRoleId].shiftRoles.push(role);
+        }
+      }
+    });
+
+    return grouped;
+  }, [allRoles]);
+
+  const toggleDepartmentExpansion = (departmentId) => {
+    setExpandedDepartments((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(departmentId)) {
+        newSet.delete(departmentId);
+      } else {
+        newSet.add(departmentId);
+      }
+      return newSet;
+    });
+  };
 
   // Extract departments and pagination data from response
   const departments = departmentsResponse?.departments || departmentsResponse?.data || [];
@@ -453,97 +514,206 @@ const DepartmentsPage = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-12"></TableHead>
                       <TableHead>Name</TableHead>
                       <TableHead>Code</TableHead>
                       <TableHead>Description</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead>Roles</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredDepartments.map((department) => (
-                      <TableRow key={department.id}>
-                        <TableCell className="font-medium">
-                          {department.name}
-                        </TableCell>
-                        <TableCell>
-                          <code className="text-sm bg-muted px-2 py-1 rounded">
-                            {department.code}
-                          </code>
-                        </TableCell>
-                        <TableCell className="max-w-md truncate">
-                          {department.description || (
-                            <span className="text-muted-foreground">—</span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {department.is_active !== false ? (
-                            <Badge className="bg-green-500/10 text-green-600 hover:bg-green-500/20">
-                              <CheckCircle2 className="mr-1 h-3 w-3" />
-                              Active
-                            </Badge>
-                          ) : (
-                            <Badge className="bg-red-500/10 text-red-600 hover:bg-red-500/20">
-                              <XCircle className="mr-1 h-3 w-3" />
-                              Inactive
-                            </Badge>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" className="h-8 w-8 p-0">
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                onClick={() => handleEditDepartment(department)}
-                              >
-                                <Edit className="mr-2 h-4 w-4" />
-                                Edit
-                              </DropdownMenuItem>
-                              <AlertDialog>
-                                <AlertDialogTrigger asChild>
+                    {filteredDepartments.map((department) => {
+                      const isExpanded = expandedDepartments.has(department.id);
+                      const departmentRoles = rolesByDepartment[department.id] || {};
+                      const jobRolesList = Object.values(departmentRoles);
+                      const totalRoles = jobRolesList.reduce(
+                        (sum, group) => sum + 1 + group.shiftRoles.length,
+                        0
+                      );
+
+                      return (
+                        <React.Fragment key={department.id}>
+                          <TableRow>
+                            <TableCell>
+                              {jobRolesList.length > 0 && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 w-6 p-0"
+                                  onClick={() => toggleDepartmentExpansion(department.id)}
+                                >
+                                  {isExpanded ? (
+                                    <ChevronDown className="h-4 w-4" />
+                                  ) : (
+                                    <ChevronRight className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              )}
+                            </TableCell>
+                            <TableCell className="font-medium">
+                              {department.name}
+                            </TableCell>
+                            <TableCell>
+                              <code className="text-sm bg-muted px-2 py-1 rounded">
+                                {department.code}
+                              </code>
+                            </TableCell>
+                            <TableCell className="max-w-md truncate">
+                              {department.description || (
+                                <span className="text-muted-foreground">—</span>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {department.is_active !== false ? (
+                                <Badge className="bg-green-500/10 text-green-600 hover:bg-green-500/20">
+                                  <CheckCircle2 className="mr-1 h-3 w-3" />
+                                  Active
+                                </Badge>
+                              ) : (
+                                <Badge className="bg-red-500/10 text-red-600 hover:bg-red-500/20">
+                                  <XCircle className="mr-1 h-3 w-3" />
+                                  Inactive
+                                </Badge>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {totalRoles > 0 ? (
+                                <Badge variant="outline" className="text-xs">
+                                  <Shield className="mr-1 h-3 w-3" />
+                                  {totalRoles} {totalRoles === 1 ? "role" : "roles"}
+                                </Badge>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">No roles</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" className="h-8 w-8 p-0">
+                                    <MoreHorizontal className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                  <DropdownMenuSeparator />
                                   <DropdownMenuItem
-                                    onSelect={(e) => e.preventDefault()}
-                                    className="text-red-600"
+                                    onClick={() => handleEditDepartment(department)}
                                   >
-                                    <Trash2 className="mr-2 h-4 w-4" />
-                                    Delete
+                                    <Edit className="mr-2 h-4 w-4" />
+                                    Edit
                                   </DropdownMenuItem>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>
-                                      Are you sure?
-                                    </AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                      This will permanently delete the department{" "}
-                                      <strong>{department.name}</strong>. This action
-                                      cannot be undone.
-                                    </AlertDialogDescription>
-                                  </AlertDialogHeader>
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                    <AlertDialogAction
-                                      onClick={() =>
-                                        handleDeleteDepartment(department.id)
-                                      }
-                                      className="bg-red-600 hover:bg-red-700"
-                                    >
-                                      Delete
-                                    </AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                                  <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                      <DropdownMenuItem
+                                        onSelect={(e) => e.preventDefault()}
+                                        className="text-red-600"
+                                      >
+                                        <Trash2 className="mr-2 h-4 w-4" />
+                                        Delete
+                                      </DropdownMenuItem>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent>
+                                      <AlertDialogHeader>
+                                        <AlertDialogTitle>
+                                          Are you sure?
+                                        </AlertDialogTitle>
+                                        <AlertDialogDescription>
+                                          This will permanently delete the department{" "}
+                                          <strong>{department.name}</strong>. This action
+                                          cannot be undone.
+                                        </AlertDialogDescription>
+                                      </AlertDialogHeader>
+                                      <AlertDialogFooter>
+                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                        <AlertDialogAction
+                                          onClick={() =>
+                                            handleDeleteDepartment(department.id)
+                                          }
+                                          className="bg-red-600 hover:bg-red-700"
+                                        >
+                                          Delete
+                                        </AlertDialogAction>
+                                      </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                  </AlertDialog>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </TableCell>
+                          </TableRow>
+                          {isExpanded && jobRolesList.length > 0 && (
+                            <TableRow>
+                              <TableCell colSpan={7} className="bg-muted/30 p-0">
+                                <div className="p-4 space-y-4">
+                                  <div className="flex items-center gap-2 mb-3">
+                                    <Shield className="h-4 w-4 text-muted-foreground" />
+                                    <h4 className="text-sm font-semibold">Roles Hierarchy</h4>
+                                  </div>
+                                  <div className="space-y-3">
+                                    {jobRolesList.map((group) => (
+                                      <div
+                                        key={group.jobRole.id}
+                                        className="border rounded-lg p-3 bg-background"
+                                      >
+                                        {/* Job Role */}
+                                        <div className="flex items-center gap-2 mb-2">
+                                          <Shield className="h-4 w-4 text-blue-600" />
+                                          <span className="font-medium text-sm">
+                                            {group.jobRole.name}
+                                          </span>
+                                          <Badge variant="default" className="text-[10px]">
+                                            Job Role
+                                          </Badge>
+                                          {group.jobRole.userCount > 0 && (
+                                            <Badge variant="outline" className="text-[10px]">
+                                              <Users className="h-3 w-3 mr-1" />
+                                              {group.jobRole.userCount} users
+                                            </Badge>
+                                          )}
+                                        </div>
+
+                                        {/* Shift Roles */}
+                                        {group.shiftRoles.length > 0 && (
+                                          <div className="ml-6 mt-2 space-y-2 border-l-2 border-muted pl-3">
+                                            {group.shiftRoles.map((shiftRole) => (
+                                              <div
+                                                key={shiftRole.id}
+                                                className="flex items-center gap-2"
+                                              >
+                                                <Network className="h-3 w-3 text-muted-foreground" />
+                                                <span className="text-sm text-muted-foreground">
+                                                  {shiftRole.name}
+                                                </span>
+                                                <Badge variant="secondary" className="text-[10px]">
+                                                  Shift Role
+                                                </Badge>
+                                                {shiftRole.userCount > 0 && (
+                                                  <Badge variant="outline" className="text-[10px]">
+                                                    <Users className="h-3 w-3 mr-1" />
+                                                    {shiftRole.userCount} users
+                                                  </Badge>
+                                                )}
+                                              </div>
+                                            ))}
+                                          </div>
+                                        )}
+
+                                        {group.shiftRoles.length === 0 && (
+                                          <p className="ml-6 text-xs text-muted-foreground italic">
+                                            No shift roles
+                                          </p>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </React.Fragment>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>

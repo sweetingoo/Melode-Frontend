@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { departmentsService } from "@/services/departments";
 import { toast } from "sonner";
+import { extractErrorMessage } from "@/utils/error-handler";
 
 // Department query keys
 export const departmentKeys = {
@@ -55,8 +56,7 @@ export const useCreateDepartment = () => {
     },
     onError: (error) => {
       console.error("Create department error:", error);
-      const errorMessage =
-        error?.response?.data?.message || "Failed to create department";
+      const errorMessage = extractErrorMessage(error, "Failed to create department");
       toast.error("Failed to create department", {
         description: errorMessage,
       });
@@ -88,8 +88,7 @@ export const useUpdateDepartment = () => {
     },
     onError: (error) => {
       console.error("Update department error:", error);
-      const errorMessage =
-        error?.response?.data?.message || "Failed to update department";
+      const errorMessage = extractErrorMessage(error, "Failed to update department");
       toast.error("Failed to update department", {
         description: errorMessage,
       });
@@ -115,8 +114,7 @@ export const useDeleteDepartment = () => {
     },
     onError: (error) => {
       console.error("Delete department error:", error);
-      const errorMessage =
-        error?.response?.data?.message || "Failed to delete department";
+      const errorMessage = extractErrorMessage(error, "Failed to delete department");
       toast.error("Failed to delete department", {
         description: errorMessage,
       });

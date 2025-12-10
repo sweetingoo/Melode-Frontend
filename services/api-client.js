@@ -2,7 +2,7 @@ import axios from "axios";
 
 // Create axios instance with base configuration
 const apiClient = axios.create({
-  baseURL: "https://melode.onrender.com/api/v1",
+  baseURL: process.env.NEXT_PUBLIC_API_BASE_URL || "https://melode.onrender.com/api/v1",
   timeout: 10000, // 10 seconds timeout
   headers: {
     "Content-Type": "application/json",

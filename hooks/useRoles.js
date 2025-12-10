@@ -3,6 +3,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { rolesService } from "@/services/roles";
+import { extractErrorMessage } from "@/utils/error-handler";
 
 // Query keys for roles
 export const roleKeys = {
@@ -125,8 +126,7 @@ export const useCreateRole = () => {
     },
     onError: (error) => {
       console.error("Create role error:", error);
-      const errorMessage =
-        error?.response?.data?.message || "Failed to create role";
+      const errorMessage = extractErrorMessage(error, "Failed to create role");
       toast.error("Failed to create role", {
         description: errorMessage,
       });
@@ -154,8 +154,7 @@ export const useUpdateRole = () => {
     },
     onError: (error) => {
       console.error("Update role error:", error);
-      const errorMessage =
-        error?.response?.data?.message || "Failed to update role";
+      const errorMessage = extractErrorMessage(error, "Failed to update role");
       toast.error("Failed to update role", {
         description: errorMessage,
       });
@@ -181,8 +180,7 @@ export const useDeleteRole = () => {
     },
     onError: (error) => {
       console.error("Delete role error:", error);
-      const errorMessage =
-        error?.response?.data?.message || "Failed to delete role";
+      const errorMessage = extractErrorMessage(error, "Failed to delete role");
       toast.error("Failed to delete role", {
         description: errorMessage,
       });
@@ -207,29 +205,10 @@ export const useCreatePermission = () => {
     },
     onError: (error) => {
       console.error("Create permission error:", error);
-      
-      if (error.response?.status === 422) {
-        // Handle validation errors
-        const errorData = error.response.data;
-        if (errorData?.detail && Array.isArray(errorData.detail)) {
-          // Show first validation error
-          const firstError = errorData.detail[0];
-          const fieldName = firstError.loc && firstError.loc.length > 1 ? firstError.loc[1] : 'field';
-          toast.error(`Validation Error: ${fieldName}`, {
-            description: firstError.msg || "Please check your input",
-          });
-        } else {
-          toast.error("Validation Error", {
-            description: errorData?.message || "Please check your input",
-          });
-        }
-      } else {
-        const errorMessage =
-          error?.response?.data?.message || "Failed to create permission";
-        toast.error("Failed to create permission", {
-          description: errorMessage,
-        });
-      }
+      const errorMessage = extractErrorMessage(error, "Failed to create permission");
+      toast.error("Failed to create permission", {
+        description: errorMessage,
+      });
     },
   });
 };
@@ -260,29 +239,10 @@ export const useAssignPermissionsToRole = () => {
     },
     onError: (error) => {
       console.error("Assign permissions error:", error);
-      
-      if (error.response?.status === 422) {
-        // Handle validation errors
-        const errorData = error.response.data;
-        if (errorData?.detail && Array.isArray(errorData.detail)) {
-          // Show first validation error
-          const firstError = errorData.detail[0];
-          const fieldName = firstError.loc && firstError.loc.length > 1 ? firstError.loc[1] : 'field';
-          toast.error(`Validation Error: ${fieldName}`, {
-            description: firstError.msg || "Please check your input",
-          });
-        } else {
-          toast.error("Validation Error", {
-            description: errorData?.message || "Please check your input",
-          });
-        }
-      } else {
-        const errorMessage =
-          error?.response?.data?.message || "Failed to assign permissions";
-        toast.error("Failed to assign permissions", {
-          description: errorMessage,
-        });
-      }
+      const errorMessage = extractErrorMessage(error, "Failed to assign permissions");
+      toast.error("Failed to assign permissions", {
+        description: errorMessage,
+      });
     },
   });
 };
@@ -313,29 +273,10 @@ export const useRemovePermissionsFromRole = () => {
     },
     onError: (error) => {
       console.error("Remove permissions error:", error);
-      
-      if (error.response?.status === 422) {
-        // Handle validation errors
-        const errorData = error.response.data;
-        if (errorData?.detail && Array.isArray(errorData.detail)) {
-          // Show first validation error
-          const firstError = errorData.detail[0];
-          const fieldName = firstError.loc && firstError.loc.length > 1 ? firstError.loc[1] : 'field';
-          toast.error(`Validation Error: ${fieldName}`, {
-            description: firstError.msg || "Please check your input",
-          });
-        } else {
-          toast.error("Validation Error", {
-            description: errorData?.message || "Please check your input",
-          });
-        }
-      } else {
-        const errorMessage =
-          error?.response?.data?.message || "Failed to remove permissions";
-        toast.error("Failed to remove permissions", {
-          description: errorMessage,
-        });
-      }
+      const errorMessage = extractErrorMessage(error, "Failed to remove permissions");
+      toast.error("Failed to remove permissions", {
+        description: errorMessage,
+      });
     },
   });
 };
@@ -363,6 +304,13 @@ export const roleUtils = {
         ? new Date(apiRole.updated_at).toLocaleString()
         : "Unknown",
       permissions: apiRole.permissions || [],
+      // Hierarchy fields
+      roleType: apiRole.role_type || "job_role",
+      departmentId: apiRole.department_id || null,
+      parentRoleId: apiRole.parent_role_id || null,
+      department: apiRole.department || null,
+      parentRole: apiRole.parent_role || null,
+      shiftRoles: apiRole.shift_roles || [],
     };
   },
 
