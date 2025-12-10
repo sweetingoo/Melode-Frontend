@@ -72,7 +72,7 @@ const FILE_TYPE_CATEGORIES = {
   },
 };
 import { useForm, useUpdateForm } from "@/hooks/useForms";
-import { useRoles } from "@/hooks/useRoles";
+import { useRoles, useCreateRole } from "@/hooks/useRoles";
 import { useUsers } from "@/hooks/useUsers";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -110,6 +110,7 @@ const EditFormPage = () => {
   const { data: form, isLoading: formLoading } = useForm(formId);
   const updateFormMutation = useUpdateForm();
   const { data: rolesData } = useRoles();
+  const createRoleMutation = useCreateRole();
   const { data: usersResponse } = useUsers();
   const roles = rolesData || [];
   const users = usersResponse?.users || usersResponse || [];
@@ -148,7 +149,7 @@ const EditFormPage = () => {
           allowed_users: [],
         },
       });
-      
+
       // Set assignment state from form data
       if (form.assigned_to_role_id) {
         setAssignmentMode("role");
@@ -163,7 +164,7 @@ const EditFormPage = () => {
         setAssignedToRoleId("");
         setSelectedUserIds([]);
       }
-      
+
       setCreateIndividualAssignments(form.create_individual_assignments || false);
     }
   }, [form]);
@@ -192,15 +193,50 @@ const EditFormPage = () => {
   });
   const [newOption, setNewOption] = useState({ value: "", label: "" });
   const [allowAllFileTypes, setAllowAllFileTypes] = useState(false);
-  
+
   // Assignment state
   const [assignmentMode, setAssignmentMode] = useState("none"); // "none", "role", "users"
   const [assignedToRoleId, setAssignedToRoleId] = useState("");
   const [selectedUserIds, setSelectedUserIds] = useState([]);
   const [createIndividualAssignments, setCreateIndividualAssignments] = useState(false);
-  
+  const [isCreateRoleModalOpen, setIsCreateRoleModalOpen] = useState(false);
+  const [roleFormData, setRoleFormData] = useState({
+    displayName: "",
+    roleName: "",
+    description: "",
+    priority: 50,
+  });
+
   const handleUserSelectionChange = (newSelection) => {
     setSelectedUserIds(newSelection);
+  };
+
+  const handleCreateRole = async () => {
+    if (!roleFormData.displayName || !roleFormData.roleName) {
+      return;
+    }
+
+    try {
+      const result = await createRoleMutation.mutateAsync({
+        display_name: roleFormData.displayName,
+        name: roleFormData.roleName,
+        description: roleFormData.description,
+        priority: roleFormData.priority,
+      });
+      setIsCreateRoleModalOpen(false);
+      setRoleFormData({
+        displayName: "",
+        roleName: "",
+        description: "",
+        priority: 50,
+      });
+      // Auto-select the newly created role
+      if (result && result.id) {
+        setAssignedToRoleId(result.id.toString());
+      }
+    } catch (error) {
+      console.error("Failed to create role:", error);
+    }
   };
 
   const handleAddOption = () => {
@@ -311,7 +347,7 @@ const EditFormPage = () => {
       if (Object.keys(fileValidation).length > 0) {
         field.validation = { ...field.validation, ...fileValidation };
       }
-      
+
       // Save field_options for file fields (including allowMultiple)
       if (newField.field_options) {
         field.field_options = newField.field_options;
@@ -386,7 +422,7 @@ const EditFormPage = () => {
 
     try {
       const submitData = { ...formData };
-      
+
       // Add assignment fields based on mode
       if (assignmentMode === "role" && assignedToRoleId) {
         submitData.assigned_to_role_id = parseInt(assignedToRoleId);
@@ -402,7 +438,7 @@ const EditFormPage = () => {
         submitData.assigned_user_ids = [];
         submitData.create_individual_assignments = false;
       }
-      
+
       await updateFormMutation.mutateAsync({
         id: formId,
         formData: submitData,
@@ -630,70 +666,70 @@ const EditFormPage = () => {
                   {(newField.field_type === "select" ||
                     newField.field_type === "radio" ||
                     newField.field_type === "multiselect") && (
-                    <div className="space-y-2 pt-2 border-t">
-                      <Label>Options *</Label>
-                      <div className="grid grid-cols-2 gap-2">
-                        <Input
-                          value={newOption.value}
-                          onChange={(e) =>
-                            setNewOption({ ...newOption, value: e.target.value })
-                          }
-                          placeholder="Option value"
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              e.preventDefault();
-                              handleAddOption();
+                      <div className="space-y-2 pt-2 border-t">
+                        <Label>Options *</Label>
+                        <div className="grid grid-cols-2 gap-2">
+                          <Input
+                            value={newOption.value}
+                            onChange={(e) =>
+                              setNewOption({ ...newOption, value: e.target.value })
                             }
-                          }}
-                        />
-                        <Input
-                          value={newOption.label}
-                          onChange={(e) =>
-                            setNewOption({ ...newOption, label: e.target.value })
-                          }
-                          placeholder="Option label (optional)"
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              e.preventDefault();
-                              handleAddOption();
+                            placeholder="Option value"
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                handleAddOption();
+                              }
+                            }}
+                          />
+                          <Input
+                            value={newOption.label}
+                            onChange={(e) =>
+                              setNewOption({ ...newOption, label: e.target.value })
                             }
-                          }}
-                        />
-                      </div>
-                      <Button
-                        type="button"
-                        onClick={handleAddOption}
-                        variant="outline"
-                        size="sm"
-                      >
-                        <Plus className="h-4 w-4 mr-2" />
-                        Add Option
-                      </Button>
-                      {newField.options.length > 0 && (
-                        <div className="space-y-1">
-                          {newField.options.map((option, index) => (
-                            <div
-                              key={index}
-                              className="flex items-center justify-between p-2 bg-muted rounded-md"
-                            >
-                              <span className="text-sm">
-                                {option.label || option.value} ({option.value})
-                              </span>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleRemoveOption(index)}
-                                className="h-6 w-6"
-                              >
-                                <Trash2 className="h-3 w-3" />
-                              </Button>
-                            </div>
-                          ))}
+                            placeholder="Option label (optional)"
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                handleAddOption();
+                              }
+                            }}
+                          />
                         </div>
-                      )}
-                    </div>
-                  )}
+                        <Button
+                          type="button"
+                          onClick={handleAddOption}
+                          variant="outline"
+                          size="sm"
+                        >
+                          <Plus className="h-4 w-4 mr-2" />
+                          Add Option
+                        </Button>
+                        {newField.options.length > 0 && (
+                          <div className="space-y-1">
+                            {newField.options.map((option, index) => (
+                              <div
+                                key={index}
+                                className="flex items-center justify-between p-2 bg-muted rounded-md"
+                              >
+                                <span className="text-sm">
+                                  {option.label || option.value} ({option.value})
+                                </span>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleRemoveOption(index)}
+                                  className="h-6 w-6"
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                   {/* Validation Options */}
                   <div className="space-y-2 pt-2 border-t">
@@ -703,49 +739,49 @@ const EditFormPage = () => {
                         newField.field_type === "textarea" ||
                         newField.field_type === "email" ||
                         newField.field_type === "phone") && (
-                        <>
-                          <div>
-                            <Label htmlFor="min_length" className="text-xs">
-                              Min Length
-                            </Label>
-                            <Input
-                              id="min_length"
-                              type="number"
-                              value={newField.validation.min_length}
-                              onChange={(e) =>
-                                setNewField({
-                                  ...newField,
-                                  validation: {
-                                    ...newField.validation,
-                                    min_length: e.target.value,
-                                  },
-                                })
-                              }
-                              placeholder="Min length"
-                            />
-                          </div>
-                          <div>
-                            <Label htmlFor="max_length" className="text-xs">
-                              Max Length
-                            </Label>
-                            <Input
-                              id="max_length"
-                              type="number"
-                              value={newField.validation.max_length}
-                              onChange={(e) =>
-                                setNewField({
-                                  ...newField,
-                                  validation: {
-                                    ...newField.validation,
-                                    max_length: e.target.value,
-                                  },
-                                })
-                              }
-                              placeholder="Max length"
-                            />
-                          </div>
-                        </>
-                      )}
+                          <>
+                            <div>
+                              <Label htmlFor="min_length" className="text-xs">
+                                Min Length
+                              </Label>
+                              <Input
+                                id="min_length"
+                                type="number"
+                                value={newField.validation.min_length}
+                                onChange={(e) =>
+                                  setNewField({
+                                    ...newField,
+                                    validation: {
+                                      ...newField.validation,
+                                      min_length: e.target.value,
+                                    },
+                                  })
+                                }
+                                placeholder="Min length"
+                              />
+                            </div>
+                            <div>
+                              <Label htmlFor="max_length" className="text-xs">
+                                Max Length
+                              </Label>
+                              <Input
+                                id="max_length"
+                                type="number"
+                                value={newField.validation.max_length}
+                                onChange={(e) =>
+                                  setNewField({
+                                    ...newField,
+                                    validation: {
+                                      ...newField.validation,
+                                      max_length: e.target.value,
+                                    },
+                                  })
+                                }
+                                placeholder="Max length"
+                              />
+                            </div>
+                          </>
+                        )}
                       {(newField.field_type === "number") && (
                         <>
                           <div>
@@ -836,29 +872,29 @@ const EditFormPage = () => {
                     {(newField.field_type === "text" ||
                       newField.field_type === "email" ||
                       newField.field_type === "phone") && (
-                      <div>
-                        <Label htmlFor="pattern" className="text-xs">
-                          Pattern (Regex)
-                        </Label>
-                        <Input
-                          id="pattern"
-                          value={newField.validation.pattern}
-                          onChange={(e) =>
-                            setNewField({
-                              ...newField,
-                              validation: {
-                                ...newField.validation,
-                                pattern: e.target.value,
-                              },
-                            })
-                          }
-                          placeholder="e.g., ^[A-Za-z\\s]+$"
-                        />
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Regular expression pattern for validation
-                        </p>
-                      </div>
-                    )}
+                        <div>
+                          <Label htmlFor="pattern" className="text-xs">
+                            Pattern (Regex)
+                          </Label>
+                          <Input
+                            id="pattern"
+                            value={newField.validation.pattern}
+                            onChange={(e) =>
+                              setNewField({
+                                ...newField,
+                                validation: {
+                                  ...newField.validation,
+                                  pattern: e.target.value,
+                                },
+                              })
+                            }
+                            placeholder="e.g., ^[A-Za-z\\s]+$"
+                          />
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Regular expression pattern for validation
+                          </p>
+                        </div>
+                      )}
                   </div>
 
                   {/* File Field Configuration */}
@@ -867,7 +903,7 @@ const EditFormPage = () => {
                       <Label className="text-sm font-medium">
                         File Configuration
                       </Label>
-                      
+
                       {/* Allow Multiple Files Option */}
                       <div className="flex items-center space-x-2">
                         <Checkbox
@@ -887,7 +923,7 @@ const EditFormPage = () => {
                           Allow multiple file uploads
                         </Label>
                       </div>
-                      
+
                       {/* Allow All File Types Option */}
                       <div className="flex items-center space-x-2">
                         <Checkbox
@@ -919,7 +955,7 @@ const EditFormPage = () => {
                               const selectedTypes = newField.allowed_types
                                 ? newField.allowed_types.split(",").map((t) => t.trim())
                                 : [];
-                              
+
                               const categoryTypes = category.types.map((t) => t.value);
                               const allCategorySelected = categoryTypes.every((type) =>
                                 selectedTypes.includes(type)
@@ -1055,7 +1091,7 @@ const EditFormPage = () => {
                       </p>
                     </div>
                   )}
-                  
+
                   <Button
                     type="button"
                     onClick={handleAddField}
@@ -1206,7 +1242,7 @@ const EditFormPage = () => {
                         </TabsTrigger>
                       </TabsList>
                     </div>
-                    
+
                     {/* Role Assignment */}
                     <TabsContent value="role" className="space-y-3 mt-3">
                       <div className="p-3 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-md">
@@ -1219,26 +1255,37 @@ const EditFormPage = () => {
                           </div>
                         </div>
                       </div>
-                      <Select
-                        value={assignedToRoleId}
-                        onValueChange={(value) => {
-                          setAssignedToRoleId(value);
-                          setSelectedUserIds([]);
-                        }}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select role" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {roles.map((role) => (
-                            <SelectItem key={role.id} value={role.id.toString()}>
-                              {role.display_name || role.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <div className="flex gap-2">
+                        <Select
+                          value={assignedToRoleId}
+                          onValueChange={(value) => {
+                            setAssignedToRoleId(value);
+                            setSelectedUserIds([]);
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select role" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {roles.map((role) => (
+                              <SelectItem key={role.id} value={role.id.toString()}>
+                                {role.display_name || role.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          onClick={() => setIsCreateRoleModalOpen(true)}
+                          title="Create new role"
+                        >
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </TabsContent>
-                    
+
                     {/* Multiple Users Assignment */}
                     <TabsContent value="users" className="space-y-3 mt-3">
                       <div className="p-3 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-md">
@@ -1477,5 +1524,113 @@ const EditFormPage = () => {
   );
 };
 
-export default EditFormPage;
+{/* Create Role Modal */ }
+<Dialog open={isCreateRoleModalOpen} onOpenChange={setIsCreateRoleModalOpen}>
+  <DialogContent className="max-w-md">
+    <DialogHeader>
+      <DialogTitle>Create New Role</DialogTitle>
+      <DialogDescription>
+        Create a new role for your organization.
+      </DialogDescription>
+    </DialogHeader>
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <Label htmlFor="role-display-name">
+          Display Name <span className="text-red-500">*</span>
+        </Label>
+        <Input
+          id="role-display-name"
+          placeholder="e.g., Senior Doctor"
+          value={roleFormData.displayName}
+          onChange={(e) =>
+            setRoleFormData({
+              ...roleFormData,
+              displayName: e.target.value,
+            })
+          }
+        />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="role-name">
+          Role Name <span className="text-red-500">*</span>
+        </Label>
+        <Input
+          id="role-name"
+          placeholder="e.g., senior_doctor"
+          value={roleFormData.roleName}
+          onChange={(e) =>
+            setRoleFormData({
+              ...roleFormData,
+              roleName: e.target.value.toLowerCase().replace(/\s+/g, "_"),
+            })
+          }
+        />
+        <p className="text-xs text-muted-foreground">
+          Lowercase with underscores only. Cannot be changed after creation.
+        </p>
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="role-description">Description</Label>
+        <Textarea
+          id="role-description"
+          placeholder="Describe this role's purpose and responsibilities"
+          value={roleFormData.description}
+          onChange={(e) =>
+            setRoleFormData({
+              ...roleFormData,
+              description: e.target.value,
+            })
+          }
+          className="resize-none"
+          rows={3}
+        />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="role-priority">Priority</Label>
+        <Input
+          id="role-priority"
+          type="number"
+          value={roleFormData.priority}
+          onChange={(e) =>
+            setRoleFormData({
+              ...roleFormData,
+              priority: parseInt(e.target.value) || 50,
+            })
+          }
+          min="1"
+          max="100"
+        />
+      </div>
+    </div>
+    <DialogFooter>
+      <Button
+        variant="outline"
+        onClick={() => {
+          setIsCreateRoleModalOpen(false);
+          setRoleFormData({
+            displayName: "",
+            roleName: "",
+            description: "",
+            priority: 50,
+          });
+        }}
+      >
+        Cancel
+      </Button>
+      <Button
+        onClick={handleCreateRole}
+        disabled={
+          createRoleMutation.isPending ||
+          !roleFormData.displayName ||
+          !roleFormData.roleName
+        }
+      >
+        {createRoleMutation.isPending && (
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+        )}
+        Create Role
+      </Button>
+    </DialogFooter>
+  </DialogContent>
+</Dialog>
 

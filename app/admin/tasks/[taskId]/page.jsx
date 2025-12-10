@@ -42,6 +42,7 @@ import {
   History,
   Link as LinkIcon,
   Repeat,
+  Plus,
 } from "lucide-react";
 import {
   useTask,
@@ -54,7 +55,7 @@ import { useUsers } from "@/hooks/useUsers";
 import { useLocations } from "@/hooks/useLocations";
 import { useAssets } from "@/hooks/useAssets";
 import { useRoles } from "@/hooks/useRoles";
-import { useActiveTaskTypes } from "@/hooks/useTaskTypes";
+import { useActiveTaskTypes, useCreateTaskType } from "@/hooks/useTaskTypes";
 import { useForms } from "@/hooks/useForms";
 import { format } from "date-fns";
 import RecurringTaskHistory from "@/components/RecurringTaskHistory";
@@ -104,6 +105,15 @@ const TaskDetailPage = () => {
   const [selectedUserIds, setSelectedUserIds] = useState([]);
   const [dueDate, setDueDate] = useState(null);
   const [showHistory, setShowHistory] = useState(false);
+  const [isCreateTaskTypeModalOpen, setIsCreateTaskTypeModalOpen] = useState(false);
+  const [taskTypeFormData, setTaskTypeFormData] = useState({
+    name: "",
+    display_name: "",
+    description: "",
+    icon: "",
+    color: "#6B7280",
+    sort_order: 0,
+  });
 
   const { data: task, isLoading, error } = useTask(taskId);
   const { data: usersResponse } = useUsers();
@@ -131,6 +141,7 @@ const TaskDetailPage = () => {
   const deleteTaskMutation = useDeleteTask();
   const completeTaskMutation = useCompleteTask();
   const assignTaskMutation = useAssignTask();
+  const createTaskTypeMutation = useCreateTaskType();
 
   const users = usersResponse?.users || usersResponse || [];
   const locations = Array.isArray(locationsData) ? locationsData : [];
@@ -212,6 +223,32 @@ const TaskDetailPage = () => {
       });
       setSelectedUserIds(task.assigned_user_ids || []);
       setIsAssignModalOpen(true);
+    }
+  };
+
+  const handleCreateTaskType = async () => {
+    if (!taskTypeFormData.name || !taskTypeFormData.display_name) {
+      return;
+    }
+
+    try {
+      const result = await createTaskTypeMutation.mutateAsync(taskTypeFormData);
+      setIsCreateTaskTypeModalOpen(false);
+      // Reset form
+      setTaskTypeFormData({
+        name: "",
+        display_name: "",
+        description: "",
+        icon: "",
+        color: "#6B7280",
+        sort_order: 0,
+      });
+      // Auto-select the newly created task type
+      if (result && result.name) {
+        setTaskFormData({ ...taskFormData, task_type: result.name });
+      }
+    } catch (error) {
+      console.error("Failed to create task type:", error);
     }
   };
 
@@ -889,30 +926,41 @@ const TaskDetailPage = () => {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="edit-task_type">Task Type *</Label>
-                <Select
-                  value={taskFormData.task_type}
-                  onValueChange={(value) =>
-                    setTaskFormData({ ...taskFormData, task_type: value })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select task type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {taskTypes.length === 0 ? (
-                      <SelectItem value="none" disabled>Loading task types...</SelectItem>
-                    ) : (
-                      taskTypes.map((taskType) => (
-                        <SelectItem key={taskType.id} value={taskType.name}>
-                          <div className="flex items-center gap-2">
-                            {taskType.icon && <span>{taskType.icon}</span>}
-                            <span>{taskType.display_name || taskType.name}</span>
-                          </div>
-                        </SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
+                <div className="flex gap-2">
+                  <Select
+                    value={taskFormData.task_type}
+                    onValueChange={(value) =>
+                      setTaskFormData({ ...taskFormData, task_type: value })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select task type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {taskTypes.length === 0 ? (
+                        <SelectItem value="none" disabled>Loading task types...</SelectItem>
+                      ) : (
+                        taskTypes.map((taskType) => (
+                          <SelectItem key={taskType.id} value={taskType.name}>
+                            <div className="flex items-center gap-2">
+                              {taskType.icon && <span>{taskType.icon}</span>}
+                              <span>{taskType.display_name || taskType.name}</span>
+                            </div>
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setIsCreateTaskTypeModalOpen(true)}
+                    title="Create new task type"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
               <div>
                 <Label htmlFor="edit-priority">Priority</Label>
@@ -1257,9 +1305,163 @@ const TaskDetailPage = () => {
         isOpen={showHistory}
         onClose={() => setShowHistory(false)}
       />
+
+      {/* Create Task Type Modal */}
+      <Dialog open={isCreateTaskTypeModalOpen} onOpenChange={setIsCreateTaskTypeModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create New Task Type</DialogTitle>
+            <DialogDescription>
+              Create a new task type for your organization.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="task-type-name">Name (Unique Identifier) *</Label>
+              <Input
+                id="task-type-name"
+                value={taskTypeFormData.name}
+                onChange={(e) =>
+                  setTaskTypeFormData({
+                    ...taskTypeFormData,
+                    name: e.target.value.toLowerCase().replace(/\s+/g, "_"),
+                  })
+                }
+                placeholder="e.g., patient_care"
+                className="font-mono"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Lowercase letters, numbers, and underscores only. Used internally.
+              </p>
+            </div>
+            <div>
+              <Label htmlFor="task-type-display-name">Display Name *</Label>
+              <Input
+                id="task-type-display-name"
+                value={taskTypeFormData.display_name}
+                onChange={(e) =>
+                  setTaskTypeFormData({
+                    ...taskTypeFormData,
+                    display_name: e.target.value,
+                  })
+                }
+                placeholder="e.g., Patient Care"
+              />
+            </div>
+            <div>
+              <Label htmlFor="task-type-description">Description</Label>
+              <Textarea
+                id="task-type-description"
+                value={taskTypeFormData.description}
+                onChange={(e) =>
+                  setTaskTypeFormData({
+                    ...taskTypeFormData,
+                    description: e.target.value,
+                  })
+                }
+                placeholder="Describe this task type..."
+                rows={3}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="task-type-icon">Icon (Emoji)</Label>
+                <Input
+                  id="task-type-icon"
+                  value={taskTypeFormData.icon}
+                  onChange={(e) =>
+                    setTaskTypeFormData({
+                      ...taskTypeFormData,
+                      icon: e.target.value,
+                    })
+                  }
+                  placeholder="👨‍⚕️"
+                  maxLength={2}
+                />
+              </div>
+              <div>
+                <Label htmlFor="task-type-color">Color</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="task-type-color"
+                    type="color"
+                    value={taskTypeFormData.color}
+                    onChange={(e) =>
+                      setTaskTypeFormData({
+                        ...taskTypeFormData,
+                        color: e.target.value,
+                      })
+                    }
+                    className="w-20 h-10"
+                  />
+                  <Input
+                    value={taskTypeFormData.color}
+                    onChange={(e) =>
+                      setTaskTypeFormData({
+                        ...taskTypeFormData,
+                        color: e.target.value,
+                      })
+                    }
+                    placeholder="#6B7280"
+                    className="font-mono"
+                  />
+                </div>
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="task-type-sort-order">Sort Order</Label>
+              <Input
+                id="task-type-sort-order"
+                type="number"
+                value={taskTypeFormData.sort_order}
+                onChange={(e) =>
+                  setTaskTypeFormData({
+                    ...taskTypeFormData,
+                    sort_order: parseInt(e.target.value) || 0,
+                  })
+                }
+                placeholder="0"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Lower numbers appear first in lists.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsCreateTaskTypeModalOpen(false);
+                setTaskTypeFormData({
+                  name: "",
+                  display_name: "",
+                  description: "",
+                  icon: "",
+                  color: "#6B7280",
+                  sort_order: 0,
+                });
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleCreateTaskType}
+              disabled={
+                createTaskTypeMutation.isPending ||
+                !taskTypeFormData.name ||
+                !taskTypeFormData.display_name
+              }
+            >
+              {createTaskTypeMutation.isPending && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
+              Create Task Type
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
 
 export default TaskDetailPage;
-

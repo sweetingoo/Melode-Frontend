@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -100,10 +101,10 @@ import {
   useMyTasks,
 } from "@/hooks/useTasks";
 import { useUsers } from "@/hooks/useUsers";
-import { useLocations } from "@/hooks/useLocations";
+import { useLocations, useCreateLocation } from "@/hooks/useLocations";
 import { useAssets } from "@/hooks/useAssets";
 import { useRoles, useRoleUsers } from "@/hooks/useRoles";
-import { useActiveTaskTypes } from "@/hooks/useTaskTypes";
+import { useActiveTaskTypes, useCreateTaskType } from "@/hooks/useTaskTypes";
 import { useForms } from "@/hooks/useForms";
 import { useCurrentUser } from "@/hooks/useAuth";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -113,6 +114,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn } from "@/lib/utils";
 
 const TasksPage = () => {
+  const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -161,6 +163,34 @@ const TasksPage = () => {
   const [assetAssignmentType, setAssetAssignmentType] = useState("user"); // "user" or "role" for asset assignment
   const [isRecurring, setIsRecurring] = useState(false);
   const [createIndividualTasks, setCreateIndividualTasks] = useState(false);
+  const [isCreateTaskTypeModalOpen, setIsCreateTaskTypeModalOpen] = useState(false);
+  const [isCreateLocationModalOpen, setIsCreateLocationModalOpen] = useState(false);
+  const [taskTypeFormData, setTaskTypeFormData] = useState({
+    name: "",
+    display_name: "",
+    description: "",
+    icon: "",
+    color: "#6B7280",
+    sort_order: 0,
+  });
+  const [locationFormData, setLocationFormData] = useState({
+    name: "",
+    description: "",
+    location_type: "",
+    parent_location_id: null,
+    address: "",
+    coordinates: "",
+    capacity: 0,
+    area_sqm: 0,
+    status: "active",
+    is_accessible: true,
+    requires_access_control: false,
+    contact_person: "",
+    contact_phone: "",
+    contact_email: "",
+    responsible_department: "",
+    is_active: true,
+  });
   const [recurrencePattern, setRecurrencePattern] = useState({
     frequency: "daily",
     interval: 1,
@@ -300,6 +330,8 @@ const TasksPage = () => {
 
   const deleteTaskMutation = useDeleteTask();
   const createTaskMutation = useCreateTask();
+  const createTaskTypeMutation = useCreateTaskType();
+  const createLocationMutation = useCreateLocation();
   const updateTaskMutation = useUpdateTask();
   const completeTaskMutation = useCompleteTask();
   const assignTaskMutation = useAssignTask();
@@ -524,6 +556,72 @@ const TasksPage = () => {
 
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
+  };
+
+  const handleCreateTaskType = async () => {
+    if (!taskTypeFormData.name || !taskTypeFormData.display_name) {
+      return;
+    }
+
+    try {
+      const result = await createTaskTypeMutation.mutateAsync(taskTypeFormData);
+      setIsCreateTaskTypeModalOpen(false);
+      // Reset form
+      setTaskTypeFormData({
+        name: "",
+        display_name: "",
+        description: "",
+        icon: "",
+        color: "#6B7280",
+        sort_order: 0,
+      });
+      // Auto-select the newly created task type
+      if (result && result.name) {
+        setTaskFormData({ ...taskFormData, task_type: result.name });
+      }
+      // Refetch task types to update the dropdown
+      // The mutation should already invalidate the cache, but we can force a refetch if needed
+    } catch (error) {
+      console.error("Failed to create task type:", error);
+    }
+  };
+
+  const handleCreateLocation = async () => {
+    if (!locationFormData.name || !locationFormData.location_type || !locationFormData.address) {
+      return;
+    }
+
+    try {
+      const result = await createLocationMutation.mutateAsync(locationFormData);
+      setIsCreateLocationModalOpen(false);
+      // Reset form
+      setLocationFormData({
+        name: "",
+        description: "",
+        location_type: "",
+        parent_location_id: null,
+        address: "",
+        coordinates: "",
+        capacity: 0,
+        area_sqm: 0,
+        status: "active",
+        is_accessible: true,
+        requires_access_control: false,
+        contact_person: "",
+        contact_phone: "",
+        contact_email: "",
+        responsible_department: "",
+        is_active: true,
+      });
+      // Auto-select the newly created location
+      if (result && result.id) {
+        setTaskFormData({ ...taskFormData, location_id: result.id.toString() });
+      }
+      // Refetch locations to update the dropdown
+      // The mutation should already invalidate the cache, but we can force a refetch if needed
+    } catch (error) {
+      console.error("Failed to create location:", error);
+    }
   };
 
   const handleCreateTask = async () => {
@@ -1661,33 +1759,44 @@ const TasksPage = () => {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="task_type">Task Type *</Label>
-                <Select
-                  value={taskFormData.task_type || undefined}
-                  onValueChange={(value) => {
-                    setTaskFormData({ ...taskFormData, task_type: value });
-                    if (formErrors.task_type) {
-                      setFormErrors({ ...formErrors, task_type: null });
-                    }
-                  }}
-                >
-                  <SelectTrigger className={formErrors.task_type ? "border-red-500" : ""}>
-                    <SelectValue placeholder="Select task type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {taskTypes.length === 0 ? (
-                      <SelectItem value="none" disabled>Loading task types...</SelectItem>
-                    ) : (
-                      taskTypes.map((taskType) => (
-                        <SelectItem key={taskType.id} value={taskType.name}>
-                          <div className="flex items-center gap-2">
-                            {taskType.icon && <span>{taskType.icon}</span>}
-                            <span>{taskType.display_name || taskType.name}</span>
-                          </div>
-                        </SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
+                <div className="flex gap-2">
+                  <Select
+                    value={taskFormData.task_type || undefined}
+                    onValueChange={(value) => {
+                      setTaskFormData({ ...taskFormData, task_type: value });
+                      if (formErrors.task_type) {
+                        setFormErrors({ ...formErrors, task_type: null });
+                      }
+                    }}
+                  >
+                    <SelectTrigger className={formErrors.task_type ? "border-red-500" : ""}>
+                      <SelectValue placeholder="Select task type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {taskTypes.length === 0 ? (
+                        <SelectItem value="none" disabled>Loading task types...</SelectItem>
+                      ) : (
+                        taskTypes.map((taskType) => (
+                          <SelectItem key={taskType.id} value={taskType.name}>
+                            <div className="flex items-center gap-2">
+                              {taskType.icon && <span>{taskType.icon}</span>}
+                              <span>{taskType.display_name || taskType.name}</span>
+                            </div>
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setIsCreateTaskTypeModalOpen(true)}
+                    title="Create new task type"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
                 {formErrors.task_type && (
                   <p className="text-sm text-red-600 mt-1">{formErrors.task_type}</p>
                 )}
@@ -1754,24 +1863,35 @@ const TasksPage = () => {
             </div>
             <div>
               <Label>Location</Label>
-              <Select
-                value={taskFormData.location_id && taskFormData.location_id !== "" ? taskFormData.location_id : undefined}
-                onValueChange={(value) =>
-                  setTaskFormData({ ...taskFormData, location_id: value === "none" ? "" : value })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select location (optional)" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">None</SelectItem>
-                  {locations.map((location) => (
-                    <SelectItem key={location.id} value={location.id.toString()}>
-                      {location.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="flex gap-2">
+                <Select
+                  value={taskFormData.location_id && taskFormData.location_id !== "" ? taskFormData.location_id : undefined}
+                  onValueChange={(value) =>
+                    setTaskFormData({ ...taskFormData, location_id: value === "none" ? "" : value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select location (optional)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {locations.map((location) => (
+                      <SelectItem key={location.id} value={location.id.toString()}>
+                        {location.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setIsCreateLocationModalOpen(true)}
+                  title="Create new location"
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
             {/* Assignment Section */}
             <div>
@@ -2962,6 +3082,449 @@ const TasksPage = () => {
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               )}
               Complete Task
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Task Type Modal */}
+      <Dialog open={isCreateTaskTypeModalOpen} onOpenChange={setIsCreateTaskTypeModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create New Task Type</DialogTitle>
+            <DialogDescription>
+              Create a new task type for your organization.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="task-type-name">Name (Unique Identifier) *</Label>
+              <Input
+                id="task-type-name"
+                value={taskTypeFormData.name}
+                onChange={(e) =>
+                  setTaskTypeFormData({
+                    ...taskTypeFormData,
+                    name: e.target.value.toLowerCase().replace(/\s+/g, "_"),
+                  })
+                }
+                placeholder="e.g., patient_care"
+                className="font-mono"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Lowercase letters, numbers, and underscores only. Used internally.
+              </p>
+            </div>
+            <div>
+              <Label htmlFor="task-type-display-name">Display Name *</Label>
+              <Input
+                id="task-type-display-name"
+                value={taskTypeFormData.display_name}
+                onChange={(e) =>
+                  setTaskTypeFormData({
+                    ...taskTypeFormData,
+                    display_name: e.target.value,
+                  })
+                }
+                placeholder="e.g., Patient Care"
+              />
+            </div>
+            <div>
+              <Label htmlFor="task-type-description">Description</Label>
+              <Textarea
+                id="task-type-description"
+                value={taskTypeFormData.description}
+                onChange={(e) =>
+                  setTaskTypeFormData({
+                    ...taskTypeFormData,
+                    description: e.target.value,
+                  })
+                }
+                placeholder="Describe this task type..."
+                rows={3}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="task-type-icon">Icon (Emoji)</Label>
+                <Input
+                  id="task-type-icon"
+                  value={taskTypeFormData.icon}
+                  onChange={(e) =>
+                    setTaskTypeFormData({
+                      ...taskTypeFormData,
+                      icon: e.target.value,
+                    })
+                  }
+                  placeholder="👨‍⚕️"
+                  maxLength={2}
+                />
+              </div>
+              <div>
+                <Label htmlFor="task-type-color">Color</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="task-type-color"
+                    type="color"
+                    value={taskTypeFormData.color}
+                    onChange={(e) =>
+                      setTaskTypeFormData({
+                        ...taskTypeFormData,
+                        color: e.target.value,
+                      })
+                    }
+                    className="w-20 h-10"
+                  />
+                  <Input
+                    value={taskTypeFormData.color}
+                    onChange={(e) =>
+                      setTaskTypeFormData({
+                        ...taskTypeFormData,
+                        color: e.target.value,
+                      })
+                    }
+                    placeholder="#6B7280"
+                    className="font-mono"
+                  />
+                </div>
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="task-type-sort-order">Sort Order</Label>
+              <Input
+                id="task-type-sort-order"
+                type="number"
+                value={taskTypeFormData.sort_order}
+                onChange={(e) =>
+                  setTaskTypeFormData({
+                    ...taskTypeFormData,
+                    sort_order: parseInt(e.target.value) || 0,
+                  })
+                }
+                placeholder="0"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Lower numbers appear first in lists.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsCreateTaskTypeModalOpen(false);
+                setTaskTypeFormData({
+                  name: "",
+                  display_name: "",
+                  description: "",
+                  icon: "",
+                  color: "#6B7280",
+                  sort_order: 0,
+                });
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleCreateTaskType}
+              disabled={
+                createTaskTypeMutation.isPending ||
+                !taskTypeFormData.name ||
+                !taskTypeFormData.display_name
+              }
+            >
+              {createTaskTypeMutation.isPending && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
+              Create Task Type
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Location Modal */}
+      <Dialog open={isCreateLocationModalOpen} onOpenChange={setIsCreateLocationModalOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Create New Location</DialogTitle>
+            <DialogDescription>
+              Add a new location to the system. Fill in all required information.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="location-name">
+                Location Name <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="location-name"
+                value={locationFormData.name}
+                onChange={(e) =>
+                  setLocationFormData({
+                    ...locationFormData,
+                    name: e.target.value,
+                  })
+                }
+                placeholder="Headquarters"
+              />
+            </div>
+            <div>
+              <Label htmlFor="location-description">Description</Label>
+              <Textarea
+                id="location-description"
+                value={locationFormData.description}
+                onChange={(e) =>
+                  setLocationFormData({
+                    ...locationFormData,
+                    description: e.target.value,
+                  })
+                }
+                placeholder="Location description..."
+                rows={3}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="location-type">
+                  Location Type <span className="text-red-500">*</span>
+                </Label>
+                <Select
+                  value={locationFormData.location_type}
+                  onValueChange={(value) =>
+                    setLocationFormData({
+                      ...locationFormData,
+                      location_type: value,
+                    })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="site">Site</SelectItem>
+                    <SelectItem value="building">Building</SelectItem>
+                    <SelectItem value="room">Room</SelectItem>
+                    <SelectItem value="area">Area</SelectItem>
+                    <SelectItem value="zone">Zone</SelectItem>
+                    <SelectItem value="floor">Floor</SelectItem>
+                    <SelectItem value="wing">Wing</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="parent-location">Parent Location</Label>
+                <Select
+                  value={
+                    locationFormData.parent_location_id?.toString() ||
+                    "__none__"
+                  }
+                  onValueChange={(value) =>
+                    setLocationFormData({
+                      ...locationFormData,
+                      parent_location_id:
+                        value === "__none__" ? null : parseInt(value),
+                    })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select parent (optional)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">
+                      None (Root Location)
+                    </SelectItem>
+                    {locations.map((location) => (
+                      <SelectItem
+                        key={location.id}
+                        value={location.id.toString()}
+                      >
+                        {location.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="location-address">
+                Address <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="location-address"
+                value={locationFormData.address}
+                onChange={(e) =>
+                  setLocationFormData({
+                    ...locationFormData,
+                    address: e.target.value,
+                  })
+                }
+                placeholder="123 Main Street"
+              />
+            </div>
+            <div>
+              <Label htmlFor="location-coordinates">Coordinates</Label>
+              <Input
+                id="location-coordinates"
+                value={locationFormData.coordinates}
+                onChange={(e) =>
+                  setLocationFormData({
+                    ...locationFormData,
+                    coordinates: e.target.value,
+                  })
+                }
+                placeholder="40.7128,-74.0060 or GeoJSON format"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Optional: GPS coordinates or GeoJSON format
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="location-capacity">Capacity</Label>
+                <Input
+                  id="location-capacity"
+                  type="number"
+                  value={locationFormData.capacity}
+                  onChange={(e) =>
+                    setLocationFormData({
+                      ...locationFormData,
+                      capacity: parseInt(e.target.value) || 0,
+                    })
+                  }
+                  placeholder="0"
+                />
+              </div>
+              <div>
+                <Label htmlFor="location-area">Area (sqm)</Label>
+                <Input
+                  id="location-area"
+                  type="number"
+                  step="0.01"
+                  value={locationFormData.area_sqm}
+                  onChange={(e) =>
+                    setLocationFormData({
+                      ...locationFormData,
+                      area_sqm: parseFloat(e.target.value) || 0,
+                    })
+                  }
+                  placeholder="0"
+                />
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="location-status">
+                Status <span className="text-red-500">*</span>
+              </Label>
+              <Select
+                value={locationFormData.status}
+                onValueChange={(value) =>
+                  setLocationFormData({
+                    ...locationFormData,
+                    status: value,
+                  })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="inactive">Inactive</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="location-is-accessible"
+                checked={locationFormData.is_accessible}
+                onChange={(e) =>
+                  setLocationFormData({
+                    ...locationFormData,
+                    is_accessible: e.target.checked,
+                  })
+                }
+                className="h-4 w-4 rounded"
+              />
+              <Label htmlFor="location-is-accessible" className="cursor-pointer">
+                Is Accessible
+              </Label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="location-requires-access-control"
+                checked={locationFormData.requires_access_control}
+                onChange={(e) =>
+                  setLocationFormData({
+                    ...locationFormData,
+                    requires_access_control: e.target.checked,
+                  })
+                }
+                className="h-4 w-4 rounded"
+              />
+              <Label htmlFor="location-requires-access-control" className="cursor-pointer">
+                Requires Access Control
+              </Label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="location-is-active"
+                checked={locationFormData.is_active}
+                onChange={(e) =>
+                  setLocationFormData({
+                    ...locationFormData,
+                    is_active: e.target.checked,
+                  })
+                }
+                className="h-4 w-4 rounded"
+              />
+              <Label htmlFor="location-is-active" className="cursor-pointer">
+                Is Active
+              </Label>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsCreateLocationModalOpen(false);
+                setLocationFormData({
+                  name: "",
+                  description: "",
+                  location_type: "",
+                  parent_location_id: null,
+                  address: "",
+                  coordinates: "",
+                  capacity: 0,
+                  area_sqm: 0,
+                  status: "active",
+                  is_accessible: true,
+                  requires_access_control: false,
+                  contact_person: "",
+                  contact_phone: "",
+                  contact_email: "",
+                  responsible_department: "",
+                  is_active: true,
+                });
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleCreateLocation}
+              disabled={
+                createLocationMutation.isPending ||
+                !locationFormData.name ||
+                !locationFormData.location_type ||
+                !locationFormData.address
+              }
+            >
+              {createLocationMutation.isPending && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
+              Create Location
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -87,9 +87,9 @@ import {
   useUpdateAssetSensorData,
   useAssetsNeedingMaintenance,
 } from "@/hooks/useAssets";
-import { useLocations } from "@/hooks/useLocations";
+import { useLocations, useCreateLocation } from "@/hooks/useLocations";
 import { useUsers } from "@/hooks/useUsers";
-import { useRoles } from "@/hooks/useRoles";
+import { useRoles, useCreateRole } from "@/hooks/useRoles";
 import ResourceAuditLogs from "@/components/ResourceAuditLogs";
 import MultiFileUpload from "@/components/MultiFileUpload";
 import FileAttachmentList from "@/components/FileAttachmentList";
@@ -115,6 +115,32 @@ const AssetsPage = () => {
   const [assignToType, setAssignToType] = useState("user"); // "user" or "role"
   const [attributesData, setAttributesData] = useState("");
   const [sensorDataInput, setSensorDataInput] = useState("");
+  const [isCreateRoleModalOpen, setIsCreateRoleModalOpen] = useState(false);
+  const [isCreateLocationModalOpen, setIsCreateLocationModalOpen] = useState(false);
+  const [roleFormData, setRoleFormData] = useState({
+    displayName: "",
+    roleName: "",
+    description: "",
+    priority: 50,
+  });
+  const [locationFormData, setLocationFormData] = useState({
+    name: "",
+    description: "",
+    location_type: "",
+    parent_location_id: null,
+    address: "",
+    coordinates: "",
+    capacity: 0,
+    area_sqm: 0,
+    status: "active",
+    is_accessible: true,
+    requires_access_control: false,
+    contact_person: "",
+    contact_phone: "",
+    contact_email: "",
+    responsible_department: "",
+    is_active: true,
+  });
 
   // API hooks
   const { data: assets = [], isLoading: assetsLoading } = useAssets();
@@ -132,6 +158,8 @@ const AssetsPage = () => {
   const assignAssetMutation = useAssignAsset();
   const updateAttributesMutation = useUpdateAssetAttributes();
   const updateSensorDataMutation = useUpdateAssetSensorData();
+  const createRoleMutation = useCreateRole();
+  const createLocationMutation = useCreateLocation();
 
   const userList = useUsers();
 
@@ -236,7 +264,7 @@ const AssetsPage = () => {
       filtered = filtered.filter(
         (asset) =>
           (asset.locationId || asset.location_id)?.toString() ===
-            selectedLocation ||
+          selectedLocation ||
           (asset.currentLocation || asset.current_location) === selectedLocation
       );
     }
@@ -324,27 +352,27 @@ const AssetsPage = () => {
         asset.is_active !== undefined
           ? asset.is_active
           : asset.isActive !== undefined
-          ? asset.isActive
-          : true,
+            ? asset.isActive
+            : true,
       display_name: asset.display_name || asset.displayName || "",
       is_operational:
         asset.is_operational !== undefined
           ? asset.is_operational
           : asset.isOperational !== undefined
-          ? asset.isOperational
-          : true,
+            ? asset.isOperational
+            : true,
       needs_maintenance:
         asset.needs_maintenance !== undefined
           ? asset.needs_maintenance
           : asset.needsMaintenance !== undefined
-          ? asset.needsMaintenance
-          : false,
+            ? asset.needsMaintenance
+            : false,
       is_compliant:
         asset.is_compliant !== undefined
           ? asset.is_compliant
           : asset.isCompliant !== undefined
-          ? asset.isCompliant
-          : true,
+            ? asset.isCompliant
+            : true,
     });
     setIsEditModalOpen(true);
   };
@@ -370,6 +398,69 @@ const AssetsPage = () => {
       setAssignToType("user");
     }
     setIsAssignModalOpen(true);
+  };
+
+  const handleCreateRole = async () => {
+    if (!roleFormData.displayName || !roleFormData.roleName) {
+      return;
+    }
+
+    try {
+      const result = await createRoleMutation.mutateAsync({
+        display_name: roleFormData.displayName,
+        name: roleFormData.roleName,
+        description: roleFormData.description,
+        priority: roleFormData.priority,
+      });
+      setIsCreateRoleModalOpen(false);
+      setRoleFormData({
+        displayName: "",
+        roleName: "",
+        description: "",
+        priority: 50,
+      });
+      // Auto-select the newly created role
+      if (result && result.id) {
+        setAssignData({ ...assignData, assigned_to_role_id: result.id });
+      }
+    } catch (error) {
+      console.error("Failed to create role:", error);
+    }
+  };
+
+  const handleCreateLocation = async () => {
+    if (!locationFormData.name || !locationFormData.location_type || !locationFormData.address) {
+      return;
+    }
+
+    try {
+      const result = await createLocationMutation.mutateAsync(locationFormData);
+      setIsCreateLocationModalOpen(false);
+      setLocationFormData({
+        name: "",
+        description: "",
+        location_type: "",
+        parent_location_id: null,
+        address: "",
+        coordinates: "",
+        capacity: 0,
+        area_sqm: 0,
+        status: "active",
+        is_accessible: true,
+        requires_access_control: false,
+        contact_person: "",
+        contact_phone: "",
+        contact_email: "",
+        responsible_department: "",
+        is_active: true,
+      });
+      // Auto-select the newly created location
+      if (result && result.id) {
+        setAssignData({ ...assignData, location_id: result.id });
+      }
+    } catch (error) {
+      console.error("Failed to create location:", error);
+    }
   };
 
   const handleUpdateAttributes = (asset) => {
@@ -781,19 +872,19 @@ const AssetsPage = () => {
             {(searchQuery ||
               selectedLocation !== "all" ||
               showMaintenanceNeeded) && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setSearchQuery("");
-                  setSelectedLocation("all");
-                  setShowMaintenanceNeeded(false);
-                }}
-              >
-                <X className="h-4 w-4 mr-2" />
-                Clear
-              </Button>
-            )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setSearchQuery("");
+                    setSelectedLocation("all");
+                    setShowMaintenanceNeeded(false);
+                  }}
+                >
+                  <X className="h-4 w-4 mr-2" />
+                  Clear
+                </Button>
+              )}
           </div>
         </CardContent>
       </Card>
@@ -868,8 +959,8 @@ const AssetsPage = () => {
               <h3 className="text-lg font-semibold mb-2">No assets found</h3>
               <p className="text-muted-foreground text-center mb-4">
                 {searchQuery ||
-                selectedLocation !== "all" ||
-                showMaintenanceNeeded
+                  selectedLocation !== "all" ||
+                  showMaintenanceNeeded
                   ? "Try adjusting your filters to see more results."
                   : "Get started by creating your first asset."}
               </p>
@@ -1516,7 +1607,7 @@ const AssetsPage = () => {
                   <p className="font-medium mt-1">
                     {selectedAsset.assignedTo ||
                       (selectedAsset.assignedToUserId ||
-                      selectedAsset.assignedToRoleId
+                        selectedAsset.assignedToRoleId
                         ? "Assigned"
                         : "Unassigned")}
                   </p>
@@ -1549,7 +1640,7 @@ const AssetsPage = () => {
                   <p className="font-medium mt-1">
                     {formatDateOnly(
                       selectedAsset.warrantyExpiry ||
-                        selectedAsset.warranty_expiry
+                      selectedAsset.warranty_expiry
                     )}
                   </p>
                 </div>
@@ -1560,7 +1651,7 @@ const AssetsPage = () => {
                   <p className="font-medium mt-1">
                     {formatDateOnly(
                       selectedAsset.lastMaintenanceDate ||
-                        selectedAsset.last_maintenance_date
+                      selectedAsset.last_maintenance_date
                     )}
                   </p>
                 </div>
@@ -1571,12 +1662,12 @@ const AssetsPage = () => {
                   <p className="font-medium mt-1">
                     {formatDateOnly(
                       selectedAsset.nextMaintenanceDate ||
-                        selectedAsset.next_maintenance_date
+                      selectedAsset.next_maintenance_date
                     )}
                   </p>
                 </div>
               </div>
-              
+
               {/* File Attachments */}
               <div className="pt-6 border-t space-y-4">
                 <FileAttachmentList
@@ -1594,7 +1685,7 @@ const AssetsPage = () => {
                   }}
                 />
               </div>
-              
+
               {/* Activity History */}
               <div className="pt-6 border-t">
                 <ResourceAuditLogs
@@ -1720,35 +1811,55 @@ const AssetsPage = () => {
                       )}
                     </SelectContent>
                   </Select>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setIsCreateRoleModalOpen(true)}
+                    title="Create new role"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
                 </TabsContent>
               </Tabs>
             </div>
             <div className="space-y-2">
               <Label htmlFor="assign-location">Location</Label>
-              <Select
-                value={assignData.location_id?.toString() || "__none__"}
-                onValueChange={(value) => {
-                  setAssignData({
-                    ...assignData,
-                    location_id: value === "__none__" ? null : parseInt(value),
-                  });
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select location" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">No location</SelectItem>
-                  {locations.map((location) => (
-                    <SelectItem
-                      key={location.id}
-                      value={location.id.toString()}
-                    >
-                      {location.name || location.locationName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="flex gap-2">
+                <Select
+                  value={assignData.location_id?.toString() || "__none__"}
+                  onValueChange={(value) => {
+                    setAssignData({
+                      ...assignData,
+                      location_id: value === "__none__" ? null : parseInt(value),
+                    });
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select location" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">No location</SelectItem>
+                    {locations.map((location) => (
+                      <SelectItem
+                        key={location.id}
+                        value={location.id.toString()}
+                      >
+                        {location.name || location.locationName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setIsCreateLocationModalOpen(true)}
+                  title="Create new location"
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           </div>
           <DialogFooter>
@@ -1898,6 +2009,404 @@ const AssetsPage = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Create Role Modal */}
+      <Dialog open={isCreateRoleModalOpen} onOpenChange={setIsCreateRoleModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Create New Role</DialogTitle>
+            <DialogDescription>
+              Create a new role for your organization.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="role-display-name">
+                Display Name <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="role-display-name"
+                placeholder="e.g., Senior Doctor"
+                value={roleFormData.displayName}
+                onChange={(e) =>
+                  setRoleFormData({
+                    ...roleFormData,
+                    displayName: e.target.value,
+                  })
+                }
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="role-name">
+                Role Name <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="role-name"
+                placeholder="e.g., senior_doctor"
+                value={roleFormData.roleName}
+                onChange={(e) =>
+                  setRoleFormData({
+                    ...roleFormData,
+                    roleName: e.target.value.toLowerCase().replace(/\s+/g, "_"),
+                  })
+                }
+              />
+              <p className="text-xs text-muted-foreground">
+                Lowercase with underscores only. Cannot be changed after creation.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="role-description">Description</Label>
+              <Textarea
+                id="role-description"
+                placeholder="Describe this role's purpose and responsibilities"
+                value={roleFormData.description}
+                onChange={(e) =>
+                  setRoleFormData({
+                    ...roleFormData,
+                    description: e.target.value,
+                  })
+                }
+                className="resize-none"
+                rows={3}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="role-priority">Priority</Label>
+              <Input
+                id="role-priority"
+                type="number"
+                value={roleFormData.priority}
+                onChange={(e) =>
+                  setRoleFormData({
+                    ...roleFormData,
+                    priority: parseInt(e.target.value) || 50,
+                  })
+                }
+                min="1"
+                max="100"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsCreateRoleModalOpen(false);
+                setRoleFormData({
+                  displayName: "",
+                  roleName: "",
+                  description: "",
+                  priority: 50,
+                });
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleCreateRole}
+              disabled={
+                createRoleMutation.isPending ||
+                !roleFormData.displayName ||
+                !roleFormData.roleName
+              }
+            >
+              {createRoleMutation.isPending && (
+                <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+              )}
+              Create Role
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Location Modal */}
+      <Dialog open={isCreateLocationModalOpen} onOpenChange={setIsCreateLocationModalOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Create New Location</DialogTitle>
+            <DialogDescription>
+              Add a new location to the system. Fill in all required information.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="location-name">
+                Location Name <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="location-name"
+                value={locationFormData.name}
+                onChange={(e) =>
+                  setLocationFormData({
+                    ...locationFormData,
+                    name: e.target.value,
+                  })
+                }
+                placeholder="Headquarters"
+              />
+            </div>
+            <div>
+              <Label htmlFor="location-description">Description</Label>
+              <Textarea
+                id="location-description"
+                value={locationFormData.description}
+                onChange={(e) =>
+                  setLocationFormData({
+                    ...locationFormData,
+                    description: e.target.value,
+                  })
+                }
+                placeholder="Location description..."
+                rows={3}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="location-type">
+                  Location Type <span className="text-red-500">*</span>
+                </Label>
+                <Select
+                  value={locationFormData.location_type}
+                  onValueChange={(value) =>
+                    setLocationFormData({
+                      ...locationFormData,
+                      location_type: value,
+                    })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="site">Site</SelectItem>
+                    <SelectItem value="building">Building</SelectItem>
+                    <SelectItem value="room">Room</SelectItem>
+                    <SelectItem value="area">Area</SelectItem>
+                    <SelectItem value="zone">Zone</SelectItem>
+                    <SelectItem value="floor">Floor</SelectItem>
+                    <SelectItem value="wing">Wing</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="parent-location">Parent Location</Label>
+                <Select
+                  value={
+                    locationFormData.parent_location_id?.toString() ||
+                    "__none__"
+                  }
+                  onValueChange={(value) =>
+                    setLocationFormData({
+                      ...locationFormData,
+                      parent_location_id:
+                        value === "__none__" ? null : parseInt(value),
+                    })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select parent (optional)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">
+                      None (Root Location)
+                    </SelectItem>
+                    {locations.map((location) => (
+                      <SelectItem
+                        key={location.id}
+                        value={location.id.toString()}
+                      >
+                        {location.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="location-address">
+                Address <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="location-address"
+                value={locationFormData.address}
+                onChange={(e) =>
+                  setLocationFormData({
+                    ...locationFormData,
+                    address: e.target.value,
+                  })
+                }
+                placeholder="123 Main Street"
+              />
+            </div>
+            <div>
+              <Label htmlFor="location-coordinates">Coordinates</Label>
+              <Input
+                id="location-coordinates"
+                value={locationFormData.coordinates}
+                onChange={(e) =>
+                  setLocationFormData({
+                    ...locationFormData,
+                    coordinates: e.target.value,
+                  })
+                }
+                placeholder="40.7128,-74.0060 or GeoJSON format"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Optional: GPS coordinates or GeoJSON format
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="location-capacity">Capacity</Label>
+                <Input
+                  id="location-capacity"
+                  type="number"
+                  value={locationFormData.capacity}
+                  onChange={(e) =>
+                    setLocationFormData({
+                      ...locationFormData,
+                      capacity: parseInt(e.target.value) || 0,
+                    })
+                  }
+                  placeholder="0"
+                />
+              </div>
+              <div>
+                <Label htmlFor="location-area">Area (sqm)</Label>
+                <Input
+                  id="location-area"
+                  type="number"
+                  step="0.01"
+                  value={locationFormData.area_sqm}
+                  onChange={(e) =>
+                    setLocationFormData({
+                      ...locationFormData,
+                      area_sqm: parseFloat(e.target.value) || 0,
+                    })
+                  }
+                  placeholder="0"
+                />
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="location-status">
+                Status <span className="text-red-500">*</span>
+              </Label>
+              <Select
+                value={locationFormData.status}
+                onValueChange={(value) =>
+                  setLocationFormData({
+                    ...locationFormData,
+                    status: value,
+                  })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="inactive">Inactive</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="location-is-accessible"
+                checked={locationFormData.is_accessible}
+                onChange={(e) =>
+                  setLocationFormData({
+                    ...locationFormData,
+                    is_accessible: e.target.checked,
+                  })
+                }
+                className="h-4 w-4 rounded"
+              />
+              <Label htmlFor="location-is-accessible" className="cursor-pointer">
+                Is Accessible
+              </Label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="location-requires-access-control"
+                checked={locationFormData.requires_access_control}
+                onChange={(e) =>
+                  setLocationFormData({
+                    ...locationFormData,
+                    requires_access_control: e.target.checked,
+                  })
+                }
+                className="h-4 w-4 rounded"
+              />
+              <Label htmlFor="location-requires-access-control" className="cursor-pointer">
+                Requires Access Control
+              </Label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="location-is-active"
+                checked={locationFormData.is_active}
+                onChange={(e) =>
+                  setLocationFormData({
+                    ...locationFormData,
+                    is_active: e.target.checked,
+                  })
+                }
+                className="h-4 w-4 rounded"
+              />
+              <Label htmlFor="location-is-active" className="cursor-pointer">
+                Is Active
+              </Label>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsCreateLocationModalOpen(false);
+                setLocationFormData({
+                  name: "",
+                  description: "",
+                  location_type: "",
+                  parent_location_id: null,
+                  address: "",
+                  coordinates: "",
+                  capacity: 0,
+                  area_sqm: 0,
+                  status: "active",
+                  is_accessible: true,
+                  requires_access_control: false,
+                  contact_person: "",
+                  contact_phone: "",
+                  contact_email: "",
+                  responsible_department: "",
+                  is_active: true,
+                });
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleCreateLocation}
+              disabled={
+                createLocationMutation.isPending ||
+                !locationFormData.name ||
+                !locationFormData.location_type ||
+                !locationFormData.address
+              }
+            >
+              {createLocationMutation.isPending && (
+                <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+              )}
+              Create Location
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

@@ -61,6 +61,7 @@ import {
   UserCheck,
   Loader2,
   Mail,
+  Plus,
 } from "lucide-react";
 import {
   useUsers,
@@ -72,6 +73,7 @@ import {
   useSendInvitationToUser,
   userUtils,
 } from "@/hooks/useUsers";
+import { useCreateRole } from "@/hooks/useRoles";
 import { useHijackUser } from "@/hooks/useAuth";
 import {
   Dialog,
@@ -108,6 +110,13 @@ const UserManagementPage = () => {
     role_id: "",
   });
   const [validationErrors, setValidationErrors] = useState({});
+  const [isCreateRoleModalOpen, setIsCreateRoleModalOpen] = useState(false);
+  const [roleFormData, setRoleFormData] = useState({
+    displayName: "",
+    roleName: "",
+    description: "",
+    priority: 50,
+  });
   const itemsPerPage = 10;
 
   // API hooks
@@ -120,6 +129,7 @@ const UserManagementPage = () => {
   const createUserMutation = useCreateUser();
   const hijackUserMutation = useHijackUser();
   const sendInvitationMutation = useSendInvitationToUser();
+  const createRoleMutation = useCreateRole();
 
   // Extract users and pagination data from response
   const users = usersResponse?.users || [];
@@ -275,6 +285,35 @@ const UserManagementPage = () => {
 
     setValidationErrors(errors);
     return Object.keys(errors).length === 0;
+  };
+
+  const handleCreateRole = async () => {
+    if (!roleFormData.displayName || !roleFormData.roleName) {
+      return;
+    }
+
+    try {
+      const result = await createRoleMutation.mutateAsync({
+        display_name: roleFormData.displayName,
+        name: roleFormData.roleName,
+        description: roleFormData.description,
+        priority: roleFormData.priority,
+      });
+      setIsCreateRoleModalOpen(false);
+      // Reset form
+      setRoleFormData({
+        displayName: "",
+        roleName: "",
+        description: "",
+        priority: 50,
+      });
+      // Auto-select the newly created role
+      if (result && result.id) {
+        setUserFormData({ ...userFormData, role_id: result.id.toString() });
+      }
+    } catch (error) {
+      console.error("Failed to create role:", error);
+    }
   };
 
   const handleCreateUser = () => {
@@ -1181,40 +1220,51 @@ const UserManagementPage = () => {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="role_id">Role</Label>
-                <Select
-                  value={userFormData.role_id || "__none__"}
-                  onValueChange={(value) =>
-                    setUserFormData({
-                      ...userFormData,
-                      role_id: value === "__none__" ? "" : value,
-                    })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select role" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">No Role</SelectItem>
-                    {rolesLoading ? (
-                      <SelectItem value="loading" disabled>
-                        Loading roles...
-                      </SelectItem>
-                    ) : roles.length === 0 ? (
-                      <SelectItem value="no-roles" disabled>
-                        No roles available
-                      </SelectItem>
-                    ) : (
-                      roles.map((role) => (
-                        <SelectItem key={role.id} value={role.id.toString()}>
-                          {role.display_name ||
-                            role.name ||
-                            role.role_name ||
-                            `Role ${role.id}`}
+                <div className="flex gap-2">
+                  <Select
+                    value={userFormData.role_id || "__none__"}
+                    onValueChange={(value) =>
+                      setUserFormData({
+                        ...userFormData,
+                        role_id: value === "__none__" ? "" : value,
+                      })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select role" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">No Role</SelectItem>
+                      {rolesLoading ? (
+                        <SelectItem value="loading" disabled>
+                          Loading roles...
                         </SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
+                      ) : roles.length === 0 ? (
+                        <SelectItem value="no-roles" disabled>
+                          No roles available
+                        </SelectItem>
+                      ) : (
+                        roles.map((role) => (
+                          <SelectItem key={role.id} value={role.id.toString()}>
+                            {role.display_name ||
+                              role.name ||
+                              role.role_name ||
+                              `Role ${role.id}`}
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setIsCreateRoleModalOpen(true)}
+                    title="Create new role"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
               <div className="flex items-center space-x-2 pt-8">
                 <input
@@ -1260,6 +1310,116 @@ const UserManagementPage = () => {
                   Create User
                 </>
               )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Role Modal */}
+      <Dialog open={isCreateRoleModalOpen} onOpenChange={setIsCreateRoleModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Create New Role</DialogTitle>
+            <DialogDescription>
+              Create a new role for your organization.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="role-display-name">
+                Display Name <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="role-display-name"
+                placeholder="e.g., Senior Doctor"
+                value={roleFormData.displayName}
+                onChange={(e) =>
+                  setRoleFormData({
+                    ...roleFormData,
+                    displayName: e.target.value,
+                  })
+                }
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="role-name">
+                Role Name <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="role-name"
+                placeholder="e.g., senior_doctor"
+                value={roleFormData.roleName}
+                onChange={(e) =>
+                  setRoleFormData({
+                    ...roleFormData,
+                    roleName: e.target.value.toLowerCase().replace(/\s+/g, "_"),
+                  })
+                }
+              />
+              <p className="text-xs text-muted-foreground">
+                Lowercase with underscores only. Cannot be changed after creation.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="role-description">Description</Label>
+              <Textarea
+                id="role-description"
+                placeholder="Describe this role's purpose and responsibilities"
+                value={roleFormData.description}
+                onChange={(e) =>
+                  setRoleFormData({
+                    ...roleFormData,
+                    description: e.target.value,
+                  })
+                }
+                className="resize-none"
+                rows={3}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="role-priority">Priority</Label>
+              <Input
+                id="role-priority"
+                type="number"
+                value={roleFormData.priority}
+                onChange={(e) =>
+                  setRoleFormData({
+                    ...roleFormData,
+                    priority: parseInt(e.target.value) || 50,
+                  })
+                }
+                min="1"
+                max="100"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsCreateRoleModalOpen(false);
+                setRoleFormData({
+                  displayName: "",
+                  roleName: "",
+                  description: "",
+                  priority: 50,
+                });
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleCreateRole}
+              disabled={
+                createRoleMutation.isPending ||
+                !roleFormData.displayName ||
+                !roleFormData.roleName
+              }
+            >
+              {createRoleMutation.isPending && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
+              Create Role
             </Button>
           </DialogFooter>
         </DialogContent>
