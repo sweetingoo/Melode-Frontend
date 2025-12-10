@@ -1599,8 +1599,3 @@ const NewFormPage = () => {
 };
 
 export default NewFormPage;
-    </div >
-  );
-};
-
-export default NewFormPage;
