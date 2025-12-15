@@ -767,6 +767,13 @@ export default function AdminLayout({ children }) {
         return true;
       }
 
+      // Special case: clock:in - allow superusers even if they don't have the permission
+      if (item.permission === "clock:in") {
+        // If user is superuser, allow access
+        if (isCurrentRoleSuperuser) return true;
+        // Otherwise check for permission
+      }
+
       // If user has wildcard permissions, show all
       if (userPermissionNames.includes("*")) return true;
 

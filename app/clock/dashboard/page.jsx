@@ -57,8 +57,6 @@ export default function ClockDashboardPage() {
   // Get current user
   const { data: currentUser, isLoading: userLoading } = useCurrentUser();
 
-  // Superusers don't need to clock in/out
-  const isSuperuser = currentUser?.is_superuser || false;
 
   // Get clock status with auto-refresh
   const { data: clockStatus, isLoading, refetch } = useClockStatus({
@@ -112,26 +110,6 @@ export default function ClockDashboardPage() {
     );
   }, [clockStatus?.job_role_id, rolesData]);
 
-  // Don't show clock dashboard for superusers
-  if (!userLoading && isSuperuser) {
-    return (
-      <div className="container mx-auto py-8">
-        <Card>
-          <CardContent className="p-6">
-            <div className="text-center">
-              <h1 className="text-2xl font-bold mb-4">Clock Dashboard Not Available</h1>
-              <p className="text-muted-foreground">
-                Superusers don't need to clock in/out. You have full access to view everything.
-              </p>
-              <Button onClick={() => router.push("/admin")} className="mt-4">
-                Go to Admin Dashboard
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
 
   // Check if clocked in
   if (isLoading || userLoading) {

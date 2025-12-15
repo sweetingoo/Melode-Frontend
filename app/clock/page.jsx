@@ -115,26 +115,16 @@ export default function ClockPage() {
   // Transform locations for select
   const locations = locationsData || [];
 
-  // Redirect superusers - they don't need to clock in/out
-  useEffect(() => {
-    if (!userLoading && isSuperuser) {
-      toast.info("Superusers don't need to clock in/out", {
-        description: "You have full access to view everything.",
-      });
-      router.push("/admin");
-    }
-  }, [isSuperuser, userLoading, router]);
-
   // Check if already clocked in
   useEffect(() => {
-    if (!statusLoading && clockStatus?.status === "active" && !isSuperuser) {
+    if (!statusLoading && clockStatus?.status === "active") {
       // Redirect to active shift dashboard or show message
       toast.info("You are already clocked in", {
         description: "Redirecting to your active shift...",
       });
       router.push("/clock/dashboard");
     }
-  }, [clockStatus, statusLoading, isSuperuser, router]);
+  }, [clockStatus, statusLoading, router]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -184,26 +174,6 @@ export default function ClockPage() {
     );
   }
 
-  // Don't show clock in page for superusers
-  if (isSuperuser) {
-    return (
-      <div className="container mx-auto py-8">
-        <Card>
-          <CardContent className="p-6">
-            <div className="text-center">
-              <h1 className="text-2xl font-bold mb-4">Clock In Not Available</h1>
-              <p className="text-muted-foreground">
-                Superusers don't need to clock in/out. You have full access to view everything.
-              </p>
-              <Button onClick={() => router.push("/admin")} className="mt-4">
-                Go to Admin Dashboard
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
 
   // If already clocked in, show message
   if (clockStatus?.status === "active") {

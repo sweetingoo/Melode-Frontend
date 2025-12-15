@@ -24,9 +24,8 @@ export const ClockInOutButton = ({ className = "" }) => {
   const { data: currentUserData } = useCurrentUser();
   const { hasPermission, isSuperuser } = usePermissionsCheck();
 
-  // Superusers don't need to clock in/out - they can see everything
-  // Also check if user has clock:in permission
-  if (isSuperuser || !hasPermission("clock:in")) {
+  // Check if user has clock:in permission or is a superuser
+  if (!isSuperuser && !hasPermission("clock:in")) {
     return null;
   }
   const router = useRouter();
@@ -190,6 +189,7 @@ export const ClockInOutButton = ({ className = "" }) => {
     </>
   );
 };
+
 
 
 
