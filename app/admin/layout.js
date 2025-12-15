@@ -415,97 +415,6 @@ export default function AdminLayout({ children }) {
     hasWildcardPermissions,
   ]);
 
-  // Helper function to check if current role is a Superuser role
-  const isCurrentRoleSuperuser = React.useMemo(() => {
-    if (!currentRole) return false;
-    return (
-      currentRole.slug === "superuser" ||
-      currentRole.name === "superuser" ||
-      currentRole.role_type === "superuser" ||
-      currentRole.id === "superuser" ||
-      (typeof currentRole === "object" && currentRole.display_name?.toLowerCase() === "superuser")
-    );
-  }, [currentRole]);
-
-  // Helper function to filter items based on permissions
-  const filterItemsByPermission = (items) => {
-    if (currentUserLoading) return items; // Show all while loading
-
-    return items.filter((item) => {
-      // Special case: SUPERUSER_ROLE_ONLY - only show when assigned to Superuser role
-      if (item.permission === "SUPERUSER_ROLE_ONLY") {
-        return isCurrentRoleSuperuser;
-      }
-
-      // Items with null or undefined permission are always visible (Dashboard, My Tasks, etc.)
-      // This ensures these items are visible to ALL users regardless of roles/permissions
-      if (item.permission === null || item.permission === undefined) {
-        return true;
-      }
-
-      // If user has wildcard permissions, show all
-      if (userPermissionNames.includes("*")) return true;
-
-      // Check if user has the specific permission
-      return userPermissionNames.some((perm) => {
-        // Exact match
-        if (perm === item.permission) return true;
-
-        // Resource match (e.g., invitation:create matches invitations:create)
-        const itemResource = item.permission.split(":")[0];
-        const permResource = perm.split(":")[0];
-        if (
-          permResource === itemResource ||
-          permResource === itemResource + "s" ||
-          permResource + "s" === itemResource
-        ) {
-          return true;
-        }
-
-        // Check if permission contains the resource
-        return perm.includes(itemResource);
-      });
-    });
-  };
-
-  // Filter all menu groups based on permissions
-  const visibleMainMenuItems = React.useMemo(
-    () => filterItemsByPermission(mainMenuItems),
-    [userPermissionNames, currentUserLoading]
-  );
-
-  const visiblePeopleAndAccessItems = React.useMemo(
-    () => filterItemsByPermission(peopleAndAccessItems),
-    [userPermissionNames, currentUserLoading]
-  );
-
-  const visibleOrganizationItems = React.useMemo(
-    () => filterItemsByPermission(organizationItems),
-    [userPermissionNames, currentUserLoading]
-  );
-
-  const visibleSettingsItems = React.useMemo(
-    () => filterItemsByPermission(settingsItems),
-    [userPermissionNames, currentUserLoading]
-  );
-
-  // Filter quick setup items based on permissions
-  const visibleQuickSetupItems = React.useMemo(() => {
-    if (currentUserLoading) return quickSetupItems; // Show all while loading
-
-    return quickSetupItems.filter((item) => {
-      // If user has wildcard permissions, show all
-      if (userPermissionNames.includes("*")) return true;
-
-      // Check if user has the specific permission
-      return userPermissionNames.some(
-        (perm) =>
-          perm === item.permission ||
-          perm.includes(item.permission.split(":")[0]) // Check resource match
-      );
-    });
-  }, [userPermissionNames, currentUserLoading]);
-
   // Group assignments by department for role switcher
   const assignments = departmentsData?.departments || [];
 
@@ -805,6 +714,97 @@ export default function AdminLayout({ children }) {
   );
   const currentDepartment = currentAssignment?.department;
   const currentRole = currentAssignment?.role;
+
+  // Helper function to check if current role is a Superuser role
+  const isCurrentRoleSuperuser = React.useMemo(() => {
+    if (!currentRole) return false;
+    return (
+      currentRole.slug === "superuser" ||
+      currentRole.name === "superuser" ||
+      currentRole.role_type === "superuser" ||
+      currentRole.id === "superuser" ||
+      (typeof currentRole === "object" && currentRole.display_name?.toLowerCase() === "superuser")
+    );
+  }, [currentRole]);
+
+  // Helper function to filter items based on permissions
+  const filterItemsByPermission = (items) => {
+    if (currentUserLoading) return items; // Show all while loading
+
+    return items.filter((item) => {
+      // Special case: SUPERUSER_ROLE_ONLY - only show when assigned to Superuser role
+      if (item.permission === "SUPERUSER_ROLE_ONLY") {
+        return isCurrentRoleSuperuser;
+      }
+
+      // Items with null or undefined permission are always visible (Dashboard, My Tasks, etc.)
+      // This ensures these items are visible to ALL users regardless of roles/permissions
+      if (item.permission === null || item.permission === undefined) {
+        return true;
+      }
+
+      // If user has wildcard permissions, show all
+      if (userPermissionNames.includes("*")) return true;
+
+      // Check if user has the specific permission
+      return userPermissionNames.some((perm) => {
+        // Exact match
+        if (perm === item.permission) return true;
+
+        // Resource match (e.g., invitation:create matches invitations:create)
+        const itemResource = item.permission.split(":")[0];
+        const permResource = perm.split(":")[0];
+        if (
+          permResource === itemResource ||
+          permResource === itemResource + "s" ||
+          permResource + "s" === itemResource
+        ) {
+          return true;
+        }
+
+        // Check if permission contains the resource
+        return perm.includes(itemResource);
+      });
+    });
+  };
+
+  // Filter all menu groups based on permissions
+  const visibleMainMenuItems = React.useMemo(
+    () => filterItemsByPermission(mainMenuItems),
+    [userPermissionNames, currentUserLoading, isCurrentRoleSuperuser]
+  );
+
+  const visiblePeopleAndAccessItems = React.useMemo(
+    () => filterItemsByPermission(peopleAndAccessItems),
+    [userPermissionNames, currentUserLoading, isCurrentRoleSuperuser]
+  );
+
+  const visibleOrganizationItems = React.useMemo(
+    () => filterItemsByPermission(organizationItems),
+    [userPermissionNames, currentUserLoading, isCurrentRoleSuperuser]
+  );
+
+  const visibleSettingsItems = React.useMemo(
+    () => filterItemsByPermission(settingsItems),
+    [userPermissionNames, currentUserLoading, isCurrentRoleSuperuser]
+  );
+
+  // Filter quick setup items based on permissions
+  const visibleQuickSetupItems = React.useMemo(() => {
+    if (currentUserLoading) return quickSetupItems; // Show all while loading
+
+    return quickSetupItems.filter((item) => {
+      // If user has wildcard permissions, show all
+      if (userPermissionNames.includes("*")) return true;
+
+      // Check if user has the specific permission
+      return userPermissionNames.some(
+        (perm) =>
+          perm === item.permission ||
+          perm.includes(item.permission.split(":")[0]) // Check resource match
+      );
+    });
+  }, [userPermissionNames, currentUserLoading]);
 
   // Handle role switch
   const handleRoleSwitch = async (assignmentId) => {

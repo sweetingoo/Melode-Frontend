@@ -835,6 +835,7 @@ const CustomFieldsAdminPage = () => {
               <Plus className="h-4 w-4 mr-2" />
               Create Field
             </Button>
+          )}
         </div>
       </div>
 
@@ -1236,7 +1237,6 @@ const CustomFieldsAdminPage = () => {
                               </AlertDialogFooter>
                             </AlertDialogContent>
                           </AlertDialog>
-                          )}
                         </div>
                       </div>
                     </CardContent>

@@ -1086,12 +1086,15 @@ const AssetsPage = () => {
                                 <UserPlus className="mr-2 h-4 w-4" />
                                 Assign Asset
                               </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => handleUpdateAttributes(asset)}
-                              >
+                              )}
+                              {canUpdateAsset && (
+                                <DropdownMenuItem
+                                  onClick={() => handleUpdateAttributes(asset)}
+                                >
                                 <Settings className="mr-2 h-4 w-4" />
                                 Update Attributes
                               </DropdownMenuItem>
+                              )}
                               {canUpdateAsset && (
                                 <DropdownMenuItem
                                   onClick={() => handleUpdateSensorData(asset)}

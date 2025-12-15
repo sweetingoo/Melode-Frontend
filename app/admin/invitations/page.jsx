@@ -839,6 +839,7 @@ const InvitationPage = () => {
               </form>
             </DialogContent>
           </Dialog>
+        )}
 
         {/* View Invitation Modal */}
         <Dialog open={isViewModalOpen} onOpenChange={handleViewModalClose}>
