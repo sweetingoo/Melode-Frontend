@@ -1088,9 +1088,9 @@ const AssetsPage = () => {
                               </DropdownMenuItem>
                               )}
                               {canUpdateAsset && (
-                                <DropdownMenuItem
-                                  onClick={() => handleUpdateAttributes(asset)}
-                                >
+                              <DropdownMenuItem
+                                onClick={() => handleUpdateAttributes(asset)}
+                              >
                                 <Settings className="mr-2 h-4 w-4" />
                                 Update Attributes
                               </DropdownMenuItem>

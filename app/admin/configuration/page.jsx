@@ -49,6 +49,7 @@ import {
   useUpdateOrganisation,
 } from "@/hooks/useConfiguration";
 import { useCurrentUser } from "@/hooks/useAuth";
+import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
 import {
   Settings,
   Search,
@@ -72,9 +73,16 @@ export default function ConfigurationPage() {
   const [editingSetting, setEditingSetting] = useState(null);
   const [bulkUpdates, setBulkUpdates] = useState({});
 
-  // Check if user is superuser
+  // Check if user is superuser or has configuration permissions
   const { data: currentUser } = useCurrentUser();
-  const isSuperuser = currentUser?.is_superuser || false;
+  const { isSuperuser, hasPermission } = usePermissionsCheck();
+  const hasConfigurationPermission = hasPermission("configuration:read") || 
+                                     hasPermission("configuration:*") ||
+                                     hasPermission("configuration:write") ||
+                                     hasPermission("configuration:update");
+  
+  // Allow access if superuser or has configuration permission
+  const canAccessConfiguration = isSuperuser || hasConfigurationPermission;
 
   // Get categories
   const { data: categoriesData } = useConfigurationCategories();
@@ -367,7 +375,7 @@ export default function ConfigurationPage() {
     }
   };
 
-  if (!isSuperuser) {
+  if (!canAccessConfiguration) {
     return (
       <div className="container mx-auto p-6">
         <Card>
@@ -379,8 +387,8 @@ export default function ConfigurationPage() {
           </CardHeader>
           <CardContent>
             <p className="text-muted-foreground">
-              Configuration management is only available to Superusers.
-              Superuser privileges are required to manage configuration settings.
+              Configuration management is only available to Superusers or users with configuration permissions.
+              Superuser privileges or configuration:read permission is required to manage configuration settings.
             </p>
           </CardContent>
         </Card>
