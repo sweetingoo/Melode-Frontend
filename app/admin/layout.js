@@ -717,6 +717,10 @@ export default function AdminLayout({ children }) {
 
   // Helper function to check if current role is a Superuser role
   const isCurrentRoleSuperuser = React.useMemo(() => {
+    // First check if user is a superuser (regardless of assignment)
+    if (currentUserData?.is_superuser) return true;
+    
+    // Then check if current role is superuser
     if (!currentRole) return false;
     return (
       currentRole.slug === "superuser" ||
@@ -725,16 +729,36 @@ export default function AdminLayout({ children }) {
       currentRole.id === "superuser" ||
       (typeof currentRole === "object" && currentRole.display_name?.toLowerCase() === "superuser")
     );
-  }, [currentRole]);
+  }, [currentRole, currentUserData?.is_superuser]);
 
   // Helper function to filter items based on permissions
   const filterItemsByPermission = (items) => {
     if (currentUserLoading) return items; // Show all while loading
 
     return items.filter((item) => {
-      // Special case: SUPERUSER_ROLE_ONLY - only show when assigned to Superuser role
+      // Special case: SUPERUSER_ROLE_ONLY - show if:
+      // 1. User has wildcard (*) permission
+      // 2. User is a superuser (by role or is_superuser flag)
+      // 3. User has a specific permission for configuration (e.g., "configuration:read", "configuration:*", etc.)
       if (item.permission === "SUPERUSER_ROLE_ONLY") {
-        return isCurrentRoleSuperuser;
+        // Check wildcard permission first
+        if (userPermissionNames.includes("*")) return true;
+        
+        // Check if user is superuser
+        if (isCurrentRoleSuperuser) return true;
+        
+        // Check for configuration-related permissions
+        const hasConfigurationPermission = userPermissionNames.some((perm) => {
+          return (
+            perm === "configuration:read" ||
+            perm === "configuration:*" ||
+            perm === "configuration:write" ||
+            perm === "configuration:update" ||
+            perm.startsWith("configuration:")
+          );
+        });
+        
+        return hasConfigurationPermission;
       }
 
       // Items with null or undefined permission are always visible (Dashboard, My Tasks, etc.)
