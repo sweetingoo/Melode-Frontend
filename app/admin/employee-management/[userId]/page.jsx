@@ -167,6 +167,47 @@ const UserEditPage = () => {
   // Get available roles from API (needed for Superuser role lookup)
   const { data: rolesData, isLoading: rolesLoading } = useRoles();
 
+  // Get current user for permission checks
+  const { data: currentUserData } = useCurrentUser();
+  const currentUserPermissions = currentUserData?.permissions || [];
+  const currentUserDirectPermissions = currentUserData?.direct_permissions || [];
+
+  // Extract permission names
+  const userPermissionNames = React.useMemo(() => {
+    const allPermissions = [...currentUserPermissions, ...currentUserDirectPermissions];
+    return allPermissions.map((p) => {
+      if (typeof p === "string") return p;
+      if (typeof p === "object") {
+        return p.permission || p.name || p.permission_id || p.id || "";
+      }
+      return String(p);
+    }).filter(Boolean);
+  }, [currentUserPermissions, currentUserDirectPermissions]);
+
+  // Check if user has wildcard permissions
+  const hasWildcardPermissions = userPermissionNames.includes("*");
+
+  // Permission check helper
+  const hasPermission = React.useCallback((permission) => {
+    if (hasWildcardPermissions) return true;
+    return userPermissionNames.some((perm) => {
+      if (perm === permission) return true;
+      // Resource match (e.g., user:create matches users:create)
+      const permResource = perm.split(":")[0];
+      const checkResource = permission.split(":")[0];
+      if (permResource === checkResource || permResource === checkResource + "s" || permResource + "s" === checkResource) {
+        return true;
+      }
+      return perm.includes(checkResource);
+    });
+  }, [userPermissionNames, hasWildcardPermissions]);
+
+  // User management permissions
+  const canUpdateUser = hasPermission("user:update");
+  const canDeleteUser = hasPermission("user:delete");
+  const canAssignRole = hasPermission("role:assign");
+  const canAssignEmployee = hasPermission("employee:assign");
+
   // Group assignments by department
   const assignmentsByDepartment = React.useMemo(() => {
     if (!employeeAssignmentsData || !Array.isArray(employeeAssignmentsData)) {
