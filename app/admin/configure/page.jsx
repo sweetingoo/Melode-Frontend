@@ -1,15 +1,15 @@
-import { Badge } from "@/components/ui/badge";
-import React from "react";
+"use client";
+
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 
 export default function ConfigurePage() {
-  return (
-    <div className="">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Configure</h1>
-        <Badge variant={"outline"}>
-          Configure Page is Under the Development
-        </Badge>
-      </div>
-    </div>
-  );
+  const router = useRouter();
+
+  useEffect(() => {
+    // Redirect to Configuration page
+    router.replace("/admin/configuration");
+  }, [router]);
+
+  return null;
 }

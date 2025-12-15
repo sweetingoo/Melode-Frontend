@@ -61,6 +61,7 @@ import {
 } from "@/hooks/useForms";
 import { useRoles } from "@/hooks/useRoles";
 import { useUsers } from "@/hooks/useUsers";
+import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
 import { format } from "date-fns";
 import { Shield, Users, User } from "lucide-react";
 
@@ -70,7 +71,7 @@ const FormsPage = () => {
   const [formTypeFilter, setFormTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [assignmentFilter, setAssignmentFilter] = useState("all"); // "all", "role", "users", "none"
-  
+
   const { data: rolesData } = useRoles();
   const { data: usersResponse } = useUsers();
   const roles = rolesData || [];
@@ -82,6 +83,12 @@ const FormsPage = () => {
   });
 
   const deleteFormMutation = useDeleteForm();
+
+  // Permission checks
+  const { hasPermission } = usePermissionsCheck();
+  const canCreateForm = hasPermission("form:create");
+  const canUpdateForm = hasPermission("form:update");
+  const canDeleteForm = hasPermission("form:delete");
 
   // Handle different API response structures
   let forms = [];
@@ -180,12 +187,14 @@ const FormsPage = () => {
             Manage custom forms and templates
           </p>
         </div>
-        <Link href="/admin/forms/new">
-          <Button>
-            <Plus className="mr-2 h-4 w-4" />
-            Create Form
-          </Button>
-        </Link>
+        {canCreateForm && (
+          <Link href="/admin/forms/new">
+            <Button>
+              <Plus className="mr-2 h-4 w-4" />
+              Create Form
+            </Button>
+          </Link>
+        )}
       </div>
 
       {/* Filters */}
@@ -319,9 +328,9 @@ const FormsPage = () => {
                           <div className="flex items-center gap-1.5">
                             <Shield className="h-3 w-3 text-muted-foreground" />
                             <span className="text-xs text-muted-foreground">
-                              {roles.find(r => r.id === form.assigned_to_role_id)?.display_name || 
-                               roles.find(r => r.id === form.assigned_to_role_id)?.name || 
-                               "Role"}
+                              {roles.find(r => r.id === form.assigned_to_role_id)?.display_name ||
+                                roles.find(r => r.id === form.assigned_to_role_id)?.name ||
+                                "Role"}
                             </span>
                           </div>
                         ) : form.assigned_user_ids && form.assigned_user_ids.length > 0 ? (
@@ -366,12 +375,14 @@ const FormsPage = () => {
                                 View
                               </Link>
                             </DropdownMenuItem>
-                            <DropdownMenuItem asChild>
-                              <Link href={`/admin/forms/${form.id}/edit`}>
-                                <Edit className="mr-2 h-4 w-4" />
-                                Edit
-                              </Link>
-                            </DropdownMenuItem>
+                            {canUpdateForm && (
+                              <DropdownMenuItem asChild>
+                                <Link href={`/admin/forms/${form.id}/edit`}>
+                                  <Edit className="mr-2 h-4 w-4" />
+                                  Edit
+                                </Link>
+                              </DropdownMenuItem>
+                            )}
                             <DropdownMenuItem asChild>
                               <Link href={`/admin/forms/${form.id}/submit`}>
                                 <FileText className="mr-2 h-4 w-4" />
@@ -384,36 +395,40 @@ const FormsPage = () => {
                                 Submissions
                               </Link>
                             </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <DropdownMenuItem
-                                  onSelect={(e) => e.preventDefault()}
-                                  className="text-red-600"
-                                >
-                                  <Trash2 className="mr-2 h-4 w-4" />
-                                  Delete
-                                </DropdownMenuItem>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Delete Form</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    Are you sure you want to delete this form?
-                                    This action cannot be undone.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                  <AlertDialogAction
-                                    onClick={() => handleDeleteForm(form.id)}
-                                    className="bg-red-600 hover:bg-red-700"
-                                  >
-                                    Delete
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
+                            {canDeleteForm && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <DropdownMenuItem
+                                      onSelect={(e) => e.preventDefault()}
+                                      className="text-red-600"
+                                    >
+                                      <Trash2 className="mr-2 h-4 w-4" />
+                                      Delete
+                                    </DropdownMenuItem>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>Delete Form</AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                        Are you sure you want to delete this form?
+                                        This action cannot be undone.
+                                      </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                      <AlertDialogAction
+                                        onClick={() => handleDeleteForm(form.id)}
+                                        className="bg-red-600 hover:bg-red-700"
+                                      >
+                                        Delete
+                                      </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              </>
+                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>

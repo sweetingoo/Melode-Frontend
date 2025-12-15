@@ -65,6 +65,7 @@ import {
   useUpdateDepartment,
 } from "@/hooks/useDepartments";
 import { useRoles, roleUtils } from "@/hooks/useRoles";
+import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
 import {
   Dialog,
   DialogContent,
@@ -103,6 +104,12 @@ const DepartmentsPage = () => {
   const deleteDepartmentMutation = useDeleteDepartment();
   const createDepartmentMutation = useCreateDepartment();
   const updateDepartmentMutation = useUpdateDepartment();
+
+  // Permission checks
+  const { hasPermission } = usePermissionsCheck();
+  const canCreateDepartment = hasPermission("department:create");
+  const canUpdateDepartment = hasPermission("department:update");
+  const canDeleteDepartment = hasPermission("department:delete");
 
   // Fetch all roles for hierarchy display
   const { data: rolesData } = useRoles();
@@ -469,10 +476,12 @@ const DepartmentsPage = () => {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold tracking-tight">Departments</h1>
-          <Button onClick={handleCreateDepartment}>
-            <Plus className="mr-2 h-4 w-4" />
-            Add Department
-          </Button>
+          {canCreateDepartment && (
+            <Button onClick={handleCreateDepartment}>
+              <Plus className="mr-2 h-4 w-4" />
+              Add Department
+            </Button>
+          )}
         </div>
         {/* Search Input */}
         <div className="relative">
@@ -598,46 +607,51 @@ const DepartmentsPage = () => {
                                 <DropdownMenuContent align="end">
                                   <DropdownMenuLabel>Actions</DropdownMenuLabel>
                                   <DropdownMenuSeparator />
-                                  <DropdownMenuItem
-                                    onClick={() => handleEditDepartment(department)}
-                                  >
-                                    <Edit className="mr-2 h-4 w-4" />
-                                    Edit
-                                  </DropdownMenuItem>
-                                  <AlertDialog>
-                                    <AlertDialogTrigger asChild>
-                                      <DropdownMenuItem
-                                        onSelect={(e) => e.preventDefault()}
-                                        className="text-red-600"
-                                      >
-                                        <Trash2 className="mr-2 h-4 w-4" />
-                                        Delete
-                                      </DropdownMenuItem>
-                                    </AlertDialogTrigger>
-                                    <AlertDialogContent>
-                                      <AlertDialogHeader>
-                                        <AlertDialogTitle>
-                                          Are you sure?
-                                        </AlertDialogTitle>
-                                        <AlertDialogDescription>
-                                          This will permanently delete the department{" "}
-                                          <strong>{department.name}</strong>. This action
-                                          cannot be undone.
-                                        </AlertDialogDescription>
-                                      </AlertDialogHeader>
-                                      <AlertDialogFooter>
-                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                        <AlertDialogAction
-                                          onClick={() =>
-                                            handleDeleteDepartment(department.id)
-                                          }
-                                          className="bg-red-600 hover:bg-red-700"
+                                  {canUpdateDepartment && (
+                                    <DropdownMenuItem
+                                      onClick={() => handleEditDepartment(department)}
+                                    >
+                                      <Edit className="mr-2 h-4 w-4" />
+                                      Edit
+                                    </DropdownMenuItem>
+                                  )}
+                                  (<> {canDeleteDepartment && (
+                                    <AlertDialog>
+                                      <AlertDialogTrigger asChild>
+                                        <DropdownMenuItem
+                                          onSelect={(e) => e.preventDefault()}
+                                          className="text-red-600"
                                         >
+                                          <Trash2 className="mr-2 h-4 w-4" />
                                           Delete
-                                        </AlertDialogAction>
-                                      </AlertDialogFooter>
-                                    </AlertDialogContent>
-                                  </AlertDialog>
+                                        </DropdownMenuItem>
+                                      </AlertDialogTrigger>
+                                      <AlertDialogContent>
+                                        <AlertDialogHeader>
+                                          <AlertDialogTitle>
+                                            Are you sure?
+                                          </AlertDialogTitle>
+                                          <AlertDialogDescription>
+                                            This will permanently delete the department{" "}
+                                            <strong>{department.name}</strong>. This action
+                                            cannot be undone.
+                                          </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <AlertDialogFooter>
+                                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                          <AlertDialogAction
+                                            onClick={() =>
+                                              handleDeleteDepartment(department.id)
+                                            }
+                                            className="bg-red-600 hover:bg-red-700"
+                                          >
+                                            Delete
+                                          </AlertDialogAction>
+                                        </AlertDialogFooter>
+                                      </AlertDialogContent>
+                                    </AlertDialog>
+                                  )}
+                                  </>)
                                 </DropdownMenuContent>
                               </DropdownMenu>
                             </TableCell>

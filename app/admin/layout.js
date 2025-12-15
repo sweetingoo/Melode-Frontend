@@ -54,10 +54,14 @@ import {
   Type,
   FileText,
   ClipboardList,
+  Clock,
+  History,
+  Crown,
 } from "lucide-react";
 import { assets } from "../assets/assets";
 import Image from "next/image";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { ClockInOutButton } from "@/components/ClockInOutButton";
 import { User, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -73,6 +77,7 @@ import {
   useUserDepartments,
   useSwitchDepartment,
 } from "@/hooks/useDepartmentContext";
+import { useRoles } from "@/hooks/useRoles";
 
 // Main navigation items (always visible, no grouping)
 const mainMenuItems = [
@@ -87,6 +92,18 @@ const mainMenuItems = [
     icon: ClipboardList,
     url: "/admin/my-tasks",
     permission: null, // My Tasks is visible to all users
+  },
+  {
+    title: "Clock In/Out",
+    icon: Clock,
+    url: "/clock",
+    permission: "clock:in", // Permission to clock in
+  },
+  {
+    title: "Clock History",
+    icon: History,
+    url: "/clock/history",
+    permission: "clock:view", // Permission to view clock records
   },
   {
     title: "Tasks",
@@ -161,10 +178,16 @@ const settingsItems = [
     permission: "task_types:read", // Permission to read task types
   },
   {
-    title: "Configure",
+    title: "Active Clocks",
+    icon: Clock,
+    url: "/admin/clock",
+    permission: "clock:view_all", // Permission to view all active clocks
+  },
+  {
+    title: "Configuration",
     icon: Settings,
-    url: "/admin/configure",
-    permission: "system:configure", // Permission to configure system
+    url: "/admin/configuration",
+    permission: "SUPERUSER_ROLE_ONLY", // Only visible when assigned to Superuser role
   },
   {
     title: "Audit Logs",
@@ -277,6 +300,11 @@ export default function AdminLayout({ children }) {
   // Role switching hooks
   const { data: departmentsData, isLoading: departmentsLoading } =
     useUserDepartments();
+  const { data: allRolesDataRaw } = useRoles(); // Get all roles to find shift roles hierarchy
+  // Handle both array and object response formats
+  const allRolesData = Array.isArray(allRolesDataRaw)
+    ? allRolesDataRaw
+    : allRolesDataRaw?.roles || allRolesDataRaw?.items || [];
   const switchDepartmentMutation = useSwitchDepartment();
 
   // Client-side state to prevent hydration mismatch
@@ -387,11 +415,28 @@ export default function AdminLayout({ children }) {
     hasWildcardPermissions,
   ]);
 
+  // Helper function to check if current role is a Superuser role
+  const isCurrentRoleSuperuser = React.useMemo(() => {
+    if (!currentRole) return false;
+    return (
+      currentRole.slug === "superuser" ||
+      currentRole.name === "superuser" ||
+      currentRole.role_type === "superuser" ||
+      currentRole.id === "superuser" ||
+      (typeof currentRole === "object" && currentRole.display_name?.toLowerCase() === "superuser")
+    );
+  }, [currentRole]);
+
   // Helper function to filter items based on permissions
   const filterItemsByPermission = (items) => {
     if (currentUserLoading) return items; // Show all while loading
 
     return items.filter((item) => {
+      // Special case: SUPERUSER_ROLE_ONLY - only show when assigned to Superuser role
+      if (item.permission === "SUPERUSER_ROLE_ONLY") {
+        return isCurrentRoleSuperuser;
+      }
+
       // Items with null or undefined permission are always visible (Dashboard, My Tasks, etc.)
       // This ensures these items are visible to ALL users regardless of roles/permissions
       if (item.permission === null || item.permission === undefined) {
@@ -487,21 +532,272 @@ export default function AdminLayout({ children }) {
       if (!grouped[deptId]) {
         grouped[deptId] = {
           department: assignment.department,
-          roles: [],
+          jobRoles: new Map(), // Use Map to group by job role
+          roles: [], // Flat list for roles without department
         };
       }
 
       if (assignment.assignment_id && assignment.role) {
-        grouped[deptId].roles.push({
+        const role = assignment.role;
+        const roleData = {
           assignment_id: assignment.assignment_id,
-          role: assignment.role,
+          role: role,
           is_active: assignment.is_active,
-        });
+        };
+
+        // If it's a shift role, we'll handle it when processing the parent job role
+        // This prevents duplicates when shift roles appear both as assignments and in shift_roles array
+        if (role.role_type === "shift_role" && role.parent_role_id) {
+          // Skip processing shift roles here - they'll be added when we process their parent job role
+          // The parent job role processing will merge shift roles from both assignments and shift_roles array
+        } else if (role.role_type === "job_role") {
+          // Job role - add to map if not exists, or update if exists
+          if (!grouped[deptId].jobRoles.has(role.id)) {
+            // Get shift roles from allRolesData if available
+            const fullRoleData = Array.isArray(allRolesData)
+              ? allRolesData.find((r) => r.id === role.id)
+              : null;
+            // Handle both transformed and raw role data - check multiple possible property names
+            const shiftRolesFromData = fullRoleData?.shiftRoles ||
+              fullRoleData?.shift_roles ||
+              (fullRoleData && Array.isArray(fullRoleData.shift_roles) ? fullRoleData.shift_roles : null) ||
+              role.shift_roles ||
+              role.shiftRoles ||
+              (Array.isArray(role.shift_roles) ? role.shift_roles : []) ||
+              [];
+
+            // Find shift role assignments for this job role
+            const shiftRoleAssignments = assignments
+              .filter(
+                (a) =>
+                  a.role?.parent_role_id === role.id &&
+                  a.role?.role_type === "shift_role" &&
+                  a.department?.id === deptId
+              )
+              .map((a) => ({
+                assignment_id: a.assignment_id,
+                role: a.role,
+                is_active: a.is_active,
+              }));
+
+            // Use Map to deduplicate shift roles by role ID
+            // This prevents duplicates when shift roles appear both as assignments and in shift_roles array
+            const shiftRolesMap = new Map();
+
+            // First, add shift roles from assignments (these have assignment_id)
+            shiftRoleAssignments.forEach((sr) => {
+              if (sr.role?.id) {
+                // Ensure consistent key type (always use number)
+                const roleId = typeof sr.role.id === "string" ? parseInt(sr.role.id) : sr.role.id;
+                if (roleId && !isNaN(roleId)) {
+                  shiftRolesMap.set(roleId, sr);
+                }
+              }
+            });
+
+            // Then, add shift roles from role data that aren't already in the map
+            // This ensures we show all shift roles, even if user doesn't have assignments for them
+            if (Array.isArray(shiftRolesFromData) && shiftRolesFromData.length > 0) {
+              shiftRolesFromData.forEach((shiftRole) => {
+                // Ensure consistent key type (always use number)
+                const shiftRoleId = typeof shiftRole.id === "string" ? parseInt(shiftRole.id) : shiftRole.id;
+                // Only add if not already in map (prevents duplicates)
+                if (shiftRoleId && !isNaN(shiftRoleId) && !shiftRolesMap.has(shiftRoleId)) {
+                  shiftRolesMap.set(shiftRoleId, {
+                    assignment_id: null, // No assignment
+                    role: {
+                      id: shiftRole.id,
+                      name: shiftRole.name,
+                      display_name: shiftRole.display_name || shiftRole.name,
+                      role_type: shiftRole.role_type || "shift_role",
+                      parent_role_id: shiftRole.parent_role_id || role.id,
+                      ...shiftRole,
+                    },
+                    is_active: false,
+                  });
+                }
+              });
+            }
+
+            // Final deduplication: convert to array and remove any remaining duplicates by role.id
+            const shiftRolesArray = Array.from(shiftRolesMap.values());
+            const uniqueShiftRoles = [];
+            const seenIds = new Set();
+            shiftRolesArray.forEach((sr) => {
+              const roleId = typeof sr.role?.id === "string" ? parseInt(sr.role.id) : sr.role?.id;
+              if (roleId && !isNaN(roleId) && !seenIds.has(roleId)) {
+                seenIds.add(roleId);
+                uniqueShiftRoles.push(sr);
+              }
+            });
+
+            grouped[deptId].jobRoles.set(role.id, {
+              assignment_id: assignment.assignment_id,
+              role: role,
+              is_active: assignment.is_active,
+              shiftRoles: uniqueShiftRoles,
+            });
+          } else {
+            // Update existing job role assignment
+            const existing = grouped[deptId].jobRoles.get(role.id);
+            existing.assignment_id = assignment.assignment_id;
+            existing.is_active = assignment.is_active;
+
+            // Rebuild shift roles list to ensure no duplicates
+            // Get shift roles from allRolesData
+            const fullRoleData = Array.isArray(allRolesData)
+              ? allRolesData.find((r) => r.id === role.id)
+              : null;
+            // Handle both transformed and raw role data - check multiple possible property names
+            const shiftRolesFromData = fullRoleData?.shiftRoles ||
+              fullRoleData?.shift_roles ||
+              (fullRoleData && Array.isArray(fullRoleData.shift_roles) ? fullRoleData.shift_roles : null) ||
+              role.shift_roles ||
+              role.shiftRoles ||
+              (Array.isArray(role.shift_roles) ? role.shift_roles : []) ||
+              [];
+
+            // Find shift role assignments for this job role
+            const shiftRoleAssignments = assignments
+              .filter(
+                (a) =>
+                  a.role?.parent_role_id === role.id &&
+                  a.role?.role_type === "shift_role" &&
+                  a.department?.id === deptId
+              )
+              .map((a) => ({
+                assignment_id: a.assignment_id,
+                role: a.role,
+                is_active: a.is_active,
+              }));
+
+            // Use Map to deduplicate shift roles by role ID
+            // This prevents duplicates when shift roles appear both as assignments and in shift_roles array
+            const shiftRolesMap = new Map();
+
+            // First, add shift roles from assignments (these have assignment_id)
+            shiftRoleAssignments.forEach((sr) => {
+              if (sr.role?.id) {
+                // Ensure consistent key type (always use number)
+                const roleId = typeof sr.role.id === "string" ? parseInt(sr.role.id) : sr.role.id;
+                if (roleId && !isNaN(roleId)) {
+                  shiftRolesMap.set(roleId, sr);
+                }
+              }
+            });
+
+            // Then, add shift roles from role data that aren't already in the map
+            if (Array.isArray(shiftRolesFromData) && shiftRolesFromData.length > 0) {
+              shiftRolesFromData.forEach((shiftRole) => {
+                // Ensure consistent key type (always use number)
+                const shiftRoleId = typeof shiftRole.id === "string" ? parseInt(shiftRole.id) : shiftRole.id;
+                // Only add if not already in map (prevents duplicates)
+                if (shiftRoleId && !isNaN(shiftRoleId) && !shiftRolesMap.has(shiftRoleId)) {
+                  shiftRolesMap.set(shiftRoleId, {
+                    assignment_id: null,
+                    role: {
+                      id: shiftRole.id,
+                      name: shiftRole.name,
+                      display_name: shiftRole.display_name || shiftRole.name,
+                      role_type: shiftRole.role_type || "shift_role",
+                      parent_role_id: shiftRole.parent_role_id || role.id,
+                      ...shiftRole,
+                    },
+                    is_active: false,
+                  });
+                }
+              });
+            }
+
+            // Final deduplication: convert to array and remove any remaining duplicates by role.id
+            const shiftRolesArray = Array.from(shiftRolesMap.values());
+            const uniqueShiftRoles = [];
+            const seenIds = new Set();
+            shiftRolesArray.forEach((sr) => {
+              const roleId = typeof sr.role?.id === "string" ? parseInt(sr.role.id) : sr.role?.id;
+              if (roleId && !isNaN(roleId) && !seenIds.has(roleId)) {
+                seenIds.add(roleId);
+                uniqueShiftRoles.push(sr);
+              }
+            });
+
+            // Replace existing shiftRoles with deduplicated list
+            existing.shiftRoles = uniqueShiftRoles;
+          }
+        } else {
+          // Other roles (fallback)
+          grouped[deptId].roles.push(roleData);
+        }
       }
     });
 
-    return Object.values(grouped);
-  }, [assignments]);
+    // Convert Maps to arrays and structure for display
+    const departmentGroups = Object.values(grouped).map((deptGroup) => ({
+      department: deptGroup.department,
+      jobRoles: Array.from(deptGroup.jobRoles.values()),
+      roles: deptGroup.roles,
+    }));
+
+    // Add Superuser role if user is a superuser
+    // Superuser role doesn't need a department or assignment
+    if (currentUserData?.is_superuser) {
+      // Check if superuser role already exists in assignments
+      // Superuser might be in assignments or might be a system role without assignment
+      const superuserAssignment = assignments.find(
+        (a) =>
+          a.role?.slug === "superuser" ||
+          a.role?.name === "superuser" ||
+          a.role?.role_type === "superuser" ||
+          a.role?.id === "superuser" ||
+          (typeof a.role === "object" && (a.role.slug === "superuser" || a.role.name === "superuser"))
+      );
+
+      // Find superuser role from all roles data
+      // Check multiple possible identifiers for superuser role
+      const superuserRole = Array.isArray(allRolesData)
+        ? allRolesData.find(
+          (r) =>
+            r.slug === "superuser" ||
+            r.name === "superuser" ||
+            r.role_type === "superuser" ||
+            r.id === "superuser" ||
+            (typeof r === "object" && r.display_name?.toLowerCase() === "superuser")
+        )
+        : null;
+
+      if (superuserRole || currentUserData.is_superuser) {
+        // Use the actual role data from API if found, otherwise create a fallback
+        const roleToUse = superuserRole || {
+          id: "superuser",
+          name: "Superuser",
+          display_name: "Superuser",
+          slug: "superuser",
+          role_type: "superuser",
+          isSystem: true,
+        };
+
+        // Add superuser as a special group at the beginning
+        departmentGroups.unshift({
+          department: {
+            id: "superuser",
+            name: "Superuser",
+            code: "SU",
+            description: "System administrator role",
+          },
+          jobRoles: [],
+          roles: [
+            {
+              assignment_id: superuserAssignment?.assignment_id || null,
+              role: roleToUse,
+              is_active: true,
+            },
+          ],
+        });
+      }
+    }
+
+    return departmentGroups;
+  }, [assignments, allRolesData, currentUserData]);
 
   // Find current assignment
   const currentAssignment = assignments.find(
@@ -513,6 +809,16 @@ export default function AdminLayout({ children }) {
   // Handle role switch
   const handleRoleSwitch = async (assignmentId) => {
     try {
+      // Handle null assignmentId (for Superuser without assignment)
+      if (assignmentId === null || assignmentId === undefined) {
+        if (typeof window !== "undefined") {
+          localStorage.removeItem("assignment_id");
+          localStorage.removeItem("activeRoleId");
+        }
+        // Invalidate queries to refresh
+        switchDepartmentMutation.mutate(null);
+        return;
+      }
       await switchDepartmentMutation.mutateAsync(assignmentId);
     } catch (error) {
       // Error is handled by the mutation's onError
@@ -534,8 +840,8 @@ export default function AdminLayout({ children }) {
                         ? "Melode Portal"
                         : hasWildcardPermissions.rolePermissions ||
                           hasWildcardPermissions.directPermissions
-                        ? "Melode Admin"
-                        : "Melode Portal"
+                          ? "Melode Admin"
+                          : "Melode Portal"
                     }
                     width={32}
                     height={32}
@@ -548,16 +854,16 @@ export default function AdminLayout({ children }) {
                       ? "Melode Portal"
                       : hasWildcardPermissions.rolePermissions ||
                         hasWildcardPermissions.directPermissions
-                      ? "Melode Admin"
-                      : "Melode Portal"}
+                        ? "Melode Admin"
+                        : "Melode Portal"}
                   </span>
                   <span className="text-xs text-muted-foreground">
                     {!isClient || currentUserLoading
                       ? "User Portal"
                       : hasWildcardPermissions.rolePermissions ||
                         hasWildcardPermissions.directPermissions
-                      ? "Management Panel"
-                      : "User Portal"}
+                        ? "Management Panel"
+                        : "User Portal"}
                   </span>
                 </div>
               </div>
@@ -650,13 +956,20 @@ export default function AdminLayout({ children }) {
                       >
                         <Building2 className="h-4 w-4 shrink-0" />
                         <span className=" truncate min-w-0  block group-data-[collapsible=icon]:hidden">
-                          {currentDepartment?.name || "Select role"}
+                          {currentDepartment?.name || (currentUserData?.is_superuser ? "Superuser" : "Select role")}
                         </span>
-                        {currentRole && (
-                          <span className="text-xs flex-1 text-right text-muted-foreground  block group-data-[collapsible=icon]:hidden">
-                            {currentRole.display_name ||
-                              currentRole.name ||
-                              currentRole.role_name}
+                        {(currentRole || (currentUserData?.is_superuser && !currentRole)) && (
+                          <span className="text-xs flex-1 text-right text-muted-foreground flex items-center justify-end gap-1 block group-data-[collapsible=icon]:hidden">
+                            {currentUserData?.is_superuser && !currentRole ? (
+                              <>
+                                <Crown className="h-3 w-3 text-yellow-600 dark:text-yellow-400" />
+                                <span>Superuser</span>
+                              </>
+                            ) : (
+                              currentRole?.display_name ||
+                              currentRole?.name ||
+                              currentRole?.role_name
+                            )}
                           </span>
                         )}
                         {switchDepartmentMutation.isPending && (
@@ -669,47 +982,123 @@ export default function AdminLayout({ children }) {
                       <DropdownMenuLabel>Switch Role</DropdownMenuLabel>
                       <DropdownMenuSeparator />
                       {assignmentsByDepartment.map((deptGroup) => (
-                        <div key={deptGroup.department.id}>
+                        <div key={deptGroup.department.id || deptGroup.department.name}>
                           <DropdownMenuLabel className="text-xs font-semibold text-muted-foreground px-2 py-1.5">
                             {deptGroup.department.name}
+                            {deptGroup.department.id === "superuser" && (
+                              <Crown className="h-3 w-3 inline-block ml-1 text-yellow-600" />
+                            )}
                           </DropdownMenuLabel>
+
+                          {/* Job Roles Only - Shift roles are automatically available when job role is assigned */}
+                          {deptGroup.jobRoles.map((jobRoleAssignment) => {
+                            const isJobRoleActive =
+                              jobRoleAssignment.assignment_id === currentAssignmentId;
+
+                            return (
+                              jobRoleAssignment.assignment_id && (
+                                <DropdownMenuItem
+                                  key={jobRoleAssignment.assignment_id}
+                                  className={`cursor-pointer pl-6 ${isJobRoleActive ? "bg-accent" : ""}`}
+                                  onClick={() =>
+                                    handleRoleSwitch(jobRoleAssignment.assignment_id)
+                                  }
+                                  disabled={
+                                    switchDepartmentMutation.isPending || isJobRoleActive
+                                  }
+                                >
+                                  <div className="flex items-center justify-between w-full">
+                                    <div className="flex items-center gap-2">
+                                      <Shield className="h-3 w-3 text-muted-foreground" />
+                                      <span className="text-sm font-medium">
+                                        {jobRoleAssignment.role.display_name ||
+                                          jobRoleAssignment.role.name ||
+                                          jobRoleAssignment.role.role_name}
+                                      </span>
+                                    </div>
+                                    {isJobRoleActive && (
+                                      <Check className="h-3 w-3 text-primary" />
+                                    )}
+                                  </div>
+                                </DropdownMenuItem>
+                              )
+                            );
+                          })}
+
+                          {/* Other roles (fallback for roles without hierarchy) */}
                           {deptGroup.roles.map((roleAssignment) => {
-                            const isActive =
-                              roleAssignment.assignment_id ===
-                              currentAssignmentId;
+                            const isSuperuserRole =
+                              roleAssignment.role.slug === "superuser" ||
+                              roleAssignment.role.name === "superuser" ||
+                              roleAssignment.role.role_type === "superuser" ||
+                              deptGroup.department.id === "superuser";
+
+                            // For Superuser role, check if it's active (no assignment_id means superuser mode)
+                            const isActive = isSuperuserRole
+                              ? (!roleAssignment.assignment_id && !currentAssignmentId) ||
+                              (roleAssignment.assignment_id === currentAssignmentId)
+                              : roleAssignment.assignment_id === currentAssignmentId;
+
                             return (
                               <DropdownMenuItem
-                                key={roleAssignment.assignment_id}
-                                className={`cursor-pointer pl-6 ${
-                                  isActive ? "bg-accent" : ""
-                                }`}
-                                onClick={() =>
-                                  handleRoleSwitch(roleAssignment.assignment_id)
-                                }
+                                key={roleAssignment.assignment_id || `role-${roleAssignment.role.id}`}
+                                className={`cursor-pointer pl-6 ${isActive ? "bg-accent" : ""}`}
+                                onClick={() => {
+                                  // For superuser role, handle specially
+                                  if (isSuperuserRole) {
+                                    // Superuser doesn't need an assignment_id - it's a system role
+                                    // If there's an assignment_id, use it; otherwise use a special value
+                                    if (roleAssignment.assignment_id) {
+                                      handleRoleSwitch(roleAssignment.assignment_id);
+                                    } else {
+                                      // For Superuser without assignment_id, clear assignment_id to switch to superuser mode
+                                      // This means no assignment_id in localStorage = superuser mode
+                                      if (typeof window !== "undefined") {
+                                        localStorage.removeItem("assignment_id");
+                                        localStorage.removeItem("activeRoleId");
+                                      }
+                                      // Invalidate queries to refresh
+                                      switchDepartmentMutation.mutate(null);
+                                    }
+                                    return;
+                                  }
+                                  if (roleAssignment.assignment_id) {
+                                    handleRoleSwitch(roleAssignment.assignment_id);
+                                  }
+                                }}
                                 disabled={
-                                  switchDepartmentMutation.isPending || isActive
+                                  switchDepartmentMutation.isPending ||
+                                  // Disable if this role is already active
+                                  isActive ||
+                                  // For non-superuser roles, disable if no assignment_id
+                                  (!isSuperuserRole && !roleAssignment.assignment_id)
                                 }
                               >
                                 <div className="flex items-center justify-between w-full">
                                   <div className="flex items-center gap-2">
-                                    <Shield className="h-3 w-3 text-muted-foreground" />
-                                    <span className="text-sm">
+                                    {isSuperuserRole ? (
+                                      <Crown className="h-3 w-3 text-yellow-600 dark:text-yellow-400" />
+                                    ) : (
+                                      <Shield className="h-3 w-3 text-muted-foreground" />
+                                    )}
+                                    <span className="text-sm font-medium">
                                       {roleAssignment.role.display_name ||
                                         roleAssignment.role.name ||
                                         roleAssignment.role.role_name}
                                     </span>
                                   </div>
-                                  {isActive && (
+                                  {(isActive || (isSuperuserRole && currentUserData?.is_superuser && !roleAssignment.assignment_id && !currentAssignmentId)) && (
                                     <Check className="h-3 w-3 text-primary" />
                                   )}
                                 </div>
                               </DropdownMenuItem>
                             );
                           })}
+
                           {assignmentsByDepartment.indexOf(deptGroup) <
                             assignmentsByDepartment.length - 1 && (
-                            <DropdownMenuSeparator />
-                          )}
+                              <DropdownMenuSeparator />
+                            )}
                         </div>
                       ))}
                     </DropdownMenuContent>
@@ -736,10 +1125,10 @@ export default function AdminLayout({ children }) {
                         <AvatarFallback className="text-sm font-semibold">
                           {currentUserData
                             ? (
-                                currentUserData.first_name?.[0] ||
-                                currentUserData.email?.[0] ||
-                                "U"
-                              ).toUpperCase()
+                              currentUserData.first_name?.[0] ||
+                              currentUserData.email?.[0] ||
+                              "U"
+                            ).toUpperCase()
                             : "U"}
                         </AvatarFallback>
                       </Avatar>
@@ -749,21 +1138,19 @@ export default function AdminLayout({ children }) {
                           title={
                             currentUserData
                               ? currentUserData.display_name ||
-                                `${currentUserData.first_name || ""} ${
-                                  currentUserData.last_name || ""
+                              `${currentUserData.first_name || ""} ${currentUserData.last_name || ""
                                 }`.trim() ||
-                                currentUserData.email ||
-                                "User"
+                              currentUserData.email ||
+                              "User"
                               : "Loading..."
                           }
                         >
                           {currentUserData
                             ? currentUserData.display_name ||
-                              `${currentUserData.first_name || ""} ${
-                                currentUserData.last_name || ""
+                            `${currentUserData.first_name || ""} ${currentUserData.last_name || ""
                               }`.trim() ||
-                              currentUserData.email ||
-                              "User"
+                            currentUserData.email ||
+                            "User"
                             : "Loading..."}
                         </span>
                         <span
@@ -843,11 +1230,12 @@ export default function AdminLayout({ children }) {
                     ? "User Dashboard"
                     : hasWildcardPermissions.rolePermissions ||
                       hasWildcardPermissions.directPermissions
-                    ? "Admin Dashboard"
-                    : "User Dashboard"}
+                      ? "Admin Dashboard"
+                      : "User Dashboard"}
                 </h1>
               </div>
               <div className="flex items-center gap-2">
+                <ClockInOutButton />
                 <ThemeToggle />
               </div>
             </header>

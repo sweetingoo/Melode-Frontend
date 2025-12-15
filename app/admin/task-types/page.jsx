@@ -58,6 +58,7 @@ import {
   useUpdateTaskType,
   useDeleteTaskType,
 } from "@/hooks/useTaskTypes";
+import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
 
 const TaskTypesPage = () => {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -76,6 +77,12 @@ const TaskTypesPage = () => {
   const createTaskTypeMutation = useCreateTaskType();
   const updateTaskTypeMutation = useUpdateTaskType();
   const deleteTaskTypeMutation = useDeleteTaskType();
+
+  // Permission checks
+  const { hasPermission } = usePermissionsCheck();
+  const canCreateTaskType = hasPermission("task_type:create");
+  const canUpdateTaskType = hasPermission("task_type:update");
+  const canDeleteTaskType = hasPermission("task_type:delete");
 
   // Extract task types from response
   let taskTypes = [];
@@ -165,10 +172,12 @@ const TaskTypesPage = () => {
             Manage task types for your organization
           </p>
         </div>
-        <Button onClick={() => setIsCreateModalOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Create Task Type
-        </Button>
+        {canCreateTaskType && (
+          <Button onClick={() => setIsCreateModalOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Create Task Type
+          </Button>
+        )}
       </div>
 
       {/* Task Types Table */}
@@ -259,13 +268,15 @@ const TaskTypesPage = () => {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => openEditModal(taskType)}>
-                              <Edit className="mr-2 h-4 w-4" />
-                              Edit
-                            </DropdownMenuItem>
-                            {!taskType.is_system && (
+                            {canUpdateTaskType && (
+                              <DropdownMenuItem onClick={() => openEditModal(taskType)}>
+                                <Edit className="mr-2 h-4 w-4" />
+                                Edit
+                              </DropdownMenuItem>
+                            )}
+                            {!taskType.is_system && canDeleteTaskType && (
                               <>
-                                <DropdownMenuSeparator />
+                                {canUpdateTaskType && <DropdownMenuSeparator />}
                                 <AlertDialog>
                                   <AlertDialogTrigger asChild>
                                     <DropdownMenuItem

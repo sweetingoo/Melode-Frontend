@@ -72,6 +72,7 @@ import {
   useDeletePermission,
   permissionUtils,
 } from "@/hooks/usePermissions";
+import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
 
 const PermissionsManagementPage = () => {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -100,6 +101,12 @@ const PermissionsManagementPage = () => {
   const createPermissionMutation = useCreatePermission();
   const updatePermissionMutation = useUpdatePermission();
   const deletePermissionMutation = useDeletePermission();
+
+  // Permission checks
+  const { hasPermission } = usePermissionsCheck();
+  const canCreatePermission = hasPermission("permission:create");
+  const canUpdatePermission = hasPermission("permission:update");
+  const canDeletePermission = hasPermission("permission:delete");
 
   // Transform API data
   const permissions = permissionsData
@@ -340,6 +347,7 @@ const PermissionsManagementPage = () => {
         <Button
           onClick={() => setIsCreateModalOpen(true)}
           className="flex items-center gap-2"
+          disabled={!canCreatePermission}
         >
           <Plus className="h-4 w-4" />
           Create Permission
@@ -559,8 +567,8 @@ const PermissionsManagementPage = () => {
                   </h3>
                   <p className="text-muted-foreground mb-4">
                     {searchTerm ||
-                    resourceFilter !== "all" ||
-                    typeFilter !== "all"
+                      resourceFilter !== "all" ||
+                      typeFilter !== "all"
                       ? "Try adjusting your search or filter criteria"
                       : "Get started by creating your first permission"}
                   </p>
@@ -626,7 +634,7 @@ const PermissionsManagementPage = () => {
                               >
                                 <Eye className="h-4 w-4" />
                               </Button>
-                              {!permission.isSystem && (
+                              {!permission.isSystem && canDeletePermission && (
                                 <AlertDialog>
                                   <AlertDialogTrigger asChild>
                                     <Button

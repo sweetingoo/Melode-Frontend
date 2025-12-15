@@ -88,6 +88,7 @@ import {
 } from "@/hooks/useLocations";
 import MultiFileUpload from "@/components/MultiFileUpload";
 import FileAttachmentList from "@/components/FileAttachmentList";
+import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
 
 const LocationsPage = () => {
   const router = useRouter();
@@ -113,6 +114,12 @@ const LocationsPage = () => {
   const updateLocationMutation = useUpdateLocation();
   const deleteLocationMutation = useDeleteLocation();
   const moveLocationMutation = useMoveLocation();
+
+  // Permission checks
+  const { hasPermission } = usePermissionsCheck();
+  const canCreateLocation = hasPermission("location:create");
+  const canUpdateLocation = hasPermission("location:update");
+  const canDeleteLocation = hasPermission("location:delete");
 
   // Form data - matching API schema (kept for edit modal)
   const [locationFormData, setLocationFormData] = useState({
@@ -429,8 +436,8 @@ const LocationsPage = () => {
           newParentId === "__none__" || !newParentId
             ? null
             : typeof newParentId === "string"
-            ? parseInt(newParentId)
-            : newParentId,
+              ? parseInt(newParentId)
+              : newParentId,
       },
       {
         onSuccess: () => {
@@ -501,9 +508,8 @@ const LocationsPage = () => {
     return (
       <div key={location.id} className="w-full">
         <div
-          className={`flex items-center gap-2 p-3 hover:bg-muted/50 rounded-md transition-colors ${
-            depth > 0 ? "ml-" + depth * 4 : ""
-          }`}
+          className={`flex items-center gap-2 p-3 hover:bg-muted/50 rounded-md transition-colors ${depth > 0 ? "ml-" + depth * 4 : ""
+            }`}
           style={{ paddingLeft: `${depth * 1.5 + 0.75}rem` }}
         >
           {hasChildren ? (
@@ -556,22 +562,28 @@ const LocationsPage = () => {
                 <Network className="mr-2 h-4 w-4" />
                 View Hierarchy
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleEditLocation(location)}>
-                <Edit className="mr-2 h-4 w-4" />
-                Edit Location
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleMoveLocation(location)}>
-                <Move className="mr-2 h-4 w-4" />
-                Move Location
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={() => handleDeleteLocation(location)}
-                className="text-red-600"
-              >
-                <Trash2 className="mr-2 h-4 w-4" />
-                Delete Location
-              </DropdownMenuItem>
+              {canUpdateLocation && (
+                <DropdownMenuItem onClick={() => handleEditLocation(location)}>
+                  <Edit className="mr-2 h-4 w-4" />
+                  Edit Location
+                </DropdownMenuItem>
+              )}
+              {canUpdateLocation && (
+                <DropdownMenuItem onClick={() => handleMoveLocation(location)}>
+                  <Move className="mr-2 h-4 w-4" />
+                  Move Location
+                </DropdownMenuItem>
+              )}
+              {canUpdateLocation && canDeleteLocation && <DropdownMenuSeparator />}
+              {canDeleteLocation && (
+                <DropdownMenuItem
+                  onClick={() => handleDeleteLocation(location)}
+                  className="text-red-600"
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete Location
+                </DropdownMenuItem>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -879,7 +891,7 @@ const LocationsPage = () => {
                               <Badge variant="secondary">
                                 {getLocationTypeLabel(
                                   location.locationType ||
-                                    location.location_type
+                                  location.location_type
                                 )}
                               </Badge>
                             </TableCell>
@@ -923,28 +935,34 @@ const LocationsPage = () => {
                                     <Network className="mr-2 h-4 w-4" />
                                     View Hierarchy
                                   </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onClick={() => handleEditLocation(location)}
-                                  >
-                                    <Edit className="mr-2 h-4 w-4" />
-                                    Edit Location
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onClick={() => handleMoveLocation(location)}
-                                  >
-                                    <Move className="mr-2 h-4 w-4" />
-                                    Move Location
-                                  </DropdownMenuItem>
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuItem
-                                    onClick={() =>
-                                      handleDeleteLocation(location)
-                                    }
-                                    className="text-red-600"
-                                  >
-                                    <Trash2 className="mr-2 h-4 w-4" />
-                                    Delete Location
-                                  </DropdownMenuItem>
+                                  {canUpdateLocation && (
+                                    <DropdownMenuItem
+                                      onClick={() => handleEditLocation(location)}
+                                    >
+                                      <Edit className="mr-2 h-4 w-4" />
+                                      Edit Location
+                                    </DropdownMenuItem>
+                                  )}
+                                  {canUpdateLocation && (
+                                    <DropdownMenuItem
+                                      onClick={() => handleMoveLocation(location)}
+                                    >
+                                      <Move className="mr-2 h-4 w-4" />
+                                      Move Location
+                                    </DropdownMenuItem>
+                                  )}
+                                  {canUpdateLocation && canDeleteLocation && <DropdownMenuSeparator />}
+                                  {canDeleteLocation && (
+                                    <DropdownMenuItem
+                                      onClick={() =>
+                                        handleDeleteLocation(location)
+                                      }
+                                      className="text-red-600"
+                                    >
+                                      <Trash2 className="mr-2 h-4 w-4" />
+                                      Delete Location
+                                    </DropdownMenuItem>
+                                  )}
                                 </DropdownMenuContent>
                               </DropdownMenu>
                             </TableCell>
@@ -1248,7 +1266,7 @@ const LocationsPage = () => {
                     <Badge variant="secondary">
                       {getLocationTypeLabel(
                         selectedLocation.locationType ||
-                          selectedLocation.location_type
+                        selectedLocation.location_type
                       )}
                     </Badge>
                   </div>
@@ -1291,20 +1309,20 @@ const LocationsPage = () => {
                 )}
                 {(selectedLocation.parentLocationId ||
                   selectedLocation.parentId) && (
-                  <div>
-                    <Label className="text-muted-foreground">
-                      Parent Location
-                    </Label>
-                    <p className="font-medium mt-1">
-                      {locations.find(
-                        (l) =>
-                          l.id ===
-                          (selectedLocation.parentLocationId ||
-                            selectedLocation.parentId)
-                      )?.name || "N/A"}
-                    </p>
-                  </div>
-                )}
+                    <div>
+                      <Label className="text-muted-foreground">
+                        Parent Location
+                      </Label>
+                      <p className="font-medium mt-1">
+                        {locations.find(
+                          (l) =>
+                            l.id ===
+                            (selectedLocation.parentLocationId ||
+                              selectedLocation.parentId)
+                        )?.name || "N/A"}
+                      </p>
+                    </div>
+                  )}
                 {selectedLocation.capacity > 0 && (
                   <div>
                     <Label className="text-muted-foreground">Capacity</Label>
@@ -1344,7 +1362,7 @@ const LocationsPage = () => {
                   </div>
                 )}
               </div>
-              
+
               {/* File Attachments */}
               <div className="pt-6 border-t space-y-4">
                 <FileAttachmentList
@@ -1409,7 +1427,7 @@ const LocationsPage = () => {
                       `${selectedLocation.displayName} • `}
                     {getLocationTypeLabel(
                       selectedLocation.locationType ||
-                        selectedLocation.location_type
+                      selectedLocation.location_type
                     )}
                   </div>
                   {(() => {
@@ -1526,10 +1544,10 @@ const LocationsPage = () => {
               {(() => {
                 const children = selectedLocation
                   ? locations.filter(
-                      (l) =>
-                        (l.parentLocationId || l.parentId) ===
-                        selectedLocation.id
-                    )
+                    (l) =>
+                      (l.parentLocationId || l.parentId) ===
+                      selectedLocation.id
+                  )
                   : [];
                 return children.length > 0 ? (
                   <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded-md">

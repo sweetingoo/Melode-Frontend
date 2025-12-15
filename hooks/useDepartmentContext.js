@@ -31,10 +31,16 @@ export const useSwitchDepartment = () => {
     },
     onSuccess: (assignmentId) => {
       // Store active assignment_id in localStorage (this is what we use for X-Assignment-ID header)
+      // If assignmentId is null/undefined, clear it (for Superuser mode)
       if (typeof window !== "undefined") {
-        localStorage.setItem("assignment_id", assignmentId.toString());
-        // Also store for backward compatibility
-        localStorage.setItem("activeRoleId", assignmentId.toString());
+        if (assignmentId === null || assignmentId === undefined) {
+          localStorage.removeItem("assignment_id");
+          localStorage.removeItem("activeRoleId");
+        } else {
+          localStorage.setItem("assignment_id", assignmentId.toString());
+          // Also store for backward compatibility
+          localStorage.setItem("activeRoleId", assignmentId.toString());
+        }
       }
 
       // The API client interceptor will automatically pick up the new value from localStorage

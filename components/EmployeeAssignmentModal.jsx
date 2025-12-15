@@ -22,7 +22,7 @@ import { useCreateAssignment, useUpdateAssignment, useAssignment } from "@/hooks
 import { useDepartments } from "@/hooks/useDepartments";
 import { useEmployees } from "@/hooks/useEmployees";
 import { useRoles } from "@/hooks/useRoles";
-import { Loader2 } from "lucide-react";
+import { Loader2, Shield } from "lucide-react";
 import { toast } from "sonner";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -42,7 +42,7 @@ const EmployeeAssignmentModal = ({
   const [formData, setFormData] = useState({
     employee_id: employeeId?.toString() || "",
     department_id: departmentId?.toString() || "",
-    role_id: "",
+    job_role_id: "", // Job role selection (shift roles are auto-assigned)
     start_date: null,
     end_date: null,
     notes: "",
@@ -59,16 +59,67 @@ const EmployeeAssignmentModal = ({
 
   const departments = departmentsResponse?.departments || departmentsResponse?.data || [];
   const employees = employeesResponse?.employees || employeesResponse?.data || [];
-  const roles = rolesData || [];
+  const allRoles = rolesData || [];
+
+  // Group roles by hierarchy (job roles with their shift roles)
+  const rolesByHierarchy = React.useMemo(() => {
+    if (!allRoles || !Array.isArray(allRoles)) return { jobRoles: [], shiftRoles: [] };
+
+    const jobRoles = [];
+    const shiftRolesMap = new Map(); // Map of parent_role_id -> shift roles
+
+    allRoles.forEach((role) => {
+      const roleType = role.role_type || role.roleType || "job_role";
+
+      if (roleType === "job_role") {
+        jobRoles.push(role);
+        // Get shift roles for this job role
+        const shiftRoles = role.shift_roles || role.shiftRoles || [];
+        if (shiftRoles.length > 0) {
+          shiftRolesMap.set(role.id, shiftRoles);
+        }
+      } else if (roleType === "shift_role") {
+        const parentId = role.parent_role_id || role.parentRoleId;
+        if (parentId) {
+          if (!shiftRolesMap.has(parentId)) {
+            shiftRolesMap.set(parentId, []);
+          }
+          shiftRolesMap.get(parentId).push(role);
+        }
+      }
+    });
+
+    // Filter roles based on selected department
+    const selectedDepartment = departments.find(
+      (d) => d.id === parseInt(formData.department_id)
+    );
+
+    let filteredJobRoles = jobRoles;
+    if (selectedDepartment) {
+      // Filter job roles that belong to the selected department
+      filteredJobRoles = jobRoles.filter(
+        (role) => (role.department_id || role.departmentId) === selectedDepartment.id
+      );
+    }
+
+    return {
+      jobRoles: filteredJobRoles,
+      shiftRolesMap: shiftRolesMap,
+    };
+  }, [allRoles, formData.department_id, departments]);
 
   useEffect(() => {
     if (isOpen) {
       if (assignmentId && assignmentData) {
         // Load existing assignment data for editing
+        const roleId = assignmentData.role_id?.toString() || "";
+        const role = allRoles.find((r) => r.id === parseInt(roleId));
+        const isJobRole = role && (role.role_type === "job_role" || role.roleType === "job_role");
+
         setFormData({
           employee_id: assignmentData.employee_id?.toString() || employeeId?.toString() || "",
           department_id: assignmentData.department_id?.toString() || departmentId?.toString() || "",
-          role_id: assignmentData.role_id?.toString() || "",
+          job_role_id: isJobRole ? roleId : (role?.parent_role_id || role?.parentRoleId || "").toString(),
           start_date: assignmentData.start_date ? new Date(assignmentData.start_date) : null,
           end_date: assignmentData.end_date ? new Date(assignmentData.end_date) : null,
           notes: assignmentData.notes || "",
@@ -79,7 +130,7 @@ const EmployeeAssignmentModal = ({
         setFormData({
           employee_id: employeeId?.toString() || "",
           department_id: departmentId?.toString() || "",
-          role_id: "",
+          job_role_id: "",
           start_date: null,
           end_date: null,
           notes: "",
@@ -88,7 +139,7 @@ const EmployeeAssignmentModal = ({
       }
       setValidationErrors({});
     }
-  }, [isOpen, employeeId, departmentId, assignmentId, assignmentData]);
+  }, [isOpen, employeeId, departmentId, assignmentId, assignmentData, allRoles]);
 
   const validateForm = () => {
     const errors = {};
@@ -101,39 +152,25 @@ const EmployeeAssignmentModal = ({
       errors.department_id = "Department selection is required";
     }
 
-    if (!formData.role_id) {
-      errors.role_id = "Role is required";
+    if (!formData.job_role_id) {
+      errors.job_role_id = "Job role is required";
     }
+
+    // Shift roles are optional - user can have just a job role assignment
 
     setValidationErrors(errors);
     return Object.keys(errors).length === 0;
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!validateForm()) {
       return;
     }
 
-    const assignmentData = {
-      employee_id: parseInt(formData.employee_id),
-      department_id: parseInt(formData.department_id),
-      role_id: parseInt(formData.role_id),
-      ...(formData.start_date && {
-        start_date: formData.start_date.toISOString(),
-      }),
-      ...(formData.end_date && {
-        end_date: formData.end_date.toISOString(),
-      }),
-      ...(formData.notes?.trim() && {
-        notes: formData.notes.trim(),
-      }),
-      is_active: formData.is_active,
-    };
-
     if (assignmentId) {
       // Update existing assignment - don't include employee_id or department_id per API docs
       const updateData = {
-        role_id: parseInt(formData.role_id),
+        role_id: parseInt(formData.job_role_id), // For now, update to job role
         ...(formData.start_date && {
           start_date: formData.start_date.toISOString(),
         }),
@@ -145,11 +182,23 @@ const EmployeeAssignmentModal = ({
         }),
         is_active: formData.is_active,
       };
+
       updateAssignmentMutation.mutate(
         { id: assignmentId, assignmentData: updateData },
         {
-          onSuccess: () => {
-            toast.success("Assignment updated successfully");
+          onSuccess: async (response) => {
+            // Shift roles are automatically assigned/removed by the backend
+            const autoAssignedShiftRoles = response?.data?.details?.auto_assigned_shift_roles || [];
+
+            if (autoAssignedShiftRoles.length > 0) {
+              toast.success("Assignment updated successfully", {
+                description: `Job role updated. ${autoAssignedShiftRoles.length} shift role(s) automatically assigned: ${autoAssignedShiftRoles.join(", ")}`,
+              });
+            } else {
+              toast.success("Assignment updated successfully", {
+                description: "Job role updated. Shift roles have been automatically managed.",
+              });
+            }
             onClose();
             if (onSuccess) onSuccess();
           },
@@ -179,10 +228,39 @@ const EmployeeAssignmentModal = ({
         }
       );
     } else {
-      // Create new assignment
-      createAssignmentMutation.mutate(assignmentData, {
-        onSuccess: () => {
-          toast.success("Assignment created successfully");
+      // Create new assignments
+      // First create the job role assignment
+      const jobRoleAssignmentData = {
+        employee_id: parseInt(formData.employee_id),
+        department_id: parseInt(formData.department_id),
+        role_id: parseInt(formData.job_role_id),
+        ...(formData.start_date && {
+          start_date: formData.start_date.toISOString(),
+        }),
+        ...(formData.end_date && {
+          end_date: formData.end_date.toISOString(),
+        }),
+        ...(formData.notes?.trim() && {
+          notes: formData.notes.trim(),
+        }),
+        is_active: formData.is_active,
+      };
+
+      createAssignmentMutation.mutate(jobRoleAssignmentData, {
+        onSuccess: async (jobRoleAssignment) => {
+          // Shift roles are automatically assigned by the backend
+          const autoAssignedShiftRoles = jobRoleAssignment?.details?.auto_assigned_shift_roles ||
+            jobRoleAssignment?.data?.details?.auto_assigned_shift_roles || [];
+
+          if (autoAssignedShiftRoles.length > 0) {
+            toast.success("Assignment created successfully", {
+              description: `Job role assigned. ${autoAssignedShiftRoles.length} shift role(s) automatically assigned: ${autoAssignedShiftRoles.join(", ")}`,
+            });
+          } else {
+            toast.success("Assignment created successfully", {
+              description: "Job role assigned. Shift roles have been automatically assigned.",
+            });
+          }
           onClose();
           if (onSuccess) onSuccess();
         },
@@ -254,8 +332,8 @@ const EmployeeAssignmentModal = ({
                     employees.map((employee) => {
                       const employeeName = employee.user
                         ? `${employee.user.first_name || ""} ${employee.user.last_name || ""}`.trim() ||
-                          employee.user.email ||
-                          "Unknown"
+                        employee.user.email ||
+                        "Unknown"
                         : "Unknown";
                       return (
                         <SelectItem
@@ -283,9 +361,9 @@ const EmployeeAssignmentModal = ({
               </Label>
               <Select
                 value={formData.department_id}
-                onValueChange={(value) =>
-                  setFormData({ ...formData, department_id: value })
-                }
+                onValueChange={(value) => {
+                  setFormData({ ...formData, department_id: value, job_role_id: "" }); // Reset job role when department changes
+                }}
               >
                 <SelectTrigger
                   className={
@@ -315,39 +393,104 @@ const EmployeeAssignmentModal = ({
               )}
             </div>
           )}
+          {/* Job Role Selection */}
           <div className="space-y-2">
-            <Label htmlFor="role_id">
-              Role <span className="text-red-500">*</span>
+            <Label htmlFor="job_role_id">
+              Job Role <span className="text-red-500">*</span>
             </Label>
             <Select
-              value={formData.role_id}
+              value={formData.job_role_id}
               onValueChange={(value) =>
-                setFormData({ ...formData, role_id: value })
+                setFormData({ ...formData, job_role_id: value })
               }
+              disabled={!formData.department_id}
             >
               <SelectTrigger
-                className={validationErrors.role_id ? "border-red-500" : ""}
+                className={validationErrors.job_role_id ? "border-red-500" : ""}
               >
-                <SelectValue placeholder="Select role" />
+                <SelectValue placeholder={formData.department_id ? "Select job role" : "Select department first"} />
               </SelectTrigger>
               <SelectContent>
-                {roles.length === 0 ? (
+                {!formData.department_id ? (
+                  <SelectItem value="select-dept-first" disabled>
+                    Please select a department first
+                  </SelectItem>
+                ) : rolesByHierarchy.jobRoles.length === 0 ? (
                   <SelectItem value="no-roles" disabled>
-                    No roles available
+                    No job roles available for this department
                   </SelectItem>
                 ) : (
-                  roles.map((role) => (
-                    <SelectItem key={role.id} value={role.id.toString()}>
-                      {role.display_name || role.name || role.role_name || `Role ${role.id}`}
+                  rolesByHierarchy.jobRoles.map((jobRole) => (
+                    <SelectItem key={jobRole.id} value={jobRole.id.toString()}>
+                      <div className="flex items-center gap-2">
+                        <Shield className="h-3 w-3" />
+                        <span className="font-medium">
+                          {jobRole.display_name || jobRole.name}
+                        </span>
+                      </div>
                     </SelectItem>
                   ))
                 )}
               </SelectContent>
             </Select>
-            {validationErrors.role_id && (
-              <p className="text-sm text-red-500">{validationErrors.role_id}</p>
+            {validationErrors.job_role_id && (
+              <p className="text-sm text-red-500">{validationErrors.job_role_id}</p>
+            )}
+            {!formData.department_id && (
+              <p className="text-sm text-muted-foreground">
+                Please select a department to see available job roles
+              </p>
             )}
           </div>
+
+          {/* Auto-assignment info (only shown when job role is selected) */}
+          {formData.job_role_id && (
+            <div className="space-y-2">
+              <div className="border rounded-md p-4 bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
+                <div className="flex items-start gap-2">
+                  <Shield className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-blue-900 dark:text-blue-100">
+                      Automatic Shift Role Assignment
+                    </p>
+                    <p className="text-xs text-blue-800 dark:text-blue-200 mt-1">
+                      All shift roles under this job role will be automatically assigned to the user.
+                    </p>
+                    {(() => {
+                      const selectedJobRole = rolesByHierarchy.jobRoles.find(
+                        (r) => r.id === parseInt(formData.job_role_id)
+                      );
+                      const shiftRoles = selectedJobRole
+                        ? rolesByHierarchy.shiftRolesMap.get(selectedJobRole.id) || []
+                        : [];
+
+                      if (shiftRoles.length > 0) {
+                        return (
+                          <div className="mt-2">
+                            <p className="text-xs font-medium text-blue-900 dark:text-blue-100 mb-1">
+                              Shift roles that will be auto-assigned:
+                            </p>
+                            <ul className="text-xs text-blue-800 dark:text-blue-200 list-disc list-inside space-y-0.5">
+                              {shiftRoles.map((shiftRole) => (
+                                <li key={shiftRole.id}>
+                                  {shiftRole.display_name || shiftRole.name}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        );
+                      }
+                      return (
+                        <p className="text-xs text-blue-800 dark:text-blue-200 mt-1 italic">
+                          No shift roles available for this job role.
+                        </p>
+                      );
+                    })()}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="start_date">Start Date</Label>
@@ -451,8 +594,8 @@ const EmployeeAssignmentModal = ({
           >
             {(createAssignmentMutation.isPending ||
               updateAssignmentMutation.isPending) && (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            )}
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
             {assignmentId ? "Update Assignment" : "Create Assignment"}
           </Button>
         </DialogFooter>

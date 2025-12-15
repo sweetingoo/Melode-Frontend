@@ -118,11 +118,23 @@ export const useCreateRole = () => {
       const response = await rolesService.createRole(roleData);
       return response.data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: roleKeys.lists() });
-      toast.success("Role created successfully", {
-        description: "The role has been created.",
-      });
+
+      // Check if this is a shift role and show auto-assignment notification
+      const autoAssignedCount = data?.details?.auto_assigned_to_users ||
+        data?.data?.details?.auto_assigned_to_users || 0;
+      const roleType = data?.role_type || data?.data?.role_type;
+
+      if (roleType === "shift_role" && autoAssignedCount > 0) {
+        toast.success("Shift role created successfully", {
+          description: `Shift role created and automatically assigned to ${autoAssignedCount} user(s) who have the parent job role.`,
+        });
+      } else {
+        toast.success("Role created successfully", {
+          description: "The role has been created.",
+        });
+      }
     },
     onError: (error) => {
       console.error("Create role error:", error);
@@ -174,9 +186,20 @@ export const useDeleteRole = () => {
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: roleKeys.lists() });
       queryClient.invalidateQueries({ queryKey: roleKeys.detail(variables) });
-      toast.success("Role deleted successfully", {
-        description: "The role has been deleted.",
-      });
+
+      // Check if shift roles were automatically removed
+      const removedShiftRoles = data?.details?.auto_removed_shift_roles ||
+        data?.data?.details?.auto_removed_shift_roles || [];
+
+      if (removedShiftRoles.length > 0) {
+        toast.success("Job role removed successfully", {
+          description: `${removedShiftRoles.length} shift role(s) were automatically removed: ${removedShiftRoles.join(", ")}`,
+        });
+      } else {
+        toast.success("Role deleted successfully", {
+          description: "The role has been deleted.",
+        });
+      }
     },
     onError: (error) => {
       console.error("Delete role error:", error);

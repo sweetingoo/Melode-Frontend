@@ -82,6 +82,7 @@ import {
 } from "@/hooks/useUsers";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useCurrentUser } from "@/hooks/useAuth";
+import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
 import {
   useEmployeeAssignments,
   useCreateAssignment,
@@ -163,16 +164,22 @@ const UserEditPage = () => {
     return userData ? userUtils.transformUser(userData) : null;
   }, [userData]);
 
+  // Get available roles from API (needed for Superuser role lookup)
+  const { data: rolesData, isLoading: rolesLoading } = useRoles();
+
   // Group assignments by department
   const assignmentsByDepartment = React.useMemo(() => {
     if (!employeeAssignmentsData || !Array.isArray(employeeAssignmentsData)) {
       return [];
     }
 
-    // Group assignments by department_id
+    // Group assignments by department_id, then by job role with nested shift roles
     const grouped = {};
+
     employeeAssignmentsData.forEach((assignment) => {
       const deptId = assignment.department_id || assignment.department?.id;
+      if (!deptId || !assignment.role) return;
+
       if (!grouped[deptId]) {
         grouped[deptId] = {
           department: assignment.department || {
@@ -180,19 +187,145 @@ const UserEditPage = () => {
             name: assignment.department_name || "Unknown Department",
             code: assignment.department_code || "",
           },
-          roles: [],
+          jobRoles: new Map(), // Use Map to group by job role ID
         };
       }
-      if (assignment.role) {
-        grouped[deptId].roles.push({
-          ...assignment.role,
-          assignment_id: assignment.assignment_id || assignment.id,
+
+      const role = assignment.role;
+      const roleType = role.role_type || role.roleType;
+      const assignmentId = assignment.assignment_id || assignment.id;
+
+      if (roleType === "job_role") {
+        // Job role - add to map if not exists
+        if (!grouped[deptId].jobRoles.has(role.id)) {
+          grouped[deptId].jobRoles.set(role.id, {
+            role: role,
+            assignment_id: assignmentId,
+            shiftRoles: [],
+          });
+        } else {
+          // Update existing job role assignment
+          const existing = grouped[deptId].jobRoles.get(role.id);
+          existing.assignment_id = assignmentId;
+        }
+      } else if (roleType === "shift_role" && role.parent_role_id) {
+        // Shift role - find parent job role and add to its shiftRoles array
+        const parentJobRoleId = role.parent_role_id;
+
+        // Ensure parent job role exists in the map (might not have assignment)
+        if (!grouped[deptId].jobRoles.has(parentJobRoleId)) {
+          // Try to find parent job role from other assignments
+          const parentAssignment = employeeAssignmentsData.find(
+            (a) =>
+              a.role?.id === parentJobRoleId &&
+              a.role?.role_type === "job_role" &&
+              (a.department_id === deptId || a.department?.id === deptId)
+          );
+
+          if (parentAssignment) {
+            grouped[deptId].jobRoles.set(parentJobRoleId, {
+              role: parentAssignment.role,
+              assignment_id: parentAssignment.assignment_id || parentAssignment.id,
+              shiftRoles: [],
+            });
+          } else {
+            // Create placeholder for parent job role (might not be assigned)
+            grouped[deptId].jobRoles.set(parentJobRoleId, {
+              role: {
+                id: parentJobRoleId,
+                name: role.parent_role?.name || "Unknown Job Role",
+                display_name: role.parent_role?.display_name || "Unknown Job Role",
+                role_type: "job_role",
+              },
+              assignment_id: null,
+              shiftRoles: [],
+            });
+          }
+        }
+
+        // Add shift role to parent's shiftRoles array (deduplicate by role.id)
+        const jobRoleGroup = grouped[deptId].jobRoles.get(parentJobRoleId);
+        const existingShiftRole = jobRoleGroup.shiftRoles.find(
+          (sr) => sr.role?.id === role.id
+        );
+
+        if (!existingShiftRole) {
+          jobRoleGroup.shiftRoles.push({
+            role: role,
+            assignment_id: assignmentId,
+          });
+        }
+      } else {
+        // Other roles (fallback - shouldn't happen with current structure)
+        if (!grouped[deptId].otherRoles) {
+          grouped[deptId].otherRoles = [];
+        }
+        grouped[deptId].otherRoles.push({
+          ...role,
+          assignment_id: assignmentId,
         });
       }
     });
 
-    return Object.values(grouped);
-  }, [employeeAssignmentsData]);
+    // Convert Maps to arrays and structure for display
+    const departmentGroups = Object.values(grouped).map((deptGroup) => ({
+      department: deptGroup.department,
+      jobRoles: Array.from(deptGroup.jobRoles.values()),
+      otherRoles: deptGroup.otherRoles || [],
+    }));
+
+    // Add Superuser role if user is a superuser
+    // Superuser role doesn't need a department or parent job role
+    if (transformedUser?.isSuperuser) {
+      // Check if superuser role already exists in assignments
+      const superuserAssignment = employeeAssignmentsData?.find(
+        (a) =>
+          a.role?.slug === "superuser" ||
+          a.role?.name === "superuser" ||
+          a.role?.role_type === "superuser" ||
+          a.role?.id === "superuser" ||
+          (typeof a.role === "object" && (a.role.slug === "superuser" || a.role.name === "superuser"))
+      );
+
+      // Find superuser role from rolesData if available
+      const superuserRole = rolesData?.find(
+        (r) =>
+          r.slug === "superuser" ||
+          r.name === "superuser" ||
+          r.role_type === "superuser" ||
+          r.id === "superuser" ||
+          (typeof r === "object" && r.display_name?.toLowerCase() === "superuser")
+      ) || {
+        id: "superuser",
+        name: "superuser",
+        display_name: "Superuser",
+        slug: "superuser",
+        role_type: "superuser",
+        isSystem: true,
+        description: "Full system access with all permissions",
+      };
+
+      // Prepend Superuser department group
+      departmentGroups.unshift({
+        department: {
+          id: "superuser",
+          name: "Superuser",
+          code: "SU",
+          description: "System administrator role",
+        },
+        jobRoles: [
+          {
+            role: superuserRole,
+            assignment_id: superuserAssignment?.assignment_id || superuserAssignment?.id || null,
+            shiftRoles: [],
+          },
+        ],
+        otherRoles: [],
+      });
+    }
+
+    return departmentGroups;
+  }, [employeeAssignmentsData, transformedUser, rolesData]);
 
   const [formData, setFormData] = useState({
     email: "",
@@ -228,9 +361,6 @@ const UserEditPage = () => {
       });
     }
   }, [transformedUser]);
-
-  // Get available roles from API
-  const { data: rolesData, isLoading: rolesLoading } = useRoles();
 
   const availableRoles = React.useMemo(() => {
     if (!rolesData) return [];
@@ -682,10 +812,33 @@ const UserEditPage = () => {
     const departmentAssignments = assignmentsByDepartment.find(
       (dept) => dept.department.id === departmentId
     );
-    const assignedRoleIds = (departmentAssignments?.roles || []).map(
-      (role) => role.id
-    );
-    return availableRoles.filter((role) => !assignedRoleIds.includes(role.id));
+
+    // Collect all assigned role IDs from job roles and their shift roles
+    const assignedRoleIds = new Set();
+
+    if (departmentAssignments) {
+      // Add job role IDs
+      departmentAssignments.jobRoles?.forEach((jobRoleGroup) => {
+        if (jobRoleGroup.role?.id) {
+          assignedRoleIds.add(jobRoleGroup.role.id);
+        }
+        // Add shift role IDs
+        jobRoleGroup.shiftRoles?.forEach((shiftRoleAssignment) => {
+          if (shiftRoleAssignment.role?.id) {
+            assignedRoleIds.add(shiftRoleAssignment.role.id);
+          }
+        });
+      });
+
+      // Add other role IDs (fallback)
+      departmentAssignments.otherRoles?.forEach((role) => {
+        if (role.id) {
+          assignedRoleIds.add(role.id);
+        }
+      });
+    }
+
+    return availableRoles.filter((role) => !assignedRoleIds.has(role.id));
   };
 
   // Filter permissions based on search term (for both assigned and available)
@@ -1000,13 +1153,15 @@ const UserEditPage = () => {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle>Departments & Roles</CardTitle>
-                <Button
-                  onClick={() => setIsAssignDepartmentModalOpen(true)}
-                  size="sm"
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Assign Department
-                </Button>
+                {canAssignEmployee && (
+                  <Button
+                    onClick={() => setIsAssignDepartmentModalOpen(true)}
+                    size="sm"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Assign Department
+                  </Button>
+                )}
               </div>
             </CardHeader>
             <CardContent>
@@ -1028,112 +1183,282 @@ const UserEditPage = () => {
                       {/* Department Header */}
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                          <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-blue-100">
-                            <Building2 className="h-6 w-6 text-blue-600" />
-                          </div>
+                          {deptGroup.department.id === "superuser" ? (
+                            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-yellow-100 dark:bg-yellow-900/20">
+                              <Crown className="h-6 w-6 text-yellow-600 dark:text-yellow-400" />
+                            </div>
+                          ) : (
+                            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-blue-100">
+                              <Building2 className="h-6 w-6 text-blue-600" />
+                            </div>
+                          )}
                           <div>
-                            <h3 className="font-semibold text-lg">
-                              {deptGroup.department.name}
-                            </h3>
+                            <div className="flex items-center gap-2">
+                              <h3 className="font-semibold text-lg">
+                                {deptGroup.department.name}
+                              </h3>
+                              {deptGroup.department.id === "superuser" && (
+                                <Crown className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
+                              )}
+                            </div>
                             {deptGroup.department.code && (
                               <p className="text-sm text-muted-foreground">
                                 Code: {deptGroup.department.code}
                               </p>
                             )}
+                            {deptGroup.department.id === "superuser" && (
+                              <p className="text-sm text-muted-foreground">
+                                {deptGroup.department.description}
+                              </p>
+                            )}
                           </div>
                         </div>
-                        <Button
-                          onClick={() => {
-                            setSelectedDepartmentForRole(deptGroup);
-                            setIsAddRoleToDepartmentModalOpen(true);
-                          }}
-                          variant="outline"
-                          size="sm"
-                        >
-                          <Plus className="h-4 w-4 mr-2" />
-                          Add Role
-                        </Button>
+                        {deptGroup.department.id !== "superuser" && (
+                          (<> {canAssignRole && (
+                            <Button
+                              onClick={() => {
+                                setSelectedDepartmentForRole(deptGroup);
+                                setIsAddRoleToDepartmentModalOpen(true);
+                              }}
+                              variant="outline"
+                              size="sm"
+                            >
+                              <Plus className="h-4 w-4 mr-2" />
+                              Add Role
+                            </Button>
+                          )} </>)
+                        )}
                       </div>
 
-                      {/* Roles in this Department */}
-                      <div className="ml-16 space-y-3">
-                        {deptGroup.roles.length === 0 ? (
+                      {/* Roles in this Department - Hierarchical Display */}
+                      <div className="ml-16 space-y-4">
+                        {deptGroup.jobRoles.length === 0 && (!deptGroup.otherRoles || deptGroup.otherRoles.length === 0) ? (
                           <div className="text-sm text-muted-foreground py-2">
                             No roles assigned in this department.
                           </div>
                         ) : (
-                          deptGroup.roles.map((role) => (
-                            <div
-                              key={role.assignment_id || role.id}
-                              className="flex items-center justify-between p-3 border rounded-lg bg-muted/30"
-                            >
-                              <div className="flex items-center gap-3">
-                                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
-                                  <Shield className="h-4 w-4 text-primary" />
+                          <>
+                            {/* Job Roles with nested Shift Roles */}
+                            {deptGroup.jobRoles.map((jobRoleGroup) => {
+                              const jobRole = jobRoleGroup.role;
+                              const shiftRoles = jobRoleGroup.shiftRoles || [];
+
+                              return (
+                                <div
+                                  key={jobRole.id}
+                                  className="space-y-2"
+                                >
+                                  {/* Job Role (or Superuser) */}
+                                  {(jobRoleGroup.assignment_id || deptGroup.department.id === "superuser") && (
+                                    <div className="flex items-center justify-between p-3 border rounded-lg bg-muted/30">
+                                      <div className="flex items-center gap-3">
+                                        {deptGroup.department.id === "superuser" ? (
+                                          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-yellow-100 dark:bg-yellow-900/20">
+                                            <Crown className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
+                                          </div>
+                                        ) : (
+                                          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+                                            <Shield className="h-4 w-4 text-primary" />
+                                          </div>
+                                        )}
+                                        <div>
+                                          <div className="flex items-center gap-2">
+                                            <h4 className="font-medium">
+                                              {jobRole.display_name || jobRole.name}
+                                            </h4>
+                                            {deptGroup.department.id === "superuser" ? (
+                                              <Badge variant="default" className="text-[10px] px-1.5 py-0 bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300">
+                                                Superuser
+                                              </Badge>
+                                            ) : (
+                                              <Badge variant="default" className="text-[10px] px-1.5 py-0">
+                                                Job Role
+                                              </Badge>
+                                            )}
+                                          </div>
+                                          <p className="text-xs text-muted-foreground">
+                                            {jobRole.description || "No description"}
+                                          </p>
+                                          <div className="flex items-center gap-1 mt-1">
+                                            <Key className="h-3 w-3 text-muted-foreground" />
+                                            <span className="text-xs text-muted-foreground">
+                                              {jobRole.permissions_count || jobRole.permissions?.length || "All"} permissions
+                                            </span>
+                                          </div>
+                                        </div>
+                                      </div>
+                                      {deptGroup.department.id !== "superuser" && jobRoleGroup.assignment_id && (
+                                        <AlertDialog>
+                                          <AlertDialogTrigger asChild>
+                                            <Button
+                                              variant="ghost"
+                                              size="sm"
+                                              className="text-red-600 hover:text-red-700"
+                                              disabled={
+                                                deleteAssignmentMutation.isPending
+                                              }
+                                            >
+                                              <X className="h-4 w-4" />
+                                            </Button>
+                                          </AlertDialogTrigger>
+                                          <AlertDialogContent>
+                                            <AlertDialogHeader>
+                                              <AlertDialogTitle>
+                                                Remove Job Role
+                                              </AlertDialogTitle>
+                                              <AlertDialogDescription>
+                                                Are you sure you want to remove the "
+                                                {jobRole.display_name || jobRole.name}" job role
+                                                from {deptGroup.department.name}?
+                                                {shiftRoles.length > 0 && (
+                                                  <>
+                                                    <br />
+                                                    <br />
+                                                    <strong>Warning:</strong> This will also automatically remove {shiftRoles.length} shift role(s) under this job role.
+                                                  </>
+                                                )}
+                                                <br />
+                                                <br />
+                                                <strong>Person:</strong>{" "}
+                                                {transformedUser.name} (
+                                                {transformedUser.email})
+                                              </AlertDialogDescription>
+                                            </AlertDialogHeader>
+                                            <AlertDialogFooter>
+                                              <AlertDialogCancel>
+                                                Cancel
+                                              </AlertDialogCancel>
+                                              <AlertDialogAction
+                                                onClick={() =>
+                                                  handleRemoveAssignment(
+                                                    deptGroup.department.id,
+                                                    jobRoleGroup.assignment_id
+                                                  )
+                                                }
+                                                className="bg-red-600 hover:bg-red-700"
+                                              >
+                                                Remove Job Role
+                                              </AlertDialogAction>
+                                            </AlertDialogFooter>
+                                          </AlertDialogContent>
+                                        </AlertDialog>
+                                      )}
+                                    </div>
+                                  )}
+
+                                  {/* Shift Roles (nested under job role) - Auto-assigned, read-only */}
+                                  {shiftRoles.length > 0 && (
+                                    <div className="ml-8 space-y-2">
+                                      {shiftRoles.map((shiftRoleAssignment) => {
+                                        const shiftRole = shiftRoleAssignment.role;
+
+                                        return (
+                                          <div
+                                            key={shiftRole.id}
+                                            className="flex items-center p-2 pl-4 border-l-2 border-muted rounded-r-lg bg-muted/20"
+                                          >
+                                            <div className="flex items-center gap-3">
+                                              <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/20">
+                                                <span className="text-xs text-blue-600 dark:text-blue-400">└</span>
+                                              </div>
+                                              <div>
+                                                <div className="flex items-center gap-2">
+                                                  <h5 className="text-sm font-medium">
+                                                    {shiftRole.display_name || shiftRole.name}
+                                                  </h5>
+                                                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0 bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+                                                    Auto-assigned
+                                                  </Badge>
+                                                </div>
+                                                <p className="text-xs text-muted-foreground">
+                                                  {shiftRole.description || "No description"}
+                                                </p>
+                                                <p className="text-xs text-muted-foreground italic mt-1">
+                                                  Automatically removed when job role is removed
+                                                </p>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
                                 </div>
-                                <div>
-                                  <h4 className="font-medium">
-                                    {role.display_name || role.name}
-                                  </h4>
-                                  <p className="text-xs text-muted-foreground">
-                                    {role.description || "No description"}
-                                  </p>
-                                  <div className="flex items-center gap-1 mt-1">
-                                    <Key className="h-3 w-3 text-muted-foreground" />
-                                    <span className="text-xs text-muted-foreground">
-                                      {role.permissions_count || 0} permissions
-                                    </span>
-                                  </div>
-                                </div>
-                              </div>
-                              <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="text-red-600 hover:text-red-700"
-                                    disabled={
-                                      deleteAssignmentMutation.isPending
-                                    }
+                              );
+                            })}
+
+                            {/* Other roles (fallback for roles without hierarchy) */}
+                            {deptGroup.otherRoles && deptGroup.otherRoles.length > 0 && (
+                              <div className="space-y-2">
+                                {deptGroup.otherRoles.map((role) => (
+                                  <div
+                                    key={role.assignment_id || role.id}
+                                    className="flex items-center justify-between p-3 border rounded-lg bg-muted/30"
                                   >
-                                    <X className="h-4 w-4" />
-                                  </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>
-                                      Remove Role
-                                    </AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                      Are you sure you want to remove the "
-                                      {role.display_name || role.name}" role
-                                      from {deptGroup.department.name}?
-                                      <br />
-                                      <strong>Person:</strong>{" "}
-                                      {transformedUser.name} (
-                                      {transformedUser.email})
-                                    </AlertDialogDescription>
-                                  </AlertDialogHeader>
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel>
-                                      Cancel
-                                    </AlertDialogCancel>
-                                    <AlertDialogAction
-                                      onClick={() =>
-                                        handleRemoveAssignment(
-                                          deptGroup.department.id,
-                                          role.assignment_id
-                                        )
-                                      }
-                                      className="bg-red-600 hover:bg-red-700"
-                                    >
-                                      Remove Role
-                                    </AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
-                            </div>
-                          ))
+                                    <div className="flex items-center gap-3">
+                                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+                                        <Shield className="h-4 w-4 text-primary" />
+                                      </div>
+                                      <div>
+                                        <h4 className="font-medium">
+                                          {role.display_name || role.name}
+                                        </h4>
+                                        <p className="text-xs text-muted-foreground">
+                                          {role.description || "No description"}
+                                        </p>
+                                      </div>
+                                    </div>
+                                    <AlertDialog>
+                                      <AlertDialogTrigger asChild>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className="text-red-600 hover:text-red-700"
+                                          disabled={
+                                            deleteAssignmentMutation.isPending
+                                          }
+                                        >
+                                          <X className="h-4 w-4" />
+                                        </Button>
+                                      </AlertDialogTrigger>
+                                      <AlertDialogContent>
+                                        <AlertDialogHeader>
+                                          <AlertDialogTitle>
+                                            Remove Role
+                                          </AlertDialogTitle>
+                                          <AlertDialogDescription>
+                                            Are you sure you want to remove the "
+                                            {role.display_name || role.name}" role
+                                            from {deptGroup.department.name}?
+                                            <br />
+                                            <strong>Person:</strong>{" "}
+                                            {transformedUser.name} (
+                                            {transformedUser.email})
+                                          </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <AlertDialogFooter>
+                                          <AlertDialogCancel>
+                                            Cancel
+                                          </AlertDialogCancel>
+                                          <AlertDialogAction
+                                            onClick={() =>
+                                              handleRemoveAssignment(
+                                                deptGroup.department.id,
+                                                role.assignment_id
+                                              )
+                                            }
+                                            className="bg-red-600 hover:bg-red-700"
+                                          >
+                                            Remove Role
+                                          </AlertDialogAction>
+                                        </AlertDialogFooter>
+                                      </AlertDialogContent>
+                                    </AlertDialog>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </>
                         )}
                       </div>
                     </div>

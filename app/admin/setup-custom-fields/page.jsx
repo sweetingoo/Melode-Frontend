@@ -14,8 +14,12 @@ import {
   Zap,
 } from "lucide-react";
 import { toast } from "sonner";
+import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
 
 const SetupCustomFieldsPage = () => {
+  // Permission checks
+  const { hasPermission } = usePermissionsCheck();
+  const canCreateCustomField = hasPermission("custom_field:create");
   const handleCreateExample = () => {
     toast.success("Healthcare Staff Example created successfully!", {
       description:
@@ -97,13 +101,15 @@ const SetupCustomFieldsPage = () => {
                     </div>
                   </div>
                 </div>
-                <Button
-                  onClick={handleCreateExample}
-                  size="lg"
-                  className="bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-xl transition-all duration-300 px-8"
-                >
-                  Create Example
-                </Button>
+                {canCreateCustomField && (
+                  <Button
+                    onClick={handleCreateExample}
+                    size="lg"
+                    className="bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-xl transition-all duration-300 px-8"
+                  >
+                    Create Example
+                  </Button>
+                )}
               </div>
             </CardHeader>
           </Card>
@@ -144,13 +150,15 @@ const SetupCustomFieldsPage = () => {
                     </div>
                   </div>
                 </div>
-                <Button
-                  onClick={handleCreateSimple}
-                  size="lg"
-                  className="bg-green-600 hover:bg-green-700 text-white shadow-lg hover:shadow-xl transition-all duration-300 px-8"
-                >
-                  Create Simple
-                </Button>
+                {canCreateCustomField && (
+                  <Button
+                    onClick={handleCreateSimple}
+                    size="lg"
+                    className="bg-green-600 hover:bg-green-700 text-white shadow-lg hover:shadow-xl transition-all duration-300 px-8"
+                  >
+                    Create Simple
+                  </Button>
+                )}
               </div>
             </CardHeader>
           </Card>

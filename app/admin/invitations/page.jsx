@@ -83,6 +83,7 @@ import {
   invitationUtils,
 } from "@/hooks/useInvitations";
 import { useRoles } from "@/hooks/useRoles";
+import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
 
 const InvitationPage = () => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -112,6 +113,12 @@ const InvitationPage = () => {
   const revokeInvitationMutation = useRevokeInvitation();
   const resendAllPendingMutation = useResendAllPending();
   const revokeAllExpiredMutation = useRevokeAllExpired();
+
+  // Permission checks
+  const { hasPermission } = usePermissionsCheck();
+  const canCreateInvitation = hasPermission("invitation:create");
+  const canUpdateInvitation = hasPermission("invitation:update");
+  const canDeleteInvitation = hasPermission("invitation:delete");
 
   // Transform API data to display format
   const transformedInvitations = invitations.map((invitation) => {
@@ -531,306 +538,307 @@ const InvitationPage = () => {
           </div>
         </div>
 
-        <Dialog open={isModalOpen} onOpenChange={handleModalClose}>
-          <DialogTrigger asChild>
-            <Button>
-              <PlusCircle className="mr-2 h-4 w-4" />
-              Create Invitation
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[600px]">
-            <DialogHeader>
-              <DialogTitle>Create New Invitation</DialogTitle>
-              <DialogDescription>
-                Send an invitation to a new user to join your organization.
-              </DialogDescription>
-            </DialogHeader>
+        {canCreateInvitation && (
+          <Dialog open={isModalOpen} onOpenChange={handleModalClose}>
+            <DialogTrigger asChild>
+              <Button>
+                <PlusCircle className="mr-2 h-4 w-4" />
+                Create Invitation
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[600px]">
+              <DialogHeader>
+                <DialogTitle>Create New Invitation</DialogTitle>
+                <DialogDescription>
+                  Send an invitation to a new user to join your organization.
+                </DialogDescription>
+              </DialogHeader>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label htmlFor="email" className="text-sm font-medium">
-                    Email *
-                  </label>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label htmlFor="email" className="text-sm font-medium">
+                      Email *
+                    </label>
 
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="user@company.com"
-                    value={formData.email}
-                    onChange={(e) =>
-                      handleInputChange("email", e.target.value)
-                    }
-                    className={
-                      validationErrors.email
-                        ? "border-red-500 focus:border-red-500"
-                        : ""
-                    }
-                    required
-                  />
-
-                  {validationErrors.email && (
-                    <p className="text-xs text-red-600">
-                      {validationErrors.email}
-                    </p>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <label htmlFor="role_id" className="text-sm font-medium">
-                    Role *
-                  </label>
-
-                  <Select
-                    value={formData.role_id}
-                    onValueChange={(value) =>
-                      handleInputChange("role_id", value)
-                    }
-                    disabled={rolesLoading}
-                  >
-                    <SelectTrigger
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="user@company.com"
+                      value={formData.email}
+                      onChange={(e) =>
+                        handleInputChange("email", e.target.value)
+                      }
                       className={
-                        validationErrors.role_id
+                        validationErrors.email
                           ? "border-red-500 focus:border-red-500"
                           : ""
                       }
+                      required
+                    />
+
+                    {validationErrors.email && (
+                      <p className="text-xs text-red-600">
+                        {validationErrors.email}
+                      </p>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <label htmlFor="role_id" className="text-sm font-medium">
+                      Role *
+                    </label>
+
+                    <Select
+                      value={formData.role_id}
+                      onValueChange={(value) =>
+                        handleInputChange("role_id", value)
+                      }
+                      disabled={rolesLoading}
                     >
-                      <SelectValue placeholder={rolesLoading ? "Loading roles..." : "Select role"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {roles.map((role) => (
-                        <SelectItem key={role.id} value={role.id.toString()}>
-                          {role.display_name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                      <SelectTrigger
+                        className={
+                          validationErrors.role_id
+                            ? "border-red-500 focus:border-red-500"
+                            : ""
+                        }
+                      >
+                        <SelectValue placeholder={rolesLoading ? "Loading roles..." : "Select role"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {roles.map((role) => (
+                          <SelectItem key={role.id} value={role.id.toString()}>
+                            {role.display_name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
 
-                  {validationErrors.role_id && (
-                    <p className="text-xs text-red-600">
-                      {validationErrors.role_id}
-                    </p>
-                  )}
+                    {validationErrors.role_id && (
+                      <p className="text-xs text-red-600">
+                        {validationErrors.role_id}
+                      </p>
+                    )}
+                  </div>
                 </div>
-              </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label
-                    htmlFor="expires_in_days"
-                    className="text-sm font-medium"
-                  >
-                    Expires In (Days) *
-                  </label>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label
+                      htmlFor="expires_in_days"
+                      className="text-sm font-medium"
+                    >
+                      Expires In (Days) *
+                    </label>
 
-                  <Select
-                    value={formData.expires_in_days}
-                    onValueChange={(value) =>
-                      handleInputChange("expires_in_days", value)
-                    }
-                  >
-                    <SelectTrigger
+                    <Select
+                      value={formData.expires_in_days}
+                      onValueChange={(value) =>
+                        handleInputChange("expires_in_days", value)
+                      }
+                    >
+                      <SelectTrigger
+                        className={
+                          validationErrors.expires_in_days
+                            ? "border-red-500 focus:border-red-500"
+                            : ""
+                        }
+                      >
+                        <SelectValue placeholder="Select days" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1">1 Day</SelectItem>
+                        <SelectItem value="3">3 Days</SelectItem>
+                        <SelectItem value="7">7 Days</SelectItem>
+                        <SelectItem value="14">14 Days</SelectItem>
+                        <SelectItem value="30">30 Days</SelectItem>
+                      </SelectContent>
+                    </Select>
+
+                    {validationErrors.expires_in_days && (
+                      <p className="text-xs text-red-600">
+                        {validationErrors.expires_in_days}
+                      </p>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <label
+                      htmlFor="suggested_username"
+                      className="text-sm font-medium"
+                    >
+                      Suggested Username
+                    </label>
+
+                    <Input
+                      id="suggested_username"
+                      placeholder="john.doe"
+                      value={formData.suggested_username}
+                      onChange={(e) =>
+                        handleInputChange("suggested_username", e.target.value)
+                      }
                       className={
-                        validationErrors.expires_in_days
+                        validationErrors.suggested_username
                           ? "border-red-500 focus:border-red-500"
                           : ""
                       }
-                    >
-                      <SelectValue placeholder="Select days" />
+                    />
+
+                    {validationErrors.suggested_username && (
+                      <p className="text-xs text-red-600">
+                        {validationErrors.suggested_username}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label
+                    htmlFor="suggested_title"
+                    className="text-sm font-medium"
+                  >
+                    Title
+                  </label>
+                  <Select
+                    value={formData.suggested_title}
+                    onValueChange={(value) =>
+                      handleInputChange("suggested_title", value)
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select title" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="1">1 Day</SelectItem>
-                      <SelectItem value="3">3 Days</SelectItem>
-                      <SelectItem value="7">7 Days</SelectItem>
-                      <SelectItem value="14">14 Days</SelectItem>
-                      <SelectItem value="30">30 Days</SelectItem>
+                      <SelectItem value="mr">Mr.</SelectItem>
+                      <SelectItem value="mrs">Mrs.</SelectItem>
+                      <SelectItem value="ms">Ms.</SelectItem>
+                      <SelectItem value="dr">Dr.</SelectItem>
+                      <SelectItem value="prof">Prof.</SelectItem>
                     </SelectContent>
                   </Select>
-
-                  {validationErrors.expires_in_days && (
-                    <p className="text-xs text-red-600">
-                      {validationErrors.expires_in_days}
-                    </p>
-                  )}
                 </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label
+                      htmlFor="suggested_first_name"
+                      className="text-sm font-medium"
+                    >
+                      First Name *
+                    </label>
+
+                    <Input
+                      id="suggested_first_name"
+                      placeholder="John"
+                      value={formData.suggested_first_name}
+                      onChange={(e) =>
+                        handleInputChange(
+                          "suggested_first_name",
+                          e.target.value
+                        )
+                      }
+                      className={
+                        validationErrors.suggested_first_name
+                          ? "border-red-500 focus:border-red-500"
+                          : ""
+                      }
+                      required
+                    />
+
+                    {validationErrors.suggested_first_name && (
+                      <p className="text-xs text-red-600">
+                        {validationErrors.suggested_first_name}
+                      </p>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <label
+                      htmlFor="suggested_last_name"
+                      className="text-sm font-medium"
+                    >
+                      Last Name *
+                    </label>
+
+                    <Input
+                      id="suggested_last_name"
+                      placeholder="Doe"
+                      value={formData.suggested_last_name}
+                      onChange={(e) =>
+                        handleInputChange("suggested_last_name", e.target.value)
+                      }
+                      className={
+                        validationErrors.suggested_last_name
+                          ? "border-red-500 focus:border-red-500"
+                          : ""
+                      }
+                      required
+                    />
+
+                    {validationErrors.suggested_last_name && (
+                      <p className="text-xs text-red-600">
+                        {validationErrors.suggested_last_name}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
                 <div className="space-y-2">
                   <label
-                    htmlFor="suggested_username"
+                    htmlFor="suggested_phone_number"
                     className="text-sm font-medium"
                   >
-                    Suggested Username
+                    UK Phone Number
                   </label>
 
                   <Input
-                    id="suggested_username"
-                    placeholder="john.doe"
-                    value={formData.suggested_username}
-                    onChange={(e) =>
-                      handleInputChange("suggested_username", e.target.value)
-                    }
-                    className={
-                      validationErrors.suggested_username
-                        ? "border-red-500 focus:border-red-500"
-                        : ""
-                    }
-                  />
-
-                  {validationErrors.suggested_username && (
-                    <p className="text-xs text-red-600">
-                      {validationErrors.suggested_username}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label
-                  htmlFor="suggested_title"
-                  className="text-sm font-medium"
-                >
-                  Title
-                </label>
-                <Select
-                  value={formData.suggested_title}
-                  onValueChange={(value) =>
-                    handleInputChange("suggested_title", value)
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select title" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="mr">Mr.</SelectItem>
-                    <SelectItem value="mrs">Mrs.</SelectItem>
-                    <SelectItem value="ms">Ms.</SelectItem>
-                    <SelectItem value="dr">Dr.</SelectItem>
-                    <SelectItem value="prof">Prof.</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label
-                    htmlFor="suggested_first_name"
-                    className="text-sm font-medium"
-                  >
-                    First Name *
-                  </label>
-
-                  <Input
-                    id="suggested_first_name"
-                    placeholder="John"
-                    value={formData.suggested_first_name}
+                    id="suggested_phone_number"
+                    type="tel"
+                    placeholder="+44 (555) 123-4567"
+                    value={formData.suggested_phone_number}
                     onChange={(e) =>
                       handleInputChange(
-                        "suggested_first_name",
+                        "suggested_phone_number",
                         e.target.value
                       )
                     }
                     className={
-                      validationErrors.suggested_first_name
+                      validationErrors.suggested_phone_number
                         ? "border-red-500 focus:border-red-500"
                         : ""
                     }
-                    required
                   />
 
-                  {validationErrors.suggested_first_name && (
+                  {validationErrors.suggested_phone_number && (
                     <p className="text-xs text-red-600">
-                      {validationErrors.suggested_first_name}
+                      {validationErrors.suggested_phone_number}
                     </p>
                   )}
                 </div>
-                <div className="space-y-2">
-                  <label
-                    htmlFor="suggested_last_name"
-                    className="text-sm font-medium"
+
+                <DialogFooter>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => handleModalClose(false)}
+                    disabled={createInvitationMutation.isPending}
                   >
-                    Last Name *
-                  </label>
-
-                  <Input
-                    id="suggested_last_name"
-                    placeholder="Doe"
-                    value={formData.suggested_last_name}
-                    onChange={(e) =>
-                      handleInputChange("suggested_last_name", e.target.value)
-                    }
-                    className={
-                      validationErrors.suggested_last_name
-                        ? "border-red-500 focus:border-red-500"
-                        : ""
-                    }
-                    required
-                  />
-
-                  {validationErrors.suggested_last_name && (
-                    <p className="text-xs text-red-600">
-                      {validationErrors.suggested_last_name}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label
-                  htmlFor="suggested_phone_number"
-                  className="text-sm font-medium"
-                >
-                  UK Phone Number
-                </label>
-
-                <Input
-                  id="suggested_phone_number"
-                  type="tel"
-                  placeholder="+44 (555) 123-4567"
-                  value={formData.suggested_phone_number}
-                  onChange={(e) =>
-                    handleInputChange(
-                      "suggested_phone_number",
-                      e.target.value
-                    )
-                  }
-                  className={
-                    validationErrors.suggested_phone_number
-                      ? "border-red-500 focus:border-red-500"
-                      : ""
-                  }
-                />
-
-                {validationErrors.suggested_phone_number && (
-                  <p className="text-xs text-red-600">
-                    {validationErrors.suggested_phone_number}
-                  </p>
-                )}
-              </div>
-
-              <DialogFooter>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => handleModalClose(false)}
-                  disabled={createInvitationMutation.isPending}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  disabled={createInvitationMutation.isPending}
-                >
-                  {createInvitationMutation.isPending ? (
-                    <div className="flex items-center gap-2">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Creating...
-                    </div>
-                  ) : (
-                    "Send Invitation"
-                  )}
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={createInvitationMutation.isPending}
+                  >
+                    {createInvitationMutation.isPending ? (
+                      <div className="flex items-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Creating...
+                      </div>
+                    ) : (
+                      "Send Invitation"
+                    )}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
 
         {/* View Invitation Modal */}
         <Dialog open={isViewModalOpen} onOpenChange={handleViewModalClose}>
@@ -1186,66 +1194,70 @@ const InvitationPage = () => {
                             {/* Only show action buttons for non-accepted invitations */}
                             {invitation.status !== "Accepted" && (
                               <>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() =>
-                                        handleResendInvitation(invitation.id)
-                                      }
-                                      disabled={resendInvitationMutation.isPending}
-                                    >
-                                      <Send className="h-4 w-4" />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    <p>Resend invitation email</p>
-                                  </TooltipContent>
-                                </Tooltip>
-                                <AlertDialog>
-                                  <AlertDialogTrigger asChild>
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          className="text-red-600 hover:text-red-700"
-                                          disabled={revokeInvitationMutation.isPending}
-                                        >
-                                          <X className="h-4 w-4" />
-                                        </Button>
-                                      </TooltipTrigger>
-                                      <TooltipContent>
-                                        <p>Revoke invitation</p>
-                                      </TooltipContent>
-                                    </Tooltip>
-                                  </AlertDialogTrigger>
-                                  <AlertDialogContent>
-                                    <AlertDialogHeader>
-                                      <AlertDialogTitle>
-                                        Revoke Invitation
-                                      </AlertDialogTitle>
-                                      <AlertDialogDescription>
-                                        Are you sure you want to revoke this
-                                        invitation? This action cannot be undone.
-                                        <br />
-                                        <strong>Email:</strong> {invitation.email}
-                                      </AlertDialogDescription>
-                                    </AlertDialogHeader>
-                                    <AlertDialogFooter>
-                                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                      <AlertDialogAction
+                                {canUpdateInvitation && (
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
                                         onClick={() =>
-                                          handleRevokeInvitation(invitation.id)
+                                          handleResendInvitation(invitation.id)
                                         }
-                                        className="bg-red-600 hover:bg-red-700"
+                                        disabled={resendInvitationMutation.isPending}
                                       >
-                                        Revoke Invitation
-                                      </AlertDialogAction>
-                                    </AlertDialogFooter>
-                                  </AlertDialogContent>
-                                </AlertDialog>
+                                        <Send className="h-4 w-4" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      <p>Resend invitation email</p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                )}
+                                {canDeleteInvitation && (
+                                  <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="text-red-600 hover:text-red-700"
+                                            disabled={revokeInvitationMutation.isPending}
+                                          >
+                                            <X className="h-4 w-4" />
+                                          </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                          <p>Revoke invitation</p>
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent>
+                                      <AlertDialogHeader>
+                                        <AlertDialogTitle>
+                                          Revoke Invitation
+                                        </AlertDialogTitle>
+                                        <AlertDialogDescription>
+                                          Are you sure you want to revoke this
+                                          invitation? This action cannot be undone.
+                                          <br />
+                                          <strong>Email:</strong> {invitation.email}
+                                        </AlertDialogDescription>
+                                      </AlertDialogHeader>
+                                      <AlertDialogFooter>
+                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                        <AlertDialogAction
+                                          onClick={() =>
+                                            handleRevokeInvitation(invitation.id)
+                                          }
+                                          className="bg-red-600 hover:bg-red-700"
+                                        >
+                                          Revoke Invitation
+                                        </AlertDialogAction>
+                                      </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                  </AlertDialog>
+                                )}
                               </>
                             )}
                           </div>

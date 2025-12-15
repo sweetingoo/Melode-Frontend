@@ -74,7 +74,7 @@ import {
   userUtils,
 } from "@/hooks/useUsers";
 import { useCreateRole } from "@/hooks/useRoles";
-import { useHijackUser } from "@/hooks/useAuth";
+import { useHijackUser, useCurrentUser } from "@/hooks/useAuth";
 import {
   Dialog,
   DialogContent,
@@ -130,6 +130,48 @@ const UserManagementPage = () => {
   const hijackUserMutation = useHijackUser();
   const sendInvitationMutation = useSendInvitationToUser();
   const createRoleMutation = useCreateRole();
+
+  // Get current user for permission checks
+  const { data: currentUserData } = useCurrentUser();
+  const currentUserPermissions = currentUserData?.permissions || [];
+  const currentUserDirectPermissions = currentUserData?.direct_permissions || [];
+
+  // Extract permission names
+  const userPermissionNames = React.useMemo(() => {
+    const allPermissions = [...currentUserPermissions, ...currentUserDirectPermissions];
+    return allPermissions.map((p) => {
+      if (typeof p === "string") return p;
+      if (typeof p === "object") {
+        return p.permission || p.name || p.permission_id || p.id || "";
+      }
+      return String(p);
+    }).filter(Boolean);
+  }, [currentUserPermissions, currentUserDirectPermissions]);
+
+  // Check if user has wildcard permissions
+  const hasWildcardPermissions = userPermissionNames.includes("*");
+
+  // Permission check helper
+  const hasPermission = React.useCallback((permission) => {
+    if (hasWildcardPermissions) return true;
+    return userPermissionNames.some((perm) => {
+      if (perm === permission) return true;
+      // Resource match (e.g., user:create matches users:create)
+      const permResource = perm.split(":")[0];
+      const checkResource = permission.split(":")[0];
+      if (permResource === checkResource || permResource === checkResource + "s" || permResource + "s" === checkResource) {
+        return true;
+      }
+      return perm.includes(checkResource);
+    });
+  }, [userPermissionNames, hasWildcardPermissions]);
+
+  // User management permissions
+  const canCreateUser = hasPermission("user:create");
+  const canUpdateUser = hasPermission("user:update");
+  const canDeleteUser = hasPermission("user:delete");
+  const canAssignRole = hasPermission("role:assign");
+  const canAssignEmployee = hasPermission("employee:assign");
 
   // Extract users and pagination data from response
   const users = usersResponse?.users || [];
@@ -555,10 +597,12 @@ const UserManagementPage = () => {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold tracking-tight">People Management</h1>
-          <Button onClick={() => setIsCreateModalOpen(true)}>
-            <UserPlus className="mr-2 h-4 w-4" />
-            Create Person
-          </Button>
+          {canCreateUser && (
+            <Button onClick={() => setIsCreateModalOpen(true)}>
+              <UserPlus className="mr-2 h-4 w-4" />
+              Create Person
+            </Button>
+          )}
         </div>
         {/* Search Input */}
         <div className="relative">
@@ -725,18 +769,20 @@ const UserManagementPage = () => {
                           <DropdownMenuSeparator />
 
                           {/* Edit User */}
-                          <DropdownMenuItem asChild>
-                            <Link
-                              href={`/admin/employee-management/${user.id}`}
-                              className="flex items-center"
-                            >
-                              <Edit className="mr-2 h-4 w-4" />
-                              Edit Person
-                            </Link>
-                          </DropdownMenuItem>
+                          {canUpdateUser && (
+                            <DropdownMenuItem asChild>
+                              <Link
+                                href={`/admin/employee-management/${user.id}`}
+                                className="flex items-center"
+                              >
+                                <Edit className="mr-2 h-4 w-4" />
+                                Edit Person
+                              </Link>
+                            </DropdownMenuItem>
+                          )}
 
                           {/* Activate/Deactivate User */}
-                          {user.isActive ? (
+                          {canUpdateUser && user.isActive && (
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
                                 <DropdownMenuItem
@@ -775,7 +821,8 @@ const UserManagementPage = () => {
                                 </AlertDialogFooter>
                               </AlertDialogContent>
                             </AlertDialog>
-                          ) : (
+                          )}
+                          {canUpdateUser && !user.isActive && (
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
                                 <DropdownMenuItem
@@ -813,48 +860,50 @@ const UserManagementPage = () => {
                             </AlertDialog>
                           )}
 
-                          {/* Hijack User */}
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <DropdownMenuItem
-                                className="text-blue-600 focus:text-blue-600"
-                                disabled={hijackUserMutation.isPending}
-                                onSelect={(e) => e.preventDefault()}
-                              >
-                                <UserCheck className="mr-2 h-4 w-4" />
-                                Hijack User Session
-                              </DropdownMenuItem>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>
-                                  Hijack User Session
-                                </AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Are you sure you want to hijack this user's
-                                  session? You will be logged in as this user
-                                  and can perform actions on their behalf.
-                                  <br />
-                                  <br />
-                                  <strong>Target User:</strong> {user.name} (
-                                  {user.email})
-                                  <br />
-                                  <strong>Warning:</strong> This action will log
-                                  you out of your current session and log you in
-                                  as the target user.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() => handleHijackUser(user.id)}
-                                  className="bg-blue-600 hover:bg-blue-700"
+                          {/* Hijack User - Requires update permission */}
+                          {canUpdateUser && (
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <DropdownMenuItem
+                                  className="text-blue-600 focus:text-blue-600"
+                                  disabled={hijackUserMutation.isPending}
+                                  onSelect={(e) => e.preventDefault()}
                                 >
-                                  Hijack User
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
+                                  <UserCheck className="mr-2 h-4 w-4" />
+                                  Hijack User Session
+                                </DropdownMenuItem>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>
+                                    Hijack User Session
+                                  </AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Are you sure you want to hijack this user's
+                                    session? You will be logged in as this user
+                                    and can perform actions on their behalf.
+                                    <br />
+                                    <br />
+                                    <strong>Target User:</strong> {user.name} (
+                                    {user.email})
+                                    <br />
+                                    <strong>Warning:</strong> This action will log
+                                    you out of your current session and log you in
+                                    as the target user.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => handleHijackUser(user.id)}
+                                    className="bg-blue-600 hover:bg-blue-700"
+                                  >
+                                    Hijack User
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          )}
 
                           <DropdownMenuSeparator />
 
@@ -919,40 +968,42 @@ const UserManagementPage = () => {
                           <DropdownMenuSeparator />
 
                           {/* Delete User */}
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <DropdownMenuItem
-                                className="text-red-600 focus:text-red-600"
-                                disabled={deleteUserMutation.isPending}
-                                onSelect={(e) => e.preventDefault()}
-                              >
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Delete Person
-                              </DropdownMenuItem>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Delete Person</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Are you sure you want to delete this person?
-                                  This action cannot be undone and will
-                                  permanently remove the person from the system.
-                                  <br />
-                                  <strong>Person:</strong> {user.name} (
-                                  {user.email})
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() => handleDeleteUser(user.id)}
-                                  className="bg-red-600 hover:bg-red-700"
+                          {canDeleteUser && (
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <DropdownMenuItem
+                                  className="text-red-600 focus:text-red-600"
+                                  disabled={deleteUserMutation.isPending}
+                                  onSelect={(e) => e.preventDefault()}
                                 >
+                                  <Trash2 className="mr-2 h-4 w-4" />
                                   Delete Person
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
+                                </DropdownMenuItem>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Delete Person</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Are you sure you want to delete this person?
+                                    This action cannot be undone and will
+                                    permanently remove the person from the system.
+                                    <br />
+                                    <strong>Person:</strong> {user.name} (
+                                    {user.email})
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => handleDeleteUser(user.id)}
+                                    className="bg-red-600 hover:bg-red-700"
+                                  >
+                                    Delete Person
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>

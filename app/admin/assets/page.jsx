@@ -93,6 +93,7 @@ import { useRoles, useCreateRole } from "@/hooks/useRoles";
 import ResourceAuditLogs from "@/components/ResourceAuditLogs";
 import MultiFileUpload from "@/components/MultiFileUpload";
 import FileAttachmentList from "@/components/FileAttachmentList";
+import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
 
 const AssetsPage = () => {
   // State management
@@ -156,6 +157,12 @@ const AssetsPage = () => {
   const updateAssetMutation = useUpdateAsset();
   const deleteAssetMutation = useDeleteAsset();
   const assignAssetMutation = useAssignAsset();
+
+  // Permission checks
+  const { hasPermission } = usePermissionsCheck();
+  const canCreateAsset = hasPermission("asset:create");
+  const canUpdateAsset = hasPermission("asset:update");
+  const canDeleteAsset = hasPermission("asset:delete");
   const updateAttributesMutation = useUpdateAssetAttributes();
   const updateSensorDataMutation = useUpdateAssetSensorData();
   const createRoleMutation = useCreateRole();
@@ -717,10 +724,12 @@ const AssetsPage = () => {
           <h1 className="text-3xl font-bold tracking-tight">
             Assets Management
           </h1>
-          <Button onClick={handleCreateAsset}>
-            <Plus className="mr-2 h-4 w-4" />
-            Create Asset
-          </Button>
+          {canCreateAsset && (
+            <Button onClick={handleCreateAsset}>
+              <Plus className="mr-2 h-4 w-4" />
+              Create Asset
+            </Button>
+          )}
         </div>
         {/* Search Input */}
         <div className="relative">
@@ -1061,16 +1070,19 @@ const AssetsPage = () => {
                                 <Eye className="mr-2 h-4 w-4" />
                                 View Details
                               </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => handleEditAsset(asset)}
-                              >
-                                <Edit className="mr-2 h-4 w-4" />
-                                Edit Asset
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                onClick={() => handleAssignAsset(asset)}
-                              >
+                              {canUpdateAsset && (
+                                <DropdownMenuItem
+                                  onClick={() => handleEditAsset(asset)}
+                                >
+                                  <Edit className="mr-2 h-4 w-4" />
+                                  Edit Asset
+                                </DropdownMenuItem>
+                              )}
+                              {(canUpdateAsset || canDeleteAsset) && <DropdownMenuSeparator />}
+                              {canUpdateAsset && (
+                                <DropdownMenuItem
+                                  onClick={() => handleAssignAsset(asset)}
+                                >
                                 <UserPlus className="mr-2 h-4 w-4" />
                                 Assign Asset
                               </DropdownMenuItem>
@@ -1080,20 +1092,24 @@ const AssetsPage = () => {
                                 <Settings className="mr-2 h-4 w-4" />
                                 Update Attributes
                               </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => handleUpdateSensorData(asset)}
-                              >
-                                <Activity className="mr-2 h-4 w-4" />
-                                Update Sensor Data
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                onClick={() => handleDeleteAsset(asset)}
-                                className="text-red-600"
-                              >
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Delete Asset
-                              </DropdownMenuItem>
+                              {canUpdateAsset && (
+                                <DropdownMenuItem
+                                  onClick={() => handleUpdateSensorData(asset)}
+                                >
+                                  <Activity className="mr-2 h-4 w-4" />
+                                  Update Sensor Data
+                                </DropdownMenuItem>
+                              )}
+                              {canUpdateAsset && canDeleteAsset && <DropdownMenuSeparator />}
+                              {canDeleteAsset && (
+                                <DropdownMenuItem
+                                  onClick={() => handleDeleteAsset(asset)}
+                                  className="text-red-600"
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  Delete Asset
+                                </DropdownMenuItem>
+                              )}
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </TableCell>

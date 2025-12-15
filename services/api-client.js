@@ -99,10 +99,13 @@ apiClient.interceptors.response.use(
           break;
         case 404:
           // Not found - log as warning instead of error for better UX
-          console.warn(
-            "Resource not found:",
-            data.message || "The requested resource was not found"
-          );
+          // Don't log 404s for clock/current endpoint (user not clocked in is a valid state)
+          if (!config?.url?.includes("/clock/current")) {
+            console.warn(
+              "Resource not found:",
+              data.message || "The requested resource was not found"
+            );
+          }
           break;
         case 422:
           // Validation error
@@ -126,7 +129,11 @@ apiClient.interceptors.response.use(
       }
 
       // Log error in development
-      if (process.env.NODE_ENV === "development") {
+      // Don't log 404s for clock/current endpoint (user not clocked in is a valid state)
+      if (
+        process.env.NODE_ENV === "development" &&
+        !(error.response?.status === 404 && error.response?.config?.url?.includes("/clock/current"))
+      ) {
         console.error("API Error Response:", {
           status: error.response?.status,
           statusText: error.response?.statusText,
