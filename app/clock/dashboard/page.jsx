@@ -34,7 +34,7 @@ import { useCurrentUser } from "@/hooks/useAuth";
 import {
   Clock,
   Coffee,
-  CoffeeOff,
+  X,
   AlertTriangle,
   User,
   MapPin,
@@ -372,7 +372,7 @@ export default function ClockDashboardPage() {
                 {endBreakMutation.isPending ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : (
-                  <CoffeeOff className="mr-2 h-4 w-4" />
+                  <X className="mr-2 h-4 w-4" />
                 )}
                 End Break
               </Button>
@@ -512,6 +512,7 @@ export default function ClockDashboardPage() {
     </div>
   );
 }
+
 
 
 
