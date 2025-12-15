@@ -167,47 +167,6 @@ const UserEditPage = () => {
   // Get available roles from API (needed for Superuser role lookup)
   const { data: rolesData, isLoading: rolesLoading } = useRoles();
 
-  // Get current user for permission checks
-  const { data: currentUserData } = useCurrentUser();
-  const currentUserPermissions = currentUserData?.permissions || [];
-  const currentUserDirectPermissions = currentUserData?.direct_permissions || [];
-
-  // Extract permission names
-  const userPermissionNames = React.useMemo(() => {
-    const allPermissions = [...currentUserPermissions, ...currentUserDirectPermissions];
-    return allPermissions.map((p) => {
-      if (typeof p === "string") return p;
-      if (typeof p === "object") {
-        return p.permission || p.name || p.permission_id || p.id || "";
-      }
-      return String(p);
-    }).filter(Boolean);
-  }, [currentUserPermissions, currentUserDirectPermissions]);
-
-  // Check if user has wildcard permissions
-  const hasWildcardPermissions = userPermissionNames.includes("*");
-
-  // Permission check helper
-  const hasPermission = React.useCallback((permission) => {
-    if (hasWildcardPermissions) return true;
-    return userPermissionNames.some((perm) => {
-      if (perm === permission) return true;
-      // Resource match (e.g., user:create matches users:create)
-      const permResource = perm.split(":")[0];
-      const checkResource = permission.split(":")[0];
-      if (permResource === checkResource || permResource === checkResource + "s" || permResource + "s" === checkResource) {
-        return true;
-      }
-      return perm.includes(checkResource);
-    });
-  }, [userPermissionNames, hasWildcardPermissions]);
-
-  // User management permissions
-  const canUpdateUser = hasPermission("user:update");
-  const canDeleteUser = hasPermission("user:delete");
-  const canAssignRole = hasPermission("role:assign");
-  const canAssignEmployee = hasPermission("employee:assign");
-
   // Group assignments by department
   const assignmentsByDepartment = React.useMemo(() => {
     if (!employeeAssignmentsData || !Array.isArray(employeeAssignmentsData)) {
@@ -423,6 +382,42 @@ const UserEditPage = () => {
   const currentUserDirectPermissions =
     currentUserData?.direct_permissions || [];
 
+  // Extract permission names for permission checks (canUpdateUser, canDeleteUser, etc.)
+  const userPermissionNames = React.useMemo(() => {
+    const allPermissions = [...currentUserPermissions, ...currentUserDirectPermissions];
+    return allPermissions.map((p) => {
+      if (typeof p === "string") return p;
+      if (typeof p === "object") {
+        return p.permission || p.name || p.permission_id || p.id || "";
+      }
+      return String(p);
+    }).filter(Boolean);
+  }, [currentUserPermissions, currentUserDirectPermissions]);
+
+  // Check if user has wildcard permissions for permission checks
+  const hasWildcardPermissions = userPermissionNames.includes("*");
+
+  // Permission check helper
+  const hasPermission = React.useCallback((permission) => {
+    if (hasWildcardPermissions) return true;
+    return userPermissionNames.some((perm) => {
+      if (perm === permission) return true;
+      // Resource match (e.g., user:create matches users:create)
+      const permResource = perm.split(":")[0];
+      const checkResource = permission.split(":")[0];
+      if (permResource === checkResource || permResource === checkResource + "s" || permResource + "s" === checkResource) {
+        return true;
+      }
+      return perm.includes(checkResource);
+    });
+  }, [userPermissionNames, hasWildcardPermissions]);
+
+  // User management permissions
+  const canUpdateUser = hasPermission("user:update");
+  const canDeleteUser = hasPermission("user:delete");
+  const canAssignRole = hasPermission("role:assign");
+  const canAssignEmployee = hasPermission("employee:assign");
+
   // Check if current user has wildcard permissions
   const currentUserHasWildcardPermissions = React.useMemo(() => {
     const rolePermissions = currentUserPermissions.some(
@@ -487,8 +482,8 @@ const UserEditPage = () => {
     allPermissionsData,
   ]);
 
-  // Check if user has wildcard permissions (e.g., superuser with "*")
-  const hasWildcardPermissions = React.useMemo(() => {
+  // Check if user being edited has wildcard permissions (e.g., superuser with "*")
+  const editedUserHasWildcardPermissions = React.useMemo(() => {
     const rolePermissions = userPermissions.some(
       (p) =>
         p === "*" ||
@@ -511,7 +506,7 @@ const UserEditPage = () => {
   // Get user's current permissions from roles (to check for conflicts)
   const userRolePermissionIds = React.useMemo(() => {
     // If user has wildcard permissions, they have all permissions
-    if (hasWildcardPermissions.rolePermissions) {
+    if (editedUserHasWildcardPermissions.rolePermissions) {
       console.log(
         "User has wildcard role permissions - treating as having all permissions"
       );
@@ -534,14 +529,14 @@ const UserEditPage = () => {
     return ids;
   }, [
     userPermissions,
-    hasWildcardPermissions.rolePermissions,
+    editedUserHasWildcardPermissions.rolePermissions,
     allPermissionsData,
   ]);
 
   // Get user's current direct permissions (to mark as already assigned)
   const userDirectPermissionIds = React.useMemo(() => {
     // If user has wildcard direct permissions, they have all permissions
-    if (hasWildcardPermissions.directPermissions) {
+    if (editedUserHasWildcardPermissions.directPermissions) {
       console.log(
         "User has wildcard direct permissions - treating as having all permissions"
       );
@@ -564,7 +559,7 @@ const UserEditPage = () => {
     return ids;
   }, [
     userDirectPermissions,
-    hasWildcardPermissions.directPermissions,
+    editedUserHasWildcardPermissions.directPermissions,
     allPermissionsData,
   ]);
 
@@ -2038,7 +2033,7 @@ const UserEditPage = () => {
                       {filteredAssignedPermissions.length})
                     </h3>
                   </div>
-                  {hasWildcardPermissions.directPermissions ? (
+                  {editedUserHasWildcardPermissions.directPermissions ? (
                     <div className="border rounded-lg bg-yellow-50/50 p-4 text-center">
                       <div className="flex items-center justify-center gap-2 mb-2">
                         <Crown className="h-5 w-5 text-yellow-600" />
@@ -2108,8 +2103,8 @@ const UserEditPage = () => {
                 </div>
 
                 {/* Available Permissions Section */}
-                {!hasWildcardPermissions.rolePermissions &&
-                  !hasWildcardPermissions.directPermissions &&
+                {!editedUserHasWildcardPermissions.rolePermissions &&
+                  !editedUserHasWildcardPermissions.directPermissions &&
                   (filteredAvailablePermissions.length > 0 ? (
                     <div className="space-y-2">
                       <div className="flex items-center gap-2 px-2">
@@ -2182,7 +2177,7 @@ const UserEditPage = () => {
                   ))}
 
                 {/* Wildcard Role Permissions Message */}
-                {hasWildcardPermissions.rolePermissions && (
+                {editedUserHasWildcardPermissions.rolePermissions && (
                   <div className="space-y-2">
                     <div className="flex items-center gap-2 px-2">
                       <Crown className="h-4 w-4 text-yellow-600" />
