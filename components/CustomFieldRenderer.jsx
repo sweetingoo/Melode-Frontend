@@ -129,11 +129,16 @@ const CustomFieldRenderer = ({
               <SelectValue placeholder={field.field_description || `Select ${field.field_label || field.name}`} />
             </SelectTrigger>
             <SelectContent>
-              {options.map((option, index) => (
-                <SelectItem key={index} value={option.value || option}>
-                  {option.label || option}
-                </SelectItem>
-              ))}
+              {options.map((option, index) => {
+                // Ensure value is never an empty string
+                const optionValue = option.value || option || `option-${index}`;
+                const safeValue = optionValue === "" ? `option-${index}` : String(optionValue);
+                return (
+                  <SelectItem key={index} value={safeValue}>
+                    {option.label || option}
+                  </SelectItem>
+                );
+              })}
             </SelectContent>
           </Select>
         );

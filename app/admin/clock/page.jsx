@@ -53,8 +53,8 @@ import { formatDistanceToNow, format } from "date-fns";
 import Link from "next/link";
 
 export default function ManagerClockPage() {
-  const [locationFilter, setLocationFilter] = useState("");
-  const [departmentFilter, setDepartmentFilter] = useState("");
+  const [locationFilter, setLocationFilter] = useState("all");
+  const [departmentFilter, setDepartmentFilter] = useState("all");
   const [editingRecord, setEditingRecord] = useState(null);
   const [editClockInTime, setEditClockInTime] = useState("");
   const [editClockOutTime, setEditClockOutTime] = useState("");
@@ -78,8 +78,8 @@ export default function ManagerClockPage() {
 
   // Get active clocks
   const params = {};
-  if (locationFilter) params.location_id = parseInt(locationFilter);
-  if (departmentFilter) params.department_id = parseInt(departmentFilter);
+  if (locationFilter && locationFilter !== "all") params.location_id = parseInt(locationFilter);
+  if (departmentFilter && departmentFilter !== "all") params.department_id = parseInt(departmentFilter);
 
   const { data: activeClocksData, isLoading, refetch } = useActiveClocks(params, {
     refetchInterval: 30000, // Refresh every 30 seconds
@@ -87,7 +87,27 @@ export default function ManagerClockPage() {
 
   // Get locations and departments for filters
   const { data: locationsData } = useLocations();
-  const { data: departmentsData } = useDepartments();
+  const { data: departmentsDataRaw } = useDepartments();
+
+  // Normalize departments data to handle different response formats
+  const departmentsData = React.useMemo(() => {
+    if (!departmentsDataRaw) return [];
+    if (Array.isArray(departmentsDataRaw)) return departmentsDataRaw;
+    if (Array.isArray(departmentsDataRaw.departments)) return departmentsDataRaw.departments;
+    if (Array.isArray(departmentsDataRaw.data)) return departmentsDataRaw.data;
+    if (Array.isArray(departmentsDataRaw.items)) return departmentsDataRaw.items;
+    return [];
+  }, [departmentsDataRaw]);
+
+  // Normalize locations data to handle different response formats
+  const locations = React.useMemo(() => {
+    if (!locationsData) return [];
+    if (Array.isArray(locationsData)) return locationsData;
+    if (Array.isArray(locationsData.locations)) return locationsData.locations;
+    if (Array.isArray(locationsData.data)) return locationsData.data;
+    if (Array.isArray(locationsData.items)) return locationsData.items;
+    return [];
+  }, [locationsData]);
 
   // Update clock record mutation
   const updateClockRecordMutation = useUpdateClockRecord();
@@ -221,8 +241,8 @@ export default function ManagerClockPage() {
                   <SelectValue placeholder="All locations" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All locations</SelectItem>
-                  {locationsData?.map((location) => (
+                  <SelectItem value="all">All locations</SelectItem>
+                  {locations.map((location) => (
                     <SelectItem key={location.id} value={location.id.toString()}>
                       {location.name}
                     </SelectItem>
@@ -237,7 +257,7 @@ export default function ManagerClockPage() {
                   <SelectValue placeholder="All departments" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All departments</SelectItem>
+                  <SelectItem value="all">All departments</SelectItem>
                   {departmentsData?.map((department) => (
                     <SelectItem key={department.id} value={department.id.toString()}>
                       {department.name}

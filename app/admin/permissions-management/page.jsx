@@ -780,7 +780,7 @@ const PermissionsManagementPage = () => {
                 </SelectTrigger>
                 <SelectContent>
                   {resourcesLoading ? (
-                    <SelectItem value="" disabled>
+                    <SelectItem value="loading-resources" disabled>
                       Loading resources...
                     </SelectItem>
                   ) : (
@@ -814,7 +814,7 @@ const PermissionsManagementPage = () => {
                 </SelectTrigger>
                 <SelectContent>
                   {actionsLoading ? (
-                    <SelectItem value="" disabled>
+                    <SelectItem value="loading-actions" disabled>
                       Loading actions...
                     </SelectItem>
                   ) : (
