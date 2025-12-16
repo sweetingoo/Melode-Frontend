@@ -1535,7 +1535,7 @@ const EditFormPage = () => {
           <DialogHeader>
             <DialogTitle>Create New Role</DialogTitle>
             <DialogDescription>
-              Create a new role for your organization.
+              Create a new role for your organisation.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">

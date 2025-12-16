@@ -21,7 +21,7 @@ export const customFieldSectionUtils = {
     sectionDescription: section.section_description,
     entityType: section.entity_type,
     sortOrder: section.sort_order,
-    organizationId: section.organization_id,
+    organizationId: section.organization_id || section.organisation_id,
     isActive: section.is_active,
     createdAt: section.created_at,
     updatedAt: section.updated_at,
@@ -32,7 +32,7 @@ export const customFieldSectionUtils = {
         .replace(/\b\w/g, (l) => l.toUpperCase()) || "Untitled Section",
     tag: section.entity_type
       ? section.entity_type.charAt(0).toUpperCase() +
-        section.entity_type.slice(1)
+      section.entity_type.slice(1)
       : "General",
     status: section.is_active ? "Active" : "Inactive",
     order: section.sort_order || 0,
@@ -43,7 +43,7 @@ export const customFieldSectionUtils = {
     section_description: section.sectionDescription,
     entity_type: section.entityType,
     sort_order: section.sortOrder || 0,
-    organization_id: section.organizationId || 0,
+    organization_id: section.organizationId !== undefined ? section.organizationId : (section.organisationId !== undefined ? section.organisationId : (section.organization_id !== undefined ? section.organization_id : (section.organisation_id !== undefined ? section.organisation_id : 0))),
     is_active: section.isActive !== undefined ? section.isActive : true,
   }),
 };

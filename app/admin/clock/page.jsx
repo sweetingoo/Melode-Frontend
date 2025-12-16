@@ -48,9 +48,14 @@ import {
   RefreshCw,
   Edit,
   ArrowLeft,
+  Users,
+  TrendingUp,
+  Filter,
 } from "lucide-react";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { formatDistanceToNow, format } from "date-fns";
 import Link from "next/link";
+import { calculateElapsedHours, formatElapsedTime } from "@/utils/time";
 
 export default function ManagerClockPage() {
   const [locationFilter, setLocationFilter] = useState("all");
@@ -112,7 +117,14 @@ export default function ManagerClockPage() {
   // Update clock record mutation
   const updateClockRecordMutation = useUpdateClockRecord();
 
-  const activeClocks = activeClocksData?.items || activeClocksData || [];
+  // Normalize active clocks data - API returns array directly
+  const activeClocks = React.useMemo(() => {
+    if (!activeClocksData) return [];
+    if (Array.isArray(activeClocksData)) return activeClocksData;
+    if (Array.isArray(activeClocksData.items)) return activeClocksData.items;
+    if (Array.isArray(activeClocksData.data)) return activeClocksData.data;
+    return [];
+  }, [activeClocksData]);
 
   const handleEditRecord = (record) => {
     setEditingRecord(record);
@@ -126,6 +138,7 @@ export default function ManagerClockPage() {
         ? format(new Date(record.clock_out_time), "yyyy-MM-dd'T'HH:mm")
         : ""
     );
+    // API might not return notes in active clocks endpoint, use empty string as default
     setEditNotes(record.notes || "");
   };
 
@@ -148,8 +161,10 @@ export default function ManagerClockPage() {
     };
 
     try {
+      // Use clock_record_id from API response, fallback to id for backward compatibility
+      const recordId = editingRecord.clock_record_id || editingRecord.id;
       await updateClockRecordMutation.mutateAsync({
-        id: editingRecord.id,
+        id: recordId,
         clockData: updateData,
       });
       setEditingRecord(null);
@@ -161,15 +176,13 @@ export default function ManagerClockPage() {
     }
   };
 
-  const calculateElapsedHours = (clockInTime) => {
-    if (!clockInTime) return 0;
-    const clockIn = new Date(clockInTime);
-    const now = new Date();
-    return (now - clockIn) / (1000 * 60 * 60); // Convert to hours
-  };
 
   const getStatusBadge = (record) => {
-    if (record.status === "on_break") {
+    // API returns current_state, but also check status for backward compatibility
+    const status = record.current_state || record.status;
+    const isOnBreak = record.is_on_break || status === "on_break";
+
+    if (isOnBreak || status === "on_break") {
       return (
         <Badge variant="secondary" className="flex items-center gap-1">
           <Coffee className="h-3 w-3" />
@@ -216,21 +229,80 @@ export default function ManagerClockPage() {
             </Button>
           </Link>
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Active Clocks</h1>
-            <p className="text-muted-foreground">
-              View and manage active clock sessions
+            <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
+              <Users className="h-8 w-8 text-primary" />
+              Active People
+            </h1>
+            <p className="text-muted-foreground mt-1">
+              Monitor and manage active clock sessions in real-time
             </p>
           </div>
         </div>
-        <Button variant="outline" size="icon" onClick={() => refetch()}>
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={() => refetch()}
+          className="h-10 w-10"
+        >
           <RefreshCw className="h-4 w-4" />
         </Button>
+      </div>
+
+      {/* Stats Summary */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card className="border-l-4 border-l-blue-500">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Active</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{activeClocks.length}</div>
+            <p className="text-xs text-muted-foreground">
+              {activeClocks.length === 1 ? "person clocked in" : "people clocked in"}
+            </p>
+          </CardContent>
+        </Card>
+        <Card className="border-l-4 border-l-green-500">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">On Break</CardTitle>
+            <Coffee className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {activeClocks.filter(r => r.is_on_break || r.current_state === "on_break").length}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Currently on break
+            </p>
+          </CardContent>
+        </Card>
+        <Card className="border-l-4 border-l-amber-500">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Long Sessions</CardTitle>
+            <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {activeClocks.filter(r => {
+                const hours = calculateElapsedHours(r.clock_in_time);
+                return hours >= warningThresholdHours;
+              }).length}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Over {warningThresholdHours}h elapsed
+            </p>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Filters */}
       <Card>
         <CardHeader>
-          <CardTitle>Filters</CardTitle>
+          <div className="flex items-center gap-2">
+            <Filter className="h-5 w-5 text-muted-foreground" />
+            <CardTitle>Filters</CardTitle>
+          </div>
+          <CardDescription>Filter active people by location or department</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -270,106 +342,159 @@ export default function ManagerClockPage() {
         </CardContent>
       </Card>
 
-      {/* Active Clocks Table */}
+      {/* Active People Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Active Users</CardTitle>
-          <CardDescription>
-            {activeClocks.length} user{activeClocks.length !== 1 ? "s" : ""} currently clocked in
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <TrendingUp className="h-5 w-5 text-primary" />
+                Active Sessions
+              </CardTitle>
+              <CardDescription className="mt-1">
+                {activeClocks.length} {activeClocks.length === 1 ? "person" : "people"} currently clocked in
+              </CardDescription>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-8 w-8 animate-spin" />
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
           ) : activeClocks.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              No active clocks found
+            <div className="text-center py-12">
+              <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
+              <h3 className="text-lg font-semibold mb-2">No Active People</h3>
+              <p className="text-muted-foreground">
+                There are currently no active clock sessions
+              </p>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
-                  <TableRow>
-                    <TableHead>User</TableHead>
-                    <TableHead>Job Role</TableHead>
-                    <TableHead>Shift Role</TableHead>
-                    <TableHead>Location</TableHead>
-                    <TableHead>Department</TableHead>
-                    <TableHead>Clock In Time</TableHead>
-                    <TableHead>Elapsed</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Actions</TableHead>
+                  <TableRow className="bg-muted/50">
+                    <TableHead className="font-semibold">User</TableHead>
+                    <TableHead className="font-semibold">Job Role</TableHead>
+                    <TableHead className="font-semibold">Shift Role</TableHead>
+                    <TableHead className="font-semibold">Location</TableHead>
+                    <TableHead className="font-semibold">Department</TableHead>
+                    <TableHead className="font-semibold">Check In Time</TableHead>
+                    <TableHead className="font-semibold">Elapsed</TableHead>
+                    <TableHead className="font-semibold">Status</TableHead>
+                    <TableHead className="font-semibold">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {activeClocks.map((record) => {
+                  {activeClocks.map((record, index) => {
                     const elapsedHours = calculateElapsedHours(record.clock_in_time);
                     const warningBadge = getWarningBadge(elapsedHours);
+                    // Create a unique key: use clock_record_id if available, otherwise combine user_id and clock_in_time
+                    const uniqueKey = record.clock_record_id || `clock-${record.user_id || 'unknown'}-${record.clock_in_time || `index-${index}`}`;
+
+                    // Get user initials for avatar
+                    const userInitials = record.user_name
+                      ? record.user_name
+                        .split(' ')
+                        .map(n => n[0])
+                        .join('')
+                        .toUpperCase()
+                        .slice(0, 2)
+                      : 'U';
 
                     return (
-                      <TableRow key={record.id}>
+                      <TableRow key={uniqueKey} className="hover:bg-muted/50 transition-colors">
                         <TableCell>
-                          <div className="flex items-center gap-2">
-                            <User className="h-4 w-4 text-muted-foreground" />
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-10 w-10">
+                              <AvatarFallback className="bg-primary/10 text-primary font-semibold">
+                                {userInitials}
+                              </AvatarFallback>
+                            </Avatar>
                             <div>
                               <div className="font-medium">
-                                {record.user?.first_name} {record.user?.last_name}
+                                {record.user_name || "N/A"}
                               </div>
-                              <div className="text-sm text-muted-foreground">
-                                {record.user?.email}
-                              </div>
+                              {record.user?.email && (
+                                <div className="text-sm text-muted-foreground">
+                                  {record.user.email}
+                                </div>
+                              )}
                             </div>
                           </div>
                         </TableCell>
                         <TableCell>
-                          {record.job_role?.display_name || record.job_role?.name || "N/A"}
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="font-normal">
+                              {record.job_role_name || record.job_role?.display_name || record.job_role?.name || "N/A"}
+                            </Badge>
+                          </div>
                         </TableCell>
                         <TableCell>
-                          {record.current_shift_role?.display_name ||
-                            record.current_shift_role?.name ||
-                            "N/A"}
+                          <div className="flex items-center gap-2">
+                            <Badge variant="secondary" className="font-normal">
+                              {record.current_shift_role_name ||
+                                record.current_shift_role?.display_name ||
+                                record.current_shift_role?.name ||
+                                "N/A"}
+                            </Badge>
+                          </div>
                         </TableCell>
                         <TableCell>
-                          {record.location ? (
-                            <div className="flex items-center gap-1">
-                              <MapPin className="h-3 w-3 text-muted-foreground" />
-                              {record.location.name}
+                          {record.location_name || record.location?.name ? (
+                            <div className="flex items-center gap-2">
+                              <MapPin className="h-4 w-4 text-muted-foreground" />
+                              <span className="text-sm">{record.location_name || record.location?.name}</span>
                             </div>
                           ) : (
-                            "N/A"
+                            <span className="text-muted-foreground text-sm">—</span>
                           )}
                         </TableCell>
                         <TableCell>
-                          {record.department ? (
-                            <div className="flex items-center gap-1">
-                              <Building2 className="h-3 w-3 text-muted-foreground" />
-                              {record.department.name}
+                          {record.department_name || record.department?.name ? (
+                            <div className="flex items-center gap-2">
+                              <Building2 className="h-4 w-4 text-muted-foreground" />
+                              <span className="text-sm">{record.department_name || record.department?.name}</span>
                             </div>
                           ) : (
-                            "N/A"
+                            <span className="text-muted-foreground text-sm">—</span>
                           )}
                         </TableCell>
                         <TableCell>
-                          {record.clock_in_time
-                            ? format(new Date(record.clock_in_time), "dd/MM/yyyy HH:mm")
-                            : "N/A"}
+                          <div className="flex flex-col">
+                            <span className="text-sm font-medium">
+                              {record.clock_in_time
+                                ? format(new Date(record.clock_in_time), "dd MMM yyyy")
+                                : "N/A"}
+                            </span>
+                            {record.clock_in_time && (
+                              <span className="text-xs text-muted-foreground">
+                                {format(new Date(record.clock_in_time), "HH:mm")}
+                              </span>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell>
-                          <div className="space-y-1">
-                            <div className="font-medium">
-                              {elapsedHours.toFixed(1)}h
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2">
+                              <Clock className="h-4 w-4 text-primary" />
+                              <span className="font-semibold text-primary">
+                                {formatElapsedTime(record.clock_in_time)}
+                              </span>
                             </div>
                             {warningBadge}
                           </div>
                         </TableCell>
-                        <TableCell>{getStatusBadge(record)}</TableCell>
+                        <TableCell>
+                          {getStatusBadge(record)}
+                        </TableCell>
                         <TableCell>
                           <Button
                             variant="ghost"
                             size="icon"
                             onClick={() => handleEditRecord(record)}
+                            className="h-8 w-8"
                           >
                             <Edit className="h-4 w-4" />
                           </Button>
@@ -390,14 +515,14 @@ export default function ManagerClockPage() {
           <DialogHeader>
             <DialogTitle>Edit Clock Record</DialogTitle>
             <DialogDescription>
-              Update clock in/out times and notes. Notes are required.
+              Update check in/out times and notes. Notes are required.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="editClockInTime">
-                  Clock In Time <span className="text-red-500">*</span>
+                  Check In Time <span className="text-red-500">*</span>
                 </Label>
                 <Input
                   id="editClockInTime"
@@ -407,7 +532,7 @@ export default function ManagerClockPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="editClockOutTime">Clock Out Time</Label>
+                <Label htmlFor="editClockOutTime">Check Out Time</Label>
                 <Input
                   id="editClockOutTime"
                   type="datetime-local"

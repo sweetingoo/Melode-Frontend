@@ -550,7 +550,7 @@ const InvitationPage = () => {
               <DialogHeader>
                 <DialogTitle>Create New Invitation</DialogTitle>
                 <DialogDescription>
-                  Send an invitation to a new user to join your organization.
+                  Send an invitation to a new user to join your organisation.
                 </DialogDescription>
               </DialogHeader>
 

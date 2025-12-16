@@ -74,7 +74,7 @@ export const useActiveClocks = (params = {}, options = {}) => {
   });
 };
 
-// Clock in mutation
+// Check in mutation
 export const useClockIn = () => {
   const queryClient = useQueryClient();
 
@@ -87,17 +87,17 @@ export const useClockIn = () => {
       queryClient.invalidateQueries({ queryKey: clockKeys.status() });
       queryClient.invalidateQueries({ queryKey: clockKeys.records() });
       queryClient.invalidateQueries({ queryKey: clockKeys.active() });
-      toast.success("Clocked in successfully", {
-        description: "You have been clocked in.",
+      toast.success("Checked in successfully", {
+        description: "You have been checked in.",
       });
     },
     onError: (error) => {
-      console.error("Clock in error:", error);
+      console.error("Check in error:", error);
       const errorMessage =
         error?.response?.data?.message ||
         error?.response?.data?.detail ||
-        "Failed to clock in";
-      toast.error("Failed to clock in", {
+        "Failed to check in";
+      toast.error("Failed to check in", {
         description: Array.isArray(errorMessage)
           ? errorMessage.map((e) => e.msg || e).join(", ")
           : errorMessage,
@@ -106,7 +106,7 @@ export const useClockIn = () => {
   });
 };
 
-// Clock out mutation
+// Check out mutation
 export const useClockOut = () => {
   const queryClient = useQueryClient();
 
@@ -119,17 +119,17 @@ export const useClockOut = () => {
       queryClient.invalidateQueries({ queryKey: clockKeys.status() });
       queryClient.invalidateQueries({ queryKey: clockKeys.records() });
       queryClient.invalidateQueries({ queryKey: clockKeys.active() });
-      toast.success("Clocked out successfully", {
-        description: "You have been clocked out.",
+      toast.success("Checked out successfully", {
+        description: "You have been checked out.",
       });
     },
     onError: (error) => {
-      console.error("Clock out error:", error);
+      console.error("Check out error:", error);
       const errorMessage =
         error?.response?.data?.message ||
         error?.response?.data?.detail ||
-        "Failed to clock out";
-      toast.error("Failed to clock out", {
+        "Failed to check out";
+      toast.error("Failed to check out", {
         description: Array.isArray(errorMessage)
           ? errorMessage.map((e) => e.msg || e).join(", ")
           : errorMessage,
@@ -262,6 +262,8 @@ export const useEndBreak = () => {
     },
   });
 };
+
+
 
 
 

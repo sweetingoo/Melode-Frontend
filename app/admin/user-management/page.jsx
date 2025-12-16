@@ -397,7 +397,7 @@ const UserManagementPage = () => {
               People Management
             </h1>
             <p className="text-muted-foreground mt-1">
-              Manage people, roles, and permissions for your organization.
+              Manage people, roles, and permissions for your organisation.
             </p>
           </div>
         </div>
@@ -439,7 +439,7 @@ const UserManagementPage = () => {
               People Management
             </h1>
             <p className="text-muted-foreground mt-1">
-              Manage people, roles, and permissions for your organization.
+              Manage people, roles, and permissions for your organisation.
             </p>
           </div>
         </div>

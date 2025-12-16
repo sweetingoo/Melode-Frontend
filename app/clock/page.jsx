@@ -19,6 +19,7 @@ import { useCurrentUser } from "@/hooks/useAuth";
 import { useRoles } from "@/hooks/useRoles";
 import { useLocations } from "@/hooks/useLocations";
 import { useUserDepartments } from "@/hooks/useDepartmentContext";
+import { usePreferences } from "@/hooks/useProfile";
 import { Loader2, Clock, MapPin, User, FileText, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
@@ -28,28 +29,39 @@ export default function ClockPage() {
   const [jobRoleId, setJobRoleId] = useState("");
   const [shiftRoleId, setShiftRoleId] = useState("");
   const [locationId, setLocationId] = useState("none");
-  const [loginMethod, setLoginMethod] = useState("web");
+  const [loginMethod] = useState("web"); // Always "web" for web version
   const [notes, setNotes] = useState("");
+  const [currentTime, setCurrentTime] = useState(new Date());
 
   // Get current user
   const { data: currentUser, isLoading: userLoading } = useCurrentUser();
 
-  // Superusers don't need to clock in/out
+  // Superusers don't need to check in/out
   const isSuperuser = currentUser?.is_superuser || false;
 
   // Get clock status to check if already clocked in
-  const { data: clockStatus, isLoading: statusLoading } = useClockStatus();
+  const { data: clockStatus, isLoading: statusLoading, refetch: refetchStatus } = useClockStatus();
 
   // Get all roles to find shift roles
   const { data: rolesData, isLoading: rolesLoading } = useRoles();
 
-  // Get user assignments (which contain the roles they can clock in with)
+  // Get user assignments (which contain the roles they can check in with)
   const { data: departmentsData, isLoading: assignmentsLoading } = useUserDepartments();
 
   // Get locations
   const { data: locationsData, isLoading: locationsLoading } = useLocations();
 
-  // Clock in mutation
+  // Get user preferences from API (includes clock-in defaults)
+  const { data: preferences, isLoading: preferencesLoading } = usePreferences();
+
+  // Extract clock-in defaults from preferences
+  const clockDefaults = preferences ? {
+    default_job_role_id: preferences.default_job_role_id,
+    default_shift_role_id: preferences.default_shift_role_id,
+    default_location_id: preferences.default_location_id,
+  } : null;
+
+  // Check in mutation
   const clockInMutation = useClockIn();
 
   // Extract job roles from user's assignments
@@ -99,30 +111,95 @@ export default function ClockPage() {
     if (!jobRoleId || !rolesData) return [];
 
     const selectedJobRole = rolesData.find(
-      (r) => r.id === parseInt(jobRoleId) && r.roleType === "job_role"
+      (r) => r.id === parseInt(jobRoleId) && (r.roleType === "job_role" || r.role_type === "job_role")
     );
 
     if (!selectedJobRole) return [];
 
     // Get shift roles that belong to this job role
-    return rolesData.filter(
-      (role) =>
-        role.roleType === "shift_role" &&
-        role.parentRoleId === parseInt(jobRoleId)
+    // Method 1: Check nested shift roles in the job role object
+    const nestedShiftRoles = selectedJobRole.shift_roles || selectedJobRole.shiftRoles || [];
+
+    // Method 2: Filter from rolesData array by parent_role_id
+    const filteredShiftRoles = rolesData.filter(
+      (role) => {
+        const roleType = role.roleType || role.role_type;
+        const parentRoleId = role.parentRoleId || role.parent_role_id;
+
+        return (
+          roleType === "shift_role" &&
+          parentRoleId === parseInt(jobRoleId)
+        );
+      }
     );
+
+    // Combine both sources and deduplicate by role ID
+    const shiftRolesMap = new Map();
+
+    // Add nested shift roles
+    nestedShiftRoles.forEach((role) => {
+      if (role?.id) {
+        shiftRolesMap.set(role.id, role);
+      }
+    });
+
+    // Add filtered shift roles (will overwrite duplicates)
+    filteredShiftRoles.forEach((role) => {
+      if (role?.id) {
+        shiftRolesMap.set(role.id, role);
+      }
+    });
+
+    return Array.from(shiftRolesMap.values());
   }, [jobRoleId, rolesData]);
 
   // Transform locations for select
   const locations = locationsData || [];
 
-  // Check if already clocked in
+  // Update current time every second
   useEffect(() => {
-    if (!statusLoading && clockStatus?.status === "active") {
-      // Redirect to active shift dashboard or show message
-      toast.info("You are already clocked in", {
-        description: "Redirecting to your active shift...",
-      });
-      router.push("/clock/dashboard");
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Load defaults from API when data is available
+  useEffect(() => {
+    if (clockDefaults?.default_job_role_id && userJobRoles.length > 0 && !jobRoleId) {
+      const defaultJobRoleId = clockDefaults.default_job_role_id.toString();
+      if (userJobRoles.some(role => role.id.toString() === defaultJobRoleId)) {
+        setJobRoleId(defaultJobRoleId);
+      }
+    }
+  }, [clockDefaults?.default_job_role_id, userJobRoles, jobRoleId]);
+
+  useEffect(() => {
+    if (clockDefaults?.default_shift_role_id && availableShiftRoles.length > 0 && !shiftRoleId && jobRoleId) {
+      const defaultShiftRoleId = clockDefaults.default_shift_role_id.toString();
+      if (availableShiftRoles.some(role => role.id.toString() === defaultShiftRoleId)) {
+        setShiftRoleId(defaultShiftRoleId);
+      }
+    }
+  }, [clockDefaults?.default_shift_role_id, availableShiftRoles, shiftRoleId, jobRoleId]);
+
+  useEffect(() => {
+    if (clockDefaults?.default_location_id && locations.length > 0 && locationId === "none") {
+      const defaultLocationId = clockDefaults.default_location_id.toString();
+      if (locations.some(loc => loc.id.toString() === defaultLocationId)) {
+        setLocationId(defaultLocationId);
+      }
+    }
+  }, [clockDefaults?.default_location_id, locations, locationId]);
+
+  // Check if already checked in - redirect immediately
+  useEffect(() => {
+    if (!statusLoading && clockStatus) {
+      const status = clockStatus.status;
+      if (status === "active" || status === "on_break") {
+        // Redirect to active shift dashboard immediately
+        router.replace("/clock/dashboard");
+      }
     }
   }, [clockStatus, statusLoading, router]);
 
@@ -159,14 +236,17 @@ export default function ClockPage() {
 
     try {
       await clockInMutation.mutateAsync(clockInData);
-      // Redirect to dashboard or show success
+      // Refetch status to ensure we have the latest data
+      await refetchStatus();
+      // Redirect to dashboard
       router.push("/clock/dashboard");
     } catch (error) {
       // Error is handled by the mutation
     }
   };
 
-  if (userLoading || statusLoading || assignmentsLoading) {
+  // Show loading while checking status
+  if (userLoading || statusLoading || assignmentsLoading || preferencesLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Loader2 className="h-8 w-8 animate-spin" />
@@ -174,39 +254,21 @@ export default function ClockPage() {
     );
   }
 
-
-  // If already clocked in, show message
-  if (clockStatus?.status === "active") {
-    return (
-      <div className="container mx-auto p-6 max-w-2xl space-y-4">
-        <div className="flex items-center gap-4">
-          <Link href="/admin">
-            <Button variant="ghost" size="icon">
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-          </Link>
-          <div>
-            <h1 className="text-2xl font-bold">Already Clocked In</h1>
-            <p className="text-muted-foreground">
-              You are currently clocked in. View your active shift or clock out.
-            </p>
+  // If already clocked in (active or on break), show loading while redirecting
+  // This prevents the form from flashing before redirect
+  if (clockStatus) {
+    const status = clockStatus.status;
+    if (status === "active" || status === "on_break") {
+      // The useEffect will handle the redirect, but show loading state here
+      return (
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="text-center space-y-4">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto" />
+            <p className="text-muted-foreground">Redirecting to your active shift...</p>
           </div>
         </div>
-        <Card>
-          <CardHeader>
-            <CardTitle>Already Clocked In</CardTitle>
-            <CardDescription>
-              You are currently clocked in. View your active shift or clock out.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Link href="/clock/dashboard">
-              <Button className="w-full">View Active Shift</Button>
-            </Link>
-          </CardContent>
-        </Card>
-      </div>
-    );
+      );
+    }
   }
 
   return (
@@ -217,21 +279,32 @@ export default function ClockPage() {
             <ArrowLeft className="h-4 w-4" />
           </Button>
         </Link>
-        <div>
-          <h1 className="text-2xl font-bold">Clock In</h1>
-          <p className="text-muted-foreground">
-            Select your job role, shift role, and location to clock in.
-          </p>
+        <div className="flex-1">
+          <h1 className="text-2xl font-bold">Check In</h1>
+        </div>
+        <div className="text-right">
+          <div className="text-2xl font-mono font-semibold">
+            {currentTime.toLocaleTimeString("en-US", {
+              hour: "2-digit",
+              minute: "2-digit",
+              second: "2-digit",
+              hour12: true,
+            })}
+          </div>
+          <div className="text-sm text-muted-foreground">
+            {currentTime.toLocaleDateString("en-US", {
+              weekday: "long",
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+            })}
+          </div>
         </div>
       </div>
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Clock className="h-5 w-5" />
-            Clock In
-          </CardTitle>
           <CardDescription>
-            Select your job role, shift role, and location to clock in.
+            Select your job role, shift role, and location to check in.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -345,28 +418,6 @@ export default function ClockPage() {
               </Select>
             </div>
 
-            {/* Login Method */}
-            <div className="space-y-2">
-              <Label htmlFor="loginMethod">
-                Login Method <span className="text-red-500">*</span>
-              </Label>
-              <Select
-                value={loginMethod}
-                onValueChange={setLoginMethod}
-                disabled={clockInMutation.isPending}
-              >
-                <SelectTrigger id="loginMethod">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="web">Web</SelectItem>
-                  <SelectItem value="tablet">Tablet</SelectItem>
-                  <SelectItem value="app">App</SelectItem>
-                  <SelectItem value="nfc">NFC</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
             {/* Notes (Optional) */}
             <div className="space-y-2">
               <Label htmlFor="notes">
@@ -376,7 +427,7 @@ export default function ClockPage() {
                 id="notes"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="Add any notes about your clock in..."
+                placeholder="Add any notes about your check in..."
                 disabled={clockInMutation.isPending}
                 rows={3}
               />
@@ -396,12 +447,12 @@ export default function ClockPage() {
               {clockInMutation.isPending ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Clocking In...
+                  Checking In...
                 </>
               ) : (
                 <>
                   <Clock className="mr-2 h-4 w-4" />
-                  Clock In
+                  Check In
                 </>
               )}
             </Button>

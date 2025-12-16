@@ -3093,7 +3093,7 @@ const TasksPage = () => {
           <DialogHeader>
             <DialogTitle>Create New Task Type</DialogTitle>
             <DialogDescription>
-              Create a new task type for your organization.
+              Create a new task type for your organisation.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">

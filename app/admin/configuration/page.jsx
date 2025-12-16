@@ -76,11 +76,11 @@ export default function ConfigurationPage() {
   // Check if user is superuser or has configuration permissions
   const { data: currentUser } = useCurrentUser();
   const { isSuperuser, hasPermission } = usePermissionsCheck();
-  const hasConfigurationPermission = hasPermission("configuration:read") || 
-                                     hasPermission("configuration:*") ||
-                                     hasPermission("configuration:write") ||
-                                     hasPermission("configuration:update");
-  
+  const hasConfigurationPermission = hasPermission("configuration:read") ||
+    hasPermission("configuration:*") ||
+    hasPermission("configuration:write") ||
+    hasPermission("configuration:update");
+
   // Allow access if superuser or has configuration permission
   const canAccessConfiguration = isSuperuser || hasConfigurationPermission;
 
@@ -710,7 +710,7 @@ export default function ConfigurationPage() {
                 onChange={(e) =>
                   setFormData((prev) => ({ ...prev, setting_key: e.target.value }))
                 }
-                placeholder="e.g., clock.auto_clock_out.enabled"
+                placeholder="e.g., clock.auto_check_out.enabled"
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -744,7 +744,7 @@ export default function ConfigurationPage() {
                   onChange={(e) =>
                     setFormData((prev) => ({ ...prev, setting_group: e.target.value }))
                   }
-                  placeholder="e.g., auto_clock_out"
+                  placeholder="e.g., auto_check_out"
                 />
               </div>
             </div>

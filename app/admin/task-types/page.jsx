@@ -169,7 +169,7 @@ const TaskTypesPage = () => {
         <div>
           <h1 className="text-3xl font-bold">Task Types</h1>
           <p className="text-muted-foreground">
-            Manage task types for your organization
+            Manage task types for your organisation
           </p>
         </div>
         {canCreateTaskType && (
@@ -327,7 +327,7 @@ const TaskTypesPage = () => {
           <DialogHeader>
             <DialogTitle>Create New Task Type</DialogTitle>
             <DialogDescription>
-              Create a new task type for your organization.
+              Create a new task type for your organisation.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">

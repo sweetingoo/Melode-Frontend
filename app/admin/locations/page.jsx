@@ -605,7 +605,7 @@ const LocationsPage = () => {
             Locations Management
           </h1>
           <p className="text-muted-foreground">
-            Manage organizational locations and their hierarchy efficiently.
+            Manage organisational locations and their hierarchy efficiently.
           </p>
         </div>
         <Button onClick={handleCreateLocation}>

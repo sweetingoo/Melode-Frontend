@@ -57,7 +57,7 @@ const SetupCustomFieldsPage = () => {
             Setup Custom Fields
           </h1>
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-            Create example custom fields for your organization with our
+            Create example custom fields for your organisation with our
             pre-built templates
           </p>
         </div>

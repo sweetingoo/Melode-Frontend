@@ -67,6 +67,7 @@ import { format, formatDistanceToNow } from "date-fns";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { formatDateTimeForAPI } from "@/utils/time";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 const AuditLogsPage = () => {
@@ -109,10 +110,12 @@ const AuditLogsPage = () => {
     if (selectedResource && selectedResource !== "__all__") filterParams.resource = selectedResource;
     if (selectedSeverity && selectedSeverity !== "__all__") filterParams.severity = selectedSeverity;
     if (startDate) {
-      filterParams.start_date = format(startDate, "yyyy-MM-dd'T'00:00:00");
+      // Use timezone-aware formatting to prevent day shifts
+      filterParams.start_date = formatDateTimeForAPI(startDate, "00:00");
     }
     if (endDate) {
-      filterParams.end_date = format(endDate, "yyyy-MM-dd'T'23:59:59");
+      // Use timezone-aware formatting to prevent day shifts
+      filterParams.end_date = formatDateTimeForAPI(endDate, "23:59");
     }
     if (searchTerm) filterParams.resource_id = searchTerm;
 

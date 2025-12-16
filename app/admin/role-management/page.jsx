@@ -1930,7 +1930,7 @@ const RoleManagementPage = () => {
               </Label>
               <Input
                 id="quickDeptName"
-                placeholder="e.g., Engineering"
+                placeholder="e.g., Finance"
                 value={quickCreateDepartmentData.name}
                 onChange={(e) =>
                   setQuickCreateDepartmentData({
@@ -1947,7 +1947,7 @@ const RoleManagementPage = () => {
               </Label>
               <Input
                 id="quickDeptCode"
-                placeholder="e.g., ENG"
+                placeholder="e.g., FIN"
                 value={quickCreateDepartmentData.code}
                 onChange={(e) =>
                   setQuickCreateDepartmentData({

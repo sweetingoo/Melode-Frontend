@@ -127,7 +127,7 @@ export const profileService = {
     try {
       const formData = new FormData();
       formData.append('file', file);
-      
+
       const response = await api.post("/profile/me/photo", formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
@@ -197,7 +197,7 @@ export const profileService = {
       if (!userId) {
         throw new Error("User ID is required for custom fields operations");
       }
-      
+
       const response = await api.get(`/settings/entities/user/${userId}/custom-fields`);
       return response.data || response;
     } catch (error) {
@@ -211,7 +211,7 @@ export const profileService = {
       if (!userId) {
         throw new Error("User ID is required for custom fields operations");
       }
-      
+
       const response = await api.get(`/settings/entities/user/${userId}/custom-fields/hierarchy`);
       return response.data || response;
     } catch (error) {
@@ -225,10 +225,10 @@ export const profileService = {
       if (!userId) {
         throw new Error("User ID is required for custom fields operations");
       }
-      
+
       const payload = { value_data: valueData };
       if (fileId) payload.file_id = fileId;
-      
+
       const response = await api.put(`/settings/entities/user/${userId}/custom-fields/${fieldId}`, payload);
       return response.data || response;
     } catch (error) {
@@ -242,7 +242,7 @@ export const profileService = {
       if (!userId) {
         throw new Error("User ID is required for custom fields operations");
       }
-      
+
       const response = await api.put(`/settings/entities/user/${userId}/custom-fields/bulk`, {
         updates: updates
       });
@@ -258,7 +258,7 @@ export const profileService = {
       if (!userId) {
         throw new Error("User ID is required for custom fields operations");
       }
-      
+
       const response = await api.post(`/settings/entities/user/${userId}/group-entries`, {
         group_key: groupKey,
         sort_order: sortOrder,
@@ -276,7 +276,7 @@ export const profileService = {
     try {
       const formData = new FormData();
       formData.append('file', file);
-      
+
       // Add form_id and field_id for form-based validation
       if (options.form_id !== undefined && options.form_id !== null) {
         formData.append('form_id', options.form_id.toString());
@@ -287,7 +287,7 @@ export const profileService = {
       if (options.organization_id !== undefined && options.organization_id !== null) {
         formData.append('organization_id', options.organization_id.toString());
       }
-      
+
       // Debug logging in development
       if (process.env.NODE_ENV === 'development') {
         console.log('File upload with options:', {
@@ -298,7 +298,7 @@ export const profileService = {
           organization_id: options.organization_id,
         });
       }
-      
+
       // Don't set Content-Type header - let axios set it automatically with boundary
       // This is important for FormData to work correctly
       const response = await api.post('/settings/files/upload', formData);
@@ -316,6 +316,40 @@ export const profileService = {
       return response.data || response;
     } catch (error) {
       console.error("File download failed:", error);
+      throw error;
+    }
+  },
+
+  // User Preferences endpoints
+  getPreferences: async () => {
+    try {
+      const response = await api.get("/profile/preferences");
+      return response.data || response;
+    } catch (error) {
+      // Handle different error scenarios gracefully
+      if (error.response?.status === 404) {
+        // Preferences don't exist yet - API should auto-create, but handle gracefully
+        return null;
+      }
+      if (error.response?.status === 422) {
+        // Validation error - endpoint might not be ready or has validation issues
+        // Return null to allow app to continue with defaults
+        console.warn("Preferences endpoint validation error - using defaults:", error.response?.data);
+        return null;
+      }
+      // For other errors, log but don't throw - let hook handle gracefully
+      console.error("Get preferences failed:", error);
+      return null;
+    }
+  },
+
+  updatePreferences: async (preferences) => {
+    try {
+      // Partial update - only send fields that are provided
+      const response = await api.put("/profile/preferences", preferences);
+      return response.data || response;
+    } catch (error) {
+      console.error("Update preferences failed:", error);
       throw error;
     }
   },

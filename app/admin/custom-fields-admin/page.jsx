@@ -141,7 +141,7 @@ const CustomFieldsAdminPage = () => {
     sectionDescription: "",
     entityType: "user",
     sortOrder: 0,
-    organizationId: 0,
+    organisationId: 0,
   });
   const [fieldFormData, setFieldFormData] = useState({
     field_name: "",
@@ -158,7 +158,7 @@ const CustomFieldsAdminPage = () => {
     relationship_config: null,
     entity_type: "user",
     sort_order: 0,
-    organization_id: 0,
+    organisation_id: 0,
     section_id: 0,
     is_active: true,
   });
@@ -344,7 +344,7 @@ const CustomFieldsAdminPage = () => {
       sectionDescription: "",
       entityType: selectedEntityType,
       sortOrder: sections.length + 1,
-      organizationId: 0,
+      organisationId: 0,
     });
   };
 
@@ -379,7 +379,7 @@ const CustomFieldsAdminPage = () => {
         sectionDescription: "",
         entityType: selectedEntityType,
         sortOrder: 0,
-        organizationId: 0,
+        organisationId: 0,
       });
       setEditingSectionId(null);
       setIsCreateSectionModalOpen(false);
@@ -394,7 +394,7 @@ const CustomFieldsAdminPage = () => {
       sectionDescription: "",
       entityType: selectedEntityType,
       sortOrder: 0,
-      organizationId: 0,
+      organisationId: 0,
     });
     setEditingSectionId(null); // Reset editing state
     setIsCreateSectionModalOpen(false);
@@ -424,7 +424,7 @@ const CustomFieldsAdminPage = () => {
       relationship_config: null,
       entity_type: selectedEntityType,
       sort_order: fields.length + 1,
-      organization_id: 0,
+      organisation_id: 0,
       section_id: defaultSectionId,
       is_active: true,
     });
@@ -511,7 +511,7 @@ const CustomFieldsAdminPage = () => {
         relationshipConfig: {},
         entityType: selectedEntityType,
         sortOrder: 0,
-        organizationId: 0,
+        organisationId: 0,
         sectionId: 0,
       });
       setEditingFieldId(null);
@@ -538,7 +538,7 @@ const CustomFieldsAdminPage = () => {
       relationship_config: null,
       entity_type: selectedEntityType,
       sort_order: 0,
-      organization_id: 0,
+      organisation_id: 0,
       section_id: 0,
       is_active: true,
     });
@@ -796,7 +796,7 @@ const CustomFieldsAdminPage = () => {
           </h1>
           <p className="text-muted-foreground mt-1">
             Configure custom fields for different entity types in your
-            organization
+            organisation
           </p>
 
           {/* State Indicators */}

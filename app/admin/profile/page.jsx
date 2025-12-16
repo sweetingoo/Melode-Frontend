@@ -66,7 +66,7 @@ export default function ProfilePage() {
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  
+
   // MFA State
   const [mfaSetupData, setMfaSetupData] = useState(null);
   const [mfaVerificationToken, setMfaVerificationToken] = useState("");
@@ -177,9 +177,9 @@ export default function ProfilePage() {
   // Utility function to extract value from API response
   const extractValueFromAPIResponse = (field, apiValue) => {
     if (!apiValue) return '';
-    
+
     const fieldType = field.field_type || field.type;
-    
+
     switch (fieldType?.toLowerCase()) {
       case 'text':
       case 'string':
@@ -193,85 +193,85 @@ export default function ProfilePage() {
       case 'radio_group':
       case 'time':
         return apiValue.value || apiValue || '';
-      
+
       case 'number':
       case 'integer':
       case 'decimal':
       case 'float':
         return apiValue.value !== undefined ? apiValue.value : apiValue || '';
-      
+
       case 'boolean':
       case 'checkbox':
         return apiValue.value !== undefined ? apiValue.value : Boolean(apiValue);
-      
+
       case 'date':
         return apiValue.value || apiValue || '';
-      
+
       case 'datetime':
       case 'date_time':
         return apiValue.value || apiValue || '';
-      
+
       case 'multiselect':
-        return Array.isArray(apiValue.value) ? apiValue.value : 
-               Array.isArray(apiValue) ? apiValue : [];
-      
+        return Array.isArray(apiValue.value) ? apiValue.value :
+          Array.isArray(apiValue) ? apiValue : [];
+
       case 'file':
         return apiValue.file_id || apiValue || '';
-      
+
       case 'json':
         return typeof apiValue === 'string' ? apiValue : JSON.stringify(apiValue);
-      
+
       default:
         return apiValue.value || apiValue || '';
     }
   };
 
-    // Initialize custom fields data when user custom fields load
-    useEffect(() => {
-      if (userCustomFields && userCustomFields.sections) {
-        // Extract field values from the hierarchical structure
-        const fieldValues = {};
-        userCustomFields.sections.forEach(section => {
-          section.fields?.forEach(field => {
-            if (field.value_data) {
-              fieldValues[field.id] = extractValueFromAPIResponse(field, field.value_data);
-            } else {
-              // Initialize empty values for fields without data
-              fieldValues[field.id] = '';
-            }
-          });
+  // Initialize custom fields data when user custom fields load
+  useEffect(() => {
+    if (userCustomFields && userCustomFields.sections) {
+      // Extract field values from the hierarchical structure
+      const fieldValues = {};
+      userCustomFields.sections.forEach(section => {
+        section.fields?.forEach(field => {
+          if (field.value_data) {
+            fieldValues[field.id] = extractValueFromAPIResponse(field, field.value_data);
+          } else {
+            // Initialize empty values for fields without data
+            fieldValues[field.id] = '';
+          }
         });
-        setCustomFieldsData(fieldValues);
-      }
-    }, [userCustomFields]);
+      });
+      setCustomFieldsData(fieldValues);
+    }
+  }, [userCustomFields]);
 
-    // Check for changes when customFieldsData is initialized (after data loads)
-    useEffect(() => {
-      if (customFieldsData && Object.keys(customFieldsData).length > 0 && userCustomFields) {
-        // Only run change detection once when data is first loaded
-        // Individual field changes are handled in handleCustomFieldChange
-        checkForCustomFieldsChanges();
-      }
-    }, [userCustomFields]); // Only depend on userCustomFields, not customFieldsData
+  // Check for changes when customFieldsData is initialized (after data loads)
+  useEffect(() => {
+    if (customFieldsData && Object.keys(customFieldsData).length > 0 && userCustomFields) {
+      // Only run change detection once when data is first loaded
+      // Individual field changes are handled in handleCustomFieldChange
+      checkForCustomFieldsChanges();
+    }
+  }, [userCustomFields]); // Only depend on userCustomFields, not customFieldsData
 
-    // Reset customFieldsData when userCustomFields updates after a save
-    useEffect(() => {
-      if (userCustomFields && userCustomFields.sections && !isUpdatingCustomFields) {
-        // This runs when userCustomFields updates (after API refetch)
-        // Reset customFieldsData to match the fresh API data
-        const fieldValues = {};
-        userCustomFields.sections.forEach(section => {
-          section.fields?.forEach(field => {
-            if (field.value_data) {
-              fieldValues[field.id] = extractValueFromAPIResponse(field, field.value_data);
-            } else {
-              fieldValues[field.id] = '';
-            }
-          });
+  // Reset customFieldsData when userCustomFields updates after a save
+  useEffect(() => {
+    if (userCustomFields && userCustomFields.sections && !isUpdatingCustomFields) {
+      // This runs when userCustomFields updates (after API refetch)
+      // Reset customFieldsData to match the fresh API data
+      const fieldValues = {};
+      userCustomFields.sections.forEach(section => {
+        section.fields?.forEach(field => {
+          if (field.value_data) {
+            fieldValues[field.id] = extractValueFromAPIResponse(field, field.value_data);
+          } else {
+            fieldValues[field.id] = '';
+          }
         });
-        setCustomFieldsData(fieldValues);
-      }
-    }, [userCustomFields, isUpdatingCustomFields]);
+      });
+      setCustomFieldsData(fieldValues);
+    }
+  }, [userCustomFields, isUpdatingCustomFields]);
 
 
   const handleProfileUpdate = async () => {
@@ -343,7 +343,7 @@ export default function ProfilePage() {
     }
 
     const fieldType = field.field_type || field.type;
-    
+
     switch (fieldType?.toLowerCase()) {
       case 'text':
       case 'string':
@@ -352,55 +352,55 @@ export default function ProfilePage() {
       case 'url':
       case 'textarea':
         return { value: String(value) };
-      
+
       case 'number':
       case 'integer':
       case 'decimal':
       case 'float':
         return { value: parseFloat(value) || 0 };
-      
+
       case 'boolean':
       case 'checkbox':
         return { value: Boolean(value) };
-      
+
       case 'date':
         return { value: value instanceof Date ? value.toISOString().split('T')[0] : value };
-      
+
       case 'datetime':
       case 'date_time':
         return { value: value instanceof Date ? value.toISOString() : value };
-      
+
       case 'time':
         return { value: String(value) };
-      
+
       case 'select':
       case 'dropdown':
         return { value: String(value) };
-      
+
       case 'radio':
       case 'radio_group':
         return { value: String(value) };
-      
+
       case 'multiselect':
         if (Array.isArray(value)) {
           return { value: value };
         }
         return { value: [String(value)] };
-      
+
       case 'file':
         // If value is a File object, we need to upload it first
         if (value instanceof File) {
           throw new Error("File upload must be handled separately");
         }
         return { file_id: value };
-      
+
       case 'json':
         try {
           return typeof value === 'string' ? JSON.parse(value) : value;
         } catch {
           return { value: value };
         }
-      
+
       default:
         return { value: String(value) };
     }
@@ -415,7 +415,7 @@ export default function ProfilePage() {
 
     let hasChanges = false;
     const changes = [];
-    
+
     customFieldsHierarchy.sections
       .filter(section => section.is_active !== false)
       .forEach(section => {
@@ -423,7 +423,7 @@ export default function ProfilePage() {
           ?.filter(field => field.is_active !== false)
           ?.forEach(field => {
             const currentValue = customFieldsData[field.id];
-            
+
             // Get the original value from userCustomFields (which has the actual values)
             let originalValue = '';
             if (userCustomFields && userCustomFields.sections) {
@@ -434,7 +434,7 @@ export default function ProfilePage() {
                 originalValue = extractValueFromAPIResponse(userField, userField.value_data);
               }
             }
-            
+
             const hasFieldChanged = JSON.stringify(currentValue) !== JSON.stringify(originalValue);
             if (hasFieldChanged) {
               hasChanges = true;
@@ -447,7 +447,7 @@ export default function ProfilePage() {
             }
           });
       });
-    
+
     setHasCustomFieldsChanges(hasChanges);
   };
 
@@ -457,7 +457,7 @@ export default function ProfilePage() {
       ...prev,
       [fieldId]: value
     }));
-    
+
     // Clear error for this field
     if (customFieldsErrors[fieldId]) {
       setCustomFieldsErrors(prev => {
@@ -466,12 +466,12 @@ export default function ProfilePage() {
         return newErrors;
       });
     }
-    
+
     // Immediately check if this specific field has changed from its original value
     const field = customFieldsHierarchy?.sections
       ?.flatMap(section => section.fields || [])
       ?.find(f => f.id === fieldId);
-    
+
     if (field && userCustomFields) {
       // Get the original value from userCustomFields
       let originalValue = '';
@@ -481,9 +481,9 @@ export default function ProfilePage() {
       if (userField && userField.value_data) {
         originalValue = extractValueFromAPIResponse(userField, userField.value_data);
       }
-      
+
       const hasChanged = JSON.stringify(value) !== JSON.stringify(originalValue);
-      
+
       if (hasChanged) {
         // This field has changed, enable save button
         setHasCustomFieldsChanges(true);
@@ -501,23 +501,23 @@ export default function ProfilePage() {
       toast.error("User ID not available");
       return;
     }
-    
+
     // Find the field definition to get the field type
     const field = customFieldsHierarchy?.sections
       ?.flatMap(section => section.fields || [])
       ?.find(f => f.id === fieldId);
-    
+
     if (!field) {
       console.warn(`Field with ID ${fieldId} not found`);
       return;
     }
-    
+
     // Handle file uploads separately
     if (field.field_type?.toLowerCase() === 'file' && value instanceof File) {
       try {
         // Upload the file first
         const uploadResult = await uploadFileMutation.mutateAsync(value);
-        
+
         // Then update the field with the file ID
         updateUserCustomFieldMutation.mutate({
           fieldId,
@@ -531,7 +531,7 @@ export default function ProfilePage() {
     } else {
       // Format the value according to field type
       const formattedValue = formatFieldValueForAPI(field, value);
-      
+
       updateUserCustomFieldMutation.mutate({
         fieldId,
         valueData: formattedValue,
@@ -544,7 +544,7 @@ export default function ProfilePage() {
     // Validate required fields
     const errors = {};
     const updates = [];
-    
+
     if (customFieldsHierarchy && customFieldsHierarchy.sections) {
       customFieldsHierarchy.sections
         .filter(section => section.is_active !== false) // Only process active sections
@@ -554,19 +554,19 @@ export default function ProfilePage() {
             ?.forEach(field => {
               const fieldValue = customFieldsData[field.id];
               const fieldLabel = field.field_label || field.field_name || field.name;
-              
+
               // Check required fields
               if (field.is_required && (!fieldValue || fieldValue === '')) {
                 errors[field.id] = `${fieldLabel} is required`;
               }
-              
+
               // Validate field-specific constraints
               if (fieldValue !== undefined && fieldValue !== '') {
                 // Validate min/max length for text fields
                 if (field.field_type === 'text' && field.max_length && fieldValue.length > field.max_length) {
                   errors[field.id] = `${fieldLabel} must be no more than ${field.max_length} characters`;
                 }
-                
+
                 // Validate min/max values for number fields
                 if (field.field_type === 'number' && field.min_value !== null && field.min_value !== undefined) {
                   const numValue = parseFloat(fieldValue);
@@ -580,7 +580,7 @@ export default function ProfilePage() {
                     errors[field.id] = `${fieldLabel} must be no more than ${field.max_value}`;
                   }
                 }
-                
+
                 // Validate email format
                 if (field.field_type === 'email' && fieldValue) {
                   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -589,7 +589,7 @@ export default function ProfilePage() {
                   }
                 }
               }
-              
+
               // Prepare update only if field has data AND has changed
               if (fieldValue !== undefined) {
                 // Get the original value from userCustomFields (which has the actual values)
@@ -602,7 +602,7 @@ export default function ProfilePage() {
                     originalValue = extractValueFromAPIResponse(userField, userField.value_data);
                   }
                 }
-                
+
                 // Only update if the value has actually changed
                 if (JSON.stringify(fieldValue) !== JSON.stringify(originalValue)) {
                   updates.push({
@@ -629,30 +629,30 @@ export default function ProfilePage() {
         toast.error("User ID not available");
         return;
       }
-      
+
       setIsUpdatingCustomFields(true);
-      
+
       try {
         // Update fields one by one sequentially to reduce server load
         for (let i = 0; i < updates.length; i++) {
           const update = updates[i];
-          
+
           // Find the field definition to get the field type
           const field = customFieldsHierarchy.sections
             .flatMap(section => section.fields || [])
             .find(f => f.id === update.field_id);
-          
+
           if (!field) {
             console.warn(`Field with ID ${update.field_id} not found`);
             continue;
           }
-          
+
           // Handle file uploads separately
           if (field.field_type?.toLowerCase() === 'file' && update.value_data instanceof File) {
             try {
               // Upload the file first
               const uploadResult = await uploadFileMutation.mutateAsync(update.value_data);
-              
+
               // Then update the field with the file ID
               await updateUserCustomFieldMutation.mutateAsync({
                 fieldId: update.field_id,
@@ -666,7 +666,7 @@ export default function ProfilePage() {
           } else {
             // Format the value according to field type
             const formattedValue = formatFieldValueForAPI(field, update.value_data);
-            
+
             // Update field one by one
             await updateUserCustomFieldMutation.mutateAsync({
               fieldId: update.field_id,
@@ -674,13 +674,13 @@ export default function ProfilePage() {
               userId: profileData.id
             });
           }
-          
+
           // Small delay between updates to reduce server load (except for the last one)
           if (i < updates.length - 1) {
             await new Promise(resolve => setTimeout(resolve, 100));
           }
         }
-        
+
         toast.success("Custom fields updated successfully!", {
           description: "All your custom field information has been saved."
         });
@@ -793,12 +793,12 @@ export default function ProfilePage() {
     try {
       // Compress the image before uploading
       const compressedFile = await compressImage(file, 800, 800, 0.85);
-      
+
       // Show compression info if file was significantly reduced
       const originalSizeMB = (file.size / (1024 * 1024)).toFixed(2);
       const compressedSizeMB = (compressedFile.size / (1024 * 1024)).toFixed(2);
       const reduction = ((1 - compressedFile.size / file.size) * 100).toFixed(0);
-      
+
       if (reduction > 10) {
         toast.info("Image compressed", {
           description: `Reduced from ${originalSizeMB}MB to ${compressedSizeMB}MB (${reduction}% smaller)`,
@@ -828,7 +828,7 @@ export default function ProfilePage() {
   const handleDrop = (e) => {
     e.preventDefault();
     setIsDragOver(false);
-    
+
     const files = e.dataTransfer.files;
     if (files.length > 0) {
       processAvatarFile(files[0]);
@@ -961,10 +961,10 @@ export default function ProfilePage() {
                   <Avatar className="h-20 w-20">
                     <AvatarImage
                       src={
-                        avatarPreview || 
-                        formData.avatar || 
-                        profileData?.avatar_url || 
-                        profileData?.avatar || 
+                        avatarPreview ||
+                        formData.avatar ||
+                        profileData?.avatar_url ||
+                        profileData?.avatar ||
                         "/placeholder-avatar.jpg"
                       }
                     />
@@ -977,8 +977,8 @@ export default function ProfilePage() {
                     <div
                       className={`
                         relative border-2 border-dashed rounded-lg p-4 text-center transition-colors cursor-pointer
-                        ${isDragOver 
-                          ? 'border-primary bg-primary/5' 
+                        ${isDragOver
+                          ? 'border-primary bg-primary/5'
                           : 'border-muted-foreground/25 hover:border-muted-foreground/50'
                         }
                       `}
@@ -1007,7 +1007,7 @@ export default function ProfilePage() {
                         </div>
                       </div>
                     </div>
-                    
+
                     {/* Upload Status */}
                     {uploadAvatarMutation.isPending && (
                       <div className="flex items-center justify-center space-x-2 text-sm text-muted-foreground">
@@ -1368,7 +1368,7 @@ export default function ProfilePage() {
               {!mfaStatusLoading && !mfaStatus?.is_enabled && (
                 <>
                   <Separator />
-                  
+
                   <div className="space-y-4">
                     <div className="space-y-2">
                       <Label className="text-sm font-medium">
@@ -1378,7 +1378,7 @@ export default function ProfilePage() {
                         Enable multi-factor authentication for enhanced security
                       </p>
                     </div>
-                    
+
                     {!mfaSetupData ? (
                       <Button
                         onClick={handleMfaSetup}
@@ -1490,7 +1490,7 @@ export default function ProfilePage() {
               {!mfaStatusLoading && mfaStatus?.is_enabled && (
                 <>
                   <Separator />
-                  
+
                   <div className="space-y-4">
                     <div className="space-y-2">
                       <Label className="text-sm font-medium">
@@ -1596,86 +1596,86 @@ export default function ProfilePage() {
         {/* Additional Information Tab */}
         <TabsContent value="additional" className="space-y-6">
           {/* Custom Fields Section - First Row */}
-          {customFieldsHierarchy && customFieldsHierarchy.sections && 
-           customFieldsHierarchy.sections.filter(section => section.is_active !== false).length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <User className="h-5 w-5" />
-                  Additional Information
-                </CardTitle>
-                <CardDescription>
-                  Complete your profile with additional details required by your organization
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                {customFieldsHierarchyLoading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="h-6 w-6 animate-spin mr-2" />
-                    <span>Loading custom fields...</span>
-                  </div>
-                ) : (
-                  <>
-                    {customFieldsHierarchy.sections
-                      .filter(section => section.is_active !== false) // Only show active sections
-                      .map((section) => (
-                        <div key={section.id} className="space-y-4">
-                          <div className="border-b pb-2">
-                            <h3 className="text-lg font-semibold">{section.section_name}</h3>
-                            {section.subsections && section.subsections.length > 0 && (
-                              <p className="text-sm text-muted-foreground">
-                                Subsections: {section.subsections.join(', ')}
-                              </p>
-                            )}
-                          </div>
-                          
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            {section.fields
-                              ?.filter(field => field.is_active !== false) // Only show active fields
-                              ?.map((field) => (
-                                <CustomFieldRenderer
-                                  key={field.id}
-                                  field={field}
-                                  value={customFieldsData[field.id] || ''}
-                                  onChange={handleCustomFieldChange}
-                                  error={customFieldsErrors[field.id]}
-                                />
-                              ))}
-                          </div>
-                        </div>
-                      ))}
-                    
-                    <div className="flex justify-between items-center pt-4 border-t">
-                      <div className="text-sm text-muted-foreground">
-                        {hasCustomFieldsChanges && (
-                          <span className="text-amber-600 font-medium">
-                            You have unsaved changes
-                          </span>
-                        )}
-                      </div>
-                      <Button
-                        onClick={handleCustomFieldsBulkUpdate}
-                        disabled={isUpdatingCustomFields || !hasCustomFieldsChanges}
-                        variant={hasCustomFieldsChanges ? "default" : "outline"}
-                      >
-                        {isUpdatingCustomFields ? (
-                          <>
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            Saving...
-                          </>
-                        ) : (
-                          <>
-                            <Save className="h-4 w-4 mr-2" />
-                            {hasCustomFieldsChanges ? "Save Changes" : "Save Custom Fields"}
-                          </>
-                        )}
-                      </Button>
+          {customFieldsHierarchy && customFieldsHierarchy.sections &&
+            customFieldsHierarchy.sections.filter(section => section.is_active !== false).length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <User className="h-5 w-5" />
+                    Additional Information
+                  </CardTitle>
+                  <CardDescription>
+                    Complete your profile with additional details required by your organisation
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  {customFieldsHierarchyLoading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="h-6 w-6 animate-spin mr-2" />
+                      <span>Loading custom fields...</span>
                     </div>
-                  </>
-                )}
-              </CardContent>
-            </Card>
-          )}
+                  ) : (
+                    <>
+                      {customFieldsHierarchy.sections
+                        .filter(section => section.is_active !== false) // Only show active sections
+                        .map((section) => (
+                          <div key={section.id} className="space-y-4">
+                            <div className="border-b pb-2">
+                              <h3 className="text-lg font-semibold">{section.section_name}</h3>
+                              {section.subsections && section.subsections.length > 0 && (
+                                <p className="text-sm text-muted-foreground">
+                                  Subsections: {section.subsections.join(', ')}
+                                </p>
+                              )}
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                              {section.fields
+                                ?.filter(field => field.is_active !== false) // Only show active fields
+                                ?.map((field) => (
+                                  <CustomFieldRenderer
+                                    key={field.id}
+                                    field={field}
+                                    value={customFieldsData[field.id] || ''}
+                                    onChange={handleCustomFieldChange}
+                                    error={customFieldsErrors[field.id]}
+                                  />
+                                ))}
+                            </div>
+                          </div>
+                        ))}
+
+                      <div className="flex justify-between items-center pt-4 border-t">
+                        <div className="text-sm text-muted-foreground">
+                          {hasCustomFieldsChanges && (
+                            <span className="text-amber-600 font-medium">
+                              You have unsaved changes
+                            </span>
+                          )}
+                        </div>
+                        <Button
+                          onClick={handleCustomFieldsBulkUpdate}
+                          disabled={isUpdatingCustomFields || !hasCustomFieldsChanges}
+                          variant={hasCustomFieldsChanges ? "default" : "outline"}
+                        >
+                          {isUpdatingCustomFields ? (
+                            <>
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              Saving...
+                            </>
+                          ) : (
+                            <>
+                              <Save className="h-4 w-4 mr-2" />
+                              {hasCustomFieldsChanges ? "Save Changes" : "Save Custom Fields"}
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            )}
 
           {/* Custom Fields Empty State */}
           {!customFieldsHierarchyLoading && (!customFieldsHierarchy || !customFieldsHierarchy.sections || customFieldsHierarchy.sections.length === 0) && (
@@ -1686,7 +1686,7 @@ export default function ProfilePage() {
                   Additional Information
                 </CardTitle>
                 <CardDescription>
-                  Complete your profile with additional details required by your organization
+                  Complete your profile with additional details required by your organisation
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -1694,7 +1694,7 @@ export default function ProfilePage() {
                   <User className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                   <h3 className="text-lg font-semibold mb-2">No Additional Information Required</h3>
                   <p className="text-muted-foreground mb-4">
-                    Your organization hasn't configured any additional profile fields yet. Contact your administrator if you need to add more information to your profile.
+                    Your organisation hasn't configured any additional profile fields yet. Contact your administrator if you need to add more information to your profile.
                   </p>
                 </div>
               </CardContent>
@@ -1892,9 +1892,8 @@ export default function ProfilePage() {
                   <h3 className="font-medium">Account Status</h3>
                   <Badge
                     variant="outline"
-                    className={`mt-1 ${
-                      profileData?.isActive ? "text-green-600" : "text-red-600"
-                    }`}
+                    className={`mt-1 ${profileData?.isActive ? "text-green-600" : "text-red-600"
+                      }`}
                   >
                     {profileData?.isActive ? "Active" : "Inactive"}
                   </Badge>

@@ -364,7 +364,14 @@ const UserEditPage = () => {
 
   const availableRoles = React.useMemo(() => {
     if (!rolesData) return [];
-    return rolesData;
+    // Filter out shift roles - they cannot be directly assigned to users
+    return rolesData.filter(
+      (role) =>
+        role.role_type !== "shift_role" &&
+        role.roleType !== "shift_role" &&
+        !role.parent_role_id &&
+        !role.parentRoleId
+    );
   }, [rolesData]);
 
   // Get all permissions from API
@@ -874,7 +881,15 @@ const UserEditPage = () => {
       });
     }
 
-    return availableRoles.filter((role) => !assignedRoleIds.has(role.id));
+    // Filter out shift roles and already assigned roles
+    return availableRoles.filter(
+      (role) =>
+        !assignedRoleIds.has(role.id) &&
+        role.role_type !== "shift_role" &&
+        role.roleType !== "shift_role" &&
+        !role.parent_role_id &&
+        !role.parentRoleId
+    );
   };
 
   // Filter permissions based on search term (for both assigned and available)

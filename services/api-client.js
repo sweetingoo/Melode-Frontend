@@ -99,7 +99,7 @@ apiClient.interceptors.response.use(
           break;
         case 404:
           // Not found - log as warning instead of error for better UX
-          // Don't log 404s for clock/current endpoint (user not clocked in is a valid state)
+          // Don't log 404s for clock/current endpoint (user not checked in is a valid state)
           if (!config?.url?.includes("/clock/current")) {
             console.warn(
               "Resource not found:",

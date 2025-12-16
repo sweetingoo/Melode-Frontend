@@ -13,6 +13,7 @@ export const profileKeys = {
   userStats: (userId) => [...profileKeys.all, "userStats", userId],
   mfaStatus: () => [...profileKeys.all, "mfaStatus"],
   userCustomFields: () => [...profileKeys.all, "userCustomFields"],
+  preferences: () => [...profileKeys.all, "preferences"],
 };
 
 // Utility functions for data transformation
@@ -690,7 +691,7 @@ export const useUploadFile = (options = {}) => {
       // params can be a file or an object with { file, form_id, field_id, organization_id }
       let file;
       let uploadOptions = { ...options };
-      
+
       if (params instanceof File) {
         // Backward compatibility: if just a file is passed
         file = params;
@@ -713,7 +714,7 @@ export const useUploadFile = (options = {}) => {
       } else {
         throw new Error("Invalid parameters: expected File or { file, ...options }");
       }
-      
+
       // Debug logging in development
       if (process.env.NODE_ENV === 'development') {
         console.log('useUploadFile - Uploading file with options:', {
@@ -724,16 +725,16 @@ export const useUploadFile = (options = {}) => {
           organization_id: uploadOptions.organization_id,
         });
       }
-      
+
       const response = await profileService.uploadFile(file, uploadOptions);
       return response;
     },
     onSuccess: (data, variables, context) => {
       // Only show toast if not silent (for form submissions, we might want to suppress)
       if (!options.silent) {
-      toast.success("File uploaded successfully!", {
+        toast.success("File uploaded successfully!", {
           description: `File "${data.file_name || data.name || 'file'}" has been uploaded.`,
-      });
+        });
       }
     },
     onError: (error) => {
@@ -741,27 +742,27 @@ export const useUploadFile = (options = {}) => {
 
       // Only show toast if not silent
       if (!options.silent) {
-      if (error.response?.status === 422) {
-        const errorData = error.response.data;
+        if (error.response?.status === 422) {
+          const errorData = error.response.data;
           // Backend returns detail as string for file upload errors
           if (errorData?.detail) {
-            const errorMessage = typeof errorData.detail === 'string' 
-              ? errorData.detail 
-              : Array.isArray(errorData.detail) 
+            const errorMessage = typeof errorData.detail === 'string'
+              ? errorData.detail
+              : Array.isArray(errorData.detail)
                 ? errorData.detail[0]?.msg || errorData.detail[0]?.detail || "File validation failed"
                 : errorData.detail;
             toast.error("File Upload Error", {
               description: errorMessage,
-          });
+            });
+          } else {
+            toast.error("File Upload Error", {
+              description: errorData?.message || "Please check your file",
+            });
+          }
         } else {
           toast.error("File Upload Error", {
-            description: errorData?.message || "Please check your file",
-          });
-        }
-      } else {
-          toast.error("File Upload Error", {
             description: error.response?.data?.message || error.message || "Failed to upload file",
-        });
+          });
         }
       }
     },
@@ -808,6 +809,82 @@ export const useDownloadFile = () => {
           error.response?.data?.message ||
           "An error occurred while downloading the file.",
       });
+    },
+  });
+};
+
+// User Preferences hooks
+export const usePreferences = () => {
+  return useQuery({
+    queryKey: profileKeys.preferences(),
+    queryFn: async () => {
+      const response = await profileService.getPreferences();
+      // API auto-creates preferences if they don't exist, so response should always exist
+      // But handle null gracefully (service returns null on errors)
+      return response || {
+        default_job_role_id: null,
+        default_shift_role_id: null,
+        default_location_id: null,
+        additional_preferences: null,
+      };
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    retry: (failureCount, error) => {
+      // Don't retry on 422 (validation errors) or 404 (not found)
+      // These are likely permanent issues
+      if (error.response?.status === 422 || error.response?.status === 404) {
+        return false;
+      }
+      // Retry other errors up to 2 times
+      return failureCount < 2;
+    },
+  });
+};
+
+export const useUpdatePreferences = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (preferences) => {
+      // Partial update - only send fields that are provided
+      const response = await profileService.updatePreferences(preferences);
+      return response;
+    },
+    onSuccess: () => {
+      // Invalidate preferences to refetch updated data
+      queryClient.invalidateQueries({ queryKey: profileKeys.preferences() });
+
+      toast.success("Preferences updated successfully!", {
+        description: "Your preferences have been saved.",
+      });
+    },
+    onError: (error) => {
+      console.error("Failed to update preferences:", error);
+
+      if (error.response?.status === 422) {
+        const errorData = error.response.data;
+        if (errorData?.detail && Array.isArray(errorData.detail)) {
+          const firstError = errorData.detail[0];
+          const fieldName = firstError.loc && firstError.loc.length > 1 ? firstError.loc[1] : 'field';
+          toast.error(`Update Error: ${fieldName}`, {
+            description: firstError.msg || "Please check your input",
+          });
+        } else {
+          toast.error("Update Error", {
+            description: errorData?.message || "Please check your input",
+          });
+        }
+      } else if (error.response?.status === 403) {
+        toast.error("Access Denied", {
+          description: "You don't have permission to update this preference.",
+        });
+      } else {
+        toast.error("Failed to update preferences", {
+          description:
+            error.response?.data?.message ||
+            "An error occurred while updating your preferences.",
+        });
+      }
     },
   });
 };

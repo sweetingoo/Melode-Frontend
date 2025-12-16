@@ -3,8 +3,8 @@
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Clock, Square, Loader2 } from "lucide-react";
-import { useClockStatus, useClockIn, useClockOut } from "@/hooks/useClock";
+import { Clock, Square, Loader2, Coffee, X } from "lucide-react";
+import { useClockStatus, useClockIn, useClockOut, useStartBreak, useEndBreak } from "@/hooks/useClock";
 import { useRouter } from "next/navigation";
 import {
   Dialog,
@@ -19,15 +19,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { useCurrentUser } from "@/hooks/useAuth";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
+import { formatElapsedTimeHHMMSS } from "@/utils/time";
 
 export const ClockInOutButton = ({ className = "" }) => {
   const { data: currentUserData } = useCurrentUser();
   const { hasPermission, isSuperuser } = usePermissionsCheck();
-
-  // Check if user has clock:in permission or is a superuser
-  if (!isSuperuser && !hasPermission("clock:in")) {
-    return null;
-  }
   const router = useRouter();
   const [showClockOutDialog, setShowClockOutDialog] = useState(false);
   const [clockOutNotes, setClockOutNotes] = useState("");
@@ -39,27 +35,29 @@ export const ClockInOutButton = ({ className = "" }) => {
 
   const clockInMutation = useClockIn();
   const clockOutMutation = useClockOut();
+  const startBreakMutation = useStartBreak();
+  const endBreakMutation = useEndBreak();
 
-  const isClockedIn = clockStatus?.status === "active" || clockStatus?.status === "on_break";
-  const isOnBreak = clockStatus?.status === "on_break";
+  // Check for clocked in status - API can return status, current_state, or is_clocked_in
+  const isClockedIn =
+    clockStatus?.is_clocked_in === true ||
+    clockStatus?.status === "active" ||
+    clockStatus?.status === "on_break" ||
+    clockStatus?.current_state === "active" ||
+    clockStatus?.current_state === "on_break";
+
+  const isOnBreak =
+    clockStatus?.is_on_break === true ||
+    clockStatus?.status === "on_break" ||
+    clockStatus?.current_state === "on_break";
+
+  const isActive = isClockedIn && !isOnBreak;
 
   // Calculate and update elapsed time
   useEffect(() => {
     if (clockStatus?.clock_in_time && isClockedIn) {
       const updateElapsed = () => {
-        const clockInTime = new Date(clockStatus.clock_in_time);
-        const now = new Date();
-        const diff = Math.floor((now - clockInTime) / 1000);
-
-        const hours = Math.floor(diff / 3600);
-        const minutes = Math.floor((diff % 3600) / 60);
-        const seconds = diff % 60;
-
-        setElapsedTime(
-          `${hours.toString().padStart(2, "0")}:${minutes
-            .toString()
-            .padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`
-        );
+        setElapsedTime(formatElapsedTimeHHMMSS(clockStatus.clock_in_time));
       };
 
       updateElapsed();
@@ -69,6 +67,12 @@ export const ClockInOutButton = ({ className = "" }) => {
       setElapsedTime("");
     }
   }, [clockStatus?.clock_in_time, isClockedIn]);
+
+  // Check if user has clock:in permission or is a superuser
+  // This check must happen AFTER all hooks are called
+  if (!isSuperuser && !hasPermission("clock:in")) {
+    return null;
+  }
 
   const handleClockIn = () => {
     router.push("/clock");
@@ -91,6 +95,22 @@ export const ClockInOutButton = ({ className = "" }) => {
     }
   };
 
+  const handleStartBreak = async () => {
+    try {
+      await startBreakMutation.mutateAsync();
+    } catch (error) {
+      // Error handled by mutation
+    }
+  };
+
+  const handleEndBreak = async () => {
+    try {
+      await endBreakMutation.mutateAsync();
+    } catch (error) {
+      // Error handled by mutation
+    }
+  };
+
   if (statusLoading) {
     return (
       <Button variant="ghost" size="sm" className={`h-9 px-3 ${className}`} disabled>
@@ -106,7 +126,8 @@ export const ClockInOutButton = ({ className = "" }) => {
         {isClockedIn && elapsedTime && (
           <Badge
             variant={isOnBreak ? "secondary" : "default"}
-            className="h-9 px-3 font-mono text-sm"
+            className="h-9 px-3 font-mono text-sm cursor-pointer hover:opacity-80 transition-opacity"
+            onClick={() => router.push("/clock/dashboard")}
           >
             <Clock className="h-3 w-3 mr-1.5" />
             {elapsedTime}
@@ -116,7 +137,46 @@ export const ClockInOutButton = ({ className = "" }) => {
           </Badge>
         )}
 
-        {/* Clock In/Out Button */}
+        {/* Break Controls - Show when active or on break */}
+        {isActive && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleStartBreak}
+            className={`h-9 px-3 ${className}`}
+            disabled={startBreakMutation.isPending}
+          >
+            {startBreakMutation.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <>
+                <Coffee className="h-4 w-4 mr-2" />
+                <span className="hidden sm:inline">Break</span>
+              </>
+            )}
+          </Button>
+        )}
+
+        {isOnBreak && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleEndBreak}
+            className={`h-9 px-3 ${className}`}
+            disabled={endBreakMutation.isPending}
+          >
+            {endBreakMutation.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <>
+                <X className="h-4 w-4 mr-2" />
+                <span className="hidden sm:inline">End Break</span>
+              </>
+            )}
+          </Button>
+        )}
+
+        {/* Check In/Out Button */}
         <Button
           variant={isClockedIn ? "default" : "ghost"}
           size="sm"
@@ -129,26 +189,24 @@ export const ClockInOutButton = ({ className = "" }) => {
           ) : isClockedIn ? (
             <>
               <Square className="h-4 w-4 mr-2" />
-              <span className="hidden sm:inline">
-                {isOnBreak ? "On Break" : "Clock Out"}
-              </span>
+              <span className="hidden sm:inline">Check Out</span>
             </>
           ) : (
             <>
               <Clock className="h-4 w-4 mr-2" />
-              <span className="hidden sm:inline">Clock In</span>
+              <span className="hidden sm:inline">Check In</span>
             </>
           )}
         </Button>
       </div>
 
-      {/* Clock Out Dialog */}
+      {/* Check Out Dialog */}
       <Dialog open={showClockOutDialog} onOpenChange={setShowClockOutDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Clock Out</DialogTitle>
+            <DialogTitle>Check Out</DialogTitle>
             <DialogDescription>
-              Add any notes about your shift (optional) and confirm clock out.
+              Add any notes about your shift (optional) and confirm check out.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -177,10 +235,10 @@ export const ClockInOutButton = ({ className = "" }) => {
               {clockOutMutation.isPending ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Clocking Out...
+                  Checking Out...
                 </>
               ) : (
-                "Clock Out"
+                "Check Out"
               )}
             </Button>
           </DialogFooter>
@@ -189,6 +247,8 @@ export const ClockInOutButton = ({ className = "" }) => {
     </>
   );
 };
+
+
 
 
 

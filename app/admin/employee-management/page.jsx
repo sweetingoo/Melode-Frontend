@@ -75,6 +75,7 @@ import {
 } from "@/hooks/useUsers";
 import { useCreateRole } from "@/hooks/useRoles";
 import { useHijackUser, useCurrentUser } from "@/hooks/useAuth";
+import { useInvitations, invitationUtils } from "@/hooks/useInvitations";
 import {
   Dialog,
   DialogContent,
@@ -123,6 +124,7 @@ const UserManagementPage = () => {
   const { data: usersResponse, isLoading, error, refetch } = useUsers();
   const { data: rolesData, isLoading: rolesLoading } = useRoles();
   const roles = rolesData || [];
+  const { data: invitations = [], isLoading: invitationsLoading } = useInvitations();
   const deleteUserMutation = useDeleteUser();
   const deactivateUserMutation = useDeactivateUser();
   const activateUserMutation = useActivateUser();
@@ -184,6 +186,28 @@ const UserManagementPage = () => {
 
   // Transform API data to display format
   const transformedUsers = users.map(userUtils.transformUser);
+
+  // Create a map of invitations by email for quick lookup
+  const invitationsByEmail = React.useMemo(() => {
+    const map = new Map();
+    invitations.forEach((invitation) => {
+      const transformed = invitationUtils.transformInvitation(invitation);
+      // Override role with dynamic role display name if available
+      if (roles.length > 0) {
+        const role = roles.find(r => r.id === invitation.role_id);
+        if (role) {
+          transformed.role = role.display_name;
+        }
+      }
+      map.set(invitation.email.toLowerCase(), transformed);
+    });
+    return map;
+  }, [invitations, roles]);
+
+  // Helper function to get invitation for a user
+  const getUserInvitation = (userEmail) => {
+    return invitationsByEmail.get(userEmail?.toLowerCase());
+  };
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -705,6 +729,7 @@ const UserManagementPage = () => {
                   <TableHead>Person</TableHead>
                   <TableHead>Role</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Invitation</TableHead>
                   <TableHead>Last Login</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -745,6 +770,28 @@ const UserManagementPage = () => {
                       >
                         {userUtils.getStatus(user)}
                       </span>
+                    </TableCell>
+                    <TableCell>
+                      {(() => {
+                        const invitation = getUserInvitation(user.email);
+                        if (!invitation) {
+                          return (
+                            <span className="text-xs text-muted-foreground">
+                              No invitation
+                            </span>
+                          );
+                        }
+                        return (
+                          <span
+                            className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${invitationUtils.getStatusColor(
+                              invitation.status
+                            )}`}
+                            title={`Sent: ${invitation.sentDate}, Expires: ${invitation.expiresDate}`}
+                          >
+                            {invitation.status}
+                          </span>
+                        );
+                      })()}
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       <div className="flex items-center gap-1">
@@ -1295,14 +1342,22 @@ const UserManagementPage = () => {
                           No roles available
                         </SelectItem>
                       ) : (
-                        roles.map((role) => (
-                          <SelectItem key={role.id} value={role.id.toString()}>
-                            {role.display_name ||
-                              role.name ||
-                              role.role_name ||
-                              `Role ${role.id}`}
-                          </SelectItem>
-                        ))
+                        roles
+                          .filter(
+                            (role) =>
+                              role.role_type !== "shift_role" &&
+                              role.roleType !== "shift_role" &&
+                              !role.parent_role_id &&
+                              !role.parentRoleId
+                          )
+                          .map((role) => (
+                            <SelectItem key={role.id} value={role.id.toString()}>
+                              {role.display_name ||
+                                role.name ||
+                                role.role_name ||
+                                `Role ${role.id}`}
+                            </SelectItem>
+                          ))
                       )}
                     </SelectContent>
                   </Select>
@@ -1372,7 +1427,7 @@ const UserManagementPage = () => {
           <DialogHeader>
             <DialogTitle>Create New Role</DialogTitle>
             <DialogDescription>
-              Create a new role for your organization.
+              Create a new role for your organisation.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">

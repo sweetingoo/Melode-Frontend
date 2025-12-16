@@ -779,7 +779,7 @@ const DepartmentsPage = () => {
           <DialogHeader>
             <DialogTitle>Create Department</DialogTitle>
             <DialogDescription>
-              Add a new department to your organization.
+              Add a new department to your organisation.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -796,7 +796,7 @@ const DepartmentsPage = () => {
                     name: e.target.value,
                   })
                 }
-                placeholder="e.g., Engineering"
+                placeholder="e.g., Finance"
                 className={validationErrors.name ? "border-red-500" : ""}
               />
               {validationErrors.name && (
@@ -816,7 +816,7 @@ const DepartmentsPage = () => {
                     code: e.target.value.toUpperCase(),
                   })
                 }
-                placeholder="e.g., ENG"
+                placeholder="e.g., FIN"
                 className={validationErrors.code ? "border-red-500" : ""}
               />
               {validationErrors.code && (
@@ -903,7 +903,7 @@ const DepartmentsPage = () => {
                     name: e.target.value,
                   })
                 }
-                placeholder="e.g., Engineering"
+                placeholder="e.g., Finance"
                 className={validationErrors.name ? "border-red-500" : ""}
               />
               {validationErrors.name && (
@@ -923,7 +923,7 @@ const DepartmentsPage = () => {
                     code: e.target.value.toUpperCase(),
                   })
                 }
-                placeholder="e.g., ENG"
+                placeholder="e.g., FIN"
                 className={validationErrors.code ? "border-red-500" : ""}
               />
               {validationErrors.code && (

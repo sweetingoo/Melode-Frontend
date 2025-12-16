@@ -43,7 +43,6 @@ import {
   Shield,
   Key,
   Settings,
-  Zap,
   ChevronDown,
   Images,
   MapPin,
@@ -94,7 +93,7 @@ const mainMenuItems = [
     permission: null, // My Tasks is visible to all users
   },
   {
-    title: "Clock In/Out",
+    title: "Check In/Out",
     icon: Clock,
     url: "/clock",
     permission: "clock:in", // Permission to clock in
@@ -117,16 +116,16 @@ const mainMenuItems = [
     url: "/admin/forms",
     permission: "forms:read", // Permission to read forms
   },
+  {
+    title: "Preferences",
+    icon: Settings,
+    url: "/admin/preferences",
+    permission: null, // Preferences are visible to all users
+  },
 ];
 
 // People & Access Management group
 const peopleAndAccessItems = [
-  {
-    title: "Create invitation",
-    icon: UserPlus,
-    url: "/admin/invitations",
-    permission: "invitation:create", // Permission to create invitations
-  },
   {
     title: "Manage people",
     icon: Users,
@@ -148,7 +147,7 @@ const peopleAndAccessItems = [
 ];
 
 // Organisation Management group
-const organizationItems = [
+const organisationItems = [
   {
     title: "Locations",
     icon: MapPin,
@@ -178,10 +177,10 @@ const settingsItems = [
     permission: "task_types:read", // Permission to read task types
   },
   {
-    title: "Active Clocks",
+    title: "Active People",
     icon: Clock,
     url: "/admin/clock",
-    permission: "clock:view_all", // Permission to view all active clocks
+    permission: "clock:view_all", // Permission to view all active people
   },
   {
     title: "Configuration",
@@ -197,20 +196,7 @@ const settingsItems = [
   },
 ];
 
-const quickSetupItems = [
-  {
-    title: "Quick Setup",
-    icon: Zap,
-    url: "/admin/setup-custom-fields",
-    permission: "custom_fields:create", // Permission to create custom fields
-  },
-  {
-    title: "Manage Fields",
-    icon: Settings,
-    url: "/admin/custom-fields-admin",
-    permission: "custom_fields:read", // Permission to read custom fields
-  },
-];
+// Quick Setup removed - functionality moved to other sections
 
 // Helper component for collapsible menu items that work in both expanded and collapsed states
 function CollapsibleMenuItem({ title, icon: Icon, items, pathname }) {
@@ -719,7 +705,7 @@ export default function AdminLayout({ children }) {
   const isCurrentRoleSuperuser = React.useMemo(() => {
     // First check if user is a superuser (regardless of assignment)
     if (currentUserData?.is_superuser) return true;
-    
+
     // Then check if current role is superuser
     if (!currentRole) return false;
     return (
@@ -743,10 +729,10 @@ export default function AdminLayout({ children }) {
       if (item.permission === "SUPERUSER_ROLE_ONLY") {
         // Check wildcard permission first
         if (userPermissionNames.includes("*")) return true;
-        
+
         // Check if user is superuser
         if (isCurrentRoleSuperuser) return true;
-        
+
         // Check for configuration-related permissions
         const hasConfigurationPermission = userPermissionNames.some((perm) => {
           return (
@@ -757,7 +743,7 @@ export default function AdminLayout({ children }) {
             perm.startsWith("configuration:")
           );
         });
-        
+
         return hasConfigurationPermission;
       }
 
@@ -810,8 +796,8 @@ export default function AdminLayout({ children }) {
     [userPermissionNames, currentUserLoading, isCurrentRoleSuperuser]
   );
 
-  const visibleOrganizationItems = React.useMemo(
-    () => filterItemsByPermission(organizationItems),
+  const visibleOrganisationItems = React.useMemo(
+    () => filterItemsByPermission(organisationItems),
     [userPermissionNames, currentUserLoading, isCurrentRoleSuperuser]
   );
 
@@ -820,22 +806,7 @@ export default function AdminLayout({ children }) {
     [userPermissionNames, currentUserLoading, isCurrentRoleSuperuser]
   );
 
-  // Filter quick setup items based on permissions
-  const visibleQuickSetupItems = React.useMemo(() => {
-    if (currentUserLoading) return quickSetupItems; // Show all while loading
-
-    return quickSetupItems.filter((item) => {
-      // If user has wildcard permissions, show all
-      if (userPermissionNames.includes("*")) return true;
-
-      // Check if user has the specific permission
-      return userPermissionNames.some(
-        (perm) =>
-          perm === item.permission ||
-          perm.includes(item.permission.split(":")[0]) // Check resource match
-      );
-    });
-  }, [userPermissionNames, currentUserLoading]);
+  // Quick Setup section removed
 
   // Handle role switch
   const handleRoleSwitch = async (assignmentId) => {
@@ -938,11 +909,11 @@ export default function AdminLayout({ children }) {
                     )}
 
                     {/* Organisation Management - Collapsible */}
-                    {visibleOrganizationItems.length > 0 && (
+                    {visibleOrganisationItems.length > 0 && (
                       <CollapsibleMenuItem
                         title="Organisation"
                         icon={Building2}
-                        items={visibleOrganizationItems}
+                        items={visibleOrganisationItems}
                         pathname={pathname}
                       />
                     )}
@@ -953,16 +924,6 @@ export default function AdminLayout({ children }) {
                         title="Settings"
                         icon={Settings}
                         items={visibleSettingsItems}
-                        pathname={pathname}
-                      />
-                    )}
-
-                    {/* Custom Fields (existing collapsible) */}
-                    {visibleQuickSetupItems.length > 0 && (
-                      <CollapsibleMenuItem
-                        title="Custom Fields"
-                        icon={Zap}
-                        items={visibleQuickSetupItems}
                         pathname={pathname}
                       />
                     )}

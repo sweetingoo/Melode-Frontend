@@ -1083,17 +1083,17 @@ const AssetsPage = () => {
                                 <DropdownMenuItem
                                   onClick={() => handleAssignAsset(asset)}
                                 >
-                                <UserPlus className="mr-2 h-4 w-4" />
-                                Assign Asset
-                              </DropdownMenuItem>
+                                  <UserPlus className="mr-2 h-4 w-4" />
+                                  Assign Asset
+                                </DropdownMenuItem>
                               )}
                               {canUpdateAsset && (
-                              <DropdownMenuItem
-                                onClick={() => handleUpdateAttributes(asset)}
-                              >
-                                <Settings className="mr-2 h-4 w-4" />
-                                Update Attributes
-                              </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => handleUpdateAttributes(asset)}
+                                >
+                                  <Settings className="mr-2 h-4 w-4" />
+                                  Update Attributes
+                                </DropdownMenuItem>
                               )}
                               {canUpdateAsset && (
                                 <DropdownMenuItem
@@ -2035,7 +2035,7 @@ const AssetsPage = () => {
           <DialogHeader>
             <DialogTitle>Create New Role</DialogTitle>
             <DialogDescription>
-              Create a new role for your organization.
+              Create a new role for your organisation.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">

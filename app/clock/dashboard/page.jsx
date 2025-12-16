@@ -31,8 +31,10 @@ import {
 } from "@/hooks/useClock";
 import { useRoles } from "@/hooks/useRoles";
 import { useCurrentUser } from "@/hooks/useAuth";
+import { formatElapsedTimeHHMMSS, calculateElapsedHours as calcElapsedHours } from "@/utils/time";
 import {
   Clock,
+  Square,
   Coffee,
   X,
   AlertTriangle,
@@ -50,7 +52,11 @@ export default function ClockDashboardPage() {
   const router = useRouter();
   const [showClockOutDialog, setShowClockOutDialog] = useState(false);
   const [showChangeRoleDialog, setShowChangeRoleDialog] = useState(false);
+  const [showStartBreakDialog, setShowStartBreakDialog] = useState(false);
+  const [showEndBreakDialog, setShowEndBreakDialog] = useState(false);
   const [clockOutNotes, setClockOutNotes] = useState("");
+  const [breakNotes, setBreakNotes] = useState("");
+  const [endBreakNotes, setEndBreakNotes] = useState("");
   const [newShiftRoleId, setNewShiftRoleId] = useState("");
   const [changeRoleNotes, setChangeRoleNotes] = useState("");
 
@@ -79,19 +85,13 @@ export default function ClockDashboardPage() {
   useEffect(() => {
     if (clockStatus?.clock_in_time) {
       const updateElapsed = () => {
-        const clockInTime = new Date(clockStatus.clock_in_time);
-        const now = new Date();
-        const diff = Math.floor((now - clockInTime) / 1000);
-        setElapsedSeconds(diff);
+        const checkInTime = clockStatus.clock_in_time;
+        const elapsedStr = formatElapsedTimeHHMMSS(checkInTime);
+        setElapsedTime(elapsedStr);
 
-        const hours = Math.floor(diff / 3600);
-        const minutes = Math.floor((diff % 3600) / 60);
-        const seconds = diff % 60;
-        setElapsedTime(
-          `${hours.toString().padStart(2, "0")}:${minutes
-            .toString()
-            .padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`
-        );
+        // Calculate seconds for other uses
+        const hours = calcElapsedHours(checkInTime);
+        setElapsedSeconds(Math.floor(hours * 3600));
       };
 
       updateElapsed();
@@ -110,8 +110,21 @@ export default function ClockDashboardPage() {
     );
   }, [clockStatus?.job_role_id, rolesData]);
 
+  // Get current shift role name
+  const currentShiftRoleName = React.useMemo(() => {
+    if (!clockStatus?.current_shift_role_id || !rolesData) return "Unknown";
+    const role = rolesData.find((r) => r.id === clockStatus.current_shift_role_id);
+    return role?.display_name || role?.name || "Unknown";
+  }, [clockStatus?.current_shift_role_id, rolesData]);
 
-  // Check if clocked in
+  // Get job role name
+  const jobRoleName = React.useMemo(() => {
+    if (!clockStatus?.job_role_id || !rolesData) return "Unknown";
+    const role = rolesData.find((r) => r.id === clockStatus.job_role_id);
+    return role?.display_name || role?.name || "Unknown";
+  }, [clockStatus?.job_role_id, rolesData]);
+
+  // Check if checked in
   if (isLoading || userLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -120,7 +133,14 @@ export default function ClockDashboardPage() {
     );
   }
 
-  if (!clockStatus || clockStatus.status === "clocked_out") {
+  // Check if clocked out - API can return status, current_state, or is_clocked_in
+  const isClockedOut =
+    clockStatus?.is_clocked_in === false ||
+    clockStatus?.status === "clocked_out" ||
+    clockStatus?.current_state === "clocked_out" ||
+    !clockStatus;
+
+  if (isClockedOut) {
     return (
       <div className="container mx-auto p-6 max-w-2xl space-y-4">
         <div className="flex items-center gap-4">
@@ -147,7 +167,7 @@ export default function ClockDashboardPage() {
             <Link href="/clock">
               <Button className="w-full">
                 <Clock className="mr-2 h-4 w-4" />
-                Clock In
+                Check In
               </Button>
             </Link>
           </CardContent>
@@ -156,8 +176,15 @@ export default function ClockDashboardPage() {
     );
   }
 
-  const isOnBreak = clockStatus.status === "on_break";
-  const isActive = clockStatus.status === "active";
+  // Check break and active status - API can return status, current_state, or is_on_break
+  const isOnBreak =
+    clockStatus?.is_on_break === true ||
+    clockStatus?.status === "on_break" ||
+    clockStatus?.current_state === "on_break";
+
+  const isActive =
+    (clockStatus?.is_clocked_in === true || clockStatus?.status === "active" || clockStatus?.current_state === "active") &&
+    !isOnBreak;
 
   const handleClockOut = async () => {
     const clockOutData = clockOutNotes.trim() ? { notes: clockOutNotes.trim() } : {};
@@ -198,34 +225,26 @@ export default function ClockDashboardPage() {
   };
 
   const handleStartBreak = async () => {
+    const breakData = breakNotes.trim() ? { notes: breakNotes.trim() } : {};
     try {
-      await startBreakMutation.mutateAsync();
+      await startBreakMutation.mutateAsync(breakData);
+      setShowStartBreakDialog(false);
+      setBreakNotes("");
     } catch (error) {
       // Error handled by mutation
     }
   };
 
   const handleEndBreak = async () => {
+    const breakData = endBreakNotes.trim() ? { notes: endBreakNotes.trim() } : {};
     try {
-      await endBreakMutation.mutateAsync();
+      await endBreakMutation.mutateAsync(breakData);
+      setShowEndBreakDialog(false);
+      setEndBreakNotes("");
     } catch (error) {
       // Error handled by mutation
     }
   };
-
-  // Get current shift role name
-  const currentShiftRoleName = React.useMemo(() => {
-    if (!clockStatus?.current_shift_role_id || !rolesData) return "Unknown";
-    const role = rolesData.find((r) => r.id === clockStatus.current_shift_role_id);
-    return role?.name || "Unknown";
-  }, [clockStatus?.current_shift_role_id, rolesData]);
-
-  // Get job role name
-  const jobRoleName = React.useMemo(() => {
-    if (!clockStatus?.job_role_id || !rolesData) return "Unknown";
-    const role = rolesData.find((r) => r.id === clockStatus.job_role_id);
-    return role?.name || "Unknown";
-  }, [clockStatus?.job_role_id, rolesData]);
 
   return (
     <div className="container mx-auto p-6 max-w-4xl space-y-6">
@@ -301,7 +320,7 @@ export default function ClockDashboardPage() {
             <div className="flex items-center gap-3 p-3 border rounded-lg">
               <Clock className="h-5 w-5 text-muted-foreground" />
               <div>
-                <p className="text-sm text-muted-foreground">Clock In Time</p>
+                <p className="text-sm text-muted-foreground">Check In Time</p>
                 <p className="font-medium">
                   {clockStatus.clock_in_time
                     ? new Date(clockStatus.clock_in_time).toLocaleString("en-GB")
@@ -326,7 +345,7 @@ export default function ClockDashboardPage() {
             {/* Break Controls */}
             {isActive && (
               <Button
-                onClick={handleStartBreak}
+                onClick={() => setShowStartBreakDialog(true)}
                 disabled={startBreakMutation.isPending}
                 variant="outline"
                 className="w-full"
@@ -342,7 +361,7 @@ export default function ClockDashboardPage() {
 
             {isOnBreak && (
               <Button
-                onClick={handleEndBreak}
+                onClick={() => setShowEndBreakDialog(true)}
                 disabled={endBreakMutation.isPending}
                 variant="outline"
                 className="w-full"
@@ -368,26 +387,26 @@ export default function ClockDashboardPage() {
               </Button>
             )}
 
-            {/* Clock Out */}
+            {/* Check Out */}
             <Button
               onClick={() => setShowClockOutDialog(true)}
               variant="destructive"
               className="w-full"
             >
-              <ClockOut className="mr-2 h-4 w-4" />
-              Clock Out
+              <Square className="mr-2 h-4 w-4" />
+              Check Out
             </Button>
           </div>
         </CardContent>
       </Card>
 
-      {/* Clock Out Dialog */}
+      {/* Check Out Dialog */}
       <Dialog open={showClockOutDialog} onOpenChange={setShowClockOutDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Clock Out</DialogTitle>
+            <DialogTitle>Check Out</DialogTitle>
             <DialogDescription>
-              Add any notes about your shift (optional) and confirm clock out.
+              Add any notes about your shift (optional) and confirm check out.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -416,10 +435,10 @@ export default function ClockDashboardPage() {
               {clockOutMutation.isPending ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Clocking Out...
+                  Checking Out...
                 </>
               ) : (
-                "Clock Out"
+                "Check Out"
               )}
             </Button>
           </DialogFooter>
@@ -447,7 +466,7 @@ export default function ClockDashboardPage() {
                 <SelectContent>
                   {availableShiftRoles.map((role) => (
                     <SelectItem key={role.id} value={role.id.toString()}>
-                      {role.name}
+                      {role.display_name || role.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -482,6 +501,102 @@ export default function ClockDashboardPage() {
                 </>
               ) : (
                 "Change Role"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Start Break Dialog */}
+      <Dialog open={showStartBreakDialog} onOpenChange={setShowStartBreakDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Start Break</DialogTitle>
+            <DialogDescription>
+              Add any notes about your break (optional) and confirm to start.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="breakNotes">Notes (Optional)</Label>
+              <Textarea
+                id="breakNotes"
+                value={breakNotes}
+                onChange={(e) => setBreakNotes(e.target.value)}
+                placeholder="e.g., Lunch break, Coffee break..."
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowStartBreakDialog(false);
+                setBreakNotes("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleStartBreak}
+              disabled={startBreakMutation.isPending}
+            >
+              {startBreakMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Starting...
+                </>
+              ) : (
+                "Start Break"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* End Break Dialog */}
+      <Dialog open={showEndBreakDialog} onOpenChange={setShowEndBreakDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>End Break</DialogTitle>
+            <DialogDescription>
+              Add any notes about ending your break (optional) and confirm.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="endBreakNotes">Notes (Optional)</Label>
+              <Textarea
+                id="endBreakNotes"
+                value={endBreakNotes}
+                onChange={(e) => setEndBreakNotes(e.target.value)}
+                placeholder="e.g., Back from lunch..."
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowEndBreakDialog(false);
+                setEndBreakNotes("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleEndBreak}
+              disabled={endBreakMutation.isPending}
+            >
+              {endBreakMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Ending...
+                </>
+              ) : (
+                "End Break"
               )}
             </Button>
           </DialogFooter>

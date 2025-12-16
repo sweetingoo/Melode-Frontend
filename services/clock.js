@@ -2,22 +2,22 @@ import { api } from "./api-client";
 
 // Clock API service
 export const clockService = {
-  // Clock in
+  // Check in
   clockIn: async (clockInData) => {
     try {
       return await api.post("/clock/in", clockInData);
     } catch (error) {
-      console.error("Clock in failed:", error);
+      console.error("Check in failed:", error);
       throw error;
     }
   },
 
-  // Clock out
+  // Check out
   clockOut: async (clockOutData = {}) => {
     try {
       return await api.post("/clock/out", clockOutData);
     } catch (error) {
-      console.error("Clock out failed:", error);
+      console.error("Check out failed:", error);
       throw error;
     }
   },
@@ -75,7 +75,7 @@ export const clockService = {
   // Start break
   startBreak: async (breakData = {}) => {
     try {
-      return await api.post("/clock/break/start", breakData);
+      return await api.post("/clock/breaks/start", breakData);
     } catch (error) {
       console.error("Start break failed:", error);
       throw error;
@@ -85,7 +85,7 @@ export const clockService = {
   // End break
   endBreak: async (breakData = {}) => {
     try {
-      return await api.post("/clock/break/end", breakData);
+      return await api.post("/clock/breaks/end", breakData);
     } catch (error) {
       console.error("End break failed:", error);
       throw error;

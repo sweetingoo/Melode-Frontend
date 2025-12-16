@@ -31,7 +31,7 @@ export const customFieldsUtils = {
     relationshipConfig: field.relationship_config,
     entityType: field.entity_type,
     sortOrder: field.sort_order,
-    organizationId: field.organization_id,
+    organizationId: field.organization_id || field.organisation_id,
     sectionId: field.section_id,
     // Additional computed fields for UI
     name: field.field_label || field.field_name || "Untitled Field",
@@ -55,12 +55,12 @@ export const customFieldsUtils = {
     validation_rules: field.validation_rules || field.validationRules || {},
     relationship_config:
       (field.relationship_config && Object.keys(field.relationship_config).length > 0) ||
-      (field.relationshipConfig && Object.keys(field.relationshipConfig).length > 0)
+        (field.relationshipConfig && Object.keys(field.relationshipConfig).length > 0)
         ? (field.relationship_config || field.relationshipConfig)
         : null, // Send null instead of empty object
     entity_type: field.entity_type || field.entityType,
     sort_order: field.sort_order !== undefined ? field.sort_order : (field.sortOrder || 0),
-    organization_id: field.organization_id !== undefined ? field.organization_id : (field.organizationId || 0),
+    organization_id: field.organization_id !== undefined ? field.organization_id : (field.organisation_id !== undefined ? field.organisation_id : (field.organizationId !== undefined ? field.organizationId : (field.organisationId !== undefined ? field.organisationId : 0))),
     section_id: field.section_id !== undefined ? field.section_id : (field.sectionId || 0),
     is_active: field.is_active !== undefined ? field.is_active : (field.isActive !== undefined ? field.isActive : true),
   }),
