@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -213,7 +213,7 @@ const documentationCategories = [
   },
 ];
 
-export default function DocumentationPage() {
+function DocumentationContent() {
   const searchParams = useSearchParams();
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -435,6 +435,40 @@ export default function DocumentationPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function DocumentationPage() {
+  return (
+    <Suspense fallback={
+      <div className="container mx-auto py-8 px-4 max-w-7xl">
+        <div className="mb-8">
+          <h1 className="text-4xl font-bold mb-4">Documentation</h1>
+          <p className="text-lg text-muted-foreground mb-6">
+            Comprehensive guides for all Melode features and functionality
+          </p>
+        </div>
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {[...Array(6)].map((_, i) => (
+            <Card key={i} className="animate-pulse">
+              <CardHeader>
+                <div className="h-6 bg-gray-200 rounded w-3/4"></div>
+                <div className="h-4 bg-gray-200 rounded w-full mt-2"></div>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {[...Array(3)].map((_, j) => (
+                    <div key={j} className="h-16 bg-gray-200 rounded"></div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    }>
+      <DocumentationContent />
+    </Suspense>
   );
 }
 

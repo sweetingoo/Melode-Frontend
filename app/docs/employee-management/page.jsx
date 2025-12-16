@@ -1,7 +1,7 @@
 "use client";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, Search, Edit, Shield, Building2, Plus, Mail, Phone, User } from "lucide-react";
+import { Users, Search, Edit, Shield, Building2, Plus, Mail, Phone, User, Lock } from "lucide-react";
 import { FormMockup, DialogMockup, FormField, FormButton, FormSelect } from "@/components/docs/FormMockup";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -141,23 +141,24 @@ export default function EmployeeManagementDocs() {
                 <li>Last login date</li>
               </ul>
             </div>
+
+            <Separator />
+
+            <div>
+              <h3 className="font-semibold mb-2">Searching Employees</h3>
+              <p className="text-sm text-muted-foreground mb-2">
+                Use the search functionality to find employees by:
+              </p>
+              <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
+                <li>Name (first name, last name, or display name)</li>
+                <li>Email address</li>
+                <li>Employee ID or user ID</li>
+                <li>Department</li>
+                <li>Role</li>
+              </ul>
+            </div>
           </CardContent>
         </Card>
-        <div>
-          <h3 className="font-semibold mb-2">Searching Employees</h3>
-          <p className="text-sm text-muted-foreground mb-2">
-            Use the search functionality to find employees by:
-          </p>
-          <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
-            <li>Name (first name, last name, or display name)</li>
-            <li>Email address</li>
-            <li>Employee ID or user ID</li>
-            <li>Department</li>
-            <li>Role</li>
-          </ul>
-        </div>
-      </CardContent>
-    </Card >
 
         <Card>
           <CardHeader>
@@ -173,8 +174,8 @@ export default function EmployeeManagementDocs() {
               <p className="text-sm text-muted-foreground mb-4">
                 Click "Create User" to open the employee creation form:
               </p>
-              <DialogMockup 
-                title="Create New User" 
+              <DialogMockup
+                title="Create New User"
                 description="Add a new employee to your organisation"
                 footer={
                   <>
