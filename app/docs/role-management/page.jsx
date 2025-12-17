@@ -1,7 +1,7 @@
 "use client";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Shield, Plus, Edit, Users, Key } from "lucide-react";
+import { Shield, Plus, Edit, Users, Key, AlertCircle, Settings } from "lucide-react";
 import { FormMockup, DialogMockup, FormField, FormButton, FormTextarea } from "@/components/docs/FormMockup";
 import { Separator } from "@/components/ui/separator";
 
@@ -104,9 +104,17 @@ export default function RoleManagementDocs() {
                         rows={3}
                         value="Manages projects and coordinates team activities"
                       />
-                      <div className="p-3 bg-muted rounded-lg">
-                        <p className="text-xs font-semibold mb-2">Permissions</p>
-                        <p className="text-xs text-muted-foreground">Select permissions for this role after creation</p>
+                      <div className="p-3 bg-muted rounded-lg border border-muted-foreground/20">
+                        <div className="flex items-start gap-2">
+                          <AlertCircle className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                          <div>
+                            <p className="text-xs font-semibold mb-1">Permissions</p>
+                            <p className="text-xs text-muted-foreground">
+                              After creating this role, you can assign permissions. If no permissions are selected,
+                              the default permissions configured in Settings will be automatically assigned.
+                            </p>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </DialogMockup>
@@ -122,9 +130,74 @@ export default function RoleManagementDocs() {
                 <li>Navigate to Role Management</li>
                 <li>Click "Create Role" or "New Role"</li>
                 <li>Fill in role details including name, display name, and description</li>
-                <li>Assign permissions to the role</li>
+                <li>Assign permissions to the role (or use default permissions if none are specified)</li>
                 <li>Click "Save" to create the role</li>
               </ol>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <Settings className="h-6 w-6 text-purple-600" />
+              <CardTitle>Default Role Permissions</CardTitle>
+            </div>
+            <CardDescription>Understanding default permissions for new roles</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <h3 className="font-semibold mb-2">What are Default Role Permissions?</h3>
+              <p className="text-sm text-muted-foreground mb-3">
+                Default role permissions are a set of permissions that are automatically assigned to new roles
+                when they are created without explicitly specifying permissions. This feature helps streamline
+                role creation by providing sensible defaults.
+              </p>
+            </div>
+            <div>
+              <h3 className="font-semibold mb-2">How Default Permissions Work</h3>
+              <ul className="list-disc list-inside space-y-2 text-sm text-muted-foreground">
+                <li>
+                  <strong>When creating a role with permissions:</strong> If you explicitly assign permissions
+                  during role creation, those permissions will be used and defaults will be ignored.
+                </li>
+                <li>
+                  <strong>When creating a role without permissions:</strong> If no permissions are specified
+                  (empty permission list), the system will automatically assign the configured default permissions.
+                </li>
+                <li>
+                  <strong>If no defaults are configured:</strong> New roles created without permissions will
+                  have no permissions assigned.
+                </li>
+              </ul>
+            </div>
+            <div>
+              <h3 className="font-semibold mb-2">Configuring Default Permissions</h3>
+              <p className="text-sm text-muted-foreground mb-2">
+                To configure default role permissions:
+              </p>
+              <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground">
+                <li>Navigate to Configuration (requires superuser access)</li>
+                <li>Click on the "Role Defaults" tab</li>
+                <li>Select the permissions you want to assign to new roles by default</li>
+                <li>Use the search bar to find specific permissions</li>
+                <li>Click "Select All" or "Deselect All" for quick selection</li>
+                <li>Click "Save Default Permissions" to apply your changes</li>
+              </ol>
+            </div>
+            <div className="bg-muted p-4 rounded-lg border border-muted-foreground/20">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                <div className="text-sm text-muted-foreground">
+                  <p className="font-medium mb-1">Important Notes:</p>
+                  <ul className="list-disc list-inside space-y-1 ml-2">
+                    <li>Default permissions only apply to new roles created without explicit permissions</li>
+                    <li>Existing roles are not affected by changes to default permissions</li>
+                    <li>You can always modify permissions for individual roles after creation</li>
+                    <li>Only superusers can configure default role permissions</li>
+                  </ul>
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>

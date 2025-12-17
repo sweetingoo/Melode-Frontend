@@ -378,6 +378,9 @@ const UserEditPage = () => {
   const { data: allPermissionsData, isLoading: permissionsLoading } =
     usePermissions();
 
+  // Handle new paginated response structure: { permissions: [], total: 96, ... }
+  const allPermissionsArray = allPermissionsData?.permissions || (Array.isArray(allPermissionsData) ? allPermissionsData : []);
+
   // Get current user (admin) data to check what permissions they can assign
   const { data: currentUserData, isLoading: currentUserLoading } = useCurrentUser();
 
@@ -454,7 +457,7 @@ const UserEditPage = () => {
       console.log(
         "Current user has wildcard permissions - can assign all permissions"
       );
-      return allPermissionsData?.map((p) => p.id) || [];
+      return allPermissionsArray.map((p) => p.id);
     }
 
     // Otherwise, get their specific permission IDs
@@ -486,7 +489,7 @@ const UserEditPage = () => {
     currentUserPermissions,
     currentUserDirectPermissions,
     currentUserHasWildcardPermissions,
-    allPermissionsData,
+    allPermissionsArray,
   ]);
 
   // Check if user being edited has wildcard permissions (e.g., superuser with "*")
@@ -517,7 +520,7 @@ const UserEditPage = () => {
       console.log(
         "User has wildcard role permissions - treating as having all permissions"
       );
-      return allPermissionsData?.map((p) => p.id) || [];
+      return allPermissionsArray.map((p) => p.id);
     }
 
     const ids = userPermissions
@@ -537,7 +540,7 @@ const UserEditPage = () => {
   }, [
     userPermissions,
     editedUserHasWildcardPermissions.rolePermissions,
-    allPermissionsData,
+    allPermissionsArray,
   ]);
 
   // Get user's current direct permissions (to mark as already assigned)
@@ -547,7 +550,7 @@ const UserEditPage = () => {
       console.log(
         "User has wildcard direct permissions - treating as having all permissions"
       );
-      return allPermissionsData?.map((p) => p.id) || [];
+      return allPermissionsArray.map((p) => p.id);
     }
 
     const ids = userDirectPermissions
@@ -567,17 +570,17 @@ const UserEditPage = () => {
   }, [
     userDirectPermissions,
     editedUserHasWildcardPermissions.directPermissions,
-    allPermissionsData,
+    allPermissionsArray,
   ]);
 
   // Filter available permissions (exclude those already assigned through roles)
   // Only show permissions that the current user can actually assign
   // Split into assigned direct permissions and available to assign
   const { assignedPermissions, availablePermissions } = React.useMemo(() => {
-    if (!allPermissionsData || !currentUserPermissionIds)
+    if (!allPermissionsArray || !currentUserPermissionIds)
       return { assignedPermissions: [], availablePermissions: [] };
 
-    console.log("All permissions data:", allPermissionsData);
+    console.log("All permissions data:", allPermissionsArray);
     console.log(
       "Current user can assign permission IDs:",
       currentUserPermissionIds
@@ -588,7 +591,7 @@ const UserEditPage = () => {
     );
 
     // First filter to only permissions the current user can assign
-    const assignablePermissions = allPermissionsData.filter((permission) =>
+    const assignablePermissions = allPermissionsArray.filter((permission) =>
       currentUserPermissionIds.includes(permission.id)
     );
 
@@ -626,7 +629,7 @@ const UserEditPage = () => {
 
     return { assignedPermissions: assigned, availablePermissions: available };
   }, [
-    allPermissionsData,
+    allPermissionsArray,
     currentUserPermissionIds,
     userRolePermissionIds,
     userDirectPermissionIds,

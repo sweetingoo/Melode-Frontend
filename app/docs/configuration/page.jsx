@@ -1,7 +1,7 @@
 "use client";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Settings, Shield, Database, Bell, Globe, Lock, Server, Zap } from "lucide-react";
+import { Settings, Shield, Database, Bell, Globe, Lock, Server, Zap, Key, CheckSquare, Search, AlertCircle } from "lucide-react";
 import { FormMockup, DialogMockup, FormField, FormButton, FormSelect, FormTextarea, FormCheckbox } from "@/components/docs/FormMockup";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -64,7 +64,15 @@ export default function ConfigurationDocs() {
             <div>
               <h3 className="font-semibold mb-4">Configuration Page Layout</h3>
               <p className="text-sm text-muted-foreground mb-4">
-                The configuration page is organized into different sections:
+                The configuration page is organized into different tabs:
+              </p>
+              <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground mb-4">
+                <li><strong>Settings:</strong> General system settings organized by category and group</li>
+                <li><strong>Organisation:</strong> Organisation-wide information and settings</li>
+                <li><strong>Role Defaults:</strong> Configure default permissions for new roles</li>
+              </ul>
+              <p className="text-sm text-muted-foreground mb-4">
+                Each tab provides access to different configuration areas:
               </p>
               <FormMockup
                 title="System Configuration"
@@ -541,6 +549,157 @@ export default function ConfigurationDocs() {
                 <li>Save the configuration</li>
                 <li>Monitor integration status and logs</li>
               </ol>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <Shield className="h-6 w-6 text-purple-600" />
+              <CardTitle>Role Defaults Configuration</CardTitle>
+            </div>
+            <CardDescription>Configuring default permissions for new roles</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div>
+              <h3 className="font-semibold mb-4">Step-by-Step: Configure Default Role Permissions</h3>
+
+              <div className="space-y-6">
+                <div>
+                  <h4 className="text-sm font-semibold mb-2">Step 1: Open Role Defaults Tab</h4>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    Navigate to Configuration and click on the "Role Defaults" tab.
+                  </p>
+                </div>
+
+                <div>
+                  <h4 className="text-sm font-semibold mb-3">Step 2: Select Default Permissions</h4>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    The Role Defaults interface allows you to select which permissions should be automatically
+                    assigned to new roles:
+                  </p>
+                  <FormMockup
+                    title="Default Role Permissions"
+                    description="Configure default permissions that will be automatically assigned to new roles when no permissions are specified."
+                  >
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-4 p-3 border rounded-lg">
+                        <div className="relative flex-1">
+                          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                          <input
+                            type="text"
+                            placeholder="Search permissions..."
+                            className="w-full pl-10 pr-3 py-2 border rounded-md text-sm"
+                            readOnly
+                          />
+                        </div>
+                        <div className="flex gap-2">
+                          <button className="px-3 py-2 text-xs border rounded-md">Select All</button>
+                          <button className="px-3 py-2 text-xs border rounded-md">Deselect All</button>
+                        </div>
+                      </div>
+
+                      <div className="text-xs text-muted-foreground flex items-center justify-between">
+                        <span>5 of 96 permissions selected</span>
+                        <Badge variant="outline" className="text-orange-600 border-orange-600 text-xs">
+                          Unsaved changes
+                        </Badge>
+                      </div>
+
+                      <div className="border rounded-lg max-h-[300px] overflow-y-auto">
+                        <div className="divide-y">
+                          <div className="flex items-center gap-3 p-3 hover:bg-muted/50 cursor-pointer">
+                            <div className="flex items-center justify-center h-5 w-5 rounded border-2 border-primary">
+                              <CheckSquare className="h-4 w-4 text-primary fill-primary" />
+                            </div>
+                            <div className="flex-1">
+                              <div className="font-medium text-sm">View Clock Records</div>
+                              <div className="text-xs text-muted-foreground">clock:view</div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3 p-3 hover:bg-muted/50 cursor-pointer">
+                            <div className="flex items-center justify-center h-5 w-5 rounded border-2 border-primary">
+                              <CheckSquare className="h-4 w-4 text-primary fill-primary" />
+                            </div>
+                            <div className="flex-1">
+                              <div className="font-medium text-sm">Clock In</div>
+                              <div className="text-xs text-muted-foreground">clock:in</div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3 p-3 hover:bg-muted/50 cursor-pointer">
+                            <div className="h-5 w-5 rounded border-2 border-muted"></div>
+                            <div className="flex-1">
+                              <div className="font-medium text-sm">Create Task</div>
+                              <div className="text-xs text-muted-foreground">task:create</div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex justify-end">
+                        <button className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm flex items-center gap-2">
+                          <Settings className="h-4 w-4" />
+                          Save Default Permissions
+                        </button>
+                      </div>
+
+                      <div className="p-3 bg-muted rounded-lg border border-muted-foreground/20">
+                        <div className="flex items-start gap-2">
+                          <AlertCircle className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                          <div className="text-xs text-muted-foreground">
+                            <p className="font-medium mb-1">How it works:</p>
+                            <ul className="list-disc list-inside space-y-1 ml-2">
+                              <li>When creating a new role, if no permissions are specified, these default permissions will be automatically assigned.</li>
+                              <li>If permissions are explicitly provided during role creation, the defaults will not be used.</li>
+                              <li>If no default permissions are configured, new roles will be created with no permissions.</li>
+                            </ul>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </FormMockup>
+                </div>
+              </div>
+            </div>
+
+            <Separator />
+
+            <div>
+              <h3 className="font-semibold mb-2">Understanding Default Role Permissions</h3>
+              <p className="text-sm text-muted-foreground mb-3">
+                Default role permissions streamline the role creation process by automatically assigning
+                commonly needed permissions to new roles. This is especially useful when creating multiple
+                roles with similar permission sets.
+              </p>
+              <div className="space-y-3">
+                <div>
+                  <h4 className="text-sm font-semibold mb-2">When Defaults Are Used</h4>
+                  <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
+                    <li>When creating a role without specifying any permissions</li>
+                    <li>When the permission list is empty during role creation</li>
+                    <li>Defaults are applied automatically by the system</li>
+                  </ul>
+                </div>
+                <div>
+                  <h4 className="text-sm font-semibold mb-2">When Defaults Are NOT Used</h4>
+                  <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
+                    <li>When you explicitly assign permissions during role creation</li>
+                    <li>When you specify a non-empty permission list</li>
+                    <li>Defaults are ignored if permissions are provided</li>
+                  </ul>
+                </div>
+                <div>
+                  <h4 className="text-sm font-semibold mb-2">Best Practices</h4>
+                  <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
+                    <li>Choose permissions that are commonly needed across most roles</li>
+                    <li>Consider basic read permissions (e.g., <code className="bg-muted px-1 py-0.5 rounded">clock:view</code>, <code className="bg-muted px-1 py-0.5 rounded">task:read</code>)</li>
+                    <li>Avoid including sensitive permissions (e.g., delete, admin access) in defaults</li>
+                    <li>Review and update defaults periodically as your organisation evolves</li>
+                    <li>Remember that you can always modify permissions for individual roles after creation</li>
+                  </ul>
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>

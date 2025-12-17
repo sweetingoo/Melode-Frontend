@@ -160,17 +160,7 @@ const ForgetPasswordPage = () => {
 
         {/* Forgot Password Card */}
         <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm">
-          <CardHeader className="space-y-1 pb-4">
-            <CardTitle className="text-2xl font-bold text-center text-slate-900">
-              Reset Password
-            </CardTitle>
-            <p className="text-sm text-center text-slate-600">
-              Enter your email address and we'll send you a link to reset your
-              password
-            </p>
-          </CardHeader>
-
-          <CardContent className="space-y-6">
+          <CardContent className="space-y-6 pt-6">
             <form onSubmit={handleSubmit} className="space-y-4">
               {/* Email Field */}
               <div className="space-y-2">

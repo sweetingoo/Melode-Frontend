@@ -31,8 +31,12 @@ export const usePermissions = (params = {}) => {
     queryKey: permissionKeys.list(params),
     queryFn: async () => {
       const response = await permissionsService.getPermissions(params);
-      // Handle both direct array response and wrapped response
-      return Array.isArray(response) ? response : response.data;
+      // Handle new paginated response structure: { permissions: [], total: 96, page: 1, per_page: 50, total_pages: 2 }
+      if (response && typeof response === 'object' && 'permissions' in response) {
+        return response; // Return full paginated response
+      }
+      // Handle legacy array response or wrapped response
+      return Array.isArray(response) ? { permissions: response, total: response.length } : { permissions: response.data || [], total: (response.data || []).length };
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
@@ -50,8 +54,12 @@ export const usePermissionsPaginated = (params = {}) => {
     queryKey: permissionKeys.list(defaultParams),
     queryFn: async () => {
       const response = await permissionsService.getPermissions(defaultParams);
-      // Handle both direct array response and wrapped response
-      return Array.isArray(response) ? response : response.data;
+      // Handle new paginated response structure: { permissions: [], total: 96, page: 1, per_page: 50, total_pages: 2 }
+      if (response && typeof response === 'object' && 'permissions' in response) {
+        return response; // Return full paginated response
+      }
+      // Handle legacy array response or wrapped response
+      return Array.isArray(response) ? { permissions: response, total: response.length } : { permissions: response.data || [], total: (response.data || []).length };
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
@@ -144,7 +152,7 @@ export const useCreatePermission = () => {
     },
     onError: (error) => {
       console.error("Create permission error:", error);
-      
+
       if (error.response?.status === 422) {
         // Handle validation errors
         const errorData = error.response.data;
@@ -251,8 +259,8 @@ export const permissionUtils = {
       updatedAt: apiPermission.updated_at
         ? new Date(apiPermission.updated_at).toLocaleString()
         : apiPermission.created_at
-        ? new Date(apiPermission.created_at).toLocaleString()
-        : "Unknown",
+          ? new Date(apiPermission.created_at).toLocaleString()
+          : "Unknown",
     };
   },
 

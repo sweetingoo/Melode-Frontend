@@ -681,17 +681,6 @@ const Dashboard = () => {
                       Documentation
                     </Button>
                   </Link>
-                  {canCreateInvitations && (
-                    <Link href="/admin/invitations">
-                      <Button
-                        className="w-full justify-start cursor-pointer"
-                        variant="outline"
-                      >
-                        <UserPlus className="mr-2 h-4 w-4" />
-                        Send New Invitation
-                      </Button>
-                    </Link>
-                  )}
                   {canManageUsers && (
                     <Link href="/admin/employee-management">
                       <Button
@@ -725,8 +714,7 @@ const Dashboard = () => {
                       </Button>
                     </Link>
                   )}
-                  {!canCreateInvitations &&
-                    !canManageUsers &&
+                  {!canManageUsers &&
                     !canManageRoles &&
                     !canManagePermissions && (
                       <div className="text-center text-muted-foreground py-8">

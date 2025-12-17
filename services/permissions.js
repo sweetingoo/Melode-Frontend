@@ -5,7 +5,9 @@ export const permissionsService = {
   // Get all permissions
   getPermissions: async (params = {}) => {
     try {
-      return await api.get("/roles/permissions/", { params });
+      const response = await api.get("/roles/permissions/", { params });
+      // Axios returns { data: {...}, status: 200, ... }, return just the data
+      return response.data || response;
     } catch (error) {
       console.error("Get permissions failed:", error);
       throw error;
@@ -56,10 +58,17 @@ export const permissionsService = {
   getResources: async () => {
     try {
       // Get all permissions first
-      const permissions = await api.get("/roles/permissions/");
-      const permissionsData = Array.isArray(permissions)
-        ? permissions
-        : permissions.data;
+      const permissionsResponse = await api.get("/roles/permissions/");
+      // Axios returns { data: {...}, status: 200, ... }, so we need to access .data
+      const responseData = permissionsResponse.data || permissionsResponse;
+
+      // Handle new paginated response structure: { permissions: [], total: 96, ... }
+      let permissionsData = [];
+      if (responseData?.permissions && Array.isArray(responseData.permissions)) {
+        permissionsData = responseData.permissions;
+      } else if (Array.isArray(responseData)) {
+        permissionsData = responseData;
+      }
 
       // Extract unique resources from permissions
       const resources = [...new Set(permissionsData.map((p) => p.resource))];
@@ -82,10 +91,17 @@ export const permissionsService = {
   getActions: async () => {
     try {
       // Get all permissions first
-      const permissions = await api.get("/roles/permissions/");
-      const permissionsData = Array.isArray(permissions)
-        ? permissions
-        : permissions.data;
+      const permissionsResponse = await api.get("/roles/permissions/");
+      // Axios returns { data: {...}, status: 200, ... }, so we need to access .data
+      const responseData = permissionsResponse.data || permissionsResponse;
+
+      // Handle new paginated response structure: { permissions: [], total: 96, ... }
+      let permissionsData = [];
+      if (responseData?.permissions && Array.isArray(responseData.permissions)) {
+        permissionsData = responseData.permissions;
+      } else if (Array.isArray(responseData)) {
+        permissionsData = responseData;
+      }
 
       // Extract unique actions from permissions
       const actions = [...new Set(permissionsData.map((p) => p.action))];

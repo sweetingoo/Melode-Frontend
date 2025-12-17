@@ -747,9 +747,11 @@ const UserManagementPage = () => {
                         </Avatar>
                         <div className="flex flex-col">
                           <span className="font-medium">{user.name}</span>
-                          <span className="text-sm text-muted-foreground">
-                            {user.email}
-                          </span>
+                          {user.title && (
+                            <span className="text-sm text-muted-foreground">
+                              {user.title}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </TableCell>

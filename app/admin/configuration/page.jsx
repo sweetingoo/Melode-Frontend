@@ -47,9 +47,13 @@ import {
   useDeleteSetting,
   useOrganisation,
   useUpdateOrganisation,
+  useDefaultRolePermissions,
+  useUpdateDefaultRolePermissions,
 } from "@/hooks/useConfiguration";
+import { usePermissions } from "@/hooks/usePermissions";
 import { useCurrentUser } from "@/hooks/useAuth";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
+import { permissionsService } from "@/services/permissions";
 import {
   Settings,
   Search,
@@ -60,6 +64,10 @@ import {
   Loader2,
   Building2,
   AlertCircle,
+  Shield,
+  Key,
+  CheckSquare,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -441,6 +449,7 @@ export default function ConfigurationPage() {
         <TabsList>
           <TabsTrigger value="settings">Settings</TabsTrigger>
           <TabsTrigger value="organisation">Organisation</TabsTrigger>
+          <TabsTrigger value="role-defaults">Role Defaults</TabsTrigger>
         </TabsList>
 
         {/* Settings Tab */}
@@ -688,6 +697,11 @@ export default function ConfigurationPage() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* Role Defaults Tab */}
+        <TabsContent value="role-defaults" className="space-y-4">
+          <DefaultRolePermissionsSection />
+        </TabsContent>
       </Tabs>
 
       {/* Create Setting Dialog */}
@@ -882,6 +896,268 @@ export default function ConfigurationPage() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+// Default Role Permissions Section Component
+function DefaultRolePermissionsSection() {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedPermissionIds, setSelectedPermissionIds] = useState(new Set());
+  const [isInitialized, setIsInitialized] = useState(false);
+  const [allPermissionsList, setAllPermissionsList] = useState([]);
+  const [isLoadingAllPermissions, setIsLoadingAllPermissions] = useState(true);
+
+  const { data: defaultPermissionIds = [], isLoading: isLoadingDefaults } = useDefaultRolePermissions();
+  const { data: permissionsData, isLoading: isLoadingPermissions } = usePermissions({ page: 1, per_page: 50 });
+  const updateDefaultPermissionsMutation = useUpdateDefaultRolePermissions();
+
+  // Fetch all permissions across all pages
+  useEffect(() => {
+    const fetchAllPermissions = async () => {
+      if (!permissionsData) return;
+
+      setIsLoadingAllPermissions(true);
+      try {
+        const totalPages = permissionsData.total_pages || 1;
+        const total = permissionsData.total || permissionsData.permissions?.length || 0;
+
+        // If only one page, use the data we already have
+        if (totalPages === 1) {
+          const permissionsArray = permissionsData.permissions || (Array.isArray(permissionsData) ? permissionsData : []);
+          setAllPermissionsList(permissionsArray.map((p) => ({
+            id: p.id,
+            name: p.display_name || p.name,
+            resource: p.resource,
+            action: p.action,
+          })));
+          setIsLoadingAllPermissions(false);
+          return;
+        }
+
+        // Fetch all pages
+        const allPermissions = [];
+
+        // Start with the first page (already fetched)
+        const firstPagePermissions = permissionsData.permissions || [];
+        allPermissions.push(...firstPagePermissions);
+
+        // Fetch remaining pages
+        for (let page = 2; page <= totalPages; page++) {
+          const response = await permissionsService.getPermissions({ page, per_page: 50 });
+          const pagePermissions = response?.permissions || (Array.isArray(response) ? response : []);
+          allPermissions.push(...pagePermissions);
+        }
+
+        // Transform and set all permissions
+        setAllPermissionsList(allPermissions.map((p) => ({
+          id: p.id,
+          name: p.display_name || p.name,
+          resource: p.resource,
+          action: p.action,
+        })));
+      } catch (error) {
+        console.error("Error fetching all permissions:", error);
+        // Fallback to first page data
+        const permissionsArray = permissionsData.permissions || (Array.isArray(permissionsData) ? permissionsData : []);
+        setAllPermissionsList(permissionsArray.map((p) => ({
+          id: p.id,
+          name: p.display_name || p.name,
+          resource: p.resource,
+          action: p.action,
+        })));
+      } finally {
+        setIsLoadingAllPermissions(false);
+      }
+    };
+
+    if (!isLoadingPermissions && permissionsData) {
+      fetchAllPermissions();
+    }
+  }, [permissionsData, isLoadingPermissions]);
+
+  const allPermissions = allPermissionsList;
+
+  // Initialize selected permissions from API
+  useEffect(() => {
+    if (!isLoadingDefaults && defaultPermissionIds.length > 0 && !isInitialized) {
+      setSelectedPermissionIds(new Set(defaultPermissionIds));
+      setIsInitialized(true);
+    } else if (!isLoadingDefaults && defaultPermissionIds.length === 0 && !isInitialized) {
+      setSelectedPermissionIds(new Set());
+      setIsInitialized(true);
+    }
+  }, [defaultPermissionIds, isLoadingDefaults, isInitialized]);
+
+  // Filter permissions based on search
+  const filteredPermissions = allPermissions.filter((permission) =>
+    permission.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    permission.resource.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    permission.action.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const handleTogglePermission = (permissionId) => {
+    setSelectedPermissionIds((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(permissionId)) {
+        newSet.delete(permissionId);
+      } else {
+        newSet.add(permissionId);
+      }
+      return newSet;
+    });
+  };
+
+  const handleSelectAll = () => {
+    setSelectedPermissionIds(new Set(filteredPermissions.map((p) => p.id)));
+  };
+
+  const handleDeselectAll = () => {
+    setSelectedPermissionIds(new Set());
+  };
+
+  const handleSave = async () => {
+    const permissionIds = Array.from(selectedPermissionIds);
+    try {
+      await updateDefaultPermissionsMutation.mutateAsync(permissionIds);
+    } catch (error) {
+      // Error handled by mutation
+    }
+  };
+
+  const hasChanges = useMemo(() => {
+    if (!isInitialized) return false;
+    const currentIds = Array.from(selectedPermissionIds).sort();
+    const defaultIds = Array.from(defaultPermissionIds).sort();
+    return JSON.stringify(currentIds) !== JSON.stringify(defaultIds);
+  }, [selectedPermissionIds, defaultPermissionIds, isInitialized]);
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Shield className="h-5 w-5" />
+          Default Role Permissions
+        </CardTitle>
+        <CardDescription>
+          Configure default permissions that will be automatically assigned to new roles when no permissions are specified.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {isLoadingDefaults || isLoadingPermissions || isLoadingAllPermissions ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            <span className="ml-2 text-muted-foreground">Loading permissions...</span>
+          </div>
+        ) : (
+          <>
+            <div className="space-y-4">
+              {/* Search and Actions */}
+              <div className="flex items-center gap-4">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    placeholder="Search permissions..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={handleSelectAll}>
+                    Select All
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={handleDeselectAll}>
+                    Deselect All
+                  </Button>
+                </div>
+              </div>
+
+              {/* Selected Count */}
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-muted-foreground">
+                  {selectedPermissionIds.size} of {allPermissions.length} permissions selected
+                </div>
+                {hasChanges && (
+                  <Badge variant="outline" className="text-orange-600 border-orange-600">
+                    Unsaved changes
+                  </Badge>
+                )}
+              </div>
+
+              {/* Permissions List */}
+              <div className="border rounded-lg max-h-[500px] overflow-y-auto">
+                {filteredPermissions.length === 0 ? (
+                  <div className="p-8 text-center text-muted-foreground">
+                    <Key className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                    <p>No permissions found</p>
+                  </div>
+                ) : (
+                  <div className="divide-y">
+                    {filteredPermissions.map((permission) => {
+                      const isSelected = selectedPermissionIds.has(permission.id);
+                      return (
+                        <div
+                          key={permission.id}
+                          className="flex items-center gap-3 p-3 hover:bg-muted/50 transition-colors cursor-pointer"
+                          onClick={() => handleTogglePermission(permission.id)}
+                        >
+                          <div className="flex items-center justify-center h-5 w-5 rounded border-2 border-primary">
+                            {isSelected && (
+                              <CheckSquare className="h-4 w-4 text-primary fill-primary" />
+                            )}
+                          </div>
+                          <div className="flex-1">
+                            <div className="font-medium">{permission.name}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {permission.resource}:{permission.action}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Save Button */}
+              <div className="flex justify-end">
+                <Button
+                  onClick={handleSave}
+                  disabled={!hasChanges || updateDefaultPermissionsMutation.isPending}
+                >
+                  {updateDefaultPermissionsMutation.isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="mr-2 h-4 w-4" />
+                      Save Default Permissions
+                    </>
+                  )}
+                </Button>
+              </div>
+
+              {/* Info Note */}
+              <div className="rounded-lg bg-muted p-4">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                  <div className="text-sm text-muted-foreground">
+                    <p className="font-medium mb-1">How it works:</p>
+                    <ul className="list-disc list-inside space-y-1 ml-2">
+                      <li>When creating a new role, if no permissions are specified, these default permissions will be automatically assigned.</li>
+                      <li>If permissions are explicitly provided during role creation, the defaults will not be used.</li>
+                      <li>If no default permissions are configured, new roles will be created with no permissions.</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

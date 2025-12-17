@@ -90,12 +90,13 @@ const PermissionsManagementPage = () => {
     description: "",
   });
 
-  // API hooks
+  // API hooks - fetch with pagination when no filters are active
+  const hasActiveFilters = searchTerm || (resourceFilter && resourceFilter !== "all") || (typeFilter && typeFilter !== "all");
   const {
     data: permissionsData,
     isLoading: permissionsLoading,
     error: permissionsError,
-  } = usePermissions();
+  } = usePermissions(hasActiveFilters ? {} : { page: currentPage, per_page: 50 });
   const { data: resourcesData, isLoading: resourcesLoading } = useResources();
   const { data: actionsData, isLoading: actionsLoading } = useActions();
   const createPermissionMutation = useCreatePermission();
@@ -109,9 +110,12 @@ const PermissionsManagementPage = () => {
   const canDeletePermission = hasPermission("permission:delete");
 
   // Transform API data
-  const permissions = permissionsData
-    ? permissionsData.map(permissionUtils.transformPermission)
-    : [];
+  // Handle new paginated response structure: { permissions: [], total: 96, page: 1, per_page: 50, total_pages: 2 }
+  const permissionsArray = permissionsData?.permissions || (Array.isArray(permissionsData) ? permissionsData : []);
+  const totalPermissions = permissionsData?.total ?? permissionsArray.length;
+  const totalPagesFromAPI = permissionsData?.total_pages ?? 1;
+  const currentPageFromAPI = permissionsData?.page ?? 1;
+  const permissions = permissionsArray.map(permissionUtils.transformPermission);
   const resources = resourcesData
     ? resourcesData.map(permissionUtils.transformResource)
     : [];
@@ -152,13 +156,32 @@ const PermissionsManagementPage = () => {
   });
 
   // Pagination logic
-  const totalPages = Math.ceil(filteredPermissions.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const currentPermissions = filteredPermissions.slice(startIndex, endIndex);
+  // Use API pagination metadata when no filters are applied, otherwise use client-side pagination
+
+  // When no filters, use API pagination; when filters are active, paginate filtered results
+  const totalPages = hasActiveFilters
+    ? Math.ceil(filteredPermissions.length / itemsPerPage)
+    : totalPagesFromAPI;
+
+  // When no filters, use currentPage (which triggers API fetch); when filters are active, use currentPage for client-side pagination
+  const effectivePage = currentPage;
+
+  // When no filters, show all permissions from current API page
+  // When filters are active, paginate the filtered results
+  const currentPermissions = hasActiveFilters
+    ? filteredPermissions.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
+    : filteredPermissions; // Show all 50 when no filters
+
+  // Use API total when no filters, otherwise use filtered count
+  const displayTotal = hasActiveFilters ? filteredPermissions.length : totalPermissions;
+  const displayCount = hasActiveFilters
+    ? filteredPermissions.length
+    : totalPermissions;
 
   const handlePageChange = (page) => {
     setCurrentPage(page);
+    // Scroll to top when page changes
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   // Reset to first page when filters change
@@ -441,7 +464,7 @@ const PermissionsManagementPage = () => {
                 <div className="flex items-center gap-2">
                   <Shield className="h-5 w-5 text-primary" />
                   <div>
-                    <p className="text-2xl font-bold">{permissions.length}</p>
+                    <p className="text-2xl font-bold">{totalPermissions}</p>
                     <p className="text-sm text-muted-foreground">
                       Total Permissions
                     </p>
@@ -691,9 +714,18 @@ const PermissionsManagementPage = () => {
           {totalPages > 1 && (
             <div className="flex items-center justify-between">
               <div className="text-sm text-muted-foreground">
-                Showing {startIndex + 1} to{" "}
-                {Math.min(endIndex, filteredPermissions.length)} of{" "}
-                {filteredPermissions.length} permissions
+                {hasActiveFilters ? (
+                  <>
+                    Showing {(currentPage - 1) * itemsPerPage + 1} to{" "}
+                    {Math.min(currentPage * itemsPerPage, filteredPermissions.length)} of{" "}
+                    {displayTotal} permissions
+                  </>
+                ) : (
+                  <>
+                    Showing {permissionsArray.length} of {displayTotal} permissions
+                    {totalPagesFromAPI > 1 && ` (Page ${currentPage} of ${totalPagesFromAPI})`}
+                  </>
+                )}
               </div>
               <Pagination>
                 <PaginationContent>

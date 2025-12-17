@@ -16,6 +16,7 @@ export const configurationKeys = {
     category,
   ],
   organisation: () => [...configurationKeys.all, "organisation"],
+  defaultRolePermissions: () => [...configurationKeys.all, "default-role-permissions"],
 };
 
 // Get settings query
@@ -376,6 +377,71 @@ export const useUpdateOrganisation = () => {
         error?.response?.data?.detail ||
         "Failed to update organisation";
       toast.error("Failed to update organisation", {
+        description: Array.isArray(errorMessage)
+          ? errorMessage.map((e) => e.msg || e).join(", ")
+          : errorMessage,
+      });
+    },
+  });
+};
+
+// Get default role permissions query
+export const useDefaultRolePermissions = (options = {}) => {
+  return useQuery({
+    queryKey: configurationKeys.defaultRolePermissions(),
+    queryFn: async () => {
+      try {
+        const response = await configurationService.getDefaultRolePermissions();
+        // Extract value from response - could be { value: [...] } or direct array
+        const data = response.data || response;
+        const value = data?.value || data;
+        return Array.isArray(value) ? value : [];
+      } catch (error) {
+        if (error?.response?.status === 404) {
+          // Setting doesn't exist yet, return empty array
+          return [];
+        }
+        if (error?.response?.status === 403) {
+          throw new Error("Superuser privileges required to manage configuration");
+        }
+        throw error;
+      }
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    ...options,
+  });
+};
+
+// Update default role permissions mutation
+export const useUpdateDefaultRolePermissions = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (permissionIds) => {
+      const response = await configurationService.updateDefaultRolePermissions(permissionIds);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: configurationKeys.defaultRolePermissions(),
+      });
+      toast.success("Default role permissions updated successfully", {
+        description: "New roles will automatically receive these permissions if none are specified.",
+      });
+    },
+    onError: (error) => {
+      console.error("Update default role permissions error:", error);
+      if (error?.response?.status === 403) {
+        toast.error("Access Denied", {
+          description: "Superuser privileges required to manage configuration",
+        });
+        return;
+      }
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.response?.data?.detail ||
+        "Failed to update default role permissions";
+      toast.error("Failed to update default role permissions", {
         description: Array.isArray(errorMessage)
           ? errorMessage.map((e) => e.msg || e).join(", ")
           : errorMessage,

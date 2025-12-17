@@ -135,9 +135,33 @@ const RoleManagementPage = () => {
 
   // Transform API data
   const allRoles = rolesData ? rolesData.map(roleUtils.transformRole) : [];
-  const allPermissions = permissionsData
-    ? permissionsData.map(permissionUtils.transformPermission)
-    : [];
+  // Handle new paginated response structure: { permissions: [], total: 96, ... }
+  const allPermissions = React.useMemo(() => {
+    if (!permissionsData) return [];
+
+    let permissionsArray = [];
+
+    // Check if it's the new paginated structure
+    if (permissionsData.permissions && Array.isArray(permissionsData.permissions)) {
+      permissionsArray = permissionsData.permissions;
+    }
+    // Check if it's a legacy array response
+    else if (Array.isArray(permissionsData)) {
+      permissionsArray = permissionsData;
+    }
+    // Fallback to empty array
+    else {
+      permissionsArray = [];
+    }
+
+    // Ensure we have an array before mapping
+    if (!Array.isArray(permissionsArray)) {
+      console.warn('permissionsArray is not an array:', permissionsArray);
+      return [];
+    }
+
+    return permissionsArray.map(permissionUtils.transformPermission);
+  }, [permissionsData]);
   const departments = departmentsData?.departments || departmentsData?.data || departmentsData || [];
 
   // Group roles by department and job role (hierarchical structure)
@@ -1436,6 +1460,20 @@ const RoleManagementPage = () => {
                 min="1"
                 max="100"
               />
+            </div>
+
+            {/* Default Permissions Note */}
+            <div className="rounded-lg bg-muted p-3 border border-muted-foreground/20">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                <div className="text-xs text-muted-foreground">
+                  <p className="font-medium mb-1">Permissions:</p>
+                  <p>
+                    After creating this role, you can assign permissions. If no permissions are selected,
+                    the default permissions configured in Settings will be automatically assigned.
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
 

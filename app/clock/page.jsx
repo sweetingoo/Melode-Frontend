@@ -174,6 +174,13 @@ export default function ClockPage() {
     }
   }, [clockDefaults?.default_job_role_id, userJobRoles, jobRoleId]);
 
+  // Auto-populate job role if only one option available
+  useEffect(() => {
+    if (userJobRoles.length === 1 && !jobRoleId && !clockDefaults?.default_job_role_id) {
+      setJobRoleId(userJobRoles[0].id.toString());
+    }
+  }, [userJobRoles, jobRoleId, clockDefaults?.default_job_role_id]);
+
   useEffect(() => {
     if (clockDefaults?.default_shift_role_id && availableShiftRoles.length > 0 && !shiftRoleId && jobRoleId) {
       const defaultShiftRoleId = clockDefaults.default_shift_role_id.toString();
@@ -182,6 +189,13 @@ export default function ClockPage() {
       }
     }
   }, [clockDefaults?.default_shift_role_id, availableShiftRoles, shiftRoleId, jobRoleId]);
+
+  // Auto-populate shift role if only one option available
+  useEffect(() => {
+    if (availableShiftRoles.length === 1 && !shiftRoleId && jobRoleId && !clockDefaults?.default_shift_role_id) {
+      setShiftRoleId(availableShiftRoles[0].id.toString());
+    }
+  }, [availableShiftRoles, shiftRoleId, jobRoleId, clockDefaults?.default_shift_role_id]);
 
   useEffect(() => {
     if (clockDefaults?.default_location_id && locations.length > 0 && locationId === "none") {
