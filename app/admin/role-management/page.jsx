@@ -1461,20 +1461,6 @@ const RoleManagementPage = () => {
                 max="100"
               />
             </div>
-
-            {/* Default Permissions Note */}
-            <div className="rounded-lg bg-muted p-3 border border-muted-foreground/20">
-              <div className="flex items-start gap-2">
-                <AlertCircle className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
-                <div className="text-xs text-muted-foreground">
-                  <p className="font-medium mb-1">Permissions:</p>
-                  <p>
-                    After creating this role, you can assign permissions. If no permissions are selected,
-                    the default permissions configured in Settings will be automatically assigned.
-                  </p>
-                </div>
-              </div>
-            </div>
           </div>
 
           <DialogFooter>

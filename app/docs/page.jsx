@@ -393,46 +393,46 @@ function DocumentationContent() {
           </div>
         </div>
       ) : (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {documentationCategories.map((category) => {
-            const Icon = category.icon;
-            return (
-              <Card key={category.title} className="hover:shadow-lg transition-shadow">
-                <CardHeader>
-                  <div className="flex items-center gap-3 mb-2">
-                    <Icon className={`h-6 w-6 ${category.color}`} />
-                    <CardTitle className="text-xl">{category.title}</CardTitle>
-                  </div>
-                  <CardDescription>{category.description}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    {category.features.map((feature) => {
-                      const FeatureIcon = feature.icon;
-                      return (
-                        <Link
-                          key={feature.title}
-                          href={feature.href}
-                          className="flex items-start gap-3 p-3 rounded-lg hover:bg-accent transition-colors group"
-                        >
-                          <FeatureIcon className="h-5 w-5 text-muted-foreground mt-0.5 group-hover:text-foreground transition-colors" />
-                          <div className="flex-1 min-w-0">
-                            <h3 className="font-semibold text-sm group-hover:text-primary transition-colors">
-                              {feature.title}
-                            </h3>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {feature.description}
-                            </p>
-                          </div>
-                        </Link>
-                      );
-                    })}
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        {documentationCategories.map((category) => {
+          const Icon = category.icon;
+          return (
+            <Card key={category.title} className="hover:shadow-lg transition-shadow">
+              <CardHeader>
+                <div className="flex items-center gap-3 mb-2">
+                  <Icon className={`h-6 w-6 ${category.color}`} />
+                  <CardTitle className="text-xl">{category.title}</CardTitle>
+                </div>
+                <CardDescription>{category.description}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {category.features.map((feature) => {
+                    const FeatureIcon = feature.icon;
+                    return (
+                      <Link
+                        key={feature.title}
+                        href={feature.href}
+                        className="flex items-start gap-3 p-3 rounded-lg hover:bg-accent transition-colors group"
+                      >
+                        <FeatureIcon className="h-5 w-5 text-muted-foreground mt-0.5 group-hover:text-foreground transition-colors" />
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-semibold text-sm group-hover:text-primary transition-colors">
+                            {feature.title}
+                          </h3>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {feature.description}
+                          </p>
+                        </div>
+                      </Link>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
       )}
     </div>
   );

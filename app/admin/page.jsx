@@ -673,14 +673,14 @@ const Dashboard = () => {
               <CardContent>
                 <div className="my-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-2">
                   <Link href="/docs">
-                    <Button
-                      className="w-full justify-start cursor-pointer"
-                      variant="outline"
-                    >
+                      <Button
+                        className="w-full justify-start cursor-pointer"
+                        variant="outline"
+                      >
                       <BookOpen className="mr-2 h-4 w-4" />
                       Documentation
-                    </Button>
-                  </Link>
+                      </Button>
+                    </Link>
                   {canManageUsers && (
                     <Link href="/admin/employee-management">
                       <Button

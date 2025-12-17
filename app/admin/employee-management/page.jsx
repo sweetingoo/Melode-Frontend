@@ -748,9 +748,9 @@ const UserManagementPage = () => {
                         <div className="flex flex-col">
                           <span className="font-medium">{user.name}</span>
                           {user.title && (
-                            <span className="text-sm text-muted-foreground">
+                          <span className="text-sm text-muted-foreground">
                               {user.title}
-                            </span>
+                          </span>
                           )}
                         </div>
                       </div>
@@ -1353,13 +1353,13 @@ const UserManagementPage = () => {
                               !role.parentRoleId
                           )
                           .map((role) => (
-                            <SelectItem key={role.id} value={role.id.toString()}>
-                              {role.display_name ||
-                                role.name ||
-                                role.role_name ||
-                                `Role ${role.id}`}
-                            </SelectItem>
-                          ))
+                          <SelectItem key={role.id} value={role.id.toString()}>
+                            {role.display_name ||
+                              role.name ||
+                              role.role_name ||
+                              `Role ${role.id}`}
+                          </SelectItem>
+                        ))
                       )}
                     </SelectContent>
                   </Select>
