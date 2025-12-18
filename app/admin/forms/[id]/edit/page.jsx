@@ -475,8 +475,8 @@ const EditFormPage = () => {
           </Button>
         </Link>
         <div>
-          <h1 className="text-3xl font-bold">Edit Form</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Edit Form</h1>
+          <p className="text-sm sm:text-base text-muted-foreground mt-1">
             Update form fields and configuration
           </p>
         </div>

@@ -433,8 +433,8 @@ const NewFormPage = () => {
           </Button>
         </Link>
         <div>
-          <h1 className="text-3xl font-bold">Create New Form</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Create New Form</h1>
+          <p className="text-sm sm:text-base text-muted-foreground mt-1">
             Build a custom form with fields and configuration
           </p>
         </div>

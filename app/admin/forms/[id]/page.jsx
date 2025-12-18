@@ -75,7 +75,7 @@ const FormDetailPage = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-4">
           <Link href="/admin/forms">
             <Button variant="ghost" size="icon">
@@ -83,19 +83,19 @@ const FormDetailPage = () => {
             </Button>
           </Link>
           <div>
-            <h1 className="text-3xl font-bold">{form.form_title || form.form_name}</h1>
-            <p className="text-muted-foreground">Form Details</p>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">{form.form_title || form.form_name}</h1>
+            <p className="text-sm sm:text-base text-muted-foreground mt-1">Form Details</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-shrink-0">
           <Link href={`/admin/forms/${formId}/submit`}>
-            <Button>
+            <Button className="w-full sm:w-auto">
               <FileText className="mr-2 h-4 w-4" />
               Submit Form
             </Button>
           </Link>
           <Link href={`/admin/forms/${formId}/edit`}>
-            <Button variant="outline">
+            <Button variant="outline" className="w-full sm:w-auto">
               <Edit className="mr-2 h-4 w-4" />
               Edit
             </Button>
@@ -156,7 +156,7 @@ const FormDetailPage = () => {
                   <p className="mt-1 text-sm font-mono">{form.form_name}</p>
                 </div>
               </div>
-              
+
               {/* Assignment Information */}
               {(form.assigned_to_role_id || (form.assigned_user_ids && form.assigned_user_ids.length > 0)) && (
                 <div className="pt-4 border-t">
@@ -191,10 +191,10 @@ const FormDetailPage = () => {
                           return (
                             <div key={userId} className="flex items-center gap-2 text-sm text-muted-foreground">
                               <User className="h-3 w-3" />
-                              {user?.display_name || 
-                               (user ? `${user.first_name || ""} ${user.last_name || ""}`.trim() : "") || 
-                               user?.email || 
-                               `User #${userId}`}
+                              {user?.display_name ||
+                                (user ? `${user.first_name || ""} ${user.last_name || ""}`.trim() : "") ||
+                                user?.email ||
+                                `User #${userId}`}
                             </div>
                           );
                         })}

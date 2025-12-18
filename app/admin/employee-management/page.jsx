@@ -465,11 +465,14 @@ const UserManagementPage = () => {
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
               People Management
             </h1>
+            <p className="text-sm sm:text-base text-muted-foreground mt-1">
+              Manage people, roles, and permissions for your organisation
+            </p>
           </div>
         </div>
         <div className="grid gap-4 md:grid-cols-4">
@@ -619,10 +622,15 @@ const UserManagementPage = () => {
     <div className="space-y-6">
       {/* Header Section */}
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold tracking-tight">People Management</h1>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">People Management</h1>
+            <p className="text-sm sm:text-base text-muted-foreground mt-1">
+              Manage people, roles, and permissions for your organisation
+            </p>
+          </div>
           {canCreateUser && (
-            <Button onClick={() => setIsCreateModalOpen(true)}>
+            <Button onClick={() => setIsCreateModalOpen(true)} className="w-full sm:w-auto">
               <UserPlus className="mr-2 h-4 w-4" />
               Create Person
             </Button>
@@ -748,9 +756,9 @@ const UserManagementPage = () => {
                         <div className="flex flex-col">
                           <span className="font-medium">{user.name}</span>
                           {user.title && (
-                          <span className="text-sm text-muted-foreground">
+                            <span className="text-sm text-muted-foreground">
                               {user.title}
-                          </span>
+                            </span>
                           )}
                         </div>
                       </div>
@@ -1353,13 +1361,13 @@ const UserManagementPage = () => {
                               !role.parentRoleId
                           )
                           .map((role) => (
-                          <SelectItem key={role.id} value={role.id.toString()}>
-                            {role.display_name ||
-                              role.name ||
-                              role.role_name ||
-                              `Role ${role.id}`}
-                          </SelectItem>
-                        ))
+                            <SelectItem key={role.id} value={role.id.toString()}>
+                              {role.display_name ||
+                                role.name ||
+                                role.role_name ||
+                                `Role ${role.id}`}
+                            </SelectItem>
+                          ))
                       )}
                     </SelectContent>
                   </Select>
