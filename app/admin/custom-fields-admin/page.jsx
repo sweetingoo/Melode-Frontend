@@ -789,18 +789,18 @@ const CustomFieldsAdminPage = () => {
   return (
     <div className="space-y-6">
       {/* Header Section */}
-      <div className="flex items-start justify-between mb-10">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-10">
+        <div className="flex-1">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
             Custom Fields Management
           </h1>
-          <p className="text-muted-foreground mt-1">
+          <p className="text-sm sm:text-base text-muted-foreground mt-1">
             Configure custom fields for different entity types in your
             organisation
           </p>
 
           {/* State Indicators */}
-          <div className="flex items-center gap-4 mt-3">
+          <div className="flex flex-wrap items-center gap-3 sm:gap-4 mt-3">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Database className="h-4 w-4" />
               <span>State Persisted</span>
@@ -816,11 +816,11 @@ const CustomFieldsAdminPage = () => {
         </div>
 
         {/* Action Buttons */}
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
           {canCreateCustomField && (
             <Button
               onClick={handleCreateSection}
-              className="bg-primary hover:bg-primary/90"
+              className="bg-primary hover:bg-primary/90 w-full sm:w-auto"
             >
               <Plus className="h-4 w-4 mr-2" />
               Create Section
@@ -831,6 +831,7 @@ const CustomFieldsAdminPage = () => {
               variant="outline"
               onClick={handleCreateField}
               disabled={filteredSections.length === 0}
+              className="w-full sm:w-auto"
             >
               <Plus className="h-4 w-4 mr-2" />
               Create Field

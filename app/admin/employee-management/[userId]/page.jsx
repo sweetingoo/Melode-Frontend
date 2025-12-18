@@ -1135,7 +1135,7 @@ const UserEditPage = () => {
                       onChange={(e) =>
                         handleInputChange("phoneNumber", e.target.value)
                       }
-                      placeholder="+1 (555) 123-4567"
+                      placeholder="+44 20 1234 5678"
                     />
                   </div>
                 </div>

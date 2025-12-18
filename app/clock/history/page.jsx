@@ -84,7 +84,7 @@ export default function ClockHistoryPage() {
 
     // Debug: Log what we're sending
     if (process.env.NODE_ENV === "development") {
-      console.log("Clock History Filter Params:", paramsObj);
+      console.log("Session History Filter Params:", paramsObj);
       console.log("Selected dates - Start:", startDate?.toLocaleString(), "End:", endDate?.toLocaleString());
       console.log("Selected times - Start:", startTime, "End:", endTime);
     }
@@ -195,10 +195,10 @@ export default function ClockHistoryPage() {
           <div>
             <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
               <History className="h-8 w-8 text-primary" />
-              Clock History
+              Session History
             </h1>
             <p className="text-muted-foreground mt-1">
-              View and filter your past clock in/out records
+              View and filter your past check in/out records
             </p>
           </div>
         </div>
@@ -214,7 +214,7 @@ export default function ClockHistoryPage() {
             <Filter className="h-5 w-5 text-muted-foreground" />
             <CardTitle>Filters</CardTitle>
           </div>
-          <CardDescription>Filter clock records by date and time range</CardDescription>
+          <CardDescription>Filter session records by date and time range</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           {/* Quick Date Range Presets */}
@@ -429,14 +429,14 @@ export default function ClockHistoryPage() {
         </CardContent>
       </Card>
 
-      {/* Clock Records Table */}
+      {/* Session Records Table */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
               <CardTitle className="flex items-center gap-2">
                 <Clock className="h-5 w-5 text-primary" />
-                Clock Records
+                Session Records
               </CardTitle>
               <CardDescription className="mt-1">
                 {total} record{total !== 1 ? "s" : ""} found
@@ -454,7 +454,7 @@ export default function ClockHistoryPage() {
               <History className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
               <h3 className="text-lg font-semibold mb-2">No Records Found</h3>
               <p className="text-muted-foreground">
-                No clock records found for the selected date range
+                No session records found for the selected date range
               </p>
             </div>
           ) : (
@@ -767,6 +767,7 @@ export default function ClockHistoryPage() {
     </div>
   );
 }
+
 
 
 

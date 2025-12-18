@@ -87,8 +87,8 @@ export default function EmployeeManagementDocs() {
                             <User className="h-5 w-5 text-primary" />
                           </div>
                           <div>
-                            <h4 className="font-semibold text-sm">John Doe</h4>
-                            <p className="text-xs text-muted-foreground">john.doe@example.com</p>
+                            <h4 className="font-semibold text-sm">Alex Brown</h4>
+                            <p className="text-xs text-muted-foreground">alex.brown@example.com</p>
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
@@ -108,8 +108,8 @@ export default function EmployeeManagementDocs() {
                             <User className="h-5 w-5 text-primary" />
                           </div>
                           <div>
-                            <h4 className="font-semibold text-sm">Jane Smith</h4>
-                            <p className="text-xs text-muted-foreground">jane.smith@example.com</p>
+                            <h4 className="font-semibold text-sm">Sarah Williams</h4>
+                            <p className="text-xs text-muted-foreground">sarah.williams@example.com</p>
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
@@ -193,34 +193,34 @@ export default function EmployeeManagementDocs() {
                     <FormField
                       label="First Name"
                       type="text"
-                      placeholder="John"
+                      placeholder="Alex"
                       icon={User}
                       required
-                      value="John"
+                      value="Alex"
                     />
                     <FormField
                       label="Last Name"
                       type="text"
-                      placeholder="Doe"
+                      placeholder="Brown"
                       icon={User}
                       required
-                      value="Doe"
+                      value="Brown"
                     />
                   </div>
                   <FormField
                     label="Email Address"
                     type="email"
-                    placeholder="john.doe@example.com"
+                    placeholder="alex.brown@example.com"
                     icon={Mail}
                     required
-                    value="john.doe@example.com"
+                    value="alex.brown@example.com"
                   />
                   <FormField
                     label="Phone Number"
                     type="tel"
-                    placeholder="+1 (555) 123-4567"
+                    placeholder="+44 20 1234 5678"
                     icon={Phone}
-                    value="+1 (555) 123-4567"
+                    value="+44 20 1234 5678"
                   />
                   <FormField
                     label="Password"

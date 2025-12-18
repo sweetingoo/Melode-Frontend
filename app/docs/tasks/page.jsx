@@ -132,19 +132,19 @@ export default function TasksDocs() {
                         required
                         value="user-1"
                         options={[
-                          { value: "user-1", label: "John Doe" },
-                          { value: "user-2", label: "Jane Smith" },
-                          { value: "user-3", label: "Bob Johnson" },
+                          { value: "user-1", label: "Alex Brown" },
+                          { value: "user-2", label: "Sarah Williams" },
+                          { value: "user-3", label: "James Taylor" },
                         ]}
                       />
                       <div className="grid grid-cols-2 gap-4">
                         <FormSelect
                           label="Department"
                           placeholder="Select department"
-                          value="sales"
+                          value="operations"
                           options={[
-                            { value: "sales", label: "Sales" },
-                            { value: "marketing", label: "Marketing" },
+                            { value: "operations", label: "Operations" },
+                            { value: "finance", label: "Finance" },
                             { value: "it", label: "IT" },
                           ]}
                         />
@@ -154,7 +154,7 @@ export default function TasksDocs() {
                           value=""
                           options={[
                             { value: "office-1", label: "Main Office" },
-                            { value: "warehouse", label: "Warehouse A" },
+                            { value: "office-2", label: "Branch Office" },
                           ]}
                         />
                       </div>
@@ -229,7 +229,7 @@ export default function TasksDocs() {
               <Filter className="h-6 w-6 text-orange-600" />
               <CardTitle>Viewing & Filtering Tasks</CardTitle>
             </div>
-            <CardDescription>How to find and organize tasks</CardDescription>
+            <CardDescription>How to find and organise tasks</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
@@ -240,7 +240,7 @@ export default function TasksDocs() {
               <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
                 <li><strong>List View:</strong> Simple list of all tasks</li>
                 <li><strong>Table View:</strong> Detailed table with sortable columns</li>
-                <li><strong>Kanban View:</strong> Board view organized by status</li>
+                <li><strong>Kanban View:</strong> Board view organised by status</li>
                 <li><strong>Calendar View:</strong> Tasks displayed on a calendar by due date</li>
               </ul>
             </div>

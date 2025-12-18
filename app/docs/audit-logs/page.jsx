@@ -29,8 +29,8 @@ export default function AuditLogsDocs() {
             <div>
               <h3 className="font-semibold mb-2">What are Audit Logs?</h3>
               <p className="text-sm text-muted-foreground">
-                Audit logs record all significant activities and changes in the system, including user actions, 
-                data modifications, access attempts, system events, security events, and administrative changes. 
+                Audit logs record all significant activities and changes in the system, including user actions,
+                data modifications, access attempts, system events, security events, and administrative changes.
                 Audit logs provide a complete trail of system activity for compliance, security, and troubleshooting purposes.
               </p>
             </div>
@@ -59,8 +59,8 @@ export default function AuditLogsDocs() {
               <p className="text-sm text-muted-foreground mb-4">
                 The audit logs page displays all system activity in a comprehensive table:
               </p>
-              <FormMockup 
-                title="Audit Logs" 
+              <FormMockup
+                title="Audit Logs"
                 description="Complete system activity and audit trail"
               >
                 <div className="space-y-4">
@@ -73,15 +73,15 @@ export default function AuditLogsDocs() {
                       Export
                     </FormButton>
                   </div>
-                  
+
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
                     <FormSelect
                       placeholder="All Users"
                       value=""
                       options={[
                         { value: "all", label: "All Users" },
-                        { value: "user-1", label: "John Doe" },
-                        { value: "user-2", label: "Jane Smith" },
+                        { value: "user-1", label: "Alex Brown" },
+                        { value: "user-2", label: "Sarah Williams" },
                       ]}
                     />
                     <FormSelect
@@ -117,13 +117,13 @@ export default function AuditLogsDocs() {
                       ]}
                     />
                   </div>
-                  
+
                   <div className="flex items-center gap-2 mb-4">
                     <div className="relative flex-1">
                       <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <input 
-                        type="text" 
-                        placeholder="Search by resource ID..." 
+                      <input
+                        type="text"
+                        placeholder="Search by resource ID..."
                         className="w-full px-10 py-2 border rounded-md text-sm"
                         disabled
                         value=""
@@ -133,7 +133,7 @@ export default function AuditLogsDocs() {
                       Date Range
                     </FormButton>
                   </div>
-                  
+
                   <div className="border rounded-lg overflow-hidden">
                     <table className="w-full text-sm">
                       <thead className="bg-muted/50">
@@ -157,7 +157,7 @@ export default function AuditLogsDocs() {
                           <td className="p-3">
                             <div className="flex items-center gap-2">
                               <User className="h-4 w-4 text-muted-foreground" />
-                              <span className="text-sm">John Doe</span>
+                              <span className="text-sm">Alex Brown</span>
                             </div>
                           </td>
                           <td className="p-3">
@@ -189,7 +189,7 @@ export default function AuditLogsDocs() {
                           <td className="p-3">
                             <div className="flex items-center gap-2">
                               <User className="h-4 w-4 text-muted-foreground" />
-                              <span className="text-sm">Jane Smith</span>
+                              <span className="text-sm">Sarah Williams</span>
                             </div>
                           </td>
                           <td className="p-3">
@@ -245,7 +245,7 @@ export default function AuditLogsDocs() {
                       </tbody>
                     </table>
                   </div>
-                  
+
                   <div className="flex items-center justify-between pt-2">
                     <p className="text-xs text-muted-foreground">Showing 1-50 of 1,234 records</p>
                     <div className="flex items-center gap-2">
@@ -294,7 +294,7 @@ export default function AuditLogsDocs() {
           <CardContent className="space-y-6">
             <div>
               <h3 className="font-semibold mb-4">Step-by-Step: View Log Details</h3>
-              
+
               <div className="space-y-6">
                 <div>
                   <h4 className="text-sm font-semibold mb-2">Step 1: Find the Log Entry</h4>
@@ -315,8 +315,8 @@ export default function AuditLogsDocs() {
                   <p className="text-sm text-muted-foreground mb-4">
                     The details dialog shows comprehensive log information:
                   </p>
-                  <DialogMockup 
-                    title="Audit Log Details" 
+                  <DialogMockup
+                    title="Audit Log Details"
                     description="Complete information about this audit log entry"
                     footer={
                       <>
@@ -337,17 +337,17 @@ export default function AuditLogsDocs() {
                         </div>
                         <p className="text-xs text-muted-foreground">January 15, 2024 at 10:30:45 AM</p>
                       </div>
-                      
+
                       <Separator />
-                      
+
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <p className="text-xs text-muted-foreground mb-1">User</p>
                           <div className="flex items-center gap-2">
                             <User className="h-4 w-4 text-muted-foreground" />
-                            <p className="text-sm font-medium">John Doe</p>
+                            <p className="text-sm font-medium">Alex Brown</p>
                           </div>
-                          <p className="text-xs text-muted-foreground mt-1">john.doe@example.com</p>
+                          <p className="text-xs text-muted-foreground mt-1">alex.brown@example.com</p>
                         </div>
                         <div>
                           <p className="text-xs text-muted-foreground mb-1">Action</p>
@@ -373,17 +373,17 @@ export default function AuditLogsDocs() {
                           <p className="text-xs font-medium">Chrome 120.0</p>
                         </div>
                       </div>
-                      
+
                       <div>
                         <p className="text-xs text-muted-foreground mb-1">Description</p>
                         <p className="text-sm">User created a new task: "Complete quarterly report"</p>
                       </div>
-                      
+
                       <div className="pt-2 border-t">
                         <p className="text-xs font-semibold mb-2">Changes Made</p>
                         <div className="p-3 bg-muted rounded-lg">
                           <pre className="text-xs overflow-auto">
-{`{
+                            {`{
   "title": "Complete quarterly report",
   "status": "pending",
   "priority": "high",
@@ -392,7 +392,7 @@ export default function AuditLogsDocs() {
                           </pre>
                         </div>
                       </div>
-                      
+
                       <div className="pt-2 border-t">
                         <p className="text-xs font-semibold mb-2">Metadata</p>
                         <div className="space-y-1 text-xs">
@@ -432,8 +432,8 @@ export default function AuditLogsDocs() {
               <p className="text-sm text-muted-foreground mb-4">
                 Use filters to narrow down audit logs:
               </p>
-              <FormMockup 
-                title="Filter Audit Logs" 
+              <FormMockup
+                title="Filter Audit Logs"
                 description="Apply filters to find specific log entries"
               >
                 <div className="space-y-4">
@@ -453,18 +453,18 @@ export default function AuditLogsDocs() {
                       />
                     </div>
                   </div>
-                  
+
                   <FormSelect
                     label="User"
                     placeholder="All Users"
                     value=""
                     options={[
                       { value: "all", label: "All Users" },
-                      { value: "user-1", label: "John Doe" },
-                      { value: "user-2", label: "Jane Smith" },
+                      { value: "user-1", label: "Alex Brown" },
+                      { value: "user-2", label: "Sarah Williams" },
                     ]}
                   />
-                  
+
                   <FormSelect
                     label="Action"
                     placeholder="All Actions"
@@ -479,7 +479,7 @@ export default function AuditLogsDocs() {
                       { value: "unauthorized_access", label: "Unauthorized Access" },
                     ]}
                   />
-                  
+
                   <FormSelect
                     label="Resource Type"
                     placeholder="All Resources"
@@ -492,7 +492,7 @@ export default function AuditLogsDocs() {
                       { value: "asset", label: "Asset" },
                     ]}
                   />
-                  
+
                   <FormSelect
                     label="Severity"
                     placeholder="All Severities"
@@ -506,14 +506,14 @@ export default function AuditLogsDocs() {
                       { value: "critical", label: "Critical" },
                     ]}
                   />
-                  
+
                   <FormField
                     label="Resource ID"
                     type="text"
                     placeholder="Search by resource ID..."
                     value=""
                   />
-                  
+
                   <div className="flex gap-2 pt-2">
                     <FormButton variant="outline" className="flex-1">
                       Clear Filters
@@ -554,7 +554,7 @@ export default function AuditLogsDocs() {
           <CardContent className="space-y-6">
             <div>
               <h3 className="font-semibold mb-4">Step-by-Step: Export Audit Logs</h3>
-              
+
               <div className="space-y-6">
                 <div>
                   <h4 className="text-sm font-semibold mb-2">Step 1: Apply Filters (Optional)</h4>
@@ -575,8 +575,8 @@ export default function AuditLogsDocs() {
                   <p className="text-sm text-muted-foreground mb-4">
                     Choose your preferred export format:
                   </p>
-                  <DialogMockup 
-                    title="Export Audit Logs" 
+                  <DialogMockup
+                    title="Export Audit Logs"
                     description="Export audit log records"
                     footer={
                       <>
@@ -595,7 +595,7 @@ export default function AuditLogsDocs() {
                         <p className="text-sm font-medium">January 1, 2024 - January 31, 2024</p>
                         <p className="text-xs text-muted-foreground">1,234 records</p>
                       </div>
-                      
+
                       <FormSelect
                         label="Export Format"
                         placeholder="Select format"
@@ -606,7 +606,7 @@ export default function AuditLogsDocs() {
                           { value: "json", label: "JSON (JavaScript Object Notation)" },
                         ]}
                       />
-                      
+
                       <div className="p-3 bg-muted rounded-lg">
                         <p className="text-xs font-semibold mb-2">Include Fields:</p>
                         <div className="space-y-1">

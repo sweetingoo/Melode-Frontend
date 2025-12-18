@@ -123,7 +123,7 @@ export default function UserPreferencesDocs() {
                       options={[
                         { value: "none", label: "No default" },
                         { value: "main-office", label: "Main Office" },
-                        { value: "warehouse", label: "Warehouse" },
+                        { value: "facility", label: "Facility" },
                       ]}
                     />
                   </div>
@@ -164,7 +164,7 @@ export default function UserPreferencesDocs() {
             <div>
               <h3 className="font-semibold mb-2">Default Job Role</h3>
               <p className="text-sm text-muted-foreground mb-2">
-                Your default job role is the primary role you typically use when clocking in. This
+                Your default job role is the primary role you typically use when checking in. This
                 should be one of the job roles assigned to you by your administrator.
               </p>
               <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
@@ -208,7 +208,7 @@ export default function UserPreferencesDocs() {
                 <li>Location defaults are independent of role selections</li>
                 <li>You can set a location default even if you don't set role defaults</li>
                 <li>If your organization has multiple locations, select the one you work at most often</li>
-                <li>You can still change the location when clocking in if needed</li>
+                <li>You can still change the location when checking in if needed</li>
               </ul>
             </div>
           </CardContent>
@@ -216,8 +216,8 @@ export default function UserPreferencesDocs() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Using Clock-In Defaults</CardTitle>
-            <CardDescription>How defaults work when clocking in</CardDescription>
+            <CardTitle>Using Check-In Defaults</CardTitle>
+            <CardDescription>How defaults work when checking in</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
@@ -240,7 +240,7 @@ export default function UserPreferencesDocs() {
               <div>
                 <h3 className="font-semibold mb-2">Validation</h3>
                 <p className="text-sm text-muted-foreground">
-                  The system validates that your defaults are still valid when you clock in. If a
+                  The system validates that your defaults are still valid when you check in. If a
                   default role or location is no longer available or you no longer have access to it,
                   the form will load without that default, and you'll need to make a new selection.
                 </p>

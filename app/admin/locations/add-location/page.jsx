@@ -243,7 +243,7 @@ const AddLocationPage = () => {
                       address: e.target.value,
                     })
                   }
-                  placeholder="123 Main Street"
+                  placeholder="123 High Street"
                 />
               </div>
 
@@ -428,7 +428,7 @@ const AddLocationPage = () => {
                         contact_person: e.target.value,
                       })
                     }
-                    placeholder="John Doe"
+                    placeholder="Alex Brown"
                   />
                 </div>
 
@@ -443,7 +443,7 @@ const AddLocationPage = () => {
                         contact_phone: e.target.value,
                       })
                     }
-                    placeholder="+1 234 567 8900"
+                    placeholder="+44 20 1234 5678"
                   />
                 </div>
 
@@ -459,7 +459,7 @@ const AddLocationPage = () => {
                         contact_email: e.target.value,
                       })
                     }
-                    placeholder="john@example.com"
+                    placeholder="alex.brown@example.com"
                   />
                 </div>
               </div>

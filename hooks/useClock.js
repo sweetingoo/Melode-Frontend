@@ -150,8 +150,8 @@ export const useUpdateClockRecord = () => {
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: clockKeys.records() });
       queryClient.invalidateQueries({ queryKey: clockKeys.active() });
-      toast.success("Clock record updated successfully", {
-        description: "The clock record has been updated.",
+      toast.success("Session record updated successfully", {
+        description: "The session record has been updated.",
       });
     },
     onError: (error) => {
@@ -159,8 +159,8 @@ export const useUpdateClockRecord = () => {
       const errorMessage =
         error?.response?.data?.message ||
         error?.response?.data?.detail ||
-        "Failed to update clock record";
-      toast.error("Failed to update clock record", {
+        "Failed to update session record";
+      toast.error("Failed to update session record", {
         description: Array.isArray(errorMessage)
           ? errorMessage.map((e) => e.msg || e).join(", ")
           : errorMessage,
@@ -262,6 +262,7 @@ export const useEndBreak = () => {
     },
   });
 };
+
 
 
 

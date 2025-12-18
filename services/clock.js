@@ -91,4 +91,17 @@ export const clockService = {
       throw error;
     }
   },
+
+  // Export clock records to Excel
+  exportClockRecords: async (params = {}) => {
+    try {
+      return await api.get("/clock/records/export", {
+        params,
+        responseType: "blob",
+      });
+    } catch (error) {
+      console.error("Export clock records failed:", error);
+      throw error;
+    }
+  },
 };

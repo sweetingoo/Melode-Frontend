@@ -150,17 +150,17 @@ export default function ClockDashboardPage() {
             </Button>
           </Link>
           <div>
-            <h1 className="text-2xl font-bold">Not Clocked In</h1>
+            <h1 className="text-2xl font-bold">Not Checked In</h1>
             <p className="text-muted-foreground">
-              You are not currently clocked in. Clock in to start your shift.
+              You are not currently checked in. Check in to start your shift.
             </p>
           </div>
         </div>
         <Card>
           <CardHeader>
-            <CardTitle>Not Clocked In</CardTitle>
+            <CardTitle>Not Checked In</CardTitle>
             <CardDescription>
-              You are not currently clocked in. Clock in to start your shift.
+              You are not currently checked in. Check in to start your shift.
             </CardDescription>
           </CardHeader>
           <CardContent>

@@ -409,22 +409,23 @@ export default function ConfigurationPage() {
   return (
     <div className="container mx-auto p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Configuration Management</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Configuration Management</h1>
+          <p className="text-sm sm:text-base text-muted-foreground mt-1">
             Manage system settings and organisation configuration
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
           <Button
             variant="outline"
             onClick={() => setIsBulkEditMode(!isBulkEditMode)}
+            className="w-full sm:w-auto"
           >
             {isBulkEditMode ? "Cancel Bulk Edit" : "Bulk Edit"}
           </Button>
           {isBulkEditMode && (
-            <Button onClick={handleSaveBulkUpdates} disabled={bulkUpdateMutation.isPending}>
+            <Button onClick={handleSaveBulkUpdates} disabled={bulkUpdateMutation.isPending} className="w-full sm:w-auto">
               {bulkUpdateMutation.isPending ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -438,7 +439,7 @@ export default function ConfigurationPage() {
               )}
             </Button>
           )}
-          <Button onClick={() => setIsCreateDialogOpen(true)}>
+          <Button onClick={() => setIsCreateDialogOpen(true)} className="w-full sm:w-auto">
             <Plus className="mr-2 h-4 w-4" />
             Create Setting
           </Button>

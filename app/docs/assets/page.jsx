@@ -130,7 +130,7 @@ export default function AssetsDocs() {
                           options={[
                             { value: "all", label: "All Locations" },
                             { value: "office-1", label: "Main Office" },
-                            { value: "warehouse", label: "Warehouse A" },
+                            { value: "office-2", label: "Branch Office" },
                           ]}
                           className="flex-1"
                         />
@@ -229,7 +229,7 @@ export default function AssetsDocs() {
                         value="office-1"
                         options={[
                           { value: "office-1", label: "Main Office" },
-                          { value: "warehouse", label: "Warehouse A" },
+                          { value: "office-2", label: "Branch Office" },
                         ]}
                       />
                       <FormField
@@ -414,9 +414,9 @@ export default function AssetsDocs() {
                         placeholder="Choose a user"
                         value="user-1"
                         options={[
-                          { value: "user-1", label: "John Doe" },
-                          { value: "user-2", label: "Jane Smith" },
-                          { value: "user-3", label: "Bob Johnson" },
+                          { value: "user-1", label: "Alex Brown" },
+                          { value: "user-2", label: "Sarah Williams" },
+                          { value: "user-3", label: "James Taylor" },
                         ]}
                       />
 
@@ -426,7 +426,7 @@ export default function AssetsDocs() {
                         value=""
                         options={[
                           { value: "office-1", label: "Main Office" },
-                          { value: "warehouse", label: "Warehouse A" },
+                          { value: "office-2", label: "Branch Office" },
                         ]}
                       />
 
@@ -598,7 +598,7 @@ export default function AssetsDocs() {
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground mb-1">Assigned To</p>
-                      <p className="text-sm font-medium">John Doe</p>
+                      <p className="text-sm font-medium">Alex Brown</p>
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground mb-1">Purchase Date</p>

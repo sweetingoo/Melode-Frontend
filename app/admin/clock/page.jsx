@@ -146,7 +146,7 @@ export default function ManagerClockPage() {
     if (!editingRecord) return;
 
     if (!editNotes.trim()) {
-      alert("Notes are required when editing clock records.");
+      alert("Notes are required when editing session records.");
       return;
     }
 
@@ -258,7 +258,7 @@ export default function ManagerClockPage() {
           <CardContent>
             <div className="text-2xl font-bold">{activeClocks.length}</div>
             <p className="text-xs text-muted-foreground">
-              {activeClocks.length === 1 ? "person clocked in" : "people clocked in"}
+              {activeClocks.length === 1 ? "person checked in" : "people checked in"}
             </p>
           </CardContent>
         </Card>
@@ -352,7 +352,7 @@ export default function ManagerClockPage() {
                 Active Sessions
               </CardTitle>
               <CardDescription className="mt-1">
-                {activeClocks.length} {activeClocks.length === 1 ? "person" : "people"} currently clocked in
+                {activeClocks.length} {activeClocks.length === 1 ? "person" : "people"} currently checked in
               </CardDescription>
             </div>
           </div>
@@ -509,11 +509,11 @@ export default function ManagerClockPage() {
         </CardContent>
       </Card>
 
-      {/* Edit Clock Record Dialog */}
+      {/* Edit Session Record Dialog */}
       <Dialog open={!!editingRecord} onOpenChange={(open) => !open && setEditingRecord(null)}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Edit Clock Record</DialogTitle>
+            <DialogTitle>Edit Session Record</DialogTitle>
             <DialogDescription>
               Update check in/out times and notes. Notes are required.
             </DialogDescription>

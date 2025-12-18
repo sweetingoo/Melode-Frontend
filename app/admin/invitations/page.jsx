@@ -670,7 +670,7 @@ const InvitationPage = () => {
 
                     <Input
                       id="suggested_username"
-                      placeholder="john.doe"
+                      placeholder="alex.brown"
                       value={formData.suggested_username}
                       onChange={(e) =>
                         handleInputChange("suggested_username", e.target.value)
@@ -791,7 +791,7 @@ const InvitationPage = () => {
                   <Input
                     id="suggested_phone_number"
                     type="tel"
-                    placeholder="+44 (555) 123-4567"
+                    placeholder="+44 20 1234 5678"
                     value={formData.suggested_phone_number}
                     onChange={(e) =>
                       handleInputChange(

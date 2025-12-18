@@ -91,30 +91,30 @@ export default function InvitationsDocs() {
                         placeholder="user@example.com"
                         icon={Mail}
                         required
-                        value="john.doe@example.com"
+                        value="alex.brown@example.com"
                       />
                       <div className="grid grid-cols-2 gap-4">
                         <FormField
                           label="First Name"
                           type="text"
-                          placeholder="John"
+                          placeholder="Alex"
                           icon={User}
-                          value="John"
+                          value="Alex"
                         />
                         <FormField
                           label="Last Name"
                           type="text"
-                          placeholder="Doe"
+                          placeholder="Brown"
                           icon={User}
-                          value="Doe"
+                          value="Brown"
                         />
                       </div>
                       <FormField
                         label="Phone Number"
                         type="tel"
-                        placeholder="+1 (555) 123-4567"
+                        placeholder="+44 20 1234 5678"
                         icon={Phone}
-                        value="+1 (555) 123-4567"
+                        value="+44 20 1234 5678"
                       />
                       <FormSelect
                         label="Role"

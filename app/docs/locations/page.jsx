@@ -29,8 +29,8 @@ export default function LocationsDocs() {
               <h3 className="font-semibold mb-2">What are Locations?</h3>
               <p className="text-sm text-muted-foreground">
                 Locations represent physical places where your organisation operates, such as offices,
-                warehouses, retail stores, construction sites, or any other facilities. Locations help
-                track where work is performed and organize resources geographically.
+                facilities, sites, or any other premises. Locations help
+                track where work is performed and organise resources geographically.
               </p>
             </div>
             <div>
@@ -102,36 +102,35 @@ export default function LocationsDocs() {
                         <FormField
                           label="Address"
                           type="text"
-                          placeholder="123 Main Street"
-                          value="123 Main Street"
+                          placeholder="123 High Street"
+                          value="123 High Street"
                         />
                         <FormField
                           label="City"
                           type="text"
-                          placeholder="New York"
-                          value="New York"
+                          placeholder="London"
+                          value="London"
                         />
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <FormField
                           label="State/Province"
                           type="text"
-                          placeholder="NY"
-                          value="NY"
+                          placeholder="Greater London"
+                          value="Greater London"
                         />
                         <FormField
                           label="Postal Code"
                           type="text"
-                          placeholder="10001"
-                          value="10001"
+                          placeholder="SW1A 1AA"
+                          value="SW1A 1AA"
                         />
                       </div>
                       <FormSelect
                         label="Country"
                         placeholder="Select country"
-                        value="us"
+                        value="uk"
                         options={[
-                          { value: "us", label: "United States" },
                           { value: "uk", label: "United Kingdom" },
                           { value: "ca", label: "Canada" },
                         ]}
@@ -142,8 +141,8 @@ export default function LocationsDocs() {
                         value="office"
                         options={[
                           { value: "office", label: "Office" },
-                          { value: "warehouse", label: "Warehouse" },
-                          { value: "retail", label: "Retail Store" },
+                          { value: "facility", label: "Facility" },
+                          { value: "site", label: "Site" },
                           { value: "factory", label: "Factory" },
                         ]}
                       />
@@ -161,15 +160,15 @@ export default function LocationsDocs() {
                 Fill in the location details including:
               </p>
               <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
-                <li><strong>Name:</strong> Location name (e.g., "Main Office", "Warehouse A")</li>
+                <li><strong>Name:</strong> Location name (e.g., "Main Office", "Branch Office")</li>
                 <li><strong>Address:</strong> Street address</li>
                 <li><strong>City:</strong> City name</li>
                 <li><strong>State/Province:</strong> State or province</li>
-                <li><strong>Postal Code:</strong> ZIP or postal code</li>
+                <li><strong>Postal Code:</strong> Postal code</li>
                 <li><strong>Country:</strong> Country</li>
                 <li><strong>Coordinates:</strong> Latitude and longitude (optional, for GPS)</li>
                 <li><strong>Description:</strong> Additional details about the location</li>
-                <li><strong>Type:</strong> Location type (Office, Warehouse, Retail, etc.)</li>
+                <li><strong>Type:</strong> Location type (Office, Facility, Site, etc.)</li>
               </ul>
             </div>
 
@@ -182,11 +181,10 @@ export default function LocationsDocs() {
               </p>
               <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
                 <li>Office</li>
-                <li>Warehouse</li>
-                <li>Retail Store</li>
-                <li>Construction Site</li>
+                <li>Facility</li>
+                <li>Site</li>
                 <li>Remote/Home Office</li>
-                <li>Manufacturing Facility</li>
+                <li>Branch</li>
                 <li>Other (custom types may be available)</li>
               </ul>
             </div>
@@ -229,7 +227,7 @@ export default function LocationsDocs() {
               <Search className="h-6 w-6 text-orange-600" />
               <CardTitle>Viewing & Searching Locations</CardTitle>
             </div>
-            <CardDescription>Finding and organizing locations</CardDescription>
+            <CardDescription>Finding and organising locations</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
@@ -324,7 +322,7 @@ export default function LocationsDocs() {
               <div>
                 <h3 className="font-semibold mb-2">Task Assignment</h3>
                 <p className="text-sm text-muted-foreground">
-                  Tasks can be assigned to specific locations, helping organize work by geographic area.
+                  Tasks can be assigned to specific locations, helping organise work by geographic area.
                 </p>
               </div>
               <div>

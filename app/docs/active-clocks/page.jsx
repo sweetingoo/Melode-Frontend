@@ -29,10 +29,10 @@ export default function ActiveClocksDocs() {
             <div>
               <h3 className="font-semibold mb-2">What are Active People?</h3>
               <p className="text-sm text-muted-foreground">
-                Active People shows all employees who are currently clocked in across your organisation.
+                Active People shows all employees who are currently checked in across your organisation.
                 This helps managers and administrators monitor who is working, track attendance in real-time,
                 and ensure proper time tracking. You can see who is working, where they are, and how long
-                they've been clocked in.
+                they've been checked in.
               </p>
             </div>
             <div>
@@ -68,7 +68,7 @@ export default function ActiveClocksDocs() {
                   <div className="flex items-center justify-between mb-4">
                     <div>
                       <h3 className="text-lg font-semibold">Active People</h3>
-                      <p className="text-xs text-muted-foreground">12 employees currently clocked in</p>
+                      <p className="text-xs text-muted-foreground">12 employees currently checked in</p>
                     </div>
                     <div className="flex items-center gap-2">
                       <FormButton variant="outline" size="sm" icon={RefreshCw}>
@@ -94,7 +94,7 @@ export default function ActiveClocksDocs() {
                       options={[
                         { value: "all", label: "All Locations" },
                         { value: "office-1", label: "Main Office" },
-                        { value: "warehouse", label: "Warehouse A" },
+                        { value: "office-2", label: "Branch Office" },
                       ]}
                       className="w-40"
                     />
@@ -108,8 +108,8 @@ export default function ActiveClocksDocs() {
                             <User className="h-5 w-5 text-primary" />
                           </div>
                           <div>
-                            <h4 className="font-semibold text-sm">John Doe</h4>
-                            <p className="text-xs text-muted-foreground">john.doe@example.com</p>
+                            <h4 className="font-semibold text-sm">Alex Brown</h4>
+                            <p className="text-xs text-muted-foreground">alex.brown@example.com</p>
                           </div>
                         </div>
                         <Badge className="bg-green-500 text-xs">
@@ -132,7 +132,7 @@ export default function ActiveClocksDocs() {
                         </div>
                         <div>
                           <p className="text-muted-foreground mb-1">Department</p>
-                          <p className="font-medium">Sales</p>
+                          <p className="font-medium">Operations</p>
                         </div>
                       </div>
                     </div>
@@ -144,8 +144,8 @@ export default function ActiveClocksDocs() {
                             <User className="h-5 w-5 text-primary" />
                           </div>
                           <div>
-                            <h4 className="font-semibold text-sm">Jane Smith</h4>
-                            <p className="text-xs text-muted-foreground">jane.smith@example.com</p>
+                            <h4 className="font-semibold text-sm">Sarah Williams</h4>
+                            <p className="text-xs text-muted-foreground">sarah.williams@example.com</p>
                           </div>
                         </div>
                         <Badge className="bg-green-500 text-xs">
@@ -160,7 +160,7 @@ export default function ActiveClocksDocs() {
                         </div>
                         <div>
                           <p className="text-muted-foreground mb-1">Location</p>
-                          <p className="font-medium">Warehouse A</p>
+                          <p className="font-medium">Branch Office</p>
                         </div>
                         <div>
                           <p className="text-muted-foreground mb-1">Time Elapsed</p>
@@ -188,8 +188,8 @@ export default function ActiveClocksDocs() {
                 <li><strong>Employee Name:</strong> Name of the clocked-in employee</li>
                 <li><strong>Email:</strong> Employee email address</li>
                 <li><strong>Check In Time:</strong> When the employee checked in</li>
-                <li><strong>Location:</strong> Where the employee clocked in</li>
-                <li><strong>Time Elapsed:</strong> Live timer showing how long they've been clocked in</li>
+                <li><strong>Location:</strong> Where the employee checked in</li>
+                <li><strong>Time Elapsed:</strong> Live timer showing how long they've been checked in</li>
                 <li><strong>Department:</strong> Employee's department</li>
                 <li><strong>Status Badge:</strong> Visual indicator showing active status</li>
               </ul>
@@ -244,8 +244,8 @@ export default function ActiveClocksDocs() {
                       <div className="p-3 bg-muted rounded-lg">
                         <div className="flex items-center justify-between mb-2">
                           <div>
-                            <h4 className="font-semibold text-sm">John Doe</h4>
-                            <p className="text-xs text-muted-foreground">john.doe@example.com</p>
+                            <h4 className="font-semibold text-sm">Alex Brown</h4>
+                            <p className="text-xs text-muted-foreground">alex.brown@example.com</p>
                           </div>
                           <Badge className="bg-green-500 text-xs">
                             <div className="w-2 h-2 bg-white rounded-full mr-1 animate-pulse"></div>
@@ -272,7 +272,7 @@ export default function ActiveClocksDocs() {
                         </div>
                         <div>
                           <p className="text-xs text-muted-foreground mb-1">Department</p>
-                          <p className="text-sm font-medium">Sales</p>
+                          <p className="text-sm font-medium">Operations</p>
                         </div>
                         <div>
                           <p className="text-xs text-muted-foreground mb-1">Role</p>
@@ -388,8 +388,8 @@ export default function ActiveClocksDocs() {
               </p>
               <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
                 <li><strong>Long Sessions:</strong> Sessions that have been active for unusually long periods</li>
-                <li><strong>Missing Employees:</strong> Employees who should be working but aren't clocked in</li>
-                <li><strong>Location Mismatches:</strong> Employees clocked in at unexpected locations</li>
+                <li><strong>Missing Employees:</strong> Employees who should be working but aren't checked in</li>
+                <li><strong>Location Mismatches:</strong> Employees checked in at unexpected locations</li>
                 <li><strong>Multiple Sessions:</strong> Employees with multiple active sessions (shouldn't happen)</li>
                 <li><strong>Stale Sessions:</strong> Sessions that appear to be stuck or not updating</li>
               </ul>
@@ -434,7 +434,7 @@ export default function ActiveClocksDocs() {
                   <div className="p-3 border rounded-lg">
                     <p className="text-xs text-muted-foreground mb-1">By Location</p>
                     <p className="text-sm font-medium">8 Main Office</p>
-                    <p className="text-sm font-medium">4 Warehouse</p>
+                    <p className="text-sm font-medium">4 Facilities</p>
                   </div>
                   <div className="p-3 border rounded-lg">
                     <p className="text-xs text-muted-foreground mb-1">Average Duration</p>

@@ -30,7 +30,7 @@ export default function CustomFieldsManagementDocs() {
               <h3 className="font-semibold mb-2">What is Custom Fields Management?</h3>
               <p className="text-sm text-muted-foreground">
                 Custom Fields Management allows you to view, edit, and manage all custom fields in your system.
-                You can update field properties, change field types, reorder fields, organize fields into sections,
+                You can update field properties, change field types, reorder fields, organise fields into sections,
                 and delete fields that are no longer needed. This is where you have full control over your custom fields.
               </p>
             </div>
@@ -61,7 +61,7 @@ export default function CustomFieldsManagementDocs() {
               </p>
               <FormMockup
                 title="Custom Fields Management"
-                description="Manage all custom fields organized by entity type and sections"
+                description="Manage all custom fields organised by entity type and sections"
               >
                 <div className="space-y-4">
                   <div className="flex items-center justify-between mb-4">
@@ -236,7 +236,7 @@ export default function CustomFieldsManagementDocs() {
                   </p>
                   <DialogMockup
                     title="Create Custom Field Section"
-                    description="Create a new section to organize custom fields"
+                    description="Create a new section to organise custom fields"
                     footer={
                       <>
                         <FormButton variant="outline" size="sm">

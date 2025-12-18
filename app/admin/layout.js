@@ -56,6 +56,9 @@ import {
   Clock,
   History,
   Crown,
+  FileSpreadsheet,
+  BarChart3,
+  Activity,
 } from "lucide-react";
 import { assets } from "../assets/assets";
 import Image from "next/image";
@@ -99,7 +102,7 @@ const mainMenuItems = [
     permission: "clock:in", // Permission to clock in
   },
   {
-    title: "Clock History",
+    title: "Session History",
     icon: History,
     url: "/clock/history",
     permission: "clock:view", // Permission to view clock records
@@ -166,33 +169,43 @@ const organisationItems = [
     url: "/admin/departments",
     permission: "departments:read", // Permission to read departments
   },
-];
-
-// Settings group
-const settingsItems = [
   {
     title: "Task Types",
     icon: Type,
     url: "/admin/task-types",
     permission: "task_types:read", // Permission to read task types
   },
+];
+
+// Monitoring & Reports group
+const monitoringAndReportsItems = [
   {
     title: "Active People",
-    icon: Clock,
+    icon: Activity,
     url: "/admin/clock",
     permission: "clock:view_all", // Permission to view all active people
   },
   {
-    title: "Configuration",
-    icon: Settings,
-    url: "/admin/configuration",
-    permission: "SUPERUSER_ROLE_ONLY", // Only visible when assigned to Superuser role
+    title: "Reports",
+    icon: FileSpreadsheet,
+    url: "/admin/reports",
+    permission: "SUPERUSER_OR_REPORTS", // Superuser or reports:read permission
   },
   {
     title: "Audit Logs",
     icon: FileText,
     url: "/admin/audit-logs",
     permission: "SYSTEM_MONITOR", // Permission to view audit logs
+  },
+];
+
+// Settings group
+const settingsItems = [
+  {
+    title: "Configuration",
+    icon: Settings,
+    url: "/admin/configuration",
+    permission: "SUPERUSER_ROLE_ONLY", // Only visible when assigned to Superuser role
   },
 ];
 
@@ -722,6 +735,30 @@ export default function AdminLayout({ children }) {
     if (currentUserLoading) return items; // Show all while loading
 
     return items.filter((item) => {
+      // Special case: SUPERUSER_OR_REPORTS - show if:
+      // 1. User has wildcard (*) permission
+      // 2. User is a superuser (by role or is_superuser flag)
+      // 3. User has reports:read or reports:* permission
+      if (item.permission === "SUPERUSER_OR_REPORTS") {
+        // Check wildcard permission first
+        if (userPermissionNames.includes("*")) return true;
+
+        // Check if user is superuser
+        if (isCurrentRoleSuperuser) return true;
+
+        // Check for reports-related permissions
+        const hasReportsPermission = userPermissionNames.some((perm) => {
+          return (
+            perm === "reports:read" ||
+            perm === "reports:*" ||
+            perm === "reports:view" ||
+            perm.startsWith("reports:")
+          );
+        });
+
+        return hasReportsPermission;
+      }
+
       // Special case: SUPERUSER_ROLE_ONLY - show if:
       // 1. User has wildcard (*) permission
       // 2. User is a superuser (by role or is_superuser flag)
@@ -798,6 +835,11 @@ export default function AdminLayout({ children }) {
 
   const visibleOrganisationItems = React.useMemo(
     () => filterItemsByPermission(organisationItems),
+    [userPermissionNames, currentUserLoading, isCurrentRoleSuperuser]
+  );
+
+  const visibleMonitoringAndReportsItems = React.useMemo(
+    () => filterItemsByPermission(monitoringAndReportsItems),
     [userPermissionNames, currentUserLoading, isCurrentRoleSuperuser]
   );
 
@@ -914,6 +956,16 @@ export default function AdminLayout({ children }) {
                         title="Organisation"
                         icon={Building2}
                         items={visibleOrganisationItems}
+                        pathname={pathname}
+                      />
+                    )}
+
+                    {/* Monitoring & Reports - Collapsible */}
+                    {visibleMonitoringAndReportsItems.length > 0 && (
+                      <CollapsibleMenuItem
+                        title="Monitoring & Reports"
+                        icon={BarChart3}
+                        items={visibleMonitoringAndReportsItems}
                         pathname={pathname}
                       />
                     )}

@@ -209,8 +209,15 @@ export default function ClockPage() {
   // Check if already checked in - redirect immediately
   useEffect(() => {
     if (!statusLoading && clockStatus) {
-      const status = clockStatus.status;
-      if (status === "active" || status === "on_break") {
+      // Check for clocked in status - API can return status, current_state, or is_clocked_in
+      const isClockedIn =
+        clockStatus?.is_clocked_in === true ||
+        clockStatus?.status === "active" ||
+        clockStatus?.status === "on_break" ||
+        clockStatus?.current_state === "active" ||
+        clockStatus?.current_state === "on_break";
+
+      if (isClockedIn) {
         // Redirect to active shift dashboard immediately
         router.replace("/clock/dashboard");
       }
@@ -271,8 +278,15 @@ export default function ClockPage() {
   // If already clocked in (active or on break), show loading while redirecting
   // This prevents the form from flashing before redirect
   if (clockStatus) {
-    const status = clockStatus.status;
-    if (status === "active" || status === "on_break") {
+    // Check for clocked in status - API can return status, current_state, or is_clocked_in
+    const isClockedIn =
+      clockStatus?.is_clocked_in === true ||
+      clockStatus?.status === "active" ||
+      clockStatus?.status === "on_break" ||
+      clockStatus?.current_state === "active" ||
+      clockStatus?.current_state === "on_break";
+
+    if (isClockedIn) {
       // The useEffect will handle the redirect, but show loading state here
       return (
         <div className="flex items-center justify-center min-h-screen">

@@ -28,7 +28,7 @@ export default function TaskTypesDocs() {
             <div>
               <h3 className="font-semibold mb-2">What are Task Types?</h3>
               <p className="text-sm text-muted-foreground">
-                Task types categorize different kinds of work in your organisation. They help organize tasks,
+                Task types categorise different kinds of work in your organisation. They help organise tasks,
                 apply specific workflows, and enable better reporting.
               </p>
             </div>

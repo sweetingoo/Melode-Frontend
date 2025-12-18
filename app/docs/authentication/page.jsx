@@ -28,7 +28,7 @@ export default function AuthenticationDocs() {
           <CardContent className="space-y-6">
             <div>
               <h3 className="font-semibold mb-4">Step-by-Step Login Process</h3>
-              
+
               <div className="space-y-6">
                 <div>
                   <h4 className="text-sm font-semibold mb-2">Step 1: Navigate to Login Page</h4>
@@ -42,8 +42,8 @@ export default function AuthenticationDocs() {
                   <p className="text-sm text-muted-foreground mb-4">
                     You'll see the login form with the following fields:
                   </p>
-                  <FormMockup 
-                    title="Login Form" 
+                  <FormMockup
+                    title="Login Form"
                     description="Enter your credentials to access your account"
                   >
                     <div className="space-y-4">
@@ -81,8 +81,8 @@ export default function AuthenticationDocs() {
                   <p className="text-sm text-muted-foreground mb-4">
                     If MFA is enabled, you'll see this verification screen:
                   </p>
-                  <FormMockup 
-                    title="MFA Verification" 
+                  <FormMockup
+                    title="MFA Verification"
                     description="Enter the 6-digit code from your authenticator app"
                   >
                     <div className="space-y-4">
@@ -137,7 +137,7 @@ export default function AuthenticationDocs() {
           <CardContent className="space-y-6">
             <div>
               <h3 className="font-semibold mb-4">Step-by-Step Sign Up Process</h3>
-              
+
               <div className="space-y-6">
                 <div>
                   <h4 className="text-sm font-semibold mb-2">Step 1: Access Sign Up Page</h4>
@@ -151,8 +151,8 @@ export default function AuthenticationDocs() {
                   <p className="text-sm text-muted-foreground mb-4">
                     Fill in the sign up form with your information:
                   </p>
-                  <FormMockup 
-                    title="Create Account" 
+                  <FormMockup
+                    title="Create Account"
                     description="Fill in all required information to create your account"
                   >
                     <div className="space-y-4">
@@ -160,25 +160,25 @@ export default function AuthenticationDocs() {
                         <FormField
                           label="First Name"
                           type="text"
-                          placeholder="John"
+                          placeholder="Alex"
                           required
-                          value="John"
+                          value="Alex"
                         />
                         <FormField
                           label="Last Name"
                           type="text"
-                          placeholder="Doe"
+                          placeholder="Brown"
                           required
-                          value="Doe"
+                          value="Brown"
                         />
                       </div>
                       <FormField
                         label="Email Address"
                         type="email"
-                        placeholder="john.doe@example.com"
+                        placeholder="alex.brown@example.com"
                         icon={Mail}
                         required
-                        value="john.doe@example.com"
+                        value="alex.brown@example.com"
                       />
                       <FormField
                         label="Password"
@@ -229,12 +229,12 @@ export default function AuthenticationDocs() {
           <CardContent className="space-y-6">
             <div>
               <h3 className="font-semibold mb-4">Password Recovery Flow</h3>
-              
+
               <div className="space-y-6">
                 <div>
                   <h4 className="text-sm font-semibold mb-3">Step 1: Forgot Password Form</h4>
-                  <FormMockup 
-                    title="Forgot Password" 
+                  <FormMockup
+                    title="Forgot Password"
                     description="Enter your email to receive a password reset link"
                   >
                     <div className="space-y-4">
@@ -258,8 +258,8 @@ export default function AuthenticationDocs() {
                   <p className="text-sm text-muted-foreground mb-4">
                     After clicking the reset link in your email, you'll see:
                   </p>
-                  <FormMockup 
-                    title="Reset Password" 
+                  <FormMockup
+                    title="Reset Password"
                     description="Enter your new password"
                   >
                     <div className="space-y-4">
@@ -301,15 +301,15 @@ export default function AuthenticationDocs() {
           <CardContent className="space-y-6">
             <div>
               <h3 className="font-semibold mb-4">Role Selection Process</h3>
-              
+
               <div className="space-y-6">
                 <div>
                   <h4 className="text-sm font-semibold mb-3">Role Selection Screen</h4>
                   <p className="text-sm text-muted-foreground mb-4">
                     If you have multiple roles, you'll see this selection screen:
                   </p>
-                  <FormMockup 
-                    title="Select Your Role" 
+                  <FormMockup
+                    title="Select Your Role"
                     description="Choose which role you want to use for this session"
                   >
                     <div className="space-y-3">
@@ -317,7 +317,7 @@ export default function AuthenticationDocs() {
                         <div className="flex items-center justify-between">
                           <div>
                             <h5 className="font-semibold text-sm">Manager</h5>
-                            <p className="text-xs text-muted-foreground">Sales Department</p>
+                            <p className="text-xs text-muted-foreground">Operations Department</p>
                           </div>
                           <Badge variant="secondary">Active</Badge>
                         </div>
@@ -326,7 +326,7 @@ export default function AuthenticationDocs() {
                         <div className="flex items-center justify-between">
                           <div>
                             <h5 className="font-semibold text-sm">Employee</h5>
-                            <p className="text-xs text-muted-foreground">Marketing Department</p>
+                            <p className="text-xs text-muted-foreground">Finance Department</p>
                           </div>
                           <Badge>Selected</Badge>
                         </div>

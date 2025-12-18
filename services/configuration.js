@@ -118,4 +118,26 @@ export const configurationService = {
       throw error;
     }
   },
+
+  // Get default role permissions
+  getDefaultRolePermissions: async () => {
+    try {
+      return await api.get("/configuration/default-role-permissions");
+    } catch (error) {
+      console.error("Get default role permissions failed:", error);
+      throw error;
+    }
+  },
+
+  // Update default role permissions
+  updateDefaultRolePermissions: async (permissionIds) => {
+    try {
+      return await api.put("/configuration/default-role-permissions", {
+        permission_ids: permissionIds,
+      });
+    } catch (error) {
+      console.error("Update default role permissions failed:", error);
+      throw error;
+    }
+  },
 };

@@ -11,7 +11,7 @@ export default function DepartmentsDocs() {
       <div className="mb-8">
         <h1 className="text-4xl font-bold mb-4">Departments</h1>
         <p className="text-lg text-muted-foreground">
-          Organize your company into departments and manage organisational structure
+          Organise your company into departments and manage organisational structure
         </p>
       </div>
 
@@ -28,8 +28,8 @@ export default function DepartmentsDocs() {
             <div>
               <h3 className="font-semibold mb-2">What are Departments?</h3>
               <p className="text-sm text-muted-foreground">
-                Departments represent organisational units within your company, such as Sales, Marketing,
-                Engineering, HR, Operations, etc. Departments help organize employees, tasks, resources,
+                Departments represent organisational units within your company, such as Operations, HR,
+                Finance, IT, Administration, etc. Departments help organise employees, tasks, resources,
                 and reporting structures.
               </p>
             </div>
@@ -87,22 +87,22 @@ export default function DepartmentsDocs() {
                       <FormField
                         label="Department Name"
                         type="text"
-                        placeholder="Sales"
+                        placeholder="Operations"
                         icon={Building2}
                         required
-                        value="Sales"
+                        value="Operations"
                       />
                       <FormField
                         label="Department Code"
                         type="text"
-                        placeholder="SALES"
-                        value="SALES"
+                        placeholder="OPS"
+                        value="OPS"
                       />
                       <FormTextarea
                         label="Description"
                         placeholder="Department description..."
                         rows={3}
-                        value="Responsible for all sales activities and customer relationships"
+                        value="Responsible for operational activities and day-to-day management"
                       />
                     </div>
                   </DialogMockup>

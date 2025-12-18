@@ -29,7 +29,7 @@ export default function MyTasksDocs() {
             <div>
               <h3 className="font-semibold mb-2">What is My Tasks?</h3>
               <p className="text-sm text-muted-foreground">
-                My Tasks is your personal task management center where you can view all tasks assigned to you, 
+                My Tasks is your personal task management center where you can view all tasks assigned to you,
                 track their progress, update their status, and manage your workload. This feature is available to all users.
               </p>
             </div>
@@ -58,17 +58,17 @@ export default function MyTasksDocs() {
               <p className="text-sm text-muted-foreground mb-4">
                 When you navigate to My Tasks, you'll see a list of all your assigned tasks:
               </p>
-              <FormMockup 
-                title="My Tasks" 
+              <FormMockup
+                title="My Tasks"
                 description="All tasks assigned to you"
               >
                 <div className="space-y-4">
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2">
                       <Search className="h-4 w-4 text-muted-foreground" />
-                      <input 
-                        type="text" 
-                        placeholder="Search tasks..." 
+                      <input
+                        type="text"
+                        placeholder="Search tasks..."
                         className="flex-1 px-3 py-2 border rounded-md text-sm"
                         disabled
                         value=""
@@ -86,7 +86,7 @@ export default function MyTasksDocs() {
                       className="w-40"
                     />
                   </div>
-                  
+
                   <div className="space-y-2">
                     <div className="p-4 border rounded-lg hover:bg-muted/50">
                       <div className="flex items-start justify-between">
@@ -110,7 +110,7 @@ export default function MyTasksDocs() {
                         </button>
                       </div>
                     </div>
-                    
+
                     <div className="p-4 border rounded-lg hover:bg-muted/50 bg-muted/30">
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
@@ -145,8 +145,8 @@ export default function MyTasksDocs() {
               <p className="text-sm text-muted-foreground mb-4">
                 Click on a task to view details and update its status. You'll see a dialog like this:
               </p>
-              <DialogMockup 
-                title="Task Details" 
+              <DialogMockup
+                title="Task Details"
                 description="View and update task information"
                 footer={
                   <>
@@ -166,7 +166,7 @@ export default function MyTasksDocs() {
                       Prepare and submit the quarterly financial report including revenue analysis, expenses, and projections.
                     </p>
                   </div>
-                  
+
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="text-xs text-muted-foreground">Status</label>
@@ -192,7 +192,7 @@ export default function MyTasksDocs() {
                       />
                     </div>
                   </div>
-                  
+
                   <div>
                     <label className="text-xs text-muted-foreground mb-2 block">Add Comment</label>
                     <FormTextarea
@@ -216,7 +216,7 @@ export default function MyTasksDocs() {
               <Filter className="h-6 w-6 text-purple-600" />
               <CardTitle>Filtering & Sorting</CardTitle>
             </div>
-            <CardDescription>Organize and find tasks efficiently</CardDescription>
+            <CardDescription>Organise and find tasks efficiently</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div>

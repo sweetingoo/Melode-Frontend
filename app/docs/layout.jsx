@@ -173,7 +173,7 @@ const documentationCategories = [
                 icon: Clock,
             },
             {
-                title: "Clock History",
+                title: "Session History",
                 href: "/docs/clock-history",
                 icon: History,
             },

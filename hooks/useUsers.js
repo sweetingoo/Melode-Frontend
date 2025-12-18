@@ -77,8 +77,8 @@ export const useUsers = (params = {}) => {
             users: [
               {
                 id: 1,
-                email: "john.doe@company.com",
-                username: "john.doe",
+                email: "alex.brown@company.com",
+                username: "alex.brown",
                 first_name: "John",
                 last_name: "Doe",
                 title: "Mr",
@@ -94,8 +94,8 @@ export const useUsers = (params = {}) => {
               },
               {
                 id: 2,
-                email: "jane.smith@company.com",
-                username: "jane.smith",
+                email: "sarah.williams@company.com",
+                username: "sarah.williams",
                 first_name: "Jane",
                 last_name: "Smith",
                 title: "Ms",
@@ -111,8 +111,8 @@ export const useUsers = (params = {}) => {
               },
               {
                 id: 3,
-                email: "mike.wilson@company.com",
-                username: "mike.wilson",
+                email: "james.taylor@company.com",
+                username: "james.taylor",
                 first_name: "Mike",
                 last_name: "Wilson",
                 title: "Mr",

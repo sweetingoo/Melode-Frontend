@@ -197,8 +197,8 @@ const Dashboard = () => {
       activities.push({
         id: `clock-${record.id}`,
         type: "clock",
-        title: record.clock_in_time ? "Clocked In" : "Clocked Out",
-        description: record.location?.name || record.job_role?.display_name || "Clock record",
+        title: record.clock_in_time ? "Checked In" : "Checked Out",
+        description: record.location?.name || record.job_role?.display_name || "Session record",
         timestamp: record.clock_in_time || record.clock_out_time || record.created_at,
         link: "/clock/history",
         icon: Clock,
@@ -673,14 +673,14 @@ const Dashboard = () => {
               <CardContent>
                 <div className="my-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-2">
                   <Link href="/docs">
-                      <Button
-                        className="w-full justify-start cursor-pointer"
-                        variant="outline"
-                      >
+                    <Button
+                      className="w-full justify-start cursor-pointer"
+                      variant="outline"
+                    >
                       <BookOpen className="mr-2 h-4 w-4" />
                       Documentation
-                      </Button>
-                    </Link>
+                    </Button>
+                  </Link>
                   {canManageUsers && (
                     <Link href="/admin/employee-management">
                       <Button
@@ -838,26 +838,62 @@ const Dashboard = () => {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
-                  {clockStatus?.status === "active" || clockStatus?.status === "on_break" ? (
-                    <span className="text-green-600">Clocked In</span>
-                  ) : (
-                    <span className="text-muted-foreground">Clocked Out</span>
-                  )}
+                  {(() => {
+                    // Check for clocked in status - API can return status, current_state, or is_clocked_in
+                    const isClockedIn =
+                      clockStatus?.is_clocked_in === true ||
+                      clockStatus?.status === "active" ||
+                      clockStatus?.status === "on_break" ||
+                      clockStatus?.current_state === "active" ||
+                      clockStatus?.current_state === "on_break";
+
+                    return isClockedIn ? (
+                      <span className="text-green-600">Checked In</span>
+                    ) : (
+                      <span className="text-muted-foreground">Checked Out</span>
+                    );
+                  })()}
                 </div>
-                {clockStatus?.status === "active" && clockStatus?.clock_in_time && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Since {new Date(clockStatus.clock_in_time).toLocaleTimeString()}
-                  </p>
-                )}
+                {(() => {
+                  // Check if active (not on break)
+                  const isClockedIn =
+                    clockStatus?.is_clocked_in === true ||
+                    clockStatus?.status === "active" ||
+                    clockStatus?.status === "on_break" ||
+                    clockStatus?.current_state === "active" ||
+                    clockStatus?.current_state === "on_break";
+                  const isOnBreak =
+                    clockStatus?.is_on_break === true ||
+                    clockStatus?.status === "on_break" ||
+                    clockStatus?.current_state === "on_break";
+                  const isActive = isClockedIn && !isOnBreak;
+
+                  if (isActive && clockStatus?.clock_in_time) {
+                    return (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Since {new Date(clockStatus.clock_in_time).toLocaleTimeString()}
+                      </p>
+                    );
+                  }
+                  return null;
+                })()}
                 <Link href="/clock">
                   <Button variant="ghost" size="sm" className="mt-2 w-full">
-                    {clockStatus?.status === "active" || clockStatus?.status === "on_break" ? "View Shift" : "Check In"} <ArrowRight className="ml-2 h-3 w-3" />
+                    {(() => {
+                      const isClockedIn =
+                        clockStatus?.is_clocked_in === true ||
+                        clockStatus?.status === "active" ||
+                        clockStatus?.status === "on_break" ||
+                        clockStatus?.current_state === "active" ||
+                        clockStatus?.current_state === "on_break";
+                      return isClockedIn ? "View Shift" : "Check In";
+                    })()} <ArrowRight className="ml-2 h-3 w-3" />
                   </Button>
                 </Link>
               </CardContent>
             </Card>
 
-            {/* Clock History Card */}
+            {/* Session History Card */}
             <Card className="hover:shadow-lg transition-all duration-200 border-l-4 border-l-purple-500">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">This Week</CardTitle>
@@ -870,7 +906,7 @@ const Dashboard = () => {
                   {myStats?.total_clock_records_this_week || recentClockRecords?.total || 0}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Clock records this week
+                  Session records this week
                 </p>
                 <Link href="/clock/history">
                   <Button variant="ghost" size="sm" className="mt-2 w-full">
@@ -954,7 +990,7 @@ const Dashboard = () => {
                     <Button className="w-full justify-start h-auto py-3" variant="outline">
                       <Calendar className="mr-2 h-4 w-4" />
                       <div className="text-left">
-                        <div className="font-medium">Clock History</div>
+                        <div className="font-medium">Session History</div>
                         <div className="text-xs text-muted-foreground">Past records</div>
                       </div>
                     </Button>

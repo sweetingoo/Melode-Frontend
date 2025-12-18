@@ -83,7 +83,7 @@ export default function ClockInOutDocs() {
                         value="main-office"
                         options={[
                           { value: "main-office", label: "Main Office" },
-                          { value: "warehouse-a", label: "Warehouse A" },
+                          { value: "office-2", label: "Branch Office" },
                           { value: "remote", label: "Remote/Home Office" },
                         ]}
                       />
@@ -114,7 +114,7 @@ export default function ClockInOutDocs() {
                         <div className="flex items-center justify-between mb-2">
                           <div className="flex items-center gap-2">
                             <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-                            <span className="text-sm font-semibold">Clocked In</span>
+                            <span className="text-sm font-semibold">Checked In</span>
                           </div>
                           <Badge variant="secondary">Active</Badge>
                         </div>
@@ -150,8 +150,8 @@ export default function ClockInOutDocs() {
                 <li>A new clock session is created with the current timestamp</li>
                 <li>Your location is recorded (if GPS/location services are enabled)</li>
                 <li>The system tracks your active work time</li>
-                <li>You'll see a live timer showing how long you've been clocked in</li>
-                <li>Your status changes to "Clocked In"</li>
+                <li>You'll see a live timer showing how long you've been checked in</li>
+                <li>Your status changes to "Checked In"</li>
               </ul>
             </div>
             <div className="bg-muted p-4 rounded-lg">
@@ -189,7 +189,7 @@ export default function ClockInOutDocs() {
                 <li>Your clock session is completed with an end timestamp</li>
                 <li>Total hours worked are calculated and saved</li>
                 <li>The session is recorded in your clock history</li>
-                <li>Your status changes to "Clocked Out"</li>
+                <li>Your status changes to "Checked Out"</li>
                 <li>You can now check in again for a new session</li>
               </ul>
             </div>
@@ -241,7 +241,7 @@ export default function ClockInOutDocs() {
               <div>
                 <h3 className="font-semibold mb-2">Live Timer</h3>
                 <p className="text-sm text-muted-foreground">
-                  When you're clocked in, you'll see a live timer showing:
+                  When you're checked in, you'll see a live timer showing:
                 </p>
                 <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground mt-2">
                   <li>Current time elapsed since checking in</li>
@@ -270,7 +270,7 @@ export default function ClockInOutDocs() {
             <ul className="list-disc list-inside space-y-2 text-sm text-muted-foreground">
               <li><strong>Check in promptly:</strong> Check in as soon as you start work to ensure accurate time tracking</li>
               <li><strong>Check out on time:</strong> Remember to check out when you finish work or take breaks</li>
-              <li><strong>Check your status:</strong> Verify that you're clocked in/out correctly before leaving</li>
+              <li><strong>Check your status:</strong> Verify that you're checked in/out correctly before leaving</li>
               <li><strong>Add notes when needed:</strong> Use notes to document any special circumstances or breaks</li>
               <li><strong>Review your history:</strong> Regularly check your clock history to ensure accuracy</li>
               <li><strong>Report issues:</strong> Contact your administrator if you notice any discrepancies</li>

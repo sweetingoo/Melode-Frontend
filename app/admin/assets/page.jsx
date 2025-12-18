@@ -720,12 +720,17 @@ const AssetsPage = () => {
     <div className="space-y-6">
       {/* Header */}
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold tracking-tight">
-            Assets Management
-          </h1>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
+              Assets Management
+            </h1>
+            <p className="text-sm sm:text-base text-muted-foreground mt-1">
+              Manage and track all assets in your organisation
+            </p>
+          </div>
           {canCreateAsset && (
-            <Button onClick={handleCreateAsset}>
+            <Button onClick={handleCreateAsset} className="w-full sm:w-auto">
               <Plus className="mr-2 h-4 w-4" />
               Create Asset
             </Button>
@@ -2255,7 +2260,7 @@ const AssetsPage = () => {
                     address: e.target.value,
                   })
                 }
-                placeholder="123 Main Street"
+                placeholder="123 High Street"
               />
             </div>
             <div>

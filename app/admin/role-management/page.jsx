@@ -607,15 +607,15 @@ const RoleManagementPage = () => {
   return (
     <div className="space-y-6">
       {/* Header Section */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Role Management</h1>
-          <p className="text-muted-foreground mt-1">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Role Management</h1>
+          <p className="text-muted-foreground mt-1 text-sm sm:text-base">
             Manage roles and their permissions
           </p>
         </div>
         {canCreateRole && (
-          <Button onClick={handleCreateRole} className="flex items-center gap-2">
+          <Button onClick={handleCreateRole} className="flex items-center gap-2 w-full sm:w-auto">
             <Plus className="h-4 w-4" />
             Create Role
           </Button>
@@ -623,8 +623,8 @@ const RoleManagementPage = () => {
       </div>
 
       {/* Filters Section */}
-      <div className="flex flex-wrap items-center gap-4">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-3 sm:gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
           <Label htmlFor="departmentFilter" className="text-sm font-medium">
             Filter by Department:
           </Label>
@@ -634,7 +634,7 @@ const RoleManagementPage = () => {
               setSelectedDepartmentFilter(value === "all" ? null : parseInt(value))
             }
           >
-            <SelectTrigger className="w-[200px]">
+            <SelectTrigger className="w-full sm:w-[200px]">
               <SelectValue placeholder="All departments" />
             </SelectTrigger>
             <SelectContent>
@@ -648,7 +648,7 @@ const RoleManagementPage = () => {
           </Select>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
           <Label htmlFor="roleTypeFilter" className="text-sm font-medium">
             Filter by Type:
           </Label>
@@ -658,7 +658,7 @@ const RoleManagementPage = () => {
               setSelectedRoleTypeFilter(value === "all" ? null : value)
             }
           >
-            <SelectTrigger className="w-[180px]">
+            <SelectTrigger className="w-full sm:w-[180px]">
               <SelectValue placeholder="All types" />
             </SelectTrigger>
             <SelectContent>
@@ -677,6 +677,7 @@ const RoleManagementPage = () => {
               setSelectedDepartmentFilter(null);
               setSelectedRoleTypeFilter(null);
             }}
+            className="w-full sm:w-auto"
           >
             Clear Filters
           </Button>
@@ -782,13 +783,13 @@ const RoleManagementPage = () => {
               return (
                 <Card key={department.id} className="bg-card">
                   <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 flex-shrink-0">
                           <Building2 className="h-5 w-5 text-primary" />
                         </div>
-                        <div>
-                          <CardTitle className="text-lg">
+                        <div className="min-w-0 flex-1">
+                          <CardTitle className="text-base sm:text-lg break-words">
                             {department.name}
                             {department.code && (
                               <span className="text-sm text-muted-foreground font-normal ml-2">
@@ -797,13 +798,13 @@ const RoleManagementPage = () => {
                             )}
                           </CardTitle>
                           {department.description && (
-                            <p className="text-sm text-muted-foreground mt-1">
+                            <p className="text-sm text-muted-foreground mt-1 break-words">
                               {department.description}
                             </p>
                           )}
                         </div>
                       </div>
-                      <Badge variant="secondary">
+                      <Badge variant="secondary" className="w-fit">
                         {filteredJobRolesList.length} job role(s)
                       </Badge>
                     </div>
@@ -828,44 +829,44 @@ const RoleManagementPage = () => {
                           return (
                             <div
                               key={role.id}
-                              className="border rounded-lg p-4 bg-background space-y-3"
+                              className="border rounded-lg p-3 sm:p-4 bg-background space-y-3"
                             >
                               {/* Job Role Header */}
-                              <div className="flex items-start justify-between">
-                                <div className="flex items-center gap-3 flex-1">
+                              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                                <div className="flex items-start gap-3 flex-1 min-w-0">
                                   <div
-                                    className={`flex h-8 w-8 items-center justify-center rounded-lg ${iconClasses}`}
+                                    className={`flex h-8 w-8 sm:h-8 sm:w-8 items-center justify-center rounded-lg flex-shrink-0 ${iconClasses}`}
                                   >
                                     <IconComponent className="h-4 w-4" />
                                   </div>
-                                  <div className="flex-1">
-                                    <div className="flex items-center gap-2">
-                                      <h4 className="font-semibold text-base">
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <h4 className="font-semibold text-base break-words">
                                         {role.name}
                                       </h4>
                                       <Badge
                                         variant="default"
-                                        className="text-[10px] px-1.5 py-0"
+                                        className="text-[10px] px-1.5 py-0 flex-shrink-0"
                                       >
                                         Job Role
                                       </Badge>
                                       {role.isSystem && (
                                         <Badge
                                           variant="secondary"
-                                          className="text-[10px] px-1.5 py-0"
+                                          className="text-[10px] px-1.5 py-0 flex-shrink-0"
                                         >
                                           System
                                         </Badge>
                                       )}
                                     </div>
                                     {role.description && (
-                                      <p className="text-xs text-muted-foreground mt-1">
+                                      <p className="text-xs text-muted-foreground mt-1 break-words">
                                         {role.description}
                                       </p>
                                     )}
                                   </div>
                                 </div>
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2 flex-shrink-0">
                                   {canUpdateRole && (
                                     <Button
                                       variant="ghost"
@@ -932,18 +933,18 @@ const RoleManagementPage = () => {
                               </div>
 
                               {/* Job Role Details */}
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-xs text-muted-foreground">
                                   <div className="flex items-center gap-1">
-                                    <Key className="h-3 w-3" />
+                                    <Key className="h-3 w-3 flex-shrink-0" />
                                     <span>Priority: {role.priority}</span>
                                   </div>
                                   <div className="flex items-center gap-1">
-                                    <Users className="h-3 w-3" />
+                                    <Users className="h-3 w-3 flex-shrink-0" />
                                     <span>Users: {role.userCount || 0}</span>
                                   </div>
                                   <div className="flex items-center gap-1">
-                                    <Settings className="h-3 w-3" />
+                                    <Settings className="h-3 w-3 flex-shrink-0" />
                                     <span>
                                       Permissions: {getRolePermissions(role).length}
                                     </span>
@@ -954,7 +955,7 @@ const RoleManagementPage = () => {
                                     variant="outline"
                                     size="sm"
                                     onClick={() => handleManagePermissions(role.id)}
-                                    className="flex items-center gap-1 h-7 text-xs px-2"
+                                    className="flex items-center gap-1 h-7 text-xs px-2 w-full sm:w-auto"
                                   >
                                     <Settings className="h-3 w-3" />
                                     Manage Permissions
@@ -998,9 +999,9 @@ const RoleManagementPage = () => {
 
                               {/* Shift Roles */}
                               {group.shiftRoles.length > 0 && (
-                                <div className="ml-4 mt-3 space-y-2 border-l-2 border-muted pl-4">
+                                <div className="ml-0 sm:ml-4 mt-3 space-y-2 border-l-0 sm:border-l-2 border-muted pl-0 sm:pl-4">
                                   <div className="flex items-center gap-2 mb-2">
-                                    <Network className="h-3 w-3 text-muted-foreground" />
+                                    <Network className="h-3 w-3 text-muted-foreground flex-shrink-0" />
                                     <span className="text-xs font-medium text-muted-foreground">
                                       Shift Roles ({group.shiftRoles.length})
                                     </span>
@@ -1014,41 +1015,41 @@ const RoleManagementPage = () => {
                                     return (
                                       <div
                                         key={shiftRole.id}
-                                        className="border rounded-md p-3 bg-muted/30 space-y-2"
+                                        className="border rounded-md p-2 sm:p-3 bg-muted/30 space-y-2"
                                       >
-                                        <div className="flex items-start justify-between">
-                                          <div className="flex items-center gap-2 flex-1">
+                                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                                          <div className="flex items-start gap-2 flex-1 min-w-0">
                                             <div
-                                              className={`flex h-6 w-6 items-center justify-center rounded ${shiftIconClasses}`}
+                                              className={`flex h-6 w-6 items-center justify-center rounded flex-shrink-0 ${shiftIconClasses}`}
                                             >
                                               <ShiftIconComponent className="h-3 w-3" />
                                             </div>
-                                            <div className="flex-1">
-                                              <div className="flex items-center gap-2">
-                                                <span className="text-sm font-medium">
+                                            <div className="flex-1 min-w-0">
+                                              <div className="flex flex-wrap items-center gap-2">
+                                                <span className="text-sm font-medium break-words">
                                                   {shiftRole.name}
                                                 </span>
                                                 <Badge
                                                   variant="secondary"
-                                                  className="text-[10px] px-1.5 py-0"
+                                                  className="text-[10px] px-1.5 py-0 flex-shrink-0"
                                                 >
                                                   Shift Role
                                                 </Badge>
                                                 <Badge
                                                   variant="outline"
-                                                  className="text-[10px] px-1.5 py-0 text-blue-600 dark:text-blue-400 border-blue-300 dark:border-blue-700"
+                                                  className="text-[10px] px-1.5 py-0 text-blue-600 dark:text-blue-400 border-blue-300 dark:border-blue-700 flex-shrink-0"
                                                 >
                                                   Auto-assigned
                                                 </Badge>
                                               </div>
                                               {shiftRole.description && (
-                                                <p className="text-xs text-muted-foreground mt-1">
+                                                <p className="text-xs text-muted-foreground mt-1 break-words">
                                                   {shiftRole.description}
                                                 </p>
                                               )}
                                             </div>
                                           </div>
-                                          <div className="flex items-center gap-2">
+                                          <div className="flex items-center gap-2 flex-shrink-0">
                                             <Button
                                               variant="ghost"
                                               size="sm"
@@ -1103,20 +1104,20 @@ const RoleManagementPage = () => {
                                             )}
                                           </div>
                                         </div>
-                                        <div className="flex items-center justify-between">
-                                          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                          <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                                             <div className="flex items-center gap-1">
-                                              <Key className="h-3 w-3" />
+                                              <Key className="h-3 w-3 flex-shrink-0" />
                                               <span>Priority: {shiftRole.priority}</span>
                                             </div>
                                             <div className="flex items-center gap-1">
-                                              <Users className="h-3 w-3" />
+                                              <Users className="h-3 w-3 flex-shrink-0" />
                                               <span>
                                                 Users: {shiftRole.userCount || 0}
                                               </span>
                                             </div>
                                             <div className="flex items-center gap-1">
-                                              <Settings className="h-3 w-3" />
+                                              <Settings className="h-3 w-3 flex-shrink-0" />
                                               <span>
                                                 Permissions:{" "}
                                                 {getRolePermissions(shiftRole).length}
@@ -1130,7 +1131,7 @@ const RoleManagementPage = () => {
                                               onClick={() =>
                                                 handleManagePermissions(shiftRole.id)
                                               }
-                                              className="flex items-center gap-1 h-6 text-xs px-2"
+                                              className="flex items-center gap-1 h-6 text-xs px-2 w-full sm:w-auto"
                                             >
                                               <Settings className="h-3 w-3" />
                                               Manage Permissions
@@ -1178,7 +1179,7 @@ const RoleManagementPage = () => {
                               )}
 
                               {group.shiftRoles.length === 0 && (
-                                <div className="ml-4 mt-2">
+                                <div className="ml-0 sm:ml-4 mt-2">
                                   <p className="text-xs text-muted-foreground italic">
                                     No shift roles assigned
                                   </p>

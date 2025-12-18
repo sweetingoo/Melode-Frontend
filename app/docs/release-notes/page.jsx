@@ -33,7 +33,7 @@ const releaseNotes = [
             {
                 type: "improvement",
                 title: "Release Notes Integration",
-                description: "Dedicated release notes page showing all version updates, new features, improvements, and bug fixes in an organized, easy-to-read format.",
+                description: "Dedicated release notes page showing all version updates, new features, improvements, and bug fixes in an organised, easy-to-read format.",
                 icon: CheckCircle,
             },
         ],

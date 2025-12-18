@@ -10,7 +10,7 @@ export default function ClockHistoryDocs() {
   return (
     <>
       <div className="mb-8">
-        <h1 className="text-4xl font-bold mb-4">Clock History</h1>
+        <h1 className="text-4xl font-bold mb-4">Session History</h1>
         <p className="text-lg text-muted-foreground">
           View and review your check in/out history and work hours
         </p>
@@ -27,17 +27,17 @@ export default function ClockHistoryDocs() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <h3 className="font-semibold mb-2">What is Clock History?</h3>
+              <h3 className="font-semibold mb-2">What is Session History?</h3>
               <p className="text-sm text-muted-foreground">
-                Clock History provides a comprehensive record of all your clock in/out sessions,
+                Session History provides a comprehensive record of all your check in/out sessions,
                 including timestamps, locations, duration, and total hours worked. This helps you
                 track your attendance and verify your work hours.
               </p>
             </div>
             <div>
-              <h3 className="font-semibold mb-2">Accessing Clock History</h3>
+              <h3 className="font-semibold mb-2">Accessing Session History</h3>
               <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
-                <li>Click "Clock History" in the sidebar navigation</li>
+                <li>Click "Session History" in the sidebar navigation</li>
                 <li>URL: <code className="bg-muted px-1 py-0.5 rounded">/clock/history</code></li>
                 <li>Requires <code className="bg-muted px-1 py-0.5 rounded">clock:view</code> permission</li>
               </ul>
@@ -49,7 +49,7 @@ export default function ClockHistoryDocs() {
           <CardHeader>
             <div className="flex items-center gap-3">
               <Calendar className="h-6 w-6 text-green-600" />
-              <CardTitle>Clock History Interface</CardTitle>
+              <CardTitle>Session History Interface</CardTitle>
             </div>
             <CardDescription>Understanding the history display</CardDescription>
           </CardHeader>
@@ -60,12 +60,12 @@ export default function ClockHistoryDocs() {
                 The clock history page displays all your clock sessions in a table format:
               </p>
               <FormMockup
-                title="Clock History"
+                title="Session History"
                 description="Complete record of all check in/out sessions"
               >
                 <div className="space-y-4">
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold">Clock History</h3>
+                    <h3 className="text-lg font-semibold">Session History</h3>
                     <div className="flex items-center gap-2">
                       <FormButton variant="outline" size="sm" icon={Download}>
                         Export
@@ -186,7 +186,7 @@ export default function ClockHistoryDocs() {
                 <li><strong>Check In Time:</strong> When you checked in</li>
                 <li><strong>Check Out Time:</strong> When you checked out (if completed)</li>
                 <li><strong>Duration:</strong> Total hours worked for that session</li>
-                <li><strong>Location:</strong> Where you clocked in/out</li>
+                <li><strong>Location:</strong> Where you checked in/out</li>
                 <li><strong>Status:</strong> Whether the session is active or completed</li>
                 <li><strong>Actions:</strong> View details button</li>
               </ul>
@@ -282,7 +282,7 @@ export default function ClockHistoryDocs() {
                         <div className="space-y-2">
                           <div className="flex items-center gap-2 text-xs">
                             <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                            <span>09:00 AM - Clocked In at Main Office</span>
+                            <span>09:00 AM - Checked In at Main Office</span>
                           </div>
                           <div className="flex items-center gap-2 text-xs">
                             <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
@@ -290,7 +290,7 @@ export default function ClockHistoryDocs() {
                           </div>
                           <div className="flex items-center gap-2 text-xs">
                             <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                            <span>05:30 PM - Clocked Out at Main Office</span>
+                            <span>05:30 PM - Checked Out at Main Office</span>
                           </div>
                         </div>
                       </div>
@@ -308,7 +308,7 @@ export default function ClockHistoryDocs() {
               <Filter className="h-6 w-6 text-purple-600" />
               <CardTitle>Filtering & Sorting</CardTitle>
             </div>
-            <CardDescription>Organize and find specific clock records</CardDescription>
+            <CardDescription>Organise and find specific session records</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             <div>
@@ -317,7 +317,7 @@ export default function ClockHistoryDocs() {
                 Use filters to narrow down your clock history:
               </p>
               <FormMockup
-                title="Filter Clock History"
+                title="Filter Session History"
                 description="Apply filters to find specific sessions"
               >
                 <div className="space-y-4">
@@ -357,7 +357,7 @@ export default function ClockHistoryDocs() {
                     options={[
                       { value: "all", label: "All Locations" },
                       { value: "office-1", label: "Main Office" },
-                      { value: "warehouse", label: "Warehouse A" },
+                      { value: "office-2", label: "Branch Office" },
                     ]}
                   />
 
@@ -401,7 +401,7 @@ export default function ClockHistoryDocs() {
           </CardHeader>
           <CardContent className="space-y-6">
             <div>
-              <h3 className="font-semibold mb-4">Step-by-Step: Export Clock History</h3>
+              <h3 className="font-semibold mb-4">Step-by-Step: Export Session History</h3>
 
               <div className="space-y-6">
                 <div>
@@ -424,7 +424,7 @@ export default function ClockHistoryDocs() {
                     Choose your preferred export format:
                   </p>
                   <DialogMockup
-                    title="Export Clock History"
+                    title="Export Session History"
                     description="Export your clock history records"
                     footer={
                       <>
@@ -565,7 +565,7 @@ export default function ClockHistoryDocs() {
               <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
                 <li>Use date range filters to jump to specific time periods</li>
                 <li>Search to quickly find sessions by date or location</li>
-                <li>Sort columns to organize data differently</li>
+                <li>Sort columns to organise data differently</li>
               </ul>
             </div>
           </CardContent>

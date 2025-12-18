@@ -16,6 +16,7 @@ export const configurationKeys = {
     category,
   ],
   organisation: () => [...configurationKeys.all, "organisation"],
+  defaultRolePermissions: () => [...configurationKeys.all, "default-role-permissions"],
 };
 
 // Get settings query
@@ -376,6 +377,79 @@ export const useUpdateOrganisation = () => {
         error?.response?.data?.detail ||
         "Failed to update organisation";
       toast.error("Failed to update organisation", {
+        description: Array.isArray(errorMessage)
+          ? errorMessage.map((e) => e.msg || e).join(", ")
+          : errorMessage,
+      });
+    },
+  });
+};
+
+// Get default role permissions query
+export const useDefaultRolePermissions = (options = {}) => {
+  return useQuery({
+    queryKey: configurationKeys.defaultRolePermissions(),
+    queryFn: async () => {
+      try {
+        const response = await configurationService.getDefaultRolePermissions();
+        // Handle different response formats
+        const data = response.data || response;
+        // Return array of permission IDs
+        if (Array.isArray(data)) {
+          return data;
+        }
+        // Handle object with permission_ids or permissions key
+        return data?.permission_ids || data?.permissions || [];
+      } catch (error) {
+        if (error?.response?.status === 403) {
+          throw new Error("Superuser privileges required to manage configuration");
+        }
+        if (error?.response?.status === 404) {
+          // No default permissions set yet, return empty array
+          return [];
+        }
+        throw error;
+      }
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    ...options,
+  });
+};
+
+// Update default role permissions mutation
+export const useUpdateDefaultRolePermissions = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (permissionIds) => {
+      const response = await configurationService.updateDefaultRolePermissions(
+        permissionIds
+      );
+      // Handle different response formats
+      const data = response.data || response;
+      return data?.permission_ids || data?.permissions || permissionIds;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: configurationKeys.defaultRolePermissions(),
+      });
+      toast.success("Default role permissions updated successfully", {
+        description: "New roles will use these permissions by default.",
+      });
+    },
+    onError: (error) => {
+      console.error("Update default role permissions error:", error);
+      if (error?.response?.status === 403) {
+        toast.error("Access Denied", {
+          description: "Superuser privileges required to manage configuration",
+        });
+        return;
+      }
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.response?.data?.detail ||
+        "Failed to update default role permissions";
+      toast.error("Failed to update default role permissions", {
         description: Array.isArray(errorMessage)
           ? errorMessage.map((e) => e.msg || e).join(", ")
           : errorMessage,
