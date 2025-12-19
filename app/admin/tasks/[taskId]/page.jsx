@@ -452,18 +452,18 @@ const TaskDetailPage = () => {
   const location = locations.find((loc) => loc.id === task.location_id);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6 p-4 md:p-0">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-2 md:gap-4 w-full sm:w-auto">
           <Link href="/admin/tasks">
-            <Button variant="ghost" size="icon">
+            <Button variant="ghost" size="icon" className="flex-shrink-0">
               <ArrowLeft className="h-4 w-4" />
             </Button>
           </Link>
-          <div>
+          <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-3xl font-bold">{task.title}</h1>
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold break-words">{task.title}</h1>
               {task.is_recurring && (
                 <Badge variant="outline" className="border-purple-500/50 text-purple-700 dark:text-purple-400">
                   <Repeat className="mr-1 h-3 w-3" />
@@ -489,34 +489,48 @@ const TaskDetailPage = () => {
                 </Badge>
               )}
             </div>
-            <p className="text-muted-foreground">Task Details</p>
+            <p className="text-sm md:text-base text-muted-foreground">Task Details</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
           {(task.is_recurring || task.parent_task_id) && (
             <Button
               variant="outline"
               onClick={() => setShowHistory(true)}
+              className="h-11 min-h-[44px] px-3 sm:px-4 text-sm flex-shrink-0"
             >
               <History className="mr-2 h-4 w-4" />
-              View History
+              <span className="hidden sm:inline">View History</span>
+              <span className="sm:hidden">History</span>
             </Button>
           )}
           {task.status !== "completed" && (
-            <Button onClick={() => setIsCompleteModalOpen(true)}>
+            <Button
+              onClick={() => setIsCompleteModalOpen(true)}
+              className="h-11 min-h-[44px] px-3 sm:px-4 text-sm flex-shrink-0"
+            >
               <CheckCircle className="mr-2 h-4 w-4" />
-              Complete Task
+              <span className="hidden sm:inline">Complete Task</span>
+              <span className="sm:hidden">Complete</span>
             </Button>
           )}
-          <Button variant="outline" onClick={openEditModal}>
+          <Button
+            variant="outline"
+            onClick={openEditModal}
+            className="h-11 min-h-[44px] px-3 sm:px-4 text-sm flex-shrink-0"
+          >
             <Edit className="mr-2 h-4 w-4" />
             Edit
           </Button>
           <AlertDialog>
             <AlertDialogTrigger asChild>
-              <Button variant="destructive">
+              <Button
+                variant="destructive"
+                className="h-11 min-h-[44px] px-3 sm:px-4 text-sm flex-shrink-0"
+              >
                 <Trash2 className="mr-2 h-4 w-4" />
-                Delete
+                <span className="hidden sm:inline">Delete</span>
+                <span className="sm:hidden">Del</span>
               </Button>
             </AlertDialogTrigger>
             <AlertDialogContent>
@@ -541,9 +555,9 @@ const TaskDetailPage = () => {
         </div>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-3">
+      <div className="grid gap-4 md:gap-6 md:grid-cols-3">
         {/* Main Content */}
-        <div className="md:col-span-2 space-y-6">
+        <div className="md:col-span-2 space-y-4 md:space-y-6">
           {/* File Attachments */}
           <div className="space-y-4">
             <FileAttachmentList
@@ -564,15 +578,15 @@ const TaskDetailPage = () => {
 
           {/* Task Information */}
           <Card>
-            <CardHeader>
-              <CardTitle>Task Information</CardTitle>
+            <CardHeader className="px-4 md:px-6 pt-4 md:pt-6">
+              <CardTitle className="text-lg md:text-xl">Task Information</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="px-4 md:px-6 pb-4 md:pb-6 space-y-4">
               <div>
                 <Label className="text-muted-foreground">Description</Label>
                 <p className="mt-1">{task.description || "No description provided"}</p>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <Label className="text-muted-foreground">Task Type</Label>
                   <div className="mt-1">
@@ -637,7 +651,7 @@ const TaskDetailPage = () => {
               {/* Form Links */}
               {(task.form_id || task.form_submission_id) && (
                 <div className="pt-4 border-t">
-                  <div className="flex items-center justify-between mb-2">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 mb-2">
                     <Label className="text-muted-foreground flex items-center gap-2">
                       <LinkIcon className="h-4 w-4" />
                       Created from Form
@@ -651,32 +665,36 @@ const TaskDetailPage = () => {
                   </div>
                   <div className="mt-2 space-y-2">
                     {task.form_id && (
-                      <div className="flex items-center gap-2 p-2 border rounded-md">
-                        <FileText className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm">
-                          Form ID: {task.form_id}
-                        </span>
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 p-2 border rounded-md">
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                          <span className="text-sm truncate">
+                            Form ID: {task.form_id}
+                          </span>
+                        </div>
                         <Link
                           href={`/admin/forms/${task.form_id}`}
-                          className="ml-auto"
+                          className="sm:ml-auto w-full sm:w-auto"
                         >
-                          <Button variant="ghost" size="sm">
+                          <Button variant="ghost" size="sm" className="w-full sm:w-auto h-10 min-h-[40px] px-3 sm:px-4 text-sm">
                             View Form
                           </Button>
                         </Link>
                       </div>
                     )}
                     {task.form_submission_id && (
-                      <div className="flex items-center gap-2 p-2 border rounded-md">
-                        <FileText className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm">
-                          Submission ID: {task.form_submission_id}
-                        </span>
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 p-2 border rounded-md">
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                          <span className="text-sm truncate">
+                            Submission ID: {task.form_submission_id}
+                          </span>
+                        </div>
                         <Link
                           href={`/admin/forms/${task.form_id || ''}/submissions/${task.form_submission_id}`}
-                          className="ml-auto"
+                          className="sm:ml-auto w-full sm:w-auto"
                         >
-                          <Button variant="ghost" size="sm">
+                          <Button variant="ghost" size="sm" className="w-full sm:w-auto h-10 min-h-[40px] px-3 sm:px-4 text-sm">
                             View Submission
                           </Button>
                         </Link>
@@ -698,16 +716,21 @@ const TaskDetailPage = () => {
 
           {/* Assignment Information */}
           <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle>Assignments</CardTitle>
-                <Button variant="outline" size="sm" onClick={openAssignModal}>
+            <CardHeader className="px-4 md:px-6 pt-4 md:pt-6">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                <CardTitle className="text-lg md:text-xl">Assignments</CardTitle>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={openAssignModal}
+                  className="h-10 min-h-[40px] px-3 sm:px-4 text-sm flex-shrink-0"
+                >
                   <User className="mr-2 h-4 w-4" />
                   Reassign
                 </Button>
               </div>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="px-4 md:px-6 pb-4 md:pb-6 space-y-4">
               {task.assigned_user_ids?.length > 0 && (
                 <div>
                   <Label className="text-muted-foreground flex items-center gap-2">
@@ -777,13 +800,13 @@ const TaskDetailPage = () => {
         </div>
 
         {/* Sidebar */}
-        <div className="space-y-6">
+        <div className="space-y-4 md:space-y-6">
           {/* Dates */}
           <Card>
-            <CardHeader>
-              <CardTitle>Dates</CardTitle>
+            <CardHeader className="px-4 md:px-6 pt-4 md:pt-6">
+              <CardTitle className="text-lg md:text-xl">Dates</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="px-4 md:px-6 pb-4 md:pb-6 space-y-4">
               {task.start_date && (
                 <div>
                   <Label className="text-muted-foreground flex items-center gap-2">
@@ -833,10 +856,10 @@ const TaskDetailPage = () => {
           {/* Location */}
           {location && (
             <Card>
-              <CardHeader>
-                <CardTitle>Location</CardTitle>
+              <CardHeader className="px-4 md:px-6 pt-4 md:pt-6">
+                <CardTitle className="text-lg md:text-xl">Location</CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="px-4 md:px-6 pb-4 md:pb-6">
                 <p>{location.name}</p>
                 {location.address && (
                   <p className="text-sm text-muted-foreground mt-1">
@@ -849,10 +872,10 @@ const TaskDetailPage = () => {
 
           {/* Metadata */}
           <Card>
-            <CardHeader>
-              <CardTitle>Metadata</CardTitle>
+            <CardHeader className="px-4 md:px-6 pt-4 md:pt-6">
+              <CardTitle className="text-lg md:text-xl">Metadata</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2 text-sm">
+            <CardContent className="px-4 md:px-6 pb-4 md:pb-6 space-y-2 text-sm">
               <div>
                 <Label className="text-muted-foreground">Created</Label>
                 <p>
@@ -875,7 +898,7 @@ const TaskDetailPage = () => {
                   <div className="flex items-center gap-2 mt-1">
                     <p>{task.parent_task_id}</p>
                     <Link href={`/admin/tasks/${task.parent_task_id}`}>
-                      <Button variant="ghost" size="sm">
+                      <Button variant="ghost" size="sm" className="h-10 min-h-[40px] px-3 sm:px-4 text-sm">
                         View Parent
                       </Button>
                     </Link>
@@ -923,7 +946,7 @@ const TaskDetailPage = () => {
                 placeholder="Enter task title"
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="edit-task_type">Task Type *</Label>
                 <div className="flex gap-2">
@@ -1066,7 +1089,7 @@ const TaskDetailPage = () => {
                 )}
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <Label>Link to Form</Label>
                 <Select
@@ -1110,16 +1133,18 @@ const TaskDetailPage = () => {
               </div>
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="gap-2">
             <Button
               variant="outline"
               onClick={() => setIsEditModalOpen(false)}
+              className="h-10 min-h-[40px] px-4"
             >
               Cancel
             </Button>
             <Button
               onClick={handleUpdateTask}
               disabled={updateTaskMutation.isPending || !taskFormData.title || !taskFormData.task_type}
+              className="h-10 min-h-[40px] px-4"
             >
               {updateTaskMutation.isPending && (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -1132,7 +1157,7 @@ const TaskDetailPage = () => {
 
       {/* Assign Task Modal */}
       <Dialog open={isAssignModalOpen} onOpenChange={setIsAssignModalOpen}>
-        <DialogContent>
+        <DialogContent className="w-[95vw] sm:w-full max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Assign Task</DialogTitle>
             <DialogDescription>
@@ -1166,7 +1191,7 @@ const TaskDetailPage = () => {
                 )}
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <Label>Assign to Role</Label>
                 <Select
@@ -1217,16 +1242,18 @@ const TaskDetailPage = () => {
               </div>
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="gap-2">
             <Button
               variant="outline"
               onClick={() => setIsAssignModalOpen(false)}
+              className="h-10 min-h-[40px] px-4"
             >
               Cancel
             </Button>
             <Button
               onClick={handleAssignTask}
               disabled={assignTaskMutation.isPending}
+              className="h-10 min-h-[40px] px-4"
             >
               {assignTaskMutation.isPending && (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -1239,7 +1266,7 @@ const TaskDetailPage = () => {
 
       {/* Complete Task Modal */}
       <Dialog open={isCompleteModalOpen} onOpenChange={setIsCompleteModalOpen}>
-        <DialogContent>
+        <DialogContent className="w-[95vw] sm:w-full max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Complete Task</DialogTitle>
             <DialogDescription>
@@ -1279,16 +1306,18 @@ const TaskDetailPage = () => {
               />
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="gap-2">
             <Button
               variant="outline"
               onClick={() => setIsCompleteModalOpen(false)}
+              className="h-10 min-h-[40px] px-4"
             >
               Cancel
             </Button>
             <Button
               onClick={handleCompleteTask}
               disabled={completeTaskMutation.isPending}
+              className="h-10 min-h-[40px] px-4"
             >
               {completeTaskMutation.isPending && (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -1308,7 +1337,7 @@ const TaskDetailPage = () => {
 
       {/* Create Task Type Modal */}
       <Dialog open={isCreateTaskTypeModalOpen} onOpenChange={setIsCreateTaskTypeModalOpen}>
-        <DialogContent>
+        <DialogContent className="w-[95vw] sm:w-full max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Create New Task Type</DialogTitle>
             <DialogDescription>
@@ -1363,7 +1392,7 @@ const TaskDetailPage = () => {
                 rows={3}
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="task-type-icon">Icon (Emoji)</Label>
                 <Input
@@ -1427,7 +1456,7 @@ const TaskDetailPage = () => {
               </p>
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="gap-2">
             <Button
               variant="outline"
               onClick={() => {
@@ -1441,6 +1470,7 @@ const TaskDetailPage = () => {
                   sort_order: 0,
                 });
               }}
+              className="h-10 min-h-[40px] px-4"
             >
               Cancel
             </Button>
@@ -1451,6 +1481,7 @@ const TaskDetailPage = () => {
                 !taskTypeFormData.name ||
                 !taskTypeFormData.display_name
               }
+              className="h-10 min-h-[40px] px-4"
             >
               {createTaskTypeMutation.isPending && (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />

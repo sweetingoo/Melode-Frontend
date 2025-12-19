@@ -16,6 +16,13 @@ const PUBLIC_ROUTES = [
   '/'
 ];
 
+// Define routes that require authentication but are not in admin layout
+const PROTECTED_NON_ADMIN_ROUTES = [
+  '/setup',
+  '/clock',
+  '/my-tasks'
+];
+
 const AuthGuard = ({ children }) => {
   const router = useRouter();
   const pathname = usePathname();
@@ -25,7 +32,7 @@ const AuthGuard = ({ children }) => {
   useEffect(() => {
     const checkAuth = async () => {
       // Check if current route is public
-      const isPublicRoute = PUBLIC_ROUTES.some(route => 
+      const isPublicRoute = PUBLIC_ROUTES.some(route =>
         pathname === route || pathname.startsWith(route + '/')
       );
 
@@ -37,7 +44,7 @@ const AuthGuard = ({ children }) => {
 
       // Check if user is authenticated
       const isAuthenticated = apiUtils.isAuthenticated();
-      
+
       if (!isAuthenticated) {
         // Not authenticated and trying to access protected route
         console.log('AuthGuard: User not authenticated, redirecting to login');
