@@ -10,9 +10,9 @@ export default function EmployeeManagementDocs() {
   return (
     <>
       <div className="mb-8">
-        <h1 className="text-4xl font-bold mb-4">Employee Management</h1>
+        <h1 className="text-4xl font-bold mb-4">People Management</h1>
         <p className="text-lg text-muted-foreground">
-          Manage employee information, assignments, and organisational structure
+          Manage people information, assignments, and organisational structure
         </p>
       </div>
 
@@ -23,21 +23,21 @@ export default function EmployeeManagementDocs() {
               <Users className="h-6 w-6 text-blue-600" />
               <CardTitle>Overview</CardTitle>
             </div>
-            <CardDescription>Understanding employee management</CardDescription>
+            <CardDescription>Understanding people management</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <h3 className="font-semibold mb-2">What is Employee Management?</h3>
+              <h3 className="font-semibold mb-2">What is People Management?</h3>
               <p className="text-sm text-muted-foreground">
-                Employee Management allows administrators to view, manage, and update employee information,
+                People Management allows administrators to view, manage, and update people information,
                 including personal details, role assignments, department memberships, and organisational relationships.
               </p>
             </div>
             <div>
-              <h3 className="font-semibold mb-2">Accessing Employee Management</h3>
+              <h3 className="font-semibold mb-2">Accessing People Management</h3>
               <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
                 <li>Click "Manage people" in the sidebar under People & Access</li>
-                <li>URL: <code className="bg-muted px-1 py-0.5 rounded">/admin/employee-management</code></li>
+                <li>URL: <code className="bg-muted px-1 py-0.5 rounded">/admin/people-management</code></li>
                 <li>Requires <code className="bg-muted px-1 py-0.5 rounded">users:read</code> permission</li>
               </ul>
             </div>
@@ -48,19 +48,19 @@ export default function EmployeeManagementDocs() {
           <CardHeader>
             <div className="flex items-center gap-3">
               <Search className="h-6 w-6 text-green-600" />
-              <CardTitle>Viewing Employees</CardTitle>
+              <CardTitle>Viewing People</CardTitle>
             </div>
-            <CardDescription>How to find and view employee information</CardDescription>
+            <CardDescription>How to find and view people information</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             <div>
-              <h3 className="font-semibold mb-4">Employee List Interface</h3>
+              <h3 className="font-semibold mb-4">People List Interface</h3>
               <p className="text-sm text-muted-foreground mb-4">
-                The employee management page shows a list of all users in your organisation:
+                The people management page shows a list of all users in your organisation:
               </p>
               <FormMockup
-                title="Employee Management"
-                description="Manage all employees in your organisation"
+                title="People Management"
+                description="Manage all people in your organisation"
               >
                 <div className="space-y-4">
                   <div className="flex items-center justify-between mb-4">
@@ -68,7 +68,7 @@ export default function EmployeeManagementDocs() {
                       <Search className="h-4 w-4 text-muted-foreground" />
                       <input
                         type="text"
-                        placeholder="Search employees..."
+                        placeholder="Search people..."
                         className="flex-1 px-3 py-2 border rounded-md text-sm"
                         disabled
                         value=""
@@ -113,7 +113,7 @@ export default function EmployeeManagementDocs() {
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
-                          <Badge variant="secondary" className="text-xs">Employee</Badge>
+                          <Badge variant="secondary" className="text-xs">Person</Badge>
                           <Badge className="text-xs bg-green-500">Active</Badge>
                           <button className="p-2 hover:bg-muted rounded-md" disabled>
                             <Edit className="h-4 w-4" />
@@ -129,9 +129,9 @@ export default function EmployeeManagementDocs() {
             <Separator />
 
             <div>
-              <h3 className="font-semibold mb-2">Employee List Information</h3>
+              <h3 className="font-semibold mb-2">People List Information</h3>
               <p className="text-sm text-muted-foreground mb-2">
-                The employee list displays all users in your organisation with information such as:
+                The people list displays all users in your organisation with information such as:
               </p>
               <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
                 <li>Name and email address</li>
@@ -145,14 +145,14 @@ export default function EmployeeManagementDocs() {
             <Separator />
 
             <div>
-              <h3 className="font-semibold mb-2">Searching Employees</h3>
+              <h3 className="font-semibold mb-2">Searching People</h3>
               <p className="text-sm text-muted-foreground mb-2">
-                Use the search functionality to find employees by:
+                Use the search functionality to find people by:
               </p>
               <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
                 <li>Name (first name, last name, or display name)</li>
                 <li>Email address</li>
-                <li>Employee ID or user ID</li>
+                <li>People ID or user ID</li>
                 <li>Department</li>
                 <li>Role</li>
               </ul>
@@ -164,19 +164,19 @@ export default function EmployeeManagementDocs() {
           <CardHeader>
             <div className="flex items-center gap-3">
               <Edit className="h-6 w-6 text-purple-600" />
-              <CardTitle>Creating & Editing Employees</CardTitle>
+              <CardTitle>Creating & Editing People</CardTitle>
             </div>
-            <CardDescription>How to create and update employee details</CardDescription>
+            <CardDescription>How to create and update people details</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             <div>
-              <h3 className="font-semibold mb-4">Create New Employee</h3>
+              <h3 className="font-semibold mb-4">Create New Person</h3>
               <p className="text-sm text-muted-foreground mb-4">
-                Click "Create User" to open the employee creation form:
+                Click "Create User" to open the people creation form:
               </p>
               <DialogMockup
                 title="Create New User"
-                description="Add a new employee to your organisation"
+                description="Add a new person to your organisation"
                 footer={
                   <>
                     <FormButton variant="outline" size="sm">
@@ -235,7 +235,7 @@ export default function EmployeeManagementDocs() {
                     placeholder="Select role"
                     value="employee"
                     options={[
-                      { value: "employee", label: "Employee" },
+                      { value: "employee", label: "Person" },
                       { value: "manager", label: "Manager" },
                       { value: "admin", label: "Administrator" },
                     ]}
@@ -247,9 +247,9 @@ export default function EmployeeManagementDocs() {
             <Separator />
 
             <div>
-              <h3 className="font-semibold mb-2">How to Edit an Employee</h3>
+              <h3 className="font-semibold mb-2">How to Edit a Person</h3>
               <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground">
-                <li>Find the employee in the list</li>
+                <li>Find the person in the list</li>
                 <li>Click on their name or the "Edit" button</li>
                 <li>Update the information you need to change</li>
                 <li>Click "Save" to apply changes</li>
@@ -264,13 +264,13 @@ export default function EmployeeManagementDocs() {
               <Shield className="h-6 w-6 text-orange-600" />
               <CardTitle>Role & Department Assignments</CardTitle>
             </div>
-            <CardDescription>Managing employee role and department assignments</CardDescription>
+            <CardDescription>Managing people role and department assignments</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
               <h3 className="font-semibold mb-2">Viewing Assignments</h3>
               <p className="text-sm text-muted-foreground mb-2">
-                Each employee's profile shows their current assignments including roles and departments.
+                Each person's profile shows their current assignments including roles and departments.
               </p>
             </div>
           </CardContent>

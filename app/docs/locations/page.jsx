@@ -239,7 +239,7 @@ export default function LocationsDocs() {
                 <li>Location name</li>
                 <li>Address (full or partial)</li>
                 <li>Location type</li>
-                <li>Number of employees assigned</li>
+                <li>Number of people assigned</li>
                 <li>Status (Active/Inactive)</li>
               </ul>
             </div>
@@ -289,7 +289,7 @@ export default function LocationsDocs() {
                 <li>GPS coordinates (if set)</li>
                 <li>Location type and description</li>
                 <li>Associated departments</li>
-                <li>Employees assigned to this location</li>
+                <li>People assigned to this location</li>
                 <li>Assets at this location</li>
                 <li>Recent activity or check-ins</li>
                 <li>Custom field values</li>
@@ -315,7 +315,7 @@ export default function LocationsDocs() {
               <div>
                 <h3 className="font-semibold mb-2">Check In/Out</h3>
                 <p className="text-sm text-muted-foreground">
-                  When employees check in, they may be required to select their work location.
+                  When people check in, they may be required to select their work location.
                   This helps track where work is being performed.
                 </p>
               </div>
@@ -371,7 +371,7 @@ export default function LocationsDocs() {
                 <h3 className="font-semibold mb-2">Deleting Locations</h3>
                 <p className="text-sm text-muted-foreground">
                   Requires <code className="bg-muted px-1 py-0.5 rounded">locations:delete</code> permission.
-                  Locations with associated employees or assets may not be deletable.
+                  Locations with associated people or assets may not be deletable.
                 </p>
               </div>
             </div>

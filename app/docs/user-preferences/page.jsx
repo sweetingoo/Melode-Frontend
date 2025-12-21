@@ -96,7 +96,7 @@ export default function UserPreferencesDocs() {
                         { value: "none", label: "No default" },
                         { value: "manager", label: "Manager" },
                         { value: "supervisor", label: "Supervisor" },
-                        { value: "employee", label: "Employee" },
+                        { value: "employee", label: "Person" },
                       ]}
                     />
                   </div>

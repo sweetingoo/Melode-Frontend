@@ -29,7 +29,7 @@ export default function ActiveClocksDocs() {
             <div>
               <h3 className="font-semibold mb-2">What are Active People?</h3>
               <p className="text-sm text-muted-foreground">
-                Active People shows all employees who are currently checked in across your organisation.
+                Active People shows all people who are currently checked in across your organisation.
                 This helps managers and administrators monitor who is working, track attendance in real-time,
                 and ensure proper time tracking. You can see who is working, where they are, and how long
                 they've been checked in.
@@ -68,7 +68,7 @@ export default function ActiveClocksDocs() {
                   <div className="flex items-center justify-between mb-4">
                     <div>
                       <h3 className="text-lg font-semibold">Active People</h3>
-                      <p className="text-xs text-muted-foreground">12 employees currently checked in</p>
+                      <p className="text-xs text-muted-foreground">12 people currently checked in</p>
                     </div>
                     <div className="flex items-center gap-2">
                       <FormButton variant="outline" size="sm" icon={RefreshCw}>
@@ -185,12 +185,12 @@ export default function ActiveClocksDocs() {
                 Each active clock session shows:
               </p>
               <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
-                <li><strong>Employee Name:</strong> Name of the clocked-in employee</li>
-                <li><strong>Email:</strong> Employee email address</li>
-                <li><strong>Check In Time:</strong> When the employee checked in</li>
-                <li><strong>Location:</strong> Where the employee checked in</li>
+                <li><strong>Person Name:</strong> Name of the clocked-in person</li>
+                <li><strong>Email:</strong> Person's email address</li>
+                <li><strong>Check In Time:</strong> When the person checked in</li>
+                <li><strong>Location:</strong> Where the person checked in</li>
                 <li><strong>Time Elapsed:</strong> Live timer showing how long they've been checked in</li>
-                <li><strong>Department:</strong> Employee's department</li>
+                <li><strong>Department:</strong> Person's department</li>
                 <li><strong>Status Badge:</strong> Visual indicator showing active status</li>
               </ul>
             </div>
@@ -213,7 +213,7 @@ export default function ActiveClocksDocs() {
                 <div>
                   <h4 className="text-sm font-semibold mb-2">Step 1: Find the Active Session</h4>
                   <p className="text-sm text-muted-foreground mb-3">
-                    Browse the active people list or use search to find the employee's session.
+                    Browse the active people list or use search to find the person's session.
                   </p>
                 </div>
 
@@ -316,7 +316,7 @@ export default function ActiveClocksDocs() {
                 Use the search bar to find active sessions by:
               </p>
               <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
-                <li>Employee name</li>
+                <li>Person name</li>
                 <li>Email address</li>
                 <li>Department name</li>
                 <li>Location name</li>
@@ -329,8 +329,8 @@ export default function ActiveClocksDocs() {
               </p>
               <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
                 <li><strong>Location:</strong> Show only active sessions at specific locations</li>
-                <li><strong>Department:</strong> Filter by employee department</li>
-                <li><strong>Role:</strong> Filter by employee role</li>
+                <li><strong>Department:</strong> Filter by person's department</li>
+                <li><strong>Role:</strong> Filter by person's role</li>
                 <li><strong>Duration:</strong> Show sessions by how long they've been active</li>
               </ul>
             </div>
@@ -352,8 +352,8 @@ export default function ActiveClocksDocs() {
                 The Active People page automatically updates:
               </p>
               <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
-                <li>When new employees check in, they appear in the list</li>
-                <li>When employees check out, they are removed from the list</li>
+                <li>When new people check in, they appear in the list</li>
+                <li>When people check out, they are removed from the list</li>
                 <li>Time elapsed timers update every second</li>
                 <li>Session information refreshes periodically</li>
               </ul>
@@ -388,9 +388,9 @@ export default function ActiveClocksDocs() {
               </p>
               <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
                 <li><strong>Long Sessions:</strong> Sessions that have been active for unusually long periods</li>
-                <li><strong>Missing Employees:</strong> Employees who should be working but aren't checked in</li>
-                <li><strong>Location Mismatches:</strong> Employees checked in at unexpected locations</li>
-                <li><strong>Multiple Sessions:</strong> Employees with multiple active sessions (shouldn't happen)</li>
+                <li><strong>Missing People:</strong> People who should be working but aren't checked in</li>
+                <li><strong>Location Mismatches:</strong> People checked in at unexpected locations</li>
+                <li><strong>Multiple Sessions:</strong> People with multiple active sessions (shouldn't happen)</li>
                 <li><strong>Stale Sessions:</strong> Sessions that appear to be stuck or not updating</li>
               </ul>
             </div>
@@ -401,7 +401,7 @@ export default function ActiveClocksDocs() {
               </p>
               <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground">
                 <li>Click on the session to view details</li>
-                <li>Contact the employee if there's a concern</li>
+                <li>Contact the person if there's a concern</li>
                 <li>Document any discrepancies</li>
                 <li>Report issues to administrators if needed</li>
                 <li>Use the refresh button to ensure you have current data</li>
@@ -429,7 +429,7 @@ export default function ActiveClocksDocs() {
                   <div className="p-3 border rounded-lg">
                     <p className="text-xs text-muted-foreground mb-1">Total Active</p>
                     <p className="text-2xl font-bold">12</p>
-                    <p className="text-xs text-muted-foreground">employees</p>
+                    <p className="text-xs text-muted-foreground">people</p>
                   </div>
                   <div className="p-3 border rounded-lg">
                     <p className="text-xs text-muted-foreground mb-1">By Location</p>

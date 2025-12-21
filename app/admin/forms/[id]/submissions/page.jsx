@@ -165,7 +165,7 @@ const FormSubmissionsPage = () => {
                       <TableCell>
                         {submission.submitted_by_user_id ? (
                           <Link
-                            href={`/admin/employee-management/${submission.submitted_by_user_id}`}
+                            href={`/admin/people-management/${submission.submitted_by_user_id}`}
                             className="text-primary hover:underline"
                           >
                             {getUserName(submission.submitted_by_user_id) || `User #${submission.submitted_by_user_id}`}

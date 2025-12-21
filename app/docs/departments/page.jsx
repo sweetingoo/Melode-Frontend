@@ -29,7 +29,7 @@ export default function DepartmentsDocs() {
               <h3 className="font-semibold mb-2">What are Departments?</h3>
               <p className="text-sm text-muted-foreground">
                 Departments represent organisational units within your company, such as Operations, HR,
-                Finance, IT, Administration, etc. Departments help organise employees, tasks, resources,
+                Finance, IT, Administration, etc. Departments help organise people, tasks, resources,
                 and reporting structures.
               </p>
             </div>

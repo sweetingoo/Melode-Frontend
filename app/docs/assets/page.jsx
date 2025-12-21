@@ -443,7 +443,7 @@ export default function AssetsDocs() {
                 <div>
                   <h4 className="text-sm font-semibold mb-2">Assignment Options</h4>
                   <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
-                    <li><strong>Assign to User:</strong> Assign the asset to a specific employee</li>
+                    <li><strong>Assign to User:</strong> Assign the asset to a specific person</li>
                     <li><strong>Assign to Role:</strong> Assign the asset to all users with a specific role</li>
                     <li><strong>Location:</strong> Optionally specify where the asset is located</li>
                     <li><strong>Notes:</strong> Add notes about the assignment (e.g., reason, duration)</li>

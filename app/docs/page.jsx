@@ -120,9 +120,9 @@ const documentationCategories = [
         icon: UserPlus,
       },
       {
-        title: "Employee Management",
-        description: "Manage employee information and assignments",
-        href: "/docs/employee-management",
+        title: "People Management",
+        description: "Manage people information and assignments",
+        href: "/docs/people-management",
         icon: Users,
       },
       {

@@ -132,7 +132,7 @@ const peopleAndAccessItems = [
   {
     title: "Manage people",
     icon: Users,
-    url: "/admin/employee-management",
+    url: "/admin/people-management",
     permission: "users:read", // Permission to read users
   },
   {

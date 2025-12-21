@@ -92,12 +92,12 @@ export default function MyTasksDocs() {
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-2">
-                            <h4 className="font-semibold text-sm">Complete quarterly report</h4>
+                            <h4 className="font-semibold text-sm">Complete Executive Management Report</h4>
                             <Badge variant="secondary" className="text-xs">High</Badge>
                             <Badge className="text-xs bg-yellow-500">Pending</Badge>
                           </div>
                           <p className="text-xs text-muted-foreground mb-2">
-                            Prepare and submit the quarterly financial report...
+                            Prepare and submit the monthly EMT Paper
                           </p>
                           <div className="flex items-center gap-4 text-xs text-muted-foreground">
                             <span>Due: Feb 15, 2024</span>
@@ -161,9 +161,9 @@ export default function MyTasksDocs() {
               >
                 <div className="space-y-4">
                   <div>
-                    <h4 className="font-semibold mb-2">Complete quarterly report</h4>
+                    <h4 className="font-semibold mb-2">Complete Executive Management Report</h4>
                     <p className="text-sm text-muted-foreground">
-                      Prepare and submit the quarterly financial report including revenue analysis, expenses, and projections.
+                      Prepare and submit the monthly EMT Paper
                     </p>
                   </div>
 

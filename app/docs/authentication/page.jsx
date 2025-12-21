@@ -325,7 +325,7 @@ export default function AuthenticationDocs() {
                       <div className="p-4 border rounded-lg hover:bg-accent cursor-pointer bg-accent">
                         <div className="flex items-center justify-between">
                           <div>
-                            <h5 className="font-semibold text-sm">Employee</h5>
+                            <h5 className="font-semibold text-sm">Person</h5>
                             <p className="text-xs text-muted-foreground">Finance Department</p>
                           </div>
                           <Badge>Selected</Badge>

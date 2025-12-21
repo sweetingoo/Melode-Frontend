@@ -121,7 +121,7 @@ export default function InvitationsDocs() {
                         placeholder="Select role (optional)"
                         value="employee"
                         options={[
-                          { value: "employee", label: "Employee" },
+                          { value: "employee", label: "Person" },
                           { value: "manager", label: "Manager" },
                           { value: "admin", label: "Administrator" },
                         ]}

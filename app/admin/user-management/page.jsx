@@ -730,7 +730,7 @@ const UserManagementPage = () => {
                           {/* Edit User */}
                           <DropdownMenuItem asChild>
                             <Link
-                              href={`/admin/employee-management/${user.id}`}
+                              href={`/admin/people-management/${user.id}`}
                               className="flex items-center"
                             >
                               <Edit className="mr-2 h-4 w-4" />

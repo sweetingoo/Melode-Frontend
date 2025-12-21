@@ -698,7 +698,7 @@ const UserEditPage = () => {
 
     try {
       await deleteUserMutation.mutateAsync(transformedUser.id);
-      router.push("/admin/employee-management");
+      router.push("/admin/people-management");
     } catch (error) {
       console.error("Failed to delete user:", error);
     }
@@ -962,7 +962,7 @@ const UserEditPage = () => {
               </p>
               <div className="flex gap-2 justify-center">
                 <Button
-                  onClick={() => router.push("/admin/employee-management")}
+                  onClick={() => router.push("/admin/people-management")}
                   variant="outline"
                 >
                   Back to People Management

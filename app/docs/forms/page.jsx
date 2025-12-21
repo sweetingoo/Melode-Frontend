@@ -152,7 +152,7 @@ export default function FormsDocs() {
                         placeholder="Describe what happened..."
                         required
                         rows={5}
-                        value="Employee slipped on wet floor in the break room. No serious injury, but reported for safety review."
+                        value="Person slipped on wet floor in the break room. No serious injury, but reported for safety review."
                       />
                       <FormField
                         label="Witnesses"

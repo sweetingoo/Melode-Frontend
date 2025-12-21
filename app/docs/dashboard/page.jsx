@@ -230,7 +230,7 @@ export default function DashboardDocs() {
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground mb-3">
-              The dashboard content is customized based on your role and permissions:
+              The dashboard content is customised based on your role and permissions:
             </p>
             <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
               <li><strong>Regular Users:</strong> See personal metrics, assigned tasks, and their own activity</li>

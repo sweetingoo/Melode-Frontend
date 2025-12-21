@@ -740,7 +740,7 @@ const FormSubmissionDetailPage = () => {
                 <div className="mt-1">
                   {submission.submitted_by_user_id ? (
                     <Link
-                      href={`/admin/employee-management/${submission.submitted_by_user_id}`}
+                      href={`/admin/people-management/${submission.submitted_by_user_id}`}
                       className="text-primary hover:underline"
                     >
                       {getUserName(submission.submitted_by_user_id) || `User #${submission.submitted_by_user_id}`}
@@ -782,7 +782,7 @@ const FormSubmissionDetailPage = () => {
                   <label className="text-muted-foreground">Reviewed By</label>
                   <div className="mt-1">
                     <Link
-                      href={`/admin/employee-management/${submission.reviewed_by_user_id}`}
+                      href={`/admin/people-management/${submission.reviewed_by_user_id}`}
                       className="text-primary hover:underline"
                     >
                       {getUserName(submission.reviewed_by_user_id) || `User #${submission.reviewed_by_user_id}`}
