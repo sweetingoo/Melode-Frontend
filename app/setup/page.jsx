@@ -829,3 +829,5 @@ const SetupPage = () => {
 
 // Setup page doesn't require authentication - it's for initial one-time setup
 export default SetupPage;
+
+
