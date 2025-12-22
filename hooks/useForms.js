@@ -43,6 +43,20 @@ export const useForm = (id, options = {}) => {
   });
 };
 
+// Get single form by slug query (for public forms)
+export const useFormBySlug = (slug, options = {}) => {
+  return useQuery({
+    queryKey: [...formKeys.details(), 'slug', slug],
+    queryFn: async () => {
+      const response = await formsService.getFormBySlug(slug);
+      return response.data;
+    },
+    enabled: !!slug,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    ...options,
+  });
+};
+
 // Create form mutation
 export const useCreateForm = () => {
   const queryClient = useQueryClient();

@@ -59,6 +59,8 @@ import {
   FileSpreadsheet,
   BarChart3,
   Activity,
+  Database,
+  Mail,
 } from "lucide-react";
 import { assets } from "../assets/assets";
 import Image from "next/image";
@@ -174,6 +176,12 @@ const organisationItems = [
     icon: Type,
     url: "/admin/task-types",
     permission: "task_types:read", // Permission to read task types
+  },
+  {
+    title: "Custom Fields",
+    icon: Database,
+    url: "/admin/custom-fields-admin",
+    permission: "custom_field:read", // Permission to read custom fields
   },
 ];
 

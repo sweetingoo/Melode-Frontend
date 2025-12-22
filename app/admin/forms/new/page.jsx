@@ -25,7 +25,38 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { ArrowLeft, Loader2, Plus, Trash2, Info } from "lucide-react";
+import { 
+  ArrowLeft, 
+  Loader2, 
+  Plus, 
+  Trash2, 
+  Info, 
+  GripVertical, 
+  Edit2, 
+  Eye, 
+  Type, 
+  Mail, 
+  Phone, 
+  Calendar, 
+  CheckSquare, 
+  List, 
+  Upload, 
+  FileText, 
+  Image, 
+  Minus, 
+  FileDown,
+  PenTool,
+  Hash,
+  AlignLeft,
+  ChevronDown,
+  ChevronUp,
+  Sparkles
+} from "lucide-react";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 
 // Predefined file type categories for easy selection
 const FILE_TYPE_CATEGORIES = {
@@ -80,9 +111,12 @@ const FILE_TYPE_CATEGORIES = {
   },
 };
 import { useCreateForm } from "@/hooks/useForms";
+import { generateSlug } from "@/utils/slug";
 import { useRoles, useCreateRole } from "@/hooks/useRoles";
 import { useUsers } from "@/hooks/useUsers";
+import { useUploadFile } from "@/hooks/useProfile";
 import { toast } from "sonner";
+import RichTextEditor from "@/components/RichTextEditor";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Users, Shield } from "lucide-react";
 import UserMentionSelector from "@/components/UserMentionSelector";
@@ -100,6 +134,13 @@ const fieldTypes = [
   { value: "multiselect", label: "Multi-Select" },
   { value: "file", label: "File Upload" },
   { value: "json", label: "JSON" },
+  { value: "signature", label: "Signature" },
+  // Display-only field types
+  { value: "text_block", label: "Text Block (Display Only)" },
+  { value: "image_block", label: "Image Block (Display Only)" },
+  { value: "line_break", label: "Line Break (Display Only)" },
+  { value: "page_break", label: "Page Break (Display Only)" },
+  { value: "download_link", label: "Download Link (Display Only)" },
 ];
 
 const formTypes = [
@@ -110,12 +151,39 @@ const formTypes = [
   { value: "general", label: "General" },
 ];
 
+// Helper function to generate field ID from label (for form names and field IDs)
+const generateFieldIdFromLabel = (label) => {
+  if (!label) return '';
+  return label
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s_-]/g, '') // Remove special characters (keep spaces, hyphens, underscores)
+    .replace(/\s+/g, '_') // Replace spaces with underscores
+    .replace(/-+/g, '_') // Replace hyphens with underscores
+    .replace(/_+/g, '_') // Replace multiple underscores with single
+    .replace(/^_+|_+$/g, '') // Remove leading/trailing underscores
+    .substring(0, 100); // Limit length
+};
+
+// Helper function to generate random field ID for display-only fields
+const generateDisplayFieldId = (fieldType) => {
+  const prefix = fieldType === 'text_block' ? 'txt' : 
+                 fieldType === 'image_block' ? 'img' : 
+                 fieldType === 'line_break' ? 'line' : 
+                 fieldType === 'page_break' ? 'page' : 
+                 fieldType === 'download_link' ? 'download' : 'display';
+  const random = Math.random().toString(36).substring(2, 9);
+  const timestamp = Date.now().toString(36);
+  return `${prefix}_${timestamp}_${random}`;
+};
+
 const NewFormPage = () => {
   const router = useRouter();
   const createFormMutation = useCreateForm();
   const { data: rolesData } = useRoles();
   const createRoleMutation = useCreateRole();
   const { data: usersResponse } = useUsers();
+  const uploadFileMutation = useUploadFile({ silent: true });
   const roles = rolesData || [];
   const users = usersResponse?.users || usersResponse || [];
 
@@ -155,7 +223,6 @@ const NewFormPage = () => {
 
   const [newField, setNewField] = useState({
     field_id: "",
-    field_name: "",
     field_type: "text",
     label: "",
     required: false,
@@ -174,6 +241,17 @@ const NewFormPage = () => {
     max_size_mb: "",
     // JSON field specific
     json_schema: "",
+    // Display-only field specific
+    content: "", // for text_block
+    image_url: "", // for image_block (direct URL)
+    image_file: null, // for image_block (uploaded file)
+    image_file_id: null, // for image_block (uploaded file ID after upload)
+    alt_text: "", // for image_block
+    download_url: "", // for download_link
+    // Conditional visibility
+    conditional_visibility: null, // { depends_on_field, show_when, value }
+    // File expiry date support
+    file_expiry_date: false, // Enable expiry date for file fields
   });
   const [newOption, setNewOption] = useState({ value: "", label: "" });
   const [allowAllFileTypes, setAllowAllFileTypes] = useState(false);
@@ -251,8 +329,51 @@ const NewFormPage = () => {
   };
 
   const handleAddField = () => {
-    if (!newField.field_id || !newField.label) {
-      toast.error("Field ID and Label are required");
+    // Display-only field types that auto-generate field_id
+    const displayOnlyTypes = ['text_block', 'image_block', 'line_break', 'page_break', 'download_link'];
+    const isDisplayOnly = displayOnlyTypes.includes(newField.field_type);
+
+    // Auto-generate field_id if not provided
+    let fieldId = newField.field_id;
+    if (!fieldId) {
+      if (isDisplayOnly) {
+        // For display-only fields, generate random ID
+        fieldId = generateDisplayFieldId(newField.field_type);
+      } else if (newField.label) {
+        // For regular fields, generate from label
+        fieldId = generateFieldIdFromLabel(newField.label);
+        if (!fieldId) {
+          // Fallback if label doesn't generate valid ID
+          fieldId = `field_${Date.now()}`;
+        }
+      } else {
+        // No label provided, require manual field_id
+        toast.error("Label is required (Field ID will be auto-generated from label)");
+        return;
+      }
+    }
+
+    // For regular fields, require label
+    if (!isDisplayOnly && !newField.label) {
+      toast.error("Label is required");
+      return;
+    }
+
+    // For text_block, require content
+    if (newField.field_type === 'text_block' && !newField.content) {
+      toast.error("Content is required for text block");
+      return;
+    }
+
+    // For image_block, require image_url (download_url from upload or direct URL)
+    if (newField.field_type === 'image_block' && !newField.image_url) {
+      toast.error("Either Image URL or uploaded image is required for image block");
+      return;
+    }
+
+    // For download_link, require download_url
+    if (newField.field_type === 'download_link' && !newField.download_url) {
+      toast.error("Download URL is required for download link");
       return;
     }
 
@@ -270,15 +391,41 @@ const NewFormPage = () => {
     }
 
     const field = {
-      field_id: newField.field_id,
-      field_name: newField.field_name || newField.field_id,
+      field_id: fieldId,
+      field_name: fieldId, // Auto-generate from field_id
       field_type: newField.field_type,
-      label: newField.label,
-      required: newField.required,
+      label: newField.label || undefined,
+      // Display-only fields don't have required property
+      ...(isDisplayOnly ? {} : { required: newField.required }),
     };
 
-    // Add placeholder if provided
-    if (newField.placeholder) {
+    // Add display-only field properties
+    if (newField.field_type === 'text_block') {
+      field.content = newField.content;
+    } else if (newField.field_type === 'image_block') {
+      // For image_block, use image_url (download_url from upload or direct URL)
+      if (newField.image_url) {
+        field.image_url = newField.image_url;
+      }
+      if (newField.alt_text) {
+        field.alt_text = newField.alt_text;
+      }
+    } else if (newField.field_type === 'download_link') {
+      field.download_url = newField.download_url;
+    }
+
+    // Add conditional visibility
+    if (newField.conditional_visibility && newField.conditional_visibility.depends_on_field) {
+      field.conditional_visibility = newField.conditional_visibility;
+    }
+
+    // Add file expiry date support
+    if (newField.field_type === 'file' && newField.file_expiry_date) {
+      field.file_expiry_date = true;
+    }
+
+    // Add placeholder if provided (not for display-only fields)
+    if (!isDisplayOnly && newField.placeholder) {
       field.placeholder = newField.placeholder;
     }
 
@@ -362,7 +509,6 @@ const NewFormPage = () => {
 
     setNewField({
       field_id: "",
-      field_name: "",
       field_type: "text",
       label: "",
       required: false,
@@ -379,6 +525,11 @@ const NewFormPage = () => {
       allowed_types: "",
       max_size_mb: "",
       json_schema: "",
+      content: "",
+      image_url: "",
+      image_file: null,
+      image_file_id: null,
+      alt_text: "",
     });
     setNewOption({ value: "", label: "" });
     setAllowAllFileTypes(false);
@@ -396,16 +547,101 @@ const NewFormPage = () => {
     });
   };
 
+  // Drag and drop handlers for reordering fields
+  const [draggedIndex, setDraggedIndex] = useState(null);
+  const [dragOverIndex, setDragOverIndex] = useState(null);
+
+  const handleDragStart = (index) => {
+    setDraggedIndex(index);
+  };
+
+  const handleDragOver = (e, index) => {
+    e.preventDefault();
+    setDragOverIndex(index);
+  };
+
+  const handleDragLeave = () => {
+    setDragOverIndex(null);
+  };
+
+  const handleDrop = (e, dropIndex) => {
+    e.preventDefault();
+    setDragOverIndex(null);
+    
+    if (draggedIndex === null || draggedIndex === dropIndex) {
+      setDraggedIndex(null);
+      return;
+    }
+
+    const newFields = [...formData.form_fields.fields];
+    const [draggedField] = newFields.splice(draggedIndex, 1);
+    newFields.splice(dropIndex, 0, draggedField);
+
+    setFormData({
+      ...formData,
+      form_fields: {
+        ...formData.form_fields,
+        fields: newFields,
+      },
+    });
+
+    setDraggedIndex(null);
+    toast.success("Field order updated");
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!formData.form_name || !formData.form_title) {
-      toast.error("Form name and title are required");
+    if (!formData.form_title) {
+      toast.error("Form title is required");
+      return;
+    }
+
+    // Auto-generate form_name if not provided
+    if (!formData.form_name && formData.form_title) {
+      formData.form_name = generateFieldIdFromLabel(formData.form_title);
+      if (!formData.form_name) {
+        formData.form_name = `form_${Date.now()}`;
+      }
+    }
+
+    // Auto-generate slug from form_title if not provided
+    if (!formData.slug && formData.form_title) {
+      formData.slug = generateSlug(formData.form_title);
+    }
+
+    // Validate and sanitize form_name
+    if (!formData.form_name) {
+      toast.error("Form name is required");
+      return;
+    }
+
+    // Ensure form_name only contains valid characters (alphanumeric, hyphens, underscores)
+    const sanitizedFormName = formData.form_name
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]/g, '') // Remove invalid characters
+      .replace(/_+/g, '_') // Replace multiple underscores with single
+      .replace(/^_+|_+$/g, ''); // Remove leading/trailing underscores
+    
+    if (!sanitizedFormName || sanitizedFormName.length === 0) {
+      toast.error("Form name is invalid. Please use only lowercase letters, numbers, hyphens, and underscores.");
+      return;
+    }
+    
+    if (sanitizedFormName !== formData.form_name) {
+      toast.error("Form name contains invalid characters. Only lowercase letters, numbers, hyphens, and underscores are allowed.");
+      // Update form data with sanitized name
+      setFormData({ ...formData, form_name: sanitizedFormName });
       return;
     }
 
     try {
-      const submitData = { ...formData };
+      const submitData = { ...formData, form_name: sanitizedFormName };
 
       // Add assignment fields based on mode
       if (assignmentMode === "role" && assignedToRoleId) {
@@ -451,31 +687,26 @@ const NewFormPage = () => {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <Label htmlFor="form_name">Form Name (Internal) *</Label>
-                  <Input
-                    id="form_name"
-                    value={formData.form_name}
-                    onChange={(e) =>
-                      setFormData({ ...formData, form_name: e.target.value })
-                    }
-                    placeholder="e.g., daily_check_form"
-                    required
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Internal identifier (lowercase, no spaces)
-                  </p>
-                </div>
-                <div>
                   <Label htmlFor="form_title">Form Title (Display) *</Label>
                   <Input
                     id="form_title"
                     value={formData.form_title}
-                    onChange={(e) =>
-                      setFormData({ ...formData, form_title: e.target.value })
-                    }
+                    onChange={(e) => {
+                      const title = e.target.value;
+                      // Auto-generate form_name from title
+                      const autoFormName = title ? generateFieldIdFromLabel(title) : '';
+                      setFormData({ 
+                        ...formData, 
+                        form_title: title,
+                        form_name: formData.form_name || autoFormName
+                      });
+                    }}
                     placeholder="e.g., Daily Equipment Check"
                     required
                   />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    The title that users will see when filling out the form
+                  </p>
                 </div>
                 <div>
                   <Label htmlFor="form_description">Description</Label>
@@ -545,90 +776,406 @@ const NewFormPage = () => {
                 <CardTitle>Form Fields</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
+                {/* Quick Add Field Types */}
+                <div className="p-3 bg-muted/50 rounded-lg border border-dashed">
+                  <Label className="text-xs font-medium text-muted-foreground mb-2 block">Quick Add</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { type: 'text', icon: Type, label: 'Text' },
+                      { type: 'email', icon: Mail, label: 'Email' },
+                      { type: 'phone', icon: Phone, label: 'Phone' },
+                      { type: 'date', icon: Calendar, label: 'Date' },
+                      { type: 'select', icon: List, label: 'Select' },
+                      { type: 'file', icon: Upload, label: 'File' },
+                      { type: 'textarea', icon: AlignLeft, label: 'Textarea' },
+                      { type: 'boolean', icon: CheckSquare, label: 'Checkbox' },
+                    ].map(({ type, icon: Icon, label }) => (
+                      <Button
+                        key={type}
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-8 text-xs"
+                        onClick={() => {
+                          setNewField({
+                            ...newField,
+                            field_type: type,
+                            field_id: '',
+                            label: '',
+                          });
+                          // Scroll to field config
+                          document.getElementById('field-config-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        }}
+                      >
+                        <Icon className="h-3 w-3 mr-1.5" />
+                        {label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+
                 {/* Add New Field */}
-                <div className="p-4 border rounded-md space-y-4">
-                  <h3 className="font-medium">Add New Field</h3>
-                  <div className="grid grid-cols-2 gap-4">
+                <Collapsible defaultOpen={formData.form_fields.fields.length === 0} id="field-config-section">
+                  <CollapsibleTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full justify-between"
+                    >
+                      <span className="flex items-center gap-2">
+                        <Plus className="h-4 w-4" />
+                        {newField.field_type && newField.label ? `Configure: ${newField.label}` : 'Add New Field'}
+                      </span>
+                      <ChevronDown className="h-4 w-4" />
+                    </Button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <div className="p-4 border rounded-md space-y-4 mt-2 bg-card">
+                      {/* Field Type Selection */}
+                  <div>
+                    <Label htmlFor="field_type">Field Type *</Label>
+                    <Select
+                      value={newField.field_type}
+                      onValueChange={(value) => {
+                        const displayOnlyTypes = ['text_block', 'image_block', 'line_break', 'page_break', 'download_link'];
+                        const isDisplayOnly = displayOnlyTypes.includes(value);
+                        setNewField({ 
+                          ...newField, 
+                          field_type: value,
+                          // Reset field_id when type changes (will be auto-generated)
+                          field_id: isDisplayOnly ? '' : newField.field_id
+                        });
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {fieldTypes.map((type) => (
+                          <SelectItem key={type.value} value={type.value}>
+                            {type.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Display-only field descriptions */}
+                  {['line_break', 'page_break'].includes(newField.field_type) && (
+                    <div className="p-4 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-md">
+                      <div className="flex items-start gap-3">
+                        <div className="mt-0.5">
+                          {newField.field_type === 'line_break' ? (
+                            <div className="text-2xl">─</div>
+                          ) : (
+                            <div className="text-2xl">📄</div>
+                          )}
+                        </div>
+                        <div className="flex-1">
+                          <h4 className="font-medium text-sm mb-1">
+                            {newField.field_type === 'line_break' ? 'Line Break' : 'Page Break'}
+                          </h4>
+                          <p className="text-xs text-muted-foreground">
+                            {newField.field_type === 'line_break' 
+                              ? 'This will render as a horizontal line separator in the form. No additional configuration needed.'
+                              : 'This will create a page break for multi-page forms. Users will see Previous/Next buttons and a progress indicator when filling out the form.'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Label - required for most fields */}
+                  {!['line_break', 'page_break'].includes(newField.field_type) && (
                     <div>
-                      <Label htmlFor="field_id">Field ID *</Label>
+                      <Label htmlFor="field_label">
+                        Label {!['text_block', 'image_block', 'download_link'].includes(newField.field_type) && '*'}
+                      </Label>
+                      <Input
+                        id="field_label"
+                        value={newField.label}
+                        onChange={(e) => {
+                          const label = e.target.value;
+                          // Auto-generate field_id from label for regular fields
+                          const displayOnlyTypes = ['text_block', 'image_block', 'line_break', 'page_break', 'download_link'];
+                          const isDisplayOnly = displayOnlyTypes.includes(newField.field_type);
+                          const autoFieldId = !isDisplayOnly && label ? generateFieldIdFromLabel(label) : newField.field_id;
+                          setNewField({ 
+                            ...newField, 
+                            label: label,
+                            field_id: autoFieldId || newField.field_id
+                          });
+                        }}
+                        placeholder={
+                          ['text_block', 'image_block', 'download_link'].includes(newField.field_type)
+                            ? "Optional label for this display element"
+                            : "e.g., Equipment Name (Field ID will be auto-generated)"
+                        }
+                      />
+                      {!['text_block', 'image_block', 'line_break', 'page_break', 'download_link'].includes(newField.field_type) && newField.label && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Field ID: <code className="px-1 py-0.5 bg-muted rounded text-xs">{generateFieldIdFromLabel(newField.label) || 'Will be generated'}</code>
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Field ID - show as read-only for auto-generated, editable override */}
+                  {!['text_block', 'image_block', 'line_break', 'page_break', 'download_link'].includes(newField.field_type) && newField.label && (
+                    <div>
+                      <Label htmlFor="field_id">Field ID (Auto-generated, click to override)</Label>
                       <Input
                         id="field_id"
-                        value={newField.field_id}
+                        value={newField.field_id || generateFieldIdFromLabel(newField.label)}
                         onChange={(e) =>
                           setNewField({ ...newField, field_id: e.target.value })
                         }
-                        placeholder="e.g., equipment_name"
+                        placeholder="Auto-generated from label"
+                        className="font-mono text-sm"
                       />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Automatically generated from label. You can override it if needed.
+                      </p>
                     </div>
-                    <div>
-                      <Label htmlFor="field_type">Field Type</Label>
-                      <Select
-                        value={newField.field_type}
-                        onValueChange={(value) =>
-                          setNewField({ ...newField, field_type: value })
+                  )}
+                  
+                  {/* Required checkbox - hidden for display-only fields */}
+                  {!['text_block', 'image_block', 'line_break', 'page_break'].includes(newField.field_type) && (
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="field_required"
+                        checked={newField.required}
+                        onCheckedChange={(checked) =>
+                          setNewField({ ...newField, required: checked })
                         }
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {fieldTypes.map((type) => (
-                            <SelectItem key={type.value} value={type.value}>
-                              {type.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      />
+                      <Label htmlFor="field_required">Required</Label>
                     </div>
-                  </div>
-                  <div>
-                    <Label htmlFor="field_label">Label *</Label>
-                    <Input
-                      id="field_label"
-                      value={newField.label}
-                      onChange={(e) =>
-                        setNewField({ ...newField, label: e.target.value })
-                      }
-                      placeholder="e.g., Equipment Name"
-                    />
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="field_required"
-                      checked={newField.required}
-                      onCheckedChange={(checked) =>
-                        setNewField({ ...newField, required: checked })
-                      }
-                    />
-                    <Label htmlFor="field_required">Required</Label>
-                  </div>
+                  )}
 
-                  {/* Placeholder */}
-                  <div>
-                    <Label htmlFor="field_placeholder">Placeholder</Label>
-                    <Input
-                      id="field_placeholder"
-                      value={newField.placeholder}
-                      onChange={(e) =>
-                        setNewField({ ...newField, placeholder: e.target.value })
-                      }
-                      placeholder="Enter placeholder text"
-                    />
-                  </div>
+                  {/* Basic Field Settings - Collapsible */}
+                  {!['line_break', 'page_break'].includes(newField.field_type) && (
+                    <Collapsible defaultOpen>
+                      <CollapsibleTrigger asChild>
+                        <Button type="button" variant="ghost" className="w-full justify-between -ml-4 -mr-4">
+                          <span className="text-sm font-medium">Basic Settings</span>
+                          <ChevronDown className="h-4 w-4" />
+                        </Button>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent className="space-y-3">
+                        {/* Placeholder - hidden for display-only fields */}
+                        {!['text_block', 'image_block', 'line_break', 'page_break', 'download_link'].includes(newField.field_type) && (
+                          <div>
+                            <Label htmlFor="field_placeholder">Placeholder</Label>
+                            <Input
+                              id="field_placeholder"
+                              value={newField.placeholder}
+                              onChange={(e) =>
+                                setNewField({ ...newField, placeholder: e.target.value })
+                              }
+                              placeholder="Enter placeholder text"
+                            />
+                          </div>
+                        )}
 
-                  {/* Help Text */}
-                  <div>
-                    <Label htmlFor="field_help_text">Help Text</Label>
-                    <Textarea
-                      id="field_help_text"
-                      value={newField.help_text}
-                      onChange={(e) =>
-                        setNewField({ ...newField, help_text: e.target.value })
-                      }
-                      placeholder="Enter help text or instructions"
-                      rows={2}
-                    />
-                  </div>
+                        {/* Help Text - only show for fields that use it */}
+                        {!['text_block', 'image_block', 'line_break', 'page_break', 'download_link'].includes(newField.field_type) && (
+                          <div>
+                            <Label htmlFor="field_help_text">Help Text (Optional)</Label>
+                            <Textarea
+                              id="field_help_text"
+                              value={newField.help_text}
+                              onChange={(e) =>
+                                setNewField({ ...newField, help_text: e.target.value })
+                              }
+                              placeholder={
+                                ['boolean', 'checkbox'].includes(newField.field_type)
+                                  ? "This text will appear next to the checkbox"
+                                  : "Additional instructions or guidance for users (shown as placeholder or helper text)"
+                              }
+                              rows={2}
+                            />
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {['boolean', 'checkbox'].includes(newField.field_type)
+                                ? "This text will be displayed as the checkbox label"
+                                : "This text appears as placeholder text or helper text below the field"}
+                            </p>
+                          </div>
+                        )}
+                      </CollapsibleContent>
+                    </Collapsible>
+                  )}
+
+                  {/* Text Block Configuration */}
+                  {newField.field_type === "text_block" && (
+                    <div className="space-y-2 pt-2 border-t">
+                      <div className="p-3 bg-muted rounded-md mb-3">
+                        <p className="text-xs text-muted-foreground">
+                          <strong>Text Block:</strong> Use the visual editor below to format your text content. You can add images, links, and apply various formatting options.
+                        </p>
+                      </div>
+                      <Label htmlFor="text_block_content" className="text-sm font-medium">
+                        Content *
+                      </Label>
+                      <RichTextEditor
+                        value={newField.content}
+                        onChange={(content) =>
+                          setNewField({ ...newField, content })
+                        }
+                        placeholder="Enter text content..."
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Use the toolbar above to format your text. You can add images, links, lists, and apply various text formatting options.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Image Block Configuration */}
+                  {newField.field_type === "image_block" && (
+                    <div className="space-y-2 pt-2 border-t">
+                      <div className="p-3 bg-muted rounded-md mb-3">
+                        <p className="text-xs text-muted-foreground">
+                          <strong>Image Block:</strong> This will display an image in the form. You can provide a direct URL or upload an image file.
+                        </p>
+                      </div>
+                      <Label className="text-sm font-medium">Image Configuration</Label>
+                      
+                      {/* Tabs for Upload vs URL */}
+                      <Tabs defaultValue={newField.image_file_id ? "upload" : "url"} className="w-full">
+                        <TabsList className="grid w-full grid-cols-2">
+                          <TabsTrigger value="url">Direct URL</TabsTrigger>
+                          <TabsTrigger value="upload">Upload Image</TabsTrigger>
+                        </TabsList>
+                        
+                        <TabsContent value="url" className="space-y-2">
+                          <div>
+                            <Label htmlFor="image_block_url" className="text-xs">
+                              Image URL *
+                            </Label>
+                            <Input
+                              id="image_block_url"
+                              value={newField.image_url}
+                              onChange={(e) =>
+                                setNewField({ 
+                                  ...newField, 
+                                  image_url: e.target.value,
+                                  image_file: null,
+                                  image_file_id: null
+                                })
+                              }
+                              placeholder="https://example.com/image.png"
+                            />
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Enter the full URL to the image
+                            </p>
+                          </div>
+                        </TabsContent>
+                        
+                        <TabsContent value="upload" className="space-y-2">
+                          <div>
+                            <Label htmlFor="image_block_file" className="text-xs">
+                              Upload Image *
+                            </Label>
+                            <Input
+                              id="image_block_file"
+                              type="file"
+                              accept="image/*"
+                              onChange={async (e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  try {
+                                    setNewField({ 
+                                      ...newField, 
+                                      image_file: file,
+                                      image_url: "" // Clear URL when uploading
+                                    });
+                                    
+                                    // Upload the image without form_id or field_id
+                                    // The endpoint will detect it's an image file and apply image validation
+                                    const uploadResult = await uploadFileMutation.mutateAsync({
+                                      file: file
+                                      // No form_id or field_id needed for image_block fields
+                                    });
+                                    
+                                    // Use download_url from response for image_block fields
+                                    const downloadUrl = uploadResult.download_url || uploadResult.url || uploadResult.file_url;
+                                    
+                                    if (!downloadUrl) {
+                                      throw new Error("No download_url received from upload");
+                                    }
+                                    
+                                    setNewField({ 
+                                      ...newField, 
+                                      image_file: file,
+                                      image_url: downloadUrl // Use download_url for image_block
+                                    });
+                                    
+                                    toast.success("Image uploaded successfully");
+                                  } catch (error) {
+                                    console.error("Failed to upload image:", error);
+                                    toast.error("Failed to upload image", {
+                                      description: error.response?.data?.detail || error.message
+                                    });
+                                    setNewField({ 
+                                      ...newField, 
+                                      image_file: null,
+                                      image_url: ""
+                                    });
+                                  }
+                                }
+                              }}
+                            />
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Upload an image file (JPG, PNG, GIF, etc.)
+                            </p>
+                            {newField.image_file && (
+                              <div className="mt-2 p-2 bg-muted rounded-md">
+                                <p className="text-xs font-medium">Selected: {newField.image_file.name}</p>
+                                {newField.image_file_id && (
+                                  <p className="text-xs text-muted-foreground">Uploaded successfully</p>
+                                )}
+                                {uploadFileMutation.isPending && (
+                                  <p className="text-xs text-muted-foreground">Uploading...</p>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </TabsContent>
+                      </Tabs>
+                      
+                      <div>
+                        <Label htmlFor="image_block_alt" className="text-xs">
+                          Alt Text
+                        </Label>
+                        <Input
+                          id="image_block_alt"
+                          value={newField.alt_text}
+                          onChange={(e) =>
+                            setNewField({ ...newField, alt_text: e.target.value })
+                          }
+                          placeholder="Descriptive text for accessibility"
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Optional: Alt text for screen readers and accessibility
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Download Link Info */}
+                  {newField.field_type === "download_link" && (
+                    <div className="p-4 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-md">
+                      <div className="flex items-start gap-3">
+                        <div className="mt-0.5 text-2xl">📥</div>
+                        <div className="flex-1">
+                          <h4 className="font-medium text-sm mb-1">Download Link</h4>
+                          <p className="text-xs text-muted-foreground mb-3">
+                            This will display a download button in the form. Users can click it to download files or documents.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Options for select, radio, and multiselect fields */}
                   {(newField.field_type === "select" ||
@@ -699,10 +1246,51 @@ const NewFormPage = () => {
                       </div>
                     )}
 
-                  {/* Validation Options */}
-                  <div className="space-y-2 pt-2 border-t">
-                    <Label className="text-sm font-medium">Validation</Label>
-                    <div className="grid grid-cols-2 gap-2">
+                  {/* Validation Options - Collapsible */}
+                  {!['text_block', 'image_block', 'line_break', 'page_break', 'download_link', 'boolean', 'signature'].includes(newField.field_type) && 
+                   (['text', 'textarea', 'email', 'phone', 'number', 'date'].includes(newField.field_type) ||
+                    newField.validation.min || 
+                    newField.validation.max || 
+                    newField.validation.min_length || 
+                    newField.validation.max_length || 
+                    newField.validation.pattern) && (
+                  <Collapsible>
+                    <div className="pt-2 border-t">
+                      <CollapsibleTrigger asChild>
+                        <Button type="button" variant="ghost" className="w-full justify-between -ml-4 -mr-4">
+                          <div className="flex items-center gap-2">
+                            <Label className="text-sm font-medium">Validation Rules</Label>
+                            {(newField.validation.min || newField.validation.max || newField.validation.min_length || newField.validation.max_length || newField.validation.pattern) && (
+                              <Badge variant="secondary" className="text-xs">Active</Badge>
+                            )}
+                          </div>
+                          <ChevronDown className="h-4 w-4" />
+                        </Button>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent className="space-y-3 pt-2">
+                        <div className="flex items-center justify-end">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setNewField({
+                                ...newField,
+                                validation: {
+                                  min: "",
+                                  max: "",
+                                  min_length: "",
+                                  max_length: "",
+                                  pattern: "",
+                                }
+                              });
+                            }}
+                            className="h-6 text-xs"
+                          >
+                            Clear All
+                          </Button>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
                       {(newField.field_type === "text" ||
                         newField.field_type === "textarea" ||
                         newField.field_type === "email" ||
@@ -863,7 +1451,13 @@ const NewFormPage = () => {
                           </p>
                         </div>
                       )}
+                      <p className="text-xs text-muted-foreground">
+                        Leave empty if no validation is needed
+                      </p>
+                    </CollapsibleContent>
                   </div>
+                </Collapsible>
+                )}
 
                   {/* File Field Configuration */}
                   {newField.field_type === "file" && (
@@ -1063,49 +1657,326 @@ const NewFormPage = () => {
                     </div>
                   )}
 
-                  <Button
-                    type="button"
-                    onClick={handleAddField}
-                    className="w-full"
-                  >
-                    <Plus className="mr-2 h-4 w-4" />
-                    Add Field
-                  </Button>
-                </div>
+                  {/* Download Link Configuration */}
+                  {newField.field_type === "download_link" && (
+                    <div className="space-y-2 pt-2 border-t">
+                      <div>
+                        <Label htmlFor="download_link_url" className="text-sm font-medium">
+                          Download URL *
+                        </Label>
+                        <Input
+                          id="download_link_url"
+                          value={newField.download_url}
+                          onChange={(e) =>
+                            setNewField({ ...newField, download_url: e.target.value })
+                          }
+                          placeholder="https://example.com/document.pdf"
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Enter the full URL to the file or document that users can download
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Conditional Visibility Configuration - Collapsible */}
+                  {!['text_block', 'image_block', 'line_break', 'page_break', 'download_link'].includes(newField.field_type) && (
+                    <Collapsible>
+                      <div className="pt-2 border-t">
+                        <CollapsibleTrigger asChild>
+                          <Button type="button" variant="ghost" className="w-full justify-between -ml-4 -mr-4">
+                            <div className="flex items-center gap-2">
+                              <Label className="text-sm font-medium">Conditional Visibility</Label>
+                              {newField.conditional_visibility?.depends_on_field && (
+                                <Badge variant="secondary" className="text-xs">Active</Badge>
+                              )}
+                            </div>
+                            <ChevronDown className="h-4 w-4" />
+                          </Button>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent className="space-y-3 pt-2">
+                        <div>
+                          <Label htmlFor="depends_on_field" className="text-xs">
+                            Show this field when
+                          </Label>
+                          <Select
+                            value={newField.conditional_visibility?.depends_on_field || ''}
+                            onValueChange={(value) =>
+                              setNewField({
+                                ...newField,
+                                conditional_visibility: {
+                                  ...newField.conditional_visibility,
+                                  depends_on_field: value || null,
+                                },
+                              })
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select a field..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {formData.form_fields.fields
+                                .filter(f => f.field_id !== newField.field_id && 
+                                  !['text_block', 'image_block', 'line_break', 'page_break', 'download_link'].includes(f.field_type?.toLowerCase()))
+                                .map((f) => (
+                                  <SelectItem key={f.field_id || f.field_name} value={f.field_id || f.field_name}>
+                                    {f.label || f.field_id || f.field_name}
+                                  </SelectItem>
+                                ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        {newField.conditional_visibility?.depends_on_field && (
+                          <>
+                            <div>
+                              <Label htmlFor="show_when" className="text-xs">
+                                Condition
+                              </Label>
+                              <Select
+                                value={newField.conditional_visibility?.show_when || ''}
+                                onValueChange={(value) =>
+                                  setNewField({
+                                    ...newField,
+                                    conditional_visibility: {
+                                      ...newField.conditional_visibility,
+                                      show_when: value || null,
+                                    },
+                                  })
+                                }
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select condition..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="equals">Equals</SelectItem>
+                                  <SelectItem value="not_equals">Not Equals</SelectItem>
+                                  <SelectItem value="contains">Contains</SelectItem>
+                                  <SelectItem value="is_empty">Is Empty</SelectItem>
+                                  <SelectItem value="is_not_empty">Is Not Empty</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            {newField.conditional_visibility?.show_when && 
+                             ['equals', 'not_equals', 'contains'].includes(newField.conditional_visibility.show_when) && (
+                              <div>
+                                <Label htmlFor="conditional_value" className="text-xs">
+                                  Value
+                                </Label>
+                                <Input
+                                  id="conditional_value"
+                                  value={newField.conditional_visibility?.value || ''}
+                                  onChange={(e) =>
+                                    setNewField({
+                                      ...newField,
+                                      conditional_visibility: {
+                                        ...newField.conditional_visibility,
+                                        value: e.target.value || null,
+                                      },
+                                    })
+                                  }
+                                  placeholder="Enter value to match"
+                                />
+                              </div>
+                            )}
+                          </>
+                        )}
+                          <p className="text-xs text-muted-foreground">
+                            This field will only be visible when the condition is met
+                          </p>
+                        </CollapsibleContent>
+                      </div>
+                    </Collapsible>
+                  )}
+
+                  {/* File Expiry Date Support */}
+                  {newField.field_type === "file" && (
+                    <div className="space-y-2 pt-2 border-t">
+                      <div className="flex items-center space-x-2">
+                        <Checkbox
+                          id="file_expiry_date"
+                          checked={newField.file_expiry_date || false}
+                          onCheckedChange={(checked) =>
+                            setNewField({ ...newField, file_expiry_date: checked })
+                          }
+                        />
+                        <Label htmlFor="file_expiry_date" className="text-sm font-normal">
+                          Require expiry date for uploaded files
+                        </Label>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        When enabled, users will be required to provide an expiry date when uploading files (e.g., for certificates)
+                      </p>
+                    </div>
+                  )}
+
+                      <Button
+                        type="button"
+                        onClick={handleAddField}
+                        className="w-full"
+                      >
+                        <Plus className="mr-2 h-4 w-4" />
+                        Add Field to Form
+                      </Button>
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
 
                 {/* Existing Fields */}
                 {formData.form_fields.fields.length > 0 ? (
-                  <div className="space-y-2">
-                    <h3 className="font-medium">Fields ({formData.form_fields.fields.length})</h3>
-                    {formData.form_fields.fields.map((field, index) => (
-                      <div
-                        key={index}
-                        className="flex items-center justify-between p-3 border rounded-md"
-                      >
-                        <div className="flex items-center gap-3">
-                          <span className="font-medium">{field.label}</span>
-                          <Badge variant="outline">{field.field_type}</Badge>
-                          {field.required && (
-                            <Badge variant="destructive" className="text-xs">
-                              Required
-                            </Badge>
-                          )}
-                        </div>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleRemoveField(index)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ))}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-medium text-sm">Form Fields</h3>
+                      <Badge variant="secondary" className="text-xs">
+                        {formData.form_fields.fields.length} total
+                      </Badge>
+                    </div>
+                    <div className="space-y-2">
+                      {formData.form_fields.fields.map((field, index) => {
+                        const getFieldIcon = (type) => {
+                          const icons = {
+                            text: Type,
+                            email: Mail,
+                            phone: Phone,
+                            date: Calendar,
+                            datetime: Calendar,
+                            number: Hash,
+                            textarea: AlignLeft,
+                            select: List,
+                            multiselect: List,
+                            radio: List,
+                            boolean: CheckSquare,
+                            checkbox: CheckSquare,
+                            file: Upload,
+                            signature: PenTool,
+                            text_block: FileText,
+                            image_block: Image,
+                            line_break: Minus,
+                            page_break: FileText,
+                            download_link: FileDown,
+                            json: FileText,
+                          };
+                          return icons[type?.toLowerCase()] || Type;
+                        };
+                        const FieldIcon = getFieldIcon(field.field_type);
+                        const isDisplayOnly = ['text_block', 'image_block', 'line_break', 'page_break', 'download_link'].includes(field.field_type?.toLowerCase());
+                        
+                        return (
+                          <div
+                            key={index}
+                            draggable
+                            onDragStart={() => handleDragStart(index)}
+                            onDragOver={(e) => handleDragOver(e, index)}
+                            onDragLeave={handleDragLeave}
+                            onDrop={(e) => handleDrop(e, index)}
+                            onDragEnd={handleDragEnd}
+                            className={`group relative flex items-center gap-3 p-3 border rounded-lg bg-card hover:bg-muted/50 transition-colors ${
+                              draggedIndex === index ? 'opacity-50 cursor-grabbing' : 'cursor-grab'
+                            } ${
+                              dragOverIndex === index && draggedIndex !== index ? 'border-primary border-2 bg-primary/5' : ''
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 text-muted-foreground cursor-grab active:cursor-grabbing">
+                              <GripVertical className="h-4 w-4" />
+                            </div>
+                            <div className="p-1.5 rounded-md bg-primary/10">
+                              <FieldIcon className="h-4 w-4 text-primary" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-medium text-sm">
+                                  {field.label || field.field_id || `Field ${index + 1}`}
+                                </span>
+                                <Badge variant="outline" className="text-xs font-normal">
+                                  {field.field_type}
+                                </Badge>
+                                {field.required && !isDisplayOnly && (
+                                  <Badge variant="destructive" className="text-xs">
+                                    Required
+                                  </Badge>
+                                )}
+                                {isDisplayOnly && (
+                                  <Badge variant="secondary" className="text-xs">
+                                    Display Only
+                                  </Badge>
+                                )}
+                              </div>
+                              {field.help_text && (
+                                <p className="text-xs text-muted-foreground mt-1 truncate">
+                                  {field.help_text}
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 text-xs"
+                                onClick={() => {
+                                  // Load field into editor
+                                  setNewField({
+                                    field_id: field.field_id,
+                                    field_type: field.field_type,
+                                    label: field.label || '',
+                                    required: field.required || false,
+                                    placeholder: field.placeholder || '',
+                                    help_text: field.help_text || '',
+                                    options: field.options || [],
+                                    validation: field.validation || {},
+                                    field_options: field.field_options || {},
+                                    content: field.content || '',
+                                    image_url: field.image_url || '',
+                                    image_file_id: field.image_file_id || null,
+                                    alt_text: field.alt_text || '',
+                                    download_url: field.download_url || '',
+                                    conditional_visibility: field.conditional_visibility || null,
+                                    file_expiry_date: field.file_expiry_date || false,
+                                    json_schema: field.validation?.schema ? JSON.stringify(field.validation.schema, null, 2) : '',
+                                    allowed_types: field.validation?.allowed_types ? (Array.isArray(field.validation.allowed_types) ? field.validation.allowed_types.join(', ') : field.validation.allowed_types) : '',
+                                    max_size_mb: field.validation?.max_size_mb || '',
+                                  });
+                                  // Remove the field
+                                  handleRemoveField(index);
+                                  // Scroll to config
+                                  document.getElementById('field-config-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                }}
+                                title="Edit field"
+                              >
+                                <Edit2 className="h-3 w-3 mr-1" />
+                                Edit
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                                onClick={() => {
+                                  if (confirm(`Are you sure you want to remove "${field.label || field.field_id || `Field ${index + 1}`}"?`)) {
+                                    handleRemoveField(index);
+                                    toast.success("Field removed", {
+                                      description: `"${field.label || field.field_id}" has been removed from the form.`,
+                                    });
+                                  }
+                                }}
+                                title="Delete field"
+                              >
+                                <Trash2 className="h-3 w-3 mr-1" />
+                                Remove
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 ) : (
-                  <p className="text-muted-foreground text-center py-8">
-                    No fields added yet. Add your first field above.
-                  </p>
+                  <div className="text-center py-12 border-2 border-dashed rounded-lg bg-muted/30">
+                    <Sparkles className="h-12 w-12 mx-auto text-muted-foreground mb-3 opacity-50" />
+                    <p className="text-sm font-medium text-muted-foreground mb-1">No fields yet</p>
+                    <p className="text-xs text-muted-foreground">
+                      Use the quick add buttons above or configure a field below
+                    </p>
+                  </div>
                 )}
               </CardContent>
             </Card>

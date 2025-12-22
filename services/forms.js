@@ -22,6 +22,16 @@ export const formsService = {
     }
   },
 
+  // Get form by slug
+  getFormBySlug: async (slug) => {
+    try {
+      return await api.get(`/settings/custom-forms/slug/${slug}`);
+    } catch (error) {
+      console.error(`Get form by slug ${slug} failed:`, error);
+      throw error;
+    }
+  },
+
   // Create form
   createForm: async (formData) => {
     try {

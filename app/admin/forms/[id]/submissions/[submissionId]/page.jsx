@@ -12,6 +12,7 @@ import { useUsers } from "@/hooks/useUsers";
 import { useDownloadFile } from "@/hooks/useProfile";
 import { format, formatDistance, formatDistanceToNow, differenceInHours, differenceInDays, differenceInMinutes } from "date-fns";
 import ResourceAuditLogs from "@/components/ResourceAuditLogs";
+import CustomFieldRenderer from "@/components/CustomFieldRenderer";
 
 const FormSubmissionDetailPage = () => {
   const params = useParams();
@@ -587,6 +588,38 @@ const FormSubmissionDetailPage = () => {
                 <div className="space-y-4">
                   {fields.map((field) => {
                     const fieldId = field.field_id || field.field_name;
+                    const fieldType = field.field_type?.toLowerCase();
+                    
+                    // Display-only field types that don't have submission data
+                    const displayOnlyTypes = ['text_block', 'image_block', 'line_break', 'page_break'];
+                    const isDisplayOnly = displayOnlyTypes.includes(fieldType);
+                    
+                    // For display-only fields, render them directly without submission data
+                    if (isDisplayOnly) {
+                      const mappedField = {
+                        ...field,
+                        id: fieldId,
+                        field_label: field.label,
+                        field_description: field.help_text,
+                        field_type: field.field_type,
+                        // Preserve display-only field properties
+                        content: field.content,
+                        image_url: field.image_url,
+                        alt_text: field.alt_text,
+                      };
+                      
+                      return (
+                        <div key={fieldId}>
+                          <CustomFieldRenderer
+                            field={mappedField}
+                            value={undefined}
+                            onChange={undefined}
+                            error={undefined}
+                          />
+                        </div>
+                      );
+                    }
+                    
                     const value = displayData[fieldId];
                     // Debug: Log file field data
                     if (field.field_type?.toLowerCase() === 'file') {

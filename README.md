@@ -1,8 +1,42 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# Melode Frontend
+
+This is a [Next.js](https://nextjs.org) project for the Melode application, a comprehensive workforce management system.
+
+## Features
+
+### Forms Management
+- **Custom Form Builder**: Create complex forms with drag-and-drop field reordering
+- **Rich Text Editor**: Text blocks with full formatting support (Tiptap editor)
+- **Multiple Field Types**: Text, Textarea, Number, Email, Phone, Date, DateTime, Boolean, Select, Multi-Select, File Upload, Signature, JSON
+- **Display-Only Fields**: Text Block (rich text), Image Block, Line Break, Page Break, Download Link
+- **Conditional Visibility**: Show/hide fields based on other field values
+- **Multi-Page Forms**: Split forms into multiple pages with progress tracking
+- **Public Form Submissions**: Slug-based URLs for anonymous form submissions
+- **Draft Saving**: Save and resume form submissions
+- **Session Persistence**: Form progress saved in browser session storage
+- **Image Support**: Upload images or use direct URLs with resizing and inline alignment
+- **File Validation**: Comprehensive file type and size validation
+- **Auto-Generated IDs**: Automatic field ID and form name generation
+
+### Other Features
+- User authentication and role management
+- Task management
+- Department and location management
+- Custom fields
+- Audit logs
+- Clock in/out functionality
+- Asset management
+- Reports and analytics
 
 ## Getting Started
 
-First, run the development server:
+First, install dependencies:
+
+```bash
+npm install
+```
+
+Then, run the development server:
 
 ```bash
 npm run dev
@@ -16,9 +50,37 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+## Project Structure
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+/app
+  /admin          # Admin panel pages
+  /auth           # Authentication pages
+  /forms          # Public form submission pages
+  /docs           # Documentation pages
+/components       # React components
+/hooks           # Custom React hooks
+/services        # API service layer
+/utils           # Utility functions
+```
+
+## Key Technologies
+
+- **Next.js 14+**: React framework with App Router
+- **React Query**: Data fetching and caching
+- **Tiptap**: Rich text editor
+- **Tailwind CSS**: Styling
+- **shadcn/ui**: UI component library
+- **Axios**: HTTP client
+- **date-fns**: Date manipulation
+
+## Forms Documentation
+
+For detailed information about the Forms Management system, see:
+- `/docs/forms` - Complete forms documentation in the application
+- Form creation: `/admin/forms/new`
+- Form editing: `/admin/forms/[id]/edit`
+- Public form submission: `/forms/[slug]/submit`
 
 ## Learn More
 
@@ -26,8 +88,6 @@ To learn more about Next.js, take a look at the following resources:
 
 - [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
 - [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
 ## Deploy on Vercel
 

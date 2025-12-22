@@ -1,29 +1,59 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, ArrowLeft, Edit, FileText, CheckCircle, XCircle } from "lucide-react";
+import { Loader2, ArrowLeft, Edit, FileText, CheckCircle, XCircle, Share2, Copy, Check } from "lucide-react";
 import { useForm } from "@/hooks/useForms";
 import { useRoles } from "@/hooks/useRoles";
 import { useUsers } from "@/hooks/useUsers";
 import { format } from "date-fns";
 import ResourceAuditLogs from "@/components/ResourceAuditLogs";
 import { Shield, Users, User } from "lucide-react";
+import { generateSlug } from "@/utils/slug";
+import { toast } from "sonner";
 
 const FormDetailPage = () => {
   const params = useParams();
   const router = useRouter();
   const formId = params.id;
+  const [copied, setCopied] = useState(false);
 
   const { data: form, isLoading, error } = useForm(formId);
   const { data: rolesData } = useRoles();
   const { data: usersResponse } = useUsers();
   const roles = rolesData || [];
   const users = usersResponse?.users || usersResponse || [];
+
+  // Generate share link using slug
+  const getShareLink = () => {
+    if (!form?.form_title) return '';
+    const slug = generateSlug(form.form_title);
+    const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+    return `${baseUrl}/forms/${slug}/submit`;
+  };
+
+  // Copy share link to clipboard
+  const handleCopyShareLink = async () => {
+    const shareLink = getShareLink();
+    if (!shareLink) {
+      toast.error("Unable to generate share link");
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(shareLink);
+      setCopied(true);
+      toast.success("Share link copied to clipboard!");
+      setTimeout(() => setCopied(false), 2000);
+    } catch (error) {
+      console.error("Failed to copy:", error);
+      toast.error("Failed to copy link");
+    }
+  };
 
   const getFormTypeColor = (type) => {
     switch (type) {
@@ -287,6 +317,45 @@ const FormDetailPage = () => {
               </Link>
             </CardContent>
           </Card>
+
+          {/* Share Link */}
+          {form?.form_title && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Share Form</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Share this public link to allow anyone to submit the form (no login required)
+                </p>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 p-2 bg-muted rounded-md border text-sm font-mono truncate">
+                    {getShareLink()}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={handleCopyShareLink}
+                    title="Copy share link"
+                  >
+                    {copied ? (
+                      <Check className="h-4 w-4 text-green-600" />
+                    ) : (
+                      <Copy className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+                <Button
+                  variant="outline"
+                  className="w-full justify-start"
+                  onClick={handleCopyShareLink}
+                >
+                  <Share2 className="mr-2 h-4 w-4" />
+                  {copied ? "Copied!" : "Copy Share Link"}
+                </Button>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Metadata */}
           <Card>

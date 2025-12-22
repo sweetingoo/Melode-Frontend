@@ -190,17 +190,50 @@ export default function FormsDocs() {
               <p className="text-sm text-muted-foreground mb-2">
                 Available field types include:
               </p>
-              <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
-                <li><strong>Text:</strong> Single-line text input</li>
-                <li><strong>Textarea:</strong> Multi-line text input</li>
-                <li><strong>Number:</strong> Numeric input with validation</li>
-                <li><strong>Email:</strong> Email address input</li>
-                <li><strong>Date:</strong> Date picker</li>
-                <li><strong>Select:</strong> Dropdown menu</li>
-                <li><strong>Radio:</strong> Radio button group</li>
-                <li><strong>Checkbox:</strong> Checkbox group</li>
-                <li><strong>File Upload:</strong> File attachment field</li>
-              </ul>
+              
+              <div className="mt-4 space-y-4">
+                <div>
+                  <h4 className="text-sm font-semibold mb-2">Input Fields</h4>
+                  <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
+                    <li><strong>Text:</strong> Single-line text input</li>
+                    <li><strong>Textarea:</strong> Multi-line text input</li>
+                    <li><strong>Number:</strong> Numeric input with validation</li>
+                    <li><strong>Email:</strong> Email address input with validation</li>
+                    <li><strong>Phone:</strong> Phone number input</li>
+                    <li><strong>Date:</strong> Date picker</li>
+                    <li><strong>Date & Time:</strong> Date and time picker</li>
+                    <li><strong>Boolean/Checkbox:</strong> Single checkbox for true/false values</li>
+                  </ul>
+                </div>
+
+                <div>
+                  <h4 className="text-sm font-semibold mb-2">Selection Fields</h4>
+                  <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
+                    <li><strong>Select (Single):</strong> Dropdown menu for single selection</li>
+                    <li><strong>Multi-Select:</strong> Dropdown menu for multiple selections</li>
+                  </ul>
+                </div>
+
+                <div>
+                  <h4 className="text-sm font-semibold mb-2">Special Fields</h4>
+                  <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
+                    <li><strong>File Upload:</strong> File attachment field with type and size validation</li>
+                    <li><strong>Signature:</strong> Canvas-based signature capture field</li>
+                    <li><strong>JSON:</strong> JSON data input field</li>
+                  </ul>
+                </div>
+
+                <div>
+                  <h4 className="text-sm font-semibold mb-2">Display-Only Fields</h4>
+                  <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
+                    <li><strong>Text Block:</strong> Rich text content with formatting (bold, italic, lists, links, images, etc.)</li>
+                    <li><strong>Image Block:</strong> Display images with optional alt text (supports upload or direct URL)</li>
+                    <li><strong>Line Break:</strong> Visual separator between fields</li>
+                    <li><strong>Page Break:</strong> Splits form into multiple pages</li>
+                    <li><strong>Download Link:</strong> Link to downloadable files</li>
+                  </ul>
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -253,34 +286,84 @@ export default function FormsDocs() {
             <div>
               <h3 className="font-semibold mb-2">How to Submit a Form</h3>
               <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground">
-                <li>Navigate to the form you want to submit</li>
+                <li>Navigate to the form you want to submit (via admin panel or public link)</li>
                 <li>Click "Submit" or "Fill Out Form"</li>
                 <li>Fill in all required fields (marked with an asterisk *)</li>
                 <li>Upload any required files or attachments</li>
+                <li>For multi-page forms, use "Next" and "Previous" buttons to navigate</li>
                 <li>Review your entries for accuracy</li>
                 <li>Click "Submit" to send the form</li>
                 <li>You'll receive a confirmation message</li>
               </ol>
             </div>
             <div>
-              <h3 className="font-semibold mb-2">Form Validation</h3>
+              <h3 className="font-semibold mb-2">Public Form Submissions</h3>
               <p className="text-sm text-muted-foreground mb-2">
-                Forms validate your input before submission:
+                Forms can be submitted by both logged-in users and anonymous users:
               </p>
               <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
-                <li>Required fields must be filled</li>
-                <li>Email fields must contain valid email addresses</li>
-                <li>Number fields must contain valid numbers</li>
-                <li>Date fields must contain valid dates</li>
-                <li>File uploads must meet size and type requirements</li>
+                <li><strong>Public Forms:</strong> Accessible via slug-based URLs (e.g., <code className="bg-muted px-1 py-0.5 rounded">/forms/form-title-slug/submit</code>)</li>
+                <li><strong>No Login Required:</strong> Anonymous users can submit forms without authentication</li>
+                <li><strong>Logged-in Users:</strong> Submissions are tracked with user information</li>
+                <li><strong>Anonymous Users:</strong> Submissions are recorded without user association</li>
+                <li>Form creators can share public links from the form details page</li>
+              </ul>
+            </div>
+            <div>
+              <h3 className="font-semibold mb-2">Multi-Page Forms</h3>
+              <p className="text-sm text-muted-foreground mb-2">
+                Forms can be split into multiple pages using Page Break fields:
+              </p>
+              <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
+                <li>Use "Page Break" field type to create new pages</li>
+                <li>Navigate between pages using "Next" and "Previous" buttons</li>
+                <li>Progress indicator shows completion percentage</li>
+                <li>All pages must be completed before submission</li>
+                <li>Form progress is saved in browser session storage</li>
+              </ul>
+            </div>
+            <div>
+              <h3 className="font-semibold mb-2">Form Validation</h3>
+              <p className="text-sm text-muted-foreground mb-2">
+                Forms validate your input before submission. Field-level validation options include:
+              </p>
+              <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
+                <li><strong>Required Fields:</strong> Must be filled before submission</li>
+                <li><strong>Min/Max Values:</strong> For number fields (e.g., min: 0, max: 100)</li>
+                <li><strong>Min/Max Length:</strong> For text fields (e.g., min: 5 characters, max: 255)</li>
+                <li><strong>Pattern Validation:</strong> Custom regex patterns (e.g., phone numbers, postal codes)</li>
+                <li><strong>Email Validation:</strong> Automatic validation for email format</li>
+                <li><strong>Date Validation:</strong> Ensures valid date format</li>
+                <li><strong>File Type Restrictions:</strong> Limit allowed file types (MIME types or extensions)</li>
+                <li><strong>File Size Limits:</strong> Maximum file size in MB</li>
+                <li><strong>JSON Schema:</strong> For JSON fields, validate against a JSON schema</li>
               </ul>
             </div>
             <div>
               <h3 className="font-semibold mb-2">Saving Drafts</h3>
-              <p className="text-sm text-muted-foreground">
-                Some forms allow you to save drafts so you can complete them later.
-                Look for a "Save Draft" button if this feature is available.
+              <p className="text-sm text-muted-foreground mb-2">
+                Forms can be configured to allow draft saving:
               </p>
+              <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
+                <li>Look for a "Save Draft" button if the form allows drafts</li>
+                <li>Drafts are saved to the server and can be resumed later</li>
+                <li>Form progress is automatically saved in browser session storage</li>
+                <li>If you reload the page, your progress is restored from session storage</li>
+                <li>Draft submissions can be completed and submitted later</li>
+              </ul>
+            </div>
+            <div>
+              <h3 className="font-semibold mb-2">Signature Fields</h3>
+              <p className="text-sm text-muted-foreground mb-2">
+                Forms can include signature fields for digital signatures:
+              </p>
+              <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
+                <li>Click on the signature field to open the signature canvas</li>
+                <li>Draw your signature using mouse or touch</li>
+                <li>Clear and redraw if needed</li>
+                <li>Save the signature to the form</li>
+                <li>Signatures are captured as image data</li>
+              </ul>
             </div>
           </CardContent>
         </Card>
@@ -339,12 +422,26 @@ export default function FormsDocs() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
+              <h3 className="font-semibold mb-2">Public Form Access</h3>
+              <p className="text-sm text-muted-foreground mb-2">
+                Forms can be made publicly accessible:
+              </p>
+              <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
+                <li><strong>Slug-based URLs:</strong> Forms use URL-friendly slugs derived from form titles</li>
+                <li><strong>Public Links:</strong> Share links are available on the form details page</li>
+                <li><strong>No Authentication Required:</strong> Anonymous users can access and submit public forms</li>
+                <li><strong>Full-width Layout:</strong> Public forms use a full-width layout for better user experience</li>
+                <li><strong>Example URL:</strong> <code className="bg-muted px-1 py-0.5 rounded">/forms/my-form-title/submit</code></li>
+              </ul>
+            </div>
+            <div>
               <h3 className="font-semibold mb-2">Viewing Forms</h3>
               <p className="text-sm text-muted-foreground mb-2">
                 Form visibility can be controlled by:
               </p>
               <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
-                <li><strong>Public:</strong> Visible to all users</li>
+                <li><strong>Public:</strong> Accessible via public slug-based URLs</li>
+                <li><strong>Admin Panel:</strong> Accessible via admin interface for logged-in users</li>
                 <li><strong>Department:</strong> Visible only to specific departments</li>
                 <li><strong>Role-based:</strong> Visible to users with specific roles</li>
                 <li><strong>Permission-based:</strong> Requires specific permissions</li>
@@ -360,6 +457,8 @@ export default function FormsDocs() {
                 <li>Allow only one submission per user</li>
                 <li>Restrict submissions to specific users or roles</li>
                 <li>Require approval before submission is accepted</li>
+                <li>Allow anonymous submissions (no login required)</li>
+                <li>Track logged-in user submissions with user information</li>
               </ul>
             </div>
             <div>
@@ -372,6 +471,7 @@ export default function FormsDocs() {
                 <li>Users can usually view their own submissions</li>
                 <li>Administrators may have access to all submissions</li>
                 <li>Department managers may see submissions from their department</li>
+                <li>Anonymous submissions are visible to form creators and administrators</li>
               </ul>
             </div>
           </CardContent>
@@ -408,13 +508,95 @@ export default function FormsDocs() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Form Templates</CardTitle>
-            <CardDescription>Using and creating form templates</CardDescription>
+            <CardTitle>Advanced Form Features</CardTitle>
+            <CardDescription>Advanced features for building complex forms</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
+            <div className="space-y-4">
               <div>
-                <h3 className="font-semibold mb-2">Using Templates</h3>
+                <h3 className="font-semibold mb-2">Rich Text Editor</h3>
+                <p className="text-sm text-muted-foreground mb-2">
+                  Text Block fields support a rich text editor with the following features:
+                </p>
+                <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
+                  <li>Text formatting: Bold, Italic, Underline, Strikethrough</li>
+                  <li>Headings: H1, H2, H3</li>
+                  <li>Lists: Ordered and unordered lists</li>
+                  <li>Text alignment: Left, Center, Right</li>
+                  <li>Text color and styling</li>
+                  <li>Links: Add hyperlinks to text</li>
+                  <li>Images: Upload images or use direct URLs</li>
+                  <li>Image resizing: Drag corners to resize images</li>
+                  <li>Inline images: Text can flow around images (left, right, center, inline)</li>
+                  <li>Undo/Redo functionality</li>
+                </ul>
+              </div>
+              <div>
+                <h3 className="font-semibold mb-2">Conditional Field Visibility</h3>
+                <p className="text-sm text-muted-foreground mb-2">
+                  Fields can be shown or hidden based on other field values:
+                </p>
+                <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
+                  <li>Set a field to depend on another field's value</li>
+                  <li>Show when conditions: equals, not equals, contains, is empty, is not empty</li>
+                  <li>Specify the value that triggers visibility</li>
+                  <li>Useful for creating dynamic, context-aware forms</li>
+                  <li>Example: Show "Emergency Contact" field only when "Has Emergency Contact" is checked</li>
+                </ul>
+              </div>
+              <div>
+                <h3 className="font-semibold mb-2">Drag-and-Drop Field Reordering</h3>
+                <p className="text-sm text-muted-foreground mb-2">
+                  Fields can be reordered easily:
+                </p>
+                <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
+                  <li>Click and drag the grip handle (⋮⋮) on any field</li>
+                  <li>Drop the field in the desired position</li>
+                  <li>Field order is saved automatically</li>
+                  <li>Works for all field types including display-only fields</li>
+                </ul>
+              </div>
+              <div>
+                <h3 className="font-semibold mb-2">Auto-Generated Field IDs</h3>
+                <p className="text-sm text-muted-foreground mb-2">
+                  Field IDs are automatically generated:
+                </p>
+                <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
+                  <li>Field IDs are generated from field labels automatically</li>
+                  <li>Display-only fields get random IDs with type prefixes (txt_, img_, line_, etc.)</li>
+                  <li>IDs are sanitized to contain only alphanumeric characters, hyphens, and underscores</li>
+                  <li>Form names are auto-generated from form titles</li>
+                  <li>IDs can be manually edited if needed</li>
+                </ul>
+              </div>
+              <div>
+                <h3 className="font-semibold mb-2">Image Blocks</h3>
+                <p className="text-sm text-muted-foreground mb-2">
+                  Image blocks support multiple input methods:
+                </p>
+                <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
+                  <li>Upload images directly from your device</li>
+                  <li>Use direct image URLs</li>
+                  <li>Add alt text for accessibility</li>
+                  <li>Images are validated for type and size</li>
+                  <li>Supported formats: JPEG, PNG, GIF, WebP, SVG</li>
+                </ul>
+              </div>
+              <div>
+                <h3 className="font-semibold mb-2">File Upload Validation</h3>
+                <p className="text-sm text-muted-foreground mb-2">
+                  File upload fields support comprehensive validation:
+                </p>
+                <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
+                  <li>File type restrictions (MIME types or extensions)</li>
+                  <li>Maximum file size limits (in MB)</li>
+                  <li>Single or multiple file uploads</li>
+                  <li>File expiry dates for temporary files</li>
+                  <li>Predefined categories: Images, Documents, Archives, Videos</li>
+                </ul>
+              </div>
+              <div>
+                <h3 className="font-semibold mb-2">Form Templates</h3>
                 <p className="text-sm text-muted-foreground mb-2">
                   Form templates can help you create forms quickly:
                 </p>
@@ -422,15 +604,8 @@ export default function FormsDocs() {
                   <li>Start from a pre-built template</li>
                   <li>Customize the template to fit your needs</li>
                   <li>Save time by reusing common form structures</li>
+                  <li>Mark forms as templates for reuse</li>
                 </ul>
-              </div>
-              <div>
-                <h3 className="font-semibold mb-2">Creating Templates</h3>
-                <p className="text-sm text-muted-foreground">
-                  If you frequently create similar forms, you can save a form as a template
-                  for future use. This is especially useful for recurring forms like incident reports,
-                  requests, or surveys.
-                </p>
               </div>
             </div>
           </CardContent>

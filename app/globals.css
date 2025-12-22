@@ -138,3 +138,123 @@ body {
     display: none;  /* Chrome, Safari and Opera */
   }
 }
+
+/* Ensure text blocks in forms don't overlay content */
+.prose {
+  position: relative !important;
+  display: block !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  overflow-wrap: break-word !important;
+  word-wrap: break-word !important;
+  /* Contain content but allow scrolling if needed */
+  contain: layout style !important;
+}
+
+.prose * {
+  position: relative !important;
+}
+
+.prose img {
+  max-width: 100% !important;
+  width: auto !important;
+  height: auto !important;
+  display: block !important;
+  margin: 1rem 0 !important;
+  position: relative !important;
+  clear: both !important;
+  object-fit: contain !important;
+  box-sizing: border-box !important;
+  /* Ensure images stay within container */
+  overflow: hidden !important;
+}
+
+/* Image loading states in prose */
+.prose img[loading="lazy"] {
+  opacity: 1;
+  transition: opacity 0.3s;
+}
+
+.prose img:not([src=""]) {
+  min-height: 50px;
+}
+
+/* Prevent broken image icons from showing */
+.prose img[src=""],
+.prose img:not([src]) {
+  display: none !important;
+}
+
+.prose p {
+  margin: 0.75rem 0 !important;
+}
+
+/* Ensure last element in prose has bottom margin */
+.prose > *:last-child {
+  margin-bottom: 1rem !important;
+}
+
+/* Ensure prose container itself has bottom spacing */
+.prose {
+  margin-bottom: 1rem !important;
+  padding-bottom: 0.5rem !important;
+}
+
+.prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6 {
+  margin-top: 1rem !important;
+  margin-bottom: 0.5rem !important;
+}
+
+.prose ul, .prose ol {
+  margin: 0.75rem 0 !important;
+  padding-left: 1.5rem !important;
+}
+
+.prose a {
+  color: hsl(var(--primary)) !important;
+  text-decoration: underline !important;
+}
+
+/* Ensure all form field containers don't overlay */
+/* Only apply to divs and containers, not buttons or flex items */
+div[class*="space-y"],
+section[class*="space-y"],
+article[class*="space-y"] {
+  position: relative !important;
+  display: block !important;
+}
+
+/* Ensure form images don't overlay */
+img[class*="max-w-full"] {
+  position: relative !important;
+  display: block !important;
+  clear: both !important;
+}
+
+/* Ensure buttons in forms don't overlay */
+button[class*="w-full"],
+button[data-slot="button"] {
+  position: relative !important;
+  /* Keep inline-flex for proper text alignment */
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  vertical-align: middle !important;
+}
+
+/* Ensure button text is properly aligned */
+button[data-slot="button"] {
+  line-height: normal !important;
+}
+
+button[class*="w-full"] {
+  width: 100% !important;
+}
+
+/* Ensure canvas elements (signatures) don't overlay */
+canvas {
+  position: relative !important;
+  display: block !important;
+  clear: both !important;
+}

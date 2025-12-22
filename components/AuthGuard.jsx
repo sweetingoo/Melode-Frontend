@@ -13,7 +13,8 @@ const PUBLIC_ROUTES = [
   '/auth/signup',
   '/auth/forgot-password',
   '/auth/reset-password',
-  '/'
+  '/',
+  '/forms' // Form submission routes (public)
 ];
 
 // Define routes that require authentication but are not in admin layout
@@ -36,7 +37,7 @@ const AuthGuard = ({ children }) => {
         pathname === route || pathname.startsWith(route + '/')
       );
 
-      // If it's a public route, allow access
+      // If it's a public route, allow access immediately (don't wait for user data)
       if (isPublicRoute) {
         setIsChecking(false);
         return;
@@ -74,16 +75,25 @@ const AuthGuard = ({ children }) => {
     checkAuth();
   }, [pathname, router, userLoading, userError, currentUser]);
 
-  // Show loading spinner while checking authentication
-  if (isChecking || userLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="flex flex-col items-center space-y-4">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <p className="text-sm text-muted-foreground">Loading...</p>
+  // Check if current route is public
+  const isPublicRoute = PUBLIC_ROUTES.some(route =>
+    pathname === route || pathname.startsWith(route + '/')
+  );
+
+  // Show loading spinner while checking authentication (but not for public routes)
+  if (isChecking && !isPublicRoute) {
+    // For protected routes, also wait for user loading if authenticated
+    const isAuthenticated = apiUtils.isAuthenticated();
+    if (isAuthenticated && userLoading) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-background">
+          <div className="flex flex-col items-center space-y-4">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <p className="text-sm text-muted-foreground">Loading...</p>
+          </div>
         </div>
-      </div>
-    );
+      );
+    }
   }
 
   // If there's an error, don't render children (will redirect)

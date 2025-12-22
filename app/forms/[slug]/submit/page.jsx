@@ -2,30 +2,35 @@
 
 import React, { useState, useMemo, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { Loader2, ArrowLeft, CheckCircle, ChevronLeft, ChevronRight, Save } from "lucide-react";
-import { useForm, useCreateFormSubmission, useUpdateFormSubmission } from "@/hooks/useForms";
+import { Loader2, CheckCircle, ChevronLeft, ChevronRight, Save } from "lucide-react";
+import { useFormBySlug, useCreateFormSubmission, useUpdateFormSubmission } from "@/hooks/useForms";
 import { useUploadFile } from "@/hooks/useProfile";
+import { useCurrentUser } from "@/hooks/useAuth";
+import { apiUtils } from "@/services/api-client";
 import CustomFieldRenderer from "@/components/CustomFieldRenderer";
 import { toast } from "sonner";
 
 const FormSubmitPage = () => {
   const params = useParams();
   const router = useRouter();
-  const formId = params.id;
+  const slug = params.slug;
   const resumeSubmissionId = params.resumeSubmissionId; // For resuming drafts
 
-  const { data: form, isLoading: formLoading } = useForm(formId);
+  const { data: form, isLoading: formLoading } = useFormBySlug(slug);
   const createSubmissionMutation = useCreateFormSubmission();
   const updateSubmissionMutation = useUpdateFormSubmission();
   // Use silent mode for form submissions to avoid multiple toasts
   const uploadFileMutation = useUploadFile({ silent: true });
+  
+  // Check if user is logged in (optional - form can be submitted anonymously)
+  const isAuthenticated = apiUtils.isAuthenticated();
+  const { data: currentUser } = useCurrentUser();
 
-  // Storage key for persisting form submission data
-  const storageKey = `form_submission_${formId}`;
+  // Storage key for persisting form submission data (use form ID once loaded)
+  const [storageKey, setStorageKey] = useState(`form_submission_${slug}`);
   
   const [submissionData, setSubmissionData] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -33,10 +38,17 @@ const FormSubmitPage = () => {
   const [currentPage, setCurrentPage] = useState(0);
   const [draftSubmissionId, setDraftSubmissionId] = useState(null);
   
+  // Update storage key when form is loaded
+  useEffect(() => {
+    if (form?.id) {
+      setStorageKey(`form_submission_${form.id}`);
+    }
+  }, [form?.id]);
+  
   // Load saved submission data from sessionStorage on mount
   useEffect(() => {
-    if (formId) {
-      const key = `form_submission_${formId}`;
+    if (slug) {
+      const key = `form_submission_${slug}`;
       try {
         const saved = sessionStorage.getItem(key);
         if (saved) {
@@ -55,7 +67,7 @@ const FormSubmitPage = () => {
         console.error("Failed to load saved submission:", error);
       }
     }
-  }, [formId]);
+  }, [slug]);
 
   // Save submission data to sessionStorage
   const saveSubmissionToStorage = (data, page, draftId) => {
@@ -189,13 +201,7 @@ const FormSubmitPage = () => {
       if (show_when === 'equals') {
         return normalizedDependent === normalizedExpected;
       } else if (show_when === 'not_equals') {
-        // For not_equals without a value, show if dependent field has any truthy value
-        // This is commonly used to show a field when another field is checked/selected
         if (expectedValue === undefined || expectedValue === null || expectedValue === '') {
-          // Show if dependent field has any truthy value (true, non-empty string, non-zero number, etc.)
-          // For booleans: show when true
-          // For strings: show when not empty
-          // For numbers: show when not zero
           if (typeof dependentValue === 'boolean') {
             return dependentValue === true;
           }
@@ -222,6 +228,12 @@ const FormSubmitPage = () => {
     setFieldErrors({});
 
     try {
+      if (!form?.id) {
+        toast.error("Form not found");
+        setIsSubmitting(false);
+        return;
+      }
+
       // Validate all required fields across all pages
       const allFields = form.form_fields?.fields || [];
       const errors = {};
@@ -274,42 +286,63 @@ const FormSubmitPage = () => {
       // Process and submit
       const processedSubmissionData = await processSubmissionData();
 
+      // Prepare submission payload - include user info if logged in
+      const submissionPayload = {
+        form_id: parseInt(form.id),
+        submission_data: processedSubmissionData,
+        status: "submitted",
+      };
+
+      // If user is logged in, include user information
+      if (isAuthenticated && currentUser) {
+        submissionPayload.submitted_by_user_id = currentUser.id;
+      }
+      // Otherwise, submission will be anonymous (no user_id)
+
       // Submit the form with processed data
       const result = draftSubmissionId 
         ? await updateSubmissionMutation.mutateAsync({
             id: draftSubmissionId,
-            submission_data: processedSubmissionData,
-            status: "submitted",
+            ...submissionPayload,
           })
-        : await createSubmissionMutation.mutateAsync({
-            form_id: parseInt(formId),
-            submission_data: processedSubmissionData,
-            status: "submitted",
-          });
+        : await createSubmissionMutation.mutateAsync(submissionPayload);
 
       // Clear saved submission from sessionStorage after successful submission
       clearSubmissionStorage();
 
-      // If tasks were created, handle individual vs collaborative tasks
-      if (result.processing_result?.task_creation?.created) {
-        const taskInfo = result.processing_result.task_creation;
+      // Show success message
+      toast.success("Form submitted successfully", {
+        description: isAuthenticated 
+          ? `Thank you ${currentUser?.first_name || currentUser?.email || ''} for your submission.`
+          : "Thank you for your submission.",
+      });
 
-        if (
-          taskInfo.individual_tasks &&
-          taskInfo.task_ids &&
-          taskInfo.task_ids.length > 0
-        ) {
-          // Individual tasks created - show success and navigate to submissions page
-          // The toast notification will show the count from the hook
-          router.push(`/admin/forms/${formId}/submissions/${result.id}`);
-        } else if (taskInfo.task_id) {
-          // Single collaborative task
-          router.push(`/admin/tasks/${taskInfo.task_id}`);
+      // Navigate to a success page or show success message
+      // For anonymous users, we might want to show a simple success page
+      if (isAuthenticated) {
+        // If tasks were created, handle individual vs collaborative tasks
+        if (result.processing_result?.task_creation?.created) {
+          const taskInfo = result.processing_result.task_creation;
+
+          if (
+            taskInfo.individual_tasks &&
+            taskInfo.task_ids &&
+            taskInfo.task_ids.length > 0
+          ) {
+            // Individual tasks created - navigate to tasks
+            router.push(`/admin/tasks`);
+          } else if (taskInfo.task_id) {
+            // Single collaborative task
+            router.push(`/admin/tasks/${taskInfo.task_id}`);
+          } else {
+            router.push(`/admin/forms/${form.id}/submissions/${result.id}`);
+          }
         } else {
-          router.push(`/admin/forms/${formId}/submissions/${result.id}`);
+          router.push(`/admin/forms/${form.id}/submissions/${result.id}`);
         }
       } else {
-        router.push(`/admin/forms/${formId}/submissions/${result.id}`);
+        // For anonymous users, show a success page
+        router.push(`/forms/${slug}/submitted?submission_id=${result.id}`);
       }
     } catch (error) {
       console.error("Failed to submit form:", error);
@@ -350,24 +383,14 @@ const FormSubmitPage = () => {
   const totalPages = pages.length;
   const currentPageFields = pages[currentPage] || [];
   // Calculate progress based on pages completed (not current page)
-  // On first page (0), show 0% - user hasn't completed any pages yet
-  // On last page, show progress based on pages completed
   const progressPercentage = totalPages > 1 
     ? (currentPage / totalPages) * 100 
     : 0;
 
-  // Load draft data if resuming
-  useEffect(() => {
-    if (resumeSubmissionId && form) {
-      // TODO: Load draft submission data
-      // This would require fetching the draft submission
-    }
-  }, [resumeSubmissionId, form]);
-
   // Conditional returns after all hooks
   if (formLoading) {
     return (
-      <div className="flex items-center justify-center py-12">
+      <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin" />
       </div>
     );
@@ -375,14 +398,8 @@ const FormSubmitPage = () => {
 
   if (!form) {
     return (
-      <div className="space-y-4">
-        <Link href="/admin/forms">
-          <Button variant="ghost">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Forms
-          </Button>
-        </Link>
-        <Card>
+      <div className="min-h-screen flex items-center justify-center">
+        <Card className="w-full max-w-md">
           <CardContent className="py-12 text-center">
             <p className="text-muted-foreground">Form not found</p>
           </CardContent>
@@ -401,23 +418,30 @@ const FormSubmitPage = () => {
     try {
       const processedData = await processSubmissionData();
       
+      // Prepare draft payload
+      const draftPayload = {
+        form_id: parseInt(form.id),
+        submission_data: processedData,
+        status: "draft",
+      };
+
+      // Include user info if logged in
+      if (isAuthenticated && currentUser) {
+        draftPayload.submitted_by_user_id = currentUser.id;
+      }
+      
       if (draftSubmissionId) {
         // Update existing draft
         await updateSubmissionMutation.mutateAsync({
           id: draftSubmissionId,
-          submission_data: processedData,
-          status: "draft",
+          ...draftPayload,
         });
         // Update sessionStorage with new draft ID
         saveSubmissionToStorage(submissionData, currentPage, draftSubmissionId);
         toast.success("Draft saved successfully");
       } else {
         // Create new draft
-        const result = await createSubmissionMutation.mutateAsync({
-          form_id: parseInt(formId),
-          submission_data: processedData,
-          status: "draft",
-        });
+        const result = await createSubmissionMutation.mutateAsync(draftPayload);
         const newDraftId = result.id;
         setDraftSubmissionId(newDraftId);
         // Save to sessionStorage with new draft ID
@@ -470,7 +494,7 @@ const FormSubmitPage = () => {
             uploadFileMutation
               .mutateAsync({
                 file: file,
-                form_id: parseInt(formId),
+                form_id: parseInt(form.id),
                 field_id: fieldId,
               })
               .then((uploadResult) => {
@@ -509,7 +533,7 @@ const FormSubmitPage = () => {
               return uploadFileMutation
                 .mutateAsync({
                   file: file,
-                  form_id: parseInt(formId),
+                  form_id: parseInt(form.id),
                   field_id: fieldId,
                 })
                 .then((uploadResult) => {
@@ -627,193 +651,175 @@ const FormSubmitPage = () => {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <Link href={`/admin/forms/${formId}`}>
-          <Button variant="ghost" size="icon">
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-        </Link>
-        <div className="flex-1">
-          <h1 className="text-3xl font-bold">{form.form_title || form.form_name}</h1>
-          <p className="text-muted-foreground">Submit Form</p>
+    <div className="min-h-screen w-full">
+      <div className="container mx-auto px-4 py-8 max-w-4xl">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-4xl font-bold mb-2">{form.form_title || form.form_name}</h1>
+          <p className="text-muted-foreground">
+            {isAuthenticated && currentUser 
+              ? `Submitting as ${currentUser.first_name || currentUser.email || 'User'}`
+              : "Submit Form (Anonymous)"}
+          </p>
         </div>
-      </div>
 
-      {/* Progress Indicator */}
-      {totalPages > 1 && (
-        <Card>
-          <CardContent className="pt-6">
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="font-medium">Step {currentPage + 1} of {totalPages}</span>
-                <span className="text-muted-foreground">{Math.round(progressPercentage)}% Complete</span>
+        {/* Progress Indicator */}
+        {totalPages > 1 && (
+          <Card className="mb-6">
+            <CardContent className="pt-6">
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="font-medium">Step {currentPage + 1} of {totalPages}</span>
+                  <span className="text-muted-foreground">{Math.round(progressPercentage)}% Complete</span>
+                </div>
+                <Progress value={progressPercentage} />
               </div>
-              <Progress value={progressPercentage} />
-            </div>
-          </CardContent>
-        </Card>
-      )}
+            </CardContent>
+          </Card>
+        )}
 
-      <form onSubmit={handleSubmit}>
-        <Card>
-          <CardHeader>
-            <CardTitle>
-              {totalPages > 1 ? `Step ${currentPage + 1} of ${totalPages}` : "Form Submission"}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {currentPage === 0 && form.form_description && (
-              <div className="p-4 bg-muted rounded-md">
-                <p className="text-sm">{form.form_description}</p>
-              </div>
-            )}
+        <form onSubmit={handleSubmit}>
+          <Card>
+            <CardHeader>
+              <CardTitle>
+                {totalPages > 1 ? `Step ${currentPage + 1} of ${totalPages}` : "Form Submission"}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {currentPage === 0 && form.form_description && (
+                <div className="p-4 bg-muted rounded-md">
+                  <p className="text-sm">{form.form_description}</p>
+                </div>
+              )}
 
-            {currentPageFields.length === 0 ? (
-              <p className="text-muted-foreground text-center py-8">
-                This page has no fields defined.
-              </p>
-            ) : (
-              <div className="space-y-6">
-                {currentPageFields.map((field) => {
-                  const fieldId = field.field_id || field.field_name;
-                  const fieldType = field.field_type?.toLowerCase();
-                  
-                  // Display-only fields don't need value, onChange, or error handling
-                  const isDisplayOnly = ['text_block', 'image_block', 'line_break', 'page_break', 'download_link'].includes(fieldType);
-                  
-                  // Debug logging for image blocks
-                  if (fieldType === 'image_block' && process.env.NODE_ENV === 'development') {
-                    console.log('Image block field in submit page:', {
-                      fieldId,
-                      fieldType,
-                      field,
+              {currentPageFields.length === 0 ? (
+                <p className="text-muted-foreground text-center py-8">
+                  This page has no fields defined.
+                </p>
+              ) : (
+                <div className="space-y-6">
+                  {currentPageFields.map((field) => {
+                    const fieldId = field.field_id || field.field_name;
+                    const fieldType = field.field_type?.toLowerCase();
+                    
+                    // Display-only fields don't need value, onChange, or error handling
+                    const isDisplayOnly = ['text_block', 'image_block', 'line_break', 'page_break', 'download_link'].includes(fieldType);
+                    
+                    // Check conditional visibility
+                    const isVisible = checkFieldVisibility(field, submissionData);
+                    if (!isVisible) {
+                      return null;
+                    }
+                    
+                    const value = isDisplayOnly ? undefined : submissionData[fieldId];
+                    const error = isDisplayOnly ? undefined : fieldErrors[fieldId];
+
+                    // Map field structure for CustomFieldRenderer
+                    const mappedField = {
+                      ...field,
+                      id: fieldId,
+                      field_label: field.label,
+                      field_description: field.help_text,
+                      field_type: field.field_type,
+                      is_required: field.required,
+                      required: field.required,
+                      // Preserve display-only field properties
+                      content: field.content,
                       image_url: field.image_url,
                       image_file_id: field.image_file_id,
-                      alt_text: field.alt_text
-                    });
-                  }
-                  
-                  // Check conditional visibility
-                  const isVisible = checkFieldVisibility(field, submissionData);
-                  if (!isVisible) {
-                    return null;
-                  }
-                  
-                  const value = isDisplayOnly ? undefined : submissionData[fieldId];
-                  const error = isDisplayOnly ? undefined : fieldErrors[fieldId];
+                      alt_text: field.alt_text,
+                      download_url: field.download_url,
+                      // Preserve conditional visibility
+                      conditional_visibility: field.conditional_visibility,
+                      // Preserve validation object for file fields
+                      validation: field.validation,
+                      field_options: {
+                        ...(field.field_options || {}), // Preserve all original field_options
+                        options: field.options || [],
+                        // For file fields, also map validation to field_options for backward compatibility
+                        accept: field.field_options?.accept || (field.validation?.allowed_types
+                          ? Array.isArray(field.validation.allowed_types)
+                            ? field.validation.allowed_types.join(",")
+                            : field.validation.allowed_types
+                          : undefined),
+                        maxSize: field.field_options?.maxSize || field.validation?.max_size_mb,
+                        // Preserve allowMultiple setting
+                        allowMultiple: field.field_options?.allowMultiple || false,
+                        // File expiry date support
+                        requireExpiryDate: field.file_expiry_date || false,
+                      },
+                    };
 
-                  // Map field structure for CustomFieldRenderer
-                  const mappedField = {
-                    ...field,
-                    id: fieldId,
-                    field_label: field.label,
-                    field_description: field.help_text,
-                    field_type: field.field_type,
-                    is_required: field.required,
-                    required: field.required,
-                    // Preserve display-only field properties
-                    content: field.content,
-                    image_url: field.image_url,
-                    image_file_id: field.image_file_id,
-                    alt_text: field.alt_text,
-                    download_url: field.download_url,
-                    // Preserve conditional visibility
-                    conditional_visibility: field.conditional_visibility,
-                    // Preserve validation object for file fields
-                    validation: field.validation,
-                    field_options: {
-                      ...(field.field_options || {}), // Preserve all original field_options
-                      options: field.options || [],
-                      // For file fields, also map validation to field_options for backward compatibility
-                      accept: field.field_options?.accept || (field.validation?.allowed_types
-                        ? Array.isArray(field.validation.allowed_types)
-                          ? field.validation.allowed_types.join(",")
-                          : field.validation.allowed_types
-                        : undefined),
-                      maxSize: field.field_options?.maxSize || field.validation?.max_size_mb,
-                      // Preserve allowMultiple setting
-                      allowMultiple: field.field_options?.allowMultiple || false,
-                      // File expiry date support
-                      requireExpiryDate: field.file_expiry_date || false,
-                    },
-                  };
+                    return (
+                      <CustomFieldRenderer
+                        key={fieldId}
+                        field={mappedField}
+                        value={value}
+                        onChange={isDisplayOnly ? undefined : handleFieldChange}
+                        error={error}
+                      />
+                    );
+                  })}
+                </div>
+              )}
 
-                  return (
-                    <CustomFieldRenderer
-                      key={fieldId}
-                      field={mappedField}
-                      value={value}
-                      onChange={isDisplayOnly ? undefined : handleFieldChange}
-                      error={error}
-                    />
-                  );
-                })}
+              <div className="flex justify-between gap-2 pt-4 border-t">
+                <div className="flex gap-2">
+                  {form.form_config?.allow_draft && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleSaveDraft}
+                      disabled={updateSubmissionMutation.isPending || createSubmissionMutation.isPending}
+                    >
+                      <Save className="mr-2 h-4 w-4" />
+                      Save and Resume Later
+                    </Button>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  {totalPages > 1 && currentPage > 0 && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handlePreviousPage}
+                    >
+                      <ChevronLeft className="mr-2 h-4 w-4" />
+                      Previous
+                    </Button>
+                  )}
+                  {totalPages > 1 && currentPage < totalPages - 1 ? (
+                    <Button
+                      type="button"
+                      onClick={handleNextPage}
+                    >
+                      Next
+                      <ChevronRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  ) : (
+                    <Button
+                      type="submit"
+                      disabled={isSubmitting || createSubmissionMutation.isPending}
+                    >
+                      {isSubmitting || createSubmissionMutation.isPending ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Submitting...
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle className="mr-2 h-4 w-4" />
+                          {form.form_config?.submit_button_text || "Submit"}
+                        </>
+                      )}
+                    </Button>
+                  )}
+                </div>
               </div>
-            )}
-
-            <div className="flex justify-between gap-2 pt-4 border-t">
-              <div className="flex gap-2">
-                <Link href={`/admin/forms/${formId}`}>
-                  <Button type="button" variant="outline">
-                    Cancel
-                  </Button>
-                </Link>
-                {form.form_config?.allow_draft && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={handleSaveDraft}
-                    disabled={updateSubmissionMutation.isPending || createSubmissionMutation.isPending}
-                  >
-                    <Save className="mr-2 h-4 w-4" />
-                    Save and Resume Later
-                  </Button>
-                )}
-              </div>
-              <div className="flex gap-2">
-                {totalPages > 1 && currentPage > 0 && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={handlePreviousPage}
-                  >
-                    <ChevronLeft className="mr-2 h-4 w-4" />
-                    Previous
-                  </Button>
-                )}
-                {totalPages > 1 && currentPage < totalPages - 1 ? (
-                  <Button
-                    type="button"
-                    onClick={handleNextPage}
-                  >
-                    Next
-                    <ChevronRight className="ml-2 h-4 w-4" />
-                  </Button>
-                ) : (
-                  <Button
-                    type="submit"
-                    disabled={isSubmitting || createSubmissionMutation.isPending}
-                  >
-                    {isSubmitting || createSubmissionMutation.isPending ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Submitting...
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle className="mr-2 h-4 w-4" />
-                        {form.form_config?.submit_button_text || "Submit"}
-                      </>
-                    )}
-                  </Button>
-                )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </form>
+            </CardContent>
+          </Card>
+        </form>
+      </div>
     </div>
   );
 };
