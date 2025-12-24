@@ -409,23 +409,24 @@ export default function ConfigurationPage() {
   return (
     <div className="container mx-auto p-6 space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Configuration Management</h1>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Configuration Management</h1>
           <p className="text-sm sm:text-base text-muted-foreground mt-1">
             Manage system settings and organisation configuration
           </p>
         </div>
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0">
           <Button
             variant="outline"
             onClick={() => setIsBulkEditMode(!isBulkEditMode)}
-            className="w-full sm:w-auto"
+            size="sm"
+            className="shrink-0"
           >
             {isBulkEditMode ? "Cancel Bulk Edit" : "Bulk Edit"}
           </Button>
           {isBulkEditMode && (
-            <Button onClick={handleSaveBulkUpdates} disabled={bulkUpdateMutation.isPending} className="w-full sm:w-auto">
+            <Button onClick={handleSaveBulkUpdates} disabled={bulkUpdateMutation.isPending} size="sm" className="shrink-0">
               {bulkUpdateMutation.isPending ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -439,7 +440,7 @@ export default function ConfigurationPage() {
               )}
             </Button>
           )}
-          <Button onClick={() => setIsCreateDialogOpen(true)} className="w-full sm:w-auto">
+          <Button onClick={() => setIsCreateDialogOpen(true)} size="sm" className="shrink-0">
             <Plus className="mr-2 h-4 w-4" />
             Create Setting
           </Button>

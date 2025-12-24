@@ -114,11 +114,12 @@ import { useCreateForm } from "@/hooks/useForms";
 import { generateSlug } from "@/utils/slug";
 import { useRoles, useCreateRole } from "@/hooks/useRoles";
 import { useUsers } from "@/hooks/useUsers";
+import { useActiveFormTypes } from "@/hooks/useFormTypes";
 import { useUploadFile } from "@/hooks/useProfile";
 import { toast } from "sonner";
 import RichTextEditor from "@/components/RichTextEditor";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Users, Shield } from "lucide-react";
+import { Users, Shield, X, Tag } from "lucide-react";
 import UserMentionSelector from "@/components/UserMentionSelector";
 
 const fieldTypes = [
@@ -143,13 +144,7 @@ const fieldTypes = [
   { value: "download_link", label: "Download Link (Display Only)" },
 ];
 
-const formTypes = [
-  { value: "handover", label: "Handover" },
-  { value: "assessment", label: "Assessment" },
-  { value: "incident", label: "Incident" },
-  { value: "maintenance", label: "Maintenance" },
-  { value: "general", label: "General" },
-];
+// Form types are now loaded dynamically from API
 
 // Helper function to generate field ID from label (for form names and field IDs)
 const generateFieldIdFromLabel = (label) => {
@@ -182,6 +177,7 @@ const NewFormPage = () => {
   const createFormMutation = useCreateForm();
   const { data: rolesData } = useRoles();
   const createRoleMutation = useCreateRole();
+  const { data: activeFormTypes = [], isLoading: isLoadingFormTypes } = useActiveFormTypes();
   const { data: usersResponse } = useUsers();
   const uploadFileMutation = useUploadFile({ silent: true });
   const roles = rolesData || [];
@@ -205,6 +201,8 @@ const NewFormPage = () => {
       allow_draft: false,
       auto_save: false,
       mandatory_completion: false,
+      categories: [],
+      statuses: [],
       automation: {
         auto_create_tasks: false,
         create_individual_tasks: false,
@@ -218,6 +216,8 @@ const NewFormPage = () => {
       requires_authentication: true,
       allowed_roles: [],
       allowed_users: [],
+      view_submissions_roles: [],
+      view_submissions_users: [],
     },
   });
 
@@ -261,6 +261,16 @@ const NewFormPage = () => {
   const [assignedToRoleId, setAssignedToRoleId] = useState("");
   const [selectedUserIds, setSelectedUserIds] = useState([]);
   const [createIndividualAssignments, setCreateIndividualAssignments] = useState(false);
+  
+  // View submissions permissions state
+  const [viewSubmissionsRoleIds, setViewSubmissionsRoleIds] = useState([]);
+  const [viewSubmissionsUserIds, setViewSubmissionsUserIds] = useState([]);
+  
+  // Category input state
+  const [newCategoryValue, setNewCategoryValue] = useState("");
+  
+  // Status input state
+  const [newStatusValue, setNewStatusValue] = useState("");
   const [isCreateRoleModalOpen, setIsCreateRoleModalOpen] = useState(false);
   const [roleFormData, setRoleFormData] = useState({
     displayName: "",
@@ -651,6 +661,13 @@ const NewFormPage = () => {
         submitData.create_individual_assignments = createIndividualAssignments;
       }
 
+      // Add view submissions permissions to access_config
+      submitData.access_config = {
+        ...submitData.access_config,
+        view_submissions_roles: viewSubmissionsRoleIds,
+        view_submissions_users: viewSubmissionsUserIds,
+      };
+
       const result = await createFormMutation.mutateAsync(submitData);
       toast.success("Form created successfully");
       router.push(`/admin/forms/${result.id}`);
@@ -736,11 +753,22 @@ const NewFormPage = () => {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {formTypes.map((type) => (
-                          <SelectItem key={type.value} value={type.value}>
-                            {type.label}
-                          </SelectItem>
-                        ))}
+                        {isLoadingFormTypes ? (
+                          <SelectItem value="loading" disabled>Loading...</SelectItem>
+                        ) : activeFormTypes.length === 0 ? (
+                          <SelectItem value="none" disabled>No form types available</SelectItem>
+                        ) : (
+                          activeFormTypes
+                            .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
+                            .map((formType) => (
+                              <SelectItem key={formType.name} value={formType.name}>
+                                <div className="flex items-center gap-2">
+                                  {formType.icon && <span>{formType.icon}</span>}
+                                  <span>{formType.display_name || formType.name}</span>
+                                </div>
+                              </SelectItem>
+                            ))
+                        )}
                       </SelectContent>
                     </Select>
                   </div>
@@ -2054,6 +2082,400 @@ const NewFormPage = () => {
                     }
                   />
                   <Label htmlFor="auto_save">Auto-save</Label>
+                </div>
+                <div className="space-y-2 pt-2 border-t">
+                  <Label htmlFor="categories">Categories</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Define categories to organize submissions. Backend users can assign categories when reviewing submissions.
+                  </p>
+                  <div className="space-y-2">
+                    <div className="flex gap-2">
+                      <Input
+                        id="new_category"
+                        value={newCategoryValue}
+                        onChange={(e) => setNewCategoryValue(e.target.value)}
+                        placeholder="Enter category name (e.g., Computer, Email)"
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            const value = newCategoryValue.trim();
+                            if (value && !formData.form_config.categories?.includes(value)) {
+                              setFormData({
+                                ...formData,
+                                form_config: {
+                                  ...formData.form_config,
+                                  categories: [...(formData.form_config.categories || []), value],
+                                },
+                              });
+                              setNewCategoryValue("");
+                            }
+                          }
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={() => {
+                          const value = newCategoryValue.trim();
+                          if (value && !formData.form_config.categories?.includes(value)) {
+                            setFormData({
+                              ...formData,
+                              form_config: {
+                                ...formData.form_config,
+                                categories: [...(formData.form_config.categories || []), value],
+                              },
+                            });
+                            setNewCategoryValue("");
+                          }
+                        }}
+                      >
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    {formData.form_config.categories && formData.form_config.categories.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {formData.form_config.categories.map((category, index) => (
+                          <Badge
+                            key={index}
+                            variant="secondary"
+                            className="flex items-center gap-1"
+                          >
+                            <Tag className="h-3 w-3" />
+                            {category}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const newCategories = formData.form_config.categories.filter(
+                                  (_, i) => i !== index
+                                );
+                                setFormData({
+                                  ...formData,
+                                  form_config: {
+                                    ...formData.form_config,
+                                    categories: newCategories,
+                                  },
+                                });
+                              }}
+                              className="ml-1 hover:bg-secondary/80 rounded-full p-0.5"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="space-y-2 pt-2 border-t">
+                  <Label htmlFor="statuses">Status Options</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Define custom status options for submissions. If not specified, default statuses (draft, submitted, reviewed, approved, rejected) will be used.
+                  </p>
+                  <div className="space-y-2">
+                    <div className="flex gap-2">
+                      <Input
+                        id="new_status"
+                        value={newStatusValue}
+                        onChange={(e) => setNewStatusValue(e.target.value)}
+                        placeholder="Enter status name (e.g., Open, In Progress)"
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            const value = newStatusValue.trim();
+                            if (value && !formData.form_config.statuses?.includes(value)) {
+                              setFormData({
+                                ...formData,
+                                form_config: {
+                                  ...formData.form_config,
+                                  statuses: [...(formData.form_config.statuses || []), value],
+                                },
+                              });
+                              setNewStatusValue("");
+                            }
+                          }
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={() => {
+                          const value = newStatusValue.trim();
+                          if (value && !formData.form_config.statuses?.includes(value)) {
+                            setFormData({
+                              ...formData,
+                              form_config: {
+                                ...formData.form_config,
+                                statuses: [...(formData.form_config.statuses || []), value],
+                              },
+                            });
+                            setNewStatusValue("");
+                          }
+                        }}
+                      >
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    {formData.form_config.statuses && formData.form_config.statuses.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {formData.form_config.statuses.map((status, index) => (
+                          <Badge
+                            key={index}
+                            variant="secondary"
+                            className="flex items-center gap-1"
+                          >
+                            {status}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const newStatuses = formData.form_config.statuses.filter(
+                                  (_, i) => i !== index
+                                );
+                                setFormData({
+                                  ...formData,
+                                  form_config: {
+                                    ...formData.form_config,
+                                    statuses: newStatuses,
+                                  },
+                                });
+                              }}
+                              className="ml-1 hover:bg-secondary/80 rounded-full p-0.5"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Form Access & Submission Viewing Permissions */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Form Access & Submission Viewing</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Form Access - Who can submit */}
+                <div className="space-y-4">
+                  <div>
+                    <h3 className="text-sm font-semibold mb-2">Form Access (Who can submit)</h3>
+                    <p className="text-xs text-muted-foreground mb-3">
+                      Control who can fill out and submit this form.
+                    </p>
+                  </div>
+                  
+                  <div className="space-y-3">
+                    <div>
+                      <Label>Allowed Roles</Label>
+                      <Select
+                        value=""
+                        onValueChange={(value) => {
+                          if (value && !formData.access_config.allowed_roles.includes(value)) {
+                            setFormData({
+                              ...formData,
+                              access_config: {
+                                ...formData.access_config,
+                                allowed_roles: [...formData.access_config.allowed_roles, value],
+                              },
+                            });
+                          }
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select role to add" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {roles
+                            .filter(
+                              (role) =>
+                                !formData.access_config.allowed_roles.includes(
+                                  role.name || role.slug
+                                )
+                            )
+                            .map((role) => (
+                              <SelectItem
+                                key={role.id}
+                                value={role.name || role.slug}
+                              >
+                                {role.display_name || role.name}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                      {formData.access_config.allowed_roles.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {formData.access_config.allowed_roles.map((roleName) => {
+                            const role = roles.find(
+                              (r) => (r.name || r.slug) === roleName
+                            );
+                            return (
+                              <Badge
+                                key={roleName}
+                                variant="secondary"
+                                className="flex items-center gap-1 pr-1"
+                              >
+                                <Shield className="h-3 w-3" />
+                                <span className="text-xs">
+                                  {role?.display_name || role?.name || roleName}
+                                </span>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-4 w-4 p-0 hover:bg-destructive hover:text-destructive-foreground"
+                                  onClick={() => {
+                                    setFormData({
+                                      ...formData,
+                                      access_config: {
+                                        ...formData.access_config,
+                                        allowed_roles:
+                                          formData.access_config.allowed_roles.filter(
+                                            (r) => r !== roleName
+                                          ),
+                                      },
+                                    });
+                                  }}
+                                >
+                                  <X className="h-3 w-3" />
+                                </Button>
+                              </Badge>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <Label>Allowed Users</Label>
+                      <UserMentionSelector
+                        users={users}
+                        selectedUserIds={formData.access_config.allowed_users || []}
+                        onSelectionChange={(newSelection) => {
+                          setFormData({
+                            ...formData,
+                            access_config: {
+                              ...formData.access_config,
+                              allowed_users: newSelection,
+                            },
+                          });
+                        }}
+                        placeholder="Type to search and select users..."
+                        className="w-full"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border-t pt-4">
+                  {/* Submission Viewing Permissions - Who can view submissions */}
+                  <div className="space-y-4">
+                    <div>
+                      <h3 className="text-sm font-semibold mb-2">
+                        Submission Viewing Permissions
+                      </h3>
+                      <p className="text-xs text-muted-foreground mb-3">
+                        Control who can view and review form submissions. This is separate from
+                        who can submit the form.
+                      </p>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div>
+                        <Label>View Submissions Roles</Label>
+                        <Select
+                          value=""
+                          onValueChange={(value) => {
+                            if (value && !viewSubmissionsRoleIds.includes(value)) {
+                              setViewSubmissionsRoleIds([...viewSubmissionsRoleIds, value]);
+                            }
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select role to add" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {roles
+                              .filter(
+                                (role) =>
+                                  !viewSubmissionsRoleIds.includes(
+                                    role.name || role.slug
+                                  )
+                              )
+                              .map((role) => (
+                                <SelectItem
+                                  key={role.id}
+                                  value={role.name || role.slug}
+                                >
+                                  {role.display_name || role.name}
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                        {viewSubmissionsRoleIds.length > 0 && (
+                          <div className="flex flex-wrap gap-2 mt-2">
+                            {viewSubmissionsRoleIds.map((roleName) => {
+                              const role = roles.find(
+                                (r) => (r.name || r.slug) === roleName
+                              );
+                              return (
+                                <Badge
+                                  key={roleName}
+                                  variant="secondary"
+                                  className="flex items-center gap-1 pr-1"
+                                >
+                                  <Shield className="h-3 w-3" />
+                                  <span className="text-xs">
+                                    {role?.display_name || role?.name || roleName}
+                                  </span>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-4 w-4 p-0 hover:bg-destructive hover:text-destructive-foreground"
+                                    onClick={() => {
+                                      setViewSubmissionsRoleIds(
+                                        viewSubmissionsRoleIds.filter(
+                                          (r) => r !== roleName
+                                        )
+                                      );
+                                    }}
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </Button>
+                                </Badge>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+
+                      <div>
+                        <Label>View Submissions Users</Label>
+                        <UserMentionSelector
+                          users={users}
+                          selectedUserIds={viewSubmissionsUserIds}
+                          onSelectionChange={setViewSubmissionsUserIds}
+                          placeholder="Type to search and select users..."
+                          className="w-full"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-3 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-md">
+                  <div className="flex items-start gap-2">
+                    <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1">
+                      <p className="text-xs text-blue-700 dark:text-blue-300">
+                        <strong>Note:</strong> Submission viewing permissions control who can see
+                        and review form submissions, separate from who can fill out the form. Form
+                        owners (users in assigned_user_ids) can always view all submissions.
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </CardContent>
             </Card>

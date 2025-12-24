@@ -376,12 +376,10 @@ const FormSubmitPage = () => {
   if (!form) {
     return (
       <div className="space-y-4">
-        <Link href="/admin/forms">
-          <Button variant="ghost">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Forms
-          </Button>
-        </Link>
+        <Button variant="ghost" onClick={() => router.back()}>
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back to Forms
+        </Button>
         <Card>
           <CardContent className="py-12 text-center">
             <p className="text-muted-foreground">Form not found</p>
@@ -630,11 +628,9 @@ const FormSubmitPage = () => {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Link href={`/admin/forms/${formId}`}>
-          <Button variant="ghost" size="icon">
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-        </Link>
+        <Button variant="ghost" size="icon" onClick={() => router.back()}>
+          <ArrowLeft className="h-4 w-4" />
+        </Button>
         <div className="flex-1">
           <h1 className="text-3xl font-bold">{form.form_title || form.form_name}</h1>
           <p className="text-muted-foreground">Submit Form</p>

@@ -720,9 +720,9 @@ const AssetsPage = () => {
     <div className="space-y-6">
       {/* Header */}
       <div className="space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight">
               Assets Management
             </h1>
             <p className="text-sm sm:text-base text-muted-foreground mt-1">
@@ -730,7 +730,7 @@ const AssetsPage = () => {
             </p>
           </div>
           {canCreateAsset && (
-            <Button onClick={handleCreateAsset} className="w-full sm:w-auto">
+            <Button onClick={handleCreateAsset} size="sm" className="shrink-0">
               <Plus className="mr-2 h-4 w-4" />
               Create Asset
             </Button>
@@ -749,94 +749,102 @@ const AssetsPage = () => {
       </div>
 
       {/* Statistics Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card className="hover:shadow-md transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Total Assets
-            </CardTitle>
-            <Package className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {statisticsLoading ? (
-                <Skeleton className="h-8 w-16" />
-              ) : (
-                computedStats.totalAssets
-              )}
-            </div>
-            {!statisticsLoading && computedStats.changePercentage > 0 && (
-              <div className="flex items-center space-x-2 text-xs text-muted-foreground mt-1">
-                <TrendingUp className="h-3 w-3 text-green-600" />
-                <span className="text-green-600">
-                  {computedStats.changePercentage}%
-                </span>
-                <span>from last month</span>
+      <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-4">
+        <Card className="border-l-4 border-l-blue-500">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium text-muted-foreground mb-1">Total Assets</p>
+                <div className="text-2xl font-bold">
+                  {statisticsLoading ? (
+                    <Skeleton className="h-8 w-16" />
+                  ) : (
+                    computedStats.totalAssets
+                  )}
+                </div>
+                {!statisticsLoading && computedStats.changePercentage > 0 && (
+                  <div className="flex items-center space-x-1 text-xs text-muted-foreground mt-1">
+                    <TrendingUp className="h-3 w-3 text-green-600" />
+                    <span className="text-green-600">
+                      {computedStats.changePercentage}%
+                    </span>
+                    <span>from last month</span>
+                  </div>
+                )}
               </div>
-            )}
+              <div className="h-10 w-10 rounded-full bg-blue-500/10 flex items-center justify-center">
+                <Package className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              </div>
+            </div>
           </CardContent>
         </Card>
 
-        <Card className="hover:shadow-md transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Active Assets
-            </CardTitle>
-            <CheckCircle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {statisticsLoading ? (
-                <Skeleton className="h-8 w-16" />
-              ) : (
-                computedStats.activeAssets
-              )}
+        <Card className="border-l-4 border-l-green-500">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium text-muted-foreground mb-1">Active Assets</p>
+                <div className="text-2xl font-bold">
+                  {statisticsLoading ? (
+                    <Skeleton className="h-8 w-16" />
+                  ) : (
+                    computedStats.activeAssets
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Currently in use
+                </p>
+              </div>
+              <div className="h-10 w-10 rounded-full bg-green-500/10 flex items-center justify-center">
+                <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
+              </div>
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Currently in use
-            </p>
           </CardContent>
         </Card>
 
-        <Card className="hover:shadow-md transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Maintenance Needed
-            </CardTitle>
-            <Wrench className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-yellow-600">
-              {statisticsLoading ? (
-                <Skeleton className="h-8 w-16" />
-              ) : (
-                computedStats.maintenanceNeeded
-              )}
+        <Card className="border-l-4 border-l-yellow-500">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium text-muted-foreground mb-1">Maintenance Needed</p>
+                <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
+                  {statisticsLoading ? (
+                    <Skeleton className="h-8 w-16" />
+                  ) : (
+                    computedStats.maintenanceNeeded
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Require attention
+                </p>
+              </div>
+              <div className="h-10 w-10 rounded-full bg-yellow-500/10 flex items-center justify-center">
+                <Wrench className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
+              </div>
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Require attention
-            </p>
           </CardContent>
         </Card>
 
-        <Card className="hover:shadow-md transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Assigned Assets
-            </CardTitle>
-            <UserPlus className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {statisticsLoading ? (
-                <Skeleton className="h-8 w-16" />
-              ) : (
-                computedStats.assignedAssets
-              )}
+        <Card className="border-l-4 border-l-purple-500">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium text-muted-foreground mb-1">Assigned Assets</p>
+                <div className="text-2xl font-bold">
+                  {statisticsLoading ? (
+                    <Skeleton className="h-8 w-16" />
+                  ) : (
+                    computedStats.assignedAssets
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Currently assigned
+                </p>
+              </div>
+              <div className="h-10 w-10 rounded-full bg-purple-500/10 flex items-center justify-center">
+                <UserPlus className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+              </div>
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Currently assigned
-            </p>
           </CardContent>
         </Card>
       </div>

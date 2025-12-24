@@ -998,35 +998,28 @@ const InvitationPage = () => {
         </Dialog>
 
         {/* Stats Cards */}
-        <div className="grid gap-4 md:grid-cols-4">
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                  <Mail className="h-5 w-5 text-primary" />
-                </div>
+        <div className="grid gap-2 md:grid-cols-4">
+          <Card className="border-l-4 border-l-blue-500">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">
-                    Total Sent
-                  </p>
+                  <p className="text-xs font-medium text-muted-foreground mb-1">Total Sent</p>
                   <p className="text-2xl font-bold">
                     {transformedInvitations.length}
                   </p>
+                </div>
+                <div className="h-10 w-10 rounded-full bg-blue-500/10 flex items-center justify-center">
+                  <Mail className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-green-100">
-                  <UserPlus className="h-5 w-5 text-green-600" />
-                </div>
+          <Card className="border-l-4 border-l-green-500">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">
-                    Accepted
-                  </p>
+                  <p className="text-xs font-medium text-muted-foreground mb-1">Accepted</p>
                   <p className="text-2xl font-bold">
                     {
                       transformedInvitations.filter(
@@ -1035,20 +1028,18 @@ const InvitationPage = () => {
                     }
                   </p>
                 </div>
+                <div className="h-10 w-10 rounded-full bg-green-500/10 flex items-center justify-center">
+                  <UserPlus className="h-5 w-5 text-green-600 dark:text-green-400" />
+                </div>
               </div>
             </CardContent>
           </Card>
 
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-yellow-100">
-                  <Clock className="h-5 w-5 text-yellow-600" />
-                </div>
+          <Card className="border-l-4 border-l-yellow-500">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">
-                    Pending
-                  </p>
+                  <p className="text-xs font-medium text-muted-foreground mb-1">Pending</p>
                   <p className="text-2xl font-bold">
                     {
                       transformedInvitations.filter(
@@ -1057,20 +1048,18 @@ const InvitationPage = () => {
                     }
                   </p>
                 </div>
+                <div className="h-10 w-10 rounded-full bg-yellow-500/10 flex items-center justify-center">
+                  <Clock className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
+                </div>
               </div>
             </CardContent>
           </Card>
 
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-red-100">
-                  <X className="h-5 w-5 text-red-600" />
-                </div>
+          <Card className="border-l-4 border-l-red-500">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">
-                    Expired/Revoked
-                  </p>
+                  <p className="text-xs font-medium text-muted-foreground mb-1">Expired/Revoked</p>
                   <p className="text-2xl font-bold">
                     {
                       transformedInvitations.filter(
@@ -1079,6 +1068,9 @@ const InvitationPage = () => {
                       ).length
                     }
                   </p>
+                </div>
+                <div className="h-10 w-10 rounded-full bg-red-500/10 flex items-center justify-center">
+                  <X className="h-5 w-5 text-red-600 dark:text-red-400" />
                 </div>
               </div>
             </CardContent>

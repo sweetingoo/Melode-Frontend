@@ -258,3 +258,29 @@ canvas {
   display: block !important;
   clear: both !important;
 }
+
+/* Ensure Select dropdowns have left-aligned text */
+[data-radix-select-trigger] {
+  text-align: left !important;
+}
+
+[data-radix-select-trigger] > span {
+  text-align: left !important;
+  justify-content: flex-start !important;
+  display: flex !important;
+  align-items: center !important;
+  flex: 1 1 0% !important;
+  width: 100% !important;
+}
+
+[data-radix-select-trigger] > span > * {
+  text-align: left !important;
+}
+
+[data-radix-select-content] [data-radix-select-item] {
+  text-align: left !important;
+}
+
+[data-radix-select-content] [data-radix-select-item-text] {
+  text-align: left !important;
+}

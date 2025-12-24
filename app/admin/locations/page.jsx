@@ -615,83 +615,104 @@ const LocationsPage = () => {
       </div>
 
       {/* Statistics Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card className="hover:shadow-md transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Total Locations
-            </CardTitle>
-            <MapPin className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {locationsLoading ? (
-                <Skeleton className="h-8 w-16" />
-              ) : (
-                computedStats.totalLocations
-              )}
-            </div>
-            {!locationsLoading && computedStats.changePercentage > 0 && (
-              <div className="flex items-center space-x-2 text-xs text-muted-foreground mt-1">
-                <TrendingUp className="h-3 w-3 text-green-600" />
-                <span className="text-green-600">
-                  {computedStats.changePercentage}%
-                </span>
-                <span>from last month</span>
+      <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-4">
+        <Card className="border-l-4 border-l-blue-500">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium text-muted-foreground mb-1">Total Locations</p>
+                <div className="text-2xl font-bold">
+                  {locationsLoading ? (
+                    <Skeleton className="h-8 w-16" />
+                  ) : (
+                    computedStats.totalLocations
+                  )}
+                </div>
+                {!locationsLoading && computedStats.changePercentage > 0 && (
+                  <div className="flex items-center space-x-1 text-xs text-muted-foreground mt-1">
+                    <TrendingUp className="h-3 w-3 text-green-600" />
+                    <span className="text-green-600">
+                      {computedStats.changePercentage}%
+                    </span>
+                    <span>from last month</span>
+                  </div>
+                )}
               </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="hover:shadow-md transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Root Locations
-            </CardTitle>
-            <Building2 className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {rootLocationsLoading ? (
-                <Skeleton className="h-8 w-16" />
-              ) : (
-                computedStats.rootLocations
-              )}
+              <div className="h-10 w-10 rounded-full bg-blue-500/10 flex items-center justify-center">
+                <MapPin className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              </div>
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Top-level locations
-            </p>
           </CardContent>
         </Card>
 
-        <Card className="hover:shadow-md transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Active Locations
-            </CardTitle>
-            <CheckCircle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {locationsLoading ? (
-                <Skeleton className="h-8 w-16" />
-              ) : (
-                computedStats.activeLocations
-              )}
+        <Card className="border-l-4 border-l-purple-500">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium text-muted-foreground mb-1">Root Locations</p>
+                <div className="text-2xl font-bold">
+                  {rootLocationsLoading ? (
+                    <Skeleton className="h-8 w-16" />
+                  ) : (
+                    computedStats.rootLocations
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Top-level locations
+                </p>
+              </div>
+              <div className="h-10 w-10 rounded-full bg-purple-500/10 flex items-center justify-center">
+                <Building2 className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+              </div>
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Currently active
-            </p>
           </CardContent>
         </Card>
 
-        <Card className="hover:shadow-md transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Inactive Locations
-            </CardTitle>
-            <AlertCircle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
+        <Card className="border-l-4 border-l-green-500">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium text-muted-foreground mb-1">Active Locations</p>
+                <div className="text-2xl font-bold">
+                  {locationsLoading ? (
+                    <Skeleton className="h-8 w-16" />
+                  ) : (
+                    computedStats.activeLocations
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Currently active
+                </p>
+              </div>
+              <div className="h-10 w-10 rounded-full bg-green-500/10 flex items-center justify-center">
+                <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-l-4 border-l-red-500">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium text-muted-foreground mb-1">Inactive Locations</p>
+                <div className="text-2xl font-bold">
+                  {locationsLoading ? (
+                    <Skeleton className="h-8 w-16" />
+                  ) : (
+                    computedStats.inactiveLocations
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Currently inactive
+                </p>
+              </div>
+              <div className="h-10 w-10 rounded-full bg-red-500/10 flex items-center justify-center">
+                <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
           <CardContent>
             <div className="text-2xl font-bold">
               {locationsLoading ? (

@@ -56,11 +56,19 @@ import {
   XCircle,
 } from "lucide-react";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   useForms,
   useDeleteForm,
 } from "@/hooks/useForms";
 import { useRoles } from "@/hooks/useRoles";
 import { useUsers } from "@/hooks/useUsers";
+import { useActiveFormTypes } from "@/hooks/useFormTypes";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
 import { format } from "date-fns";
 import { Shield, Users, User } from "lucide-react";
@@ -69,11 +77,12 @@ const FormsPage = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [formTypeFilter, setFormTypeFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("active"); // Default to active forms
   const [assignmentFilter, setAssignmentFilter] = useState("all"); // "all", "role", "users", "none"
 
   const { data: rolesData } = useRoles();
   const { data: usersResponse } = useUsers();
+  const { data: activeFormTypes = [] } = useActiveFormTypes();
   const roles = rolesData || [];
   const users = usersResponse?.users || usersResponse || [];
 
@@ -136,15 +145,35 @@ const FormsPage = () => {
     return matchesSearch && matchesType && matchesStatus && matchesAssignment;
   });
 
-  const formTypes = [
-    "handover",
-    "assessment",
-    "incident",
-    "maintenance",
-    "general",
-  ];
+  // Get form type info from active form types
+  const getFormTypeInfo = (typeName) => {
+    const formType = activeFormTypes.find((ft) => ft.name === typeName);
+    if (formType) {
+      return {
+        displayName: formType.display_name || formType.name,
+        icon: formType.icon || "",
+        color: formType.color || "#6b7280",
+      };
+    }
+    // Fallback for unknown types
+    return {
+      displayName: typeName ? typeName.charAt(0).toUpperCase() + typeName.slice(1) : "Unknown",
+      icon: "",
+      color: "#6b7280",
+    };
+  };
 
   const getFormTypeColor = (type) => {
+    const formType = activeFormTypes.find((ft) => ft.name === type);
+    if (formType && formType.color) {
+      // Convert hex to rgba for background
+      const hex = formType.color.replace("#", "");
+      const r = parseInt(hex.substring(0, 2), 16);
+      const g = parseInt(hex.substring(2, 4), 16);
+      const b = parseInt(hex.substring(4, 6), 16);
+      return `bg-[${formType.color}]/10 text-[${formType.color}] border-[${formType.color}]/20`;
+    }
+    // Fallback colors
     switch (type) {
       case "handover":
         return "bg-blue-500/10 text-blue-600 border-blue-500/20";
@@ -213,37 +242,42 @@ const FormsPage = () => {
               </div>
             </div>
             <div className="flex gap-2">
-              <select
-                value={formTypeFilter}
-                onChange={(e) => setFormTypeFilter(e.target.value)}
-                className="px-3 py-2 border rounded-md text-sm"
-              >
-                <option value="all">All Types</option>
-                {formTypes.map((type) => (
-                  <option key={type} value={type}>
-                    {type.charAt(0).toUpperCase() + type.slice(1)}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="px-3 py-2 border rounded-md text-sm"
-              >
-                <option value="all">All Status</option>
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-              </select>
-              <select
-                value={assignmentFilter}
-                onChange={(e) => setAssignmentFilter(e.target.value)}
-                className="px-3 py-2 border rounded-md text-sm"
-              >
-                <option value="all">All Assignments</option>
-                <option value="role">Assigned to Role</option>
-                <option value="users">Assigned to Users</option>
-                <option value="none">Not Assigned</option>
-              </select>
+              <Select value={formTypeFilter} onValueChange={setFormTypeFilter}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="All Types" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Types</SelectItem>
+                  {activeFormTypes
+                    .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
+                    .map((formType) => (
+                      <SelectItem key={formType.name} value={formType.name}>
+                        {formType.display_name || formType.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="All Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="inactive">Inactive</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={assignmentFilter} onValueChange={setAssignmentFilter}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="All Assignments" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Assignments</SelectItem>
+                  <SelectItem value="role">Assigned to Role</SelectItem>
+                  <SelectItem value="users">Assigned to Users</SelectItem>
+                  <SelectItem value="none">Not Assigned</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </CardContent>
@@ -306,9 +340,21 @@ const FormsPage = () => {
                         )}
                       </TableCell>
                       <TableCell>
-                        <Badge className={getFormTypeColor(form.form_type)}>
-                          {form.form_type || "N/A"}
-                        </Badge>
+                        {form.form_type ? (
+                          <Badge className={getFormTypeColor(form.form_type)}>
+                            {(() => {
+                              const typeInfo = getFormTypeInfo(form.form_type);
+                              return (
+                                <>
+                                  {typeInfo.icon && <span className="mr-1">{typeInfo.icon}</span>}
+                                  {typeInfo.displayName}
+                                </>
+                              );
+                            })()}
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline">N/A</Badge>
+                        )}
                       </TableCell>
                       <TableCell>
                         {form.is_active ? (

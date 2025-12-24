@@ -37,6 +37,22 @@ export const usePermissionsCheck = () => {
     return userPermissionNames.some((perm) => {
       if (perm === permission) return true;
 
+      // Check for resource-specific wildcard (e.g., form_type:* matches form_type:create)
+      const permParts = perm.split(":");
+      const checkParts = permission.split(":");
+      
+      if (permParts.length === 2 && checkParts.length === 2) {
+        const permResource = permParts[0];
+        const permAction = permParts[1];
+        const checkResource = checkParts[0];
+        const checkAction = checkParts[1];
+        
+        // Check if user has resource:* wildcard for this resource
+        if (permAction === "*" && permResource === checkResource) {
+          return true;
+        }
+      }
+
       // Resource match (e.g., task:create matches tasks:create)
       const permResource = perm.split(":")[0];
       const checkResource = permission.split(":")[0];

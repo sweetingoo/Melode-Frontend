@@ -144,11 +144,9 @@ export default function ClockDashboardPage() {
     return (
       <div className="container mx-auto p-6 max-w-2xl space-y-4">
         <div className="flex items-center gap-4">
-          <Link href="/admin">
-            <Button variant="ghost" size="icon">
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-          </Link>
+          <Button variant="ghost" size="icon" onClick={() => router.back()}>
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
           <div>
             <h1 className="text-2xl font-bold">Not Checked In</h1>
             <p className="text-muted-foreground">
@@ -251,11 +249,9 @@ export default function ClockDashboardPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Link href="/admin">
-            <Button variant="ghost" size="icon">
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-          </Link>
+          <Button variant="ghost" size="icon" onClick={() => router.back()}>
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Active Shift</h1>
             <p className="text-muted-foreground">

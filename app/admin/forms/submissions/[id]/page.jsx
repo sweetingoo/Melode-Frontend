@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,6 +15,7 @@ import CustomFieldRenderer from "@/components/CustomFieldRenderer";
 
 const FormSubmissionDetailPage = () => {
   const params = useParams();
+  const router = useRouter();
   const submissionId = params.id;
 
   const { data: submission, isLoading: submissionLoading } =
@@ -562,17 +563,9 @@ const FormSubmissionDetailPage = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Link
-            href={
-              submission.form_id
-                ? `/admin/forms/${submission.form_id}/submissions`
-                : "/admin/forms"
-            }
-          >
-            <Button variant="ghost" size="icon">
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-          </Link>
+          <Button variant="ghost" size="icon" onClick={() => router.back()}>
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
           <div>
             <h1 className="text-3xl font-bold">
               Submission #{submission.id}

@@ -607,16 +607,16 @@ const RoleManagementPage = () => {
   return (
     <div className="space-y-6">
       {/* Header Section */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Role Management</h1>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Role Management</h1>
           <p className="text-muted-foreground mt-1 text-sm sm:text-base">
             Manage roles and their permissions
           </p>
         </div>
         {canCreateRole && (
-          <Button onClick={handleCreateRole} className="flex items-center gap-2 w-full sm:w-auto">
-            <Plus className="h-4 w-4" />
+          <Button onClick={handleCreateRole} size="sm" className="shrink-0">
+            <Plus className="h-4 w-4 mr-2" />
             Create Role
           </Button>
         )}
@@ -934,7 +934,7 @@ const RoleManagementPage = () => {
 
                               {/* Job Role Details */}
                               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                                <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-xs text-muted-foreground">
+                                <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-xs text-muted-foreground min-w-0 flex-1">
                                   <div className="flex items-center gap-1">
                                     <Key className="h-3 w-3 flex-shrink-0" />
                                     <span>Priority: {role.priority}</span>
@@ -955,7 +955,7 @@ const RoleManagementPage = () => {
                                     variant="outline"
                                     size="sm"
                                     onClick={() => handleManagePermissions(role.id)}
-                                    className="flex items-center gap-1 h-7 text-xs px-2 w-full sm:w-auto"
+                                    className="flex items-center gap-1 h-7 text-xs px-2 shrink-0"
                                   >
                                     <Settings className="h-3 w-3" />
                                     Manage Permissions
@@ -1105,7 +1105,7 @@ const RoleManagementPage = () => {
                                           </div>
                                         </div>
                                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                                          <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                                          <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground min-w-0 flex-1">
                                             <div className="flex items-center gap-1">
                                               <Key className="h-3 w-3 flex-shrink-0" />
                                               <span>Priority: {shiftRole.priority}</span>
@@ -1131,7 +1131,7 @@ const RoleManagementPage = () => {
                                               onClick={() =>
                                                 handleManagePermissions(shiftRole.id)
                                               }
-                                              className="flex items-center gap-1 h-6 text-xs px-2 w-full sm:w-auto"
+                                              className="flex items-center gap-1 h-6 text-xs px-2 shrink-0"
                                             >
                                               <Settings className="h-3 w-3" />
                                               Manage Permissions
@@ -1773,7 +1773,7 @@ const RoleManagementPage = () => {
         open={isPermissionsModalOpen}
         onOpenChange={setIsPermissionsModalOpen}
       >
-        <DialogContent className="max-w-4xl max-h-[80vh]">
+        <DialogContent className="max-w-3xl max-h-[80vh]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Settings className="h-5 w-5" />

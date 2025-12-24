@@ -6,25 +6,29 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, ArrowLeft, Edit, FileText, CheckCircle, XCircle, Share2, Copy, Check } from "lucide-react";
+import { Loader2, ArrowLeft, Edit, FileText, CheckCircle, XCircle, Share2, Copy, Check, Tag, FileDown } from "lucide-react";
 import { useForm } from "@/hooks/useForms";
 import { useRoles } from "@/hooks/useRoles";
 import { useUsers } from "@/hooks/useUsers";
+import { useActiveFormTypes } from "@/hooks/useFormTypes";
 import { format } from "date-fns";
 import ResourceAuditLogs from "@/components/ResourceAuditLogs";
 import { Shield, Users, User } from "lucide-react";
 import { generateSlug } from "@/utils/slug";
 import { toast } from "sonner";
+import { generateFormPDFFromData } from "@/utils/pdf-generator";
 
 const FormDetailPage = () => {
   const params = useParams();
   const router = useRouter();
   const formId = params.id;
   const [copied, setCopied] = useState(false);
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
   const { data: form, isLoading, error } = useForm(formId);
   const { data: rolesData } = useRoles();
   const { data: usersResponse } = useUsers();
+  const { data: activeFormTypes = [] } = useActiveFormTypes();
   const roles = rolesData || [];
   const users = usersResponse?.users || usersResponse || [];
 
@@ -55,7 +59,72 @@ const FormDetailPage = () => {
     }
   };
 
+  // Handle PDF download
+  const handleDownloadPDF = async () => {
+    if (!form) {
+      toast.error("Unable to generate PDF", {
+        description: "Form data is missing",
+      });
+      return;
+    }
+
+    setIsGeneratingPDF(true);
+    try {
+      const filename = `form-${form.form_name || form.id}-${form.form_title || "definition"}.pdf`.replace(/[^a-z0-9]/gi, "-").toLowerCase();
+      
+      console.log("Starting PDF generation...", { filename, formId: form.id });
+      
+      await generateFormPDFFromData({
+        form,
+        roles,
+        users,
+        filename,
+        onDownloadComplete: () => {
+          console.log("PDF download triggered");
+          toast.success("PDF downloaded successfully");
+          setIsGeneratingPDF(false);
+        },
+      });
+
+      console.log("PDF generation completed");
+    } catch (error) {
+      console.error("Error generating PDF:", error);
+      toast.error("Failed to generate PDF", {
+        description: error.message || "An error occurred while generating the PDF",
+      });
+      setIsGeneratingPDF(false);
+    }
+  };
+
+  // Get form type info from active form types
+  const getFormTypeInfo = (typeName) => {
+    const formType = activeFormTypes.find((ft) => ft.name === typeName);
+    if (formType) {
+      return {
+        displayName: formType.display_name || formType.name,
+        icon: formType.icon || "",
+        color: formType.color || "#6b7280",
+      };
+    }
+    // Fallback for unknown types
+    return {
+      displayName: typeName ? typeName.charAt(0).toUpperCase() + typeName.slice(1) : "Unknown",
+      icon: "",
+      color: "#6b7280",
+    };
+  };
+
   const getFormTypeColor = (type) => {
+    const formType = activeFormTypes.find((ft) => ft.name === type);
+    if (formType && formType.color) {
+      // Use the color from the form type
+      const hex = formType.color.replace("#", "");
+      const r = parseInt(hex.substring(0, 2), 16);
+      const g = parseInt(hex.substring(2, 4), 16);
+      const b = parseInt(hex.substring(4, 6), 16);
+      return `bg-[${formType.color}]/10 text-[${formType.color}] border-[${formType.color}]/20`;
+    }
+    // Fallback colors
     switch (type) {
       case "handover":
         return "bg-blue-500/10 text-blue-600 border-blue-500/20";
@@ -107,25 +176,44 @@ const FormDetailPage = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-4">
-          <Link href="/admin/forms">
-            <Button variant="ghost" size="icon">
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-          </Link>
+          <Button variant="ghost" size="icon" onClick={() => router.back()}>
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">{form.form_title || form.form_name}</h1>
             <p className="text-sm sm:text-base text-muted-foreground mt-1">Form Details</p>
           </div>
         </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <Link href={`/admin/forms/${formId}/submit`}>
-            <Button className="w-full sm:w-auto">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full sm:w-auto"
+            onClick={handleDownloadPDF}
+            disabled={isGeneratingPDF}
+          >
+            {isGeneratingPDF ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Generating...
+              </>
+            ) : (
+              <>
+                <FileDown className="mr-2 h-4 w-4" />
+                <span className="hidden sm:inline">Download PDF</span>
+                <span className="sm:hidden">PDF</span>
+              </>
+            )}
+          </Button>
+          <Link href={`/admin/forms/${formId}/submit`} className="w-full sm:w-auto">
+            <Button size="sm" className="w-full sm:w-auto">
               <FileText className="mr-2 h-4 w-4" />
-              Submit Form
+              <span className="hidden sm:inline">Submit Form</span>
+              <span className="sm:hidden">Submit</span>
             </Button>
           </Link>
-          <Link href={`/admin/forms/${formId}/edit`}>
-            <Button variant="outline" className="w-full sm:w-auto">
+          <Link href={`/admin/forms/${formId}/edit`} className="w-full sm:w-auto">
+            <Button variant="outline" size="sm" className="w-full sm:w-auto">
               <Edit className="mr-2 h-4 w-4" />
               Edit
             </Button>
@@ -150,9 +238,21 @@ const FormDetailPage = () => {
                 <div>
                   <label className="text-sm font-medium text-muted-foreground">Form Type</label>
                   <div className="mt-1">
-                    <Badge className={getFormTypeColor(form.form_type)}>
-                      {form.form_type || "N/A"}
-                    </Badge>
+                    {form.form_type ? (
+                      <Badge className={getFormTypeColor(form.form_type)}>
+                        {(() => {
+                          const typeInfo = getFormTypeInfo(form.form_type);
+                          return (
+                            <>
+                              {typeInfo.icon && <span className="mr-1">{typeInfo.icon}</span>}
+                              {typeInfo.displayName}
+                            </>
+                          );
+                        })()}
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline">N/A</Badge>
+                    )}
                   </div>
                 </div>
                 <div>
@@ -280,10 +380,68 @@ const FormDetailPage = () => {
               <CardHeader>
                 <CardTitle>Configuration</CardTitle>
               </CardHeader>
-              <CardContent>
-                <pre className="text-xs bg-muted p-4 rounded-md overflow-auto">
-                  {JSON.stringify(form.form_config, null, 2)}
-                </pre>
+              <CardContent className="space-y-4">
+                {form.form_config.categories && form.form_config.categories.length > 0 ? (
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground mb-2 block">
+                      Categories
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      {form.form_config.categories.map((category, index) => (
+                        <Badge key={index} variant="secondary" className="flex items-center gap-1">
+                          <Tag className="h-3 w-3" />
+                          {category}
+                        </Badge>
+                      ))}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      These categories can be assigned to submissions when reviewing them.
+                    </p>
+                  </div>
+                ) : (
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground mb-2 block">
+                      Categories
+                    </label>
+                    <p className="text-sm text-muted-foreground">
+                      No categories configured for this form.
+                    </p>
+                  </div>
+                )}
+                {form.form_config.statuses && form.form_config.statuses.length > 0 ? (
+                  <div className="pt-4 border-t">
+                    <label className="text-sm font-medium text-muted-foreground mb-2 block">
+                      Custom Status Options
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      {form.form_config.statuses.map((status, index) => (
+                        <Badge key={index} variant="secondary">
+                          {status}
+                        </Badge>
+                      ))}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      These custom statuses will be used for submissions. If not specified, default statuses (draft, submitted, reviewed, approved, rejected) are used.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="pt-4 border-t">
+                    <label className="text-sm font-medium text-muted-foreground mb-2 block">
+                      Status Options
+                    </label>
+                    <p className="text-sm text-muted-foreground">
+                      No custom statuses configured. Default statuses (draft, submitted, reviewed, approved, rejected) will be used.
+                    </p>
+                  </div>
+                )}
+                <div className="pt-4 border-t">
+                  <label className="text-sm font-medium text-muted-foreground mb-2 block">
+                    Full Configuration (JSON)
+                  </label>
+                  <pre className="text-xs bg-muted p-4 rounded-md overflow-auto">
+                    {JSON.stringify(form.form_config, null, 2)}
+                  </pre>
+                </div>
               </CardContent>
             </Card>
           )}

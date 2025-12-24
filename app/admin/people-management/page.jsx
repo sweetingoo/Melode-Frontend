@@ -622,15 +622,15 @@ const UserManagementPage = () => {
     <div className="space-y-6">
       {/* Header Section */}
       <div className="space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">People Management</h1>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight">People Management</h1>
             <p className="text-sm sm:text-base text-muted-foreground mt-1">
               Manage people, roles, and permissions for your organisation
             </p>
           </div>
           {canCreateUser && (
-            <Button onClick={() => setIsCreateModalOpen(true)} className="w-full sm:w-auto">
+            <Button onClick={() => setIsCreateModalOpen(true)} size="sm" className="shrink-0">
               <UserPlus className="mr-2 h-4 w-4" />
               Create Person
             </Button>
@@ -649,72 +649,64 @@ const UserManagementPage = () => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                <Users className="h-5 w-5 text-primary" />
-              </div>
+      <div className="grid gap-2 md:grid-cols-4">
+        <Card className="border-l-4 border-l-blue-500">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">
-                  Total People
-                </p>
+                <p className="text-xs font-medium text-muted-foreground mb-1">Total People</p>
                 <p className="text-2xl font-bold">{pagination.total}</p>
+              </div>
+              <div className="h-10 w-10 rounded-full bg-blue-500/10 flex items-center justify-center">
+                <Users className="h-5 w-5 text-blue-600 dark:text-blue-400" />
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-green-500/10">
-                <CheckCircle className="h-5 w-5 text-green-600" />
-              </div>
+        <Card className="border-l-4 border-l-green-500">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">
-                  Active People
-                </p>
+                <p className="text-xs font-medium text-muted-foreground mb-1">Active People</p>
                 <p className="text-2xl font-bold">
                   {transformedUsers.filter((user) => user.isActive).length}
                 </p>
               </div>
+              <div className="h-10 w-10 rounded-full bg-green-500/10 flex items-center justify-center">
+                <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
+              </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-red-500/10">
-                <XCircle className="h-5 w-5 text-red-600" />
-              </div>
+        <Card className="border-l-4 border-l-red-500">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">
-                  Inactive People
-                </p>
+                <p className="text-xs font-medium text-muted-foreground mb-1">Inactive People</p>
                 <p className="text-2xl font-bold">
                   {transformedUsers.filter((user) => !user.isActive).length}
                 </p>
               </div>
+              <div className="h-10 w-10 rounded-full bg-red-500/10 flex items-center justify-center">
+                <XCircle className="h-5 w-5 text-red-600 dark:text-red-400" />
+              </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-purple-500/10">
-                <Shield className="h-5 w-5 text-purple-600" />
-              </div>
+        <Card className="border-l-4 border-l-purple-500">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">
-                  Superusers
-                </p>
+                <p className="text-xs font-medium text-muted-foreground mb-1">Superusers</p>
                 <p className="text-2xl font-bold">
                   {transformedUsers.filter((user) => user.isSuperuser).length}
                 </p>
+              </div>
+              <div className="h-10 w-10 rounded-full bg-purple-500/10 flex items-center justify-center">
+                <Shield className="h-5 w-5 text-purple-600 dark:text-purple-400" />
               </div>
             </div>
           </CardContent>

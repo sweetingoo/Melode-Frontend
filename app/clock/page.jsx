@@ -302,11 +302,9 @@ export default function ClockPage() {
   return (
     <div className="container mx-auto p-6 max-w-2xl space-y-4">
       <div className="flex items-center gap-4">
-        <Link href="/admin">
-          <Button variant="ghost" size="icon">
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-        </Link>
+        <Button variant="ghost" size="icon" onClick={() => router.back()}>
+          <ArrowLeft className="h-4 w-4" />
+        </Button>
         <div className="flex-1">
           <h1 className="text-2xl font-bold">Check In</h1>
         </div>

@@ -1,33 +1,73 @@
 "use client";
 
-import React from "react";
-import { useParams } from "next/navigation";
+import React, { useState } from "react";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, ArrowLeft, FileText, CheckCircle, Download, Check, X, Mail, Phone, Link as LinkIcon, Calendar, Clock, Eye, File, AlertCircle, CheckCircle2, XCircle } from "lucide-react";
-import { useFormSubmission, useForm } from "@/hooks/useForms";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Loader2, ArrowLeft, FileText, CheckCircle, Download, Check, X, Mail, Phone, Link as LinkIcon, Calendar, Clock, Eye, File, AlertCircle, CheckCircle2, XCircle, Link2, Tag, Edit, Save, FileDown } from "lucide-react";
+import { useFormSubmission, useForm, useUpdateFormSubmission } from "@/hooks/useForms";
 import { useUsers } from "@/hooks/useUsers";
 import { useDownloadFile } from "@/hooks/useProfile";
 import { format, formatDistance, formatDistanceToNow, differenceInHours, differenceInDays, differenceInMinutes } from "date-fns";
 import ResourceAuditLogs from "@/components/ResourceAuditLogs";
 import CustomFieldRenderer from "@/components/CustomFieldRenderer";
+import CommentThread from "@/components/CommentThread";
+import { generateFormSubmissionPDFFromData } from "@/utils/pdf-generator";
+import { toast } from "sonner";
 
 const FormSubmissionDetailPage = () => {
   const params = useParams();
+  const router = useRouter();
   const submissionId = params.submissionId;
   const formId = params.id;
 
-  const { data: submission, isLoading: submissionLoading } =
+  const { data: submission, isLoading: submissionLoading, error: submissionError } =
     useFormSubmission(submissionId);
   const { data: form, isLoading: formLoading } = useForm(formId, {
     enabled: !!formId,
   });
   const { data: usersResponse } = useUsers();
   const downloadFileMutation = useDownloadFile();
+  const updateSubmissionMutation = useUpdateFormSubmission();
 
   const users = usersResponse?.users || usersResponse || [];
+  const formCategories = form?.form_config?.categories || [];
+  
+  // Get available statuses (custom or defaults)
+  const DEFAULT_STATUSES = ["draft", "submitted", "reviewed", "approved", "rejected"];
+  const formStatuses = form?.form_config?.statuses && form.form_config.statuses.length > 0
+    ? form.form_config.statuses
+    : DEFAULT_STATUSES;
+  
+  // State for update dialog
+  const [isUpdateDialogOpen, setIsUpdateDialogOpen] = useState(false);
+  const [updateData, setUpdateData] = useState({
+    category: null,
+    status: "",
+    notes: "",
+    review_notes: "",
+  });
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
   // Helper to format file size
   const formatFileSize = (bytes) => {
@@ -129,21 +169,45 @@ const FormSubmissionDetailPage = () => {
 
   const timingInfo = calculateSubmissionTiming();
 
+  // Smart status color mapping - handles both default and custom statuses
   const getStatusColor = (status) => {
-    switch (status?.toLowerCase()) {
-      case "submitted":
-        return "bg-blue-500/10 text-blue-600 border-blue-500/20";
-      case "reviewed":
-        return "bg-green-500/10 text-green-600 border-green-500/20";
-      case "approved":
-        return "bg-green-500/10 text-green-600 border-green-500/20";
-      case "rejected":
-        return "bg-red-500/10 text-red-600 border-red-500/20";
-      case "draft":
-        return "bg-gray-500/10 text-gray-600 border-gray-500/20";
-      default:
-        return "bg-muted text-muted-foreground";
+    if (!status) return "bg-muted text-muted-foreground";
+    
+    const statusLower = status.toLowerCase();
+    
+    // Default statuses
+    if (statusLower === "submitted") {
+      return "bg-blue-500/10 text-blue-600 border-blue-500/20";
     }
+    if (statusLower === "reviewed" || statusLower === "approved") {
+      return "bg-green-500/10 text-green-600 border-green-500/20";
+    }
+    if (statusLower === "rejected" || statusLower === "closed") {
+      return "bg-red-500/10 text-red-600 border-red-500/20";
+    }
+    if (statusLower === "draft") {
+      return "bg-gray-500/10 text-gray-600 border-gray-500/20";
+    }
+    
+    // Custom statuses - smart color mapping based on keywords
+    if (statusLower.includes("open") || statusLower.includes("new") || statusLower.includes("pending")) {
+      return "bg-yellow-500/10 text-yellow-600 border-yellow-500/20";
+    }
+    if (statusLower.includes("progress") || statusLower.includes("working") || statusLower.includes("active")) {
+      return "bg-blue-500/10 text-blue-600 border-blue-500/20";
+    }
+    if (statusLower.includes("resolved") || statusLower.includes("completed") || statusLower.includes("done") || statusLower.includes("fixed")) {
+      return "bg-green-500/10 text-green-600 border-green-500/20";
+    }
+    if (statusLower.includes("closed") || statusLower.includes("cancelled") || statusLower.includes("rejected")) {
+      return "bg-red-500/10 text-red-600 border-red-500/20";
+    }
+    if (statusLower.includes("waiting") || statusLower.includes("hold") || statusLower.includes("blocked")) {
+      return "bg-orange-500/10 text-orange-600 border-orange-500/20";
+    }
+    
+    // Default for unknown statuses
+    return "bg-muted text-muted-foreground";
   };
 
   if (submissionLoading || formLoading) {
@@ -154,15 +218,50 @@ const FormSubmissionDetailPage = () => {
     );
   }
 
+  // Check if error is 404 or permission denied
+  const isNotFoundOrNoPermission = 
+    submissionError?.message === "SUBMISSION_NOT_FOUND_OR_NO_PERMISSION" ||
+    submissionError?.response?.status === 404 ||
+    (!submission && !submissionLoading && submissionError);
+
+  if (isNotFoundOrNoPermission) {
+    return (
+      <div className="space-y-4">
+        <Button variant="ghost" onClick={() => router.back()}>
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back to Submissions
+        </Button>
+        <Card>
+          <CardContent className="py-12">
+            <div className="text-center mb-6">
+              <AlertCircle className="mx-auto h-12 w-12 text-destructive mb-4" />
+              <h3 className="text-lg font-semibold mb-2">Access Denied</h3>
+              <p className="text-muted-foreground mb-4">
+                You don't have permission to view this submission.
+              </p>
+            </div>
+            <div className="bg-muted/50 rounded-md p-4 space-y-2">
+              <p className="text-sm font-medium">Possible reasons:</p>
+              <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
+                <li>You didn't submit this form</li>
+                <li>You're not a form owner</li>
+                <li>You don't have view permissions for this form</li>
+                <li>You didn't create a task linked to this submission</li>
+              </ul>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   if (!submission) {
     return (
       <div className="space-y-4">
-        <Link href={`/admin/forms/${formId}/submissions`}>
-          <Button variant="ghost">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Submissions
-          </Button>
-        </Link>
+        <Button variant="ghost" onClick={() => router.back()}>
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back to Submissions
+        </Button>
         <Card>
           <CardContent className="py-12 text-center">
             <FileText className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
@@ -549,16 +648,45 @@ const FormSubmissionDetailPage = () => {
     );
   };
 
+  // Handle PDF download
+  const handleDownloadPDF = async () => {
+    if (!submission || !form) {
+      toast.error("Unable to generate PDF", {
+        description: "Submission or form data is missing",
+      });
+      return;
+    }
+
+    setIsGeneratingPDF(true);
+    try {
+      const filename = `form-submission-${submission.id}-${form.form_title || form.form_name || "submission"}.pdf`.replace(/[^a-z0-9]/gi, "-").toLowerCase();
+      
+      await generateFormSubmissionPDFFromData({
+        submission,
+        form,
+        users,
+        filename,
+      });
+
+      toast.success("PDF downloaded successfully");
+    } catch (error) {
+      console.error("Error generating PDF:", error);
+      toast.error("Failed to generate PDF", {
+        description: error.message || "An error occurred while generating the PDF",
+      });
+    } finally {
+      setIsGeneratingPDF(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Link href={`/admin/forms/${formId}/submissions`}>
-            <Button variant="ghost" size="icon">
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-          </Link>
+          <Button variant="ghost" size="icon" onClick={() => router.back()}>
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
           <div>
             <h1 className="text-3xl font-bold">
               Submission #{submission.id}
@@ -569,9 +697,49 @@ const FormSubmissionDetailPage = () => {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {submission.category && (
+            <Badge variant="outline" className="flex items-center gap-1">
+              <Tag className="h-3 w-3" />
+              {submission.category}
+            </Badge>
+          )}
           <Badge className={getStatusColor(submission.status)}>
             {submission.status || "N/A"}
           </Badge>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleDownloadPDF}
+            disabled={isGeneratingPDF}
+          >
+            {isGeneratingPDF ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Generating...
+              </>
+            ) : (
+              <>
+                <FileDown className="h-4 w-4 mr-2" />
+                Download PDF
+              </>
+            )}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setUpdateData({
+                category: submission.category || null,
+                status: submission.status || "",
+                notes: submission.notes || "",
+                review_notes: submission.review_notes || "",
+              });
+              setIsUpdateDialogOpen(true);
+            }}
+          >
+            <Edit className="h-4 w-4 mr-2" />
+            Update
+          </Button>
         </div>
       </div>
 
@@ -768,6 +936,23 @@ const FormSubmissionDetailPage = () => {
                   </Badge>
                 </div>
               </div>
+              {formCategories.length > 0 && (
+                <div>
+                  <label className="text-muted-foreground">Category</label>
+                  <div className="mt-1">
+                    {submission.category ? (
+                      <Badge variant="outline" className="flex items-center gap-1 w-fit">
+                        <Tag className="h-3 w-3" />
+                        {submission.category}
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-muted-foreground">
+                        Uncategorized
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+              )}
               <div>
                 <label className="text-muted-foreground">Submitted By</label>
                 <div className="mt-1">
@@ -779,10 +964,37 @@ const FormSubmissionDetailPage = () => {
                       {getUserName(submission.submitted_by_user_id) || `User #${submission.submitted_by_user_id}`}
                     </Link>
                   ) : (
-                    <p className="text-muted-foreground">Anonymous</p>
+                    <Badge variant="outline" className="text-muted-foreground">
+                      Anonymous
+                    </Badge>
                   )}
                 </div>
               </div>
+              {/* Task Link */}
+              {(submission.processing_result?.task_creation?.task_id ||
+                submission.processing_result?.task_creation?.task_ids?.[0] ||
+                submission.task_id) && (
+                <div>
+                  <label className="text-muted-foreground">Related Task</label>
+                  <div className="mt-1">
+                    <Link
+                      href={`/admin/tasks/${
+                        submission.processing_result?.task_creation?.task_id ||
+                        submission.processing_result?.task_creation?.task_ids?.[0] ||
+                        submission.task_id
+                      }`}
+                    >
+                      <Badge variant="secondary" className="cursor-pointer hover:bg-secondary/80">
+                        <Link2 className="h-3 w-3 mr-1" />
+                        Task #
+                        {submission.processing_result?.task_creation?.task_id ||
+                          submission.processing_result?.task_creation?.task_ids?.[0] ||
+                          submission.task_id}
+                      </Badge>
+                    </Link>
+                  </div>
+                </div>
+              )}
               <div>
                 <label className="text-muted-foreground">Created</label>
                 <p>
@@ -905,12 +1117,146 @@ const FormSubmissionDetailPage = () => {
         </div>
       </div>
 
+      {/* Comments Section */}
+      <Card>
+        <CardContent className="pt-6">
+          <CommentThread
+            entityType="form_submission"
+            entityId={submissionId}
+            showHeader={true}
+          />
+        </CardContent>
+      </Card>
+
       {/* Activity History */}
       <ResourceAuditLogs
         resource="form_submission"
         resourceId={submissionId}
         title="Activity History"
       />
+
+      {/* Update Submission Dialog */}
+      <Dialog open={isUpdateDialogOpen} onOpenChange={setIsUpdateDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Update Submission</DialogTitle>
+            <DialogDescription>
+              Update the category, status, and notes for this submission.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            {formCategories.length > 0 && (
+              <div className="space-y-2">
+                <Label htmlFor="update_category">Category</Label>
+                <Select
+                  value={updateData.category || "uncategorized"}
+                  onValueChange={(value) =>
+                    setUpdateData({
+                      ...updateData,
+                      category: value === "uncategorized" ? null : value,
+                    })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="uncategorized">Uncategorized</SelectItem>
+                    {formCategories.map((category) => (
+                      <SelectItem key={category} value={category}>
+                        {category}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            <div className="space-y-2">
+              <Label htmlFor="update_status">Status</Label>
+              <Select
+                value={updateData.status}
+                onValueChange={(value) =>
+                  setUpdateData({ ...updateData, status: value })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select status" />
+                </SelectTrigger>
+                <SelectContent>
+                  {formStatuses.map((status) => (
+                    <SelectItem key={status} value={status}>
+                      {status}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="update_notes">Notes</Label>
+              <Textarea
+                id="update_notes"
+                value={updateData.notes}
+                onChange={(e) =>
+                  setUpdateData({ ...updateData, notes: e.target.value })
+                }
+                placeholder="Add notes about this submission..."
+                rows={4}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="update_review_notes">Review Notes</Label>
+              <Textarea
+                id="update_review_notes"
+                value={updateData.review_notes}
+                onChange={(e) =>
+                  setUpdateData({ ...updateData, review_notes: e.target.value })
+                }
+                placeholder="Add review notes..."
+                rows={4}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsUpdateDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={async () => {
+                try {
+                  await updateSubmissionMutation.mutateAsync({
+                    id: submissionId,
+                    submissionData: {
+                      category: updateData.category,
+                      status: updateData.status,
+                      notes: updateData.notes || undefined,
+                      review_notes: updateData.review_notes || undefined,
+                    },
+                  });
+                  setIsUpdateDialogOpen(false);
+                } catch (error) {
+                  console.error("Failed to update submission:", error);
+                }
+              }}
+              disabled={updateSubmissionMutation.isPending}
+            >
+              {updateSubmissionMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4 mr-2" />
+                  Save Changes
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

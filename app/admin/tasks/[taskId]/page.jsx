@@ -63,6 +63,7 @@ import ResourceAuditLogs from "@/components/ResourceAuditLogs";
 import SimpleAuditLogs from "@/components/SimpleAuditLogs";
 import MultiFileUpload from "@/components/MultiFileUpload";
 import FileAttachmentList from "@/components/FileAttachmentList";
+import CommentThread from "@/components/CommentThread";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -456,11 +457,9 @@ const TaskDetailPage = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="flex items-center gap-2 md:gap-4 w-full sm:w-auto">
-          <Link href="/admin/tasks">
-            <Button variant="ghost" size="icon" className="flex-shrink-0">
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-          </Link>
+          <Button variant="ghost" size="icon" className="flex-shrink-0" onClick={() => router.back()}>
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-xl sm:text-2xl md:text-3xl font-bold break-words">{task.title}</h1>
@@ -909,6 +908,17 @@ const TaskDetailPage = () => {
           </Card>
         </div>
       </div>
+
+      {/* Comments Section */}
+      <Card>
+        <CardContent className="pt-6">
+          <CommentThread
+            entityType="task"
+            entityId={taskId}
+            showHeader={true}
+          />
+        </CardContent>
+      </Card>
 
       {/* Activity History / Audit Logs */}
       {isFromMyTasks ? (

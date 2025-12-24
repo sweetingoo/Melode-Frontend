@@ -165,15 +165,15 @@ const TaskTypesPage = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Task Types</h1>
-          <p className="text-muted-foreground">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-xl sm:text-2xl font-bold">Task Types</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">
             Manage task types for your organisation
           </p>
         </div>
         {canCreateTaskType && (
-          <Button onClick={() => setIsCreateModalOpen(true)}>
+          <Button onClick={() => setIsCreateModalOpen(true)} size="sm" className="shrink-0">
             <Plus className="mr-2 h-4 w-4" />
             Create Task Type
           </Button>

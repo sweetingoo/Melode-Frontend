@@ -178,6 +178,12 @@ const organisationItems = [
     permission: "task_types:read", // Permission to read task types
   },
   {
+    title: "Form Types",
+    icon: FileText,
+    url: "/admin/form-types",
+    permission: "form_type:list", // Permission to list form types
+  },
+  {
     title: "Custom Fields",
     icon: Database,
     url: "/admin/custom-fields-admin",

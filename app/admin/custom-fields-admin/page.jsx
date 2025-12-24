@@ -789,9 +789,9 @@ const CustomFieldsAdminPage = () => {
   return (
     <div className="space-y-6">
       {/* Header Section */}
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-10">
-        <div className="flex-1">
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-6">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
             Custom Fields Management
           </h1>
           <p className="text-sm sm:text-base text-muted-foreground mt-1">
@@ -800,27 +800,28 @@ const CustomFieldsAdminPage = () => {
           </p>
 
           {/* State Indicators */}
-          <div className="flex flex-wrap items-center gap-3 sm:gap-4 mt-3">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Database className="h-4 w-4" />
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-2">
+            <div className="flex items-center gap-2 text-xs sm:text-sm text-muted-foreground">
+              <Database className="h-3 w-3 sm:h-4 sm:w-4" />
               <span>State Persisted</span>
             </div>
             <button
               onClick={handleResetState}
-              className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+              className="flex items-center gap-2 text-xs sm:text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
-              <RefreshCw className="h-4 w-4" />
+              <RefreshCw className="h-3 w-3 sm:h-4 sm:w-4" />
               <span>Reset State</span>
             </button>
           </div>
         </div>
 
         {/* Action Buttons */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0">
           {canCreateCustomField && (
             <Button
               onClick={handleCreateSection}
-              className="bg-primary hover:bg-primary/90 w-full sm:w-auto"
+              size="sm"
+              className="shrink-0"
             >
               <Plus className="h-4 w-4 mr-2" />
               Create Section
@@ -831,7 +832,8 @@ const CustomFieldsAdminPage = () => {
               variant="outline"
               onClick={handleCreateField}
               disabled={filteredSections.length === 0}
-              className="w-full sm:w-auto"
+              size="sm"
+              className="shrink-0"
             >
               <Plus className="h-4 w-4 mr-2" />
               Create Field

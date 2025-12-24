@@ -358,9 +358,9 @@ const PermissionsManagementPage = () => {
   return (
     <div className="space-y-6">
       {/* Header Section */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight">
             Permissions Management
           </h1>
           <p className="text-sm sm:text-base text-muted-foreground mt-1">
@@ -369,10 +369,11 @@ const PermissionsManagementPage = () => {
         </div>
         <Button
           onClick={() => setIsCreateModalOpen(true)}
-          className="flex items-center gap-2 w-full sm:w-auto"
+          size="sm"
+          className="shrink-0"
           disabled={!canCreatePermission}
         >
-          <Plus className="h-4 w-4" />
+          <Plus className="h-4 w-4 mr-2" />
           Create Permission
         </Button>
       </div>
@@ -458,53 +459,57 @@ const PermissionsManagementPage = () => {
       {!permissionsLoading && !permissionsError && (
         <>
           {/* Statistics Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center gap-2">
-                  <Shield className="h-5 w-5 text-primary" />
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+            <Card className="border-l-4 border-l-blue-500">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
                   <div>
+                    <p className="text-xs font-medium text-muted-foreground mb-1">Total Permissions</p>
                     <p className="text-2xl font-bold">{totalPermissions}</p>
-                    <p className="text-sm text-muted-foreground">
-                      Total Permissions
-                    </p>
+                  </div>
+                  <div className="h-10 w-10 rounded-full bg-blue-500/10 flex items-center justify-center">
+                    <Shield className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                   </div>
                 </div>
               </CardContent>
             </Card>
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center gap-2">
-                  <Key className="h-5 w-5 text-blue-600" />
+            <Card className="border-l-4 border-l-indigo-500">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
                   <div>
+                    <p className="text-xs font-medium text-muted-foreground mb-1">Resources</p>
                     <p className="text-2xl font-bold">{resources.length}</p>
-                    <p className="text-sm text-muted-foreground">Resources</p>
+                  </div>
+                  <div className="h-10 w-10 rounded-full bg-indigo-500/10 flex items-center justify-center">
+                    <Key className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
                   </div>
                 </div>
               </CardContent>
             </Card>
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center gap-2">
-                  <Settings className="h-5 w-5 text-green-600" />
+            <Card className="border-l-4 border-l-green-500">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
                   <div>
+                    <p className="text-xs font-medium text-muted-foreground mb-1">Types</p>
                     <p className="text-2xl font-bold">{types.length}</p>
-                    <p className="text-sm text-muted-foreground">Types</p>
+                  </div>
+                  <div className="h-10 w-10 rounded-full bg-green-500/10 flex items-center justify-center">
+                    <Settings className="h-5 w-5 text-green-600 dark:text-green-400" />
                   </div>
                 </div>
               </CardContent>
             </Card>
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center gap-2">
-                  <Filter className="h-5 w-5 text-purple-600" />
+            <Card className="border-l-4 border-l-purple-500">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
                   <div>
+                    <p className="text-xs font-medium text-muted-foreground mb-1">Filtered Results</p>
                     <p className="text-2xl font-bold">
                       {filteredPermissions.length}
                     </p>
-                    <p className="text-sm text-muted-foreground">
-                      Filtered Results
-                    </p>
+                  </div>
+                  <div className="h-10 w-10 rounded-full bg-purple-500/10 flex items-center justify-center">
+                    <Filter className="h-5 w-5 text-purple-600 dark:text-purple-400" />
                   </div>
                 </div>
               </CardContent>

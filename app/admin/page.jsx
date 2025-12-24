@@ -455,15 +455,18 @@ const Dashboard = () => {
         <>
           {/* Loading State */}
           {isDashboardLoading && (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-4">
               {[...Array(4)].map((_, index) => (
-                <Card key={index} className="animate-pulse">
-                  <CardHeader className="space-y-0 pb-2">
-                    <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="h-8 bg-gray-200 rounded w-1/2 mb-2"></div>
-                    <div className="h-3 bg-gray-200 rounded w-full"></div>
+                <Card key={index} className="border-l-4 border-l-gray-300 animate-pulse">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-20 mb-2"></div>
+                        <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-16 mb-2"></div>
+                        <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded w-24"></div>
+                      </div>
+                      <div className="h-10 w-10 rounded-full bg-gray-200 dark:bg-gray-700"></div>
+                    </div>
                   </CardContent>
                 </Card>
               ))}
@@ -472,138 +475,146 @@ const Dashboard = () => {
 
           {/* Main Stats Grid */}
           {!isDashboardLoading && dashboardData && (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-4">
               {/* Total Users */}
-              <Card className="hover:shadow-lg transition-all duration-200 border-l-4 border-l-blue-500">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">
-                    {dashboardData.total_users?.title || "Total Users"}
-                  </CardTitle>
-                  <div className="h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center">
-                    <Users className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+              <Card className="border-l-4 border-l-blue-500">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-medium text-muted-foreground mb-1">
+                        {dashboardData.total_users?.title || "Total Users"}
+                      </p>
+                      <div className="text-2xl font-bold">
+                        {dashboardData.total_users?.value?.toLocaleString() || "0"}
+                      </div>
+                      <div className="flex items-center space-x-1 text-xs text-muted-foreground mt-1">
+                        {getTrendIcon(dashboardData.total_users?.change_percentage)}
+                        <span
+                          className={getTrendColor(
+                            dashboardData.total_users?.change_percentage
+                          )}
+                        >
+                          {dashboardData.total_users?.change_text || "No change"}
+                        </span>
+                        <span>from last {period}</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {dashboardData.total_users?.description ||
+                          "Active users in the system"}
+                      </p>
+                    </div>
+                    <div className="h-10 w-10 rounded-full bg-blue-500/10 flex items-center justify-center shrink-0">
+                      <Users className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                    </div>
                   </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
-                    {dashboardData.total_users?.value?.toLocaleString() || "0"}
-                  </div>
-                  <div className="flex items-center space-x-2 text-xs text-muted-foreground">
-                    {getTrendIcon(dashboardData.total_users?.change_percentage)}
-                    <span
-                      className={getTrendColor(
-                        dashboardData.total_users?.change_percentage
-                      )}
-                    >
-                      {dashboardData.total_users?.change_text || "No change"}
-                    </span>
-                    <span>from last {period}</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {dashboardData.total_users?.description ||
-                      "Active users in the system"}
-                  </p>
                 </CardContent>
               </Card>
 
               {/* New Invitations */}
-              <Card className="hover:shadow-lg transition-all duration-200 border-l-4 border-l-green-500">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">
-                    {dashboardData.new_invitations?.title || "New Invitations"}
-                  </CardTitle>
-                  <div className="h-8 w-8 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center">
-                    <UserPlus className="h-4 w-4 text-green-600 dark:text-green-400" />
+              <Card className="border-l-4 border-l-green-500">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-medium text-muted-foreground mb-1">
+                        {dashboardData.new_invitations?.title || "New Invitations"}
+                      </p>
+                      <div className="text-2xl font-bold">
+                        {dashboardData.new_invitations?.value?.toLocaleString() ||
+                          "0"}
+                      </div>
+                      <div className="flex items-center space-x-1 text-xs text-muted-foreground mt-1">
+                        {getTrendIcon(
+                          dashboardData.new_invitations?.change_percentage
+                        )}
+                        <span
+                          className={getTrendColor(
+                            dashboardData.new_invitations?.change_percentage
+                          )}
+                        >
+                          {dashboardData.new_invitations?.change_text ||
+                            "No change"}
+                        </span>
+                        <span>from last {period}</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {dashboardData.new_invitations?.description ||
+                          "Invitations sent this period"}
+                      </p>
+                    </div>
+                    <div className="h-10 w-10 rounded-full bg-green-500/10 flex items-center justify-center shrink-0">
+                      <UserPlus className="h-5 w-5 text-green-600 dark:text-green-400" />
+                    </div>
                   </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
-                    {dashboardData.new_invitations?.value?.toLocaleString() ||
-                      "0"}
-                  </div>
-                  <div className="flex items-center space-x-2 text-xs text-muted-foreground">
-                    {getTrendIcon(
-                      dashboardData.new_invitations?.change_percentage
-                    )}
-                    <span
-                      className={getTrendColor(
-                        dashboardData.new_invitations?.change_percentage
-                      )}
-                    >
-                      {dashboardData.new_invitations?.change_text ||
-                        "No change"}
-                    </span>
-                    <span>from last {period}</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {dashboardData.new_invitations?.description ||
-                      "Invitations sent this period"}
-                  </p>
                 </CardContent>
               </Card>
 
               {/* Active Roles */}
-              <Card className="hover:shadow-lg transition-all duration-200 border-l-4 border-l-purple-500">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">
-                    {dashboardData.active_roles?.title || "Active Roles"}
-                  </CardTitle>
-                  <div className="h-8 w-8 rounded-full bg-purple-100 dark:bg-purple-900 flex items-center justify-center">
-                    <Shield className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+              <Card className="border-l-4 border-l-purple-500">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-medium text-muted-foreground mb-1">
+                        {dashboardData.active_roles?.title || "Active Roles"}
+                      </p>
+                      <div className="text-2xl font-bold">
+                        {dashboardData.active_roles?.value?.toLocaleString() || "0"}
+                      </div>
+                      <div className="flex items-center space-x-1 text-xs text-muted-foreground mt-1">
+                        {getTrendIcon(
+                          dashboardData.active_roles?.change_percentage
+                        )}
+                        <span
+                          className={getTrendColor(
+                            dashboardData.active_roles?.change_percentage
+                          )}
+                        >
+                          {dashboardData.active_roles?.change_text || "No change"}
+                        </span>
+                        <span>from last {period}</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {dashboardData.active_roles?.description ||
+                          "Roles currently in use"}
+                      </p>
+                    </div>
+                    <div className="h-10 w-10 rounded-full bg-purple-500/10 flex items-center justify-center shrink-0">
+                      <Shield className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+                    </div>
                   </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
-                    {dashboardData.active_roles?.value?.toLocaleString() || "0"}
-                  </div>
-                  <div className="flex items-center space-x-2 text-xs text-muted-foreground">
-                    {getTrendIcon(
-                      dashboardData.active_roles?.change_percentage
-                    )}
-                    <span
-                      className={getTrendColor(
-                        dashboardData.active_roles?.change_percentage
-                      )}
-                    >
-                      {dashboardData.active_roles?.change_text || "No change"}
-                    </span>
-                    <span>from last {period}</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {dashboardData.active_roles?.description ||
-                      "Roles currently in use"}
-                  </p>
                 </CardContent>
               </Card>
 
               {/* Permissions */}
-              <Card className="hover:shadow-lg transition-all duration-200 border-l-4 border-l-orange-500">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">
-                    {dashboardData.permissions?.title || "Permissions"}
-                  </CardTitle>
-                  <div className="h-8 w-8 rounded-full bg-orange-100 dark:bg-orange-900 flex items-center justify-center">
-                    <Key className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+              <Card className="border-l-4 border-l-orange-500">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-medium text-muted-foreground mb-1">
+                        {dashboardData.permissions?.title || "Permissions"}
+                      </p>
+                      <div className="text-2xl font-bold">
+                        {dashboardData.permissions?.value?.toLocaleString() || "0"}
+                      </div>
+                      <div className="flex items-center space-x-1 text-xs text-muted-foreground mt-1">
+                        {getTrendIcon(dashboardData.permissions?.change_percentage)}
+                        <span
+                          className={getTrendColor(
+                            dashboardData.permissions?.change_percentage
+                          )}
+                        >
+                          {dashboardData.permissions?.change_text || "No change"}
+                        </span>
+                        <span>from last {period}</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {dashboardData.permissions?.description ||
+                          "Total permission sets"}
+                      </p>
+                    </div>
+                    <div className="h-10 w-10 rounded-full bg-orange-500/10 flex items-center justify-center shrink-0">
+                      <Key className="h-5 w-5 text-orange-600 dark:text-orange-400" />
+                    </div>
                   </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
-                    {dashboardData.permissions?.value?.toLocaleString() || "0"}
-                  </div>
-                  <div className="flex items-center space-x-2 text-xs text-muted-foreground">
-                    {getTrendIcon(dashboardData.permissions?.change_percentage)}
-                    <span
-                      className={getTrendColor(
-                        dashboardData.permissions?.change_percentage
-                      )}
-                    >
-                      {dashboardData.permissions?.change_text || "No change"}
-                    </span>
-                    <span>from last {period}</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {dashboardData.permissions?.description ||
-                      "Total permission sets"}
-                  </p>
                 </CardContent>
               </Card>
             </div>

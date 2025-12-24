@@ -183,11 +183,29 @@ export const useFormSubmission = (id, options = {}) => {
   return useQuery({
     queryKey: formKeys.submissionDetail(id),
     queryFn: async () => {
-      const response = await formsService.getFormSubmission(id);
-      return response.data;
+      try {
+        const response = await formsService.getFormSubmission(id);
+        return response.data;
+      } catch (error) {
+        // Handle 404 errors specifically
+        if (error?.response?.status === 404) {
+          throw new Error("SUBMISSION_NOT_FOUND_OR_NO_PERMISSION");
+        }
+        throw error;
+      }
     },
     enabled: !!id,
     staleTime: 5 * 60 * 1000, // 5 minutes
+    retry: (failureCount, error) => {
+      // Don't retry on 404 errors
+      if (error?.message === "SUBMISSION_NOT_FOUND_OR_NO_PERMISSION") {
+        return false;
+      }
+      if (error?.response?.status === 404) {
+        return false;
+      }
+      return failureCount < 3;
+    },
     ...options,
   });
 };

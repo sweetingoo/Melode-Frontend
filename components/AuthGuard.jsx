@@ -28,9 +28,21 @@ const AuthGuard = ({ children }) => {
   const router = useRouter();
   const pathname = usePathname();
   const [isChecking, setIsChecking] = useState(true);
+  const [isMounted, setIsMounted] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const { data: currentUser, isLoading: userLoading, error: userError } = useCurrentUser();
 
+  // Track if component is mounted (client-side only)
   useEffect(() => {
+    setIsMounted(true);
+    // Check authentication state only on client
+    setIsAuthenticated(apiUtils.isAuthenticated());
+  }, []);
+
+  useEffect(() => {
+    // Don't run auth checks until component is mounted (client-side)
+    if (!isMounted) return;
+
     const checkAuth = async () => {
       // Check if current route is public
       const isPublicRoute = PUBLIC_ROUTES.some(route =>
@@ -43,10 +55,11 @@ const AuthGuard = ({ children }) => {
         return;
       }
 
-      // Check if user is authenticated
-      const isAuthenticated = apiUtils.isAuthenticated();
+      // Check if user is authenticated (update state)
+      const authenticated = apiUtils.isAuthenticated();
+      setIsAuthenticated(authenticated);
 
-      if (!isAuthenticated) {
+      if (!authenticated) {
         // Not authenticated and trying to access protected route
         console.log('AuthGuard: User not authenticated, redirecting to login');
         router.push('/auth');
@@ -63,6 +76,7 @@ const AuthGuard = ({ children }) => {
       if (userError) {
         console.log('AuthGuard: Error fetching user data, redirecting to login');
         apiUtils.clearAuthToken();
+        setIsAuthenticated(false);
         router.push('/auth');
         return;
       }
@@ -73,17 +87,27 @@ const AuthGuard = ({ children }) => {
     };
 
     checkAuth();
-  }, [pathname, router, userLoading, userError, currentUser]);
+  }, [pathname, router, userLoading, userError, currentUser, isMounted]);
 
   // Check if current route is public
   const isPublicRoute = PUBLIC_ROUTES.some(route =>
     pathname === route || pathname.startsWith(route + '/')
   );
 
+  // During SSR or before mount, render children to avoid hydration mismatch
+  // The actual auth check will happen on client after mount
+  if (!isMounted) {
+    return children;
+  }
+
+  // If there's an error, don't render children (will redirect)
+  if (userError) {
+    return null;
+  }
+
   // Show loading spinner while checking authentication (but not for public routes)
   if (isChecking && !isPublicRoute) {
     // For protected routes, also wait for user loading if authenticated
-    const isAuthenticated = apiUtils.isAuthenticated();
     if (isAuthenticated && userLoading) {
       return (
         <div className="min-h-screen flex items-center justify-center bg-background">
@@ -94,11 +118,17 @@ const AuthGuard = ({ children }) => {
         </div>
       );
     }
-  }
-
-  // If there's an error, don't render children (will redirect)
-  if (userError) {
-    return null;
+    // If still checking and not authenticated, show loading
+    if (!isAuthenticated) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-background">
+          <div className="flex flex-col items-center space-y-4">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <p className="text-sm text-muted-foreground">Loading...</p>
+          </div>
+        </div>
+      );
+    }
   }
 
   // Render children if authenticated or on public route

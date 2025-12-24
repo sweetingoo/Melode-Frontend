@@ -85,6 +85,7 @@ import {
   Info,
   Shield,
   Repeat,
+  ChevronDown,
 } from "lucide-react";
 import {
   useTasks,
@@ -111,6 +112,11 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { format } from "date-fns";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
 
 const TasksPage = () => {
@@ -123,6 +129,7 @@ const TasksPage = () => {
   const [isCompleteModalOpen, setIsCompleteModalOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState(null);
   const [viewMode, setViewMode] = useState("all"); // all, my-tasks, overdue, due-soon, compliance, automated
+  const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   const [filters, setFilters] = useState({
     status: "",
     priority: "",
@@ -1013,17 +1020,17 @@ const TasksPage = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold">Tasks</h1>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-xl sm:text-2xl font-bold">Tasks</h1>
           <p className="text-sm sm:text-base text-muted-foreground">
             Manage and track all tasks across your organisation
           </p>
         </div>
         {canCreateTask && (
-          <Button onClick={() => setIsCreateModalOpen(true)} className="w-full sm:w-auto">
+          <Button onClick={() => setIsCreateModalOpen(true)} size="sm" className="shrink-0">
             <Plus className="mr-2 h-4 w-4" />
             Create Task
           </Button>
@@ -1032,67 +1039,84 @@ const TasksPage = () => {
 
       {/* Statistics Cards */}
       {!statsLoading && !statsError && statsData && (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Tasks</CardTitle>
-              <FileText className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {typeof statsData.total_tasks === 'number' ? statsData.total_tasks :
-                  typeof statsData.total === 'number' ? statsData.total : 0}
+        <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-4">
+          <Card className="border-l-4 border-l-blue-500">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground mb-1">Total Tasks</p>
+                  <p className="text-2xl font-bold">
+                    {typeof statsData.total_tasks === 'number' ? statsData.total_tasks :
+                      typeof statsData.total === 'number' ? statsData.total : 0}
+                  </p>
+                </div>
+                <div className="h-10 w-10 rounded-full bg-blue-500/10 flex items-center justify-center">
+                  <FileText className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                </div>
               </div>
             </CardContent>
           </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Pending</CardTitle>
-              <Clock className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {typeof statsData.pending_count === 'number' ? statsData.pending_count :
-                  typeof statsData.pending === 'number' ? statsData.pending : 0}
+          <Card className="border-l-4 border-l-yellow-500">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground mb-1">Pending</p>
+                  <p className="text-2xl font-bold">
+                    {typeof statsData.pending_count === 'number' ? statsData.pending_count :
+                      typeof statsData.pending === 'number' ? statsData.pending : 0}
+                  </p>
+                </div>
+                <div className="h-10 w-10 rounded-full bg-yellow-500/10 flex items-center justify-center">
+                  <Clock className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
+                </div>
               </div>
             </CardContent>
           </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Overdue</CardTitle>
-              <AlertCircle className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-red-600">
-                {typeof statsData.overdue_count === 'number' ? statsData.overdue_count :
-                  typeof statsData.overdue === 'number' ? statsData.overdue : 0}
+          <Card className="border-l-4 border-l-red-500">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground mb-1">Overdue</p>
+                  <p className="text-2xl font-bold text-red-600 dark:text-red-400">
+                    {typeof statsData.overdue_count === 'number' ? statsData.overdue_count :
+                      typeof statsData.overdue === 'number' ? statsData.overdue : 0}
+                  </p>
+                </div>
+                <div className="h-10 w-10 rounded-full bg-red-500/10 flex items-center justify-center">
+                  <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400" />
+                </div>
               </div>
             </CardContent>
           </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Completed</CardTitle>
-              <CheckCircle className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-green-600">
-                {typeof statsData.completed_count === 'number' ? statsData.completed_count :
-                  typeof statsData.completed === 'number' ? statsData.completed : 0}
+          <Card className="border-l-4 border-l-green-500">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground mb-1">Completed</p>
+                  <p className="text-2xl font-bold text-green-600 dark:text-green-400">
+                    {typeof statsData.completed_count === 'number' ? statsData.completed_count :
+                      typeof statsData.completed === 'number' ? statsData.completed : 0}
+                  </p>
+                </div>
+                <div className="h-10 w-10 rounded-full bg-green-500/10 flex items-center justify-center">
+                  <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
+                </div>
               </div>
             </CardContent>
           </Card>
         </div>
       )}
       {statsLoading && (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-4">
           {[1, 2, 3, 4].map((i) => (
             <Card key={i}>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Loading...</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  <Loader2 className="h-6 w-6 animate-spin" />
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground mb-1">Loading...</p>
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  </div>
+                  <div className="h-10 w-10 rounded-full bg-muted/50" />
                 </div>
               </CardContent>
             </Card>
@@ -1101,47 +1125,53 @@ const TasksPage = () => {
       )}
 
       {/* View Mode Tabs */}
-      <div className="flex gap-2 border-b overflow-x-auto pb-0">
-        <div className="flex gap-2 min-w-max pb-2">
+      <div className="flex gap-1 border-b overflow-x-auto pb-0">
+        <div className="flex gap-1 min-w-max pb-1">
           <Button
             variant={viewMode === "all" ? "default" : "ghost"}
             onClick={() => setViewMode("all")}
-            className="whitespace-nowrap"
+            className="whitespace-nowrap h-8 text-xs"
+            size="sm"
           >
             All Tasks
           </Button>
           <Button
             variant={viewMode === "my-tasks" ? "default" : "ghost"}
             onClick={() => setViewMode("my-tasks")}
-            className="whitespace-nowrap"
+            className="whitespace-nowrap h-8 text-xs"
+            size="sm"
           >
             My Tasks
           </Button>
           <Button
             variant={viewMode === "overdue" ? "default" : "ghost"}
             onClick={() => setViewMode("overdue")}
-            className="whitespace-nowrap"
+            className="whitespace-nowrap h-8 text-xs"
+            size="sm"
           >
             Overdue
           </Button>
           <Button
             variant={viewMode === "due-soon" ? "default" : "ghost"}
             onClick={() => setViewMode("due-soon")}
-            className="whitespace-nowrap"
+            className="whitespace-nowrap h-8 text-xs"
+            size="sm"
           >
             Due Soon
           </Button>
           <Button
             variant={viewMode === "compliance" ? "default" : "ghost"}
             onClick={() => setViewMode("compliance")}
-            className="whitespace-nowrap"
+            className="whitespace-nowrap h-8 text-xs"
+            size="sm"
           >
             Compliance
           </Button>
           <Button
             variant={viewMode === "automated" ? "default" : "ghost"}
             onClick={() => setViewMode("automated")}
-            className="whitespace-nowrap"
+            className="whitespace-nowrap h-8 text-xs"
+            size="sm"
           >
             Automated
           </Button>
@@ -1150,21 +1180,29 @@ const TasksPage = () => {
 
       {/* Filters and Search */}
       <Card>
-        <CardHeader>
-          <CardTitle>Filters</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col gap-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search tasks..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-8"
-              />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Collapsible open={isFiltersOpen} onOpenChange={setIsFiltersOpen}>
+          <CardHeader className="pb-2">
+            <CollapsibleTrigger asChild>
+              <div className="flex items-center justify-between cursor-pointer">
+                <CardTitle className="text-base">Filters</CardTitle>
+                <ChevronDown className={cn("h-4 w-4 transition-transform", isFiltersOpen && "rotate-180")} />
+              </div>
+            </CollapsibleTrigger>
+          </CardHeader>
+          <CollapsibleContent>
+            <CardContent className="pt-0">
+              <div className="flex flex-col gap-3">
+                <div className="relative flex-1">
+                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search tasks..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-8"
+                    size="sm"
+                  />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               <Select
                 value={filters.status || "all"}
                 onValueChange={(value) =>
@@ -1239,7 +1277,9 @@ const TasksPage = () => {
               )}
             </div>
           </div>
-        </CardContent>
+            </CardContent>
+          </CollapsibleContent>
+        </Collapsible>
       </Card>
 
       {/* Tasks Table */}
