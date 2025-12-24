@@ -1101,31 +1101,63 @@ const SignatureFieldRenderer = ({ field, value, onChange, error, fieldId }) => {
     }
   }, [value]);
 
+  // Get coordinates from event (mouse or touch)
+  const getCoordinates = (e) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    
+    let clientX, clientY;
+    
+    if (e.touches && e.touches.length > 0) {
+      // Touch event
+      clientX = e.touches[0].clientX;
+      clientY = e.touches[0].clientY;
+    } else if (e.changedTouches && e.changedTouches.length > 0) {
+      // Touch end event
+      clientX = e.changedTouches[0].clientX;
+      clientY = e.changedTouches[0].clientY;
+    } else {
+      // Mouse event
+      clientX = e.clientX;
+      clientY = e.clientY;
+    }
+    
+    return {
+      x: (clientX - rect.left) * scaleX,
+      y: (clientY - rect.top) * scaleY
+    };
+  };
+
   const startDrawing = (e) => {
+    e.preventDefault();
     setIsDrawing(true);
     const canvas = canvasRef.current;
-    const rect = canvas.getBoundingClientRect();
+    if (!canvas) return;
+    
     const ctx = canvas.getContext('2d');
+    const coords = getCoordinates(e);
     ctx.beginPath();
-    ctx.moveTo(
-      e.clientX - rect.left,
-      e.clientY - rect.top
-    );
+    ctx.moveTo(coords.x, coords.y);
   };
 
   const draw = (e) => {
     if (!isDrawing) return;
+    e.preventDefault();
     const canvas = canvasRef.current;
-    const rect = canvas.getBoundingClientRect();
+    if (!canvas) return;
+    
     const ctx = canvas.getContext('2d');
-    ctx.lineTo(
-      e.clientX - rect.left,
-      e.clientY - rect.top
-    );
+    const coords = getCoordinates(e);
+    ctx.lineTo(coords.x, coords.y);
     ctx.stroke();
   };
 
-  const stopDrawing = () => {
+  const stopDrawing = (e) => {
+    if (e) e.preventDefault();
     setIsDrawing(false);
     const canvas = canvasRef.current;
     if (canvas) {
@@ -1153,44 +1185,67 @@ const SignatureFieldRenderer = ({ field, value, onChange, error, fieldId }) => {
       ctx.lineWidth = 2;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
+      
+      // Set canvas size based on container
+      const resizeCanvas = () => {
+        const container = canvas.parentElement;
+        if (container) {
+          const containerWidth = container.clientWidth || 600;
+          // Maintain aspect ratio (3:1)
+          canvas.width = containerWidth;
+          canvas.height = Math.max(150, containerWidth / 3);
+          canvas.style.width = '100%';
+          canvas.style.height = 'auto';
+          
+          // Re-apply drawing settings after resize
+          ctx.strokeStyle = '#000';
+          ctx.lineWidth = 2;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          
+          // Redraw existing signature if any
+          if (value) {
+            const img = new Image();
+            img.onload = () => {
+              ctx.clearRect(0, 0, canvas.width, canvas.height);
+              ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            };
+            img.src = value;
+          }
+        }
+      };
+      
+      resizeCanvas();
+      window.addEventListener('resize', resizeCanvas);
+      
+      return () => {
+        window.removeEventListener('resize', resizeCanvas);
+      };
     }
-  }, []);
+  }, [value]);
 
   return (
-    <div className="space-y-2">
-      <canvas
-        ref={canvasRef}
-        width={600}
-        height={200}
-        className="border-2 border-border rounded-md cursor-crosshair bg-white"
-        onMouseDown={startDrawing}
-        onMouseMove={draw}
-        onMouseUp={stopDrawing}
-        onMouseLeave={stopDrawing}
-        onTouchStart={(e) => {
-          e.preventDefault();
-          const touch = e.touches[0];
-          const mouseEvent = new MouseEvent('mousedown', {
-            clientX: touch.clientX,
-            clientY: touch.clientY,
-          });
-          canvasRef.current.dispatchEvent(mouseEvent);
-        }}
-        onTouchMove={(e) => {
-          e.preventDefault();
-          const touch = e.touches[0];
-          const mouseEvent = new MouseEvent('mousemove', {
-            clientX: touch.clientX,
-            clientY: touch.clientY,
-          });
-          canvasRef.current.dispatchEvent(mouseEvent);
-        }}
-        onTouchEnd={(e) => {
-          e.preventDefault();
-          const mouseEvent = new MouseEvent('mouseup', {});
-          canvasRef.current.dispatchEvent(mouseEvent);
-        }}
-      />
+    <div className="space-y-2 w-full">
+      <div className="w-full overflow-hidden" style={{ touchAction: 'none' }}>
+        <canvas
+          ref={canvasRef}
+          className="border-2 border-border rounded-md cursor-crosshair bg-white w-full"
+          style={{ 
+            touchAction: 'none',
+            display: 'block',
+            maxWidth: '100%',
+            height: 'auto'
+          }}
+          onMouseDown={startDrawing}
+          onMouseMove={draw}
+          onMouseUp={stopDrawing}
+          onMouseLeave={stopDrawing}
+          onTouchStart={startDrawing}
+          onTouchMove={draw}
+          onTouchEnd={stopDrawing}
+          onTouchCancel={stopDrawing}
+        />
+      </div>
       <div className="flex justify-between items-center">
         <p className="text-xs text-muted-foreground">
           {hasSignature ? 'Signature captured' : 'Sign above'}

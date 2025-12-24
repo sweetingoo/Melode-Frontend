@@ -713,19 +713,6 @@ const LocationsPage = () => {
             </div>
           </CardContent>
         </Card>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {locationsLoading ? (
-                <Skeleton className="h-8 w-16" />
-              ) : (
-                computedStats.inactiveLocations
-              )}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Currently inactive
-            </p>
-          </CardContent>
-        </Card>
       </div>
 
       {/* Filters and Search */}
