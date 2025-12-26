@@ -399,7 +399,7 @@ export default function ReportsPage() {
         <Button
           onClick={handleExport}
           disabled={isExporting || records.length === 0}
-          className="w-full sm:w-auto"
+          className="w-full sm:w-auto sm:max-w-fit whitespace-nowrap"
         >
           {isExporting ? (
             <>
