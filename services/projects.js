@@ -67,7 +67,8 @@ export const projectsService = {
   // Add task to project
   addTaskToProject: async (projectId, taskId) => {
     try {
-      return await api.post(`/projects/${projectId}/tasks`, { task_id: taskId });
+      // task_id should be in the URL path, not in the request body
+      return await api.post(`/projects/${projectId}/tasks/${taskId}`);
     } catch (error) {
       console.error(`Add task ${taskId} to project ${projectId} failed:`, error);
       throw error;

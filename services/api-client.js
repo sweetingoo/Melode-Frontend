@@ -174,6 +174,10 @@ export const api = {
       // Don't log network errors for invitations endpoint (handled gracefully in hook)
       if (error.code === "NETWORK_ERROR" && url.includes("/invitations")) {
         // Silently handle network errors for invitations
+      } else if (error.code === "NETWORK_ERROR" && url.includes("/tasks")) {
+        // For tasks endpoint, log as warning instead of error to reduce console noise
+        // The error is already handled in the hooks/components
+        console.warn(`Network error fetching tasks from ${url}. This may be due to connectivity issues or the endpoint not supporting certain filters.`);
       } else {
         console.error(`GET request failed for ${url}:`, error);
       }

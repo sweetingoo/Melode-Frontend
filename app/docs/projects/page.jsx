@@ -12,7 +12,7 @@ export default function ProjectsDocs() {
       <div className="mb-8">
         <h1 className="text-4xl font-bold mb-4">Projects Management</h1>
         <p className="text-lg text-muted-foreground">
-          Organize and manage tasks by grouping them into projects
+          Organise and manage tasks by grouping them into projects
         </p>
       </div>
 
@@ -29,7 +29,7 @@ export default function ProjectsDocs() {
             <div>
               <h3 className="font-semibold mb-2">What are Projects?</h3>
               <p className="text-sm text-muted-foreground">
-                Projects allow you to group related tasks together, making it easier to organize work,
+                Projects allow you to group related tasks together, making it easier to organise work,
                 track progress, and manage team collaboration. Projects provide a high-level view of
                 multiple tasks working toward a common goal.
               </p>
@@ -43,9 +43,41 @@ export default function ProjectsDocs() {
               </ul>
             </div>
             <div>
+              <h3 className="font-semibold mb-2">Projects List View</h3>
+              <p className="text-sm text-muted-foreground mb-2">
+                The projects page displays all projects in a table format with the following information:
+              </p>
+              <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
+                <li><strong>Name:</strong> Clickable project name that links to the project details page</li>
+                <li><strong>Description:</strong> Brief description of the project (truncated if long)</li>
+                <li><strong>Tasks:</strong> Number of tasks associated with the project</li>
+                <li><strong>Members:</strong> Number of team members assigned to the project</li>
+                <li><strong>Created:</strong> Date when the project was created</li>
+                <li><strong>Actions:</strong> Dropdown menu with options to view, edit, or delete the project</li>
+              </ul>
+            </div>
+            <div>
+              <h3 className="font-semibold mb-2">Search Functionality</h3>
+              <p className="text-sm text-muted-foreground mb-2">
+                Use the search bar at the top of the projects page to:
+              </p>
+              <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
+                <li>Search projects by name or description</li>
+                <li>Filter results in real-time as you type</li>
+                <li>Clear the search to view all projects again</li>
+              </ul>
+            </div>
+            <div>
+              <h3 className="font-semibold mb-2">Empty State</h3>
+              <p className="text-sm text-muted-foreground">
+                When no projects exist or no search results are found, you'll see an empty state message
+                with an option to create your first project (if you have the necessary permissions).
+              </p>
+            </div>
+            <div>
               <h3 className="font-semibold mb-2">Benefits of Using Projects</h3>
               <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
-                <li>Organize related tasks under a single project</li>
+                <li>Organise related tasks under a single project</li>
                 <li>Track project-level progress and completion</li>
                 <li>Filter tasks by project in the tasks list</li>
                 <li>View all tasks associated with a project in one place</li>
@@ -83,7 +115,7 @@ export default function ProjectsDocs() {
                   </p>
                   <DialogMockup
                     title="Create New Project"
-                    description="Create a new project to organize related tasks."
+                    description="Create a new project to organise related tasks."
                     footer={
                       <>
                         <FormButton variant="outline" size="sm">
@@ -120,8 +152,20 @@ export default function ProjectsDocs() {
             <div>
               <h3 className="font-semibold mb-2">Required Fields</h3>
               <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
-                <li>Project name (required)</li>
-                <li>Description (optional but recommended)</li>
+                <li>Project name (required) - Must be unique and descriptive</li>
+                <li>Description (optional but recommended) - Helps team members understand the project's purpose and scope</li>
+              </ul>
+            </div>
+            <div>
+              <h3 className="font-semibold mb-2">After Creating a Project</h3>
+              <p className="text-sm text-muted-foreground mb-2">
+                Once you create a project:
+              </p>
+              <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
+                <li>The project will appear in the projects list immediately</li>
+                <li>You can click on the project name to view its details page</li>
+                <li>You can start associating tasks with the project when creating or editing tasks</li>
+                <li>You can add members to the project from the project details page</li>
               </ul>
             </div>
           </CardContent>
@@ -187,31 +231,52 @@ export default function ProjectsDocs() {
             <div>
               <h3 className="font-semibold mb-2">Viewing Project Details</h3>
               <p className="text-sm text-muted-foreground mb-2">
-                Click on any project name to view its details page, which includes:
+                You can view project details in two ways:
+              </p>
+              <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground mb-3">
+                <li>Click on any project name in the projects list table</li>
+                <li>Use the "View Details" option from the Actions dropdown menu</li>
+              </ul>
+              <p className="text-sm text-muted-foreground mb-2">
+                The project details page includes:
               </p>
               <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
                 <li>Project name and description</li>
                 <li>List of all tasks associated with the project</li>
                 <li>Project members and their assignments</li>
                 <li>Project activity and audit logs</li>
+                <li>Options to edit or delete the project</li>
               </ul>
             </div>
             <div>
               <h3 className="font-semibold mb-2">Editing Projects</h3>
               <p className="text-sm text-muted-foreground mb-2">
-                To edit a project:
+                You can edit a project in two ways:
               </p>
-              <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground">
-                <li>Navigate to the project details page</li>
-                <li>Click the "Edit" button</li>
-                <li>Update the project name or description</li>
-                <li>Save your changes</li>
+              <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground mb-3">
+                <li>From the projects list: Click the Actions menu (three dots) and select "Edit"</li>
+                <li>From the project details page: Click the "Edit" button in the header</li>
               </ol>
+              <p className="text-sm text-muted-foreground mb-2">
+                The edit modal allows you to:
+              </p>
+              <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
+                <li>Update the project name</li>
+                <li>Modify the project description</li>
+                <li>Save changes or cancel to discard modifications</li>
+              </ul>
             </div>
             <div>
               <h3 className="font-semibold mb-2">Deleting Projects</h3>
               <p className="text-sm text-muted-foreground mb-2">
-                Projects can be deleted in two ways:
+                Projects can be deleted from either the projects list or the project details page:
+              </p>
+              <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground mb-3">
+                <li>From the projects list: Click the Actions menu (three dots) and select "Delete"</li>
+                <li>From the project details page: Click the "Delete" button in the header</li>
+              </ul>
+              <p className="text-sm text-muted-foreground mb-2">
+                When deleting, you'll be presented with two options:
               </p>
               <div className="space-y-3 mt-3">
                 <div className="p-3 bg-muted rounded-lg">
@@ -319,11 +384,11 @@ export default function ProjectsDocs() {
           <CardContent>
             <div className="space-y-3">
               <div>
-                <h3 className="font-semibold mb-2">Project Organization</h3>
+                <h3 className="font-semibold mb-2">Project Organisation</h3>
                 <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
                   <li>Use clear, descriptive project names that indicate the project's purpose</li>
                   <li>Add detailed descriptions to help team members understand project goals</li>
-                  <li>Group related tasks under the same project for better organization</li>
+                  <li>Group related tasks under the same project for better organisation</li>
                   <li>Regularly review and update project descriptions as goals evolve</li>
                 </ul>
               </div>

@@ -101,7 +101,7 @@ const documentationCategories = [
       },
       {
         title: "Projects Management",
-        description: "Organize tasks by grouping them into projects",
+        description: "Organise tasks by grouping them into projects",
         href: "/docs/projects",
         icon: FolderKanban,
       },

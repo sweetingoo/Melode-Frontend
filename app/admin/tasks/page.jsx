@@ -184,6 +184,12 @@ const TasksPage = () => {
     color: "#6B7280",
     sort_order: 0,
   });
+  // Project lazy loading state
+  const [projectSearchTerm, setProjectSearchTerm] = useState("");
+  const [projectPage, setProjectPage] = useState(1);
+  const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
+  const [selectedProject, setSelectedProject] = useState(null);
+  
   const [locationFormData, setLocationFormData] = useState({
     name: "",
     description: "",
@@ -275,7 +281,25 @@ const TasksPage = () => {
   const { data: rolesData } = useRoles();
   const { data: activeTaskTypes } = useActiveTaskTypes();
   const { data: formsResponse } = useForms();
-  const { data: projectsResponse } = useProjects({ per_page: 1000 });
+  // Debounce search term
+  const [debouncedProjectSearch, setDebouncedProjectSearch] = React.useState("");
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedProjectSearch(projectSearchTerm);
+      setProjectPage(1); // Reset to first page when search changes
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [projectSearchTerm]);
+  
+  // Lazy load projects - only fetch when dropdown is open, with debounced search
+  const { data: projectsResponse, isLoading: projectsLoading, error: projectsError } = useProjects({ 
+    page: projectPage,
+    per_page: 50, // Reasonable page size (API max is 100)
+    search: debouncedProjectSearch || undefined,
+    is_active: true,
+  }, {
+    enabled: isProjectDropdownOpen, // Only fetch when dropdown is open
+  });
   const { data: currentUserData } = useCurrentUser();
   const isMobile = useIsMobile();
 
@@ -351,8 +375,28 @@ const TasksPage = () => {
       projects = projectsResponse.data;
     } else if (projectsResponse.results && Array.isArray(projectsResponse.results)) {
       projects = projectsResponse.results;
+    } else if (projectsResponse.items && Array.isArray(projectsResponse.items)) {
+      projects = projectsResponse.items;
     }
   }
+  
+  // Get selected project for display
+  const selectedProjectForDisplay = React.useMemo(() => {
+    if (!taskFormData.project_id) return null;
+    return projects.find(p => p.id.toString() === taskFormData.project_id.toString());
+  }, [projects, taskFormData.project_id]);
+  
+  // Reset search and page when dropdown closes
+  React.useEffect(() => {
+    if (!isProjectDropdownOpen) {
+      setProjectSearchTerm("");
+      setProjectPage(1);
+    }
+  }, [isProjectDropdownOpen]);
+  
+  // Use projects for display
+  const displayProjects = projects;
+  const isLoadingProjects = projectsLoading;
 
   const deleteTaskMutation = useDeleteTask();
   const createTaskMutation = useCreateTask();
@@ -1374,7 +1418,7 @@ const TasksPage = () => {
                       : "Automated Tasks"}
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="overflow-x-auto">
           {isLoading ? (
             <div className="flex items-center justify-center py-8">
               <Loader2 className="h-6 w-6 animate-spin" />
@@ -1610,28 +1654,28 @@ const TasksPage = () => {
             </div>
           ) : (
             // Desktop Table View
-            <div className="rounded-md border overflow-x-auto">
-              <Table>
+            <div className="rounded-md border overflow-x-auto max-w-full">
+              <Table className="w-full">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="min-w-[200px]">Title</TableHead>
-                    <TableHead className="min-w-[120px]">Project</TableHead>
-                    <TableHead className="min-w-[120px]">Type</TableHead>
-                    <TableHead className="min-w-[100px]">Status</TableHead>
-                    <TableHead className="min-w-[100px]">Priority</TableHead>
-                    <TableHead className="min-w-[150px]">Assigned To</TableHead>
-                    <TableHead className="min-w-[150px]">Due Date</TableHead>
-                    <TableHead className="min-w-[80px]">Actions</TableHead>
+                    <TableHead className="w-[20%]">Title</TableHead>
+                    <TableHead className="w-[12%]">Project</TableHead>
+                    <TableHead className="w-[12%]">Type</TableHead>
+                    <TableHead className="w-[10%]">Status</TableHead>
+                    <TableHead className="w-[10%]">Priority</TableHead>
+                    <TableHead className="w-[15%]">Assigned To</TableHead>
+                    <TableHead className="w-[13%]">Due Date</TableHead>
+                    <TableHead className="w-[8%]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredTasks.map((task) => (
                     <TableRow key={task.id}>
-                      <TableCell className="font-medium">
+                      <TableCell className="font-medium w-[20%]">
                         <div className="flex items-center gap-2 flex-wrap">
                           <Link
                             href={`/admin/tasks/${task.id}`}
-                            className="hover:underline"
+                            className="hover:underline truncate max-w-full"
                           >
                             {task.title}
                           </Link>
@@ -2053,27 +2097,91 @@ const TasksPage = () => {
             </div>
             <div>
               <Label>Project</Label>
-              <Select
-                value={taskFormData.project_id && taskFormData.project_id !== "" ? taskFormData.project_id : "none"}
-                onValueChange={(value) =>
-                  setTaskFormData({
-                    ...taskFormData,
-                    project_id: value === "none" ? "" : value,
-                  })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a project (optional)" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">No Project</SelectItem>
-                  {projects.map((project) => (
-                    <SelectItem key={project.id} value={project.id.toString()}>
-                      {project.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Popover open={isProjectDropdownOpen} onOpenChange={setIsProjectDropdownOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    className="w-full justify-between"
+                  >
+                    {selectedProjectForDisplay ? (
+                      <span className="truncate">{selectedProjectForDisplay.name}</span>
+                    ) : (
+                      <span className="text-muted-foreground">Select a project (optional)</span>
+                    )}
+                    <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[400px] p-0" align="start">
+                  <div className="flex flex-col">
+                    <div className="flex items-center border-b px-3">
+                      <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                      <Input
+                        placeholder="Search projects..."
+                        value={projectSearchTerm}
+                        onChange={(e) => setProjectSearchTerm(e.target.value)}
+                        className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+                      />
+                    </div>
+                    <div className="max-h-[300px] overflow-y-auto">
+                      {isLoadingProjects ? (
+                        <div className="p-4 text-center text-sm text-muted-foreground">
+                          <Loader2 className="h-4 w-4 animate-spin mx-auto mb-2" />
+                          Loading projects...
+                        </div>
+                      ) : projectsError ? (
+                        <div className="p-4 text-center text-sm text-destructive">
+                          Error loading projects
+                        </div>
+                      ) : displayProjects.length === 0 ? (
+                        <div className="p-4 text-center text-sm text-muted-foreground">
+                          {projectSearchTerm ? `No projects found matching "${projectSearchTerm}"` : "No projects available"}
+                        </div>
+                      ) : (
+                        <>
+                          <div
+                            className="p-1 cursor-pointer hover:bg-accent hover:text-accent-foreground text-sm"
+                            onClick={() => {
+                              setTaskFormData({
+                                ...taskFormData,
+                                project_id: "",
+                              });
+                              setIsProjectDropdownOpen(false);
+                            }}
+                          >
+                            <div className={cn(
+                              "px-2 py-1.5 rounded-sm",
+                              !taskFormData.project_id && "bg-accent"
+                            )}>
+                              No Project
+                            </div>
+                          </div>
+                          {displayProjects.map((project) => (
+                            <div
+                              key={project.id}
+                              className="p-1 cursor-pointer hover:bg-accent hover:text-accent-foreground text-sm"
+                              onClick={() => {
+                                setTaskFormData({
+                                  ...taskFormData,
+                                  project_id: project.id.toString(),
+                                });
+                                setIsProjectDropdownOpen(false);
+                              }}
+                            >
+                              <div className={cn(
+                                "px-2 py-1.5 rounded-sm",
+                                taskFormData.project_id === project.id.toString() && "bg-accent"
+                              )}>
+                                {project.name}
+                              </div>
+                            </div>
+                          ))}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
             </div>
             <div>
               <Label>Location</Label>
@@ -2761,27 +2869,91 @@ const TasksPage = () => {
             </div>
             <div>
               <Label>Project</Label>
-              <Select
-                value={taskFormData.project_id && taskFormData.project_id !== "" ? taskFormData.project_id : "none"}
-                onValueChange={(value) =>
-                  setTaskFormData({
-                    ...taskFormData,
-                    project_id: value === "none" ? "" : value,
-                  })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a project (optional)" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">No Project</SelectItem>
-                  {projects.map((project) => (
-                    <SelectItem key={project.id} value={project.id.toString()}>
-                      {project.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Popover open={isProjectDropdownOpen} onOpenChange={setIsProjectDropdownOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    className="w-full justify-between"
+                  >
+                    {selectedProjectForDisplay ? (
+                      <span className="truncate">{selectedProjectForDisplay.name}</span>
+                    ) : (
+                      <span className="text-muted-foreground">Select a project (optional)</span>
+                    )}
+                    <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[400px] p-0" align="start">
+                  <div className="flex flex-col">
+                    <div className="flex items-center border-b px-3">
+                      <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                      <Input
+                        placeholder="Search projects..."
+                        value={projectSearchTerm}
+                        onChange={(e) => setProjectSearchTerm(e.target.value)}
+                        className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+                      />
+                    </div>
+                    <div className="max-h-[300px] overflow-y-auto">
+                      {isLoadingProjects ? (
+                        <div className="p-4 text-center text-sm text-muted-foreground">
+                          <Loader2 className="h-4 w-4 animate-spin mx-auto mb-2" />
+                          Loading projects...
+                        </div>
+                      ) : projectsError ? (
+                        <div className="p-4 text-center text-sm text-destructive">
+                          Error loading projects
+                        </div>
+                      ) : displayProjects.length === 0 ? (
+                        <div className="p-4 text-center text-sm text-muted-foreground">
+                          {projectSearchTerm ? `No projects found matching "${projectSearchTerm}"` : "No projects available"}
+                        </div>
+                      ) : (
+                        <>
+                          <div
+                            className="p-1 cursor-pointer hover:bg-accent hover:text-accent-foreground text-sm"
+                            onClick={() => {
+                              setTaskFormData({
+                                ...taskFormData,
+                                project_id: "",
+                              });
+                              setIsProjectDropdownOpen(false);
+                            }}
+                          >
+                            <div className={cn(
+                              "px-2 py-1.5 rounded-sm",
+                              !taskFormData.project_id && "bg-accent"
+                            )}>
+                              No Project
+                            </div>
+                          </div>
+                          {displayProjects.map((project) => (
+                            <div
+                              key={project.id}
+                              className="p-1 cursor-pointer hover:bg-accent hover:text-accent-foreground text-sm"
+                              onClick={() => {
+                                setTaskFormData({
+                                  ...taskFormData,
+                                  project_id: project.id.toString(),
+                                });
+                                setIsProjectDropdownOpen(false);
+                              }}
+                            >
+                              <div className={cn(
+                                "px-2 py-1.5 rounded-sm",
+                                taskFormData.project_id === project.id.toString() && "bg-accent"
+                              )}>
+                                {project.name}
+                              </div>
+                            </div>
+                          ))}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
             </div>
             <div>
               <Label>Status</Label>

@@ -753,7 +753,10 @@ export default function AdminLayout({ children }) {
 
   // Helper function to filter items based on permissions
   const filterItemsByPermission = (items) => {
-    if (currentUserLoading) return items; // Show all while loading
+    // During SSR or while loading, show all items to prevent hydration mismatch
+    if (!isClient || currentUserLoading || !currentUserData) {
+      return items;
+    }
 
     return items.filter((item) => {
       // Special case: SUPERUSER_OR_REPORTS - show if:
@@ -844,29 +847,30 @@ export default function AdminLayout({ children }) {
   };
 
   // Filter all menu groups based on permissions
+  // Only filter after client-side hydration to prevent SSR/client mismatch
   const visibleMainMenuItems = React.useMemo(
     () => filterItemsByPermission(mainMenuItems),
-    [userPermissionNames, currentUserLoading, isCurrentRoleSuperuser]
+    [userPermissionNames, currentUserLoading, isCurrentRoleSuperuser, isClient, currentUserData]
   );
 
   const visiblePeopleAndAccessItems = React.useMemo(
     () => filterItemsByPermission(peopleAndAccessItems),
-    [userPermissionNames, currentUserLoading, isCurrentRoleSuperuser]
+    [userPermissionNames, currentUserLoading, isCurrentRoleSuperuser, isClient, currentUserData]
   );
 
   const visibleOrganisationItems = React.useMemo(
     () => filterItemsByPermission(organisationItems),
-    [userPermissionNames, currentUserLoading, isCurrentRoleSuperuser]
+    [userPermissionNames, currentUserLoading, isCurrentRoleSuperuser, isClient, currentUserData]
   );
 
   const visibleMonitoringAndReportsItems = React.useMemo(
     () => filterItemsByPermission(monitoringAndReportsItems),
-    [userPermissionNames, currentUserLoading, isCurrentRoleSuperuser]
+    [userPermissionNames, currentUserLoading, isCurrentRoleSuperuser, isClient, currentUserData]
   );
 
   const visibleSettingsItems = React.useMemo(
     () => filterItemsByPermission(settingsItems),
-    [userPermissionNames, currentUserLoading, isCurrentRoleSuperuser]
+    [userPermissionNames, currentUserLoading, isCurrentRoleSuperuser, isClient, currentUserData]
   );
 
   // Quick Setup section removed

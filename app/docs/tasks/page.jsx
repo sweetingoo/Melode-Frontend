@@ -220,7 +220,7 @@ export default function TasksDocs() {
                     Project Association
                   </h4>
                   <p className="text-xs text-muted-foreground">
-                    Tasks can be optionally associated with a project. This helps organize related tasks
+                    Tasks can be optionally associated with a project. This helps organise related tasks
                     together and provides better project management capabilities. Select a project from
                     the dropdown, or leave it as "No Project" for standalone tasks.
                   </p>
@@ -451,7 +451,7 @@ export default function TasksDocs() {
               <h3 className="font-semibold mb-2">Accessing Task Details</h3>
               <p className="text-sm text-muted-foreground mb-2">
                 Click on any task from the tasks list to view its detailed information page. The task details page provides
-                a comprehensive view of all task information with an improved, organized layout.
+                a comprehensive view of all task information with an improved, organised layout.
               </p>
               <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
                 <li>URL format: <code className="bg-muted px-1 py-0.5 rounded">/admin/tasks/[taskId]</code></li>
@@ -465,7 +465,7 @@ export default function TasksDocs() {
             <div>
               <h3 className="font-semibold mb-2">Improved Layout Structure</h3>
               <p className="text-sm text-muted-foreground mb-3">
-                The task details page features a modern, organized layout with three main sections:
+                The task details page features a modern, organised layout with three main sections:
               </p>
 
               <div className="space-y-4">
@@ -487,7 +487,7 @@ export default function TasksDocs() {
                     Tabbed Content Area
                   </h4>
                   <p className="text-xs text-muted-foreground mb-2">
-                    Three tabs organize different aspects of the task:
+                    Three tabs organise different aspects of the task:
                   </p>
                   <ul className="list-disc list-inside space-y-1 text-xs text-muted-foreground ml-6">
                     <li><strong>Overview:</strong> Main task information, assignments, and file attachments</li>
@@ -595,7 +595,7 @@ export default function TasksDocs() {
                     <h4 className="text-sm font-semibold">Better Organization</h4>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Information is organized into logical sections with clear visual hierarchy,
+                    Information is organised into logical sections with clear visual hierarchy,
                     making it easier to find and understand task details.
                   </p>
                 </div>

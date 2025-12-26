@@ -156,7 +156,20 @@ const TaskDetailPage = () => {
   const locations = Array.isArray(locationsData) ? locationsData : [];
   const assets = Array.isArray(assetsData) ? assetsData : [];
   const roles = rolesData || [];
-  const projects = projectsResponse?.projects || projectsResponse?.data || projectsResponse || [];
+  
+  // Extract projects from response
+  let projects = [];
+  if (projectsResponse) {
+    if (Array.isArray(projectsResponse)) {
+      projects = projectsResponse;
+    } else if (projectsResponse.projects && Array.isArray(projectsResponse.projects)) {
+      projects = projectsResponse.projects;
+    } else if (projectsResponse.data && Array.isArray(projectsResponse.data)) {
+      projects = projectsResponse.data;
+    } else if (projectsResponse.results && Array.isArray(projectsResponse.results)) {
+      projects = projectsResponse.results;
+    }
+  }
 
   // Extract task types from response
   let taskTypes = [];

@@ -163,7 +163,14 @@ export const useAddTaskToProject = () => {
       return response.data;
     },
     onSuccess: (data, variables) => {
-      queryClient.invalidateQueries({ queryKey: projectKeys.tasks(variables.projectId) });
+      // Invalidate project tasks queries (with and without params to match all variations)
+      queryClient.invalidateQueries({ 
+        queryKey: [...projectKeys.all, "tasks", variables.projectId],
+        exact: false // Match all queries that start with this key
+      });
+      // Also invalidate the project detail to refresh task count
+      queryClient.invalidateQueries({ queryKey: projectKeys.detail(variables.projectId) });
+      // Invalidate all tasks queries
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
       toast.success("Task added to project successfully");
     },
@@ -191,8 +198,15 @@ export const useRemoveTaskFromProject = () => {
       await projectsService.removeTaskFromProject(projectId, taskId);
       return { projectId, taskId };
     },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: projectKeys.tasks(data.projectId) });
+    onSuccess: (data, variables) => {
+      // Invalidate project tasks queries (with and without params to match all variations)
+      queryClient.invalidateQueries({ 
+        queryKey: [...projectKeys.all, "tasks", variables.projectId],
+        exact: false 
+      });
+      // Also invalidate the project detail to refresh task count
+      queryClient.invalidateQueries({ queryKey: projectKeys.detail(variables.projectId) });
+      // Invalidate all tasks queries
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
       toast.success("Task removed from project successfully");
     },
