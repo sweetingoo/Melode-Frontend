@@ -1,7 +1,7 @@
 "use client";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { CheckSquare, Plus, Filter, Users, Calendar, AlertCircle, FileText, MapPin, Building2 } from "lucide-react";
+import { CheckSquare, Plus, Filter, Users, Calendar, AlertCircle, FileText, MapPin, Building2, Eye, FolderKanban, Clock } from "lucide-react";
 import { FormMockup, DialogMockup, FormField, FormButton, FormTextarea, FormSelect, StepIndicator } from "@/components/docs/FormMockup";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
@@ -120,12 +120,32 @@ export default function TasksDocs() {
                             { value: "low", label: "Low" },
                           ]}
                         />
+                        <FormSelect
+                          label="Project"
+                          placeholder="Select project (optional)"
+                          value=""
+                          options={[
+                            { value: "", label: "No Project" },
+                            { value: "project-1", label: "Q1 2024 Initiative" },
+                            { value: "project-2", label: "Infrastructure Upgrade" },
+                          ]}
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <FormField
+                          label="Start Date"
+                          type="date"
+                          value="2024-02-01"
+                        />
                         <FormField
                           label="Due Date"
                           type="date"
                           value="2024-02-15"
                         />
                       </div>
+                      <p className="text-xs text-muted-foreground">
+                        <strong>Note:</strong> Start Date defaults to the creation date if not specified.
+                      </p>
                       <FormSelect
                         label="Assign To"
                         placeholder="Select assignee(s)"
@@ -177,6 +197,35 @@ export default function TasksDocs() {
                 <li>At least one assignee (required)</li>
                 <li>Due date (may be required or optional)</li>
               </ul>
+            </div>
+
+            <Separator />
+
+            <div>
+              <h3 className="font-semibold mb-2">New Fields</h3>
+              <div className="space-y-3">
+                <div className="p-3 bg-muted rounded-lg">
+                  <h4 className="font-semibold text-sm mb-1 flex items-center gap-2">
+                    <Clock className="h-4 w-4" />
+                    Start Date
+                  </h4>
+                  <p className="text-xs text-muted-foreground">
+                    You can now set a custom start date for tasks. If not specified, the start date
+                    defaults to the task creation date. Use the date picker to select a specific start date.
+                  </p>
+                </div>
+                <div className="p-3 bg-muted rounded-lg">
+                  <h4 className="font-semibold text-sm mb-1 flex items-center gap-2">
+                    <FolderKanban className="h-4 w-4" />
+                    Project Association
+                  </h4>
+                  <p className="text-xs text-muted-foreground">
+                    Tasks can be optionally associated with a project. This helps organize related tasks
+                    together and provides better project management capabilities. Select a project from
+                    the dropdown, or leave it as "No Project" for standalone tasks.
+                  </p>
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -254,9 +303,22 @@ export default function TasksDocs() {
                 <li><strong>Priority:</strong> High, Medium, Low</li>
                 <li><strong>Assignee:</strong> Filter by who the task is assigned to</li>
                 <li><strong>Task Type:</strong> Filter by type of task</li>
+                <li><strong>Project:</strong> Filter by project association - view all tasks for a specific project</li>
                 <li><strong>Department:</strong> Filter by department</li>
                 <li><strong>Due Date:</strong> Filter by due date range or overdue tasks</li>
                 <li><strong>Created By:</strong> Filter by who created the task</li>
+              </ul>
+            </div>
+            <div>
+              <h3 className="font-semibold mb-2">Project Filtering</h3>
+              <p className="text-sm text-muted-foreground mb-2">
+                The tasks list includes a Project filter that allows you to:
+              </p>
+              <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
+                <li>View all tasks associated with a specific project</li>
+                <li>View tasks that are not associated with any project</li>
+                <li>See project information in the tasks table (Project column)</li>
+                <li>Click on a project name to navigate to the project details page</li>
               </ul>
             </div>
           </CardContent>
@@ -371,6 +433,182 @@ export default function TasksDocs() {
                   You can view the history of recurring task instances and modify or cancel
                   the recurrence pattern at any time.
                 </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <Eye className="h-6 w-6 text-blue-600" />
+              <CardTitle>Task Details Page</CardTitle>
+            </div>
+            <CardDescription>Viewing and managing individual task details</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <h3 className="font-semibold mb-2">Accessing Task Details</h3>
+              <p className="text-sm text-muted-foreground mb-2">
+                Click on any task from the tasks list to view its detailed information page. The task details page provides
+                a comprehensive view of all task information with an improved, organized layout.
+              </p>
+              <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
+                <li>URL format: <code className="bg-muted px-1 py-0.5 rounded">/admin/tasks/[taskId]</code></li>
+                <li>Accessible by clicking any task title or ID from the tasks list</li>
+                <li>Requires <code className="bg-muted px-1 py-0.5 rounded">tasks:read</code> permission</li>
+              </ul>
+            </div>
+
+            <Separator />
+
+            <div>
+              <h3 className="font-semibold mb-2">Improved Layout Structure</h3>
+              <p className="text-sm text-muted-foreground mb-3">
+                The task details page features a modern, organized layout with three main sections:
+              </p>
+
+              <div className="space-y-4">
+                <div className="p-3 bg-muted rounded-lg">
+                  <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    Header Section
+                  </h4>
+                  <ul className="list-disc list-inside space-y-1 text-xs text-muted-foreground ml-6">
+                    <li>Task title prominently displayed</li>
+                    <li>Status badges row showing: status, priority, task type, project, and assignment type</li>
+                    <li>Action buttons: History, Complete, Edit, and Delete</li>
+                  </ul>
+                </div>
+
+                <div className="p-3 bg-muted rounded-lg">
+                  <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                    <CheckSquare className="h-4 w-4" />
+                    Tabbed Content Area
+                  </h4>
+                  <p className="text-xs text-muted-foreground mb-2">
+                    Three tabs organize different aspects of the task:
+                  </p>
+                  <ul className="list-disc list-inside space-y-1 text-xs text-muted-foreground ml-6">
+                    <li><strong>Overview:</strong> Main task information, assignments, and file attachments</li>
+                    <li><strong>Comments:</strong> Comment thread for team communication</li>
+                    <li><strong>Activity:</strong> Audit logs and activity history</li>
+                  </ul>
+                </div>
+
+                <div className="p-3 bg-muted rounded-lg">
+                  <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                    <Calendar className="h-4 w-4" />
+                    Quick Info Sidebar
+                  </h4>
+                  <p className="text-xs text-muted-foreground mb-2">
+                    Consolidated sidebar card containing:
+                  </p>
+                  <ul className="list-disc list-inside space-y-1 text-xs text-muted-foreground ml-6">
+                    <li>Start date, due date, and completion date</li>
+                    <li>Location information</li>
+                    <li>Project association (if applicable)</li>
+                    <li>Metadata (created date, last updated, parent task)</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <Separator />
+
+            <div>
+              <h3 className="font-semibold mb-2">Overview Tab Features</h3>
+              <div className="space-y-3">
+                <div>
+                  <h4 className="text-sm font-semibold mb-1">Task Details Card</h4>
+                  <ul className="list-disc list-inside space-y-1 text-xs text-muted-foreground ml-4">
+                    <li>Full task description</li>
+                    <li>Task notes (if available)</li>
+                    <li>Visual progress bar with percentage</li>
+                    <li>Form links (if task was created from a form)</li>
+                  </ul>
+                </div>
+                <div>
+                  <h4 className="text-sm font-semibold mb-1">Assignments Card</h4>
+                  <ul className="list-disc list-inside space-y-1 text-xs text-muted-foreground ml-4">
+                    <li>Grid layout for multiple assigned users</li>
+                    <li>Assigned user, role, or asset information</li>
+                    <li>"Reassign" button for quick reassignment</li>
+                  </ul>
+                </div>
+                <div>
+                  <h4 className="text-sm font-semibold mb-1">File Attachments Card</h4>
+                  <ul className="list-disc list-inside space-y-1 text-xs text-muted-foreground ml-4">
+                    <li>List of all attached files</li>
+                    <li>File upload interface</li>
+                    <li>Download and delete file options</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <Separator />
+
+            <div>
+              <h3 className="font-semibold mb-2">Editing Tasks</h3>
+              <p className="text-sm text-muted-foreground mb-2">
+                Click the "Edit" button in the header to open the edit modal. The edit form includes:
+              </p>
+              <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
+                <li>All standard task fields (title, description, priority, status, etc.)</li>
+                <li><strong>Start Date:</strong> Set or modify the task start date using a date picker</li>
+                <li><strong>Project:</strong> Associate the task with a project or remove project association</li>
+                <li>Due date selection</li>
+                <li>Multiple user assignment</li>
+                <li>Form and form submission linking</li>
+              </ul>
+            </div>
+
+            <Separator />
+
+            <div>
+              <h3 className="font-semibold mb-2">Key Features</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="p-3 border rounded-lg">
+                  <div className="flex items-center gap-2 mb-1">
+                    <FolderKanban className="h-4 w-4 text-primary" />
+                    <h4 className="text-sm font-semibold">Project Association</h4>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Tasks can be associated with projects. The project badge appears in the header, and you can
+                    click it to navigate to the project details page.
+                  </p>
+                </div>
+                <div className="p-3 border rounded-lg">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Clock className="h-4 w-4 text-primary" />
+                    <h4 className="text-sm font-semibold">Start Date</h4>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Tasks now have a start date field. By default, this is set to the creation date,
+                    but can be customized when creating or editing tasks.
+                  </p>
+                </div>
+                <div className="p-3 border rounded-lg">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Users className="h-4 w-4 text-primary" />
+                    <h4 className="text-sm font-semibold">Better Organization</h4>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Information is organized into logical sections with clear visual hierarchy,
+                    making it easier to find and understand task details.
+                  </p>
+                </div>
+                <div className="p-3 border rounded-lg">
+                  <div className="flex items-center gap-2 mb-1">
+                    <FileText className="h-4 w-4 text-primary" />
+                    <h4 className="text-sm font-semibold">Tabbed Interface</h4>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Comments and activity logs are separated into their own tabs, reducing clutter
+                    and making the page easier to navigate.
+                  </p>
+                </div>
               </div>
             </div>
           </CardContent>

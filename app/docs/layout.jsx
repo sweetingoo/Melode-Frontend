@@ -62,6 +62,7 @@ import {
     Tag,
     Calendar,
     ArrowRight,
+    FolderKanban,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 
@@ -192,6 +193,11 @@ const documentationCategories = [
                 title: "Task Types",
                 href: "/docs/task-types",
                 icon: Type,
+            },
+            {
+                title: "Projects Management",
+                href: "/docs/projects",
+                icon: FolderKanban,
             },
             {
                 title: "Forms Management",

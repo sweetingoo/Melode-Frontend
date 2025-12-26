@@ -100,6 +100,12 @@ const documentationCategories = [
         icon: Settings,
       },
       {
+        title: "Projects Management",
+        description: "Organize tasks by grouping them into projects",
+        href: "/docs/projects",
+        icon: FolderKanban,
+      },
+      {
         title: "Forms Management",
         description: "Create, manage, and submit custom forms",
         href: "/docs/forms",
