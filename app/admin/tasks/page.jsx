@@ -86,6 +86,7 @@ import {
   Shield,
   Repeat,
   ChevronDown,
+  FolderKanban,
 } from "lucide-react";
 import {
   useTasks,
@@ -107,6 +108,7 @@ import { useAssets } from "@/hooks/useAssets";
 import { useRoles, useRoleUsers } from "@/hooks/useRoles";
 import { useActiveTaskTypes, useCreateTaskType } from "@/hooks/useTaskTypes";
 import { useForms } from "@/hooks/useForms";
+import { useProjects } from "@/hooks/useProjects";
 import { useCurrentUser } from "@/hooks/useAuth";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { format } from "date-fns";
@@ -136,6 +138,7 @@ const TasksPage = () => {
     task_type: "",
     assigned_to_user_id: "",
     is_overdue: "",
+    project_id: "",
   });
   const [taskFormData, setTaskFormData] = useState({
     title: "",
@@ -165,6 +168,7 @@ const TasksPage = () => {
   });
   const [selectedUserIds, setSelectedUserIds] = useState([]);
   const [dueDate, setDueDate] = useState(null);
+  const [startDate, setStartDate] = useState(null);
   const [assignmentMode, setAssignmentMode] = useState("multiple-users"); // "role", "user", "asset", "multiple-users"
   const [editAssignmentMode, setEditAssignmentMode] = useState("multiple-users");
   const [assetAssignmentType, setAssetAssignmentType] = useState("user"); // "user" or "role" for asset assignment
@@ -271,6 +275,7 @@ const TasksPage = () => {
   const { data: rolesData } = useRoles();
   const { data: activeTaskTypes } = useActiveTaskTypes();
   const { data: formsResponse } = useForms();
+  const { data: projectsResponse } = useProjects({ per_page: 1000 });
   const { data: currentUserData } = useCurrentUser();
   const isMobile = useIsMobile();
 
@@ -332,6 +337,20 @@ const TasksPage = () => {
       forms = formsResponse.data;
     } else if (formsResponse.results && Array.isArray(formsResponse.results)) {
       forms = formsResponse.results;
+    }
+  }
+
+  // Handle different API response structures for projects
+  let projects = [];
+  if (projectsResponse) {
+    if (Array.isArray(projectsResponse)) {
+      projects = projectsResponse;
+    } else if (projectsResponse.projects && Array.isArray(projectsResponse.projects)) {
+      projects = projectsResponse.projects;
+    } else if (projectsResponse.data && Array.isArray(projectsResponse.data)) {
+      projects = projectsResponse.data;
+    } else if (projectsResponse.results && Array.isArray(projectsResponse.results)) {
+      projects = projectsResponse.results;
     }
   }
 
@@ -653,6 +672,14 @@ const TasksPage = () => {
         taskData.due_date = format(dueDate, "yyyy-MM-dd'T'HH:mm:ss");
       }
 
+      // Include start_date - default to current date if not set
+      if (startDate) {
+        taskData.start_date = format(startDate, "yyyy-MM-dd'T'HH:mm:ss");
+      } else {
+        // Default to current date/time if not specified
+        taskData.start_date = format(new Date(), "yyyy-MM-dd'T'HH:mm:ss");
+      }
+
       if (taskFormData.priority) {
         taskData.priority = taskFormData.priority;
       }
@@ -771,6 +798,13 @@ const TasksPage = () => {
         taskData.due_date = format(dueDate, "yyyy-MM-dd'T'HH:mm:ss");
       } else if (taskFormData.due_date) {
         taskData.due_date = taskFormData.due_date;
+      }
+
+      // Include start_date if set, otherwise use existing or default
+      if (startDate) {
+        taskData.start_date = format(startDate, "yyyy-MM-dd'T'HH:mm:ss");
+      } else if (taskFormData.start_date) {
+        taskData.start_date = taskFormData.start_date;
       }
 
       // Only include location_id if it has a value
@@ -970,9 +1004,11 @@ const TasksPage = () => {
       assigned_to_asset_id: task.assigned_to_asset_id || "",
       form_id: task.form_id || "",
       form_submission_id: task.form_submission_id || "",
+      project_id: task.project_id || "",
     });
     setSelectedUserIds(task.assigned_user_ids || []);
     setDueDate(task.due_date ? new Date(task.due_date) : null);
+    setStartDate(task.start_date ? new Date(task.start_date) : null);
 
     // Determine assignment mode based on task data
     if (task.assigned_to_role_id) {
@@ -1257,7 +1293,45 @@ const TasksPage = () => {
                   ))}
                 </SelectContent>
               </Select>
-              {(filters.status || filters.priority || filters.task_type) && (
+              <Select
+                value={filters.project_id || "all"}
+                onValueChange={(value) =>
+                  setFilters({ ...filters, project_id: value === "all" ? "" : value })
+                }
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Project" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Projects</SelectItem>
+                  {projects.map((project) => (
+                    <SelectItem key={project.id} value={project.id.toString()}>
+                      {project.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select
+                value={filters.assigned_to_user_id || "all"}
+                onValueChange={(value) =>
+                  setFilters({ ...filters, assigned_to_user_id: value === "all" ? "" : value })
+                }
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Assigned To" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Users</SelectItem>
+                  {users.map((user) => (
+                    <SelectItem key={user.id} value={user.id.toString()}>
+                      {user.display_name ||
+                        `${user.first_name || ""} ${user.last_name || ""}`.trim() ||
+                        user.email}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {(filters.status || filters.priority || filters.task_type || filters.project_id || filters.assigned_to_user_id) && (
                 <Button
                   variant="outline"
                   onClick={() =>
@@ -1267,6 +1341,7 @@ const TasksPage = () => {
                       task_type: "",
                       assigned_to_user_id: "",
                       is_overdue: "",
+                      project_id: "",
                     })
                   }
                   className="w-full sm:w-auto"
@@ -1428,6 +1503,31 @@ const TasksPage = () => {
                     {/* Task Details Grid */}
                     <div className="grid grid-cols-2 gap-3 text-sm">
                       <div>
+                        <span className="text-muted-foreground">Project:</span>
+                        <div className="mt-1">
+                          {task.project_id ? (
+                            (() => {
+                              const project = projects.find((p) => p.id === task.project_id);
+                              return project ? (
+                                <Link
+                                  href={`/admin/projects/${project.id}`}
+                                  className="inline-flex items-center gap-1 hover:underline"
+                                >
+                                  <FolderKanban className="h-3 w-3" />
+                                  <Badge variant="outline" className="text-xs">
+                                    {project.name}
+                                  </Badge>
+                                </Link>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">Unknown Project</span>
+                              );
+                            })()
+                          ) : (
+                            <span className="text-xs text-muted-foreground">No Project</span>
+                          )}
+                        </div>
+                      </div>
+                      <div>
                         <span className="text-muted-foreground">Type:</span>
                         <div className="mt-1">
                           {(() => {
@@ -1515,6 +1615,7 @@ const TasksPage = () => {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="min-w-[200px]">Title</TableHead>
+                    <TableHead className="min-w-[120px]">Project</TableHead>
                     <TableHead className="min-w-[120px]">Type</TableHead>
                     <TableHead className="min-w-[100px]">Status</TableHead>
                     <TableHead className="min-w-[100px]">Priority</TableHead>
@@ -1565,6 +1666,28 @@ const TasksPage = () => {
                             </Badge>
                           )}
                         </div>
+                      </TableCell>
+                      <TableCell>
+                        {task.project_id ? (
+                          (() => {
+                            const project = projects.find((p) => p.id === task.project_id);
+                            return project ? (
+                              <Link
+                                href={`/admin/projects/${project.id}`}
+                                className="inline-flex items-center gap-1 hover:underline"
+                              >
+                                <FolderKanban className="h-3 w-3" />
+                                <Badge variant="outline" className="text-xs">
+                                  {project.name}
+                                </Badge>
+                              </Link>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">Unknown Project</span>
+                            );
+                          })()
+                        ) : (
+                          <span className="text-xs text-muted-foreground">No Project</span>
+                        )}
                       </TableCell>
                       <TableCell>
                         {(() => {
@@ -1876,30 +1999,81 @@ const TasksPage = () => {
                 rows={4}
               />
             </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <Label>Start Date</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !startDate && "text-muted-foreground"
+                      )}
+                    >
+                      <Clock className="mr-2 h-4 w-4" />
+                      {startDate ? format(startDate, "PPP") : "Pick a date (defaults to now)"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <CalendarComponent
+                      mode="single"
+                      selected={startDate}
+                      onSelect={setStartDate}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+              <div>
+                <Label>Due Date</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !dueDate && "text-muted-foreground"
+                      )}
+                    >
+                      <Calendar className="mr-2 h-4 w-4" />
+                      {dueDate ? format(dueDate, "PPP") : "Pick a date"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <CalendarComponent
+                      mode="single"
+                      selected={dueDate}
+                      onSelect={setDueDate}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+            </div>
             <div>
-              <Label>Due Date</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !dueDate && "text-muted-foreground"
-                    )}
-                  >
-                    <Calendar className="mr-2 h-4 w-4" />
-                    {dueDate ? format(dueDate, "PPP") : "Pick a date"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                  <CalendarComponent
-                    mode="single"
-                    selected={dueDate}
-                    onSelect={setDueDate}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
+              <Label>Project</Label>
+              <Select
+                value={taskFormData.project_id && taskFormData.project_id !== "" ? taskFormData.project_id : "none"}
+                onValueChange={(value) =>
+                  setTaskFormData({
+                    ...taskFormData,
+                    project_id: value === "none" ? "" : value,
+                  })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a project (optional)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No Project</SelectItem>
+                  {projects.map((project) => (
+                    <SelectItem key={project.id} value={project.id.toString()}>
+                      {project.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label>Location</Label>
@@ -2584,6 +2758,30 @@ const TasksPage = () => {
                   />
                 </PopoverContent>
               </Popover>
+            </div>
+            <div>
+              <Label>Project</Label>
+              <Select
+                value={taskFormData.project_id && taskFormData.project_id !== "" ? taskFormData.project_id : "none"}
+                onValueChange={(value) =>
+                  setTaskFormData({
+                    ...taskFormData,
+                    project_id: value === "none" ? "" : value,
+                  })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a project (optional)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No Project</SelectItem>
+                  {projects.map((project) => (
+                    <SelectItem key={project.id} value={project.id.toString()}>
+                      {project.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label>Status</Label>

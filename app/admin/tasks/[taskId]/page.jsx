@@ -43,6 +43,7 @@ import {
   Link as LinkIcon,
   Repeat,
   Plus,
+  FolderKanban,
 } from "lucide-react";
 import {
   useTask,
@@ -57,6 +58,7 @@ import { useAssets } from "@/hooks/useAssets";
 import { useRoles } from "@/hooks/useRoles";
 import { useActiveTaskTypes, useCreateTaskType } from "@/hooks/useTaskTypes";
 import { useForms } from "@/hooks/useForms";
+import { useProject } from "@/hooks/useProjects";
 import { format } from "date-fns";
 import RecurringTaskHistory from "@/components/RecurringTaskHistory";
 import ResourceAuditLogs from "@/components/ResourceAuditLogs";
@@ -105,6 +107,7 @@ const TaskDetailPage = () => {
   });
   const [selectedUserIds, setSelectedUserIds] = useState([]);
   const [dueDate, setDueDate] = useState(null);
+  const [startDate, setStartDate] = useState(null);
   const [showHistory, setShowHistory] = useState(false);
   const [isCreateTaskTypeModalOpen, setIsCreateTaskTypeModalOpen] = useState(false);
   const [taskTypeFormData, setTaskTypeFormData] = useState({
@@ -123,6 +126,7 @@ const TaskDetailPage = () => {
   const { data: rolesData } = useRoles();
   const { data: activeTaskTypes } = useActiveTaskTypes();
   const { data: formsResponse } = useForms();
+  const { data: project } = useProject(task?.project_id, { enabled: !!task?.project_id });
 
   // Handle different API response structures for forms
   let forms = [];
@@ -210,6 +214,7 @@ const TaskDetailPage = () => {
       });
       setSelectedUserIds(task.assigned_user_ids || []);
       setDueDate(task.due_date ? new Date(task.due_date) : null);
+      setStartDate(task.start_date ? new Date(task.start_date) : null);
       setIsEditModalOpen(true);
     }
   };
@@ -270,6 +275,13 @@ const TaskDetailPage = () => {
         taskData.due_date = format(dueDate, "yyyy-MM-dd'T'HH:mm:ss");
       } else if (taskFormData.due_date) {
         taskData.due_date = taskFormData.due_date;
+      }
+
+      // Include start_date if set
+      if (startDate) {
+        taskData.start_date = format(startDate, "yyyy-MM-dd'T'HH:mm:ss");
+      } else if (taskFormData.start_date) {
+        taskData.start_date = taskFormData.start_date;
       }
 
       // Only include location_id if it has a value
@@ -713,6 +725,31 @@ const TaskDetailPage = () => {
             </CardContent>
           </Card>
 
+          {/* Project Information */}
+          {project && (
+            <Card>
+              <CardHeader className="px-4 md:px-6 pt-4 md:pt-6">
+                <CardTitle className="text-lg md:text-xl">Project</CardTitle>
+              </CardHeader>
+              <CardContent className="px-4 md:px-6 pb-4 md:pb-6">
+                <Link
+                  href={`/admin/projects/${project.id}`}
+                  className="flex items-center gap-2 p-3 border rounded-md hover:bg-muted transition-colors"
+                >
+                  <FolderKanban className="h-5 w-5 text-primary" />
+                  <div className="flex-1">
+                    <p className="font-medium">{project.name}</p>
+                    {project.description && (
+                      <p className="text-sm text-muted-foreground line-clamp-1">
+                        {project.description}
+                      </p>
+                    )}
+                  </div>
+                </Link>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Assignment Information */}
           <Card>
             <CardHeader className="px-4 md:px-6 pt-4 md:pt-6">
@@ -1029,30 +1066,57 @@ const TaskDetailPage = () => {
                 rows={4}
               />
             </div>
-            <div>
-              <Label>Due Date</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !dueDate && "text-muted-foreground"
-                    )}
-                  >
-                    <Calendar className="mr-2 h-4 w-4" />
-                    {dueDate ? format(dueDate, "PPP") : "Pick a date"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                  <CalendarComponent
-                    mode="single"
-                    selected={dueDate}
-                    onSelect={setDueDate}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <Label>Start Date</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !startDate && "text-muted-foreground"
+                      )}
+                    >
+                      <Clock className="mr-2 h-4 w-4" />
+                      {startDate ? format(startDate, "PPP") : "Pick a date"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <CalendarComponent
+                      mode="single"
+                      selected={startDate}
+                      onSelect={setStartDate}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+              <div>
+                <Label>Due Date</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !dueDate && "text-muted-foreground"
+                      )}
+                    >
+                      <Calendar className="mr-2 h-4 w-4" />
+                      {dueDate ? format(dueDate, "PPP") : "Pick a date"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <CalendarComponent
+                      mode="single"
+                      selected={dueDate}
+                      onSelect={setDueDate}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
             </div>
             <div>
               <Label>Status</Label>

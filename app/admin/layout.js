@@ -61,6 +61,7 @@ import {
   Activity,
   Database,
   Mail,
+  FolderKanban,
 } from "lucide-react";
 import { assets } from "../assets/assets";
 import Image from "next/image";
@@ -114,6 +115,12 @@ const mainMenuItems = [
     icon: CheckSquare,
     url: "/admin/tasks",
     permission: "tasks:read", // Permission to read tasks
+  },
+  {
+    title: "Projects",
+    icon: FolderKanban,
+    url: "/admin/projects",
+    permission: "project:read", // Permission to read projects
   },
   {
     title: "Forms",
