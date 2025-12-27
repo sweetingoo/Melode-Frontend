@@ -26,6 +26,7 @@ import {
   UserCircle,
   Search,
   X,
+  FolderKanban,
 } from "lucide-react";
 
 const documentationCategories = [
