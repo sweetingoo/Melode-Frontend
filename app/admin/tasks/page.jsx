@@ -114,6 +114,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { format } from "date-fns";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import UserMentionSelector from "@/components/UserMentionSelector";
 import {
   Collapsible,
   CollapsibleContent,
@@ -2279,29 +2280,13 @@ const TasksPage = () => {
                       </p>
                     </div>
                   )}
-                  <div className="border rounded-md p-4 max-h-48 overflow-y-auto">
-                    {users.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">No users available</p>
-                    ) : (
-                      <div className="space-y-2">
-                        {users.map((user) => (
-                          <div key={user.id} className="flex items-center space-x-2">
-                            <input
-                              type="checkbox"
-                              checked={selectedUserIds.includes(user.id)}
-                              onChange={() => toggleUserSelection(user.id)}
-                              className="h-4 w-4"
-                            />
-                            <label className="text-sm">
-                              {user.display_name ||
-                                `${user.first_name || ""} ${user.last_name || ""}`.trim() ||
-                                user.email}
-                            </label>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                  <UserMentionSelector
+                    users={users}
+                    selectedUserIds={selectedUserIds}
+                    onSelectionChange={setSelectedUserIds}
+                    placeholder="Type to search and select users..."
+                    className="w-full"
+                  />
                   {formErrors.assignment && assignmentMode === "multiple-users" && (
                     <p className="text-sm text-red-600">{formErrors.assignment}</p>
                   )}
@@ -2375,12 +2360,14 @@ const TasksPage = () => {
                       </p>
                     </div>
                   </div>
-                  <Select
-                    value={taskFormData.assigned_to_user_id && taskFormData.assigned_to_user_id !== "" ? taskFormData.assigned_to_user_id : undefined}
-                    onValueChange={(value) => {
+                  <UserMentionSelector
+                    users={users}
+                    selectedUserIds={taskFormData.assigned_to_user_id ? [parseInt(taskFormData.assigned_to_user_id)] : []}
+                    onSelectionChange={(userIds) => {
+                      const userId = userIds.length > 0 ? userIds[0].toString() : "";
                       setTaskFormData({
                         ...taskFormData,
-                        assigned_to_user_id: value,
+                        assigned_to_user_id: userId,
                         // Clear other assignment types when single user is selected
                         assigned_to_role_id: "",
                         assigned_to_asset_id: "",
@@ -2388,20 +2375,10 @@ const TasksPage = () => {
                       });
                       setSelectedUserIds([]);
                     }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select user" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {users.map((user) => (
-                        <SelectItem key={user.id} value={user.id.toString()}>
-                          {user.display_name ||
-                            `${user.first_name || ""} ${user.last_name || ""}`.trim() ||
-                            user.email}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    placeholder="Type to search and select a user..."
+                    singleSelection={true}
+                    className="w-full"
+                  />
                 </TabsContent>
 
                 {/* Asset Tab */}
@@ -2456,32 +2433,24 @@ const TasksPage = () => {
                         </TabsList>
                       </div>
                       <TabsContent value="user" className="mt-3">
-                        <Select
-                          value={taskFormData.assigned_to_user_id && taskFormData.assigned_to_user_id !== "" ? taskFormData.assigned_to_user_id : undefined}
-                          onValueChange={(value) => {
+                        <UserMentionSelector
+                          users={users}
+                          selectedUserIds={taskFormData.assigned_to_user_id ? [parseInt(taskFormData.assigned_to_user_id)] : []}
+                          onSelectionChange={(userIds) => {
+                            const userId = userIds.length > 0 ? userIds[0].toString() : "";
                             setTaskFormData({
                               ...taskFormData,
-                              assigned_to_user_id: value,
+                              assigned_to_user_id: userId,
                               assigned_to_role_id: "", // Clear role when user is selected
                             });
                             if (formErrors.asset_assignment) {
                               setFormErrors({ ...formErrors, asset_assignment: null });
                             }
                           }}
-                        >
-                          <SelectTrigger className={formErrors.asset_assignment ? "border-red-500" : ""}>
-                            <SelectValue placeholder="Select user" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {users.map((user) => (
-                              <SelectItem key={user.id} value={user.id.toString()}>
-                                {user.display_name ||
-                                  `${user.first_name || ""} ${user.last_name || ""}`.trim() ||
-                                  user.email}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                          placeholder="Type to search and select a user..."
+                          singleSelection={true}
+                          className="w-full"
+                        />
                       </TabsContent>
                       <TabsContent value="role" className="mt-3">
                         <Select
@@ -3104,12 +3073,14 @@ const TasksPage = () => {
                       </p>
                     </div>
                   </div>
-                  <Select
-                    value={taskFormData.assigned_to_user_id && taskFormData.assigned_to_user_id !== "" ? taskFormData.assigned_to_user_id : undefined}
-                    onValueChange={(value) => {
+                  <UserMentionSelector
+                    users={users}
+                    selectedUserIds={taskFormData.assigned_to_user_id ? [parseInt(taskFormData.assigned_to_user_id)] : []}
+                    onSelectionChange={(userIds) => {
+                      const userId = userIds.length > 0 ? userIds[0].toString() : "";
                       setTaskFormData({
                         ...taskFormData,
-                        assigned_to_user_id: value,
+                        assigned_to_user_id: userId,
                         // Clear other assignment types when single user is selected
                         assigned_to_role_id: "",
                         assigned_to_asset_id: "",
@@ -3117,20 +3088,10 @@ const TasksPage = () => {
                       });
                       setSelectedUserIds([]);
                     }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select user" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {users.map((user) => (
-                        <SelectItem key={user.id} value={user.id.toString()}>
-                          {user.display_name ||
-                            `${user.first_name || ""} ${user.last_name || ""}`.trim() ||
-                            user.email}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    placeholder="Type to search and select a user..."
+                    singleSelection={true}
+                    className="w-full"
+                  />
                 </TabsContent>
 
                 {/* Asset Tab */}

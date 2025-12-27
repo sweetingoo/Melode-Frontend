@@ -46,6 +46,7 @@ import {
   FolderKanban,
   MapPin,
 } from "lucide-react";
+import UserMentionSelector from "@/components/UserMentionSelector";
 import {
   useTask,
   useUpdateTask,

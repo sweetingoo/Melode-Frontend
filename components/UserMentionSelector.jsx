@@ -14,6 +14,7 @@ const UserMentionSelector = ({
   placeholder = "Type to search users...",
   maxHeight = "300px",
   className = "",
+  singleSelection = false, // New prop for single selection mode
 }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [isOpen, setIsOpen] = useState(false);
@@ -46,12 +47,20 @@ const UserMentionSelector = ({
   );
 
   const handleUserSelect = (userId) => {
-    const newSelection = [...selectedUserIds, userId];
-    onSelectionChange(newSelection);
-    setSearchTerm("");
-    // Keep popover open for multiple selections
-    if (inputRef.current) {
-      inputRef.current.focus();
+    if (singleSelection) {
+      // For single selection, replace the selection
+      onSelectionChange([userId]);
+      setSearchTerm("");
+      setIsOpen(false); // Close dropdown after selection
+    } else {
+      // For multiple selection, add to the list
+      const newSelection = [...selectedUserIds, userId];
+      onSelectionChange(newSelection);
+      setSearchTerm("");
+      // Keep popover open for multiple selections
+      if (inputRef.current) {
+        inputRef.current.focus();
+      }
     }
   };
 
@@ -177,8 +186,8 @@ const UserMentionSelector = ({
         )}
       </div>
 
-      {/* Selection Count */}
-      {selectedUserIds.length > 0 && (
+      {/* Selection Count - Only show for multiple selection */}
+      {!singleSelection && selectedUserIds.length > 0 && (
         <p className="text-xs text-muted-foreground">
           {selectedUserIds.length} user{selectedUserIds.length !== 1 ? "s" : ""} selected
         </p>

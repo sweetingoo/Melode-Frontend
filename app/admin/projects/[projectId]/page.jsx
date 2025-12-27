@@ -65,6 +65,7 @@ import {
   Info,
   Repeat,
 } from "lucide-react";
+import UserMentionSelector from "@/components/UserMentionSelector";
 import {
   useProject,
   useUpdateProject,
@@ -104,7 +105,7 @@ const ProjectDetailPage = () => {
   const [isCreateTaskModalOpen, setIsCreateTaskModalOpen] = useState(false);
   const [isAddMemberModalOpen, setIsAddMemberModalOpen] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState("");
-  const [selectedUserId, setSelectedUserId] = useState("");
+  const [selectedMemberUserIds, setSelectedMemberUserIds] = useState([]);
   const [taskSearchTerm, setTaskSearchTerm] = useState("");
   const [taskPage, setTaskPage] = useState(1);
   const [accumulatedTasks, setAccumulatedTasks] = useState([]);
@@ -460,15 +461,18 @@ const ProjectDetailPage = () => {
   };
 
   const handleAddMember = async () => {
-    if (!selectedUserId) return;
+    if (selectedMemberUserIds.length === 0) return;
 
     try {
-      await addMemberMutation.mutateAsync({
-        projectId,
-        userId: parseInt(selectedUserId),
-      });
+      // Add all selected members
+      for (const userId of selectedMemberUserIds) {
+        await addMemberMutation.mutateAsync({
+          projectId,
+          userId: typeof userId === 'number' ? userId : parseInt(userId),
+        });
+      }
       setIsAddMemberModalOpen(false);
-      setSelectedUserId("");
+      setSelectedMemberUserIds([]);
     } catch (error) {
       console.error("Failed to add member:", error);
     }
@@ -1680,32 +1684,24 @@ const ProjectDetailPage = () => {
                         </TabsList>
                       </div>
                       <TabsContent value="user" className="mt-3">
-                        <Select
-                          value={taskFormData.assigned_to_user_id && taskFormData.assigned_to_user_id !== "" ? taskFormData.assigned_to_user_id : undefined}
-                          onValueChange={(value) => {
+                        <UserMentionSelector
+                          users={users}
+                          selectedUserIds={taskFormData.assigned_to_user_id ? [parseInt(taskFormData.assigned_to_user_id)] : []}
+                          onSelectionChange={(userIds) => {
+                            const userId = userIds.length > 0 ? userIds[0].toString() : "";
                             setTaskFormData({
                               ...taskFormData,
-                              assigned_to_user_id: value,
+                              assigned_to_user_id: userId,
                               assigned_to_role_id: "",
                             });
                             if (formErrors.asset_assignment) {
                               setFormErrors({ ...formErrors, asset_assignment: null });
                             }
                           }}
-                        >
-                          <SelectTrigger className={formErrors.asset_assignment ? "border-red-500" : ""}>
-                            <SelectValue placeholder="Select user" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {users.map((user) => (
-                              <SelectItem key={user.id} value={user.id.toString()}>
-                                {user.display_name ||
-                                  `${user.first_name || ""} ${user.last_name || ""}`.trim() ||
-                                  user.email}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                          placeholder="Type to search and select a user..."
+                          singleSelection={true}
+                          className="w-full"
+                        />
                       </TabsContent>
                       <TabsContent value="role" className="mt-3">
                         <Select
@@ -1985,34 +1981,21 @@ const ProjectDetailPage = () => {
       <Dialog open={isAddMemberModalOpen} onOpenChange={setIsAddMemberModalOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Add Member to Project</DialogTitle>
+            <DialogTitle>Add Members to Project</DialogTitle>
             <DialogDescription>
-              Select a user to add to this project.
+              Select one or more users to add to this project.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label>User</Label>
-              <Select value={selectedUserId} onValueChange={setSelectedUserId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a user" />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableUsers.length === 0 ? (
-                    <SelectItem value="none" disabled>
-                      No available users
-                    </SelectItem>
-                  ) : (
-                    availableUsers.map((user) => (
-                      <SelectItem key={user.id} value={user.id.toString()}>
-                        {user.display_name ||
-                          `${user.first_name || ""} ${user.last_name || ""}`.trim() ||
-                          user.email}
-                      </SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
+              <Label>Users</Label>
+              <UserMentionSelector
+                users={availableUsers}
+                selectedUserIds={selectedMemberUserIds}
+                onSelectionChange={setSelectedMemberUserIds}
+                placeholder="Type to search and select users..."
+                className="w-full"
+              />
             </div>
           </div>
           <DialogFooter className="gap-2">
@@ -2020,7 +2003,7 @@ const ProjectDetailPage = () => {
               variant="outline"
               onClick={() => {
                 setIsAddMemberModalOpen(false);
-                setSelectedUserId("");
+                setSelectedMemberUserIds([]);
               }}
               className="h-10 min-h-[40px] px-4"
             >
@@ -2028,13 +2011,13 @@ const ProjectDetailPage = () => {
             </Button>
             <Button
               onClick={handleAddMember}
-              disabled={addMemberMutation.isPending || !selectedUserId}
+              disabled={addMemberMutation.isPending || selectedMemberUserIds.length === 0}
               className="h-10 min-h-[40px] px-4"
             >
               {addMemberMutation.isPending && (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               )}
-              Add Member
+              Add {selectedMemberUserIds.length > 0 ? `${selectedMemberUserIds.length} ` : ""}Member{selectedMemberUserIds.length !== 1 ? "s" : ""}
             </Button>
           </DialogFooter>
         </DialogContent>
