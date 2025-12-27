@@ -1509,29 +1509,13 @@ const ProjectDetailPage = () => {
                       Create individual tasks
                     </Label>
                   </div>
-                  <div className="border rounded-md p-4 max-h-48 overflow-y-auto">
-                    {users.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">No users available</p>
-                    ) : (
-                      <div className="space-y-2">
-                        {users.map((user) => (
-                          <div key={user.id} className="flex items-center space-x-2">
-                            <input
-                              type="checkbox"
-                              checked={selectedUserIds.includes(user.id)}
-                              onChange={() => toggleUserSelection(user.id)}
-                              className="h-4 w-4"
-                            />
-                            <label className="text-sm">
-                              {user.display_name ||
-                                `${user.first_name || ""} ${user.last_name || ""}`.trim() ||
-                                user.email}
-                            </label>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                  <UserMentionSelector
+                    users={users}
+                    selectedUserIds={selectedUserIds}
+                    onSelectionChange={setSelectedUserIds}
+                    placeholder="Type to search and select users..."
+                    className="w-full"
+                  />
                   {formErrors.assignment && assignmentMode === "multiple-users" && (
                     <p className="text-sm text-red-600">{formErrors.assignment}</p>
                   )}
@@ -1604,32 +1588,24 @@ const ProjectDetailPage = () => {
                       </p>
                     </div>
                   </div>
-                  <Select
-                    value={taskFormData.assigned_to_user_id && taskFormData.assigned_to_user_id !== "" ? taskFormData.assigned_to_user_id : undefined}
-                    onValueChange={(value) => {
+                  <UserMentionSelector
+                    users={users}
+                    selectedUserIds={taskFormData.assigned_to_user_id ? [parseInt(taskFormData.assigned_to_user_id)] : []}
+                    onSelectionChange={(userIds) => {
+                      const userId = userIds.length > 0 ? userIds[0].toString() : "";
                       setTaskFormData({
                         ...taskFormData,
-                        assigned_to_user_id: value,
+                        assigned_to_user_id: userId,
                         assigned_to_role_id: "",
                         assigned_to_asset_id: "",
                         assigned_user_ids: [],
                       });
                       setSelectedUserIds([]);
                     }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select user" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {users.map((user) => (
-                        <SelectItem key={user.id} value={user.id.toString()}>
-                          {user.display_name ||
-                            `${user.first_name || ""} ${user.last_name || ""}`.trim() ||
-                            user.email}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    placeholder="Type to search and select a user..."
+                    singleSelection={true}
+                    className="w-full"
+                  />
                 </TabsContent>
 
                 {/* Asset Tab */}

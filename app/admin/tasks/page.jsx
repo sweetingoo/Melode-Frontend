@@ -3143,29 +3143,21 @@ const TasksPage = () => {
                         </TabsList>
                       </div>
                       <TabsContent value="user" className="mt-3">
-                        <Select
-                          value={taskFormData.assigned_to_user_id && taskFormData.assigned_to_user_id !== "" ? taskFormData.assigned_to_user_id : undefined}
-                          onValueChange={(value) => {
+                        <UserMentionSelector
+                          users={users}
+                          selectedUserIds={taskFormData.assigned_to_user_id ? [parseInt(taskFormData.assigned_to_user_id)] : []}
+                          onSelectionChange={(userIds) => {
+                            const userId = userIds.length > 0 ? userIds[0].toString() : "";
                             setTaskFormData({
                               ...taskFormData,
-                              assigned_to_user_id: value,
+                              assigned_to_user_id: userId,
                               assigned_to_role_id: "", // Clear role when user is selected
                             });
                           }}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select user" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {users.map((user) => (
-                              <SelectItem key={user.id} value={user.id.toString()}>
-                                {user.display_name ||
-                                  `${user.first_name || ""} ${user.last_name || ""}`.trim() ||
-                                  user.email}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                          placeholder="Type to search and select a user..."
+                          singleSelection={true}
+                          className="w-full"
+                        />
                       </TabsContent>
                       <TabsContent value="role" className="mt-3">
                         <Select
