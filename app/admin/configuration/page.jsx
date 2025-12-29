@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -76,7 +76,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-export default function ConfigurationPage() {
+function ConfigurationPageContent() {
   const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState(searchParams.get("tab") || "settings");
   const [selectedCategory, setSelectedCategory] = useState("");
@@ -1746,6 +1746,18 @@ function DefaultRolePermissionsSection() {
         )}
       </CardContent>
     </Card>
+  );
+}
+
+export default function ConfigurationPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    }>
+      <ConfigurationPageContent />
+    </Suspense>
   );
 }
 
