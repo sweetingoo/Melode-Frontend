@@ -9,7 +9,30 @@ import { useCurrentUser } from "@/hooks/useAuth";
  */
 export const usePermissionsCheck = () => {
   const { data: currentUserData } = useCurrentUser();
-  const currentUserPermissions = currentUserData?.permissions || [];
+  
+  // Extract permissions from roles if top-level permissions array is empty
+  const currentUserPermissions = useMemo(() => {
+    if (!currentUserData) return [];
+    
+    // If top-level permissions exist, use them
+    if (currentUserData.permissions && currentUserData.permissions.length > 0) {
+      return currentUserData.permissions;
+    }
+    
+    // Otherwise, extract from roles
+    if (currentUserData.roles && Array.isArray(currentUserData.roles)) {
+      const allRolePermissions = [];
+      currentUserData.roles.forEach((role) => {
+        if (role.permissions && Array.isArray(role.permissions)) {
+          allRolePermissions.push(...role.permissions);
+        }
+      });
+      return allRolePermissions;
+    }
+    
+    return [];
+  }, [currentUserData]);
+  
   const currentUserDirectPermissions = currentUserData?.direct_permissions || [];
 
   // Extract permission names
@@ -31,6 +54,9 @@ export const usePermissionsCheck = () => {
 
   // Permission check helper
   const hasPermission = useCallback((permission) => {
+    // If user is a superuser, they have all permissions
+    if (currentUserData?.is_superuser) return true;
+    
     if (hasWildcardPermissions) return true;
     if (!permission) return false;
 

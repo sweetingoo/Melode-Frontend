@@ -101,6 +101,10 @@ export const configurationService = {
         organization_code: organisationData.organisation_code || organisationData.organization_code,
         description: organisationData.description,
         is_active: organisationData.is_active,
+        // Include integration_config if provided
+        ...(organisationData.integration_config && {
+          integration_config: organisationData.integration_config,
+        }),
       };
       return await api.put("/settings/organizations/", requestData);
     } catch (error) {

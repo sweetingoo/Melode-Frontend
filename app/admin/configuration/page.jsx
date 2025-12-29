@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -8,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { Separator } from "@/components/ui/separator";
 import {
   Table,
   TableBody,
@@ -68,10 +70,15 @@ import {
   Key,
   CheckSquare,
   X,
+  Mail,
+  Smartphone,
+  CheckCircle2,
 } from "lucide-react";
 import { toast } from "sonner";
 
 export default function ConfigurationPage() {
+  const searchParams = useSearchParams();
+  const [activeTab, setActiveTab] = useState(searchParams.get("tab") || "settings");
   const [selectedCategory, setSelectedCategory] = useState("");
   const [selectedGroup, setSelectedGroup] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
@@ -154,16 +161,77 @@ export default function ConfigurationPage() {
     organisation_code: "",
     description: "",
     is_active: true,
+    integration_config: {
+      sendgrid_api_key: null,
+      twilio_account_sid: null,
+      twilio_auth_token: null,
+      twilio_from_number: null,
+      from_email: null,
+      from_name: null,
+      app_name: null,
+      domain_name: null,
+      frontend_base_url: null,
+      enable_two_way_communication: false,
+      enable_email_replies: false,
+      enable_sms_replies: false,
+      list_unsubscribe_url: null,
+      list_unsubscribe_mailto: null,
+      list_unsubscribe_one_click: true,
+    },
   });
+
+  // Track enabled state for Email and SMS
+  const [emailEnabled, setEmailEnabled] = useState(false);
+  const [smsEnabled, setSmsEnabled] = useState(false);
+  
+  // Store original values when disabling (to restore if re-enabled)
+  const [originalEmailConfig, setOriginalEmailConfig] = useState(null);
+  const [originalSMSConfig, setOriginalSMSConfig] = useState(null);
 
   // Load organisation data when it's fetched from API
   useEffect(() => {
     if (organisationResponse) {
+      const integrationConfig = organisationResponse.integration_config || {
+        sendgrid_api_key: null,
+        twilio_account_sid: null,
+        twilio_auth_token: null,
+        twilio_from_number: null,
+        from_email: null,
+        from_name: null,
+        app_name: null,
+        domain_name: null,
+        frontend_base_url: null,
+        enable_two_way_communication: false,
+        enable_email_replies: false,
+        enable_sms_replies: false,
+        list_unsubscribe_url: null,
+        list_unsubscribe_mailto: null,
+        list_unsubscribe_one_click: true,
+      };
+
       setOrganisationData({
         organisation_name: organisationResponse.organisation_name || "",
         organisation_code: organisationResponse.organisation_code || "",
         description: organisationResponse.description || "",
         is_active: organisationResponse.is_active !== false,
+        integration_config: integrationConfig,
+      });
+
+      // Set enabled state based on whether keys exist
+      const hasEmailConfig = !!integrationConfig.sendgrid_api_key;
+      const hasSMSConfig = !!(integrationConfig.twilio_account_sid && 
+                              integrationConfig.twilio_auth_token && 
+                              integrationConfig.twilio_from_number);
+      
+      setEmailEnabled(hasEmailConfig);
+      setSmsEnabled(hasSMSConfig);
+
+      // Store original values (always store, even if null, so we can restore)
+      setOriginalEmailConfig(integrationConfig.sendgrid_api_key || null);
+      setOriginalSMSConfig({
+        twilio_account_sid: integrationConfig.twilio_account_sid || null,
+        twilio_auth_token: integrationConfig.twilio_auth_token || null,
+        twilio_from_number: integrationConfig.twilio_from_number || null,
       });
     }
   }, [organisationResponse]);
@@ -447,10 +515,11 @@ export default function ConfigurationPage() {
         </div>
       </div>
 
-      <Tabs defaultValue="settings" className="space-y-4">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList>
           <TabsTrigger value="settings">Settings</TabsTrigger>
           <TabsTrigger value="organisation">Organisation</TabsTrigger>
+          <TabsTrigger value="integration">Integration</TabsTrigger>
           <TabsTrigger value="role-defaults">Role Defaults</TabsTrigger>
         </TabsList>
 
@@ -696,6 +765,523 @@ export default function ConfigurationPage() {
                   </Button>
                 </>
               )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Integration Configuration Tab */}
+        <TabsContent value="integration" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Settings className="h-5 w-5" />
+                Integration Configuration
+              </CardTitle>
+              <CardDescription>
+                Configure SendGrid, Twilio, and other integration settings for email and SMS notifications
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* SendGrid Configuration */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Mail className="h-5 w-5" />
+                    <h3 className="text-lg font-semibold">SendGrid Email Configuration</h3>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="email-enabled" className="text-sm font-medium cursor-pointer">
+                      {emailEnabled ? "Enabled" : "Disabled"}
+                    </Label>
+                    <Switch
+                      id="email-enabled"
+                      checked={emailEnabled}
+                      onCheckedChange={(checked) => {
+                        setEmailEnabled(checked);
+                        if (checked) {
+                          // Enable: Restore original value if it exists
+                          setOrganisationData((prev) => ({
+                            ...prev,
+                            integration_config: {
+                              ...prev.integration_config,
+                              sendgrid_api_key: originalEmailConfig || null,
+                            },
+                          }));
+                        } else {
+                          // Disable: Clear the key and store current value
+                          const currentKey = organisationData.integration_config?.sendgrid_api_key;
+                          if (currentKey) {
+                            setOriginalEmailConfig(currentKey);
+                          }
+                          setOrganisationData((prev) => ({
+                            ...prev,
+                            integration_config: {
+                              ...prev.integration_config,
+                              sendgrid_api_key: null,
+                            },
+                          }));
+                        }
+                      }}
+                    />
+                  </div>
+                </div>
+                {emailEnabled && (
+                  <div className="space-y-2">
+                    <Label htmlFor="sendgrid_api_key">
+                      SendGrid API Key
+                      {organisationData.integration_config?.sendgrid_api_key && (
+                        <Badge variant="outline" className="ml-2">✓ Configured</Badge>
+                      )}
+                    </Label>
+                    <Input
+                      id="sendgrid_api_key"
+                      type="password"
+                      value={organisationData.integration_config?.sendgrid_api_key || ""}
+                      onChange={(e) =>
+                        setOrganisationData((prev) => ({
+                          ...prev,
+                          integration_config: {
+                            ...prev.integration_config,
+                            sendgrid_api_key: e.target.value || null,
+                          },
+                        }))
+                      }
+                      placeholder="SG.xxxxxxxxxxxxxxxxxxxx"
+                    />
+                    <p className="text-sm text-muted-foreground">
+                      Required for sending emails. Get your API key from SendGrid dashboard.
+                    </p>
+                  </div>
+                )}
+                {!emailEnabled && (
+                  <div className="p-4 bg-muted/50 border rounded-lg">
+                    <p className="text-sm text-muted-foreground">
+                      Email configuration is disabled. Enable it to configure SendGrid API key.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <Separator />
+
+              {/* Twilio Configuration */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Smartphone className="h-5 w-5" />
+                    <h3 className="text-lg font-semibold">Twilio SMS Configuration</h3>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="sms-enabled" className="text-sm font-medium cursor-pointer">
+                      {smsEnabled ? "Enabled" : "Disabled"}
+                    </Label>
+                    <Switch
+                      id="sms-enabled"
+                      checked={smsEnabled}
+                      onCheckedChange={(checked) => {
+                        setSmsEnabled(checked);
+                        if (checked) {
+                          // Enable: Restore original values if they exist
+                          setOrganisationData((prev) => ({
+                            ...prev,
+                            integration_config: {
+                              ...prev.integration_config,
+                              twilio_account_sid: originalSMSConfig?.twilio_account_sid || null,
+                              twilio_auth_token: originalSMSConfig?.twilio_auth_token || null,
+                              twilio_from_number: originalSMSConfig?.twilio_from_number || null,
+                            },
+                          }));
+                        } else {
+                          // Disable: Clear all SMS keys and store current values
+                          const currentConfig = {
+                            twilio_account_sid: organisationData.integration_config?.twilio_account_sid,
+                            twilio_auth_token: organisationData.integration_config?.twilio_auth_token,
+                            twilio_from_number: organisationData.integration_config?.twilio_from_number,
+                          };
+                          if (currentConfig.twilio_account_sid || currentConfig.twilio_auth_token || currentConfig.twilio_from_number) {
+                            setOriginalSMSConfig(currentConfig);
+                          }
+                          setOrganisationData((prev) => ({
+                            ...prev,
+                            integration_config: {
+                              ...prev.integration_config,
+                              twilio_account_sid: null,
+                              twilio_auth_token: null,
+                              twilio_from_number: null,
+                            },
+                          }));
+                        }
+                      }}
+                    />
+                  </div>
+                </div>
+                {smsEnabled && (
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="twilio_account_sid">Twilio Account SID</Label>
+                        <Input
+                          id="twilio_account_sid"
+                          value={organisationData.integration_config?.twilio_account_sid || ""}
+                          onChange={(e) =>
+                            setOrganisationData((prev) => ({
+                              ...prev,
+                              integration_config: {
+                                ...prev.integration_config,
+                                twilio_account_sid: e.target.value || null,
+                              },
+                            }))
+                          }
+                          placeholder="ACxxxxxxxxxxxxxxxxxxxx"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="twilio_auth_token">Twilio Auth Token</Label>
+                        <Input
+                          id="twilio_auth_token"
+                          type="password"
+                          value={organisationData.integration_config?.twilio_auth_token || ""}
+                          onChange={(e) =>
+                            setOrganisationData((prev) => ({
+                              ...prev,
+                              integration_config: {
+                                ...prev.integration_config,
+                                twilio_auth_token: e.target.value || null,
+                              },
+                            }))
+                          }
+                          placeholder="Your auth token"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="twilio_from_number">Twilio From Number</Label>
+                      <Input
+                        id="twilio_from_number"
+                        value={organisationData.integration_config?.twilio_from_number || ""}
+                        onChange={(e) =>
+                          setOrganisationData((prev) => ({
+                            ...prev,
+                            integration_config: {
+                              ...prev.integration_config,
+                              twilio_from_number: e.target.value || null,
+                            },
+                          }))
+                        }
+                        placeholder="+1234567890"
+                      />
+                      <p className="text-sm text-muted-foreground">
+                        Required for sending SMS. Get credentials from Twilio console. Format: E.164 (e.g., +1234567890)
+                      </p>
+                    </div>
+                  </>
+                )}
+                {!smsEnabled && (
+                  <div className="p-4 bg-muted/50 border rounded-lg">
+                    <p className="text-sm text-muted-foreground">
+                      SMS configuration is disabled. Enable it to configure Twilio credentials.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <Separator />
+
+              {/* Email Sender Settings */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold">Email Sender Settings</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="from_email">From Email</Label>
+                    <Input
+                      id="from_email"
+                      type="email"
+                      value={organisationData.integration_config?.from_email || ""}
+                      onChange={(e) =>
+                        setOrganisationData((prev) => ({
+                          ...prev,
+                          integration_config: {
+                            ...prev.integration_config,
+                            from_email: e.target.value || null,
+                          },
+                        }))
+                      }
+                      placeholder="noreply@example.com"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="from_name">From Name</Label>
+                    <Input
+                      id="from_name"
+                      value={organisationData.integration_config?.from_name || ""}
+                      onChange={(e) =>
+                        setOrganisationData((prev) => ({
+                          ...prev,
+                          integration_config: {
+                            ...prev.integration_config,
+                            from_name: e.target.value || null,
+                          },
+                        }))
+                      }
+                      placeholder="Melode"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="app_name">App Name</Label>
+                    <Input
+                      id="app_name"
+                      value={organisationData.integration_config?.app_name || ""}
+                      onChange={(e) =>
+                        setOrganisationData((prev) => ({
+                          ...prev,
+                          integration_config: {
+                            ...prev.integration_config,
+                            app_name: e.target.value || null,
+                          },
+                        }))
+                      }
+                      placeholder="Melode"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="domain_name">Domain Name</Label>
+                    <Input
+                      id="domain_name"
+                      value={organisationData.integration_config?.domain_name || ""}
+                      onChange={(e) =>
+                        setOrganisationData((prev) => ({
+                          ...prev,
+                          integration_config: {
+                            ...prev.integration_config,
+                            domain_name: e.target.value || null,
+                          },
+                        }))
+                      }
+                      placeholder="melode.co.uk"
+                    />
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <Label htmlFor="frontend_base_url">Frontend Base URL</Label>
+                    <Input
+                      id="frontend_base_url"
+                      type="url"
+                      value={organisationData.integration_config?.frontend_base_url || ""}
+                      onChange={(e) =>
+                        setOrganisationData((prev) => ({
+                          ...prev,
+                          integration_config: {
+                            ...prev.integration_config,
+                            frontend_base_url: e.target.value || null,
+                          },
+                        }))
+                      }
+                      placeholder="https://app.melode.co.uk"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Feature Flags */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold">Feature Flags</h3>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="enable_two_way_communication">Enable Two-Way Communication</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Allow users to reply to messages via email or SMS
+                      </p>
+                    </div>
+                    <Switch
+                      id="enable_two_way_communication"
+                      checked={organisationData.integration_config?.enable_two_way_communication || false}
+                      onCheckedChange={(checked) =>
+                        setOrganisationData((prev) => ({
+                          ...prev,
+                          integration_config: {
+                            ...prev.integration_config,
+                            enable_two_way_communication: checked,
+                            // Disable reply features if two-way is disabled
+                            ...(checked === false && {
+                              enable_email_replies: false,
+                              enable_sms_replies: false,
+                            }),
+                          },
+                        }))
+                      }
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="enable_email_replies">Enable Email Replies</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Allow users to reply to messages via email
+                      </p>
+                    </div>
+                    <Switch
+                      id="enable_email_replies"
+                      checked={organisationData.integration_config?.enable_email_replies || false}
+                      onCheckedChange={(checked) =>
+                        setOrganisationData((prev) => ({
+                          ...prev,
+                          integration_config: {
+                            ...prev.integration_config,
+                            enable_email_replies: checked,
+                          },
+                        }))
+                      }
+                      disabled={!organisationData.integration_config?.enable_two_way_communication}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="enable_sms_replies">Enable SMS Replies</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Allow users to reply to messages via SMS
+                      </p>
+                    </div>
+                    <Switch
+                      id="enable_sms_replies"
+                      checked={organisationData.integration_config?.enable_sms_replies || false}
+                      onCheckedChange={(checked) =>
+                        setOrganisationData((prev) => ({
+                          ...prev,
+                          integration_config: {
+                            ...prev.integration_config,
+                            enable_sms_replies: checked,
+                          },
+                        }))
+                      }
+                      disabled={!organisationData.integration_config?.enable_two_way_communication}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Unsubscribe Settings */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold">Unsubscribe Settings</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="list_unsubscribe_url">List-Unsubscribe URL</Label>
+                    <Input
+                      id="list_unsubscribe_url"
+                      type="url"
+                      value={organisationData.integration_config?.list_unsubscribe_url || ""}
+                      onChange={(e) =>
+                        setOrganisationData((prev) => ({
+                          ...prev,
+                          integration_config: {
+                            ...prev.integration_config,
+                            list_unsubscribe_url: e.target.value || null,
+                          },
+                        }))
+                      }
+                      placeholder="https://app.melode.co.uk/unsubscribe"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="list_unsubscribe_mailto">List-Unsubscribe Mailto</Label>
+                    <Input
+                      id="list_unsubscribe_mailto"
+                      type="email"
+                      value={organisationData.integration_config?.list_unsubscribe_mailto || ""}
+                      onChange={(e) =>
+                        setOrganisationData((prev) => ({
+                          ...prev,
+                          integration_config: {
+                            ...prev.integration_config,
+                            list_unsubscribe_mailto: e.target.value || null,
+                          },
+                        }))
+                      }
+                      placeholder="mailto:unsubscribe@melode.co.uk"
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="list_unsubscribe_one_click">Enable One-Click Unsubscribe</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Allow users to unsubscribe with one click
+                    </p>
+                  </div>
+                  <Switch
+                    id="list_unsubscribe_one_click"
+                    checked={organisationData.integration_config?.list_unsubscribe_one_click !== false}
+                    onCheckedChange={(checked) =>
+                      setOrganisationData((prev) => ({
+                        ...prev,
+                        integration_config: {
+                          ...prev.integration_config,
+                          list_unsubscribe_one_click: checked,
+                        },
+                      }))
+                    }
+                  />
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Status Indicators */}
+              <div className="space-y-2">
+                <h3 className="text-lg font-semibold">Configuration Status</h3>
+                <div className="flex flex-wrap gap-2">
+                  {organisationData.integration_config?.sendgrid_api_key ? (
+                    <Badge variant="default" className="flex items-center gap-1">
+                      <CheckCircle2 className="h-3 w-3" />
+                      Email Configured
+                    </Badge>
+                  ) : (
+                    <Badge variant="secondary" className="flex items-center gap-1">
+                      <AlertCircle className="h-3 w-3" />
+                      Email Not Configured
+                    </Badge>
+                  )}
+                  {organisationData.integration_config?.twilio_account_sid &&
+                  organisationData.integration_config?.twilio_auth_token &&
+                  organisationData.integration_config?.twilio_from_number ? (
+                    <Badge variant="default" className="flex items-center gap-1">
+                      <CheckCircle2 className="h-3 w-3" />
+                      SMS Configured
+                    </Badge>
+                  ) : (
+                    <Badge variant="secondary" className="flex items-center gap-1">
+                      <AlertCircle className="h-3 w-3" />
+                      SMS Not Configured
+                    </Badge>
+                  )}
+                </div>
+              </div>
+
+              <Button
+                onClick={async () => {
+                  try {
+                    await updateOrganisationMutation.mutateAsync(organisationData);
+                  } catch (error) {
+                    // Error handled by mutation
+                  }
+                }}
+                disabled={updateOrganisationMutation.isPending}
+                className="w-full"
+              >
+                {updateOrganisationMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="mr-2 h-4 w-4" />
+                    Save Integration Configuration
+                  </>
+                )}
+              </Button>
             </CardContent>
           </Card>
         </TabsContent>

@@ -299,10 +299,15 @@ const SetupPage = () => {
       setIsRunningSetup(true);
       await markSetupCompleteMutation.mutateAsync();
       toast.success("Setup completed successfully!", {
-        description: "Your organization is now ready to use.",
+        description: "Your organization is now ready to use. Please configure your SendGrid and Twilio credentials to enable email and SMS notifications.",
+        duration: 5000,
+        action: {
+          label: "Configure Now",
+          onClick: () => router.push("/admin/configuration?tab=integration"),
+        },
       });
       setTimeout(() => {
-        router.push("/admin");
+        router.push("/admin/configuration?tab=integration");
       }, 2000);
     } catch (error) {
       console.error("Failed to complete setup:", error);
@@ -320,10 +325,15 @@ const SetupPage = () => {
         organization: organizationForm,
       });
       toast.success("Setup completed successfully!", {
-        description: "Your organization has been initialized and is ready to use.",
+        description: "Your organization has been initialized. Please configure your SendGrid and Twilio credentials to enable email and SMS notifications.",
+        duration: 5000,
+        action: {
+          label: "Configure Now",
+          onClick: () => router.push("/admin/configuration?tab=integration"),
+        },
       });
       setTimeout(() => {
-        router.push("/admin");
+        router.push("/admin/configuration?tab=integration");
       }, 2000);
     } catch (error) {
       console.error("Failed to run setup:", error);

@@ -19,6 +19,30 @@ export default function QueryProvider({ children }) {
               ) {
                 return false;
               }
+              
+              // Don't retry CORS errors - these are configuration issues that won't resolve with retries
+              if (
+                error?.code === "CORS_ERROR" ||
+                error?.message?.includes("CORS") ||
+                error?.message?.includes("Access-Control") ||
+                error?.message?.includes("Cross-Origin")
+              ) {
+                return false;
+              }
+              
+              // Don't retry network errors (ERR_FAILED, ERR_NETWORK, etc.)
+              // These are typically connectivity issues that won't resolve with retries
+              if (
+                error?.code === "NETWORK_ERROR" ||
+                error?.code === "ERR_FAILED" ||
+                error?.code === "ERR_NETWORK" ||
+                error?.message?.includes("ERR_FAILED") ||
+                error?.message?.includes("Network Error") ||
+                error?.message?.includes("ERR_NETWORK")
+              ) {
+                return false;
+              }
+              
               return failureCount < 3;
             },
           },

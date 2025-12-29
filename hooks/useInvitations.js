@@ -21,8 +21,21 @@ export const useInvitations = (params = {}) => {
         // The axios response has a 'data' property, so response.data contains the actual API response
         // Handle both cases: if response.data exists, use it; otherwise use response directly
         const apiData = response?.data || response;
+        // Handle paginated response structure: { invitations: [...], total, page, etc. }
+        // Or direct array response, or nested data property
+        if (apiData?.invitations && Array.isArray(apiData.invitations)) {
+          return apiData.invitations;
+        }
         // If the API response itself has a 'data' key, extract it
-        return apiData?.data || apiData;
+        if (apiData?.data && Array.isArray(apiData.data)) {
+          return apiData.data;
+        }
+        // If apiData is already an array, return it
+        if (Array.isArray(apiData)) {
+          return apiData;
+        }
+        // Fallback: return empty array if structure is unexpected
+        return [];
       } catch (error) {
         // If it's a network error, return demo data for development silently
         if (

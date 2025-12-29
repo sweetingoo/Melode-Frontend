@@ -6,12 +6,12 @@ export const auditLogsService = {
   getAuditLogs: async (params = {}) => {
     try {
       // Try general audit logs endpoint first
-      return await api.get("/audit-logs", { params });
+      return await api.get("/audit-logs/", { params });
     } catch (error) {
       // If general endpoint doesn't exist, try file audit logs endpoint
       if (error.response?.status === 404) {
         try {
-          return await api.get("/files/admin/audit-logs", { params });
+          return await api.get("/files/admin/audit-logs/", { params });
         } catch (fileError) {
           console.error("Get audit logs failed:", fileError);
           throw fileError;
@@ -25,7 +25,7 @@ export const auditLogsService = {
   // Get audit logs for a specific resource
   getResourceAuditLogs: async (resource, resourceId, params = {}) => {
     try {
-      return await api.get("/audit-logs", {
+      return await api.get("/audit-logs/", {
         params: {
           resource,
           resource_id: resourceId,
@@ -44,7 +44,7 @@ export const auditLogsService = {
   // Get audit logs for a specific user
   getUserAuditLogs: async (userId, params = {}) => {
     try {
-      return await api.get("/audit-logs", {
+      return await api.get("/audit-logs/", {
         params: {
           user_id: userId,
           ...params,

@@ -9,6 +9,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -16,7 +17,13 @@ import {
   Clock,
   Save,
   Loader2,
+  Bell,
+  Mail,
+  Smartphone,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -31,6 +38,7 @@ import {
 import { useRoles } from "@/hooks/useRoles";
 import { useLocations } from "@/hooks/useLocations";
 import { useUserDepartments } from "@/hooks/useDepartmentContext";
+import { useOrganisation } from "@/hooks/useConfiguration";
 
 export default function PreferencesPage() {
   // User Preferences Hooks
@@ -49,6 +57,7 @@ export default function PreferencesPage() {
   const { data: rolesData } = useRoles();
   const { data: locationsData } = useLocations();
   const { data: departmentsData } = useUserDepartments();
+  const { data: organisationData } = useOrganisation();
 
   // Clock-in Preferences State
   const [preferencesData, setPreferencesData] = useState({
@@ -56,6 +65,34 @@ export default function PreferencesPage() {
     default_shift_role_id: null,
     default_location_id: null,
   });
+
+  // Notification Preferences State
+  const [notificationPreferences, setNotificationPreferences] = useState({
+    email_enabled: true,
+    sms_enabled: true,
+  });
+
+  // Extract notification preferences from preferences (with defaults)
+  React.useEffect(() => {
+    if (preferences?.additional_preferences?.notification_preferences) {
+      setNotificationPreferences({
+        email_enabled: preferences.additional_preferences.notification_preferences.email_enabled ?? true,
+        sms_enabled: preferences.additional_preferences.notification_preferences.sms_enabled ?? true,
+      });
+    } else {
+      // Default to both enabled if not set
+      setNotificationPreferences({
+        email_enabled: true,
+        sms_enabled: true,
+      });
+    }
+  }, [preferences?.additional_preferences?.notification_preferences]);
+
+  // Check if email/SMS is configured at organization level
+  const isEmailConfigured = organisationData?.integration_config?.sendgrid_api_key ? true : false;
+  const isSMSConfigured = organisationData?.integration_config?.twilio_account_sid &&
+    organisationData?.integration_config?.twilio_auth_token &&
+    organisationData?.integration_config?.twilio_from_number ? true : false;
 
   // Extract job roles from user's assignments (same logic as clock page)
   const userJobRoles = React.useMemo(() => {
@@ -165,6 +202,28 @@ export default function PreferencesPage() {
       } else {
         payload.default_location_id = null;
       }
+
+      await updatePreferencesMutation.mutateAsync(payload);
+    } catch (error) {
+      // Error is handled by the mutation
+    }
+  };
+
+  // Handle saving notification preferences
+  const handleSaveNotificationPreferences = async () => {
+    try {
+      // Get current additional_preferences and merge with notification preferences
+      const currentAdditionalPrefs = preferences?.additional_preferences || {};
+      
+      const payload = {
+        additional_preferences: {
+          ...currentAdditionalPrefs,
+          notification_preferences: {
+            email_enabled: notificationPreferences.email_enabled,
+            sms_enabled: notificationPreferences.sms_enabled,
+          },
+        },
+      };
 
       await updatePreferencesMutation.mutateAsync(payload);
     } catch (error) {
@@ -336,6 +395,129 @@ export default function PreferencesPage() {
                     <>
                       <Save className="h-4 w-4 mr-2" />
                       Save Preferences
+                    </>
+                  )}
+                </Button>
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Notification Preferences */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Bell className="h-5 w-5" />
+            Notification Preferences
+          </CardTitle>
+          <CardDescription>
+            Control how you receive automatic notifications for tasks, forms, and project updates
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {preferencesLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin" />
+            </div>
+          ) : (
+            <>
+              {/* Email Notifications */}
+              <div className="flex items-center justify-between p-4 border rounded-lg">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Label htmlFor="email-notifications" className="text-base font-semibold cursor-pointer">
+                      Receive Email Notifications
+                    </Label>
+                    {isEmailConfigured ? (
+                      <Badge variant="outline" className="flex items-center gap-1">
+                        <CheckCircle2 className="h-3 w-3 text-green-600" />
+                        Available
+                      </Badge>
+                    ) : (
+                      <Badge variant="secondary" className="flex items-center gap-1">
+                        <XCircle className="h-3 w-3 text-muted-foreground" />
+                        Not Configured
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Receive email notifications for tasks, forms, and project updates
+                  </p>
+                </div>
+                <Switch
+                  id="email-notifications"
+                  checked={notificationPreferences.email_enabled}
+                  onCheckedChange={(checked) =>
+                    setNotificationPreferences((prev) => ({
+                      ...prev,
+                      email_enabled: checked,
+                    }))
+                  }
+                  disabled={updatePreferencesMutation.isPending || !isEmailConfigured}
+                />
+              </div>
+
+              {/* SMS Notifications */}
+              <div className="flex items-center justify-between p-4 border rounded-lg">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Label htmlFor="sms-notifications" className="text-base font-semibold cursor-pointer">
+                      Receive SMS Notifications
+                    </Label>
+                    {isSMSConfigured ? (
+                      <Badge variant="outline" className="flex items-center gap-1">
+                        <CheckCircle2 className="h-3 w-3 text-green-600" />
+                        Available
+                      </Badge>
+                    ) : (
+                      <Badge variant="secondary" className="flex items-center gap-1">
+                        <XCircle className="h-3 w-3 text-muted-foreground" />
+                        Not Configured
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Receive SMS notifications for tasks, forms, and project updates
+                  </p>
+                </div>
+                <Switch
+                  id="sms-notifications"
+                  checked={notificationPreferences.sms_enabled}
+                  onCheckedChange={(checked) =>
+                    setNotificationPreferences((prev) => ({
+                      ...prev,
+                      sms_enabled: checked,
+                    }))
+                  }
+                  disabled={updatePreferencesMutation.isPending || !isSMSConfigured}
+                />
+              </div>
+
+              {/* Important Note */}
+              <div className="p-4 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                <p className="text-sm text-blue-900 dark:text-blue-100">
+                  <strong>Note:</strong> These settings only apply to automatic notifications (tasks, forms, projects). 
+                  Direct messages will always be delivered regardless of these settings.
+                </p>
+              </div>
+
+              <Separator />
+
+              <div className="flex justify-end">
+                <Button
+                  onClick={handleSaveNotificationPreferences}
+                  disabled={updatePreferencesMutation.isPending}
+                >
+                  {updatePreferencesMutation.isPending ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="h-4 w-4 mr-2" />
+                      Save Notification Preferences
                     </>
                   )}
                 </Button>

@@ -190,7 +190,9 @@ const UserManagementPage = () => {
   // Create a map of invitations by email for quick lookup
   const invitationsByEmail = React.useMemo(() => {
     const map = new Map();
-    invitations.forEach((invitation) => {
+    // Ensure invitations is an array before iterating
+    const invitationsArray = Array.isArray(invitations) ? invitations : [];
+    invitationsArray.forEach((invitation) => {
       const transformed = invitationUtils.transformInvitation(invitation);
       // Override role with dynamic role display name if available
       if (roles.length > 0) {

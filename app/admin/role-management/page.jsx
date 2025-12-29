@@ -167,9 +167,42 @@ const RoleManagementPage = () => {
   // Group roles by department and job role (hierarchical structure)
   const rolesByDepartment = React.useMemo(() => {
     const grouped = {};
+    const systemRoles = {}; // For roles without departments (e.g., Superuser)
 
     allRoles.forEach((role) => {
-      if (role.roleType === "job_role" && role.departmentId) {
+      // Check if role is a system role (no department, or is_system flag, or superuser)
+      const isSystemRole = 
+        !role.departmentId && 
+        (role.is_system || 
+         role.isSystem || 
+         role.name === "superuser" || 
+         role.slug === "superuser" || 
+         role.roleType === "superuser" ||
+         role.role_type === "superuser");
+
+      if (isSystemRole) {
+        // Handle system roles (like Superuser) that don't have departments
+        if (role.roleType === "job_role" || !role.roleType) {
+          if (!systemRoles[role.id]) {
+            systemRoles[role.id] = {
+              jobRole: role,
+              shiftRoles: [],
+            };
+          }
+        } else if (role.roleType === "shift_role" && role.parentRoleId) {
+          // Find the parent job role
+          const parentJobRole = allRoles.find((r) => r.id === role.parentRoleId);
+          if (parentJobRole) {
+            if (!systemRoles[role.parentRoleId]) {
+              systemRoles[role.parentRoleId] = {
+                jobRole: parentJobRole,
+                shiftRoles: [],
+              };
+            }
+            systemRoles[role.parentRoleId].shiftRoles.push(role);
+          }
+        }
+      } else if (role.roleType === "job_role" && role.departmentId) {
         const deptId = role.departmentId;
         if (!grouped[deptId]) {
           grouped[deptId] = {};
@@ -199,7 +232,7 @@ const RoleManagementPage = () => {
       }
     });
 
-    return grouped;
+    return { grouped, systemRoles };
   }, [allRoles]);
 
   // Filter roles based on selected filters
@@ -746,6 +779,206 @@ const RoleManagementPage = () => {
       {/* Roles by Department Hierarchy */}
       {!rolesLoading && !rolesError && (
         <div className="space-y-6">
+          {/* System Roles Section (roles without departments, e.g., Superuser) */}
+          {Object.keys(rolesByDepartment.systemRoles || {}).length > 0 && (
+            <Card className="bg-card border-yellow-200 dark:border-yellow-800">
+              <CardHeader>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-yellow-100 dark:bg-yellow-900/20 flex-shrink-0">
+                      <Crown className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <CardTitle className="text-base sm:text-lg break-words">
+                        System Roles
+                      </CardTitle>
+                      <p className="text-sm text-muted-foreground mt-1 break-words">
+                        System-level roles that are not assigned to any department
+                      </p>
+                    </div>
+                  </div>
+                  <Badge variant="secondary" className="w-fit">
+                    {Object.keys(rolesByDepartment.systemRoles || {}).length} role(s)
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {Object.values(rolesByDepartment.systemRoles || {}).map((group) => {
+                    const role = group.jobRole;
+                    
+                    // Apply role type filter if selected
+                    if (selectedRoleTypeFilter === "shift_role" && group.shiftRoles.length === 0) {
+                      return null;
+                    }
+                    if (selectedRoleTypeFilter === "job_role" && role.roleType !== "job_role" && !role.roleType) {
+                      // Filter out non-job roles when filter is set to job_role
+                      // But include roles without roleType (legacy roles default to job_role)
+                      return null;
+                    }
+                    
+                    const iconClasses = getRoleIconClasses(
+                      roleUtils.getRoleColor(role)
+                    );
+                    const IconComponent = getRoleIcon(role);
+
+                    return (
+                      <div
+                        key={role.id}
+                        className="border rounded-lg p-3 sm:p-4 bg-background space-y-3"
+                      >
+                        {/* Job Role Header */}
+                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                          <div className="flex items-start gap-3 flex-1 min-w-0">
+                            <div
+                              className={`flex h-8 w-8 sm:h-8 sm:w-8 items-center justify-center rounded-lg flex-shrink-0 ${iconClasses}`}
+                            >
+                              <IconComponent className="h-4 w-4" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <h4 className="font-semibold text-base break-words">
+                                  {role.name}
+                                </h4>
+                                <Badge
+                                  variant="default"
+                                  className="text-[10px] px-1.5 py-0 flex-shrink-0"
+                                >
+                                  {role.roleType || "job_role"}
+                                </Badge>
+                                {role.is_system || role.isSystem ? (
+                                  <Badge
+                                    variant="outline"
+                                    className="text-[10px] px-1.5 py-0 flex-shrink-0 bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-300 border-yellow-200 dark:border-yellow-800"
+                                  >
+                                    System
+                                  </Badge>
+                                ) : null}
+                              </div>
+                              {role.description && (
+                                <p className="text-sm text-muted-foreground mt-1 break-words">
+                                  {role.description}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            {canUpdateRole && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleEditRole(role.id)}
+                                className="h-8 w-8 p-0"
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                            )}
+                            {canManagePermissions && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleManagePermissions(role.id)}
+                                className="h-8 w-8 p-0"
+                              >
+                                <Key className="h-4 w-4" />
+                              </Button>
+                            )}
+                            {canDeleteRole && !role.is_system && !role.isSystem && (
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                                  >
+                                    <X className="h-4 w-4" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>
+                                      Are you sure you want to delete this role?
+                                    </AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      This action cannot be undone. This will permanently
+                                      delete the role "{role.name}".
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      onClick={() => handleDeleteRole(role.id)}
+                                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                    >
+                                      Delete
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Permissions Count */}
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <Key className="h-4 w-4" />
+                          <span>
+                            {getRolePermissions(role).length} permission(s)
+                          </span>
+                        </div>
+
+                        {/* Shift Roles */}
+                        {group.shiftRoles.length > 0 && (
+                          <div className="space-y-2 pt-2 border-t">
+                            <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                              <Network className="h-4 w-4" />
+                              <span>Shift Roles ({group.shiftRoles.length})</span>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              {group.shiftRoles.map((shiftRole) => {
+                                const shiftIconClasses = getRoleIconClasses(
+                                  roleUtils.getRoleColor(shiftRole)
+                                );
+                                const ShiftIconComponent = getRoleIcon(shiftRole);
+                                return (
+                                  <div
+                                    key={shiftRole.id}
+                                    className="flex items-center gap-2 p-2 rounded border bg-muted/50"
+                                  >
+                                    <div
+                                      className={`flex h-6 w-6 items-center justify-center rounded flex-shrink-0 ${shiftIconClasses}`}
+                                    >
+                                      <ShiftIconComponent className="h-3 w-3" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-sm font-medium break-words">
+                                        {shiftRole.name}
+                                      </p>
+                                    </div>
+                                    {canUpdateRole && (
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => handleEditRole(shiftRole.id)}
+                                        className="h-6 w-6 p-0"
+                                      >
+                                        <Edit className="h-3 w-3" />
+                                      </Button>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {filteredDepartments.length === 0 ? (
             <Card>
               <CardContent className="p-6">
@@ -762,7 +995,7 @@ const RoleManagementPage = () => {
             </Card>
           ) : (
             filteredDepartments.map((department) => {
-              const departmentRoles = rolesByDepartment[department.id] || {};
+              const departmentRoles = rolesByDepartment.grouped?.[department.id] || {};
               const jobRolesList = Object.values(departmentRoles);
 
               // Apply role type filter if selected

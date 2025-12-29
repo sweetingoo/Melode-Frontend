@@ -522,7 +522,7 @@ const CustomFieldRenderer = ({
           imageSrc = imageUrl;
         } else if (imageFileId) {
           // Fallback: construct URL from file ID if image_url is not available
-          const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://melode.onrender.com/api/v1';
+          const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://melode-api-prod.onrender.com/api/v1';
           imageSrc = `${apiBaseUrl}/settings/files/${imageFileId}/download`;
         }
         

@@ -1,8 +1,22 @@
 import axios from "axios";
 
+// Normalize baseURL to ensure it uses https
+const normalizeBaseURL = (url) => {
+  if (!url) return "https://melode-api-prod.onrender.com/api/v1";
+
+  // Trim whitespace
+  const trimmed = url.trim();
+
+  // Replace http:// with https:// to ensure secure connections
+  // This handles both http:// and HTTP:// cases
+  const normalized = trimmed.replace(/^https?:\/\//i, "https://");
+
+  return normalized;
+};
+
 // Create axios instance with base configuration
 const apiClient = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_BASE_URL || "https://melode.onrender.com/api/v1",
+  baseURL: normalizeBaseURL(process.env.NEXT_PUBLIC_API_BASE_URL || "https://melode-api-prod.onrender.com/api/v1"),
   timeout: 10000, // 10 seconds timeout
   headers: {
     "Content-Type": "application/json",
@@ -13,6 +27,11 @@ const apiClient = axios.create({
 // Request interceptor to add auth token and department context
 apiClient.interceptors.request.use(
   (config) => {
+    // Ensure baseURL always uses HTTPS (normalize at request time as well)
+    if (config.baseURL && config.baseURL.startsWith("http://")) {
+      config.baseURL = config.baseURL.replace(/^http:\/\//, "https://");
+    }
+
     // If data is FormData, remove Content-Type header to let axios set it with boundary
     if (config.data instanceof FormData) {
       delete config.headers['Content-Type'];
@@ -145,16 +164,58 @@ apiClient.interceptors.response.use(
       // Request was made but no response received
       // Log as warning instead of error for better UX (network errors are often expected)
       const url = error.config?.url || "unknown";
-      // Only log network errors for non-invitation endpoints to reduce noise
-      if (!url.includes("/invitations")) {
-        console.warn(
-          "Network Error:",
-          `No response received from server for ${url}`
+      const baseURL = error.config?.baseURL || "";
+      const errorMessage = error.message || "";
+
+      // Check for CORS errors specifically
+      const isCORSError =
+        errorMessage.includes("CORS") ||
+        errorMessage.includes("Access-Control") ||
+        errorMessage.includes("Cross-Origin") ||
+        error.code === "ERR_CORS" ||
+        (error.code === "ERR_FAILED" && errorMessage.includes("Failed to fetch"));
+
+      // Check for common network error codes
+      const isNetworkError =
+        error.code === "ERR_FAILED" ||
+        error.code === "ERR_NETWORK" ||
+        error.code === "NETWORK_ERROR" ||
+        errorMessage.includes("ERR_FAILED") ||
+        errorMessage.includes("Network Error");
+
+      // Log CORS errors with helpful message
+      if (isCORSError) {
+        console.error(
+          "🚫 CORS Error:",
+          `The backend at ${baseURL} is not allowing requests from this origin.`,
+          "\n\nTo fix this, the backend needs to add your frontend origin to its CORS allowed origins list.",
+          "\nFrontend origin:", typeof window !== "undefined" ? window.location.origin : "unknown",
+          "\nBackend URL:", baseURL,
+          "\n\nBackend CORS configuration should include:",
+          typeof window !== "undefined" ? `- ${window.location.origin}` : "- Your frontend domain",
+          "\n- http://localhost:3000 (for local development)",
+          "\n- https://your-production-domain.com (for production)"
         );
+        error.code = "CORS_ERROR";
+      } else if (!url.includes("/invitations") && !url.includes("/tasks")) {
+        // Only log network errors for non-invitation and non-tasks endpoints to reduce noise
+        if (isNetworkError && baseURL.includes("http://")) {
+          console.warn(
+            "Network Error:",
+            `Failed to connect to ${baseURL}. Ensure the API URL uses HTTPS.`
+          );
+        } else if (!isNetworkError) {
+          console.warn(
+            "Network Error:",
+            `No response received from server for ${url}`
+          );
+        }
       }
 
-      // Add network error code for better handling
-      error.code = "NETWORK_ERROR";
+      // Add network error code for better handling if not already set
+      if (!error.code) {
+        error.code = "NETWORK_ERROR";
+      }
     } else {
       // Something else happened
       console.error("Request Setup Error:", error.message);

@@ -485,7 +485,7 @@ export const generateFormPDFFromData = async ({
               // Construct image URL
               let imageSrc = imageUrl;
               if (!imageSrc && imageFileId) {
-                const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://melode.onrender.com/api/v1';
+                const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://melode-api-prod.onrender.com/api/v1';
                 imageSrc = `${apiBaseUrl}/settings/files/${imageFileId}/download`;
               }
 

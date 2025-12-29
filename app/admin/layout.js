@@ -2,7 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Sidebar,
   SidebarContent,
@@ -62,6 +62,7 @@ import {
   Database,
   Mail,
   FolderKanban,
+  Bell,
 } from "lucide-react";
 import { assets } from "../assets/assets";
 import Image from "next/image";
@@ -75,14 +76,19 @@ import {
   useCurrentUser,
   useReturnToOriginalUser,
 } from "@/hooks/useAuth";
+import { useUnreadNotificationsCount } from "@/hooks/useNotifications";
+import NotificationsDropdown from "@/components/NotificationsDropdown";
 import { useTokenManager } from "@/hooks/useTokenManager";
 import { apiUtils } from "@/services/api-client";
 import AuthGuard from "@/components/AuthGuard";
+import { useSSE } from "@/hooks/useSSE";
+import { SSEStatusIndicator } from "@/components/SSEStatusIndicator";
 import {
   useUserDepartments,
   useSwitchDepartment,
 } from "@/hooks/useDepartmentContext";
 import { useRoles } from "@/hooks/useRoles";
+import { cn } from "@/lib/utils";
 
 // Main navigation items (always visible, no grouping)
 const mainMenuItems = [
@@ -127,6 +133,18 @@ const mainMenuItems = [
     icon: FileText,
     url: "/admin/forms",
     permission: "forms:read", // Permission to read forms
+  },
+  {
+    title: "Messages",
+    icon: Mail,
+    url: "/admin/messages",
+    permission: "message:read", // Permission to read messages
+  },
+  {
+    title: "Notifications",
+    icon: Bell,
+    url: "/admin/notifications",
+    permission: null, // Notifications are visible to all users
   },
   {
     title: "Preferences",
@@ -306,6 +324,7 @@ function CollapsibleMenuItem({ title, icon: Icon, items, pathname }) {
 
 export default function AdminLayout({ children }) {
   const pathname = usePathname();
+  const router = useRouter();
   const { logout, isLoggingOut } = useAuth();
   const {
     data: currentUserData,
@@ -316,6 +335,9 @@ export default function AdminLayout({ children }) {
 
   // Initialize token manager
   const { sessionModal } = useTokenManager();
+
+  // Initialize SSE for real-time updates
+  useSSE();
 
   // Role switching hooks
   const { data: departmentsData, isLoading: departmentsLoading } =
@@ -360,7 +382,29 @@ export default function AdminLayout({ children }) {
   }, [isClient]);
 
   // Get current user's permissions - only when data is loaded
-  const currentUserPermissions = currentUserData?.permissions || [];
+  // Extract permissions from roles if top-level permissions array is empty
+  const currentUserPermissions = React.useMemo(() => {
+    if (!currentUserData) return [];
+    
+    // If top-level permissions exist, use them
+    if (currentUserData.permissions && currentUserData.permissions.length > 0) {
+      return currentUserData.permissions;
+    }
+    
+    // Otherwise, extract from roles
+    if (currentUserData.roles && Array.isArray(currentUserData.roles)) {
+      const allRolePermissions = [];
+      currentUserData.roles.forEach((role) => {
+        if (role.permissions && Array.isArray(role.permissions)) {
+          allRolePermissions.push(...role.permissions);
+        }
+      });
+      return allRolePermissions;
+    }
+    
+    return [];
+  }, [currentUserData]);
+  
   const currentUserDirectPermissions =
     currentUserData?.direct_permissions || [];
 
@@ -758,6 +802,11 @@ export default function AdminLayout({ children }) {
       return items;
     }
 
+    // If user is a superuser (by flag), show all items
+    if (currentUserData.is_superuser) {
+      return items;
+    }
+
     return items.filter((item) => {
       // Special case: SUPERUSER_OR_REPORTS - show if:
       // 1. User has wildcard (*) permission
@@ -768,7 +817,7 @@ export default function AdminLayout({ children }) {
         if (userPermissionNames.includes("*")) return true;
 
         // Check if user is superuser
-        if (isCurrentRoleSuperuser) return true;
+        if (isCurrentRoleSuperuser || currentUserData.is_superuser) return true;
 
         // Check for reports-related permissions
         const hasReportsPermission = userPermissionNames.some((perm) => {
@@ -792,7 +841,7 @@ export default function AdminLayout({ children }) {
         if (userPermissionNames.includes("*")) return true;
 
         // Check if user is superuser
-        if (isCurrentRoleSuperuser) return true;
+        if (isCurrentRoleSuperuser || currentUserData.is_superuser) return true;
 
         // Check for configuration-related permissions
         const hasConfigurationPermission = userPermissionNames.some((perm) => {
@@ -817,7 +866,7 @@ export default function AdminLayout({ children }) {
       // Special case: clock:in - allow superusers even if they don't have the permission
       if (item.permission === "clock:in") {
         // If user is superuser, allow access
-        if (isCurrentRoleSuperuser) return true;
+        if (isCurrentRoleSuperuser || currentUserData.is_superuser) return true;
         // Otherwise check for permission
       }
 
@@ -1295,26 +1344,59 @@ export default function AdminLayout({ children }) {
               <SidebarTrigger className="-ml-1" />
               <div className="flex-1">
                 <h1 className="text-lg font-semibold">
-                  {!isClient || currentUserLoading
-                    ? "User Dashboard"
-                    : hasWildcardPermissions.rolePermissions ||
+                  {(() => {
+                    // Show page-specific titles
+                    if (pathname === "/admin/messages") {
+                      return "Messages";
+                    }
+                    if (pathname === "/admin/notifications") {
+                      return "Notifications";
+                    }
+                    if (pathname === "/admin/tasks") {
+                      return "Tasks";
+                    }
+                    if (pathname === "/admin/projects") {
+                      return "Projects";
+                    }
+                    if (pathname === "/admin/forms") {
+                      return "Forms";
+                    }
+                    if (pathname === "/admin/my-tasks") {
+                      return "My Tasks";
+                    }
+                    if (pathname === "/admin/preferences") {
+                      return "Preferences";
+                    }
+                    // Default dashboard title
+                    if (!isClient || currentUserLoading) {
+                      return "User Dashboard";
+                    }
+                    return hasWildcardPermissions.rolePermissions ||
                       hasWildcardPermissions.directPermissions
                       ? "Admin Dashboard"
-                      : "User Dashboard"}
+                      : "User Dashboard";
+                  })()}
                 </h1>
               </div>
               <div className="flex items-center gap-2">
+                <NotificationsDropdown />
                 <ClockInOutButton />
                 <ThemeToggle />
               </div>
             </header>
 
-            <main className="flex-1 p-4 overflow-x-hidden">{children}</main>
+            <main className={cn(
+              "flex-1 overflow-x-hidden",
+              pathname === "/admin/messages" ? "p-0" : "p-4"
+            )}>{children}</main>
           </SidebarInset>
         </div>
 
         {/* Session Continuation Modal */}
         {sessionModal}
+        
+        {/* SSE Status Indicator (for debugging) */}
+        <SSEStatusIndicator />
       </SidebarProvider>
     </AuthGuard>
   );

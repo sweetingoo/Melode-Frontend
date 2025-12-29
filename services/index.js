@@ -11,6 +11,8 @@ export { assignmentsService } from "./assignments";
 export { clockService } from "./clock";
 export { configurationService } from "./configuration";
 export { setupService } from "./setup";
+export { messagesService } from "./messages";
+export { notificationsService } from "./notifications";
 
 // Re-export the main API client and utilities
 export { api, apiUtils } from "./api-client";
