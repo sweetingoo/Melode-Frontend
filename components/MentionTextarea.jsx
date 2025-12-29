@@ -214,38 +214,193 @@ const MentionTextarea = ({
         setShowMentionDropdown(true);
         setSelectedMentionIndex(0);
         
-        // Position dropdown near cursor
+        // Position dropdown intelligently based on available space
         const selection = window.getSelection();
-        if (selection && selection.rangeCount > 0) {
+        const containerRect = containerRef.current?.getBoundingClientRect();
+        
+        if (selection && selection.rangeCount > 0 && containerRect) {
           try {
             const range = selection.getRangeAt(0);
-            const rect = range.getBoundingClientRect();
+            const cursorRect = range.getBoundingClientRect();
             
-            // Use getBoundingClientRect for fixed positioning (relative to viewport)
+            // Dropdown dimensions
+            const dropdownWidth = 250;
+            const dropdownHeight = 200;
+            const padding = 8;
+            
+            // Get viewport dimensions
+            const viewportWidth = window.innerWidth;
+            const viewportHeight = window.innerHeight;
+            
+            // Use container bottom as reference point (where textarea ends)
+            const containerBottom = containerRect.bottom;
+            const containerTop = containerRect.top;
+            
+            // Calculate available space from container position
+            const spaceBelow = viewportHeight - containerBottom - padding;
+            const spaceAbove = containerTop - padding;
+            
+            // Determine vertical position - prioritize above if near bottom of screen
+            let top;
+            const isNearBottom = containerBottom > viewportHeight * 0.7; // If container is in bottom 30% of screen
+            
+            if (isNearBottom || spaceBelow < dropdownHeight) {
+              // Near bottom or not enough space below - position above
+              if (spaceAbove >= dropdownHeight) {
+                // Enough space above
+                top = containerTop - dropdownHeight - padding;
+              } else if (spaceAbove > spaceBelow) {
+                // More space above than below
+                top = Math.max(padding, containerTop - dropdownHeight - padding);
+              } else {
+                // More space below, but still position above to avoid cutoff
+                top = Math.max(padding, containerTop - dropdownHeight - padding);
+              }
+            } else {
+              // Enough space below - position below
+              top = containerBottom + padding;
+            }
+            
+            // Final viewport bounds check
+            if (top < padding) {
+              top = padding;
+            }
+            if (top + dropdownHeight > viewportHeight - padding) {
+              top = Math.max(padding, viewportHeight - dropdownHeight - padding);
+            }
+            
+            // Horizontal positioning - use cursor position but keep within container bounds
+            let left = cursorRect.left;
+            const spaceRight = viewportWidth - cursorRect.left;
+            const spaceLeft = cursorRect.left;
+            
+            // If not enough space on right, try left
+            if (spaceRight < dropdownWidth && spaceLeft > spaceRight) {
+              left = cursorRect.left - dropdownWidth;
+            }
+            
+            // Ensure within viewport
+            if (left + dropdownWidth > viewportWidth - padding) {
+              left = viewportWidth - dropdownWidth - padding;
+            }
+            if (left < padding) {
+              left = padding;
+            }
+            
+            // Ensure within container horizontal bounds if possible
+            if (left < containerRect.left) {
+              left = containerRect.left;
+            }
+            if (left + dropdownWidth > containerRect.right && containerRect.right - containerRect.left >= dropdownWidth) {
+              left = containerRect.right - dropdownWidth;
+            }
+            
             setMentionPosition({
-              top: rect.bottom + 5,
-              left: rect.left,
+              top,
+              left,
             });
           } catch (e) {
-            // Fallback positioning - position below the editor
+            // Fallback positioning - use smart positioning relative to editor
             const containerRect = containerRef.current?.getBoundingClientRect();
             if (containerRect) {
-              setMentionPosition({
-                top: containerRect.bottom + 5,
-                left: containerRect.left,
-              });
+              const viewportWidth = window.innerWidth;
+              const viewportHeight = window.innerHeight;
+              const dropdownWidth = 250;
+              const dropdownHeight = 200;
+              const padding = 8;
+              
+              // Calculate available space
+              const spaceBelow = viewportHeight - containerRect.bottom - padding;
+              const spaceAbove = containerRect.top - padding;
+              
+              // Determine vertical position
+              let top;
+              if (spaceBelow >= dropdownHeight) {
+                top = containerRect.bottom + padding;
+              } else if (spaceAbove >= dropdownHeight) {
+                top = containerRect.top - dropdownHeight - padding;
+              } else {
+                // Use whichever has more space
+                if (spaceAbove > spaceBelow) {
+                  top = Math.max(padding, containerRect.top - dropdownHeight - padding);
+                } else {
+                  top = containerRect.bottom + padding;
+                }
+              }
+              
+              // Ensure within viewport
+              if (top < padding) top = padding;
+              if (top + dropdownHeight > viewportHeight - padding) {
+                top = Math.max(padding, viewportHeight - dropdownHeight - padding);
+              }
+              
+              // Horizontal positioning
+              let left = containerRect.left;
+              const spaceRight = viewportWidth - containerRect.left;
+              const spaceLeft = containerRect.left;
+              
+              if (spaceRight < dropdownWidth && spaceLeft > spaceRight) {
+                left = containerRect.left - dropdownWidth;
+              }
+              if (left + dropdownWidth > viewportWidth) {
+                left = viewportWidth - dropdownWidth - padding;
+              }
+              if (left < padding) left = padding;
+              
+              setMentionPosition({ top, left });
             } else {
               setMentionPosition({ top: 100, left: 100 });
             }
           }
         } else {
-          // Fallback positioning - position below the editor
+          // Fallback positioning - use smart positioning relative to editor
           const containerRect = containerRef.current?.getBoundingClientRect();
           if (containerRect) {
-            setMentionPosition({
-              top: containerRect.bottom + 5,
-              left: containerRect.left,
-            });
+            const viewportWidth = window.innerWidth;
+            const viewportHeight = window.innerHeight;
+            const dropdownWidth = 250;
+            const dropdownHeight = 200;
+            const padding = 8;
+            
+            // Calculate available space
+            const spaceBelow = viewportHeight - containerRect.bottom - padding;
+            const spaceAbove = containerRect.top - padding;
+            
+            // Determine vertical position
+            let top;
+            if (spaceBelow >= dropdownHeight) {
+              top = containerRect.bottom + padding;
+            } else if (spaceAbove >= dropdownHeight) {
+              top = containerRect.top - dropdownHeight - padding;
+            } else {
+              // Use whichever has more space
+              if (spaceAbove > spaceBelow) {
+                top = Math.max(padding, containerRect.top - dropdownHeight - padding);
+              } else {
+                top = containerRect.bottom + padding;
+              }
+            }
+            
+            // Ensure within viewport
+            if (top < padding) top = padding;
+            if (top + dropdownHeight > viewportHeight - padding) {
+              top = Math.max(padding, viewportHeight - dropdownHeight - padding);
+            }
+            
+            // Horizontal positioning
+            let left = containerRect.left;
+            const spaceRight = viewportWidth - containerRect.left;
+            const spaceLeft = containerRect.left;
+            
+            if (spaceRight < dropdownWidth && spaceLeft > spaceRight) {
+              left = containerRect.left - dropdownWidth;
+            }
+            if (left + dropdownWidth > viewportWidth) {
+              left = viewportWidth - dropdownWidth - padding;
+            }
+            if (left < padding) left = padding;
+            
+            setMentionPosition({ top, left });
           } else {
             setMentionPosition({ top: 100, left: 100 });
           }
@@ -256,8 +411,6 @@ const MentionTextarea = ({
     } else {
       setShowMentionDropdown(false);
     }
-    
-    onChange(text);
     
     onChange(text);
     

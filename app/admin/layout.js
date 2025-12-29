@@ -82,7 +82,6 @@ import { useTokenManager } from "@/hooks/useTokenManager";
 import { apiUtils } from "@/services/api-client";
 import AuthGuard from "@/components/AuthGuard";
 import { useSSE } from "@/hooks/useSSE";
-import { SSEStatusIndicator } from "@/components/SSEStatusIndicator";
 import {
   useUserDepartments,
   useSwitchDepartment,
@@ -1395,8 +1394,6 @@ export default function AdminLayout({ children }) {
         {/* Session Continuation Modal */}
         {sessionModal}
         
-        {/* SSE Status Indicator (for debugging) */}
-        <SSEStatusIndicator />
       </SidebarProvider>
     </AuthGuard>
   );

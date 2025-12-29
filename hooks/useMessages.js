@@ -375,7 +375,18 @@ export const useAddParticipant = () => {
     onSuccess: (data, variables) => {
       const { conversationId } = variables;
       
-      // Invalidate conversation details to refresh participant list
+      // If the API returns the updated conversation, update the cache directly
+      if (data && data.participant_user_ids) {
+        queryClient.setQueryData(
+          messageKeys.conversationDetail(conversationId),
+          (oldData) => {
+            if (!oldData) return data;
+            return { ...oldData, ...data };
+          }
+        );
+      }
+      
+      // Invalidate to ensure we have the latest data
       queryClient.invalidateQueries({ queryKey: messageKeys.conversationDetail(conversationId) });
       queryClient.invalidateQueries({ queryKey: messageKeys.conversationList() });
       
@@ -417,9 +428,36 @@ export const useRemoveParticipant = () => {
       return response.data;
     },
     onSuccess: (data, variables) => {
-      const { conversationId } = variables;
+      const { conversationId, userId } = variables;
       
-      // Invalidate conversation details to refresh participant list
+      // Optimistically update the conversation cache
+      queryClient.setQueryData(
+        messageKeys.conversationDetail(conversationId),
+        (oldData) => {
+          if (!oldData) return oldData;
+          
+          // If API returns updated conversation, use it
+          if (data && data.participant_user_ids) {
+            return { ...oldData, ...data };
+          }
+          
+          // Otherwise, remove the user from participant_user_ids
+          const updatedParticipantIds = (oldData.participant_user_ids || []).filter(
+            (id) => {
+              const normalizedId = typeof id === 'string' ? parseInt(id, 10) : id;
+              const normalizedUserId = typeof userId === 'string' ? parseInt(userId, 10) : userId;
+              return normalizedId !== normalizedUserId;
+            }
+          );
+          
+          return {
+            ...oldData,
+            participant_user_ids: updatedParticipantIds,
+          };
+        }
+      );
+      
+      // Invalidate to ensure we have the latest data
       queryClient.invalidateQueries({ queryKey: messageKeys.conversationDetail(conversationId) });
       queryClient.invalidateQueries({ queryKey: messageKeys.conversationList() });
       

@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, MessageSquare, Users } from "lucide-react";
+import { Loader2, MessageSquare, Users, Circle } from "lucide-react";
 import { useCurrentUser } from "@/hooks/useAuth";
 import { usePresence } from "@/hooks/usePresence";
 
@@ -223,7 +223,15 @@ const ConversationList = ({
     <ScrollArea className="flex-1">
       <div className="divide-y">
         {conversations.map((conversation) => {
-          const isSelected = selectedConversationId === conversation.id;
+          // Normalize IDs for comparison (handle string/number mismatch)
+          const normalizedSelectedId = selectedConversationId 
+            ? String(selectedConversationId).trim() 
+            : null;
+          const normalizedConversationId = conversation.id 
+            ? String(conversation.id).trim() 
+            : null;
+          const isSelected = normalizedSelectedId === normalizedConversationId;
+          
           const participantNames = getParticipantNames(conversation);
           const avatars = getParticipantAvatars(conversation);
           const lastMessageTime = formatLastMessageTime(conversation.last_message_at);
@@ -233,8 +241,10 @@ const ConversationList = ({
               key={conversation.id}
               onClick={() => onConversationClick(conversation.id)}
               className={cn(
-                "px-4 py-3 cursor-pointer transition-colors hover:bg-muted/50 flex items-start gap-3",
-                isSelected && "bg-primary/5 border-l-4 border-l-primary"
+                "px-4 py-3 cursor-pointer transition-all flex items-start gap-3 relative",
+                isSelected 
+                  ? "bg-primary/15 border-l-4 border-l-primary shadow-sm hover:bg-primary/20" 
+                  : "hover:bg-muted/50 border-l-4 border-l-transparent"
               )}
             >
               {/* Avatars */}
@@ -281,9 +291,17 @@ const ConversationList = ({
               {/* Content */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-2 mb-1">
-                  <h3 className="font-semibold text-sm truncate">
-                    {stripHtml(getMainThreadSubject(conversation) || conversation.subject || participantNames)}
-                  </h3>
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    {isSelected && (
+                      <Circle className="h-2 w-2 fill-primary text-primary flex-shrink-0" />
+                    )}
+                    <h3 className={cn(
+                      "text-sm truncate",
+                      isSelected ? "font-bold text-primary dark:text-primary" : "font-semibold"
+                    )}>
+                      {stripHtml(getMainThreadSubject(conversation) || conversation.subject || participantNames)}
+                    </h3>
+                  </div>
                   {lastMessageTime && (
                     <span className="text-xs text-muted-foreground flex-shrink-0">
                       {lastMessageTime}
