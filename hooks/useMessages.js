@@ -363,3 +363,91 @@ export const useConversation = (id, options = {}) => {
   });
 };
 
+// Add participant mutation
+export const useAddParticipant = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ conversationId, userId }) => {
+      const response = await messagesService.addParticipant(conversationId, userId);
+      return response.data;
+    },
+    onSuccess: (data, variables) => {
+      const { conversationId } = variables;
+      
+      // Invalidate conversation details to refresh participant list
+      queryClient.invalidateQueries({ queryKey: messageKeys.conversationDetail(conversationId) });
+      queryClient.invalidateQueries({ queryKey: messageKeys.conversationList() });
+      
+      toast.success("Participant added", {
+        description: "The user has been added to the conversation.",
+      });
+    },
+    onError: (error, variables) => {
+      console.error("Add participant error:", error);
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.response?.data?.detail ||
+        "Failed to add participant";
+      
+      // Strip HTML tags from error message
+      const stripHtml = (html) => {
+        if (typeof html !== 'string') return html;
+        return html.replace(/<[^>]*>/g, '').trim();
+      };
+      
+      const cleanErrorMessage = Array.isArray(errorMessage)
+        ? errorMessage.map((e) => stripHtml(e.msg || e)).join(", ")
+        : stripHtml(errorMessage);
+      
+      toast.error("Failed to add participant", {
+        description: cleanErrorMessage,
+      });
+    },
+  });
+};
+
+// Remove participant mutation
+export const useRemoveParticipant = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ conversationId, userId }) => {
+      const response = await messagesService.removeParticipant(conversationId, userId);
+      return response.data;
+    },
+    onSuccess: (data, variables) => {
+      const { conversationId } = variables;
+      
+      // Invalidate conversation details to refresh participant list
+      queryClient.invalidateQueries({ queryKey: messageKeys.conversationDetail(conversationId) });
+      queryClient.invalidateQueries({ queryKey: messageKeys.conversationList() });
+      
+      toast.success("Participant removed", {
+        description: "The user has been removed from the conversation.",
+      });
+    },
+    onError: (error, variables) => {
+      console.error("Remove participant error:", error);
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.response?.data?.detail ||
+        "Failed to remove participant";
+      
+      // Strip HTML tags from error message
+      const stripHtml = (html) => {
+        if (typeof html !== 'string') return html;
+        return html.replace(/<[^>]*>/g, '').trim();
+      };
+      
+      const cleanErrorMessage = Array.isArray(errorMessage)
+        ? errorMessage.map((e) => stripHtml(e.msg || e)).join(", ")
+        : stripHtml(errorMessage);
+      
+      toast.error("Failed to remove participant", {
+        description: cleanErrorMessage,
+      });
+    },
+  });
+};
+

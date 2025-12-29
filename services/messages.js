@@ -116,5 +116,27 @@ export const messagesService = {
             throw error;
         }
     },
+
+    // Add participant to conversation
+    addParticipant: async (conversationId, userId) => {
+        try {
+            return await api.post(`/conversations/${conversationId}/participants`, {
+                user_id: userId,
+            });
+        } catch (error) {
+            console.error(`Add participant ${userId} to conversation ${conversationId} failed:`, error);
+            throw error;
+        }
+    },
+
+    // Remove participant from conversation
+    removeParticipant: async (conversationId, userId) => {
+        try {
+            return await api.delete(`/conversations/${conversationId}/participants/${userId}`);
+        } catch (error) {
+            console.error(`Remove participant ${userId} from conversation ${conversationId} failed:`, error);
+            throw error;
+        }
+    },
 };
 

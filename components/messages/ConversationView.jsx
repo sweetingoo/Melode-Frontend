@@ -38,7 +38,15 @@ import { messageKeys } from "@/hooks/useMessages";
 import { messagesService } from "@/services/messages";
 import { usePresence, useBatchPresence } from "@/hooks/usePresence";
 import { toast } from "sonner";
-import { MessageSquare, UserPlus, AlertCircle } from "lucide-react";
+import { MessageSquare, UserPlus, AlertCircle, Users } from "lucide-react";
+import ParticipantManager from "./ParticipantManager";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 const ConversationView = ({
   conversationId,
@@ -54,6 +62,7 @@ const ConversationView = ({
   const [replyMessage, setReplyMessage] = useState("");
   const [showAdvancedEditor, setShowAdvancedEditor] = useState(false);
   const [mentionedUsers, setMentionedUsers] = useState([]);
+  const [showParticipantsDialog, setShowParticipantsDialog] = useState(false);
   const [deliveryChannels, setDeliveryChannels] = useState({
     send_email: false,
     send_sms: false,
@@ -149,6 +158,17 @@ const ConversationView = ({
       typeof id === 'string' ? parseInt(id) : id
     );
   }, [conversation?.participant_user_ids]);
+
+  // Listen for open participants dialog event
+  useEffect(() => {
+    const handleOpenParticipants = () => {
+      setShowParticipantsDialog(true);
+    };
+    window.addEventListener('open-participants', handleOpenParticipants);
+    return () => {
+      window.removeEventListener('open-participants', handleOpenParticipants);
+    };
+  }, []);
 
   // Get mentioned users not in conversation
   const mentionedUsersNotInChat = useMemo(() => {
@@ -559,6 +579,12 @@ const ConversationView = ({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem
+                onClick={() => setShowParticipantsDialog(true)}
+              >
+                <Users className="h-4 w-4 mr-2" />
+                Manage Participants
+              </DropdownMenuItem>
+              <DropdownMenuItem
                 onClick={() => router.push(`/admin/messages?conversation=${conversationId}`)}
               >
                 View Details
@@ -816,6 +842,24 @@ const ConversationView = ({
           </div>
         </div>
       </div>
+
+      {/* Participants Management Dialog */}
+      <Dialog open={showParticipantsDialog} onOpenChange={setShowParticipantsDialog}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Manage Participants</DialogTitle>
+            <DialogDescription>
+              Add or remove participants from this conversation.
+            </DialogDescription>
+          </DialogHeader>
+          <ParticipantManager
+            conversationId={conversationId}
+            conversation={conversation}
+            usersData={usersData}
+            currentUser={currentUser}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
