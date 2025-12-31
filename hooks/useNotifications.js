@@ -15,6 +15,8 @@ export const useNotifications = (params = {}, options = {}) => {
     queryKey: notificationKeys.list(params),
     queryFn: async () => {
       const response = await notificationsService.getNotifications(params);
+      // New API structure: response.data contains { notifications: [...], total, page, page_size }
+      // Return the full response data structure
       return response.data;
     },
     staleTime: 1 * 60 * 1000, // 1 minute (notifications should be fresh)

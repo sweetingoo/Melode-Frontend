@@ -56,8 +56,8 @@ const NotificationsDropdown = () => {
   );
 
   const unreadCount = unreadCountData?.unread_count || 0;
-  // Updated to use 'notifications' instead of 'messages'
-  const notifications = notificationsData?.notifications || notificationsData?.messages || notificationsData?.data || [];
+  // New API structure: response contains { notifications: [...], total, page, page_size }
+  const notifications = notificationsData?.notifications || [];
 
   const getMessageTypeIcon = (messageType) => {
     const iconConfig = {

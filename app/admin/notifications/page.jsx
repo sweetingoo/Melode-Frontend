@@ -114,9 +114,9 @@ const NotificationsPage = () => {
 
   const { data: notificationsData, isLoading: isLoadingNotifications } = useNotifications(queryParams);
 
-  // Updated to use 'notifications' instead of 'messages'
-  const notifications = notificationsData?.notifications || notificationsData?.messages || notificationsData?.data || [];
-  const totalPages = notificationsData?.total_pages || 1;
+  // New API structure: response contains { notifications: [...], total, page, page_size }
+  const notifications = notificationsData?.notifications || [];
+  const totalPages = notificationsData?.total_pages || Math.ceil((notificationsData?.total || 0) / (queryParams.per_page || 20));
   const total = notificationsData?.total || 0;
 
   const getPriorityBadge = (priority) => {
