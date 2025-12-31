@@ -42,13 +42,13 @@ const MessagesPageContent = () => {
   const isMobile = useIsMobile();
   const { data: currentUser } = useCurrentUser();
   const { hasPermission } = usePermissionsCheck();
-  
+
   // Permission checks
   const canReadMessages = hasPermission("message:read") || hasPermission("message:list");
   const canCreateMessage = hasPermission("message:create");
   const canUpdateMessage = hasPermission("message:update");
   const canDeleteMessage = hasPermission("message:delete");
-  
+
   const selectedMessageId = searchParams.get("message");
   const selectedConversationId = searchParams.get("conversation");
   const [viewMode, setViewMode] = useState("conversations"); // "conversations" or "messages"
@@ -64,7 +64,7 @@ const MessagesPageContent = () => {
     priority: "",
     my_messages: false,
   });
-  
+
   const [messageFormData, setMessageFormData] = useState({
     title: "",
     content: "",
@@ -119,7 +119,7 @@ const MessagesPageContent = () => {
   const messages = messagesData?.messages || messagesData?.data || [];
   const totalPages = messagesData?.total_pages || 1;
   const total = messagesData?.total || 0;
-  const selectedMessage = selectedMessageId 
+  const selectedMessage = selectedMessageId
     ? messages.find((m) => m.id.toString() === selectedMessageId)
     : null;
 
@@ -156,7 +156,7 @@ const MessagesPageContent = () => {
     if (messageFormData.image_url) submitData.image_url = messageFormData.image_url;
     if (messageFormData.link_url) submitData.link_url = messageFormData.link_url;
     if (messageFormData.link_text) submitData.link_text = messageFormData.link_text;
-    
+
     if (scheduledDate && scheduledTime) {
       const scheduledDateTime = new Date(scheduledDate);
       const [hours, minutes] = scheduledTime.split(":");
@@ -248,7 +248,7 @@ const MessagesPageContent = () => {
         const messageId = event.detail.data.id;
         newMessageIdsRef.current.add(messageId);
         setNewMessageIds(new Set(newMessageIdsRef.current));
-        
+
         // Scroll to top of messages list to show new message
         setTimeout(() => {
           const scrollArea = document.querySelector('[data-radix-scroll-area-viewport]');
@@ -256,7 +256,7 @@ const MessagesPageContent = () => {
             scrollArea.scrollTop = 0;
           }
         }, 200);
-        
+
         // Remove from new messages after 5 seconds
         setTimeout(() => {
           newMessageIdsRef.current.delete(messageId);
@@ -267,7 +267,7 @@ const MessagesPageContent = () => {
 
     // Listen for custom SSE events
     window.addEventListener("sse-message-created", handleSSEMessage);
-    
+
     return () => {
       window.removeEventListener("sse-message-created", handleSSEMessage);
     };
@@ -278,7 +278,7 @@ const MessagesPageContent = () => {
     // Remove from new messages when clicked
     newMessageIdsRef.current.delete(messageId);
     setNewMessageIds(new Set(newMessageIdsRef.current));
-    
+
     if (isMobile) {
       router.push(`/admin/messages/${messageId}`);
     } else {
@@ -325,20 +325,20 @@ const MessagesPageContent = () => {
   // Sort conversations: first conversation stays at top, rest sorted by last_message_at descending
   const sortedConversations = useMemo(() => {
     if (conversations.length === 0) return [];
-    
+
     // Get the first conversation (index 0) - this will stick to the top
     const firstConversation = conversations[0];
-    
+
     // Get the rest of the conversations (excluding the first one)
     const restConversations = conversations.slice(1);
-    
+
     // Sort the rest by last_message_at descending
     const sortedRest = [...restConversations].sort((a, b) => {
       const dateA = new Date(a.last_message_at || a.created_at || 0);
       const dateB = new Date(b.last_message_at || b.created_at || 0);
       return dateB - dateA;
     });
-    
+
     // Return first conversation at top, followed by sorted rest
     return [firstConversation, ...sortedRest];
   }, [conversations]);
@@ -417,7 +417,7 @@ const MessagesPageContent = () => {
               const result = await createMessageMutation.mutateAsync(submitData);
               setIsCreateModalOpen(false);
               resetForm();
-              
+
               // If message was added to a conversation, navigate to that conversation
               if (result?.conversation_id) {
                 router.push(`/admin/messages?conversation=${result.conversation_id}`);
