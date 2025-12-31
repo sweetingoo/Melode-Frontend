@@ -64,6 +64,7 @@ import {
   FolderKanban,
   Bell,
   MessageSquare,
+  Megaphone,
 } from "lucide-react";
 import { assets } from "../assets/assets";
 import Image from "next/image";
@@ -143,7 +144,7 @@ const mainMenuItems = [
   },
   {
     title: "Broadcasts",
-    icon: MessageSquare,
+    icon: Megaphone,
     url: "/admin/broadcasts",
     permission: "message:read", // Permission to read messages (same as messages)
   },

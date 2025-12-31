@@ -48,6 +48,7 @@ import {
   XCircle,
   Info,
   UserCheck,
+  Megaphone,
 } from "lucide-react";
 import {
   useNotifications,
@@ -55,6 +56,7 @@ import {
 import { useCurrentUser } from "@/hooks/useAuth";
 import { format } from "date-fns";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
+import { parseUTCDate } from "@/utils/time";
 
 // Helper function to ensure HTML content is properly rendered
 const getNotificationContent = (notification) => {
@@ -310,7 +312,8 @@ const NotificationsPage = () => {
               <div className="space-y-2">
                 {notifications.map((notification) => {
                   const readStatus = getReadStatus(notification);
-                  const Icon = getMessageTypeIcon(notification.message_type);
+                  // Use Megaphone icon for broadcasts, otherwise use message type icon
+                  const Icon = notification.is_broadcast ? Megaphone : getMessageTypeIcon(notification.message_type);
                   const isBroadcast = notification.is_broadcast;
                   const isSent = notification.created_by_user_id === currentUser?.id;
                   
@@ -419,7 +422,12 @@ const NotificationsPage = () => {
                                 <div className="flex items-center gap-1">
                                   <Clock className="h-3 w-3" />
                                   {notification.created_at
-                                    ? format(new Date(notification.created_at), "MMM d, yyyy HH:mm")
+                                    ? (() => {
+                                        const date = parseUTCDate(notification.created_at);
+                                        return date && !isNaN(date.getTime()) 
+                                          ? format(date, "MMM d, yyyy HH:mm")
+                                          : "N/A";
+                                      })()
                                     : "N/A"}
                                 </div>
                                 {notification.sender_name && (

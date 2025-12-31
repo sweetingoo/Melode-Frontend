@@ -38,6 +38,7 @@ import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow, format } from "date-fns";
 import { toast } from "sonner";
+import { parseUTCDate } from "@/utils/time";
 
 const BroadcastDetailPage = () => {
   const params = useParams();
@@ -230,7 +231,12 @@ const BroadcastDetailPage = () => {
                   <Clock className="h-4 w-4" />
                   <span>
                     {broadcast.created_at
-                      ? format(new Date(broadcast.created_at), "PPpp")
+                      ? (() => {
+                          const date = parseUTCDate(broadcast.created_at);
+                          return date && !isNaN(date.getTime())
+                            ? format(date, "PPpp")
+                            : "Unknown time";
+                        })()
                       : "Unknown time"}
                   </span>
                 </div>
@@ -239,9 +245,12 @@ const BroadcastDetailPage = () => {
                     <CheckCircle2 className="h-4 w-4" />
                     <span>
                       Read{" "}
-                      {formatDistanceToNow(new Date(receipt.read_at), {
-                        addSuffix: true,
-                      })}
+                      {(() => {
+                        const date = parseUTCDate(receipt.read_at);
+                        return date && !isNaN(date.getTime())
+                          ? formatDistanceToNow(date, { addSuffix: true })
+                          : "";
+                      })()}
                     </span>
                   </div>
                 )}
@@ -313,7 +322,12 @@ const BroadcastDetailPage = () => {
                     {receipt?.acknowledged_at && (
                       <span className="text-sm text-muted-foreground">
                         on{" "}
-                        {format(new Date(receipt.acknowledged_at), "PPpp")}
+                        {(() => {
+                          const date = parseUTCDate(receipt.acknowledged_at);
+                          return date && !isNaN(date.getTime())
+                            ? format(date, "PPpp")
+                            : "";
+                        })()}
                       </span>
                     )}
                   </div>

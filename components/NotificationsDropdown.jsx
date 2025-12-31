@@ -10,11 +10,12 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Bell, Mail, MessageSquare, CheckSquare2, AlertCircle, Clock, Loader2, Send, CheckCircle2, XCircle, UserCheck, Info } from "lucide-react";
+import { Bell, Mail, MessageSquare, CheckSquare2, AlertCircle, Clock, Loader2, Send, CheckCircle2, XCircle, UserCheck, Info, Megaphone } from "lucide-react";
 import { useNotifications, useUnreadNotificationsCount } from "@/hooks/useNotifications";
 import { useCurrentUser } from "@/hooks/useAuth";
 import { format, isToday, isYesterday } from "date-fns";
 import { cn } from "@/lib/utils";
+import { parseUTCDate } from "@/utils/time";
 
 // Helper function to ensure HTML content is properly rendered
 const getNotificationContent = (notification) => {
@@ -70,7 +71,8 @@ const NotificationsDropdown = () => {
 
   const formatNotificationTime = (dateString) => {
     if (!dateString) return "N/A";
-    const date = new Date(dateString);
+    const date = parseUTCDate(dateString);
+    if (!date || isNaN(date.getTime())) return "N/A";
     if (isToday(date)) {
       return format(date, "HH:mm");
     } else if (isYesterday(date)) {
@@ -144,7 +146,8 @@ const NotificationsDropdown = () => {
             ) : (
               <div className="divide-y">
                 {notifications.map((notification) => {
-                  const Icon = getMessageTypeIcon(notification.message_type);
+                  // Use Megaphone icon for broadcasts, otherwise use message type icon
+                  const Icon = notification.is_broadcast ? Megaphone : getMessageTypeIcon(notification.message_type);
                   // Use is_read directly from notification (new API structure)
                   const isUnread = !notification.is_read;
                   const isSent = notification.created_by_user_id === currentUser?.id;

@@ -3,21 +3,49 @@
  */
 
 /**
- * Parse a time string, handling timezone issues
- * If the string is ISO format without timezone, treat it as UTC
+ * Parse a UTC date string from the server and convert to local time
+ * Handles various UTC formats:
+ * - "2025-12-31T12:00:00Z" (explicit UTC)
+ * - "2025-12-31T12:00:00" (ISO without timezone - treat as UTC)
+ * - "2025-12-31T12:00:00+00:00" (UTC with offset)
+ * 
+ * @param {string|Date} dateString - Date string from server (assumed to be UTC)
+ * @returns {Date} Date object in local timezone
  */
-export const parseTime = (timeString) => {
-  if (!timeString) return null;
+export const parseUTCDate = (dateString) => {
+  if (!dateString) return null;
 
-  if (typeof timeString === 'string') {
-    // If the string is ISO format without timezone indicator, treat it as UTC
-    if (timeString.includes('T') && !timeString.endsWith('Z') && !timeString.includes('+') && !timeString.match(/[+-]\d{2}:\d{2}$/)) {
-      return new Date(timeString + 'Z');
-    }
-    return new Date(timeString);
+  if (dateString instanceof Date) {
+    return dateString;
   }
 
-  return new Date(timeString);
+  if (typeof dateString === 'string') {
+    // If already has timezone indicator (Z, +00:00, etc.), use as-is
+    if (dateString.endsWith('Z') || dateString.match(/[+-]\d{2}:\d{2}$/)) {
+      return new Date(dateString);
+    }
+    
+    // If it's ISO format without timezone, treat as UTC
+    // Format: YYYY-MM-DD or YYYY-MM-DDTHH:mm:ss or YYYY-MM-DDTHH:mm:ss.sss
+    if (dateString.includes('T') || /^\d{4}-\d{2}-\d{2}/.test(dateString)) {
+      // Append 'Z' to indicate UTC, then JavaScript will convert to local time
+      return new Date(dateString.endsWith('Z') ? dateString : dateString + 'Z');
+    }
+    
+    // Fallback: try parsing as-is
+    return new Date(dateString);
+  }
+
+  return new Date(dateString);
+};
+
+/**
+ * Parse a time string, handling timezone issues
+ * If the string is ISO format without timezone, treat it as UTC
+ * @deprecated Use parseUTCDate instead for better UTC handling
+ */
+export const parseTime = (timeString) => {
+  return parseUTCDate(timeString);
 };
 
 /**

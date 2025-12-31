@@ -32,6 +32,7 @@ import { useMessage } from "@/hooks/useMessages";
 import { useCurrentUser } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow, format } from "date-fns";
+import { parseUTCDate } from "@/utils/time";
 
 const BroadcastStatusPage = () => {
   const params = useParams();
@@ -198,12 +199,18 @@ const BroadcastStatusPage = () => {
         `${r.first_name || ""} ${r.last_name || ""}`.trim() || "N/A",
         r.email || "N/A",
         r.is_read ? "Yes" : "No",
-        r.read_at ? format(new Date(r.read_at), "PPpp") : "N/A",
+        r.read_at ? (() => {
+          const date = parseUTCDate(r.read_at);
+          return date && !isNaN(date.getTime()) ? format(date, "PPpp") : "N/A";
+        })() : "N/A",
         ...(broadcast.requires_acknowledgement
           ? [
               r.acknowledgement_status || "Not acknowledged",
               r.acknowledged_at
-                ? format(new Date(r.acknowledged_at), "PPpp")
+                ? (() => {
+                    const date = parseUTCDate(r.acknowledged_at);
+                    return date && !isNaN(date.getTime()) ? format(date, "PPpp") : "N/A";
+                  })()
                 : "N/A",
               r.acknowledgement_note || "N/A",
             ]
@@ -243,9 +250,12 @@ const BroadcastStatusPage = () => {
               <span>
                 Sent{" "}
                 {broadcast.created_at
-                  ? formatDistanceToNow(new Date(broadcast.created_at), {
-                      addSuffix: true,
-                    })
+                  ? (() => {
+                      const date = parseUTCDate(broadcast.created_at);
+                      return date && !isNaN(date.getTime())
+                        ? formatDistanceToNow(date, { addSuffix: true })
+                        : "";
+                    })()
                   : "Unknown time"}
               </span>
             </div>
@@ -397,7 +407,10 @@ const BroadcastStatusPage = () => {
                             <Clock className="h-3 w-3" />
                             <span>
                               Read{" "}
-                              {formatDistanceToNow(new Date(recipient.read_at), {
+                              {(() => {
+                                const date = parseUTCDate(recipient.read_at);
+                                return date && !isNaN(date.getTime())
+                                  ? formatDistanceToNow(date, {
                                 addSuffix: true,
                               })}
                             </span>
@@ -408,10 +421,12 @@ const BroadcastStatusPage = () => {
                             <CheckCircle2 className="h-3 w-3" />
                             <span>
                               Acknowledged{" "}
-                              {formatDistanceToNow(
-                                new Date(recipient.acknowledged_at),
-                                { addSuffix: true }
-                              )}
+                              {(() => {
+                                const date = parseUTCDate(recipient.acknowledged_at);
+                                return date && !isNaN(date.getTime())
+                                  ? formatDistanceToNow(date, { addSuffix: true })
+                                  : "";
+                              })()}
                             </span>
                           </div>
                         )}

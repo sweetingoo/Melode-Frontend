@@ -31,6 +31,7 @@ import {
   Send,
   Info,
   BarChart3,
+  Megaphone,
 } from "lucide-react";
 import { useBroadcastInbox } from "@/hooks/useMessages";
 import { useUsers } from "@/hooks/useUsers";
@@ -42,6 +43,7 @@ import CreateBroadcastDialog from "@/components/broadcasts/CreateBroadcastDialog
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
 import { Plus } from "lucide-react";
+import { parseUTCDate } from "@/utils/time";
 
 const BroadcastsPage = () => {
   const router = useRouter();
@@ -327,7 +329,7 @@ const BroadcastsPage = () => {
             </div>
           ) : filteredBroadcasts.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
-              <MessageSquare className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <Megaphone className="h-12 w-12 mx-auto mb-4 opacity-50" />
               <p>No broadcasts found</p>
             </div>
           ) : (
@@ -418,10 +420,12 @@ const BroadcastsPage = () => {
                               <Clock className="h-3 w-3" />
                               <span>
                                 {broadcast.created_at
-                                  ? formatDistanceToNow(
-                                      new Date(broadcast.created_at),
-                                      { addSuffix: true }
-                                    )
+                                  ? (() => {
+                                      const date = parseUTCDate(broadcast.created_at);
+                                      return date && !isNaN(date.getTime())
+                                        ? formatDistanceToNow(date, { addSuffix: true })
+                                        : "Unknown time";
+                                    })()
                                   : "Unknown time"}
                               </span>
                             </div>
@@ -459,10 +463,12 @@ const BroadcastsPage = () => {
                                 <CheckCircle2 className="h-3 w-3" />
                                 <span>
                                   Read{" "}
-                                  {formatDistanceToNow(
-                                    new Date(receipt.read_at),
-                                    { addSuffix: true }
-                                  )}
+                                  {(() => {
+                                    const date = parseUTCDate(receipt.read_at);
+                                    return date && !isNaN(date.getTime())
+                                      ? formatDistanceToNow(date, { addSuffix: true })
+                                      : "";
+                                  })()}
                                 </span>
                               </div>
                             )}
