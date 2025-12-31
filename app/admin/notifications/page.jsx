@@ -46,6 +46,8 @@ import {
   CheckSquare,
   Send,
   XCircle,
+  Info,
+  UserCheck,
 } from "lucide-react";
 import {
   useNotifications,
@@ -53,6 +55,34 @@ import {
 import { useCurrentUser } from "@/hooks/useAuth";
 import { format } from "date-fns";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
+
+// Helper function to ensure HTML content is properly rendered
+const getNotificationContent = (notification) => {
+  const content = notification.content || notification.summary || "No content";
+  if (!content || typeof content !== 'string') {
+    return "No content";
+  }
+  
+  // Check if content contains HTML tags (either as <tag> or &lt;tag&gt;)
+  const hasHtmlTags = content.includes('<') || content.includes('&lt;');
+  
+  if (hasHtmlTags) {
+    // If content contains HTML entities like &lt; or &gt;, decode them
+    if (content.includes('&lt;') || content.includes('&gt;') || content.includes('&amp;')) {
+      // Create a temporary element to decode HTML entities
+      if (typeof window !== 'undefined') {
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = content;
+        return tempDiv.innerHTML; // This will decode entities
+      }
+    }
+    // If it's already proper HTML, return as-is
+    return content;
+  }
+  
+  // If it's plain text, return as-is (will be rendered as text)
+  return content;
+};
 
 const NotificationsPage = () => {
   const router = useRouter();
@@ -287,8 +317,11 @@ const NotificationsPage = () => {
                   return (
                     <div
                       key={notification.id}
-                      className={`p-4 rounded-lg border transition-colors cursor-pointer hover:bg-muted/50 ${
+                      className={`p-4 rounded-lg border transition-colors cursor-pointer hover:bg-muted/50 border-l-4 ${
                         !readStatus.isRead ? "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800" : ""
+                      } ${
+                        // Different styling for sent broadcasts
+                        isSent && isBroadcast ? "bg-green-50/30 dark:bg-green-950/10 border-l-green-500" : ""
                       }`}
                       onClick={() => handleNotificationClick(notification)}
                     >
@@ -306,23 +339,44 @@ const NotificationsPage = () => {
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-2">
-                            <div className="flex-1">
+                              <div className="flex-1">
                               <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                <h3 className={`font-semibold ${
-                                  !readStatus.isRead ? "text-blue-900 dark:text-blue-100" : ""
-                                }`}>
-                                  {notification.title}
-                                </h3>
+                                <h3 
+                                  className={`font-semibold ${
+                                    !readStatus.isRead ? "text-blue-900 dark:text-blue-100" : ""
+                                  } [&_p]:mb-0 [&_p]:last:mb-0 [&_p]:inline`}
+                                  dangerouslySetInnerHTML={{ 
+                                    __html: (() => {
+                                      const title = notification.title || "";
+                                      if (!title || typeof title !== 'string') return "";
+                                      // Decode HTML entities if present
+                                      if (title.includes('&lt;') || title.includes('&gt;') || title.includes('&amp;')) {
+                                        if (typeof window !== 'undefined') {
+                                          const tempDiv = document.createElement('div');
+                                          tempDiv.innerHTML = title;
+                                          return tempDiv.innerHTML;
+                                        }
+                                      }
+                                      return title;
+                                    })()
+                                  }}
+                                />
                                 {!readStatus.isRead && (
                                   <Badge variant="default" className="h-5 px-1.5">
                                     <Circle className="h-3 w-3 fill-current" />
                                   </Badge>
                                 )}
                                 {isSent && isBroadcast && (
-                                  <Badge variant="outline" className="h-5 px-1.5 flex items-center gap-1">
-                                    <Send className="h-3 w-3" />
-                                    Sent
-                                  </Badge>
+                                  <>
+                                    <Badge variant="outline" className="h-5 px-1.5 flex items-center gap-1 bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-300 border-green-200 dark:border-green-800">
+                                      <Send className="h-3 w-3" />
+                                      Sent by you
+                                    </Badge>
+                                    <Badge variant="outline" className="h-5 px-1.5 flex items-center gap-1 bg-muted text-muted-foreground">
+                                      <Info className="h-3 w-3" />
+                                      No action needed
+                                    </Badge>
+                                  </>
                                 )}
                                 {isBroadcast && notification.category && (
                                   <Badge variant="outline" className="h-5 px-1.5">
@@ -331,7 +385,8 @@ const NotificationsPage = () => {
                                 )}
                                 {getPriorityBadge(notification.priority)}
                                 <Badge variant="outline" className="h-5 px-1.5">{notification.message_type}</Badge>
-                                {notification.requires_acknowledgement && (
+                                {/* Only show acknowledgment status for received broadcasts, not sent ones */}
+                                {notification.requires_acknowledgement && !isSent && (
                                   <div className="flex items-center gap-1">
                                     {readStatus.isAcknowledged ? (
                                       readStatus.acknowledgementStatus === "agreed" ? (
@@ -357,7 +412,7 @@ const NotificationsPage = () => {
                               <div 
                                 className="text-sm text-muted-foreground line-clamp-2 [&_p]:mb-0 [&_p]:last:mb-0 [&_p]:leading-relaxed [&_ul]:list-disc [&_ul]:ml-4 [&_ul]:my-1 [&_ol]:list-decimal [&_ol]:ml-4 [&_ol]:my-1 [&_li]:mb-0.5 [&_strong]:font-bold [&_em]:italic [&_a]:underline [&_a]:hover:underline-offset-2"
                                 dangerouslySetInnerHTML={{ 
-                                  __html: notification.content || notification.summary || "No content"
+                                  __html: getNotificationContent(notification)
                                 }}
                               />
                               <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground flex-wrap">

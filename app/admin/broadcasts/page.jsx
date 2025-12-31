@@ -28,6 +28,9 @@ import {
   Users,
   Bell,
   MessageSquare,
+  Send,
+  Info,
+  BarChart3,
 } from "lucide-react";
 import { useBroadcastInbox } from "@/hooks/useMessages";
 import { useUsers } from "@/hooks/useUsers";
@@ -70,17 +73,9 @@ const BroadcastsPage = () => {
     ...(filters.unacknowledged_only && { unacknowledged_only: true }),
   });
 
-  // Filter out broadcasts created by the current user (creators don't need to acknowledge their own broadcasts)
-  const broadcasts = useMemo(() => {
-    const allBroadcasts = data?.messages || data?.data || [];
-    if (!currentUser) return allBroadcasts;
-    // Only show broadcasts where the user is a recipient, not the creator
-    return allBroadcasts.filter(
-      (broadcast) => broadcast.created_by_user_id !== currentUser.id
-    );
-  }, [data, currentUser]);
-  
-  const total = broadcasts.length;
+  // Show all broadcasts (both sent and received)
+  const broadcasts = data?.messages || data?.data || [];
+  const total = data?.total || 0;
   const totalPages = data?.total_pages || Math.ceil(total / 20);
 
   // Extract unique categories from broadcasts
@@ -343,13 +338,25 @@ const BroadcastsPage = () => {
                 const receipt = broadcast.receipts?.find(
                   (r) => r.user_id === broadcast.current_user_id
                 );
+                const isSent = currentUser?.id === broadcast.created_by_user_id;
+                
+                // Calculate acknowledgment stats for sent broadcasts
+                const ackStats = isSent && broadcast.requires_acknowledgement ? (() => {
+                  const receipts = broadcast.receipts || [];
+                  const totalRecipients = receipts.length;
+                  const acknowledged = receipts.filter(r => r.acknowledgement_status).length;
+                  const agreed = receipts.filter(r => r.acknowledgement_status === "agreed").length;
+                  const disagreed = receipts.filter(r => r.acknowledgement_status === "disagreed").length;
+                  return { totalRecipients, acknowledged, agreed, disagreed };
+                })() : null;
 
                 return (
                   <Card
                     key={broadcast.id}
                     className={cn(
-                      "cursor-pointer hover:bg-muted/50 transition-colors",
-                      !isRead && "border-l-4 border-l-primary bg-primary/5"
+                      "cursor-pointer hover:bg-muted/50 transition-colors border-l-4",
+                      !isRead && !isSent && "border-l-primary bg-primary/5",
+                      isSent && "border-l-green-500 bg-green-50/30 dark:bg-green-950/10"
                     )}
                     onClick={() => router.push(`/admin/broadcasts/${broadcast.id}`)}
                   >
@@ -376,6 +383,18 @@ const BroadcastsPage = () => {
                               </Badge>
                             )}
                             {getPriorityBadge(broadcast.priority)}
+                            {isSent && (
+                              <>
+                                <Badge variant="outline" className="bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-300 border-green-200 dark:border-green-800">
+                                  <Send className="h-3 w-3 mr-1" />
+                                  Sent by you
+                                </Badge>
+                                <Badge variant="outline" className="bg-muted text-muted-foreground">
+                                  <Info className="h-3 w-3 mr-1" />
+                                  No action needed
+                                </Badge>
+                              </>
+                            )}
                           </div>
 
                           <div
@@ -406,12 +425,36 @@ const BroadcastsPage = () => {
                                   : "Unknown time"}
                               </span>
                             </div>
-                            {broadcast.requires_acknowledgement && (
+                            {/* Show acknowledgment status for received broadcasts */}
+                            {broadcast.requires_acknowledgement && !isSent && (
                               <div className="flex items-center gap-1">
                                 {getAcknowledgementBadge(ackStatus)}
                               </div>
                             )}
-                            {isRead && receipt?.read_at && (
+                            {/* Show acknowledgment stats for sent broadcasts */}
+                            {isSent && broadcast.requires_acknowledgement && ackStats && (
+                              <div className="flex items-center gap-2">
+                                <Badge variant="outline" className="text-xs">
+                                  <BarChart3 className="h-3 w-3 mr-1" />
+                                  {ackStats.acknowledged}/{ackStats.totalRecipients} acknowledged
+                                  {ackStats.agreed > 0 && ` (${ackStats.agreed} agreed`}
+                                  {ackStats.disagreed > 0 && `, ${ackStats.disagreed} disagreed`}
+                                  {ackStats.agreed > 0 || ackStats.disagreed > 0 ? ')' : ''}
+                                </Badge>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 text-xs"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    router.push(`/admin/broadcasts/${broadcast.id}/status`);
+                                  }}
+                                >
+                                  View Status
+                                </Button>
+                              </div>
+                            )}
+                            {isRead && receipt?.read_at && !isSent && (
                               <div className="flex items-center gap-1 text-green-600 dark:text-green-400">
                                 <CheckCircle2 className="h-3 w-3" />
                                 <span>

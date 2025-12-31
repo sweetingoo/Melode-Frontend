@@ -10,11 +10,39 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Bell, Mail, MessageSquare, CheckSquare2, AlertCircle, Clock, Loader2, Send, CheckCircle2, XCircle } from "lucide-react";
+import { Bell, Mail, MessageSquare, CheckSquare2, AlertCircle, Clock, Loader2, Send, CheckCircle2, XCircle, UserCheck, Info } from "lucide-react";
 import { useNotifications, useUnreadNotificationsCount } from "@/hooks/useNotifications";
 import { useCurrentUser } from "@/hooks/useAuth";
 import { format, isToday, isYesterday } from "date-fns";
 import { cn } from "@/lib/utils";
+
+// Helper function to ensure HTML content is properly rendered
+const getNotificationContent = (notification) => {
+  const content = notification.content || notification.summary || "No content";
+  if (!content || typeof content !== 'string') {
+    return "No content";
+  }
+  
+  // Check if content contains HTML tags (either as <tag> or &lt;tag&gt;)
+  const hasHtmlTags = content.includes('<') || content.includes('&lt;');
+  
+  if (hasHtmlTags) {
+    // If content contains HTML entities like &lt; or &gt;, decode them
+    if (content.includes('&lt;') || content.includes('&gt;') || content.includes('&amp;')) {
+      // Create a temporary element to decode HTML entities
+      if (typeof window !== 'undefined') {
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = content;
+        return tempDiv.innerHTML; // This will decode entities
+      }
+    }
+    // If it's already proper HTML, return as-is
+    return content;
+  }
+  
+  // If it's plain text, return as-is (will be rendered as text)
+  return content;
+};
 
 const NotificationsDropdown = () => {
   const router = useRouter();
@@ -127,8 +155,10 @@ const NotificationsDropdown = () => {
                       key={notification.id}
                       onClick={() => handleNotificationClick(notification)}
                       className={cn(
-                        "p-3 cursor-pointer transition-colors hover:bg-muted/50",
-                        isUnread && "bg-blue-50/50 dark:bg-blue-950/10"
+                        "p-3 cursor-pointer transition-colors hover:bg-muted/50 border-l-4",
+                        isUnread && "bg-blue-50/50 dark:bg-blue-950/10",
+                        // Different styling for sent broadcasts
+                        isSent && isBroadcast && "bg-green-50/30 dark:bg-green-950/10 border-l-green-500"
                       )}
                     >
                       <div className="flex items-start gap-3">
@@ -153,28 +183,47 @@ const NotificationsDropdown = () => {
                           <div className="flex items-start justify-between gap-2 mb-1">
                             <h4
                               className={cn(
-                                "text-sm font-medium truncate",
+                                "text-sm font-medium truncate [&_p]:mb-0 [&_p]:last:mb-0 [&_p]:inline",
                                 isUnread && "font-semibold"
                               )}
-                            >
-                              {notification.title}
-                            </h4>
+                              dangerouslySetInnerHTML={{ 
+                                __html: (() => {
+                                  const title = notification.title || "";
+                                  if (!title || typeof title !== 'string') return "";
+                                  // Decode HTML entities if present
+                                  if (title.includes('&lt;') || title.includes('&gt;') || title.includes('&amp;')) {
+                                    if (typeof window !== 'undefined') {
+                                      const tempDiv = document.createElement('div');
+                                      tempDiv.innerHTML = title;
+                                      return tempDiv.innerHTML;
+                                    }
+                                  }
+                                  return title;
+                                })()
+                              }}
+                            />
                             <div className="flex items-center gap-1 flex-shrink-0">
                               {isUnread && (
                                 <div className="w-2 h-2 rounded-full bg-blue-600 flex-shrink-0 mt-1" />
                               )}
                               {isSent && isBroadcast && (
-                                <Badge variant="outline" className="text-xs h-4 px-1.5 flex items-center gap-0.5">
-                                  <Send className="h-3 w-3" />
-                                  Sent
-                                </Badge>
+                                <>
+                                  <Badge variant="outline" className="text-xs h-4 px-1.5 flex items-center gap-0.5 bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-300 border-green-200 dark:border-green-800">
+                                    <Send className="h-3 w-3" />
+                                    Sent by you
+                                  </Badge>
+                                  <Badge variant="outline" className="text-xs h-4 px-1.5 flex items-center gap-0.5 bg-muted text-muted-foreground">
+                                    <Info className="h-3 w-3" />
+                                    No action needed
+                                  </Badge>
+                                </>
                               )}
                             </div>
                           </div>
                           <div 
-                            className="text-xs text-muted-foreground line-clamp-2 mb-1 [&_p]:mb-0 [&_p]:last:mb-0 [&_p]:leading-relaxed"
+                            className="text-xs text-muted-foreground line-clamp-2 mb-1 [&_p]:mb-0 [&_p]:last:mb-0 [&_p]:leading-relaxed [&_ul]:list-disc [&_ul]:ml-4 [&_ul]:my-1 [&_ol]:list-decimal [&_ol]:ml-4 [&_ol]:my-1 [&_li]:mb-0.5 [&_strong]:font-bold [&_em]:italic [&_a]:underline [&_a]:hover:underline-offset-2"
                             dangerouslySetInnerHTML={{ 
-                              __html: notification.content || notification.summary || "No content"
+                              __html: getNotificationContent(notification)
                             }}
                           />
                           <div className="flex items-center gap-2 flex-wrap">
@@ -194,7 +243,8 @@ const NotificationsDropdown = () => {
                                 {notification.priority}
                               </Badge>
                             )}
-                            {notification.requires_acknowledgement && (
+                            {/* Only show acknowledgment status for received broadcasts, not sent ones */}
+                            {notification.requires_acknowledgement && !isSent && (
                               <div className="flex items-center gap-1">
                                 {notification.is_acknowledged ? (
                                   notification.acknowledgement_status === "agreed" ? (
