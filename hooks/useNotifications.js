@@ -32,6 +32,10 @@ export const useUnreadNotificationsCount = (options = {}) => {
     },
     staleTime: 30 * 1000, // 30 seconds (count should be very fresh)
     refetchInterval: 60 * 1000, // Refetch every minute
+    retry: 2, // Retry up to 2 times on failure
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000), // Exponential backoff
+    // Don't throw errors - gracefully handle timeouts
+    throwOnError: false,
     ...options,
   });
 };

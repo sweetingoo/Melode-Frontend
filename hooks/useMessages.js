@@ -14,6 +14,8 @@ export const messageKeys = {
   conversationThread: (id) => [...messageKeys.conversations(), "thread", id],
   conversationMessages: (id, params) => [...messageKeys.conversations(), "messages", id, params],
   conversationDetail: (id) => [...messageKeys.conversations(), "detail", id],
+  broadcasts: () => [...messageKeys.all, "broadcasts"],
+  broadcastInbox: (params) => [...messageKeys.broadcasts(), "inbox", params],
 };
 
 // Get all messages query
@@ -51,7 +53,16 @@ export const useCreateMessage = () => {
 
   return useMutation({
     mutationFn: async (messageData) => {
-      const response = await messagesService.createMessage(messageData);
+      // If conversation_id is explicitly null or undefined, ensure it's null for broadcasts
+      // This automatically sets is_broadcast=true on the backend
+      const broadcastData = {
+        ...messageData,
+        // If conversation_id is not provided or is null, set it to null explicitly for broadcasts
+        ...(messageData.conversation_id === null || messageData.conversation_id === undefined 
+          ? { conversation_id: null } 
+          : {}),
+      };
+      const response = await messagesService.createMessage(broadcastData);
       return response.data;
     },
     onMutate: async (messageData) => {
@@ -305,6 +316,89 @@ export const useAcknowledgeMessage = () => {
           : errorMessage,
       });
     },
+  });
+};
+
+// Acknowledge message with status mutation (for broadcasts)
+export const useAcknowledgeMessageWithStatus = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, acknowledgementStatus, acknowledgementNote = "" }) => {
+      const response = await messagesService.acknowledgeMessageWithStatus(
+        id,
+        acknowledgementStatus,
+        acknowledgementNote
+      );
+      return response.data;
+    },
+    onSuccess: (data, variables) => {
+      // Update the message in cache
+      queryClient.setQueryData(messageKeys.detail(variables.id), (oldData) => {
+        if (!oldData) return oldData;
+        return {
+          ...oldData,
+          receipts: oldData.receipts?.map((receipt) =>
+            receipt.user_id === data.user_id
+              ? { ...receipt, ...data }
+              : receipt
+          ) || [],
+        };
+      });
+      
+      // Invalidate messages list and broadcast inbox to refresh acknowledgement status
+      queryClient.invalidateQueries({ queryKey: messageKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: messageKeys.broadcastInbox() });
+      
+      const statusText = variables.acknowledgementStatus === "agreed" ? "agreed" : "disagreed";
+      toast.success("Broadcast acknowledged", {
+        description: `You have ${statusText} to this broadcast.`,
+      });
+    },
+    onError: (error) => {
+      console.error("Acknowledge message with status error:", error);
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.response?.data?.detail ||
+        "Failed to acknowledge broadcast";
+      toast.error("Failed to acknowledge broadcast", {
+        description: Array.isArray(errorMessage)
+          ? errorMessage.map((e) => e.msg || e).join(", ")
+          : errorMessage,
+      });
+    },
+  });
+};
+
+// Get broadcast inbox query
+export const useBroadcastInbox = (params = {}, options = {}) => {
+  return useQuery({
+    queryKey: messageKeys.broadcastInbox(params),
+    queryFn: async () => {
+      const response = await messagesService.getBroadcastInbox(params);
+      return response.data;
+    },
+    staleTime: 0, // Always consider stale so SSE updates trigger refetch
+    refetchOnWindowFocus: true,
+    ...options,
+  });
+};
+
+// Get unread messages count query (for conversations only)
+export const useUnreadMessagesCount = (options = {}) => {
+  return useQuery({
+    queryKey: [...messageKeys.all, "unread-count"],
+    queryFn: async () => {
+      const response = await messagesService.getUnreadMessagesCount();
+      return response.data;
+    },
+    staleTime: 30 * 1000, // 30 seconds (count should be very fresh)
+    refetchInterval: 60 * 1000, // Refetch every minute
+    retry: 2, // Retry up to 2 times on failure
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000), // Exponential backoff
+    // Don't throw errors - gracefully handle timeouts
+    throwOnError: false,
+    ...options,
   });
 };
 

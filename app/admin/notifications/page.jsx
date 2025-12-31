@@ -44,6 +44,8 @@ import {
   Mail,
   MessageSquare,
   CheckSquare,
+  Send,
+  XCircle,
 } from "lucide-react";
 import {
   useNotifications,
@@ -63,8 +65,8 @@ const NotificationsPage = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   const [filters, setFilters] = useState({
-    message_type: "",
-    priority: "",
+    message_type: "all",
+    priority: "all",
     unread_only: false,
   });
 
@@ -73,14 +75,15 @@ const NotificationsPage = () => {
     page: currentPage,
     per_page: 20,
     ...(searchTerm && { search: searchTerm }),
-    ...(filters.message_type && { message_type: filters.message_type }),
-    ...(filters.priority && { priority: filters.priority }),
+    ...(filters.message_type && filters.message_type !== "all" && { message_type: filters.message_type }),
+    ...(filters.priority && filters.priority !== "all" && { priority: filters.priority }),
     ...(filters.unread_only && { unread_only: true }),
   };
 
   const { data: notificationsData, isLoading: isLoadingNotifications } = useNotifications(queryParams);
 
-  const notifications = notificationsData?.messages || notificationsData?.data || [];
+  // Updated to use 'notifications' instead of 'messages'
+  const notifications = notificationsData?.notifications || notificationsData?.messages || notificationsData?.data || [];
   const totalPages = notificationsData?.total_pages || 1;
   const total = notificationsData?.total || 0;
 
@@ -106,13 +109,30 @@ const NotificationsPage = () => {
   };
 
   const getReadStatus = (notification) => {
-    if (!currentUser) return { isRead: false };
-    
-    const receipt = notification.receipts?.find((r) => r.user_id === currentUser.id);
+    // Use is_read directly from notification (new API structure)
     return {
-      isRead: receipt?.is_read || false,
-      readAt: receipt?.read_at,
+      isRead: notification.is_read || false,
+      readAt: notification.read_at,
+      isAcknowledged: notification.is_acknowledged || false,
+      acknowledgementStatus: notification.acknowledgement_status,
+      acknowledgedAt: notification.acknowledged_at,
     };
+  };
+
+  const handleNotificationClick = (notification, showStatus = false) => {
+    // Route based on message type
+    if (notification.is_broadcast) {
+      // For sent broadcasts, optionally show status page
+      if (showStatus && notification.created_by_user_id === currentUser?.id) {
+        router.push(`/admin/broadcasts/${notification.id}/status`);
+      } else {
+        router.push(`/admin/broadcasts/${notification.id}`);
+      }
+    } else if (notification.conversation_id) {
+      router.push(`/admin/messages?conversation=${notification.conversation_id}`);
+    } else {
+      router.push(`/admin/messages/${notification.id}`);
+    }
   };
 
   // If user doesn't have permission to read notifications, show access denied
@@ -189,7 +209,7 @@ const NotificationsPage = () => {
                     <SelectValue placeholder="All types" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All types</SelectItem>
+                    <SelectItem value="all">All types</SelectItem>
                     <SelectItem value="notification">Notification</SelectItem>
                     <SelectItem value="alert">Alert</SelectItem>
                     <SelectItem value="task">Task</SelectItem>
@@ -209,7 +229,7 @@ const NotificationsPage = () => {
                     <SelectValue placeholder="All priorities" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All priorities</SelectItem>
+                    <SelectItem value="all">All priorities</SelectItem>
                     <SelectItem value="low">Low</SelectItem>
                     <SelectItem value="normal">Normal</SelectItem>
                     <SelectItem value="high">High</SelectItem>
@@ -261,18 +281,16 @@ const NotificationsPage = () => {
                 {notifications.map((notification) => {
                   const readStatus = getReadStatus(notification);
                   const Icon = getMessageTypeIcon(notification.message_type);
+                  const isBroadcast = notification.is_broadcast;
+                  const isSent = notification.created_by_user_id === currentUser?.id;
+                  
                   return (
                     <div
                       key={notification.id}
                       className={`p-4 rounded-lg border transition-colors cursor-pointer hover:bg-muted/50 ${
                         !readStatus.isRead ? "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800" : ""
                       }`}
-                      onClick={() => {
-                        // Navigate to message detail if it's a message, or handle notification click
-                        if (notification.id) {
-                          router.push(`/admin/messages/${notification.id}`);
-                        }
-                      }}
+                      onClick={() => handleNotificationClick(notification)}
                     >
                       <div className="flex items-start gap-3">
                         <div className={`p-2 rounded-full ${
@@ -289,7 +307,7 @@ const NotificationsPage = () => {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-2">
                             <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-1">
+                              <div className="flex items-center gap-2 mb-1 flex-wrap">
                                 <h3 className={`font-semibold ${
                                   !readStatus.isRead ? "text-blue-900 dark:text-blue-100" : ""
                                 }`}>
@@ -300,17 +318,69 @@ const NotificationsPage = () => {
                                     <Circle className="h-3 w-3 fill-current" />
                                   </Badge>
                                 )}
+                                {isSent && isBroadcast && (
+                                  <Badge variant="outline" className="h-5 px-1.5 flex items-center gap-1">
+                                    <Send className="h-3 w-3" />
+                                    Sent
+                                  </Badge>
+                                )}
+                                {isBroadcast && notification.category && (
+                                  <Badge variant="outline" className="h-5 px-1.5">
+                                    {notification.category}
+                                  </Badge>
+                                )}
                                 {getPriorityBadge(notification.priority)}
-                                <Badge variant="outline">{notification.message_type}</Badge>
+                                <Badge variant="outline" className="h-5 px-1.5">{notification.message_type}</Badge>
+                                {notification.requires_acknowledgement && (
+                                  <div className="flex items-center gap-1">
+                                    {readStatus.isAcknowledged ? (
+                                      readStatus.acknowledgementStatus === "agreed" ? (
+                                        <Badge variant="outline" className="h-5 px-1.5 bg-green-50 text-green-800 dark:bg-green-900/20 dark:text-green-200 border-green-200 dark:border-green-800">
+                                          <CheckCircle2 className="h-3 w-3 mr-0.5" />
+                                          Agreed
+                                        </Badge>
+                                      ) : (
+                                        <Badge variant="outline" className="h-5 px-1.5 bg-red-50 text-red-800 dark:bg-red-900/20 dark:text-red-200 border-red-200 dark:border-red-800">
+                                          <XCircle className="h-3 w-3 mr-0.5" />
+                                          Disagreed
+                                        </Badge>
+                                      )
+                                    ) : (
+                                      <Badge variant="outline" className="h-5 px-1.5 bg-yellow-50 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-200 border-yellow-200 dark:border-yellow-800">
+                                        <AlertCircle className="h-3 w-3 mr-0.5" />
+                                        Pending
+                                      </Badge>
+                                    )}
+                                  </div>
+                                )}
                               </div>
-                              <p className="text-sm text-muted-foreground line-clamp-2">
-                                {notification.content?.replace(/<[^>]*>/g, "") || notification.summary || "No content"}
-                              </p>
-                              <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
-                                <Clock className="h-3 w-3" />
-                                {notification.created_at
-                                  ? format(new Date(notification.created_at), "MMM d, yyyy HH:mm")
-                                  : "N/A"}
+                              <div 
+                                className="text-sm text-muted-foreground line-clamp-2 [&_p]:mb-0 [&_p]:last:mb-0 [&_p]:leading-relaxed [&_ul]:list-disc [&_ul]:ml-4 [&_ul]:my-1 [&_ol]:list-decimal [&_ol]:ml-4 [&_ol]:my-1 [&_li]:mb-0.5 [&_strong]:font-bold [&_em]:italic [&_a]:underline [&_a]:hover:underline-offset-2"
+                                dangerouslySetInnerHTML={{ 
+                                  __html: notification.content || notification.summary || "No content"
+                                }}
+                              />
+                              <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground flex-wrap">
+                                <div className="flex items-center gap-1">
+                                  <Clock className="h-3 w-3" />
+                                  {notification.created_at
+                                    ? format(new Date(notification.created_at), "MMM d, yyyy HH:mm")
+                                    : "N/A"}
+                                </div>
+                                {notification.sender_name && (
+                                  <span>• {notification.sender_name}</span>
+                                )}
+                                {isSent && isBroadcast && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleNotificationClick(notification, true);
+                                    }}
+                                    className="text-blue-600 dark:text-blue-400 hover:underline"
+                                  >
+                                    • View Status
+                                  </button>
+                                )}
                               </div>
                             </div>
                             <div className="flex items-center gap-2">

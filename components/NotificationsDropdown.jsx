@@ -10,13 +10,15 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Bell, Mail, MessageSquare, CheckSquare2, AlertCircle, Clock, Loader2 } from "lucide-react";
+import { Bell, Mail, MessageSquare, CheckSquare2, AlertCircle, Clock, Loader2, Send, CheckCircle2, XCircle } from "lucide-react";
 import { useNotifications, useUnreadNotificationsCount } from "@/hooks/useNotifications";
+import { useCurrentUser } from "@/hooks/useAuth";
 import { format, isToday, isYesterday } from "date-fns";
 import { cn } from "@/lib/utils";
 
 const NotificationsDropdown = () => {
   const router = useRouter();
+  const { data: currentUser } = useCurrentUser();
   const { data: unreadCountData } = useUnreadNotificationsCount();
   const [isOpen, setIsOpen] = useState(false);
   const { data: notificationsData, isLoading } = useNotifications(
@@ -25,7 +27,8 @@ const NotificationsDropdown = () => {
   );
 
   const unreadCount = unreadCountData?.unread_count || 0;
-  const notifications = notificationsData?.messages || notificationsData?.data || [];
+  // Updated to use 'notifications' instead of 'messages'
+  const notifications = notificationsData?.notifications || notificationsData?.messages || notificationsData?.data || [];
 
   const getMessageTypeIcon = (messageType) => {
     const iconConfig = {
@@ -49,8 +52,16 @@ const NotificationsDropdown = () => {
     }
   };
 
-  const handleNotificationClick = (notificationId) => {
-    router.push(`/admin/messages/${notificationId}`);
+  const handleNotificationClick = (notification) => {
+    // Route based on message type
+    if (notification.is_broadcast) {
+      router.push(`/admin/broadcasts/${notification.id}`);
+    } else if (notification.conversation_id) {
+      router.push(`/admin/messages?conversation=${notification.conversation_id}`);
+    } else {
+      router.push(`/admin/messages/${notification.id}`);
+    }
+    setIsOpen(false);
   };
 
   return (
@@ -106,14 +117,15 @@ const NotificationsDropdown = () => {
               <div className="divide-y">
                 {notifications.map((notification) => {
                   const Icon = getMessageTypeIcon(notification.message_type);
-                  const isUnread = !notification.receipts?.some(
-                    (r) => r.is_read
-                  ) || notification.receipts?.length === 0;
+                  // Use is_read directly from notification (new API structure)
+                  const isUnread = !notification.is_read;
+                  const isSent = notification.created_by_user_id === currentUser?.id;
+                  const isBroadcast = notification.is_broadcast;
 
                   return (
                     <div
                       key={notification.id}
-                      onClick={() => handleNotificationClick(notification.id)}
+                      onClick={() => handleNotificationClick(notification)}
                       className={cn(
                         "p-3 cursor-pointer transition-colors hover:bg-muted/50",
                         isUnread && "bg-blue-50/50 dark:bg-blue-950/10"
@@ -147,22 +159,63 @@ const NotificationsDropdown = () => {
                             >
                               {notification.title}
                             </h4>
-                            {isUnread && (
-                              <div className="w-2 h-2 rounded-full bg-blue-600 flex-shrink-0 mt-1" />
-                            )}
+                            <div className="flex items-center gap-1 flex-shrink-0">
+                              {isUnread && (
+                                <div className="w-2 h-2 rounded-full bg-blue-600 flex-shrink-0 mt-1" />
+                              )}
+                              {isSent && isBroadcast && (
+                                <Badge variant="outline" className="text-xs h-4 px-1.5 flex items-center gap-0.5">
+                                  <Send className="h-3 w-3" />
+                                  Sent
+                                </Badge>
+                              )}
+                            </div>
                           </div>
-                          <p className="text-xs text-muted-foreground line-clamp-2 mb-1">
-                            {notification.content?.replace(/<[^>]*>/g, "").substring(0, 80) ||
-                              notification.summary ||
-                              "No content"}
-                          </p>
-                          <div className="flex items-center gap-2">
+                          <div 
+                            className="text-xs text-muted-foreground line-clamp-2 mb-1 [&_p]:mb-0 [&_p]:last:mb-0 [&_p]:leading-relaxed"
+                            dangerouslySetInnerHTML={{ 
+                              __html: notification.content || notification.summary || "No content"
+                            }}
+                          />
+                          <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-xs text-muted-foreground">
                               {formatNotificationTime(notification.created_at)}
                             </span>
-                            <Badge variant="outline" className="text-xs h-4 px-1.5">
-                              {notification.message_type}
-                            </Badge>
+                            {isBroadcast && notification.category && (
+                              <Badge variant="outline" className="text-xs h-4 px-1.5">
+                                {notification.category}
+                              </Badge>
+                            )}
+                            {notification.priority && notification.priority !== "normal" && (
+                              <Badge 
+                                variant={notification.priority === "urgent" ? "destructive" : "default"}
+                                className="text-xs h-4 px-1.5"
+                              >
+                                {notification.priority}
+                              </Badge>
+                            )}
+                            {notification.requires_acknowledgement && (
+                              <div className="flex items-center gap-1">
+                                {notification.is_acknowledged ? (
+                                  notification.acknowledgement_status === "agreed" ? (
+                                    <Badge variant="outline" className="text-xs h-4 px-1.5 bg-green-50 text-green-800 dark:bg-green-900/20 dark:text-green-200 border-green-200 dark:border-green-800">
+                                      <CheckCircle2 className="h-3 w-3 mr-0.5" />
+                                      Agreed
+                                    </Badge>
+                                  ) : (
+                                    <Badge variant="outline" className="text-xs h-4 px-1.5 bg-red-50 text-red-800 dark:bg-red-900/20 dark:text-red-200 border-red-200 dark:border-red-800">
+                                      <XCircle className="h-3 w-3 mr-0.5" />
+                                      Disagreed
+                                    </Badge>
+                                  )
+                                ) : (
+                                  <Badge variant="outline" className="text-xs h-4 px-1.5 bg-yellow-50 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-200 border-yellow-200 dark:border-yellow-800">
+                                    <AlertCircle className="h-3 w-3 mr-0.5" />
+                                    Pending
+                                  </Badge>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>

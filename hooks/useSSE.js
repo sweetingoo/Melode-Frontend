@@ -96,6 +96,11 @@ export const useSSE = () => {
           // Invalidate and refetch ALL message queries (including lists with different params) to ensure immediate UI update
           queryClient.invalidateQueries({ queryKey: messageKeys.all, exact: false });
           queryClient.invalidateQueries({ queryKey: messageKeys.conversations(), exact: false });
+          // Invalidate unread count to update sidebar badge when new message arrives
+          queryClient.invalidateQueries({ queryKey: [...messageKeys.all, "unread-count"] });
+          // Invalidate notifications to update notification panel
+          queryClient.invalidateQueries({ queryKey: notificationKeys.lists() });
+          queryClient.invalidateQueries({ queryKey: notificationKeys.unreadCount() });
           queryClient.refetchQueries({ queryKey: messageKeys.all, exact: false, type: 'active' });
           console.log("SSE: Invalidated and refetched all message queries");
           break;
@@ -155,6 +160,11 @@ export const useSSE = () => {
           // Invalidate and refetch ALL message queries to ensure immediate UI update
           queryClient.invalidateQueries({ queryKey: messageKeys.all, exact: false });
           queryClient.invalidateQueries({ queryKey: messageKeys.conversations(), exact: false });
+          // Invalidate unread count to update sidebar badge
+          queryClient.invalidateQueries({ queryKey: [...messageKeys.all, "unread-count"] });
+          // Invalidate notifications to update notification panel
+          queryClient.invalidateQueries({ queryKey: notificationKeys.lists() });
+          queryClient.invalidateQueries({ queryKey: notificationKeys.unreadCount() });
           queryClient.refetchQueries({ queryKey: messageKeys.all, exact: false, type: 'active' });
           console.log("SSE: Invalidated and refetched all message queries for read status update");
           break;
@@ -182,6 +192,10 @@ export const useSSE = () => {
           // Invalidate and refetch ALL message queries to refresh acknowledgement status
           queryClient.invalidateQueries({ queryKey: messageKeys.all, exact: false });
           queryClient.invalidateQueries({ queryKey: messageKeys.conversations(), exact: false });
+          queryClient.invalidateQueries({ queryKey: messageKeys.broadcastInbox() });
+          // Invalidate notifications to update notification panel
+          queryClient.invalidateQueries({ queryKey: notificationKeys.lists() });
+          queryClient.invalidateQueries({ queryKey: notificationKeys.unreadCount() });
           queryClient.refetchQueries({ queryKey: messageKeys.all, exact: false, type: 'active' });
           break;
         }

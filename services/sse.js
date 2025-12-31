@@ -3,14 +3,26 @@
  * Handles real-time message and notification updates via SSE
  */
 
-// Normalize baseURL to ensure it uses https
+// Normalize baseURL - allow HTTP for localhost/127.0.0.1, force HTTPS for others
 const normalizeBaseURL = (url) => {
   if (!url) return "https://melode-api-prod.onrender.com/api/v1";
   
   // Trim whitespace
   const trimmed = url.trim();
   
-  // Replace http:// with https:// to ensure secure connections
+  // Check if it's localhost or 127.0.0.1 - allow HTTP for local development
+  const isLocalhost = /^(https?:\/\/)?(localhost|127\.0\.0\.1|0\.0\.0\.0)/i.test(trimmed);
+  
+  if (isLocalhost) {
+    // For localhost, preserve the protocol (http or https) as specified
+    // If no protocol specified, default to http
+    if (!/^https?:\/\//i.test(trimmed)) {
+      return `http://${trimmed}`;
+    }
+    return trimmed;
+  }
+  
+  // For non-localhost URLs, replace http:// with https:// to ensure secure connections
   // This handles both http:// and HTTP:// cases
   const normalized = trimmed.replace(/^https?:\/\//i, "https://");
   

@@ -1,13 +1,25 @@
 import axios from "axios";
 
-// Normalize baseURL to ensure it uses https
+// Normalize baseURL - allow HTTP for localhost/127.0.0.1, force HTTPS for others
 const normalizeBaseURL = (url) => {
   if (!url) return "https://melode-api-prod.onrender.com/api/v1";
 
   // Trim whitespace
   const trimmed = url.trim();
 
-  // Replace http:// with https:// to ensure secure connections
+  // Check if it's localhost or 127.0.0.1 - allow HTTP for local development
+  const isLocalhost = /^(https?:\/\/)?(localhost|127\.0\.0\.1|0\.0\.0\.0)/i.test(trimmed);
+  
+  if (isLocalhost) {
+    // For localhost, preserve the protocol (http or https) as specified
+    // If no protocol specified, default to http
+    if (!/^https?:\/\//i.test(trimmed)) {
+      return `http://${trimmed}`;
+    }
+    return trimmed;
+  }
+
+  // For non-localhost URLs, replace http:// with https:// to ensure secure connections
   // This handles both http:// and HTTP:// cases
   const normalized = trimmed.replace(/^https?:\/\//i, "https://");
 
@@ -27,9 +39,12 @@ const apiClient = axios.create({
 // Request interceptor to add auth token and department context
 apiClient.interceptors.request.use(
   (config) => {
-    // Ensure baseURL always uses HTTPS (normalize at request time as well)
+    // Only force HTTPS for non-localhost URLs (normalize at request time as well)
     if (config.baseURL && config.baseURL.startsWith("http://")) {
-      config.baseURL = config.baseURL.replace(/^http:\/\//, "https://");
+      const isLocalhost = /^(https?:\/\/)?(localhost|127\.0\.0\.1|0\.0\.0\.0)/i.test(config.baseURL);
+      if (!isLocalhost) {
+        config.baseURL = config.baseURL.replace(/^http:\/\//, "https://");
+      }
     }
 
     // If data is FormData, remove Content-Type header to let axios set it with boundary
@@ -232,8 +247,15 @@ export const api = {
     try {
       return await apiClient.get(url, config);
     } catch (error) {
-      // Don't log network errors for invitations endpoint (handled gracefully in hook)
-      if (error.code === "NETWORK_ERROR" && url.includes("/invitations")) {
+      // Handle timeout errors gracefully
+      if (error.code === "ECONNABORTED" || error.message?.includes("timeout")) {
+        // For notifications endpoint, don't log as error (handled gracefully in service)
+        if (url.includes("/notifications")) {
+          // Silently handle timeout for notifications - service will return default
+        } else {
+          console.warn(`Request timeout for ${url}. Backend may be slow or unresponsive.`);
+        }
+      } else if (error.code === "NETWORK_ERROR" && url.includes("/invitations")) {
         // Silently handle network errors for invitations
       } else if (error.code === "NETWORK_ERROR" && url.includes("/tasks")) {
         // For tasks endpoint, log as warning instead of error to reduce console noise

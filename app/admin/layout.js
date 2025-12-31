@@ -63,6 +63,7 @@ import {
   Mail,
   FolderKanban,
   Bell,
+  MessageSquare,
 } from "lucide-react";
 import { assets } from "../assets/assets";
 import Image from "next/image";
@@ -87,6 +88,7 @@ import {
   useSwitchDepartment,
 } from "@/hooks/useDepartmentContext";
 import { useRoles } from "@/hooks/useRoles";
+import { useUnreadMessagesCount } from "@/hooks/useMessages";
 import { cn } from "@/lib/utils";
 
 // Main navigation items (always visible, no grouping)
@@ -138,6 +140,12 @@ const mainMenuItems = [
     icon: Mail,
     url: "/admin/messages",
     permission: "message:read", // Permission to read messages
+  },
+  {
+    title: "Broadcasts",
+    icon: MessageSquare,
+    url: "/admin/broadcasts",
+    permission: "message:read", // Permission to read messages (same as messages)
   },
   {
     title: "Notifications",
@@ -337,6 +345,10 @@ export default function AdminLayout({ children }) {
 
   // Initialize SSE for real-time updates
   useSSE();
+
+  // Get unread messages count for sidebar badge
+  const { data: unreadMessagesData } = useUnreadMessagesCount();
+  const unreadMessagesCount = unreadMessagesData?.unread_count || 0;
 
   // Role switching hooks
   const { data: departmentsData, isLoading: departmentsLoading } =
@@ -994,6 +1006,8 @@ export default function AdminLayout({ children }) {
                     {/* Main Navigation Items */}
                     {visibleMainMenuItems.map((item) => {
                       const isActive = pathname === item.url;
+                      // Show unread count badge for Messages menu item
+                      const showUnreadBadge = item.url === "/admin/messages" && unreadMessagesCount > 0;
                       return (
                         <SidebarMenuItem key={item.title}>
                           <SidebarMenuButton
@@ -1003,10 +1017,15 @@ export default function AdminLayout({ children }) {
                           >
                             <Link
                               href={item.url}
-                              className="flex items-center gap-2"
+                              className="flex items-center gap-2 relative"
                             >
                               <item.icon className="h-4 w-4" />
                               <span>{item.title}</span>
+                              {showUnreadBadge && (
+                                <span className="ml-auto h-5 min-w-[20px] px-1.5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center font-semibold">
+                                  {unreadMessagesCount > 99 ? "99+" : unreadMessagesCount}
+                                </span>
+                              )}
                             </Link>
                           </SidebarMenuButton>
                         </SidebarMenuItem>
@@ -1347,6 +1366,9 @@ export default function AdminLayout({ children }) {
                     // Show page-specific titles
                     if (pathname === "/admin/messages") {
                       return "Messages";
+                    }
+                    if (pathname === "/admin/broadcasts" || pathname?.startsWith("/admin/broadcasts/")) {
+                      return "Broadcasts";
                     }
                     if (pathname === "/admin/notifications") {
                       return "Notifications";
