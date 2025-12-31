@@ -1,0 +1,13 @@
+repos:
+  - repo: local
+    hooks:
+      - id: npm-build
+        name: npm build
+        entry: bash -c 'npm run build || exit 1'
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+        verbose: true
+        require_serial: false
+

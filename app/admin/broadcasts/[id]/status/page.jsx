@@ -410,9 +410,9 @@ const BroadcastStatusPage = () => {
                               {(() => {
                                 const date = parseUTCDate(recipient.read_at);
                                 return date && !isNaN(date.getTime())
-                                  ? formatDistanceToNow(date, {
-                                addSuffix: true,
-                              })}
+                                  ? formatDistanceToNow(date, { addSuffix: true })
+                                  : "";
+                              })()}
                             </span>
                           </div>
                         )}
