@@ -63,6 +63,11 @@ import {
     Calendar,
     ArrowRight,
     FolderKanban,
+    Mail,
+    Megaphone,
+    Bell,
+    FileSpreadsheet,
+    Database,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 
@@ -178,6 +183,21 @@ const documentationCategories = [
                 href: "/docs/clock-history",
                 icon: History,
             },
+            {
+                title: "Messages",
+                href: "/docs/messages",
+                icon: Mail,
+            },
+            {
+                title: "Broadcasts",
+                href: "/docs/broadcasts",
+                icon: Megaphone,
+            },
+            {
+                title: "Notifications",
+                href: "/docs/notifications",
+                icon: Bell,
+            },
         ],
     },
     {
@@ -203,6 +223,16 @@ const documentationCategories = [
                 title: "Forms Management",
                 href: "/docs/forms",
                 icon: FileText,
+            },
+            {
+                title: "Form Types",
+                href: "/docs/form-types",
+                icon: Type,
+            },
+            {
+                title: "Documents Management",
+                href: "/docs/documents",
+                icon: BookOpen,
             },
         ],
     },
@@ -254,7 +284,7 @@ const documentationCategories = [
         ],
     },
     {
-        title: "Settings",
+        title: "Settings & Monitoring",
         icon: Settings,
         features: [
             {
@@ -266,6 +296,16 @@ const documentationCategories = [
                 title: "Configuration",
                 href: "/docs/configuration",
                 icon: Settings,
+            },
+            {
+                title: "Integrations",
+                href: "/docs/integrations",
+                icon: Zap,
+            },
+            {
+                title: "Reports",
+                href: "/docs/reports",
+                icon: FileSpreadsheet,
             },
             {
                 title: "Audit Logs",

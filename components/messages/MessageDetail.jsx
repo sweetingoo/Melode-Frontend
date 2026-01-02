@@ -35,11 +35,26 @@ import { Switch } from "@/components/ui/switch";
 import { format, isToday, isYesterday } from "date-fns";
 import { cn } from "@/lib/utils";
 import RichTextEditor from "@/components/RichTextEditor";
+import { parseUTCDate } from "@/utils/time";
 import { useCreateMessage, useMarkMessageAsRead, useConversationMessages } from "@/hooks/useMessages";
 import { useCurrentUser } from "@/hooks/useAuth";
 import { useQueryClient } from "@tanstack/react-query";
 import { messageKeys } from "@/hooks/useMessages";
 import { toast } from "sonner";
+import { useFileReferences } from "@/hooks/useFileReferences";
+
+// Component to render message content with file references
+const MessageContent = ({ content, className }) => {
+  const { processedHtml, containerRef } = useFileReferences(content);
+  
+  return (
+    <div
+      ref={containerRef}
+      className={className}
+      dangerouslySetInnerHTML={{ __html: processedHtml }}
+    />
+  );
+};
 
 const MessageDetail = ({ message, isMobile, onBack, messages, usersData, rolesData, queryParams }) => {
   const router = useRouter();
@@ -219,7 +234,7 @@ const MessageDetail = ({ message, isMobile, onBack, messages, usersData, rolesDa
 
     // Sort by created_at (oldest first for conversation view)
     return conversationMessages.sort(
-      (a, b) => new Date(a.created_at) - new Date(b.created_at)
+      (a, b) => parseUTCDate(a.created_at) - parseUTCDate(b.created_at)
     );
   };
 
@@ -255,8 +270,8 @@ const MessageDetail = ({ message, isMobile, onBack, messages, usersData, rolesDa
         return b.id - a.id; // Most recent first (higher ID)
       }
       // Fallback: by created_at
-      const dateA = new Date(a.created_at || 0);
-      const dateB = new Date(b.created_at || 0);
+      const dateA = parseUTCDate(a.created_at || 0);
+      const dateB = parseUTCDate(b.created_at || 0);
       return dateB - dateA; // Most recent first
     });
     
@@ -485,7 +500,7 @@ const MessageDetail = ({ message, isMobile, onBack, messages, usersData, rolesDa
             const isSent = isCurrentUserSender(msg);
             const readStatus = getMessageReadStatus(msg);
             const showTime = index === 0 || 
-              new Date(msg.created_at) - new Date(conversationThread[index - 1].created_at) > 5 * 60 * 1000; // 5 minutes
+              parseUTCDate(msg.created_at) - parseUTCDate(conversationThread[index - 1].created_at) > 5 * 60 * 1000; // 5 minutes
             
             return (
               <div key={msg.id} className="w-full">
@@ -495,7 +510,7 @@ const MessageDetail = ({ message, isMobile, onBack, messages, usersData, rolesDa
                     <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">
                       {msg.created_at
                         ? (() => {
-                            const msgDate = new Date(msg.created_at);
+                            const msgDate = parseUTCDate(msg.created_at);
                             if (isToday(msgDate)) {
                               return format(msgDate, "HH:mm");
                             } else if (isYesterday(msgDate)) {
@@ -520,13 +535,12 @@ const MessageDetail = ({ message, isMobile, onBack, messages, usersData, rolesDa
                       ? "bg-primary text-primary-foreground rounded-br-sm" 
                       : "bg-muted text-foreground rounded-bl-sm"
                   )}>
-                    <div className={cn(
-                      "text-sm [&_p]:mb-1 [&_p]:last:mb-0 [&_p]:leading-relaxed [&_ul]:list-disc [&_ul]:ml-4 [&_ul]:my-1 [&_ol]:list-decimal [&_ol]:ml-4 [&_ol]:my-1 [&_li]:mb-0.5 [&_strong]:font-bold [&_em]:italic [&_a]:underline [&_a]:hover:underline-offset-2",
-                      isSent ? "[&_a]:text-primary-foreground [&_a]:underline-offset-2" : "[&_a]:text-primary"
-                    )}
-                      dangerouslySetInnerHTML={{ 
-                        __html: typeof msg.content === 'string' ? msg.content : String(msg.content || "")
-                      }}
+                    <MessageContent 
+                      content={typeof msg.content === 'string' ? msg.content : String(msg.content || "")}
+                      className={cn(
+                        "text-sm [&_p]:mb-1 [&_p]:last:mb-0 [&_p]:leading-relaxed [&_ul]:list-disc [&_ul]:ml-4 [&_ul]:my-1 [&_ol]:list-decimal [&_ol]:ml-4 [&_ol]:my-1 [&_li]:mb-0.5 [&_strong]:font-bold [&_em]:italic [&_a]:underline [&_a]:hover:underline-offset-2",
+                        isSent ? "[&_a]:text-primary-foreground [&_a]:underline-offset-2" : "[&_a]:text-primary"
+                      )}
                     />
                     <div className={cn(
                       "flex items-center gap-1.5 text-xs",
@@ -534,7 +548,7 @@ const MessageDetail = ({ message, isMobile, onBack, messages, usersData, rolesDa
                     )}>
                       <span>
                         {msg.created_at
-                          ? format(new Date(msg.created_at), "HH:mm")
+                          ? format(parseUTCDate(msg.created_at), "HH:mm")
                           : ""}
                       </span>
                       {/* Read status indicator - only show for sent messages */}

@@ -29,10 +29,35 @@ export const useLogin = () => {
   return useMutation({
     mutationKey: authKeys.login(),
     mutationFn: async (credentials) => {
+      // Clear all cached queries and user-specific data before attempting login
+      // This ensures no stale data from previous user persists when switching accounts
+      queryClient.clear();
+      
+      // Clear old tokens and user-specific localStorage items before login attempt
+      // This is important when logging in with a different account
+      if (typeof window !== "undefined") {
+        // Clear old tokens (will be replaced by new login)
+        apiUtils.clearAuthToken();
+        
+        // Clear user-specific settings
+        localStorage.removeItem("assignment_id");
+        localStorage.removeItem("activeRoleId");
+        localStorage.removeItem("activeDepartmentId");
+        localStorage.removeItem("availableAssignments");
+        localStorage.removeItem("availableRoles");
+        localStorage.removeItem("pendingLoginEmail");
+        localStorage.removeItem("tempAuthToken");
+        localStorage.removeItem("needsAssignmentFetch");
+        localStorage.removeItem("hijackSession");
+        // Note: authRedirectUrl is kept intentionally for redirect after login
+        // Note: pendingLoginPassword is kept for role selection flow if needed
+      }
+
       const response = await authService.login(credentials);
       return response.data;
     },
     onSuccess: (data) => {
+      // Data clearing is done in mutationFn before the API call
       // Check if MFA is required - if so, don't redirect
       if (data.requires_mfa) {
         return; // Let the component handle MFA flow
@@ -286,17 +311,59 @@ export const useMFALogin = () => {
   return useMutation({
     mutationKey: authKeys.mfaLogin(),
     mutationFn: async ({ temp_token, mfa_token }) => {
+      // Clear all cached queries and user-specific data before attempting MFA login
+      // This ensures no stale data from previous user persists when switching accounts
+      queryClient.clear();
+      
+      // Clear old tokens and user-specific localStorage items before MFA login attempt
+      if (typeof window !== "undefined") {
+        // Clear old tokens (will be replaced by new login)
+        apiUtils.clearAuthToken();
+        
+        // Clear user-specific settings
+        localStorage.removeItem("assignment_id");
+        localStorage.removeItem("activeRoleId");
+        localStorage.removeItem("activeDepartmentId");
+        localStorage.removeItem("availableAssignments");
+        localStorage.removeItem("availableRoles");
+        localStorage.removeItem("pendingLoginEmail");
+        localStorage.removeItem("tempAuthToken");
+        localStorage.removeItem("needsAssignmentFetch");
+        localStorage.removeItem("hijackSession");
+        // Note: authRedirectUrl is kept intentionally for redirect after login
+      }
+
       const response = await authService.mfaLogin(temp_token, mfa_token);
       return response.data;
     },
     onSuccess: (data) => {
+      // Data clearing is done in mutationFn before the API call
       // Store tokens
       apiUtils.setAuthToken(data.access_token);
       if (data.refresh_token) {
         apiUtils.setRefreshToken(data.refresh_token);
       }
 
-      // Invalidate and refetch user data
+      // Store selected assignment_id if provided (preferred)
+      if (data.selected_assignment_id && typeof window !== "undefined") {
+        localStorage.setItem(
+          "assignment_id",
+          data.selected_assignment_id.toString()
+        );
+      }
+      // Also store selected_role_id for backward compatibility
+      if (data.selected_role_id && typeof window !== "undefined") {
+        localStorage.setItem("activeRoleId", data.selected_role_id.toString());
+        // If no assignment_id was provided, use role_id as fallback
+        if (!data.selected_assignment_id) {
+          localStorage.setItem(
+            "assignment_id",
+            data.selected_role_id.toString()
+          );
+        }
+      }
+
+      // Invalidate and refetch user data (queryClient.clear() was already called above)
       queryClient.invalidateQueries({ queryKey: authKeys.currentUser() });
 
       // Show success message
@@ -304,10 +371,18 @@ export const useMFALogin = () => {
         description: "Welcome back to Melode Admin",
       });
 
-      // Redirect to admin page with a small delay
+      // Redirect to stored redirect URL or admin page with a small delay
       if (typeof window !== "undefined") {
         setTimeout(() => {
-          window.location.href = "/admin";
+          const redirectUrl = localStorage.getItem('authRedirectUrl');
+          if (redirectUrl && !redirectUrl.startsWith('/auth')) {
+            // Clear the stored redirect URL and redirect to it
+            localStorage.removeItem('authRedirectUrl');
+            window.location.href = redirectUrl;
+          } else {
+            // Default to admin page
+            window.location.href = "/admin";
+          }
         }, 100);
       }
     },

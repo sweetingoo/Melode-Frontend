@@ -12,7 +12,7 @@ import { toast } from "sonner";
 import Image from "next/image";
 import { assets } from "../assets/assets";
 import Link from "next/link";
-import { useLogin } from "@/hooks/useAuth";
+import { useLogin, useCurrentUser } from "@/hooks/useAuth";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { apiUtils } from "@/services/api-client";
 import { useEffect } from "react";
@@ -33,6 +33,7 @@ const LoginPage = () => {
 
   // Use the login mutations from our custom hooks
   const loginMutation = useLogin();
+  const { data: currentUser, isLoading: userLoading, error: userError } = useCurrentUser();
 
   // Check for role_id in URL params (from role selection page)
   useEffect(() => {
@@ -60,13 +61,28 @@ const LoginPage = () => {
     }
   }, []);
 
-  // Redirect if already authenticated
+  // Redirect if already authenticated (but only if user data is actually valid)
+  // Don't redirect if there's an error fetching user (expired token)
   useEffect(() => {
-    const isAuthenticated = apiUtils.isAuthenticated();
-    if (isAuthenticated) {
-      router.push('/admin');
+    // Only redirect if we have valid user data (not just a token)
+    // If there's an error, the token is likely expired, so don't redirect
+    if (currentUser && !userError && !userLoading) {
+      // Check for stored redirect URL
+      const redirectUrl = localStorage.getItem('authRedirectUrl');
+      if (redirectUrl && !redirectUrl.startsWith('/auth')) {
+        // Clear the stored redirect URL and redirect to it
+        localStorage.removeItem('authRedirectUrl');
+        router.push(redirectUrl);
+      } else {
+        // Default to admin page
+        router.push('/admin');
+      }
+    } else if (userError) {
+      // If there's an error fetching user (expired token), clear the token
+      // This prevents redirect loops
+      apiUtils.clearAuthToken();
     }
-  }, [router]);
+  }, [router, currentUser, userError, userLoading]);
 
   // Handle MFA requirement from error response
   useEffect(() => {

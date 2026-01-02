@@ -112,6 +112,12 @@ const documentationCategories = [
         href: "/docs/forms",
         icon: FileText,
       },
+      {
+        title: "Documents Management",
+        description: "Create, organize, and manage documents with categories and permissions",
+        href: "/docs/documents",
+        icon: BookOpen,
+      },
     ],
   },
   {
@@ -189,6 +195,12 @@ const documentationCategories = [
         description: "System-wide configuration and settings",
         href: "/docs/configuration",
         icon: Settings,
+      },
+      {
+        title: "Integrations",
+        description: "Configure SendGrid, Twilio, S3 Storage, and other integrations",
+        href: "/docs/integrations",
+        icon: Zap,
       },
       {
         title: "Audit Logs",

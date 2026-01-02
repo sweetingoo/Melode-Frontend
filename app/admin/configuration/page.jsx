@@ -11,6 +11,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import {
   Table,
   TableBody,
   TableCell,
@@ -73,6 +78,12 @@ import {
   Mail,
   Smartphone,
   CheckCircle2,
+  Cloud,
+  Eye,
+  EyeOff,
+  ChevronDown,
+  ChevronUp,
+  Plug,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -87,6 +98,14 @@ function ConfigurationPageContent() {
   const [isBulkEditMode, setIsBulkEditMode] = useState(false);
   const [editingSetting, setEditingSetting] = useState(null);
   const [bulkUpdates, setBulkUpdates] = useState({});
+
+  // Sync activeTab with URL query parameter
+  useEffect(() => {
+    const tabFromUrl = searchParams.get("tab");
+    if (tabFromUrl && tabFromUrl !== activeTab) {
+      setActiveTab(tabFromUrl);
+    }
+  }, [searchParams]);
 
   // Check if user is superuser or has configuration permissions
   const { data: currentUser } = useCurrentUser();
@@ -177,16 +196,28 @@ function ConfigurationPageContent() {
       list_unsubscribe_url: null,
       list_unsubscribe_mailto: null,
       list_unsubscribe_one_click: true,
+      s3_storage: {
+        enabled: false,
+        access_key_id: null,
+        secret_access_key: null,
+        bucket_name: null,
+        region: "eu-west-2",
+      },
     },
   });
 
-  // Track enabled state for Email and SMS
+  // Track enabled state for Email, SMS, and S3
   const [emailEnabled, setEmailEnabled] = useState(false);
   const [smsEnabled, setSmsEnabled] = useState(false);
+  const [s3Enabled, setS3Enabled] = useState(false);
   
   // Store original values when disabling (to restore if re-enabled)
   const [originalEmailConfig, setOriginalEmailConfig] = useState(null);
   const [originalSMSConfig, setOriginalSMSConfig] = useState(null);
+  const [originalS3Config, setOriginalS3Config] = useState(null);
+  
+  // Track if secret access key has been changed (for masking)
+  const [s3SecretKeyChanged, setS3SecretKeyChanged] = useState(false);
 
   // Load organisation data when it's fetched from API
   useEffect(() => {
@@ -207,6 +238,13 @@ function ConfigurationPageContent() {
         list_unsubscribe_url: null,
         list_unsubscribe_mailto: null,
         list_unsubscribe_one_click: true,
+      s3_storage: integrationConfig.s3_storage || {
+        enabled: false,
+        access_key_id: null,
+        secret_access_key: null,
+        bucket_name: null,
+        region: "eu-west-2",
+      },
       };
 
       setOrganisationData({
@@ -225,6 +263,13 @@ function ConfigurationPageContent() {
       
       setEmailEnabled(hasEmailConfig);
       setSmsEnabled(hasSMSConfig);
+      
+      // Set S3 enabled state
+      const hasS3Config = !!(integrationConfig.s3_storage?.enabled && 
+                            integrationConfig.s3_storage?.access_key_id && 
+                            integrationConfig.s3_storage?.secret_access_key && 
+                            integrationConfig.s3_storage?.bucket_name);
+      setS3Enabled(hasS3Config);
 
       // Store original values (always store, even if null, so we can restore)
       setOriginalEmailConfig(integrationConfig.sendgrid_api_key || null);
@@ -233,6 +278,8 @@ function ConfigurationPageContent() {
         twilio_auth_token: integrationConfig.twilio_auth_token || null,
         twilio_from_number: integrationConfig.twilio_from_number || null,
       });
+      setOriginalS3Config(integrationConfig.s3_storage || null);
+      setS3SecretKeyChanged(false);
     }
   }, [organisationResponse]);
 
@@ -519,7 +566,7 @@ function ConfigurationPageContent() {
         <TabsList>
           <TabsTrigger value="settings">Settings</TabsTrigger>
           <TabsTrigger value="organisation">Organisation</TabsTrigger>
-          <TabsTrigger value="integration">Integration</TabsTrigger>
+          <TabsTrigger value="integrations">Integrations</TabsTrigger>
           <TabsTrigger value="role-defaults">Role Defaults</TabsTrigger>
         </TabsList>
 
@@ -769,19 +816,20 @@ function ConfigurationPageContent() {
           </Card>
         </TabsContent>
 
-        {/* Integration Configuration Tab */}
-        <TabsContent value="integration" className="space-y-4">
+        {/* Integrations Tab */}
+        <TabsContent value="integrations" className="space-y-4">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Settings className="h-5 w-5" />
+                <Plug className="h-5 w-5" />
                 Integration Configuration
               </CardTitle>
               <CardDescription>
-                Configure SendGrid, Twilio, and other integration settings for email and SMS notifications
+                Configure SendGrid, Twilio, S3 Storage, and other integration settings
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
+              <div className="space-y-6">
               {/* SendGrid Configuration */}
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
@@ -980,6 +1028,243 @@ function ConfigurationPageContent() {
                   <div className="p-4 bg-muted/50 border rounded-lg">
                     <p className="text-sm text-muted-foreground">
                       SMS configuration is disabled. Enable it to configure Twilio credentials.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <Separator />
+
+              {/* S3 Storage Configuration */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Cloud className="h-5 w-5" />
+                    <h3 className="text-lg font-semibold">S3 Storage Configuration</h3>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="s3-enabled" className="text-sm font-medium cursor-pointer">
+                      {s3Enabled ? "Enabled" : "Disabled"}
+                    </Label>
+                    <Switch
+                      id="s3-enabled"
+                      checked={s3Enabled}
+                      onCheckedChange={(checked) => {
+                        if (!checked && s3Enabled) {
+                          // Show warning when disabling
+                          if (!confirm(
+                            "Warning: Disabling S3 storage will affect file uploads. " +
+                            "Existing files stored in S3 will continue to be accessible, " +
+                            "but new files will be stored locally. Are you sure you want to disable S3 storage?"
+                          )) {
+                            return;
+                          }
+                        }
+                        setS3Enabled(checked);
+                        if (checked) {
+                          // Enable: Restore original values if they exist
+                          setOrganisationData((prev) => ({
+                            ...prev,
+                            integration_config: {
+                              ...prev.integration_config,
+                              s3_storage: {
+                                enabled: true,
+                                access_key_id: originalS3Config?.access_key_id || null,
+                                secret_access_key: originalS3Config?.secret_access_key || null,
+                                bucket_name: originalS3Config?.bucket_name || null,
+                                region: originalS3Config?.region || "eu-west-2",
+                              },
+                            },
+                          }));
+                        } else {
+                          // Disable: Store current config and clear enabled flag
+                          const currentConfig = organisationData.integration_config?.s3_storage;
+                          if (currentConfig) {
+                            setOriginalS3Config(currentConfig);
+                          }
+                          setOrganisationData((prev) => ({
+                            ...prev,
+                            integration_config: {
+                              ...prev.integration_config,
+                              s3_storage: {
+                                ...(prev.integration_config?.s3_storage || {}),
+                                enabled: false,
+                              },
+                            },
+                          }));
+                        }
+                      }}
+                    />
+                  </div>
+                </div>
+                {s3Enabled && (
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="s3_access_key_id">
+                          AWS Access Key ID <span className="text-red-500">*</span>
+                        </Label>
+                        <Input
+                          id="s3_access_key_id"
+                          value={organisationData.integration_config?.s3_storage?.access_key_id || ""}
+                          onChange={(e) =>
+                            setOrganisationData((prev) => ({
+                              ...prev,
+                              integration_config: {
+                                ...prev.integration_config,
+                                s3_storage: {
+                                  ...(prev.integration_config?.s3_storage || {
+                                    enabled: true,
+                                    secret_access_key: null,
+                                    bucket_name: null,
+                                    region: "eu-west-2",
+                                  }),
+                                  access_key_id: e.target.value || null,
+                                },
+                              },
+                            }))
+                          }
+                          placeholder="AKIAIOSFODNN7EXAMPLE"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="s3_secret_access_key">
+                          AWS Secret Access Key <span className="text-red-500">*</span>
+                        </Label>
+                        <div className="relative">
+                          <Input
+                            id="s3_secret_access_key"
+                            type={s3SecretKeyChanged ? "text" : "password"}
+                            value={
+                              s3SecretKeyChanged
+                                ? organisationData.integration_config?.s3_storage?.secret_access_key || ""
+                                : organisationData.integration_config?.s3_storage?.secret_access_key
+                                  ? "••••••••••••••••"
+                                  : ""
+                            }
+                            onChange={(e) => {
+                              setS3SecretKeyChanged(true);
+                              setOrganisationData((prev) => ({
+                                ...prev,
+                                integration_config: {
+                                  ...prev.integration_config,
+                                  s3_storage: {
+                                    ...(prev.integration_config?.s3_storage || {
+                                      enabled: true,
+                                      access_key_id: null,
+                                      bucket_name: null,
+                                      region: "eu-west-2",
+                                    }),
+                                    secret_access_key: e.target.value || null,
+                                  },
+                                },
+                              }));
+                            }}
+                            placeholder="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+                            className="pr-10"
+                          />
+                          {organisationData.integration_config?.s3_storage?.secret_access_key && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                              onClick={() => setS3SecretKeyChanged(!s3SecretKeyChanged)}
+                            >
+                              {s3SecretKeyChanged ? (
+                                <EyeOff className="h-4 w-4 text-muted-foreground" />
+                              ) : (
+                                <Eye className="h-4 w-4 text-muted-foreground" />
+                              )}
+                            </Button>
+                          )}
+                        </div>
+                        {!s3SecretKeyChanged && organisationData.integration_config?.s3_storage?.secret_access_key && (
+                          <p className="text-xs text-muted-foreground">
+                            Secret key is masked. Click the eye icon to view or update.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="s3_bucket_name">
+                          S3 Bucket Name <span className="text-red-500">*</span>
+                        </Label>
+                        <Input
+                          id="s3_bucket_name"
+                          value={organisationData.integration_config?.s3_storage?.bucket_name || ""}
+                          onChange={(e) =>
+                            setOrganisationData((prev) => ({
+                              ...prev,
+                              integration_config: {
+                                ...prev.integration_config,
+                                s3_storage: {
+                                  ...(prev.integration_config?.s3_storage || {
+                                    enabled: true,
+                                    access_key_id: null,
+                                    secret_access_key: null,
+                                    region: "eu-west-2",
+                                  }),
+                                  bucket_name: e.target.value || null,
+                                },
+                              },
+                            }))
+                          }
+                          placeholder="my-bucket-name"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="s3_region">
+                          AWS Region <span className="text-red-500">*</span>
+                        </Label>
+                        <Input
+                          id="s3_region"
+                          value={organisationData.integration_config?.s3_storage?.region || "eu-west-2"}
+                          onChange={(e) =>
+                            setOrganisationData((prev) => ({
+                              ...prev,
+                              integration_config: {
+                                ...prev.integration_config,
+                                s3_storage: {
+                                  ...(prev.integration_config?.s3_storage || {
+                                    enabled: true,
+                                    access_key_id: null,
+                                    secret_access_key: null,
+                                    bucket_name: null,
+                                  }),
+                                  region: e.target.value || "eu-west-2",
+                                },
+                              },
+                            }))
+                          }
+                          placeholder="eu-west-2"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Default: eu-west-2 (London)
+                        </p>
+                      </div>
+                    </div>
+                    <div className="p-4 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                      <div className="flex items-start gap-2">
+                        <AlertCircle className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+                        <div className="text-sm text-blue-800 dark:text-blue-200">
+                          <p className="font-medium mb-1">S3 Storage Information:</p>
+                          <ul className="list-disc list-inside space-y-1 ml-2">
+                            <li>When enabled, all file uploads will be stored in your S3 bucket</li>
+                            <li>When disabled, files will be stored locally on the server</li>
+                            <li>Existing files in S3 will remain accessible even after disabling</li>
+                            <li>All required fields must be filled when enabling S3 storage</li>
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+                {!s3Enabled && (
+                  <div className="p-4 bg-muted/50 border rounded-lg">
+                    <p className="text-sm text-muted-foreground">
+                      S3 storage is disabled. Enable it to configure AWS S3 for file storage.
                     </p>
                   </div>
                 )}
@@ -1256,13 +1541,53 @@ function ConfigurationPageContent() {
                       SMS Not Configured
                     </Badge>
                   )}
+                  {organisationData.integration_config?.s3_storage?.enabled &&
+                  organisationData.integration_config?.s3_storage?.access_key_id &&
+                  organisationData.integration_config?.s3_storage?.secret_access_key &&
+                  organisationData.integration_config?.s3_storage?.bucket_name ? (
+                    <Badge variant="default" className="flex items-center gap-1">
+                      <CheckCircle2 className="h-3 w-3" />
+                      S3 Storage Configured
+                    </Badge>
+                  ) : (
+                    <Badge variant="secondary" className="flex items-center gap-1">
+                      <AlertCircle className="h-3 w-3" />
+                      S3 Storage Not Configured
+                    </Badge>
+                  )}
                 </div>
               </div>
 
               <Button
                 onClick={async () => {
+                  // Validate S3 configuration if enabled
+                  if (s3Enabled) {
+                    const s3Config = organisationData.integration_config?.s3_storage;
+                    if (!s3Config?.access_key_id || !s3Config?.bucket_name || !s3Config?.region) {
+                      toast.error("S3 Storage requires Access Key ID, Bucket Name, and Region");
+                      return;
+                    }
+                    // If secret key hasn't been changed, keep the original (don't send empty string)
+                    if (!s3SecretKeyChanged && originalS3Config?.secret_access_key) {
+                      setOrganisationData((prev) => ({
+                        ...prev,
+                        integration_config: {
+                          ...prev.integration_config,
+                          s3_storage: {
+                            ...prev.integration_config.s3_storage,
+                            secret_access_key: originalS3Config.secret_access_key,
+                          },
+                        },
+                      }));
+                    } else if (!s3Config?.secret_access_key) {
+                      toast.error("S3 Storage requires Secret Access Key");
+                      return;
+                    }
+                  }
+                  
                   try {
                     await updateOrganisationMutation.mutateAsync(organisationData);
+                    setS3SecretKeyChanged(false); // Reset after successful save
                   } catch (error) {
                     // Error handled by mutation
                   }
@@ -1282,6 +1607,7 @@ function ConfigurationPageContent() {
                   </>
                 )}
               </Button>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

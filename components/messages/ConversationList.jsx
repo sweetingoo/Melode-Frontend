@@ -3,6 +3,7 @@
 import React, { useMemo } from "react";
 import { format, isToday, isYesterday } from "date-fns";
 import { cn } from "@/lib/utils";
+import { parseUTCDate } from "@/utils/time";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -115,7 +116,7 @@ const ConversationList = ({
   const formatLastMessageTime = (dateString) => {
     if (!dateString) return "";
     try {
-      const date = new Date(dateString);
+      const date = parseUTCDate(dateString);
       if (isToday(date)) {
         return format(date, "HH:mm");
       } else if (isYesterday(date)) {

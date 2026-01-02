@@ -62,6 +62,11 @@ const AuthGuard = ({ children }) => {
       if (!authenticated) {
         // Not authenticated and trying to access protected route
         console.log('AuthGuard: User not authenticated, redirecting to login');
+        // Store the intended destination URL for redirect after login
+        if (typeof window !== 'undefined' && pathname) {
+          const redirectUrl = pathname + (window.location.search || '');
+          localStorage.setItem('authRedirectUrl', redirectUrl);
+        }
         router.push('/auth');
         return;
       }
@@ -74,10 +79,18 @@ const AuthGuard = ({ children }) => {
 
       // If there's an error fetching user data (e.g., token expired)
       if (userError) {
-        console.log('AuthGuard: Error fetching user data, redirecting to login');
+        console.log('AuthGuard: Error fetching user data, token likely expired');
         apiUtils.clearAuthToken();
         setIsAuthenticated(false);
-        router.push('/auth');
+        setIsChecking(false);
+        
+        // Only redirect if we're not already on the auth page (prevent redirect loops)
+        if (typeof window !== 'undefined' && !pathname.startsWith('/auth')) {
+          // Store the intended destination URL for redirect after login
+          const redirectUrl = pathname + (window.location.search || '');
+          localStorage.setItem('authRedirectUrl', redirectUrl);
+          router.push('/auth');
+        }
         return;
       }
 
@@ -100,8 +113,9 @@ const AuthGuard = ({ children }) => {
     return children;
   }
 
-  // If there's an error, don't render children (will redirect)
-  if (userError) {
+  // If there's an error on a protected route, don't render children (will redirect)
+  // But on public routes, allow rendering even if there's an error (expired token)
+  if (userError && !isPublicRoute) {
     return null;
   }
 

@@ -31,6 +31,7 @@ import { format, isToday, isYesterday } from "date-fns";
 import { cn } from "@/lib/utils";
 import RichTextEditor from "@/components/RichTextEditor";
 import MentionTextarea from "@/components/MentionTextarea";
+import { parseUTCDate } from "@/utils/time";
 import { useCreateMessage, useMarkMessageAsRead, useConversationMessages, useConversation } from "@/hooks/useMessages";
 import { useCurrentUser } from "@/hooks/useAuth";
 import { useQueryClient } from "@tanstack/react-query";
@@ -40,6 +41,7 @@ import { usePresence, useBatchPresence } from "@/hooks/usePresence";
 import { toast } from "sonner";
 import { MessageSquare, UserPlus, AlertCircle, Users } from "lucide-react";
 import ParticipantManager from "./ParticipantManager";
+import { useFileReferences } from "@/hooks/useFileReferences";
 import {
   Dialog,
   DialogContent,
@@ -47,6 +49,19 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+
+// Component to render message content with file references
+const MessageContent = ({ content, className }) => {
+  const { processedHtml, containerRef } = useFileReferences(content);
+  
+  return (
+    <div
+      ref={containerRef}
+      className={className}
+      dangerouslySetInnerHTML={{ __html: processedHtml }}
+    />
+  );
+};
 
 const ConversationView = ({
   conversationId,
@@ -327,8 +342,8 @@ const ConversationView = ({
     // Find the latest unread message that was received (not sent by current user)
     const sortedMessages = [...messages].sort((a, b) => {
       // Sort by created_at descending (newest first)
-      const dateA = new Date(a.created_at || 0);
-      const dateB = new Date(b.created_at || 0);
+      const dateA = parseUTCDate(a.created_at || 0);
+      const dateB = parseUTCDate(b.created_at || 0);
       return dateB - dateA;
     });
 
@@ -631,7 +646,7 @@ const ConversationView = ({
             const isPending = msg._pending || msg._optimistic;
             const showTime = index === 0 ||
               (messages[index - 1]?.created_at && msg.created_at &&
-                new Date(msg.created_at) - new Date(messages[index - 1].created_at) > 5 * 60 * 1000);
+                parseUTCDate(msg.created_at) - parseUTCDate(messages[index - 1].created_at) > 5 * 60 * 1000);
 
             return (
               <div key={msg.id} className={cn("w-full", isPending && "opacity-70")}>
@@ -641,7 +656,7 @@ const ConversationView = ({
                     <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">
                       {msg.created_at
                         ? (() => {
-                          const msgDate = new Date(msg.created_at);
+                          const msgDate = parseUTCDate(msg.created_at);
                           if (isToday(msgDate)) {
                             return format(msgDate, "HH:mm");
                           } else if (isYesterday(msgDate)) {
@@ -666,13 +681,12 @@ const ConversationView = ({
                       ? "bg-primary text-primary-foreground rounded-br-sm"
                       : "bg-muted text-foreground rounded-bl-sm"
                   )}>
-                    <div className={cn(
-                      "text-sm [&_p]:mb-1 [&_p]:last:mb-0 [&_p]:leading-relaxed [&_ul]:list-disc [&_ul]:ml-4 [&_ul]:my-1 [&_ol]:list-decimal [&_ol]:ml-4 [&_ol]:my-1 [&_li]:mb-0.5 [&_strong]:font-bold [&_em]:italic [&_a]:underline [&_a]:hover:underline-offset-2",
-                      isSent ? "[&_a]:text-primary-foreground [&_a]:underline-offset-2" : "[&_a]:text-primary"
-                    )}
-                      dangerouslySetInnerHTML={{
-                        __html: typeof msg.content === 'string' ? msg.content : String(msg.content || "")
-                      }}
+                    <MessageContent 
+                      content={typeof msg.content === 'string' ? msg.content : String(msg.content || "")}
+                      className={cn(
+                        "text-sm [&_p]:mb-1 [&_p]:last:mb-0 [&_p]:leading-relaxed [&_ul]:list-disc [&_ul]:ml-4 [&_ul]:my-1 [&_ol]:list-decimal [&_ol]:ml-4 [&_ol]:my-1 [&_li]:mb-0.5 [&_strong]:font-bold [&_em]:italic [&_a]:underline [&_a]:hover:underline-offset-2",
+                        isSent ? "[&_a]:text-primary-foreground [&_a]:underline-offset-2" : "[&_a]:text-primary"
+                      )}
                     />
                     <div className={cn(
                       "flex items-center gap-1.5 text-xs",
@@ -680,7 +694,7 @@ const ConversationView = ({
                     )}>
                       <span>
                         {msg.created_at
-                          ? format(new Date(msg.created_at), "HH:mm")
+                          ? format(parseUTCDate(msg.created_at), "HH:mm")
                           : "Just now"}
                       </span>
                       {/* Pending/Sending indicator */}

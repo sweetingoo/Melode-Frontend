@@ -75,7 +75,7 @@ const FormTypesPage = () => {
 
   // Permission checks
   const { hasPermission, hasWildcardPermissions, isSuperuser } = usePermissionsCheck();
-  
+
   // For superusers, grant all permissions - always check isSuperuser first
   // If user is superuser, they have all permissions regardless of other checks
   const canCreate = !!isSuperuser || !!hasWildcardPermissions || hasPermission("form_type:create") || hasPermission("form_type:*");
@@ -208,136 +208,153 @@ const FormTypesPage = () => {
   return (
     <div className="container mx-auto py-8 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Form Types</h1>
-          <p className="text-muted-foreground mt-1">
-            Manage form types for your organization
-          </p>
-        </div>
-        {canCreate && (
-          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+      <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="flex items-center gap-3">
+              <h1 className="text-3xl font-bold">Form Types</h1>
+              {canCreate && (
+                <DialogTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={resetForm}
+                    className="h-8 w-8"
+                    title="Create Form Type"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </DialogTrigger>
+              )}
+            </div>
+            <p className="text-muted-foreground mt-1">
+              Manage form types for your organisation
+            </p>
+          </div>
+          {canCreate && (
             <DialogTrigger asChild>
               <Button onClick={resetForm}>
                 <Plus className="mr-2 h-4 w-4" />
                 Create Form Type
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl">
-              <DialogHeader>
-                <DialogTitle>Create Form Type</DialogTitle>
-                <DialogDescription>
-                  Create a new form type for your organization
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
+          )}
+        </div>
+        {canCreate && (
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Create Form Type</DialogTitle>
+              <DialogDescription>
+                Create a new form type for your organisation
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Name *</Label>
+                <Input
+                  id="name"
+                  value={formData.name}
+                  onChange={(e) =>
+                    setFormData({ ...formData, name: e.target.value })
+                  }
+                  placeholder="e.g., inspection"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Lowercase, no spaces (used as identifier)
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="display_name">Display Name *</Label>
+                <Input
+                  id="display_name"
+                  value={formData.display_name}
+                  onChange={(e) =>
+                    setFormData({ ...formData, display_name: e.target.value })
+                  }
+                  placeholder="e.g., Inspection"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="description">Description</Label>
+                <Input
+                  id="description"
+                  value={formData.description}
+                  onChange={(e) =>
+                    setFormData({ ...formData, description: e.target.value })
+                  }
+                  placeholder="Brief description of this form type"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="name">Name *</Label>
+                  <Label htmlFor="icon">Icon</Label>
                   <Input
-                    id="name"
-                    value={formData.name}
+                    id="icon"
+                    value={formData.icon}
                     onChange={(e) =>
-                      setFormData({ ...formData, name: e.target.value })
+                      setFormData({ ...formData, icon: e.target.value })
                     }
-                    placeholder="e.g., inspection"
+                    placeholder="e.g., 🔍"
                   />
-                  <p className="text-xs text-muted-foreground">
-                    Lowercase, no spaces (used as identifier)
-                  </p>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="display_name">Display Name *</Label>
-                  <Input
-                    id="display_name"
-                    value={formData.display_name}
-                    onChange={(e) =>
-                      setFormData({ ...formData, display_name: e.target.value })
-                    }
-                    placeholder="e.g., Inspection"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="description">Description</Label>
-                  <Input
-                    id="description"
-                    value={formData.description}
-                    onChange={(e) =>
-                      setFormData({ ...formData, description: e.target.value })
-                    }
-                    placeholder="Brief description of this form type"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="icon">Icon</Label>
+                  <Label htmlFor="color">Color</Label>
+                  <div className="flex gap-2">
                     <Input
-                      id="icon"
-                      value={formData.icon}
+                      id="color"
+                      type="color"
+                      value={formData.color}
                       onChange={(e) =>
-                        setFormData({ ...formData, icon: e.target.value })
+                        setFormData({ ...formData, color: e.target.value })
                       }
-                      placeholder="e.g., 🔍"
+                      className="w-20 h-10"
+                    />
+                    <Input
+                      value={formData.color}
+                      onChange={(e) =>
+                        setFormData({ ...formData, color: e.target.value })
+                      }
+                      placeholder="#3b82f6"
+                      className="flex-1"
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="color">Color</Label>
-                    <div className="flex gap-2">
-                      <Input
-                        id="color"
-                        type="color"
-                        value={formData.color}
-                        onChange={(e) =>
-                          setFormData({ ...formData, color: e.target.value })
-                        }
-                        className="w-20 h-10"
-                      />
-                      <Input
-                        value={formData.color}
-                        onChange={(e) =>
-                          setFormData({ ...formData, color: e.target.value })
-                        }
-                        placeholder="#3b82f6"
-                        className="flex-1"
-                      />
-                    </div>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="sort_order">Sort Order</Label>
-                  <Input
-                    id="sort_order"
-                    type="number"
-                    value={formData.sort_order}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        sort_order: parseInt(e.target.value) || 0,
-                      })
-                    }
-                  />
                 </div>
               </div>
-              <DialogFooter>
-                <Button
-                  variant="outline"
-                  onClick={() => setIsCreateDialogOpen(false)}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  onClick={handleCreate}
-                  disabled={!formData.name || !formData.display_name || createMutation.isPending}
-                >
-                  {createMutation.isPending && (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  )}
-                  Create
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+              <div className="space-y-2">
+                <Label htmlFor="sort_order">Sort Order</Label>
+                <Input
+                  id="sort_order"
+                  type="number"
+                  value={formData.sort_order}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      sort_order: parseInt(e.target.value) || 0,
+                    })
+                  }
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setIsCreateDialogOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleCreate}
+                disabled={!formData.name || !formData.display_name || createMutation.isPending}
+              >
+                {createMutation.isPending && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                )}
+                Create
+              </Button>
+            </DialogFooter>
+          </DialogContent>
         )}
-      </div>
+      </Dialog>
 
       {/* Filters */}
       <Card>

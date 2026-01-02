@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { usersService } from "@/services/users";
 import { rolesService } from "@/services/roles";
 import { toast } from "sonner";
+import { parseUTCDate } from "@/utils/time";
 
 // Role query keys
 export const roleKeys = {
@@ -37,7 +38,7 @@ export const useRoles = (params = {}) => {
 };
 
 // Get all users query
-export const useUsers = (params = {}) => {
+export const useUsers = (params = {}, options = {}) => {
   return useQuery({
     queryKey: userKeys.list(params),
     queryFn: async () => {
@@ -156,6 +157,7 @@ export const useUsers = (params = {}) => {
       return failureCount < 3;
     },
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+    ...options, // Allow passing query options like enabled, etc.
   });
 };
 
@@ -639,13 +641,22 @@ export const userUtils = {
       isVerified: apiUser.is_verified,
       isSuperuser: apiUser.is_superuser,
       lastLogin: apiUser.last_login
-        ? new Date(apiUser.last_login).toLocaleString()
+        ? (() => {
+            const date = parseUTCDate(apiUser.last_login);
+            return date ? date.toLocaleString() : "Never";
+          })()
         : "Never",
       createdAt: apiUser.created_at
-        ? new Date(apiUser.created_at).toLocaleString()
+        ? (() => {
+            const date = parseUTCDate(apiUser.created_at);
+            return date ? date.toLocaleString() : "Unknown";
+          })()
         : "Unknown",
       updatedAt: apiUser.updated_at
-        ? new Date(apiUser.updated_at).toLocaleString()
+        ? (() => {
+            const date = parseUTCDate(apiUser.updated_at);
+            return date ? date.toLocaleString() : "Unknown";
+          })()
         : "Unknown",
       initials:
         `${apiUser.first_name?.[0] || ""}${apiUser.last_name?.[0] || ""
@@ -657,7 +668,10 @@ export const userUtils = {
       directPermissions: apiUser.direct_permissions || [],
       profileCreatedByAdmin: apiUser.profile_created_by_admin,
       profileAcceptedAt: apiUser.profile_accepted_at
-        ? new Date(apiUser.profile_accepted_at).toLocaleString()
+        ? (() => {
+            const date = parseUTCDate(apiUser.profile_accepted_at);
+            return date ? date.toLocaleString() : null;
+          })()
         : null,
       isProfileAccepted: apiUser.is_profile_accepted,
       displayName: apiUser.display_name,

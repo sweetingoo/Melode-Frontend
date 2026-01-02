@@ -141,5 +141,17 @@ export const filesService = {
       throw error;
     }
   },
+
+  // Get pre-signed URL for a file by file_id
+  // Returns: { url: string, file_id: number, expires_in_seconds: number }
+  getFileUrl: async (fileId) => {
+    try {
+      const response = await api.get(`/files/${fileId}/url`);
+      return response.data || response;
+    } catch (error) {
+      console.error(`Get file URL failed for file ${fileId}:`, error);
+      throw error;
+    }
+  },
 };
 

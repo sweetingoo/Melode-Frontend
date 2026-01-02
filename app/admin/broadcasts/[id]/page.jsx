@@ -39,6 +39,7 @@ import { cn } from "@/lib/utils";
 import { formatDistanceToNow, format } from "date-fns";
 import { toast } from "sonner";
 import { parseUTCDate } from "@/utils/time";
+import { useFileReferences } from "@/hooks/useFileReferences";
 
 const BroadcastDetailPage = () => {
   const params = useParams();
@@ -49,6 +50,7 @@ const BroadcastDetailPage = () => {
   const markAsReadMutation = useMarkMessageAsRead();
   const acknowledgeMutation = useAcknowledgeMessageWithStatus();
   const { hasPermission } = usePermissionsCheck();
+  const { processedHtml, containerRef } = useFileReferences(broadcast?.content);
   
   // Check if this is actually a broadcast
   const isBroadcast = broadcast?.is_broadcast === true;
@@ -261,8 +263,9 @@ const BroadcastDetailPage = () => {
         <CardContent className="space-y-4">
           {/* Content */}
           <div
+            ref={containerRef}
             className="prose dark:prose-invert max-w-none"
-            dangerouslySetInnerHTML={{ __html: broadcast.content || "" }}
+            dangerouslySetInnerHTML={{ __html: processedHtml }}
           />
 
           {/* Delivery Info */}

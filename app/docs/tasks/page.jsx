@@ -592,7 +592,7 @@ export default function TasksDocs() {
                 <div className="p-3 border rounded-lg">
                   <div className="flex items-center gap-2 mb-1">
                     <Users className="h-4 w-4 text-primary" />
-                    <h4 className="text-sm font-semibold">Better Organization</h4>
+                    <h4 className="text-sm font-semibold">Better Organisation</h4>
                   </div>
                   <p className="text-xs text-muted-foreground">
                     Information is organised into logical sections with clear visual hierarchy,

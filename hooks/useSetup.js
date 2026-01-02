@@ -73,7 +73,7 @@ export const useRunSetup = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: setupKeys.all });
       toast.success("Setup completed successfully", {
-        description: "Your organization has been initialized and is ready to use.",
+        description: "Your organisation has been initialized and is ready to use.",
       });
     },
     onError: (error) => {
@@ -163,17 +163,17 @@ export const useCreateOrganization = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: setupKeys.all });
       queryClient.invalidateQueries({ queryKey: ["configuration"] });
-      toast.success("Organization created", {
+      toast.success("Organisation created", {
         description: "The organization has been created successfully.",
       });
     },
     onError: (error) => {
-      console.error("Create organization error:", error);
+      console.error("Create organisation error:", error);
       const errorMessage =
         error?.response?.data?.message ||
         error?.response?.data?.detail ||
-        "Failed to create organization";
-      toast.error("Failed to create organization", {
+        "Failed to create organisation";
+      toast.error("Failed to create organisation", {
         description: Array.isArray(errorMessage)
           ? errorMessage.map((e) => e.msg || e).join(", ")
           : errorMessage,

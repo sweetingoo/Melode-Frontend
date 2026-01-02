@@ -40,6 +40,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { format, isToday, isYesterday } from "date-fns";
 import { cn } from "@/lib/utils";
+import { parseUTCDate } from "@/utils/time";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
 
 const MessagesList = ({
@@ -296,7 +297,7 @@ const MessagesList = ({
       conversation.messages.push(message);
       
       // Update latest message if this one is newer
-      if (new Date(message.created_at) > new Date(conversation.latestMessage.created_at)) {
+      if (parseUTCDate(message.created_at) > parseUTCDate(conversation.latestMessage.created_at)) {
         conversation.latestMessage = message;
       }
       
@@ -310,7 +311,7 @@ const MessagesList = ({
 
     // Sort conversations by latest message time (newest first)
     const sortedConversations = Array.from(conversations.values()).sort((a, b) => {
-      return new Date(b.latestMessage.created_at) - new Date(a.latestMessage.created_at);
+      return parseUTCDate(b.latestMessage.created_at) - parseUTCDate(a.latestMessage.created_at);
     });
     
     // Debug logging to help identify grouping issues

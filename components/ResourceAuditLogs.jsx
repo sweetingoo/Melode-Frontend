@@ -41,17 +41,31 @@ import {
 import { useResourceAuditLogs } from "@/hooks/useAuditLogs";
 import { format, formatDistanceToNow } from "date-fns";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { parseUTCDate } from "@/utils/time";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
-const ResourceAuditLogs = ({ resource, resourceId, title = "Activity History" }) => {
+const ResourceAuditLogs = ({ resource, resourceId, title = "Activity History", pageSize: initialPageSize = 10 }) => {
   const [selectedLog, setSelectedLog] = useState(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [expandedRows, setExpandedRows] = useState(new Set());
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(initialPageSize);
   const isMobile = useIsMobile();
 
   const { data: auditLogsData, isLoading, error } = useResourceAuditLogs(
     resource,
     resourceId,
-    { limit: 50 }
+    { 
+      limit: pageSize,
+      offset: (currentPage - 1) * pageSize
+    }
   );
 
   // Extract audit logs from response
@@ -63,6 +77,10 @@ const ResourceAuditLogs = ({ resource, resourceId, title = "Activity History" })
     if (auditLogsData.results) return auditLogsData.results;
     return [];
   }, [auditLogsData]);
+
+  // Extract pagination info
+  const totalCount = auditLogsData?.total_count || auditLogsData?.total || auditLogs.length;
+  const totalPages = Math.ceil(totalCount / pageSize);
 
   // Get severity color
   const getSeverityColor = (severity) => {
@@ -219,7 +237,7 @@ const ResourceAuditLogs = ({ resource, resourceId, title = "Activity History" })
                           </Badge>
                         </div>
                         <p className="text-sm text-muted-foreground">
-                          {formatDistanceToNow(new Date(log.created_at), {
+                          {formatDistanceToNow(parseUTCDate(log.created_at), {
                             addSuffix: true,
                           })}
                         </p>
@@ -248,7 +266,7 @@ const ResourceAuditLogs = ({ resource, resourceId, title = "Activity History" })
                       <div className="pt-3 border-t space-y-2 text-sm">
                         <div>
                           <span className="text-muted-foreground">Time:</span>
-                          <p>{format(new Date(log.created_at), "PPP p")}</p>
+                          <p>{format(parseUTCDate(log.created_at), "PPP p")}</p>
                         </div>
                         {log.ip_address && (
                           <div>
@@ -292,10 +310,10 @@ const ResourceAuditLogs = ({ resource, resourceId, title = "Activity History" })
                         <TableCell>
                           <div className="flex flex-col">
                             <span className="text-sm font-medium">
-                              {format(new Date(log.created_at), "MMM dd, yyyy HH:mm")}
+                              {format(parseUTCDate(log.created_at), "MMM dd, yyyy HH:mm")}
                             </span>
                             <span className="text-xs text-muted-foreground">
-                              {formatDistanceToNow(new Date(log.created_at), {
+                              {formatDistanceToNow(parseUTCDate(log.created_at), {
                                 addSuffix: true,
                               })}
                             </span>
@@ -387,6 +405,55 @@ const ResourceAuditLogs = ({ resource, resourceId, title = "Activity History" })
               </Table>
             </div>
           )}
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between mt-4 pt-4 border-t">
+              <div className="flex items-center gap-2">
+                <Label className="text-sm">Page size:</Label>
+                <Select
+                  value={pageSize.toString()}
+                  onValueChange={(value) => {
+                    setPageSize(parseInt(value));
+                    setCurrentPage(1);
+                  }}
+                >
+                  <SelectTrigger className="w-20">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="25">25</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                    <SelectItem value="100">100</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1 || isLoading}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <span className="text-sm">
+                  Page {currentPage} of {totalPages} ({totalCount} total)
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    setCurrentPage((p) => Math.min(totalPages, p + 1))
+                  }
+                  disabled={currentPage === totalPages || isLoading}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -408,7 +475,7 @@ const ResourceAuditLogs = ({ resource, resourceId, title = "Activity History" })
                 </div>
                 <div>
                   <Label className="text-muted-foreground">Timestamp</Label>
-                  <p>{format(new Date(selectedLog.created_at), "PPP p")}</p>
+                  <p>{format(parseUTCDate(selectedLog.created_at), "PPP p")}</p>
                 </div>
                 <div>
                   <Label className="text-muted-foreground">User</Label>

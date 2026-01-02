@@ -10,7 +10,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Bell, Mail, MessageSquare, CheckSquare2, AlertCircle, Clock, Loader2, Send, CheckCircle2, XCircle, UserCheck, Info, Megaphone } from "lucide-react";
+import { Bell, Mail, MessageSquare, CheckSquare2, AlertCircle, Clock, Loader2, Send, CheckCircle2, XCircle, UserCheck, Info, Megaphone, FileText } from "lucide-react";
 import { useNotifications, useUnreadNotificationsCount } from "@/hooks/useNotifications";
 import { useCurrentUser } from "@/hooks/useAuth";
 import { format, isToday, isYesterday } from "date-fns";
@@ -59,7 +59,11 @@ const NotificationsDropdown = () => {
   // New API structure: response contains { notifications: [...], total, page, page_size }
   const notifications = notificationsData?.notifications || [];
 
-  const getMessageTypeIcon = (messageType) => {
+  const getMessageTypeIcon = (messageType, category) => {
+    // Document notifications get a special icon
+    if (category === "document") {
+      return FileText;
+    }
     const iconConfig = {
       notification: Mail,
       alert: AlertCircle,
@@ -83,8 +87,13 @@ const NotificationsDropdown = () => {
   };
 
   const handleNotificationClick = (notification) => {
-    // Route based on message type
-    if (notification.is_broadcast) {
+    // Check for link_url first (used by document notifications and other link-based notifications)
+    if (notification.link_url) {
+      router.push(notification.link_url);
+    } else if (notification.category === "document" && notification.metadata?.document_id) {
+      // Fallback: route to document if category is document and we have document_id
+      router.push(`/documents/${notification.metadata.document_id}`);
+    } else if (notification.is_broadcast) {
       router.push(`/admin/broadcasts/${notification.id}`);
     } else if (notification.conversation_id) {
       router.push(`/admin/messages?conversation=${notification.conversation_id}`);
@@ -147,11 +156,15 @@ const NotificationsDropdown = () => {
               <div className="divide-y">
                 {notifications.map((notification) => {
                   // Use Megaphone icon for broadcasts, otherwise use message type icon
-                  const Icon = notification.is_broadcast ? Megaphone : getMessageTypeIcon(notification.message_type);
+                  // Document notifications get FileText icon
+                  const Icon = notification.is_broadcast 
+                    ? Megaphone 
+                    : getMessageTypeIcon(notification.message_type, notification.category);
                   // Use is_read directly from notification (new API structure)
                   const isUnread = !notification.is_read;
                   const isSent = notification.created_by_user_id === currentUser?.id;
                   const isBroadcast = notification.is_broadcast;
+                  const isDocument = notification.category === "document";
 
                   return (
                     <div
@@ -233,9 +246,16 @@ const NotificationsDropdown = () => {
                             <span className="text-xs text-muted-foreground">
                               {formatNotificationTime(notification.created_at)}
                             </span>
-                            {isBroadcast && notification.category && (
+                            {(isBroadcast || isDocument) && notification.category && (
                               <Badge variant="outline" className="text-xs h-4 px-1.5">
                                 {notification.category}
+                              </Badge>
+                            )}
+                            {isDocument && notification.metadata?.event_type && (
+                              <Badge variant="secondary" className="text-xs h-4 px-1.5">
+                                {notification.metadata.event_type === "shared_with_you" && "Shared"}
+                                {notification.metadata.event_type === "updated" && "Updated"}
+                                {notification.metadata.event_type === "made_public" && "Public"}
                               </Badge>
                             )}
                             {notification.priority && notification.priority !== "normal" && (

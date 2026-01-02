@@ -118,9 +118,20 @@ apiClient.interceptors.response.use(
             config?.url?.includes("/auth/mfa-login");
 
           if (!isLoginAttempt) {
+            // Clear tokens immediately
             localStorage.removeItem("authToken");
+            localStorage.removeItem("refreshToken");
+            
             if (typeof window !== "undefined") {
-              window.location.href = "/auth";
+              const currentPath = window.location.pathname + window.location.search;
+              
+              // Only redirect if we're not already on the auth page or home page (prevent redirect loops)
+              if (!currentPath.startsWith('/auth') && currentPath !== '/') {
+                // Store the intended destination URL for redirect after login
+                localStorage.setItem('authRedirectUrl', currentPath);
+                window.location.href = "/auth";
+              }
+              // If already on auth page or home page, don't redirect (prevents loop)
             }
           }
           break;

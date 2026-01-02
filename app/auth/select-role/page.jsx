@@ -26,7 +26,16 @@ const SelectRolePage = () => {
   useEffect(() => {
     // Check if user is already authenticated
     if (apiUtils.isAuthenticated()) {
-      router.push("/admin");
+      // Check for stored redirect URL
+      const redirectUrl = localStorage.getItem('authRedirectUrl');
+      if (redirectUrl && !redirectUrl.startsWith('/auth')) {
+        // Clear the stored redirect URL and redirect to it
+        localStorage.removeItem('authRedirectUrl');
+        router.push(redirectUrl);
+      } else {
+        // Default to admin page
+        router.push("/admin");
+      }
       return;
     }
 

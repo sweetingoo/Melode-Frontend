@@ -764,6 +764,7 @@ const UserManagementPage = () => {
                         )}`}
                       >
                         {userUtils.getRole(user)}
+                        {user.isSuperuser && <span className="ml-1">*</span>}
                       </span>
                     </TableCell>
                     <TableCell>

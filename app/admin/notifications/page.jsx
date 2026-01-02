@@ -49,6 +49,7 @@ import {
   Info,
   UserCheck,
   Megaphone,
+  FileText,
 } from "lucide-react";
 import {
   useNotifications,
@@ -99,6 +100,7 @@ const NotificationsPage = () => {
   const [filters, setFilters] = useState({
     message_type: "all",
     priority: "all",
+    category: "all",
     unread_only: false,
   });
 
@@ -130,7 +132,11 @@ const NotificationsPage = () => {
     return <Badge variant={config.variant}>{config.label}</Badge>;
   };
 
-  const getMessageTypeIcon = (messageType) => {
+  const getMessageTypeIcon = (messageType, category) => {
+    // Document notifications get a special icon
+    if (category === "document") {
+      return FileText;
+    }
     const iconConfig = {
       notification: Mail,
       alert: AlertCircle,
@@ -152,8 +158,13 @@ const NotificationsPage = () => {
   };
 
   const handleNotificationClick = (notification, showStatus = false) => {
-    // Route based on message type
-    if (notification.is_broadcast) {
+    // Check for link_url first (used by document notifications and other link-based notifications)
+    if (notification.link_url) {
+      router.push(notification.link_url);
+    } else if (notification.category === "document" && notification.metadata?.document_id) {
+      // Fallback: route to document if category is document and we have document_id
+      router.push(`/documents/${notification.metadata.document_id}`);
+    } else if (notification.is_broadcast) {
       // For sent broadcasts, optionally show status page
       if (showStatus && notification.created_by_user_id === currentUser?.id) {
         router.push(`/admin/broadcasts/${notification.id}/status`);
@@ -186,7 +197,6 @@ const NotificationsPage = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Notifications</h1>
           <p className="text-muted-foreground">
             View your notifications and alerts
           </p>
@@ -212,7 +222,7 @@ const NotificationsPage = () => {
         </CardHeader>
         {isFiltersOpen && (
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
               <div className="space-y-2">
                 <Label>Search</Label>
                 <div className="relative">
@@ -270,6 +280,24 @@ const NotificationsPage = () => {
                 </Select>
               </div>
               <div className="space-y-2">
+                <Label>Category</Label>
+                <Select
+                  value={filters.category || "all"}
+                  onValueChange={(value) => {
+                    setFilters({ ...filters, category: value });
+                    setCurrentPage(1);
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="All categories" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All categories</SelectItem>
+                    <SelectItem value="document">Document</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
                 <Label>Status</Label>
                 <div className="flex items-center space-x-2 pt-2">
                   <input
@@ -313,9 +341,13 @@ const NotificationsPage = () => {
                 {notifications.map((notification) => {
                   const readStatus = getReadStatus(notification);
                   // Use Megaphone icon for broadcasts, otherwise use message type icon
-                  const Icon = notification.is_broadcast ? Megaphone : getMessageTypeIcon(notification.message_type);
+                  // Document notifications get FileText icon
+                  const Icon = notification.is_broadcast 
+                    ? Megaphone 
+                    : getMessageTypeIcon(notification.message_type, notification.category);
                   const isBroadcast = notification.is_broadcast;
                   const isSent = notification.created_by_user_id === currentUser?.id;
+                  const isDocument = notification.category === "document";
                   
                   return (
                     <div
@@ -381,9 +413,16 @@ const NotificationsPage = () => {
                                     </Badge>
                                   </>
                                 )}
-                                {isBroadcast && notification.category && (
+                                {(isBroadcast || isDocument) && notification.category && (
                                   <Badge variant="outline" className="h-5 px-1.5">
                                     {notification.category}
+                                  </Badge>
+                                )}
+                                {isDocument && notification.metadata?.event_type && (
+                                  <Badge variant="secondary" className="h-5 px-1.5">
+                                    {notification.metadata.event_type === "shared_with_you" && "Shared"}
+                                    {notification.metadata.event_type === "updated" && "Updated"}
+                                    {notification.metadata.event_type === "made_public" && "Public"}
                                   </Badge>
                                 )}
                                 {getPriorityBadge(notification.priority)}

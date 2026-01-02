@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog";
 import { 
   ArrowLeft, 
@@ -114,8 +115,10 @@ import { useCreateForm } from "@/hooks/useForms";
 import { generateSlug } from "@/utils/slug";
 import { useRoles, useCreateRole } from "@/hooks/useRoles";
 import { useUsers } from "@/hooks/useUsers";
-import { useActiveFormTypes } from "@/hooks/useFormTypes";
+import { useActiveFormTypes, useCreateFormType } from "@/hooks/useFormTypes";
 import { useUploadFile } from "@/hooks/useProfile";
+import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import RichTextEditor from "@/components/RichTextEditor";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -180,8 +183,32 @@ const NewFormPage = () => {
   const { data: activeFormTypes = [], isLoading: isLoadingFormTypes } = useActiveFormTypes();
   const { data: usersResponse } = useUsers();
   const uploadFileMutation = useUploadFile({ silent: true });
+  const { isSuperuser, hasWildcardPermissions, hasPermission } = usePermissionsCheck();
+  const createFormTypeMutation = useCreateFormType();
+  const queryClient = useQueryClient();
   const roles = rolesData || [];
   const users = usersResponse?.users || usersResponse || [];
+
+  // Track if component is mounted to avoid hydration errors
+  const [isMounted, setIsMounted] = useState(false);
+  
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  // Permission check for creating form types (only after mount to avoid hydration mismatch)
+  const canCreateFormType = isMounted && (!!isSuperuser || !!hasWildcardPermissions || hasPermission("form_type:create") || hasPermission("form_type:*"));
+
+  // State for create form type dialog
+  const [isCreateFormTypeDialogOpen, setIsCreateFormTypeDialogOpen] = useState(false);
+  const [formTypeData, setFormTypeData] = useState({
+    name: "",
+    display_name: "",
+    description: "",
+    icon: "",
+    color: "#3b82f6",
+    sort_order: 0,
+  });
 
   const [formData, setFormData] = useState({
     form_name: "",
@@ -742,7 +769,164 @@ const NewFormPage = () => {
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="form_type">Form Type</Label>
+                    <div className="flex items-center gap-2 mb-2">
+                      <Label htmlFor="form_type">Form Type</Label>
+                      {canCreateFormType && (
+                        <Dialog open={isCreateFormTypeDialogOpen} onOpenChange={setIsCreateFormTypeDialogOpen}>
+                          <DialogTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6"
+                              title="Create Form Type"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                setFormTypeData({
+                                  name: "",
+                                  display_name: "",
+                                  description: "",
+                                  icon: "",
+                                  color: "#3b82f6",
+                                  sort_order: 0,
+                                });
+                              }}
+                            >
+                              <Plus className="h-4 w-4" />
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent className="max-w-2xl">
+                            <DialogHeader>
+                              <DialogTitle>Create Form Type</DialogTitle>
+                              <DialogDescription>
+                                Create a new form type for your organisation
+                              </DialogDescription>
+                            </DialogHeader>
+                            <div className="space-y-4 py-4">
+                              <div className="space-y-2">
+                                <Label htmlFor="form-type-name">Name *</Label>
+                                <Input
+                                  id="form-type-name"
+                                  value={formTypeData.name}
+                                  onChange={(e) =>
+                                    setFormTypeData({ ...formTypeData, name: e.target.value })
+                                  }
+                                  placeholder="e.g., inspection"
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                  Lowercase, no spaces (used as identifier)
+                                </p>
+                              </div>
+                              <div className="space-y-2">
+                                <Label htmlFor="form-type-display-name">Display Name *</Label>
+                                <Input
+                                  id="form-type-display-name"
+                                  value={formTypeData.display_name}
+                                  onChange={(e) =>
+                                    setFormTypeData({ ...formTypeData, display_name: e.target.value })
+                                  }
+                                  placeholder="e.g., Inspection"
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <Label htmlFor="form-type-description">Description</Label>
+                                <Input
+                                  id="form-type-description"
+                                  value={formTypeData.description}
+                                  onChange={(e) =>
+                                    setFormTypeData({ ...formTypeData, description: e.target.value })
+                                  }
+                                  placeholder="Brief description of this form type"
+                                />
+                              </div>
+                              <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                  <Label htmlFor="form-type-icon">Icon</Label>
+                                  <Input
+                                    id="form-type-icon"
+                                    value={formTypeData.icon}
+                                    onChange={(e) =>
+                                      setFormTypeData({ ...formTypeData, icon: e.target.value })
+                                    }
+                                    placeholder="e.g., 🔍"
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label htmlFor="form-type-color">Color</Label>
+                                  <div className="flex gap-2">
+                                    <Input
+                                      id="form-type-color"
+                                      type="color"
+                                      value={formTypeData.color}
+                                      onChange={(e) =>
+                                        setFormTypeData({ ...formTypeData, color: e.target.value })
+                                      }
+                                      className="w-20 h-10"
+                                    />
+                                    <Input
+                                      value={formTypeData.color}
+                                      onChange={(e) =>
+                                        setFormTypeData({ ...formTypeData, color: e.target.value })
+                                      }
+                                      placeholder="#3b82f6"
+                                      className="flex-1"
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="space-y-2">
+                                <Label htmlFor="form-type-sort-order">Sort Order</Label>
+                                <Input
+                                  id="form-type-sort-order"
+                                  type="number"
+                                  value={formTypeData.sort_order}
+                                  onChange={(e) =>
+                                    setFormTypeData({
+                                      ...formTypeData,
+                                      sort_order: parseInt(e.target.value) || 0,
+                                    })
+                                  }
+                                />
+                              </div>
+                            </div>
+                            <DialogFooter>
+                              <Button
+                                variant="outline"
+                                onClick={() => setIsCreateFormTypeDialogOpen(false)}
+                              >
+                                Cancel
+                              </Button>
+                              <Button
+                                onClick={async () => {
+                                  try {
+                                    await createFormTypeMutation.mutateAsync(formTypeData);
+                                    setIsCreateFormTypeDialogOpen(false);
+                                    setFormTypeData({
+                                      name: "",
+                                      display_name: "",
+                                      description: "",
+                                      icon: "",
+                                      color: "#3b82f6",
+                                      sort_order: 0,
+                                    });
+                                    // Refresh form types list
+                                    queryClient.invalidateQueries({ queryKey: ["formTypes", "active", "all"] });
+                                    toast.success("Form type created successfully");
+                                  } catch (error) {
+                                    // Error handled by mutation
+                                  }
+                                }}
+                                disabled={!formTypeData.name || !formTypeData.display_name || createFormTypeMutation.isPending}
+                              >
+                                {createFormTypeMutation.isPending && (
+                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                )}
+                                Create
+                              </Button>
+                            </DialogFooter>
+                          </DialogContent>
+                        </Dialog>
+                      )}
+                    </div>
                     <Select
                       value={formData.form_type}
                       onValueChange={(value) =>
@@ -1125,17 +1309,53 @@ const NewFormPage = () => {
                                       // No form_id or field_id needed for image_block fields
                                     });
                                     
-                                    // Use download_url from response for image_block fields
-                                    const downloadUrl = uploadResult.download_url || uploadResult.url || uploadResult.file_url;
+                                    // Get API base URL from environment or use default
+                                    const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://melode-api-prod.onrender.com/api/v1';
                                     
-                                    if (!downloadUrl) {
-                                      throw new Error("No download_url received from upload");
+                                    // Helper to ensure URL is absolute (uses backend API URL)
+                                    const ensureAbsoluteUrl = (url) => {
+                                      if (!url) return null;
+                                      // If already absolute (starts with http:// or https://), return as is
+                                      if (/^https?:\/\//i.test(url)) {
+                                        return url;
+                                      }
+                                      // If relative, check if it already starts with /api/v1
+                                      // The apiBaseUrl already includes /api/v1, so we need to handle this carefully
+                                      let cleanPath = url.startsWith('/') ? url : `/${url}`;
+                                      
+                                      // If path already starts with /api/v1, use it as is with the base URL
+                                      // Otherwise, append it to the base URL
+                                      if (cleanPath.startsWith('/api/v1/')) {
+                                        // Extract the path after /api/v1
+                                        const pathAfterApi = cleanPath.substring('/api/v1'.length);
+                                        // Ensure apiBaseUrl doesn't end with / to avoid double slashes
+                                        const cleanBase = apiBaseUrl.endsWith('/') ? apiBaseUrl.slice(0, -1) : apiBaseUrl;
+                                        return `${cleanBase}${pathAfterApi}`;
+                                      } else {
+                                        // Path doesn't start with /api/v1, append directly
+                                        const cleanBase = apiBaseUrl.endsWith('/') ? apiBaseUrl.slice(0, -1) : apiBaseUrl;
+                                        return `${cleanBase}${cleanPath}`;
+                                      }
+                                    };
+                                    
+                                    // Use file_reference_url for storage (permanent reference)
+                                    // Backend will replace this with fresh pre-signed URLs when serving
+                                    const fileReferenceUrl = ensureAbsoluteUrl(uploadResult.file_reference_url) || 
+                                                             ensureAbsoluteUrl(uploadResult.file_reference) ||
+                                                             (uploadResult.id ? `${apiBaseUrl}/files/${uploadResult.id}/download` : null) ||
+                                                             (uploadResult.file_id ? `${apiBaseUrl}/files/${uploadResult.file_id}/download` : null);
+                                    
+                                    // Fallback to download_url if file_reference_url not available
+                                    const imageUrl = fileReferenceUrl || uploadResult.download_url || uploadResult.url || uploadResult.file_url;
+                                    
+                                    if (!imageUrl) {
+                                      throw new Error("No file reference URL or download URL received from upload");
                                     }
                                     
                                     setNewField({ 
                                       ...newField, 
                                       image_file: file,
-                                      image_url: downloadUrl // Use download_url for image_block
+                                      image_url: imageUrl // Store file_reference_url (backend handles URL replacement)
                                     });
                                     
                                     toast.success("Image uploaded successfully");

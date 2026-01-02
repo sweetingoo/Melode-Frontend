@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -65,6 +65,8 @@ import {
   Bell,
   MessageSquare,
   Megaphone,
+  BookOpen,
+  Plug,
 } from "lucide-react";
 import { assets } from "../assets/assets";
 import Image from "next/image";
@@ -137,6 +139,12 @@ const mainMenuItems = [
     permission: "forms:read", // Permission to read forms
   },
   {
+    title: "Documents",
+    icon: BookOpen,
+    url: "/admin/documents",
+    permission: "document:read", // Permission to read documents
+  },
+  {
     title: "Messages",
     icon: Mail,
     url: "/admin/messages",
@@ -187,6 +195,12 @@ const peopleAndAccessItems = [
 // Organisation Management group
 const organisationItems = [
   {
+    title: "Integrations",
+    icon: Plug,
+    url: "/admin/configuration?tab=integrations",
+    permission: "SUPERUSER_ROLE_ONLY", // Only visible when assigned to Superuser role
+  },
+  {
     title: "Locations",
     icon: MapPin,
     url: "/admin/locations",
@@ -222,6 +236,12 @@ const organisationItems = [
     url: "/admin/custom-fields-admin",
     permission: "custom_field:read", // Permission to read custom fields
   },
+  {
+    title: "Settings",
+    icon: Settings,
+    url: "/admin/configuration?tab=organisation",
+    permission: "SUPERUSER_ROLE_ONLY", // Only visible when assigned to Superuser role
+  },
 ];
 
 // Monitoring & Reports group
@@ -252,7 +272,7 @@ const settingsItems = [
     title: "Configuration",
     icon: Settings,
     url: "/admin/configuration",
-    permission: "SUPERUSER_ROLE_ONLY", // Only visible when assigned to Superuser role
+    permission: "SUPERUSER_ROLE_ONLY", // Only visible when assigned to Superuser role - Overall application configurations
   },
 ];
 
@@ -262,6 +282,12 @@ const settingsItems = [
 function CollapsibleMenuItem({ title, icon: Icon, items, pathname }) {
   const { state } = useSidebar();
   const isCollapsed = state === "collapsed";
+  const [isMounted, setIsMounted] = useState(false);
+
+  // Only render collapsible after mount to prevent hydration mismatch
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   if (isCollapsed) {
     // When collapsed, show a dropdown menu
@@ -298,6 +324,35 @@ function CollapsibleMenuItem({ title, icon: Icon, items, pathname }) {
   }
 
   // When expanded, show the normal collapsible
+  // Only render Collapsible after mount to prevent hydration mismatch
+  if (!isMounted) {
+    // Server-side render: show non-collapsible version
+    return (
+      <SidebarMenuItem>
+        <SidebarMenuButton tooltip={title}>
+          <Icon className="h-4 w-4" />
+          <span>{title}</span>
+          <ChevronDown className="ml-auto" />
+        </SidebarMenuButton>
+        <SidebarMenuSub>
+          {items.map((item) => {
+            const isActive = pathname === item.url;
+            return (
+              <SidebarMenuSubItem key={item.title}>
+                <SidebarMenuSubButton asChild isActive={isActive}>
+                  <Link href={item.url} className="flex items-center gap-2">
+                    <item.icon className="h-4 w-4" />
+                    <span>{item.title}</span>
+                  </Link>
+                </SidebarMenuSubButton>
+              </SidebarMenuSubItem>
+            );
+          })}
+        </SidebarMenuSub>
+      </SidebarMenuItem>
+    );
+  }
+
   return (
     <Collapsible defaultOpen className="group/collapsible">
       <SidebarMenuItem>
@@ -1382,6 +1437,9 @@ export default function AdminLayout({ children }) {
                     }
                     if (pathname === "/admin/forms") {
                       return "Forms";
+                    }
+                    if (pathname === "/admin/documents" || pathname?.startsWith("/admin/documents")) {
+                      return "Documents";
                     }
                     if (pathname === "/admin/my-tasks") {
                       return "My Tasks";

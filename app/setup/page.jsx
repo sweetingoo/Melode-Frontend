@@ -649,7 +649,7 @@ const SetupPage = () => {
               {currentStepData.id === "organization" && (
                 <div className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="orgName">Organization Name *</Label>
+                    <Label htmlFor="orgName">Organisation Name *</Label>
                     <Input
                       id="orgName"
                       placeholder="Acme Corporation"
@@ -664,7 +664,7 @@ const SetupPage = () => {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="orgCode">Organization Code *</Label>
+                    <Label htmlFor="orgCode">Organisation Code *</Label>
                     <Input
                       id="orgCode"
                       placeholder="ACME"
@@ -682,7 +682,7 @@ const SetupPage = () => {
                     <Label htmlFor="orgDescription">Description</Label>
                     <Textarea
                       id="orgDescription"
-                      placeholder="Organization description..."
+                      placeholder="Organisation description..."
                       value={organizationForm.description}
                       onChange={(e) =>
                         setOrganizationForm({
@@ -725,7 +725,7 @@ const SetupPage = () => {
                       <>
                         {currentStepData.id === "superuser-role" && "Create Superuser Role"}
                         {currentStepData.id === "superuser-user" && "Create Superuser Account"}
-                        {currentStepData.id === "organization" && "Create Organization"}
+                        {currentStepData.id === "organization" && "Create Organisation"}
                         {currentStepData.id === "permissions" && "Initialize Permissions"}
                         {currentStepData.id === "configurations" && "Initialize Configurations"}
                       </>

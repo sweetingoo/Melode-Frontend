@@ -234,7 +234,6 @@ export default function PreferencesPage() {
   return (
     <div className="container mx-auto p-6 max-w-4xl space-y-6">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-2">Preferences</h1>
         <p className="text-muted-foreground">
           Configure your default settings for quick access and streamlined workflows
         </p>

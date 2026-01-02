@@ -3,6 +3,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { permissionsService } from "@/services/permissions";
+import { parseUTCDate } from "@/utils/time";
 
 // Query keys for permissions
 export const permissionKeys = {
@@ -30,15 +31,31 @@ export const usePermissions = (params = {}) => {
   return useQuery({
     queryKey: permissionKeys.list(params),
     queryFn: async () => {
-      const response = await permissionsService.getPermissions(params);
-      // Handle new paginated response structure: { permissions: [], total: 96, page: 1, per_page: 50, total_pages: 2 }
-      if (response && typeof response === 'object' && 'permissions' in response) {
-        return response; // Return full paginated response
+      try {
+        const response = await permissionsService.getPermissions(params);
+        // Handle new paginated response structure: { permissions: [], total: 96, page: 1, per_page: 50, total_pages: 2 }
+        if (response && typeof response === 'object' && 'permissions' in response) {
+          return response; // Return full paginated response
+        }
+        // Handle legacy array response or wrapped response
+        return Array.isArray(response) ? { permissions: response, total: response.length } : { permissions: response.data || [], total: (response.data || []).length };
+      } catch (error) {
+        // If validation error (422), return empty result instead of failing
+        if (error?.response?.status === 422) {
+          console.warn("Permissions endpoint returned validation error, returning empty result:", error.response?.data);
+          return { permissions: [], total: 0 };
+        }
+        throw error;
       }
-      // Handle legacy array response or wrapped response
-      return Array.isArray(response) ? { permissions: response, total: response.length } : { permissions: response.data || [], total: (response.data || []).length };
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
+    retry: (failureCount, error) => {
+      // Don't retry on 422 validation errors
+      if (error?.response?.status === 422) {
+        return false;
+      }
+      return failureCount < 3;
+    },
   });
 };
 
@@ -84,11 +101,27 @@ export const useResources = () => {
   return useQuery({
     queryKey: permissionKeys.resources(),
     queryFn: async () => {
-      const response = await permissionsService.getResources();
-      // Handle both direct array response and wrapped response
-      return Array.isArray(response) ? response : response.data;
+      try {
+        const response = await permissionsService.getResources();
+        // Handle both direct array response and wrapped response
+        return Array.isArray(response) ? response : response.data;
+      } catch (error) {
+        // If validation error (422), return empty array instead of failing
+        if (error?.response?.status === 422) {
+          console.warn("Resources endpoint returned validation error, returning empty array:", error.response?.data);
+          return [];
+        }
+        throw error;
+      }
     },
     staleTime: 10 * 60 * 1000, // 10 minutes - resources don't change often
+    retry: (failureCount, error) => {
+      // Don't retry on 422 validation errors
+      if (error?.response?.status === 422) {
+        return false;
+      }
+      return failureCount < 3;
+    },
   });
 };
 
@@ -97,11 +130,27 @@ export const useActions = () => {
   return useQuery({
     queryKey: permissionKeys.actions(),
     queryFn: async () => {
-      const response = await permissionsService.getActions();
-      // Handle both direct array response and wrapped response
-      return Array.isArray(response) ? response : response.data;
+      try {
+        const response = await permissionsService.getActions();
+        // Handle both direct array response and wrapped response
+        return Array.isArray(response) ? response : response.data;
+      } catch (error) {
+        // If validation error (422), return empty array instead of failing
+        if (error?.response?.status === 422) {
+          console.warn("Actions endpoint returned validation error, returning empty array:", error.response?.data);
+          return [];
+        }
+        throw error;
+      }
     },
     staleTime: 10 * 60 * 1000, // 10 minutes - actions don't change often
+    retry: (failureCount, error) => {
+      // Don't retry on 422 validation errors
+      if (error?.response?.status === 422) {
+        return false;
+      }
+      return failureCount < 3;
+    },
   });
 };
 
@@ -254,12 +303,21 @@ export const permissionUtils = {
       type: apiPermission.type || "custom",
       isSystem: apiPermission.is_system || false,
       createdAt: apiPermission.created_at
-        ? new Date(apiPermission.created_at).toLocaleString()
+        ? (() => {
+            const date = parseUTCDate(apiPermission.created_at);
+            return date ? date.toLocaleString() : "Unknown";
+          })()
         : "Unknown",
       updatedAt: apiPermission.updated_at
-        ? new Date(apiPermission.updated_at).toLocaleString()
+        ? (() => {
+            const date = parseUTCDate(apiPermission.updated_at);
+            return date ? date.toLocaleString() : "Unknown";
+          })()
         : apiPermission.created_at
-          ? new Date(apiPermission.created_at).toLocaleString()
+          ? (() => {
+              const date = parseUTCDate(apiPermission.created_at);
+              return date ? date.toLocaleString() : "Unknown";
+            })()
           : "Unknown",
     };
   },

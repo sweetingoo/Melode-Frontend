@@ -55,7 +55,7 @@ export const rolesService = {
   // Get all permissions
   getPermissions: async (params = {}) => {
     try {
-      return await api.get("/roles/permissions/", { params });
+      return await api.get("/permissions/", { params });
     } catch (error) {
       console.error("Get permissions failed:", error);
       throw error;
@@ -65,7 +65,7 @@ export const rolesService = {
   // Get permission by ID
   getPermission: async (id) => {
     try {
-      return await api.get(`/roles/permissions/${id}`);
+      return await api.get(`/permissions/${id}`);
     } catch (error) {
       console.error(`Get permission ${id} failed:`, error);
       throw error;
@@ -75,7 +75,7 @@ export const rolesService = {
   // Create permission
   createPermission: async (permissionData) => {
     try {
-      return await api.post("/roles/permissions/", permissionData);
+      return await api.post("/permissions/", permissionData);
     } catch (error) {
       console.error("Create permission failed:", error);
       throw error;

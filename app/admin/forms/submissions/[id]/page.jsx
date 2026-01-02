@@ -11,6 +11,7 @@ import { useFormSubmission, useForm } from "@/hooks/useForms";
 import { useUsers } from "@/hooks/useUsers";
 import { useDownloadFile } from "@/hooks/useProfile";
 import { format, formatDistance, formatDistanceToNow, differenceInHours, differenceInDays, differenceInMinutes } from "date-fns";
+import { parseUTCDate } from "@/utils/time";
 import CustomFieldRenderer from "@/components/CustomFieldRenderer";
 
 const FormSubmissionDetailPage = () => {
@@ -466,8 +467,8 @@ const FormSubmissionDetailPage = () => {
     // Handle date
     if (fieldType === 'date' && typeof formatted === 'string') {
       try {
-        const date = new Date(formatted);
-        if (!isNaN(date.getTime())) {
+        const date = parseUTCDate(formatted);
+        if (date && !isNaN(date.getTime())) {
           return (
             <div className="flex items-center gap-2">
               <Calendar className="h-4 w-4 text-muted-foreground" />
@@ -483,8 +484,8 @@ const FormSubmissionDetailPage = () => {
     // Handle datetime
     if (fieldType === 'datetime' && typeof formatted === 'string') {
       try {
-        const date = new Date(formatted);
-        if (!isNaN(date.getTime())) {
+        const date = parseUTCDate(formatted);
+        if (date && !isNaN(date.getTime())) {
           return (
             <div className="flex items-center gap-2">
               <Clock className="h-4 w-4 text-muted-foreground" />

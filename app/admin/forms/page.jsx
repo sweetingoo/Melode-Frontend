@@ -71,6 +71,7 @@ import { useUsers } from "@/hooks/useUsers";
 import { useActiveFormTypes } from "@/hooks/useFormTypes";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
 import { format } from "date-fns";
+import { parseUTCDate } from "@/utils/time";
 import { Shield, Users, User } from "lucide-react";
 
 const FormsPage = () => {
@@ -211,7 +212,6 @@ const FormsPage = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Forms</h1>
           <p className="text-sm sm:text-base text-muted-foreground mt-1">
             Manage custom forms and templates
           </p>
@@ -402,7 +402,7 @@ const FormsPage = () => {
                       </TableCell>
                       <TableCell>
                         {form.created_at
-                          ? format(new Date(form.created_at), "MMM dd, yyyy")
+                          ? format(parseUTCDate(form.created_at), "MMM dd, yyyy")
                           : "N/A"}
                       </TableCell>
                       <TableCell>

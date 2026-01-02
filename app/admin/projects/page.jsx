@@ -74,6 +74,7 @@ import {
 import { useCurrentUser } from "@/hooks/useAuth";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
 import { format } from "date-fns";
+import { parseUTCDate } from "@/utils/time";
 import { cn } from "@/lib/utils";
 
 const ProjectsPage = () => {
@@ -216,7 +217,6 @@ const ProjectsPage = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold">Projects</h1>
           <p className="text-muted-foreground">Manage and organize your projects</p>
         </div>
         {canCreateProject && (
@@ -319,7 +319,7 @@ const ProjectsPage = () => {
                           {project.created_at ? (
                             <div className="flex items-center gap-1 text-sm text-muted-foreground">
                               <Calendar className="h-3 w-3" />
-                              {format(new Date(project.created_at), "MMM dd, yyyy")}
+                              {format(parseUTCDate(project.created_at), "MMM dd, yyyy")}
                             </div>
                           ) : (
                             <span className="text-sm text-muted-foreground">N/A</span>

@@ -14,6 +14,7 @@ import { CalendarIcon, Download, FileText, X } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useDownloadFile } from "@/hooks/useProfile";
+import { useFileReferences } from "@/hooks/useFileReferences";
 
 const CustomFieldRenderer = ({ 
   field, 
@@ -317,151 +318,13 @@ const CustomFieldRenderer = ({
         const textContent = field.content || field.field_content || '';
         const textLabel = field.label || field.field_label || field.name;
         
-        // Use useEffect to handle images in text blocks after render
+        // Use useFileReferences hook to handle file references in content
         const TextBlockContent = () => {
-          const contentRef = React.useRef(null);
-          
-          React.useEffect(() => {
-            if (!contentRef.current) return;
-            
-            // Find all images in the content
-            const images = contentRef.current.querySelectorAll('img');
-            
-            images.forEach((img) => {
-              // Store original src for retry
-              if (!img.dataset.originalSrc) {
-                img.dataset.originalSrc = img.src || img.getAttribute('src') || '';
-              }
-              
-              // Set loading attribute (use eager for above-the-fold, lazy for others)
-              if (!img.hasAttribute('loading')) {
-                img.setAttribute('loading', 'lazy');
-              }
-              
-              // Ensure proper styling
-              img.style.maxWidth = '100%';
-              img.style.height = 'auto';
-              img.style.display = 'block';
-              img.style.margin = '1rem 0';
-              img.style.position = 'relative';
-              img.style.clear = 'both';
-              img.style.objectFit = 'contain';
-              
-              // Add error handling with retry logic
-              const handleImageError = (e) => {
-                const failedImg = e.target;
-                const originalSrc = failedImg.dataset.originalSrc || failedImg.src;
-                
-                console.warn('Image failed to load in text block, retrying:', originalSrc);
-                
-                // Get retry count
-                const retryCount = parseInt(failedImg.dataset.retryCount || '0');
-                const maxRetries = 2;
-                
-                if (retryCount >= maxRetries) {
-                  // Final failure - show error placeholder
-                  console.error('Image failed to load after retries:', originalSrc);
-                  failedImg.style.display = 'none';
-                  
-                  // Remove existing error div if any
-                  const existingError = failedImg.parentNode.querySelector('.image-error-placeholder');
-                  if (existingError) {
-                    existingError.remove();
-                  }
-                  
-                  const errorDiv = document.createElement('div');
-                  errorDiv.className = 'image-error-placeholder p-2 border border-dashed rounded text-xs text-muted-foreground text-center my-2';
-                  errorDiv.textContent = 'Image unavailable';
-                  failedImg.parentNode.insertBefore(errorDiv, failedImg);
-                  return;
-                }
-                
-                // Retry with exponential backoff
-                failedImg.dataset.retryCount = String(retryCount + 1);
-                const delay = Math.pow(2, retryCount) * 500; // 500ms, 1000ms, 2000ms
-                
-                setTimeout(() => {
-                  // Create new image to test if URL is accessible
-                  const testImg = new Image();
-                  
-                  testImg.onload = () => {
-                    // URL is accessible, reload the original image
-                    failedImg.src = originalSrc;
-                    failedImg.style.display = '';
-                    failedImg.dataset.retryCount = '0'; // Reset on success
-                    
-                    // Remove any error placeholders
-                    const errorPlaceholder = failedImg.parentNode.querySelector('.image-error-placeholder');
-                    if (errorPlaceholder) {
-                      errorPlaceholder.remove();
-                    }
-                  };
-                  
-                  testImg.onerror = () => {
-                    // URL still not accessible, trigger error again
-                    handleImageError({ target: failedImg });
-                  };
-                  
-                  // Add cache busting for retry
-                  const separator = originalSrc.includes('?') ? '&' : '?';
-                  testImg.src = `${originalSrc}${separator}_retry=${Date.now()}`;
-                }, delay);
-              };
-              
-              // Add error handler if not already added
-              if (!img.dataset.errorHandlerAdded) {
-                img.dataset.errorHandlerAdded = 'true';
-                img.dataset.retryCount = '0';
-                img.addEventListener('error', handleImageError, { once: false });
-              }
-              
-              // Add load handler to reset retry count on successful load
-              const handleImageLoad = () => {
-                img.dataset.retryCount = '0';
-              };
-              
-              if (!img.dataset.loadHandlerAdded) {
-                img.dataset.loadHandlerAdded = 'true';
-                img.addEventListener('load', handleImageLoad);
-              }
-              
-              // Handle CORS issues - only add crossorigin if it's an external URL
-              if (!img.hasAttribute('crossorigin')) {
-                try {
-                  const url = new URL(img.src || img.getAttribute('src') || '', window.location.href);
-                  if (url.origin !== window.location.origin) {
-                    // Try with crossorigin, but remove if it causes issues
-                    img.setAttribute('crossorigin', 'anonymous');
-                    img.addEventListener('error', () => {
-                      // If crossorigin causes issues, remove it
-                      if (img.hasAttribute('crossorigin')) {
-                        img.removeAttribute('crossorigin');
-                        img.src = img.dataset.originalSrc || img.src;
-                      }
-                    }, { once: true });
-                  }
-                } catch (e) {
-                  // Invalid URL, skip crossorigin handling
-                }
-              }
-            });
-            
-            // Cleanup function
-            return () => {
-              if (contentRef.current) {
-                const images = contentRef.current.querySelectorAll('img');
-                images.forEach((img) => {
-                  // Remove event listeners if needed
-                  img.removeEventListener('error', () => {});
-                  img.removeEventListener('load', () => {});
-                });
-              }
-            };
-          }, [textContent]);
+          const { processedHtml, containerRef } = useFileReferences(textContent);
           
           return (
             <div 
-              ref={contentRef}
+              ref={containerRef}
               className="text-sm text-foreground prose prose-sm max-w-none w-full break-words mb-4"
               style={{ 
                 position: 'relative', 
@@ -473,7 +336,7 @@ const CustomFieldRenderer = ({
                 maxWidth: '100%',
                 boxSizing: 'border-box'
               }}
-              dangerouslySetInnerHTML={{ __html: textContent }}
+              dangerouslySetInnerHTML={{ __html: processedHtml }}
             />
           );
         };

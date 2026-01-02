@@ -13,6 +13,8 @@ export { configurationService } from "./configuration";
 export { setupService } from "./setup";
 export { messagesService } from "./messages";
 export { notificationsService } from "./notifications";
+export { documentsService } from "./documents";
+export { documentCategoriesService } from "./documentCategories";
 
 // Re-export the main API client and utilities
 export { api, apiUtils } from "./api-client";

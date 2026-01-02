@@ -18,6 +18,31 @@ This is a [Next.js](https://nextjs.org) project for the Melode application, a co
 - **File Validation**: Comprehensive file type and size validation
 - **Auto-Generated IDs**: Automatic field ID and form name generation
 
+### Document Management
+- **Hierarchical Categories**: Create categories and subcategories for organizing documents
+- **Rich Text Editor**: Create documents with full formatting support (Tiptap editor)
+- **File Attachments**: Attach multiple files to documents
+- **Permission-Based Access**: Category-level permissions with inheritance from parent categories
+- **Document Sharing**: Share documents with specific users or make them public
+- **Search Functionality**: Full-text search across document titles and content
+- **Audit History**: Track who accessed documents and when
+- **Status Management**: Draft, published, and archived document states
+
+### Notifications System
+- **Real-time Notifications**: Server-Sent Events (SSE) for instant notification delivery
+- **Document Notifications**: Notifications for document sharing, updates, and public access
+- **Notification Categories**: Filter notifications by type (document, task, form, project, system)
+- **Unread Tracking**: Track unread notifications with badges and counts
+- **Notification Dropdown**: Quick access to recent notifications from the header
+
+### Integration Configuration
+- **SendGrid Email**: Configure SendGrid API for email delivery
+- **Twilio SMS**: Set up Twilio credentials for SMS notifications
+- **S3 Storage**: Configure AWS S3 for file storage with secure credential management
+- **Email Sender Settings**: Customize from email, name, app name, and domain
+- **Feature Flags**: Enable/disable two-way communication, email replies, and SMS replies
+- **Unsubscribe Settings**: Configure unsubscribe URLs and one-click unsubscribe
+
 ### Other Features
 - User authentication and role management
 - Task management
@@ -74,10 +99,19 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 - **Axios**: HTTP client
 - **date-fns**: Date manipulation
 
-## Forms Documentation
+## Documentation
 
-For detailed information about the Forms Management system, see:
-- `/docs/forms` - Complete forms documentation in the application
+For detailed information about features, see the in-app documentation:
+- `/docs` - Complete documentation hub
+- `/docs/forms` - Forms Management documentation
+- `/docs/tasks` - Task Management documentation
+- `/docs/configuration` - Configuration and settings documentation
+
+### Key Admin Pages
+- Document Management: `/admin/documents`
+- Configuration: `/admin/configuration`
+- Integrations: `/admin/configuration?tab=integrations`
+- Organisation Settings: `/admin/configuration?tab=organisation`
 - Form creation: `/admin/forms/new`
 - Form editing: `/admin/forms/[id]/edit`
 - Public form submission: `/forms/[slug]/submit`

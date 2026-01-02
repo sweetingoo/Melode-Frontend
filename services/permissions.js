@@ -5,11 +5,26 @@ export const permissionsService = {
   // Get all permissions
   getPermissions: async (params = {}) => {
     try {
-      const response = await api.get("/roles/permissions/", { params });
+      // Ensure we have at least page and per_page for pagination if backend requires it
+      const queryParams = {
+        page: params.page || 1,
+        per_page: params.per_page || 50,
+        ...params,
+      };
+      const response = await api.get("/permissions/", { params: queryParams });
       // Axios returns { data: {...}, status: 200, ... }, return just the data
       return response.data || response;
     } catch (error) {
-      console.error("Get permissions failed:", error);
+      // Log more details for 422 errors
+      if (error?.response?.status === 422) {
+        console.error("Get permissions validation error:", {
+          status: error.response.status,
+          data: error.response.data,
+          params: params,
+        });
+      } else {
+        console.error("Get permissions failed:", error);
+      }
       throw error;
     }
   },
@@ -17,7 +32,7 @@ export const permissionsService = {
   // Get permission by ID
   getPermission: async (id) => {
     try {
-      return await api.get(`/roles/permissions/${id}`);
+      return await api.get(`/permissions/${id}`);
     } catch (error) {
       console.error(`Get permission ${id} failed:`, error);
       throw error;
@@ -27,7 +42,7 @@ export const permissionsService = {
   // Create permission
   createPermission: async (permissionData) => {
     try {
-      return await api.post("/roles/permissions/", permissionData);
+      return await api.post("/permissions/", permissionData);
     } catch (error) {
       console.error("Create permission failed:", error);
       throw error;
@@ -37,7 +52,7 @@ export const permissionsService = {
   // Update permission
   updatePermission: async (id, permissionData) => {
     try {
-      return await api.put(`/roles/permissions/${id}`, permissionData);
+      return await api.put(`/permissions/${id}`, permissionData);
     } catch (error) {
       console.error(`Update permission ${id} failed:`, error);
       throw error;
@@ -58,7 +73,7 @@ export const permissionsService = {
   getResources: async () => {
     try {
       // Get all permissions first
-      const permissionsResponse = await api.get("/roles/permissions/");
+      const permissionsResponse = await api.get("/permissions/");
       // Axios returns { data: {...}, status: 200, ... }, so we need to access .data
       const responseData = permissionsResponse.data || permissionsResponse;
 
@@ -91,7 +106,7 @@ export const permissionsService = {
   getActions: async () => {
     try {
       // Get all permissions first
-      const permissionsResponse = await api.get("/roles/permissions/");
+      const permissionsResponse = await api.get("/permissions/");
       // Axios returns { data: {...}, status: 200, ... }, so we need to access .data
       const responseData = permissionsResponse.data || permissionsResponse;
 
@@ -122,7 +137,7 @@ export const permissionsService = {
   // Get roles with specific permission
   getRolesWithPermission: async (permissionId) => {
     try {
-      return await api.get(`/roles/permissions/${permissionId}/roles`);
+      return await api.get(`/permissions/${permissionId}/roles`);
     } catch (error) {
       console.error(`Get roles with permission ${permissionId} failed:`, error);
       throw error;
@@ -132,7 +147,7 @@ export const permissionsService = {
   // Check user permissions
   checkUserPermissions: async (userId) => {
     try {
-      return await api.get(`/roles/permissions/check/${userId}`);
+      return await api.get(`/permissions/check/${userId}`);
     } catch (error) {
       console.error(`Check user permissions ${userId} failed:`, error);
       throw error;

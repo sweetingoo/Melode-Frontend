@@ -41,6 +41,20 @@ import {
 import { useCurrentUser } from "@/hooks/useAuth";
 import { format } from "date-fns";
 import { Separator } from "@/components/ui/separator";
+import { useFileReferences } from "@/hooks/useFileReferences";
+
+// Component to render message content with file references
+const MessageContent = ({ content, className }) => {
+  const { processedHtml, containerRef } = useFileReferences(content);
+  
+  return (
+    <div
+      ref={containerRef}
+      className={className}
+      dangerouslySetInnerHTML={{ __html: processedHtml }}
+    />
+  );
+};
 
 const MessageDetailPage = () => {
   const params = useParams();
@@ -182,9 +196,9 @@ const MessageDetailPage = () => {
               <CardTitle>Message Content</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div
+              <MessageContent 
+                content={message.content}
                 className="prose max-w-none"
-                dangerouslySetInnerHTML={{ __html: message.content }}
               />
 
               {/* Image */}

@@ -49,6 +49,7 @@ import {
   useCompleteTask,
 } from "@/hooks/useTasks";
 import { format, isPast, parseISO } from "date-fns";
+import { parseUTCDate } from "@/utils/time";
 import { cn } from "@/lib/utils";
 
 const MyTasksPage = () => {
@@ -150,8 +151,8 @@ const MyTasksPage = () => {
     if (!task.due_date) return false;
     if (task.status === "completed" || task.status === "cancelled") return false;
     try {
-      const dueDate = parseISO(task.due_date);
-      return isPast(dueDate);
+      const dueDate = parseUTCDate(task.due_date);
+      return dueDate ? isPast(dueDate) : false;
     } catch {
       return false;
     }
@@ -180,7 +181,6 @@ const MyTasksPage = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">My Tasks</h1>
           <p className="text-muted-foreground">
             Tasks assigned to you
           </p>
@@ -397,13 +397,17 @@ const MyTasksPage = () => {
                               )}>
                                 <Calendar className="h-4 w-4" />
                                 <span>
-                                  Due: {format(parseISO(task.due_date), "MMM dd, yyyy")}
+                                  Due: {format(parseUTCDate(task.due_date), "MMM dd, yyyy")}
                                 </span>
-                                {overdue && (
-                                  <span className="text-xs">
-                                    ({Math.ceil((new Date() - parseISO(task.due_date)) / (1000 * 60 * 60 * 24))} days overdue)
-                                  </span>
-                                )}
+                                {overdue && (() => {
+                                  const dueDate = parseUTCDate(task.due_date);
+                                  const daysOverdue = dueDate ? Math.ceil((new Date() - dueDate) / (1000 * 60 * 60 * 24)) : 0;
+                                  return (
+                                    <span className="text-xs">
+                                      ({daysOverdue} days overdue)
+                                    </span>
+                                  );
+                                })()}
                               </div>
                             ) : (
                               <div className="flex items-center gap-1 text-muted-foreground">
@@ -415,7 +419,7 @@ const MyTasksPage = () => {
                               <div className="flex items-center gap-1 text-muted-foreground">
                                 <Clock className="h-4 w-4" />
                                 <span>
-                                  Created: {format(parseISO(task.created_at), "MMM dd, yyyy")}
+                                  Created: {format(parseUTCDate(task.created_at), "MMM dd, yyyy")}
                                 </span>
                               </div>
                             )}
