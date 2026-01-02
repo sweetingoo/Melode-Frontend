@@ -162,8 +162,9 @@ const NotificationsPage = () => {
     if (notification.link_url) {
       router.push(notification.link_url);
     } else if (notification.category === "document" && notification.metadata?.document_id) {
-      // Fallback: route to document if category is document and we have document_id
-      router.push(`/documents/${notification.metadata.document_id}`);
+      // Fallback: route to document preview if category is document and we have document_id
+      // Use preview route for shared documents (clean view without access history)
+      router.push(`/documents/${notification.metadata.document_id}/preview`);
     } else if (notification.is_broadcast) {
       // For sent broadcasts, optionally show status page
       if (showStatus && notification.created_by_user_id === currentUser?.id) {
