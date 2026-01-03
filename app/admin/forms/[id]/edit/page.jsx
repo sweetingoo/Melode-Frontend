@@ -165,9 +165,9 @@ const fieldTypes = [
 const EditFormPage = () => {
   const params = useParams();
   const router = useRouter();
-  const formId = params.id;
+  const formSlug = params.id || params.slug;
 
-  const { data: form, isLoading: formLoading } = useForm(formId);
+  const { data: form, isLoading: formLoading } = useForm(formSlug);
   const updateFormMutation = useUpdateForm();
   const { data: rolesData } = useRoles();
   const createRoleMutation = useCreateRole();
@@ -673,10 +673,10 @@ const EditFormPage = () => {
       };
 
       await updateFormMutation.mutateAsync({
-        id: formId,
+        slug: formSlug,
         formData: submitData,
       });
-      router.push(`/admin/forms/${formId}`);
+      router.push(`/admin/forms/${formSlug}`);
     } catch (error) {
       console.error("Failed to update form:", error);
     }
@@ -2696,7 +2696,7 @@ const EditFormPage = () => {
 
         {/* Submit Button */}
         <div className="flex justify-end gap-2">
-          <Link href={`/admin/forms/${formId}`}>
+          <Link href={`/admin/forms/${formSlug}`}>
             <Button type="button" variant="outline">
               Cancel
             </Button>

@@ -24,12 +24,12 @@ export const messagesService = {
         }
     },
 
-    // Get message by ID
-    getMessage: async (id) => {
+    // Get message by slug
+    getMessage: async (slug) => {
         try {
-            return await api.get(`/messages/${id}`);
+            return await api.get(`/messages/${slug}`);
         } catch (error) {
-            console.error(`Get message ${id} failed:`, error);
+            console.error(`Get message ${slug} failed:`, error);
             throw error;
         }
     },
@@ -45,9 +45,9 @@ export const messagesService = {
     },
 
     // Mark message as read
-    // POST /api/v1/messages/{message_id}/read
+    // POST /api/v1/messages/{message_slug}/read
     // Request body: { read_via: string, ip_address?: string, user_agent?: string }
-    markAsRead: async (id, readVia = "web") => {
+    markAsRead: async (slug, readVia = "web") => {
         try {
             // Get user agent and IP if available
             const userAgent = typeof navigator !== "undefined" ? navigator.userAgent : undefined;
@@ -57,34 +57,34 @@ export const messagesService = {
                 ...(userAgent && { user_agent: userAgent }),
             };
             
-            return await api.post(`/messages/${id}/read`, requestBody);
+            return await api.post(`/messages/${slug}/read`, requestBody);
         } catch (error) {
-            console.error(`Mark message ${id} as read failed:`, error);
+            console.error(`Mark message ${slug} as read failed:`, error);
             throw error;
         }
     },
 
     // Acknowledge message
-    acknowledgeMessage: async (id, acknowledgementNote = "") => {
+    acknowledgeMessage: async (slug, acknowledgementNote = "") => {
         try {
-            return await api.post(`/messages/${id}/acknowledge`, {
+            return await api.post(`/messages/${slug}/acknowledge`, {
                 acknowledgement_note: acknowledgementNote,
             });
         } catch (error) {
-            console.error(`Acknowledge message ${id} failed:`, error);
+            console.error(`Acknowledge message ${slug} failed:`, error);
             throw error;
         }
     },
 
     // Acknowledge message with status (for broadcasts)
-    acknowledgeMessageWithStatus: async (id, acknowledgementStatus, acknowledgementNote = "") => {
+    acknowledgeMessageWithStatus: async (slug, acknowledgementStatus, acknowledgementNote = "") => {
         try {
-            return await api.post(`/messages/${id}/acknowledge`, {
+            return await api.post(`/messages/${slug}/acknowledge`, {
                 acknowledgement_status: acknowledgementStatus, // "agreed" or "disagreed"
                 acknowledgement_note: acknowledgementNote,
             });
         } catch (error) {
-            console.error(`Acknowledge message ${id} with status failed:`, error);
+            console.error(`Acknowledge message ${slug} with status failed:`, error);
             throw error;
         }
     },
@@ -170,57 +170,57 @@ export const messagesService = {
     },
 
     // Get conversation thread (legacy - use getConversationMessages instead)
-    getConversationThread: async (id) => {
+    getConversationThread: async (slug) => {
         try {
-            return await api.get(`/conversations/${id}/thread`);
+            return await api.get(`/conversations/${slug}/thread`);
         } catch (error) {
-            console.error(`Get conversation thread ${id} failed:`, error);
+            console.error(`Get conversation thread ${slug} failed:`, error);
             throw error;
         }
     },
 
     // Get messages in a conversation (new endpoint)
-    getConversationMessages: async (conversationId, params = {}) => {
+    getConversationMessages: async (conversationSlug, params = {}) => {
         try {
             // Support both new pagination params (limit/offset) and legacy (page/per_page)
             const queryParams = { ...params };
             // If page/per_page provided, keep them as backend expects page/per_page
             // Backend defaults: page=1, per_page=20, max per_page=100
-            return await api.get(`/conversations/${conversationId}/messages`, { params: queryParams });
+            return await api.get(`/conversations/${conversationSlug}/messages`, { params: queryParams });
         } catch (error) {
-            console.error(`Get conversation messages ${conversationId} failed:`, error);
+            console.error(`Get conversation messages ${conversationSlug} failed:`, error);
             throw error;
         }
     },
 
     // Get conversation details
-    getConversation: async (id) => {
+    getConversation: async (slug) => {
         try {
-            return await api.get(`/conversations/${id}`);
+            return await api.get(`/conversations/${slug}`);
         } catch (error) {
-            console.error(`Get conversation ${id} failed:`, error);
+            console.error(`Get conversation ${slug} failed:`, error);
             throw error;
         }
     },
 
     // Add participant to conversation
-    addParticipant: async (conversationId, userId) => {
+    addParticipant: async (conversationSlug, userId) => {
         try {
-            return await api.post(`/conversations/${conversationId}/participants`, {
+            return await api.post(`/conversations/${conversationSlug}/participants`, {
                 user_id: userId,
             });
         } catch (error) {
-            console.error(`Add participant ${userId} to conversation ${conversationId} failed:`, error);
+            console.error(`Add participant ${userId} to conversation ${conversationSlug} failed:`, error);
             throw error;
         }
     },
 
     // Remove participant from conversation
-    removeParticipant: async (conversationId, userId) => {
+    removeParticipant: async (conversationSlug, userSlug) => {
         try {
-            return await api.delete(`/conversations/${conversationId}/participants/${userId}`);
+            return await api.delete(`/conversations/${conversationSlug}/participants/${userSlug}`);
         } catch (error) {
-            console.error(`Remove participant ${userId} from conversation ${conversationId} failed:`, error);
+            console.error(`Remove participant ${userSlug} from conversation ${conversationSlug} failed:`, error);
             throw error;
         }
     },

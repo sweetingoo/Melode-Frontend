@@ -51,7 +51,7 @@ import {
 } from "@/components/ui/select";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
-const ResourceAuditLogs = ({ resource, resourceId, title = "Activity History", pageSize: initialPageSize = 10 }) => {
+const ResourceAuditLogs = ({ resource, resourceId, resourceSlug, title = "Activity History", pageSize: initialPageSize = 10 }) => {
   const [selectedLog, setSelectedLog] = useState(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [expandedRows, setExpandedRows] = useState(new Set());
@@ -61,7 +61,7 @@ const ResourceAuditLogs = ({ resource, resourceId, title = "Activity History", p
 
   const { data: auditLogsData, isLoading, error } = useResourceAuditLogs(
     resource,
-    resourceId,
+    resourceSlug || resourceId, // Use slug if provided, fallback to id for backward compatibility
     { 
       limit: pageSize,
       offset: (currentPage - 1) * pageSize

@@ -32,150 +32,148 @@ export const usersService = {
     }
   },
 
-  // Get user by ID
-  getUser: async (id) => {
+  // Get user by slug
+  getUser: async (slug) => {
     try {
-      return await api.get(`/users/${id}`);
+      return await api.get(`/users/${slug}`);
     } catch (error) {
       console.log(error);
-      console.error(`Get user ${id} failed:`, error);
+      console.error(`Get user ${slug} failed:`, error);
       throw error;
     }
   },
 
   // Update user
-  updateUser: async (id, userData) => {
+  updateUser: async (slug, userData) => {
     try {
-      return await api.put(`/users/${id}`, userData);
+      return await api.put(`/users/${slug}`, userData);
     } catch (error) {
-      console.error(`Update user ${id} failed:`, error);
+      console.error(`Update user ${slug} failed:`, error);
       throw error;
     }
   },
 
   // Delete user
-  deleteUser: async (id) => {
+  deleteUser: async (slug) => {
     try {
-      return await api.delete(`/users/${id}`);
+      return await api.delete(`/users/${slug}`);
     } catch (error) {
-      console.error(`Delete user ${id} failed:`, error);
+      console.error(`Delete user ${slug} failed:`, error);
       throw error;
     }
   },
 
   // Activate user
-  activateUser: async (id) => {
+  activateUser: async (slug) => {
     try {
-      return await api.post(`/users/${id}/activate`);
+      return await api.post(`/users/${slug}/activate`);
     } catch (error) {
-      console.error(`Activate user ${id} failed:`, error);
+      console.error(`Activate user ${slug} failed:`, error);
       throw error;
     }
   },
 
   // Deactivate user
-  deactivateUser: async (id) => {
+  deactivateUser: async (slug) => {
     try {
-      return await api.post(`/users/${id}/deactivate`);
+      return await api.post(`/users/${slug}/deactivate`);
     } catch (error) {
-      console.error(`Deactivate user ${id} failed:`, error);
+      console.error(`Deactivate user ${slug} failed:`, error);
       throw error;
     }
   },
 
   // Verify user
-  verifyUser: async (id) => {
+  verifyUser: async (slug) => {
     try {
-      return await api.post(`/users/${id}/verify`);
+      return await api.post(`/users/${slug}/verify`);
     } catch (error) {
-      console.error(`Verify user ${id} failed:`, error);
+      console.error(`Verify user ${slug} failed:`, error);
       throw error;
     }
   },
 
   // Get user permissions
-  getUserPermissions: async (id) => {
+  getUserPermissions: async (slug) => {
     try {
-      return await api.get(`/users/${id}/permissions`);
+      return await api.get(`/users/${slug}/permissions`);
     } catch (error) {
-      console.error(`Get user permissions ${id} failed:`, error);
+      console.error(`Get user permissions ${slug} failed:`, error);
       throw error;
     }
   },
 
   // Assign direct permission to user
-  assignDirectPermission: async (id, permissionId) => {
+  assignDirectPermission: async (slug, permissionSlug) => {
     try {
       return await api.post(
-        `/users/${id}/permissions?permission_id=${permissionId}`
+        `/users/${slug}/assign-permission/${permissionSlug}`
       );
     } catch (error) {
-      console.error(`Assign direct permission to user ${id} failed:`, error);
+      console.error(`Assign direct permission to user ${slug} failed:`, error);
       throw error;
     }
   },
 
   // Get user direct permissions
-  getUserDirectPermissions: async (id) => {
+  getUserDirectPermissions: async (slug) => {
     try {
-      return await api.get(`/users/${id}/permissions/direct`);
+      return await api.get(`/users/${slug}/permissions/direct`);
     } catch (error) {
-      console.error(`Get user direct permissions ${id} failed:`, error);
+      console.error(`Get user direct permissions ${slug} failed:`, error);
       throw error;
     }
   },
 
   // Remove direct permission from user
-  removeDirectPermission: async (id, permissionId) => {
+  removeDirectPermission: async (slug, permissionSlug) => {
     try {
-      return await api.delete(`/users/${id}/permissions/${permissionId}`);
+      return await api.delete(`/users/${slug}/remove-permission/${permissionSlug}`);
     } catch (error) {
-      console.error(`Remove direct permission from user ${id} failed:`, error);
+      console.error(`Remove direct permission from user ${slug} failed:`, error);
       throw error;
     }
   },
 
   // Get user roles
-  getUserRoles: async (id) => {
+  getUserRoles: async (slug) => {
     try {
-      return await api.get(`/roles/users/${id}/roles`);
+      return await api.get(`/users/${slug}/roles`);
     } catch (error) {
-      console.error(`Get user roles ${id} failed:`, error);
+      console.error(`Get user roles ${slug} failed:`, error);
       throw error;
     }
   },
 
   // Assign role to user
-  assignRole: async (id, roleId, assignedBy = null, notes = null) => {
+  assignRole: async (userSlug, roleSlug, assignedBy = null, notes = null) => {
     try {
-      return await api.post(`/roles/assign`, {
-        user_id: id,
-        role_id: roleId,
+      return await api.post(`/users/${userSlug}/assign-role/${roleSlug}`, {
         assigned_by: assignedBy,
         notes: notes,
       });
     } catch (error) {
-      console.error(`Assign role to user ${id} failed:`, error);
+      console.error(`Assign role to user ${userSlug} failed:`, error);
       throw error;
     }
   },
 
   // Remove role from user
-  removeRole: async (id, roleId) => {
+  removeRole: async (userSlug, roleSlug) => {
     try {
-      return await api.delete(`/roles/assign/${id}/${roleId}`);
+      return await api.delete(`/users/${userSlug}/remove-role/${roleSlug}`);
     } catch (error) {
-      console.error(`Remove role from user ${id} failed:`, error);
+      console.error(`Remove role from user ${userSlug} failed:`, error);
       throw error;
     }
   },
 
   // Send invitation to existing user
-  sendInvitationToUser: async (userId, options = {}) => {
+  sendInvitationToUser: async (userSlug, options = {}) => {
     try {
-      return await api.post(`/users/${userId}/send-invitation`, options);
+      return await api.post(`/users/${userSlug}/send-invitation`, options);
     } catch (error) {
-      console.error(`Send invitation to user ${userId} failed:`, error);
+      console.error(`Send invitation to user ${userSlug} failed:`, error);
       throw error;
     }
   },

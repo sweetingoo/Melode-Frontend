@@ -39,13 +39,13 @@ import { toast } from "sonner";
 const FormSubmissionDetailPage = () => {
   const params = useParams();
   const router = useRouter();
-  const submissionId = params.submissionId;
-  const formId = params.id;
+  const submissionSlug = params.submissionId || params.slug;
+  const formSlug = params.id || params.slug;
 
   const { data: submission, isLoading: submissionLoading, error: submissionError } =
-    useFormSubmission(submissionId);
-  const { data: form, isLoading: formLoading } = useForm(formId, {
-    enabled: !!formId,
+    useFormSubmission(submissionSlug);
+  const { data: form, isLoading: formLoading } = useForm(formSlug, {
+    enabled: !!formSlug,
   });
   const { data: usersResponse } = useUsers();
   const downloadFileMutation = useDownloadFile();
@@ -869,16 +869,21 @@ const FormSubmissionDetailPage = () => {
                               <div className="flex flex-wrap gap-2">
                                 {submission.processing_result.task_creation.task_ids
                                   .slice(0, 10)
-                                  .map((taskId) => (
-                                    <Link
-                                      key={taskId}
-                                      href={`/admin/tasks/${taskId}`}
-                                    >
-                                      <Button variant="outline" size="sm">
-                                        Task #{taskId}
-                                      </Button>
-                                    </Link>
-                                  ))}
+                                  .map((taskId) => {
+                                    // Note: task_ids from processing_result may still be IDs
+                                    // If backend provides task_slugs array, use that instead
+                                    const taskSlug = submission.processing_result?.task_creation?.task_slugs?.[submission.processing_result.task_creation.task_ids.indexOf(taskId)] || taskId;
+                                    return (
+                                      <Link
+                                        key={taskId}
+                                        href={`/admin/tasks/${taskSlug}`}
+                                      >
+                                        <Button variant="outline" size="sm">
+                                          Task #{taskId}
+                                        </Button>
+                                      </Link>
+                                    );
+                                  })}
                                 {submission.processing_result.task_creation.task_ids.length > 10 && (
                                   <span className="text-xs text-green-700 dark:text-green-300 self-center">
                                     +{submission.processing_result.task_creation.task_ids.length - 10} more
@@ -892,7 +897,7 @@ const FormSubmissionDetailPage = () => {
                       submission.processing_result.task_creation.task_id && (
                         <div className="mt-2">
                           <Link
-                            href={`/admin/tasks/${submission.processing_result.task_creation.task_id}`}
+                            href={`/admin/tasks/${submission.processing_result.task_creation.task_slug || submission.processing_result.task_creation.task_id}`}
                           >
                             <Button variant="outline" size="sm">
                               View Task #
@@ -959,7 +964,7 @@ const FormSubmissionDetailPage = () => {
                 <div className="mt-1">
                   {submission.submitted_by_user_id ? (
                     <Link
-                      href={`/admin/people-management/${submission.submitted_by_user_id}`}
+                      href={`/admin/people-management/${submission.submitted_by_user?.slug || submission.submitted_by_user_slug || submission.submitted_by_user_id}`}
                       className="text-primary hover:underline"
                     >
                       {getUserName(submission.submitted_by_user_id) || `User #${submission.submitted_by_user_id}`}
@@ -1028,7 +1033,7 @@ const FormSubmissionDetailPage = () => {
                   <label className="text-muted-foreground">Reviewed By</label>
                   <div className="mt-1">
                     <Link
-                      href={`/admin/people-management/${submission.reviewed_by_user_id}`}
+                      href={`/admin/people-management/${submission.reviewed_by_user?.slug || submission.reviewed_by_user_slug || submission.reviewed_by_user_id}`}
                       className="text-primary hover:underline"
                     >
                       {getUserName(submission.reviewed_by_user_id) || `User #${submission.reviewed_by_user_id}`}
@@ -1101,13 +1106,13 @@ const FormSubmissionDetailPage = () => {
               <CardTitle>Quick Actions</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
-              <Link href={`/admin/forms/${formId}`} className="block">
+              <Link href={`/admin/forms/${formSlug}`} className="block">
                 <Button variant="outline" className="w-full justify-start">
                   <FileText className="mr-2 h-4 w-4" />
                   View Form
                 </Button>
               </Link>
-              <Link href={`/admin/forms/${formId}/submissions`} className="block">
+              <Link href={`/admin/forms/${formSlug}/submissions`} className="block">
                 <Button variant="outline" className="w-full justify-start">
                   <FileText className="mr-2 h-4 w-4" />
                   All Submissions
@@ -1123,7 +1128,8 @@ const FormSubmissionDetailPage = () => {
         <CardContent className="pt-6">
           <CommentThread
             entityType="form_submission"
-            entityId={submissionId}
+            entitySlug={submission?.slug}
+            entityId={submission?.id}
             showHeader={true}
           />
         </CardContent>
@@ -1132,7 +1138,8 @@ const FormSubmissionDetailPage = () => {
       {/* Activity History */}
       <ResourceAuditLogs
         resource="form_submission"
-        resourceId={submissionId}
+        resourceSlug={submission?.slug}
+        resourceId={submission?.id}
         title="Activity History"
       />
 
@@ -1228,7 +1235,7 @@ const FormSubmissionDetailPage = () => {
               onClick={async () => {
                 try {
                   await updateSubmissionMutation.mutateAsync({
-                    id: submissionId,
+                    slug: submissionSlug,
                     submissionData: {
                       category: updateData.category,
                       status: updateData.status,

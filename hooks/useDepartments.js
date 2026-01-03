@@ -25,14 +25,14 @@ export const useDepartments = (params = {}) => {
 };
 
 // Get single department query
-export const useDepartment = (id) => {
+export const useDepartment = (slug) => {
   return useQuery({
-    queryKey: departmentKeys.detail(id),
+    queryKey: departmentKeys.detail(slug),
     queryFn: async () => {
-      const response = await departmentsService.getDepartment(id);
+      const response = await departmentsService.getDepartment(slug);
       return response.data;
     },
-    enabled: !!id,
+    enabled: !!slug,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 };
@@ -69,16 +69,16 @@ export const useUpdateDepartment = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, departmentData }) => {
+    mutationFn: async ({ slug, departmentData }) => {
       const response = await departmentsService.updateDepartment(
-        id,
+        slug,
         departmentData
       );
       return response.data;
     },
     onSuccess: (data, variables) => {
       queryClient.setQueryData(
-        departmentKeys.detail(variables.id),
+        departmentKeys.detail(variables.slug),
         data
       );
       queryClient.invalidateQueries({ queryKey: departmentKeys.lists() });
@@ -101,12 +101,12 @@ export const useDeleteDepartment = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (id) => {
-      const response = await departmentsService.deleteDepartment(id);
+    mutationFn: async (slug) => {
+      const response = await departmentsService.deleteDepartment(slug);
       return response.data;
     },
-    onSuccess: (data, id) => {
-      queryClient.removeQueries({ queryKey: departmentKeys.detail(id) });
+    onSuccess: (data, slug) => {
+      queryClient.removeQueries({ queryKey: departmentKeys.detail(slug) });
       queryClient.invalidateQueries({ queryKey: departmentKeys.lists() });
       toast.success("Department deleted successfully", {
         description: "The department has been removed.",

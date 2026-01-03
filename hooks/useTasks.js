@@ -36,14 +36,14 @@ export const useTasks = (params = {}, options = {}) => {
 };
 
 // Get single task query
-export const useTask = (id) => {
+export const useTask = (slug) => {
   return useQuery({
-    queryKey: taskKeys.detail(id),
+    queryKey: taskKeys.detail(slug),
     queryFn: async () => {
-      const response = await tasksService.getTask(id);
+      const response = await tasksService.getTask(slug);
       return response.data;
     },
-    enabled: !!id,
+    enabled: !!slug,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 };
@@ -116,12 +116,12 @@ export const useUpdateTask = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, taskData }) => {
-      const response = await tasksService.updateTask(id, taskData);
+    mutationFn: async ({ slug, taskData }) => {
+      const response = await tasksService.updateTask(slug, taskData);
       return response.data;
     },
     onSuccess: (data, variables) => {
-      queryClient.setQueryData(taskKeys.detail(variables.id), data);
+      queryClient.setQueryData(taskKeys.detail(variables.slug), data);
       queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
       queryClient.invalidateQueries({ queryKey: taskKeys.stats() });
       toast.success("Task updated successfully", {
@@ -148,12 +148,12 @@ export const useDeleteTask = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (id) => {
-      await tasksService.deleteTask(id);
-      return id;
+    mutationFn: async (slug) => {
+      await tasksService.deleteTask(slug);
+      return slug;
     },
-    onSuccess: (id) => {
-      queryClient.removeQueries({ queryKey: taskKeys.detail(id) });
+    onSuccess: (slug) => {
+      queryClient.removeQueries({ queryKey: taskKeys.detail(slug) });
       queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
       queryClient.invalidateQueries({ queryKey: taskKeys.stats() });
       toast.success("Task deleted successfully", {
@@ -180,12 +180,12 @@ export const useAssignTask = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, assignmentData }) => {
-      const response = await tasksService.assignTask(id, assignmentData);
+    mutationFn: async ({ slug, assignmentData }) => {
+      const response = await tasksService.assignTask(slug, assignmentData);
       return response.data;
     },
     onSuccess: (data, variables) => {
-      queryClient.setQueryData(taskKeys.detail(variables.id), data);
+      queryClient.setQueryData(taskKeys.detail(variables.slug), data);
       queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
       queryClient.invalidateQueries({ queryKey: taskKeys.myTasks() });
       toast.success("Task assigned successfully", {
@@ -212,12 +212,12 @@ export const useCompleteTask = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, completionData }) => {
-      const response = await tasksService.completeTask(id, completionData);
+    mutationFn: async ({ slug, completionData }) => {
+      const response = await tasksService.completeTask(slug, completionData);
       return response.data;
     },
     onSuccess: (data, variables) => {
-      queryClient.setQueryData(taskKeys.detail(variables.id), data);
+      queryClient.setQueryData(taskKeys.detail(variables.slug), data);
       queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
       queryClient.invalidateQueries({ queryKey: taskKeys.myTasks() });
       queryClient.invalidateQueries({ queryKey: taskKeys.stats() });
@@ -285,27 +285,27 @@ export const useMyTasks = (params = {}, options = {}) => {
 };
 
 // Get tasks by user query
-export const useTasksByUser = (userId, params = {}) => {
+export const useTasksByUser = (userSlug, params = {}) => {
   return useQuery({
-    queryKey: taskKeys.userTasks(userId, params),
+    queryKey: taskKeys.userTasks(userSlug, params),
     queryFn: async () => {
-      const response = await tasksService.getTasksByUser(userId, params);
+      const response = await tasksService.getTasksByUser(userSlug, params);
       return response.data;
     },
-    enabled: !!userId,
+    enabled: !!userSlug,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 };
 
 // Get tasks by asset query
-export const useTasksByAsset = (assetId, params = {}) => {
+export const useTasksByAsset = (assetSlug, params = {}) => {
   return useQuery({
-    queryKey: taskKeys.assetTasks(assetId, params),
+    queryKey: taskKeys.assetTasks(assetSlug, params),
     queryFn: async () => {
-      const response = await tasksService.getTasksByAsset(assetId, params);
+      const response = await tasksService.getTasksByAsset(assetSlug, params);
       return response.data;
     },
-    enabled: !!assetId,
+    enabled: !!assetSlug,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 };
@@ -375,14 +375,14 @@ export const useTaskStats = () => {
 };
 
 // Get recurring task history query
-export const useRecurringTaskHistory = (taskId, options = {}) => {
+export const useRecurringTaskHistory = (taskSlug, options = {}) => {
   return useQuery({
-    queryKey: taskKeys.recurringHistory(taskId),
+    queryKey: taskKeys.recurringHistory(taskSlug),
     queryFn: async () => {
-      const response = await tasksService.getRecurringTaskHistory(taskId);
+      const response = await tasksService.getRecurringTaskHistory(taskSlug);
       return response.data;
     },
-    enabled: !!taskId,
+    enabled: !!taskSlug,
     staleTime: 5 * 60 * 1000, // 5 minutes
     ...options,
   });

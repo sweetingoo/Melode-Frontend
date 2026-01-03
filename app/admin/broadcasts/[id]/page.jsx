@@ -44,9 +44,9 @@ import { useFileReferences } from "@/hooks/useFileReferences";
 const BroadcastDetailPage = () => {
   const params = useParams();
   const router = useRouter();
-  const broadcastId = params.id;
+  const broadcastSlug = params.id || params.slug;
   const { data: currentUser } = useCurrentUser();
-  const { data: broadcast, isLoading } = useMessage(broadcastId);
+  const { data: broadcast, isLoading } = useMessage(broadcastSlug);
   const markAsReadMutation = useMarkMessageAsRead();
   const acknowledgeMutation = useAcknowledgeMessageWithStatus();
   const { hasPermission } = usePermissionsCheck();
@@ -69,10 +69,10 @@ const BroadcastDetailPage = () => {
         (r) => r.user_id === currentUser.id
       );
       if (!receipt?.is_read) {
-        markAsReadMutation.mutate({ id: broadcastId, readVia: "web" });
+        markAsReadMutation.mutate({ slug: broadcastSlug, readVia: "web" });
       }
     }
-  }, [broadcast, currentUser, broadcastId]);
+  }, [broadcast, currentUser, broadcastSlug]);
 
   if (isLoading) {
     return (
@@ -162,7 +162,7 @@ const BroadcastDetailPage = () => {
   const confirmAcknowledge = () => {
     acknowledgeMutation.mutate(
       {
-        id: broadcastId,
+        slug: broadcastSlug,
         acknowledgementStatus: pendingAckStatus,
         acknowledgementNote: acknowledgementNote.trim() || undefined,
       },
@@ -193,7 +193,7 @@ const BroadcastDetailPage = () => {
         {currentUser?.id === broadcast.created_by_user_id && (
           <Button
             variant="outline"
-            onClick={() => router.push(`/admin/broadcasts/${broadcastId}/status`)}
+            onClick={() => router.push(`/admin/broadcasts/${broadcastSlug}/status`)}
           >
             <BarChart3 className="h-4 w-4 mr-2" />
             View Status

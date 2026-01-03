@@ -213,14 +213,14 @@ export const useLocations = (params = {}) => {
   });
 };
 
-export const useLocation = (id) => {
+export const useLocation = (slug) => {
   return useQuery({
-    queryKey: locationsKeys.detail(id),
+    queryKey: locationsKeys.detail(slug),
     queryFn: async () => {
-      const response = await locationsService.getLocation(id);
+      const response = await locationsService.getLocation(slug);
       return locationsUtils.transformLocation(response);
     },
-    enabled: !!id,
+    enabled: !!slug,
     staleTime: 5 * 60 * 1000,
   });
 };
@@ -312,7 +312,7 @@ export const useCreateLocation = () => {
       }
 
       // Set the detail cache
-      queryClient.setQueryData(locationsKeys.detail(data.id), data);
+      queryClient.setQueryData(locationsKeys.detail(data.slug), data);
 
       // Invalidate and refetch to ensure fresh data from server
       queryClient.invalidateQueries({ queryKey: locationsKeys.all });
@@ -337,18 +337,18 @@ export const useUpdateLocation = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, locationData }) => {
+    mutationFn: async ({ slug, locationData }) => {
       const transformedData =
         locationsUtils.transformLocationForAPI(locationData);
       const response = await locationsService.updateLocation(
-        id,
+        slug,
         transformedData
       );
       return locationsUtils.transformLocation(response);
     },
     onSuccess: (data, variables) => {
       // Update the specific location detail cache
-      queryClient.setQueryData(locationsKeys.detail(variables.id), data);
+      queryClient.setQueryData(locationsKeys.detail(variables.slug), data);
 
       // Get all existing location list queries and update them
       const queryCache = queryClient.getQueryCache();
@@ -366,7 +366,7 @@ export const useUpdateLocation = () => {
             queryClient.setQueryData(
               queryKey,
               currentData.map((location) =>
-                location.id === variables.id ? data : location
+                location.slug === variables.slug ? data : location
               )
             );
           }
@@ -378,7 +378,7 @@ export const useUpdateLocation = () => {
         if (!oldData || !Array.isArray(oldData)) return oldData;
 
         return oldData.map((location) =>
-          location.id === variables.id ? data : location
+          location.slug === variables.slug ? data : location
         );
       });
 
@@ -405,12 +405,12 @@ export const useDeleteLocation = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (id) => {
-      const response = await locationsService.deleteLocation(id);
+    mutationFn: async (slug) => {
+      const response = await locationsService.deleteLocation(slug);
       return response.data || response;
     },
-    onSuccess: (data, id) => {
-      queryClient.removeQueries({ queryKey: locationsKeys.detail(id) });
+    onSuccess: (data, slug) => {
+      queryClient.removeQueries({ queryKey: locationsKeys.detail(slug) });
       queryClient.invalidateQueries({ queryKey: locationsKeys.lists() });
       queryClient.invalidateQueries({ queryKey: locationsKeys.roots() });
       queryClient.invalidateQueries({ queryKey: locationsKeys.statistics() });

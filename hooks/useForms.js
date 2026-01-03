@@ -30,14 +30,14 @@ export const useForms = (params = {}, options = {}) => {
 };
 
 // Get single form query
-export const useForm = (id, options = {}) => {
+export const useForm = (slug, options = {}) => {
   return useQuery({
-    queryKey: formKeys.detail(id),
+    queryKey: formKeys.detail(slug),
     queryFn: async () => {
-      const response = await formsService.getForm(id);
+      const response = await formsService.getForm(slug);
       return response.data;
     },
-    enabled: !!id,
+    enabled: !!slug,
     staleTime: 5 * 60 * 1000, // 5 minutes
     ...options,
   });
@@ -92,12 +92,12 @@ export const useUpdateForm = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, formData }) => {
-      const response = await formsService.updateForm(id, formData);
+    mutationFn: async ({ slug, formData }) => {
+      const response = await formsService.updateForm(slug, formData);
       return response.data;
     },
     onSuccess: (data, variables) => {
-      queryClient.setQueryData(formKeys.detail(variables.id), data);
+      queryClient.setQueryData(formKeys.detail(variables.slug), data);
       queryClient.invalidateQueries({ queryKey: formKeys.lists() });
       toast.success("Form updated successfully", {
         description: `Form "${data.form_title || data.form_name}" has been updated.`,
@@ -123,12 +123,12 @@ export const useDeleteForm = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (id) => {
-      await formsService.deleteForm(id);
-      return id;
+    mutationFn: async (slug) => {
+      await formsService.deleteForm(slug);
+      return slug;
     },
-    onSuccess: (id) => {
-      queryClient.removeQueries({ queryKey: formKeys.detail(id) });
+    onSuccess: (slug) => {
+      queryClient.removeQueries({ queryKey: formKeys.detail(slug) });
       queryClient.invalidateQueries({ queryKey: formKeys.lists() });
       toast.success("Form deleted successfully", {
         description: "The form has been removed.",
@@ -179,12 +179,12 @@ export const useFormSubmissions = (params = {}, options = {}) => {
 };
 
 // Get single form submission query
-export const useFormSubmission = (id, options = {}) => {
+export const useFormSubmission = (slug, options = {}) => {
   return useQuery({
-    queryKey: formKeys.submissionDetail(id),
+    queryKey: formKeys.submissionDetail(slug),
     queryFn: async () => {
       try {
-        const response = await formsService.getFormSubmission(id);
+        const response = await formsService.getFormSubmission(slug);
         return response.data;
       } catch (error) {
         // Handle 404 errors specifically
@@ -194,7 +194,7 @@ export const useFormSubmission = (id, options = {}) => {
         throw error;
       }
     },
-    enabled: !!id,
+    enabled: !!slug,
     staleTime: 5 * 60 * 1000, // 5 minutes
     retry: (failureCount, error) => {
       // Don't retry on 404 errors
@@ -269,12 +269,12 @@ export const useUpdateFormSubmission = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, submissionData }) => {
-      const response = await formsService.updateFormSubmission(id, submissionData);
+    mutationFn: async ({ slug, submissionData }) => {
+      const response = await formsService.updateFormSubmission(slug, submissionData);
       return response.data;
     },
     onSuccess: (data, variables) => {
-      queryClient.setQueryData(formKeys.submissionDetail(variables.id), data);
+      queryClient.setQueryData(formKeys.submissionDetail(variables.slug), data);
       queryClient.invalidateQueries({ queryKey: formKeys.submissionList() });
       toast.success("Form submission updated successfully");
     },

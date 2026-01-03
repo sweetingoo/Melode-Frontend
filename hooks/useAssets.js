@@ -351,15 +351,15 @@ export const useAssets = (params = {}) => {
   });
 };
 
-// Hook to get a single asset by ID
-export const useAsset = (id) => {
+// Hook to get a single asset by slug
+export const useAsset = (slug) => {
   return useQuery({
-    queryKey: assetsKeys.detail(id),
+    queryKey: assetsKeys.detail(slug),
     queryFn: async () => {
-      const response = await assetsService.getAsset(id);
+      const response = await assetsService.getAsset(slug);
       return assetsUtils.transformAsset(response);
     },
-    enabled: !!id,
+    enabled: !!slug,
     staleTime: 5 * 60 * 1000,
   });
 };
@@ -412,14 +412,14 @@ export const useUpdateAsset = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, assetData }) => {
+    mutationFn: async ({ slug, assetData }) => {
       const transformedData = assetsUtils.transformAssetForAPI(assetData);
-      const response = await assetsService.updateAsset(id, transformedData);
+      const response = await assetsService.updateAsset(slug, transformedData);
       return assetsUtils.transformAsset(response);
     },
     onSuccess: (data, variables) => {
       // Update the specific asset in cache
-      queryClient.setQueryData(assetsKeys.detail(variables.id), data);
+      queryClient.setQueryData(assetsKeys.detail(variables.slug), data);
       // Invalidate lists to refetch
       queryClient.invalidateQueries({ queryKey: assetsKeys.all });
       queryClient.invalidateQueries({ queryKey: assetsKeys.statistics() });
@@ -444,9 +444,9 @@ export const useDeleteAsset = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (id) => {
-      await assetsService.deleteAsset(id);
-      return id;
+    mutationFn: async (slug) => {
+      await assetsService.deleteAsset(slug);
+      return slug;
     },
     onSuccess: () => {
       // Invalidate all asset queries

@@ -24,9 +24,9 @@ import {
 import { useDocumentCategories } from "@/hooks/useDocumentCategories";
 import { Loader2, Save } from "lucide-react";
 
-const DocumentEditor = ({ documentId, initialCategoryId = null, onSave, onCancel }) => {
-  const { data: document, isLoading: documentLoading } = useDocument(documentId, {
-    enabled: !!documentId,
+const DocumentEditor = ({ documentId, documentSlug, initialCategoryId = null, onSave, onCancel }) => {
+  const { data: document, isLoading: documentLoading } = useDocument(documentSlug || documentId, {
+    enabled: !!(documentSlug || documentId),
   });
   const { data: categoriesData } = useDocumentCategories();
   const createDocument = useCreateDocument();

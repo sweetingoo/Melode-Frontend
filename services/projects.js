@@ -12,12 +12,12 @@ export const projectsService = {
     }
   },
 
-  // Get project by ID
-  getProject: async (id) => {
+  // Get project by slug
+  getProject: async (slug) => {
     try {
-      return await api.get(`/projects/${id}`);
+      return await api.get(`/projects/${slug}`);
     } catch (error) {
-      console.error(`Get project ${id} failed:`, error);
+      console.error(`Get project ${slug} failed:`, error);
       throw error;
     }
   },
@@ -33,84 +33,84 @@ export const projectsService = {
   },
 
   // Update project
-  updateProject: async (id, projectData) => {
+  updateProject: async (slug, projectData) => {
     try {
-      return await api.put(`/projects/${id}`, projectData);
+      return await api.put(`/projects/${slug}`, projectData);
     } catch (error) {
-      console.error(`Update project ${id} failed:`, error);
+      console.error(`Update project ${slug} failed:`, error);
       throw error;
     }
   },
 
   // Delete project
-  deleteProject: async (id, force = false) => {
+  deleteProject: async (slug, force = false) => {
     try {
-      return await api.delete(`/projects/${id}`, {
+      return await api.delete(`/projects/${slug}`, {
         params: { force: force },
       });
     } catch (error) {
-      console.error(`Delete project ${id} failed:`, error);
+      console.error(`Delete project ${slug} failed:`, error);
       throw error;
     }
   },
 
   // Get tasks in project
-  getProjectTasks: async (projectId, params = {}) => {
+  getProjectTasks: async (projectSlug, params = {}) => {
     try {
-      return await api.get(`/projects/${projectId}/tasks`, { params });
+      return await api.get(`/projects/${projectSlug}/tasks`, { params });
     } catch (error) {
-      console.error(`Get tasks for project ${projectId} failed:`, error);
+      console.error(`Get tasks for project ${projectSlug} failed:`, error);
       throw error;
     }
   },
 
   // Add task to project
-  addTaskToProject: async (projectId, taskId) => {
+  addTaskToProject: async (projectSlug, taskSlug) => {
     try {
-      // task_id should be in the URL path, not in the request body
-      return await api.post(`/projects/${projectId}/tasks/${taskId}`);
+      // task_slug should be in the URL path, not in the request body
+      return await api.post(`/projects/${projectSlug}/tasks/${taskSlug}`);
     } catch (error) {
-      console.error(`Add task ${taskId} to project ${projectId} failed:`, error);
+      console.error(`Add task ${taskSlug} to project ${projectSlug} failed:`, error);
       throw error;
     }
   },
 
   // Remove task from project
-  removeTaskFromProject: async (projectId, taskId) => {
+  removeTaskFromProject: async (projectSlug, taskSlug) => {
     try {
-      return await api.delete(`/projects/${projectId}/tasks/${taskId}`);
+      return await api.delete(`/projects/${projectSlug}/tasks/${taskSlug}`);
     } catch (error) {
-      console.error(`Remove task ${taskId} from project ${projectId} failed:`, error);
+      console.error(`Remove task ${taskSlug} from project ${projectSlug} failed:`, error);
       throw error;
     }
   },
 
   // Get project members
-  getProjectMembers: async (projectId) => {
+  getProjectMembers: async (projectSlug) => {
     try {
-      return await api.get(`/projects/${projectId}/members`);
+      return await api.get(`/projects/${projectSlug}/members`);
     } catch (error) {
-      console.error(`Get members for project ${projectId} failed:`, error);
+      console.error(`Get members for project ${projectSlug} failed:`, error);
       throw error;
     }
   },
 
   // Add member to project
-  addMemberToProject: async (projectId, userId) => {
+  addMemberToProject: async (projectSlug, userId) => {
     try {
-      return await api.post(`/projects/${projectId}/members`, { user_id: userId });
+      return await api.post(`/projects/${projectSlug}/members`, { user_id: userId });
     } catch (error) {
-      console.error(`Add member ${userId} to project ${projectId} failed:`, error);
+      console.error(`Add member ${userId} to project ${projectSlug} failed:`, error);
       throw error;
     }
   },
 
   // Remove member from project
-  removeMemberFromProject: async (projectId, userId) => {
+  removeMemberFromProject: async (projectSlug, userSlug) => {
     try {
-      return await api.delete(`/projects/${projectId}/members/${userId}`);
+      return await api.delete(`/projects/${projectSlug}/members/${userSlug}`);
     } catch (error) {
-      console.error(`Remove member ${userId} from project ${projectId} failed:`, error);
+      console.error(`Remove member ${userSlug} from project ${projectSlug} failed:`, error);
       throw error;
     }
   },

@@ -212,26 +212,26 @@ export const useAcceptProfile = () => {
 };
 
 // Admin hooks
-export const useUserProfile = (userId) => {
+export const useUserProfile = (userSlug) => {
   return useQuery({
-    queryKey: profileKeys.user(userId),
+    queryKey: profileKeys.user(userSlug),
     queryFn: async () => {
-      const response = await profileService.getUserProfile(userId);
+      const response = await profileService.getUserProfile(userSlug);
       return profileUtils.transformProfile(response);
     },
-    enabled: !!userId,
+    enabled: !!userSlug,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 };
 
-export const useUserStats = (userId) => {
+export const useUserStats = (userSlug) => {
   return useQuery({
-    queryKey: profileKeys.userStats(userId),
+    queryKey: profileKeys.userStats(userSlug),
     queryFn: async () => {
-      const response = await profileService.getUserStats(userId);
+      const response = await profileService.getUserStats(userSlug);
       return response;
     },
-    enabled: !!userId,
+    enabled: !!userSlug,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 };
@@ -240,16 +240,16 @@ export const useReactivateUser = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (userId) => {
-      const response = await profileService.reactivateUser(userId);
+    mutationFn: async (userSlug) => {
+      const response = await profileService.reactivateUser(userSlug);
       return response;
     },
-    onSuccess: (data, userId) => {
+    onSuccess: (data, userSlug) => {
       // Invalidate user profile queries
-      queryClient.invalidateQueries({ queryKey: profileKeys.user(userId) });
+      queryClient.invalidateQueries({ queryKey: profileKeys.user(userSlug) });
 
       toast.success("User reactivated successfully!", {
-        description: `User ${userId} has been reactivated.`,
+        description: `User has been reactivated.`,
       });
     },
     onError: (error) => {
@@ -526,32 +526,32 @@ export const useRegenerateBackupCodes = () => {
 };
 
 // User Custom Fields hooks
-export const useUserCustomFields = (userId = null) => {
+export const useUserCustomFields = (userSlug = null) => {
   return useQuery({
-    queryKey: [...profileKeys.userCustomFields(), userId],
+    queryKey: [...profileKeys.userCustomFields(), userSlug],
     queryFn: async () => {
-      if (!userId) {
-        throw new Error("User ID is required for custom fields operations");
+      if (!userSlug) {
+        throw new Error("User slug is required for custom fields operations");
       }
-      const response = await profileService.getUserCustomFields(userId);
+      const response = await profileService.getUserCustomFields(userSlug);
       return response;
     },
-    enabled: !!userId,
+    enabled: !!userSlug,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 };
 
-export const useUserCustomFieldsHierarchy = (userId = null) => {
+export const useUserCustomFieldsHierarchy = (userSlug = null) => {
   return useQuery({
-    queryKey: [...profileKeys.userCustomFields(), 'hierarchy', userId],
+    queryKey: [...profileKeys.userCustomFields(), 'hierarchy', userSlug],
     queryFn: async () => {
-      if (!userId) {
-        throw new Error("User ID is required for custom fields operations");
+      if (!userSlug) {
+        throw new Error("User slug is required for custom fields operations");
       }
-      const response = await profileService.getUserCustomFieldsHierarchy(userId);
+      const response = await profileService.getUserCustomFieldsHierarchy(userSlug);
       return response;
     },
-    enabled: !!userId,
+    enabled: !!userSlug,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 };
@@ -560,8 +560,8 @@ export const useUpdateUserCustomField = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ fieldId, valueData, fileId = null, userId = null }) => {
-      const response = await profileService.updateUserCustomField(fieldId, valueData, fileId, userId);
+    mutationFn: async ({ fieldSlug, valueData, fileId = null, userSlug = null }) => {
+      const response = await profileService.updateUserCustomField(fieldSlug, valueData, fileId, userSlug);
       return response;
     },
     onSuccess: (data, variables) => {
@@ -603,8 +603,8 @@ export const useBulkUpdateUserCustomFields = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ updates, userId = null }) => {
-      const response = await profileService.bulkUpdateUserCustomFields(updates, userId);
+    mutationFn: async ({ updates, userSlug = null }) => {
+      const response = await profileService.bulkUpdateUserCustomFields(updates, userSlug);
       return response;
     },
     onSuccess: () => {
@@ -646,8 +646,8 @@ export const useAddUserGroupEntry = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ groupKey, entryData, sortOrder = 0, userId = null }) => {
-      const response = await profileService.addUserGroupEntry(groupKey, entryData, sortOrder, userId);
+    mutationFn: async ({ groupKey, entryData, sortOrder = 0, userSlug = null }) => {
+      const response = await profileService.addUserGroupEntry(groupKey, entryData, sortOrder, userSlug);
       return response;
     },
     onSuccess: () => {

@@ -70,7 +70,8 @@ const FILE_TYPE_CATEGORIES = {
 
 const MultiFileUpload = ({
   entityType,
-  entityId,
+  entityId, // Keep for backward compatibility
+  entitySlug, // New prop for slug
   onUploadComplete,
   maxFiles = 10,
   maxSizeMB = 10,
@@ -260,7 +261,7 @@ const MultiFileUpload = ({
       // Upload files
       await attachFilesMutation.mutateAsync({
         entityType,
-        entityId,
+        entitySlug: entitySlug || entityId, // Use slug if provided, fallback to id for backward compatibility
         files,
       });
 

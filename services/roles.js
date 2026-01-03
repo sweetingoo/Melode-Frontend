@@ -12,12 +12,12 @@ export const rolesService = {
     }
   },
 
-  // Get role by ID
-  getRole: async (id) => {
+  // Get role by slug
+  getRole: async (slug) => {
     try {
-      return await api.get(`/roles/${id}`);
+      return await api.get(`/roles/${slug}`);
     } catch (error) {
-      console.error(`Get role ${id} failed:`, error);
+      console.error(`Get role ${slug} failed:`, error);
       throw error;
     }
   },
@@ -33,21 +33,21 @@ export const rolesService = {
   },
 
   // Update role
-  updateRole: async (id, roleData) => {
+  updateRole: async (slug, roleData) => {
     try {
-      return await api.put(`/roles/${id}`, roleData);
+      return await api.put(`/roles/${slug}`, roleData);
     } catch (error) {
-      console.error(`Update role ${id} failed:`, error);
+      console.error(`Update role ${slug} failed:`, error);
       throw error;
     }
   },
 
   // Delete role
-  deleteRole: async (id) => {
+  deleteRole: async (slug) => {
     try {
-      return await api.delete(`/roles/${id}`);
+      return await api.delete(`/roles/${slug}`);
     } catch (error) {
-      console.error(`Delete role ${id} failed:`, error);
+      console.error(`Delete role ${slug} failed:`, error);
       throw error;
     }
   },
@@ -62,12 +62,12 @@ export const rolesService = {
     }
   },
 
-  // Get permission by ID
-  getPermission: async (id) => {
+  // Get permission by slug
+  getPermission: async (slug) => {
     try {
-      return await api.get(`/permissions/${id}`);
+      return await api.get(`/permissions/${slug}`);
     } catch (error) {
-      console.error(`Get permission ${id} failed:`, error);
+      console.error(`Get permission ${slug} failed:`, error);
       throw error;
     }
   },
@@ -93,62 +93,62 @@ export const rolesService = {
   },
 
   // Remove role from user
-  removeRoleFromUser: async (userId, roleId) => {
+  removeRoleFromUser: async (userSlug, roleSlug) => {
     try {
-      return await api.delete(`/roles/assign/${userId}/${roleId}`);
+      return await api.delete(`/roles/assign/${userSlug}/${roleSlug}`);
     } catch (error) {
-      console.error(`Remove role ${roleId} from user ${userId} failed:`, error);
+      console.error(`Remove role ${roleSlug} from user ${userSlug} failed:`, error);
       throw error;
     }
   },
 
   // Get user roles
-  getUserRoles: async (userId) => {
+  getUserRoles: async (userSlug) => {
     try {
-      return await api.get(`/roles/users/${userId}/roles`);
+      return await api.get(`/roles/users/${userSlug}/roles`);
     } catch (error) {
-      console.error(`Get user roles ${userId} failed:`, error);
+      console.error(`Get user roles ${userSlug} failed:`, error);
       throw error;
     }
   },
 
   // Get role users
-  getRoleUsers: async (roleId) => {
+  getRoleUsers: async (roleSlug) => {
     try {
-      return await api.get(`/roles/roles/${roleId}/users`);
+      return await api.get(`/roles/roles/${roleSlug}/users`);
     } catch (error) {
-      console.error(`Get role users ${roleId} failed:`, error);
+      console.error(`Get role users ${roleSlug} failed:`, error);
       throw error;
     }
   },
 
   // Get role permissions
-  getRolePermissions: async (id) => {
+  getRolePermissions: async (slug) => {
     try {
-      return await api.get(`/roles/${id}/permissions`);
+      return await api.get(`/roles/${slug}/permissions`);
     } catch (error) {
-      console.error(`Get role permissions ${id} failed:`, error);
+      console.error(`Get role permissions ${slug} failed:`, error);
       throw error;
     }
   },
 
   // Assign permissions to role (using PUT to update role with permission_ids)
-  assignPermissions: async (id, permissionIds) => {
+  assignPermissions: async (slug, permissionIds) => {
     try {
-      return await api.put(`/roles/${id}`, { 
+      return await api.put(`/roles/${slug}`, { 
         permission_ids: permissionIds 
       });
     } catch (error) {
-      console.error(`Assign permissions to role ${id} failed:`, error);
+      console.error(`Assign permissions to role ${slug} failed:`, error);
       throw error;
     }
   },
 
   // Remove permissions from role (using PUT to update role with empty permission_ids)
-  removePermissions: async (id, permissionIds) => {
+  removePermissions: async (slug, permissionIds) => {
     try {
       // Get current role data first to preserve other fields
-      const currentRole = await rolesService.getRole(id);
+      const currentRole = await rolesService.getRole(slug);
       const currentPermissionIds = currentRole.data.permissions?.map(p => p.id) || [];
       
       // Remove the specified permission IDs
@@ -156,11 +156,11 @@ export const rolesService = {
         pid => !permissionIds.includes(pid)
       );
       
-      return await api.put(`/roles/${id}`, { 
+      return await api.put(`/roles/${slug}`, { 
         permission_ids: updatedPermissionIds 
       });
     } catch (error) {
-      console.error(`Remove permissions from role ${id} failed:`, error);
+      console.error(`Remove permissions from role ${slug} failed:`, error);
       throw error;
     }
   },

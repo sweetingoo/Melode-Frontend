@@ -17,14 +17,14 @@ import CustomFieldRenderer from "@/components/CustomFieldRenderer";
 const FormSubmissionDetailPage = () => {
   const params = useParams();
   const router = useRouter();
-  const submissionId = params.id;
+  const submissionSlug = params.id || params.slug;
 
   const { data: submission, isLoading: submissionLoading } =
-    useFormSubmission(submissionId);
+    useFormSubmission(submissionSlug);
   const { data: form, isLoading: formLoading } = useForm(
-    submission?.form_id,
+    submission?.form_slug || submission?.form_id,
     {
-      enabled: !!submission?.form_id,
+      enabled: !!(submission?.form_slug || submission?.form_id),
     }
   );
   const { data: usersResponse } = useUsers();
@@ -45,10 +45,10 @@ const FormSubmissionDetailPage = () => {
   // Helper to get file icon emoji based on file name/type
   const getFileIcon = (fileName, contentType) => {
     if (!fileName && !contentType) return "📎";
-    
+
     const extension = fileName?.split(".").pop()?.toLowerCase();
     const type = contentType?.toLowerCase();
-    
+
     if (type?.includes("pdf") || extension === "pdf") return "📄";
     if (type?.includes("word") || extension === "doc" || extension === "docx") return "📝";
     if (type?.includes("excel") || type?.includes("spreadsheet") || extension === "xls" || extension === "xlsx") return "📊";
@@ -57,7 +57,7 @@ const FormSubmissionDetailPage = () => {
     if (type?.includes("video") || ["mp4", "mov", "avi", "webm"].includes(extension)) return "🎥";
     if (type?.includes("audio") || ["mp3", "wav", "ogg"].includes(extension)) return "🎵";
     if (type?.includes("text") || extension === "txt") return "📃";
-    
+
     return "📎";
   };
 
@@ -105,25 +105,25 @@ const FormSubmissionDetailPage = () => {
   // Calculate duration/delay from due date
   const calculateSubmissionTiming = () => {
     if (!submission) return null;
-    
-    const submissionDate = submission.submitted_at 
-      ? new Date(submission.submitted_at) 
-      : submission.created_at 
-        ? new Date(submission.created_at) 
+
+    const submissionDate = submission.submitted_at
+      ? new Date(submission.submitted_at)
+      : submission.created_at
+        ? new Date(submission.created_at)
         : null;
-    
+
     const dueDate = submission.due_date ? new Date(submission.due_date) : null;
-    
+
     if (!submissionDate || !dueDate) return null;
-    
+
     const diffMinutes = differenceInMinutes(submissionDate, dueDate);
     const diffHours = differenceInHours(submissionDate, dueDate);
     const diffDays = differenceInDays(submissionDate, dueDate);
-    
+
     const isLate = diffMinutes > 0;
     const isEarly = diffMinutes < 0;
     const isOnTime = diffMinutes === 0;
-    
+
     let durationText = "";
     if (Math.abs(diffDays) >= 1) {
       durationText = `${Math.abs(diffDays)} day${Math.abs(diffDays) !== 1 ? 's' : ''}`;
@@ -132,7 +132,7 @@ const FormSubmissionDetailPage = () => {
     } else {
       durationText = `${Math.abs(diffMinutes)} minute${Math.abs(diffMinutes) !== 1 ? 's' : ''}`;
     }
-    
+
     return {
       isLate,
       isEarly,
@@ -196,7 +196,7 @@ const FormSubmissionDetailPage = () => {
       // Handle arrays (multiple files)
       if (Array.isArray(value)) {
         if (value.length === 0) return null;
-        
+
         // Check if it's file objects
         if (value[0] && typeof value[0] === 'object' && (value[0].file_id || value[0].id)) {
           return value.map((file) => ({
@@ -207,7 +207,7 @@ const FormSubmissionDetailPage = () => {
             content_type: file.content_type || file.mime_type,
           }));
         }
-        
+
         // Check if it's an array of file IDs (numbers)
         if (typeof value[0] === 'number') {
           return value.map((fileId) => ({
@@ -276,7 +276,7 @@ const FormSubmissionDetailPage = () => {
     const formatted = formatFieldValue(field, value);
     const fieldType = field.field_type?.toLowerCase();
     const isFileField = fieldType === 'file';
-    
+
     if (formatted === null) {
       return <p className="text-muted-foreground italic">No value provided</p>;
     }
@@ -287,7 +287,7 @@ const FormSubmissionDetailPage = () => {
       const fileSize = formatted.file_size_bytes || formatted.file_size;
       const contentType = formatted.content_type || formatted.mime_type;
       const hasViewUrl = !!(formatted.file_url || formatted.download_url || formatted.url);
-      
+
       return (
         <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-md border">
           <div className="text-2xl flex-shrink-0">
@@ -333,7 +333,7 @@ const FormSubmissionDetailPage = () => {
       if (formatted.length === 0) {
         return <p className="text-muted-foreground italic">No values selected</p>;
       }
-      
+
       // Check if it's file objects (for file fields)
       const isFileArray = isFileField && formatted[0] && typeof formatted[0] === 'object' && (formatted[0].file_id || formatted[0].id);
       if (isFileArray) {
@@ -344,7 +344,7 @@ const FormSubmissionDetailPage = () => {
               const fileSize = file.file_size_bytes || file.file_size;
               const contentType = file.content_type || file.mime_type;
               const hasViewUrl = !!(file.file_url || file.download_url || file.url);
-              
+
               return (
                 <div key={index} className="flex items-center gap-3 p-3 bg-muted/50 rounded-md border">
                   <div className="text-2xl flex-shrink-0">
@@ -387,7 +387,7 @@ const FormSubmissionDetailPage = () => {
           </div>
         );
       }
-      
+
       // Array of labels (multiselect)
       return (
         <div className="flex flex-wrap gap-2">
@@ -597,11 +597,11 @@ const FormSubmissionDetailPage = () => {
                   {fields.map((field) => {
                     const fieldId = field.field_id || field.field_name;
                     const fieldType = field.field_type?.toLowerCase();
-                    
+
                     // Display-only field types that don't have submission data
                     const displayOnlyTypes = ['text_block', 'image_block', 'line_break', 'page_break'];
                     const isDisplayOnly = displayOnlyTypes.includes(fieldType);
-                    
+
                     // For display-only fields, render them directly without submission data
                     if (isDisplayOnly) {
                       const mappedField = {
@@ -615,7 +615,7 @@ const FormSubmissionDetailPage = () => {
                         image_url: field.image_url,
                         alt_text: field.alt_text,
                       };
-                      
+
                       return (
                         <div key={fieldId}>
                           <CustomFieldRenderer
@@ -627,7 +627,7 @@ const FormSubmissionDetailPage = () => {
                         </div>
                       );
                     }
-                    
+
                     const value = displayData[fieldId];
 
                     return (
@@ -657,14 +657,14 @@ const FormSubmissionDetailPage = () => {
                       (f) => (f.field_id || f.field_name) === key
                     );
                     return (
-                    <div key={key} className="p-4 border rounded-md">
-                      <label className="font-medium text-sm text-muted-foreground">
+                      <div key={key} className="p-4 border rounded-md">
+                        <label className="font-medium text-sm text-muted-foreground">
                           {field?.label || key}
-                      </label>
+                        </label>
                         <div className="mt-1 text-sm">
                           {renderFieldValue(field || { field_type: 'text' }, value)}
                         </div>
-                    </div>
+                      </div>
                     );
                   })}
                 </div>
@@ -704,16 +704,21 @@ const FormSubmissionDetailPage = () => {
                               <div className="flex flex-wrap gap-2">
                                 {submission.processing_result.task_creation.task_ids
                                   .slice(0, 10)
-                                  .map((taskId) => (
-                                    <Link
-                                      key={taskId}
-                                      href={`/admin/tasks/${taskId}`}
-                                    >
-                                      <Button variant="outline" size="sm">
-                                        Task #{taskId}
-                                      </Button>
-                                    </Link>
-                                  ))}
+                                  .map((taskId) => {
+                                    // Note: task_ids from processing_result may still be IDs
+                                    // If backend provides task_slugs array, use that instead
+                                    const taskSlug = submission.processing_result?.task_creation?.task_slugs?.[submission.processing_result.task_creation.task_ids.indexOf(taskId)] || submission.task_slug || taskId;
+                                    return (
+                                      <Link
+                                        key={taskId}
+                                        href={`/admin/tasks/${taskSlug}`}
+                                      >
+                                        <Button variant="outline" size="sm">
+                                          Task #{taskId}
+                                        </Button>
+                                      </Link>
+                                    );
+                                  })}
                                 {submission.processing_result.task_creation.task_ids.length > 10 && (
                                   <span className="text-xs text-green-700 dark:text-green-300 self-center">
                                     +{submission.processing_result.task_creation.task_ids.length - 10} more
@@ -727,7 +732,7 @@ const FormSubmissionDetailPage = () => {
                       submission.processing_result.task_creation.task_id && (
                         <div className="mt-2">
                           <Link
-                            href={`/admin/tasks/${submission.processing_result.task_creation.task_id}`}
+                            href={`/admin/tasks/${submission.processing_result.task_creation.task_slug || submission.processing_result.task_creation.task_id}`}
                           >
                             <Button variant="outline" size="sm">
                               View Task #
@@ -777,7 +782,7 @@ const FormSubmissionDetailPage = () => {
                 <div className="mt-1">
                   {submission.submitted_by_user_id ? (
                     <Link
-                      href={`/admin/people-management/${submission.submitted_by_user_id}`}
+                      href={`/admin/people-management/${submission.submitted_by_user?.slug || submission.submitted_by_user_slug || submission.submitted_by_user_id}`}
                       className="text-primary hover:underline"
                     >
                       {getUserName(submission.submitted_by_user_id) || `User #${submission.submitted_by_user_id}`}
@@ -819,7 +824,7 @@ const FormSubmissionDetailPage = () => {
                   <label className="text-muted-foreground">Reviewed By</label>
                   <div className="mt-1">
                     <Link
-                      href={`/admin/people-management/${submission.reviewed_by_user_id}`}
+                      href={`/admin/people-management/${submission.reviewed_by_user?.slug || submission.reviewed_by_user_slug || submission.reviewed_by_user_id}`}
                       className="text-primary hover:underline"
                     >
                       {getUserName(submission.reviewed_by_user_id) || `User #${submission.reviewed_by_user_id}`}
@@ -827,7 +832,7 @@ const FormSubmissionDetailPage = () => {
                   </div>
                 </div>
               )}
-              
+
               {/* Due Date and Timing Information */}
               {submission.due_date && (
                 <>
@@ -840,7 +845,7 @@ const FormSubmissionDetailPage = () => {
                       </p>
                     </div>
                   </div>
-                  
+
                   {timingInfo && (
                     <div>
                       <label className="text-muted-foreground">Submission Timing</label>
@@ -872,7 +877,7 @@ const FormSubmissionDetailPage = () => {
                                 Submitted {timingInfo.durationText} late
                               </span>
                               <p className="text-xs text-red-700 dark:text-red-300 mt-0.5">
-                                Due: {format(timingInfo.dueDate, "MMM dd, yyyy HH:mm")} • 
+                                Due: {format(timingInfo.dueDate, "MMM dd, yyyy HH:mm")} •
                                 Submitted: {format(timingInfo.submissionDate, "MMM dd, yyyy HH:mm")}
                               </p>
                             </div>
@@ -893,14 +898,14 @@ const FormSubmissionDetailPage = () => {
                 <CardTitle>Quick Actions</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
-                <Link href={`/admin/forms/${submission.form_id}`} className="block">
+                <Link href={`/admin/forms/${submission.form_slug || submission.form_id}`} className="block">
                   <Button variant="outline" className="w-full justify-start">
                     <FileText className="mr-2 h-4 w-4" />
                     View Form
                   </Button>
                 </Link>
                 <Link
-                  href={`/admin/forms/${submission.form_id}/submissions`}
+                  href={`/admin/forms/${submission.form_slug || submission.form_id}/submissions`}
                   className="block"
                 >
                   <Button variant="outline" className="w-full justify-start">

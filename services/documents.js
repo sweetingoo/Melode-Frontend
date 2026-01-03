@@ -12,12 +12,12 @@ export const documentsService = {
     }
   },
 
-  // Get document by ID
-  getDocument: async (id) => {
+  // Get document by slug
+  getDocument: async (slug) => {
     try {
-      return await api.get(`/documents/${id}`);
+      return await api.get(`/documents/${slug}`);
     } catch (error) {
-      console.error(`Get document ${id} failed:`, error);
+      console.error(`Get document ${slug} failed:`, error);
       throw error;
     }
   },
@@ -33,21 +33,21 @@ export const documentsService = {
   },
 
   // Update document
-  updateDocument: async (id, documentData) => {
+  updateDocument: async (slug, documentData) => {
     try {
-      return await api.put(`/documents/${id}`, documentData);
+      return await api.put(`/documents/${slug}`, documentData);
     } catch (error) {
-      console.error(`Update document ${id} failed:`, error);
+      console.error(`Update document ${slug} failed:`, error);
       throw error;
     }
   },
 
   // Delete document
-  deleteDocument: async (id) => {
+  deleteDocument: async (slug) => {
     try {
-      return await api.delete(`/documents/${id}`);
+      return await api.delete(`/documents/${slug}`);
     } catch (error) {
-      console.error(`Delete document ${id} failed:`, error);
+      console.error(`Delete document ${slug} failed:`, error);
       throw error;
     }
   },
@@ -63,41 +63,41 @@ export const documentsService = {
   },
 
   // Get document attachments
-  getDocumentAttachments: async (id) => {
+  getDocumentAttachments: async (slug) => {
     try {
-      return await api.get(`/documents/${id}/attachments`);
+      return await api.get(`/documents/${slug}/attachments`);
     } catch (error) {
-      console.error(`Get document ${id} attachments failed:`, error);
+      console.error(`Get document ${slug} attachments failed:`, error);
       throw error;
     }
   },
 
   // Share document with users
-  shareDocument: async (id, userIds) => {
+  shareDocument: async (slug, userIds) => {
     try {
-      return await api.post(`/documents/${id}/share`, { user_ids: userIds });
+      return await api.post(`/documents/${slug}/share`, { user_ids: userIds });
     } catch (error) {
-      console.error(`Share document ${id} failed:`, error);
+      console.error(`Share document ${slug} failed:`, error);
       throw error;
     }
   },
 
   // Unshare document with users
-  unshareDocument: async (id, userIds) => {
+  unshareDocument: async (slug, userIds) => {
     try {
-      return await api.delete(`/documents/${id}/share`, { data: { user_ids: userIds } });
+      return await api.delete(`/documents/${slug}/share`, { data: { user_ids: userIds } });
     } catch (error) {
-      console.error(`Unshare document ${id} failed:`, error);
+      console.error(`Unshare document ${slug} failed:`, error);
       throw error;
     }
   },
 
   // Get document audit logs
-  getDocumentAuditLogs: async (id, params = {}) => {
+  getDocumentAuditLogs: async (slug, params = {}) => {
     try {
-      return await api.get(`/documents/${id}/audit-logs`, { params });
+      return await api.get(`/documents/${slug}/audit-logs`, { params });
     } catch (error) {
-      console.error(`Get document ${id} audit logs failed:`, error);
+      console.error(`Get document ${slug} audit logs failed:`, error);
       throw error;
     }
   },

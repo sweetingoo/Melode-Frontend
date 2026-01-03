@@ -12,12 +12,12 @@ export const formsService = {
     }
   },
 
-  // Get form by ID
-  getForm: async (id) => {
+  // Get form by slug
+  getForm: async (slug) => {
     try {
-      return await api.get(`/settings/custom-forms/${id}`);
+      return await api.get(`/settings/custom-forms/${slug}`);
     } catch (error) {
-      console.error(`Get form ${id} failed:`, error);
+      console.error(`Get form ${slug} failed:`, error);
       throw error;
     }
   },
@@ -43,21 +43,21 @@ export const formsService = {
   },
 
   // Update form
-  updateForm: async (id, formData) => {
+  updateForm: async (slug, formData) => {
     try {
-      return await api.put(`/settings/custom-forms/${id}`, formData);
+      return await api.put(`/settings/custom-forms/${slug}`, formData);
     } catch (error) {
-      console.error(`Update form ${id} failed:`, error);
+      console.error(`Update form ${slug} failed:`, error);
       throw error;
     }
   },
 
   // Delete form
-  deleteForm: async (id) => {
+  deleteForm: async (slug) => {
     try {
-      return await api.delete(`/settings/custom-forms/${id}`);
+      return await api.delete(`/settings/custom-forms/${slug}`);
     } catch (error) {
-      console.error(`Delete form ${id} failed:`, error);
+      console.error(`Delete form ${slug} failed:`, error);
       throw error;
     }
   },
@@ -83,12 +83,12 @@ export const formsService = {
     }
   },
 
-  // Get form submission by ID
-  getFormSubmission: async (id) => {
+  // Get form submission by slug
+  getFormSubmission: async (slug) => {
     try {
-      return await api.get(`/settings/form-submissions/${id}`);
+      return await api.get(`/settings/form-submissions/${slug}`);
     } catch (error) {
-      console.error(`Get form submission ${id} failed:`, error);
+      console.error(`Get form submission ${slug} failed:`, error);
       throw error;
     }
   },
@@ -104,11 +104,11 @@ export const formsService = {
   },
 
   // Update form submission
-  updateFormSubmission: async (id, submissionData) => {
+  updateFormSubmission: async (slug, submissionData) => {
     try {
-      return await api.put(`/settings/form-submissions/${id}`, submissionData);
+      return await api.put(`/settings/form-submissions/${slug}`, submissionData);
     } catch (error) {
-      console.error(`Update form submission ${id} failed:`, error);
+      console.error(`Update form submission ${slug} failed:`, error);
       throw error;
     }
   },

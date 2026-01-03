@@ -11,12 +11,12 @@ export const locationsService = {
     }
   },
 
-  getLocation: async (id) => {
+  getLocation: async (slug) => {
     try {
-      const response = await api.get(`/locations/${id}`);
+      const response = await api.get(`/locations/${slug}`);
       return response.data || response;
     } catch (error) {
-      console.error(`Get location ${id} failed:`, error);
+      console.error(`Get location ${slug} failed:`, error);
       throw error;
     }
   },
@@ -51,22 +51,22 @@ export const locationsService = {
     }
   },
 
-  updateLocation: async (id, locationData) => {
+  updateLocation: async (slug, locationData) => {
     try {
-      const response = await api.put(`/locations/${id}`, locationData);
+      const response = await api.put(`/locations/${slug}`, locationData);
       return response.data || response;
     } catch (error) {
-      console.error(`Update location ${id} failed:`, error);
+      console.error(`Update location ${slug} failed:`, error);
       throw error;
     }
   },
 
-  deleteLocation: async (id) => {
+  deleteLocation: async (slug) => {
     try {
-      const response = await api.delete(`/locations/${id}`);
+      const response = await api.delete(`/locations/${slug}`);
       return response.data || response;
     } catch (error) {
-      console.error(`Delete location ${id} failed:`, error);
+      console.error(`Delete location ${slug} failed:`, error);
       throw error;
     }
   },
@@ -81,12 +81,12 @@ export const locationsService = {
     }
   },
 
-  getLocationHierarchy: async (id) => {
+  getLocationHierarchy: async (slug) => {
     try {
-      const response = await api.get(`/locations/${id}/hierarchy`);
+      const response = await api.get(`/locations/${slug}/hierarchy`);
       return response.data || response;
     } catch (error) {
-      console.error(`Get location hierarchy ${id} failed:`, error);
+      console.error(`Get location hierarchy ${slug} failed:`, error);
       throw error;
     }
   },
@@ -121,34 +121,34 @@ export const locationsService = {
     }
   },
 
-  moveLocation: async (id, newParentId) => {
+  moveLocation: async (slug, newParentId) => {
     try {
-      const response = await api.put(`/locations/${id}/move`, {
+      const response = await api.put(`/locations/${slug}/move`, {
         parent_location_id: newParentId || null,
       });
       return response.data || response;
     } catch (error) {
-      console.error(`Move location ${id} failed:`, error);
+      console.error(`Move location ${slug} failed:`, error);
       throw error;
     }
   },
 
-  getChildLocations: async (id) => {
+  getChildLocations: async (slug) => {
     try {
-      const response = await api.get(`/locations/${id}/children`);
+      const response = await api.get(`/locations/${slug}/children`);
       return response.data || response;
     } catch (error) {
-      console.error(`Get child locations ${id} failed:`, error);
+      console.error(`Get child locations ${slug} failed:`, error);
       throw error;
     }
   },
 
-  getDescendantLocations: async (id) => {
+  getDescendantLocations: async (slug) => {
     try {
-      const response = await api.get(`/locations/${id}/descendants`);
+      const response = await api.get(`/locations/${slug}/descendants`);
       return response.data || response;
     } catch (error) {
-      console.error(`Get descendant locations ${id} failed:`, error);
+      console.error(`Get descendant locations ${slug} failed:`, error);
       throw error;
     }
   },

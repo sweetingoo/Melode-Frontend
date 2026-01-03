@@ -12,12 +12,12 @@ export const departmentsService = {
     }
   },
 
-  // Get department by ID
-  getDepartment: async (id) => {
+  // Get department by slug
+  getDepartment: async (slug) => {
     try {
-      return await api.get(`/departments/${id}`);
+      return await api.get(`/departments/${slug}`);
     } catch (error) {
-      console.error(`Get department ${id} failed:`, error);
+      console.error(`Get department ${slug} failed:`, error);
       throw error;
     }
   },
@@ -33,21 +33,21 @@ export const departmentsService = {
   },
 
   // Update department
-  updateDepartment: async (id, departmentData) => {
+  updateDepartment: async (slug, departmentData) => {
     try {
-      return await api.put(`/departments/${id}`, departmentData);
+      return await api.put(`/departments/${slug}`, departmentData);
     } catch (error) {
-      console.error(`Update department ${id} failed:`, error);
+      console.error(`Update department ${slug} failed:`, error);
       throw error;
     }
   },
 
   // Delete department
-  deleteDepartment: async (id) => {
+  deleteDepartment: async (slug) => {
     try {
-      return await api.delete(`/departments/${id}`);
+      return await api.delete(`/departments/${slug}`);
     } catch (error) {
-      console.error(`Delete department ${id} failed:`, error);
+      console.error(`Delete department ${slug} failed:`, error);
       throw error;
     }
   },

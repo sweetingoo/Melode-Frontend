@@ -82,32 +82,32 @@ export const profileService = {
   },
 
   // Admin endpoints
-  getUserProfile: async (userId) => {
+  getUserProfile: async (userSlug) => {
     try {
-      const response = await api.get(`/profile/${userId}`);
+      const response = await api.get(`/profile/${userSlug}`);
       return response.data || response;
     } catch (error) {
-      console.error(`Get user profile ${userId} failed:`, error);
+      console.error(`Get user profile ${userSlug} failed:`, error);
       throw error;
     }
   },
 
-  getUserStats: async (userId) => {
+  getUserStats: async (userSlug) => {
     try {
-      const response = await api.get(`/profile/${userId}/stats`);
+      const response = await api.get(`/profile/${userSlug}/stats`);
       return response.data || response;
     } catch (error) {
-      console.error(`Get user stats ${userId} failed:`, error);
+      console.error(`Get user stats ${userSlug} failed:`, error);
       throw error;
     }
   },
 
-  reactivateUser: async (userId) => {
+  reactivateUser: async (userSlug) => {
     try {
-      const response = await api.post(`/profile/${userId}/reactivate`);
+      const response = await api.post(`/profile/${userSlug}/reactivate`);
       return response.data || response;
     } catch (error) {
-      console.error(`Reactivate user ${userId} failed:`, error);
+      console.error(`Reactivate user ${userSlug} failed:`, error);
       throw error;
     }
   },
@@ -192,13 +192,13 @@ export const profileService = {
   },
 
   // User Custom Fields endpoints
-  getUserCustomFields: async (userId) => {
+  getUserCustomFields: async (userSlug) => {
     try {
-      if (!userId) {
-        throw new Error("User ID is required for custom fields operations");
+      if (!userSlug) {
+        throw new Error("User slug is required for custom fields operations");
       }
 
-      const response = await api.get(`/settings/entities/user/${userId}/custom-fields`);
+      const response = await api.get(`/data/user/${userSlug}/custom-fields/hierarchy`);
       return response.data || response;
     } catch (error) {
       console.error("Get user custom fields failed:", error);
@@ -206,13 +206,13 @@ export const profileService = {
     }
   },
 
-  getUserCustomFieldsHierarchy: async (userId) => {
+  getUserCustomFieldsHierarchy: async (userSlug) => {
     try {
-      if (!userId) {
-        throw new Error("User ID is required for custom fields operations");
+      if (!userSlug) {
+        throw new Error("User slug is required for custom fields operations");
       }
 
-      const response = await api.get(`/settings/entities/user/${userId}/custom-fields/hierarchy`);
+      const response = await api.get(`/data/user/${userSlug}/custom-fields/hierarchy`);
       return response.data || response;
     } catch (error) {
       console.error("Get user custom fields hierarchy failed:", error);
@@ -220,16 +220,16 @@ export const profileService = {
     }
   },
 
-  updateUserCustomField: async (fieldId, valueData, fileId = null, userId) => {
+  updateUserCustomField: async (fieldSlug, valueData, fileId = null, userSlug) => {
     try {
-      if (!userId) {
-        throw new Error("User ID is required for custom fields operations");
+      if (!userSlug) {
+        throw new Error("User slug is required for custom fields operations");
       }
 
       const payload = { value_data: valueData };
       if (fileId) payload.file_id = fileId;
 
-      const response = await api.put(`/settings/entities/user/${userId}/custom-fields/${fieldId}`, payload);
+      const response = await api.put(`/settings/entities/user/${userSlug}/custom-fields/${fieldSlug}`, payload);
       return response.data || response;
     } catch (error) {
       console.error("Update user custom field failed:", error);
@@ -237,13 +237,13 @@ export const profileService = {
     }
   },
 
-  bulkUpdateUserCustomFields: async (updates, userId) => {
+  bulkUpdateUserCustomFields: async (updates, userSlug) => {
     try {
-      if (!userId) {
-        throw new Error("User ID is required for custom fields operations");
+      if (!userSlug) {
+        throw new Error("User slug is required for custom fields operations");
       }
 
-      const response = await api.put(`/settings/entities/user/${userId}/custom-fields/bulk`, {
+      const response = await api.put(`/settings/entities/user/${userSlug}/custom-fields/bulk`, {
         updates: updates
       });
       return response.data || response;
@@ -253,13 +253,13 @@ export const profileService = {
     }
   },
 
-  addUserGroupEntry: async (groupKey, entryData, sortOrder = 0, userId) => {
+  addUserGroupEntry: async (groupKey, entryData, sortOrder = 0, userSlug) => {
     try {
-      if (!userId) {
-        throw new Error("User ID is required for custom fields operations");
+      if (!userSlug) {
+        throw new Error("User slug is required for custom fields operations");
       }
 
-      const response = await api.post(`/settings/entities/user/${userId}/group-entries`, {
+      const response = await api.post(`/data/user/${userSlug}/group-entries`, {
         group_key: groupKey,
         sort_order: sortOrder,
         entry_data: entryData

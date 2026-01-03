@@ -158,10 +158,10 @@ const MyTasksPage = () => {
     }
   };
 
-  const handleCompleteTask = async (taskId) => {
+  const handleCompleteTask = async (taskSlug) => {
     try {
       await completeTaskMutation.mutateAsync({
-        id: taskId,
+        slug: taskSlug,
         completionData: {
           completion_data: {},
           notes: "",
@@ -436,14 +436,14 @@ const MyTasksPage = () => {
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                               <DropdownMenuItem asChild>
-                                <Link href={`/admin/tasks/${task.id}?from=my-tasks`}>
+                                <Link href={`/admin/tasks/${task.slug || task.id}?from=my-tasks`}>
                                   <Eye className="mr-2 h-4 w-4" />
                                   View Details
                                 </Link>
                               </DropdownMenuItem>
                               {task.status !== "completed" && task.status !== "cancelled" && (
                                 <DropdownMenuItem
-                                  onClick={() => handleCompleteTask(task.id)}
+                                  onClick={() => handleCompleteTask(task.slug || task.id)}
                                   disabled={completeTaskMutation.isPending}
                                 >
                                   <CheckCircle className="mr-2 h-4 w-4" />

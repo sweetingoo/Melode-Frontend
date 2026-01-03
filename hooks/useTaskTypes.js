@@ -37,14 +37,14 @@ export const useTaskTypes = (params = {}) => {
 };
 
 // Get single task type query
-export const useTaskType = (id) => {
+export const useTaskType = (slug) => {
   return useQuery({
-    queryKey: taskTypeKeys.detail(id),
+    queryKey: taskTypeKeys.detail(slug),
     queryFn: async () => {
-      const response = await taskTypesService.getTaskType(id);
+      const response = await taskTypesService.getTaskType(slug);
       return response.data;
     },
-    enabled: !!id,
+    enabled: !!slug,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 };
@@ -84,12 +84,12 @@ export const useUpdateTaskType = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, taskTypeData }) => {
-      const response = await taskTypesService.updateTaskType(id, taskTypeData);
+    mutationFn: async ({ slug, taskTypeData }) => {
+      const response = await taskTypesService.updateTaskType(slug, taskTypeData);
       return response.data;
     },
     onSuccess: (data, variables) => {
-      queryClient.setQueryData(taskTypeKeys.detail(variables.id), data);
+      queryClient.setQueryData(taskTypeKeys.detail(variables.slug), data);
       queryClient.invalidateQueries({ queryKey: taskTypeKeys.all });
       toast.success("Task type updated successfully", {
         description: `Task type "${data.display_name}" has been updated.`,
@@ -115,12 +115,12 @@ export const useDeleteTaskType = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (id) => {
-      await taskTypesService.deleteTaskType(id);
-      return id;
+    mutationFn: async (slug) => {
+      await taskTypesService.deleteTaskType(slug);
+      return slug;
     },
-    onSuccess: (id) => {
-      queryClient.removeQueries({ queryKey: taskTypeKeys.detail(id) });
+    onSuccess: (slug) => {
+      queryClient.removeQueries({ queryKey: taskTypeKeys.detail(slug) });
       queryClient.invalidateQueries({ queryKey: taskTypeKeys.all });
       toast.success("Task type deleted successfully", {
         description: "The task type has been removed.",

@@ -34,14 +34,14 @@ export const useMessages = (params = {}, options = {}) => {
 };
 
 // Get single message query
-export const useMessage = (id, options = {}) => {
+export const useMessage = (slug, options = {}) => {
   return useQuery({
-    queryKey: messageKeys.detail(id),
+    queryKey: messageKeys.detail(slug),
     queryFn: async () => {
-      const response = await messagesService.getMessage(id);
+      const response = await messagesService.getMessage(slug);
       return response.data;
     },
-    enabled: !!id,
+    enabled: !!slug,
     staleTime: 5 * 60 * 1000, // 5 minutes
     ...options,
   });
@@ -228,8 +228,8 @@ export const useMarkMessageAsRead = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, readVia = "web" }) => {
-      const response = await messagesService.markAsRead(id, readVia);
+    mutationFn: async ({ slug, readVia = "web" }) => {
+      const response = await messagesService.markAsRead(slug, readVia);
       return response.data;
     },
     onSuccess: (data, variables) => {
@@ -237,7 +237,7 @@ export const useMarkMessageAsRead = () => {
       console.log("Message marked as read:", data);
       
       // Update the message in cache with the receipt data
-      queryClient.setQueryData(messageKeys.detail(variables.id), (oldData) => {
+      queryClient.setQueryData(messageKeys.detail(variables.slug), (oldData) => {
         if (!oldData) return oldData;
         
         // Update or add receipt for current user
@@ -276,16 +276,16 @@ export const useAcknowledgeMessage = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, acknowledgementNote = "" }) => {
+    mutationFn: async ({ slug, acknowledgementNote = "" }) => {
       const response = await messagesService.acknowledgeMessage(
-        id,
+        slug,
         acknowledgementNote
       );
       return response.data;
     },
     onSuccess: (data, variables) => {
       // Update the message in cache
-      queryClient.setQueryData(messageKeys.detail(variables.id), (oldData) => {
+      queryClient.setQueryData(messageKeys.detail(variables.slug), (oldData) => {
         if (!oldData) return oldData;
         return {
           ...oldData,
@@ -324,9 +324,9 @@ export const useAcknowledgeMessageWithStatus = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, acknowledgementStatus, acknowledgementNote = "" }) => {
+    mutationFn: async ({ slug, acknowledgementStatus, acknowledgementNote = "" }) => {
       const response = await messagesService.acknowledgeMessageWithStatus(
-        id,
+        slug,
         acknowledgementStatus,
         acknowledgementNote
       );
@@ -334,7 +334,7 @@ export const useAcknowledgeMessageWithStatus = () => {
     },
     onSuccess: (data, variables) => {
       // Update the message in cache
-      queryClient.setQueryData(messageKeys.detail(variables.id), (oldData) => {
+      queryClient.setQueryData(messageKeys.detail(variables.slug), (oldData) => {
         if (!oldData) return oldData;
         return {
           ...oldData,
@@ -416,42 +416,42 @@ export const useConversations = (params = {}, options = {}) => {
 };
 
 // Get conversation thread query (legacy - use useConversationMessages instead)
-export const useConversationThread = (id, options = {}) => {
+export const useConversationThread = (slug, options = {}) => {
   return useQuery({
-    queryKey: messageKeys.conversationThread(id),
+    queryKey: messageKeys.conversationThread(slug),
     queryFn: async () => {
-      const response = await messagesService.getConversationThread(id);
+      const response = await messagesService.getConversationThread(slug);
       return response.data;
     },
-    enabled: !!id,
+    enabled: !!slug,
     staleTime: 5 * 60 * 1000, // 5 minutes
     ...options,
   });
 };
 
 // Get messages in a conversation query (new endpoint)
-export const useConversationMessages = (conversationId, params = {}, options = {}) => {
+export const useConversationMessages = (conversationSlug, params = {}, options = {}) => {
   return useQuery({
-    queryKey: messageKeys.conversationMessages(conversationId, params),
+    queryKey: messageKeys.conversationMessages(conversationSlug, params),
     queryFn: async () => {
-      const response = await messagesService.getConversationMessages(conversationId, params);
+      const response = await messagesService.getConversationMessages(conversationSlug, params);
       return response.data;
     },
-    enabled: !!conversationId,
+    enabled: !!conversationSlug,
     staleTime: 0, // Always consider stale so SSE updates trigger refetch
     ...options,
   });
 };
 
 // Get conversation details query
-export const useConversation = (id, options = {}) => {
+export const useConversation = (slug, options = {}) => {
   return useQuery({
-    queryKey: messageKeys.conversationDetail(id),
+    queryKey: messageKeys.conversationDetail(slug),
     queryFn: async () => {
-      const response = await messagesService.getConversation(id);
+      const response = await messagesService.getConversation(slug);
       return response.data;
     },
-    enabled: !!id,
+    enabled: !!slug,
     staleTime: 5 * 60 * 1000, // 5 minutes
     ...options,
   });
@@ -462,17 +462,17 @@ export const useAddParticipant = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ conversationId, userId }) => {
-      const response = await messagesService.addParticipant(conversationId, userId);
+    mutationFn: async ({ conversationSlug, userId }) => {
+      const response = await messagesService.addParticipant(conversationSlug, userId);
       return response.data;
     },
     onSuccess: (data, variables) => {
-      const { conversationId } = variables;
+      const { conversationSlug } = variables;
       
       // If the API returns the updated conversation, update the cache directly
       if (data && data.participant_user_ids) {
         queryClient.setQueryData(
-          messageKeys.conversationDetail(conversationId),
+          messageKeys.conversationDetail(conversationSlug),
           (oldData) => {
             if (!oldData) return data;
             return { ...oldData, ...data };
@@ -481,7 +481,7 @@ export const useAddParticipant = () => {
       }
       
       // Invalidate to ensure we have the latest data
-      queryClient.invalidateQueries({ queryKey: messageKeys.conversationDetail(conversationId) });
+      queryClient.invalidateQueries({ queryKey: messageKeys.conversationDetail(conversationSlug) });
       queryClient.invalidateQueries({ queryKey: messageKeys.conversationList() });
       
       toast.success("Participant added", {
@@ -517,16 +517,16 @@ export const useRemoveParticipant = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ conversationId, userId }) => {
-      const response = await messagesService.removeParticipant(conversationId, userId);
+    mutationFn: async ({ conversationSlug, userSlug }) => {
+      const response = await messagesService.removeParticipant(conversationSlug, userSlug);
       return response.data;
     },
     onSuccess: (data, variables) => {
-      const { conversationId, userId } = variables;
+      const { conversationSlug, userSlug } = variables;
       
       // Optimistically update the conversation cache
       queryClient.setQueryData(
-        messageKeys.conversationDetail(conversationId),
+        messageKeys.conversationDetail(conversationSlug),
         (oldData) => {
           if (!oldData) return oldData;
           
@@ -536,11 +536,11 @@ export const useRemoveParticipant = () => {
           }
           
           // Otherwise, remove the user from participant_user_ids
+          // Note: userSlug is used in path, but participant_user_ids still uses integer IDs
           const updatedParticipantIds = (oldData.participant_user_ids || []).filter(
             (id) => {
-              const normalizedId = typeof id === 'string' ? parseInt(id, 10) : id;
-              const normalizedUserId = typeof userId === 'string' ? parseInt(userId, 10) : userId;
-              return normalizedId !== normalizedUserId;
+              // We can't directly compare slug to ID, so we'll rely on backend response
+              return true; // Will be updated by backend response
             }
           );
           
@@ -552,7 +552,7 @@ export const useRemoveParticipant = () => {
       );
       
       // Invalidate to ensure we have the latest data
-      queryClient.invalidateQueries({ queryKey: messageKeys.conversationDetail(conversationId) });
+      queryClient.invalidateQueries({ queryKey: messageKeys.conversationDetail(conversationSlug) });
       queryClient.invalidateQueries({ queryKey: messageKeys.conversationList() });
       
       toast.success("Participant removed", {

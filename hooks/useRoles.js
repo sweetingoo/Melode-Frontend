@@ -33,14 +33,14 @@ export const useRoles = (params = {}) => {
 };
 
 // Get single role query
-export const useRole = (id) => {
+export const useRole = (slug) => {
   return useQuery({
-    queryKey: roleKeys.detail(id),
+    queryKey: roleKeys.detail(slug),
     queryFn: async () => {
-      const response = await rolesService.getRole(id);
+      const response = await rolesService.getRole(slug);
       return response.data;
     },
-    enabled: !!id,
+    enabled: !!slug,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 };
@@ -58,53 +58,53 @@ export const usePermissions = (params = {}) => {
 };
 
 // Get single permission query
-export const usePermission = (id) => {
+export const usePermission = (slug) => {
   return useQuery({
-    queryKey: roleKeys.permissionDetail(id),
+    queryKey: roleKeys.permissionDetail(slug),
     queryFn: async () => {
-      const response = await rolesService.getPermission(id);
+      const response = await rolesService.getPermission(slug);
       return response.data;
     },
-    enabled: !!id,
+    enabled: !!slug,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 };
 
 // Get role permissions query
-export const useRolePermissions = (roleId) => {
+export const useRolePermissions = (roleSlug) => {
   return useQuery({
-    queryKey: roleKeys.rolePermissions(roleId),
+    queryKey: roleKeys.rolePermissions(roleSlug),
     queryFn: async () => {
-      const response = await rolesService.getRolePermissions(roleId);
+      const response = await rolesService.getRolePermissions(roleSlug);
       return response.data;
     },
-    enabled: !!roleId,
+    enabled: !!roleSlug,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 };
 
 // Get user roles query
-export const useUserRoles = (userId) => {
+export const useUserRoles = (userSlug) => {
   return useQuery({
-    queryKey: roleKeys.userRoles(userId),
+    queryKey: roleKeys.userRoles(userSlug),
     queryFn: async () => {
-      const response = await rolesService.getUserRoles(userId);
+      const response = await rolesService.getUserRoles(userSlug);
       return response.data;
     },
-    enabled: !!userId,
+    enabled: !!userSlug,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 };
 
 // Get role users query
-export const useRoleUsers = (roleId) => {
+export const useRoleUsers = (roleSlug) => {
   return useQuery({
-    queryKey: roleKeys.roleUsers(roleId),
+    queryKey: roleKeys.roleUsers(roleSlug),
     queryFn: async () => {
-      const response = await rolesService.getRoleUsers(roleId);
+      const response = await rolesService.getRoleUsers(roleSlug);
       return response.data;
     },
-    enabled: !!roleId,
+    enabled: !!roleSlug,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 };
@@ -151,14 +151,14 @@ export const useUpdateRole = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, roleData }) => {
-      const response = await rolesService.updateRole(id, roleData);
+    mutationFn: async ({ slug, roleData }) => {
+      const response = await rolesService.updateRole(slug, roleData);
       return response.data;
     },
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: roleKeys.lists() });
       queryClient.invalidateQueries({
-        queryKey: roleKeys.detail(variables.id),
+        queryKey: roleKeys.detail(variables.slug),
       });
       toast.success("Role updated successfully", {
         description: "The role has been updated.",
@@ -179,8 +179,8 @@ export const useDeleteRole = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (id) => {
-      const response = await rolesService.deleteRole(id);
+    mutationFn: async (slug) => {
+      const response = await rolesService.deleteRole(slug);
       return response.data;
     },
     onSuccess: (data, variables) => {
@@ -241,9 +241,9 @@ export const useAssignPermissionsToRole = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ roleId, permissionIds }) => {
+    mutationFn: async ({ roleSlug, permissionIds }) => {
       const response = await rolesService.assignPermissions(
-        roleId,
+        roleSlug,
         permissionIds
       );
       return response.data;
@@ -251,10 +251,10 @@ export const useAssignPermissionsToRole = () => {
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: roleKeys.lists() });
       queryClient.invalidateQueries({
-        queryKey: roleKeys.detail(variables.roleId),
+        queryKey: roleKeys.detail(variables.roleSlug),
       });
       queryClient.invalidateQueries({
-        queryKey: roleKeys.rolePermissions(variables.roleId),
+        queryKey: roleKeys.rolePermissions(variables.roleSlug),
       });
       toast.success("Permissions assigned successfully", {
         description: "The permissions have been assigned to the role.",
@@ -275,9 +275,9 @@ export const useRemovePermissionsFromRole = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ roleId, permissionIds }) => {
+    mutationFn: async ({ roleSlug, permissionIds }) => {
       const response = await rolesService.removePermissions(
-        roleId,
+        roleSlug,
         permissionIds
       );
       return response.data;
@@ -285,10 +285,10 @@ export const useRemovePermissionsFromRole = () => {
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: roleKeys.lists() });
       queryClient.invalidateQueries({
-        queryKey: roleKeys.detail(variables.roleId),
+        queryKey: roleKeys.detail(variables.roleSlug),
       });
       queryClient.invalidateQueries({
-        queryKey: roleKeys.rolePermissions(variables.roleId),
+        queryKey: roleKeys.rolePermissions(variables.roleSlug),
       });
       toast.success("Permissions removed successfully", {
         description: "The permissions have been removed from the role.",

@@ -21,11 +21,11 @@ import { generateFormPDFFromData } from "@/utils/pdf-generator";
 const FormDetailPage = () => {
   const params = useParams();
   const router = useRouter();
-  const formId = params.id;
+  const formSlug = params.id || params.slug;
   const [copied, setCopied] = useState(false);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
-  const { data: form, isLoading, error } = useForm(formId);
+  const { data: form, isLoading, error } = useForm(formSlug);
   const { data: rolesData } = useRoles();
   const { data: usersResponse } = useUsers();
   const { data: activeFormTypes = [] } = useActiveFormTypes();
@@ -205,14 +205,14 @@ const FormDetailPage = () => {
               </>
             )}
           </Button>
-          <Link href={`/admin/forms/${formId}/submit`} className="w-full sm:w-auto">
+          <Link href={`/admin/forms/${formSlug}/submit`} className="w-full sm:w-auto">
             <Button size="sm" className="w-full sm:w-auto">
               <FileText className="mr-2 h-4 w-4" />
               <span className="hidden sm:inline">Submit Form</span>
               <span className="sm:hidden">Submit</span>
             </Button>
           </Link>
-          <Link href={`/admin/forms/${formId}/edit`} className="w-full sm:w-auto">
+          <Link href={`/admin/forms/${formSlug}/edit`} className="w-full sm:w-auto">
             <Button variant="outline" size="sm" className="w-full sm:w-auto">
               <Edit className="mr-2 h-4 w-4" />
               Edit
@@ -455,19 +455,19 @@ const FormDetailPage = () => {
               <CardTitle>Quick Actions</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
-              <Link href={`/admin/forms/${formId}/submit`} className="block">
+              <Link href={`/admin/forms/${formSlug}/submit`} className="block">
                 <Button variant="outline" className="w-full justify-start">
                   <FileText className="mr-2 h-4 w-4" />
                   Submit Form
                 </Button>
               </Link>
-              <Link href={`/admin/forms/${formId}/submissions`} className="block">
+              <Link href={`/admin/forms/${formSlug}/submissions`} className="block">
                 <Button variant="outline" className="w-full justify-start">
                   <FileText className="mr-2 h-4 w-4" />
                   View Submissions
                 </Button>
               </Link>
-              <Link href={`/admin/forms/${formId}/edit`} className="block">
+              <Link href={`/admin/forms/${formSlug}/edit`} className="block">
                 <Button variant="outline" className="w-full justify-start">
                   <Edit className="mr-2 h-4 w-4" />
                   Edit Form
@@ -545,7 +545,8 @@ const FormDetailPage = () => {
       {/* Activity History */}
       <ResourceAuditLogs
         resource="form"
-        resourceId={formId}
+        resourceSlug={form?.slug}
+        resourceId={form?.id}
         title="Activity History"
       />
     </div>

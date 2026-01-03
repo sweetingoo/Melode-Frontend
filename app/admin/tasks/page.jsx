@@ -308,7 +308,8 @@ const TasksPage = () => {
   const selectedRoleId = taskFormData.assigned_to_role_id
     ? parseInt(taskFormData.assigned_to_role_id)
     : null;
-  const { data: roleUsersData } = useRoleUsers(selectedRoleId);
+  const selectedRole = rolesData?.find(r => r.id === selectedRoleId || r.slug === selectedRoleId);
+  const { data: roleUsersData } = useRoleUsers(selectedRole?.slug || selectedRoleId);
 
   // Permission checking
   const currentUserPermissions = currentUserData?.permissions || [];
@@ -1438,7 +1439,7 @@ const TasksPage = () => {
                     <div className="space-y-2">
                       <div className="flex items-start justify-between gap-2">
                         <Link
-                          href={`/admin/tasks/${task.id}`}
+                          href={`/admin/tasks/${task.slug || task.id}`}
                           className="font-medium hover:underline flex-1"
                         >
                           {task.title}
@@ -1498,7 +1499,7 @@ const TasksPage = () => {
                                     <AlertDialogFooter>
                                       <AlertDialogCancel>Cancel</AlertDialogCancel>
                                       <AlertDialogAction
-                                        onClick={() => handleDeleteTask(task.id)}
+                                        onClick={() => handleDeleteTask(task.slug || task.id)}
                                         className="bg-red-600 hover:bg-red-700"
                                       >
                                         Delete
@@ -1555,7 +1556,7 @@ const TasksPage = () => {
                               const project = projects.find((p) => p.id === task.project_id);
                               return project ? (
                                 <Link
-                                  href={`/admin/projects/${project.id}`}
+                                  href={`/admin/projects/${project.slug || project.id}`}
                                   className="inline-flex items-center gap-1 hover:underline"
                                 >
                                   <FolderKanban className="h-3 w-3" />
@@ -1675,7 +1676,7 @@ const TasksPage = () => {
                       <TableCell className="font-medium w-[20%]">
                         <div className="flex items-center gap-2 flex-wrap">
                           <Link
-                            href={`/admin/tasks/${task.id}`}
+                            href={`/admin/tasks/${task.slug || task.id}`}
                             className="hover:underline truncate max-w-full"
                           >
                             {task.title}
@@ -1718,7 +1719,7 @@ const TasksPage = () => {
                             const project = projects.find((p) => p.id === task.project_id);
                             return project ? (
                               <Link
-                                href={`/admin/projects/${project.id}`}
+                                href={`/admin/projects/${project.slug || project.id}`}
                                 className="inline-flex items-center gap-1 hover:underline"
                               >
                                 <FolderKanban className="h-3 w-3" />
@@ -1857,7 +1858,7 @@ const TasksPage = () => {
                                     <AlertDialogFooter>
                                       <AlertDialogCancel>Cancel</AlertDialogCancel>
                                       <AlertDialogAction
-                                        onClick={() => handleDeleteTask(task.id)}
+                                        onClick={() => handleDeleteTask(task.slug || task.id)}
                                         className="bg-red-600 hover:bg-red-700"
                                       >
                                         Delete

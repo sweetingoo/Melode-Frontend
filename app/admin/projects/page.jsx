@@ -189,9 +189,9 @@ const ProjectsPage = () => {
     }
   };
 
-  const handleDeleteProject = async (projectId, force = false) => {
+  const handleDeleteProject = async (projectSlug, force = false) => {
     try {
-      await deleteProjectMutation.mutateAsync({ id: projectId, force });
+      await deleteProjectMutation.mutateAsync({ slug: projectSlug, force });
     } catch (error) {
       console.error("Failed to delete project:", error);
     }
@@ -292,7 +292,7 @@ const ProjectsPage = () => {
                       <TableRow key={project.id}>
                         <TableCell>
                           <Link
-                            href={`/admin/projects/${project.id}`}
+                            href={`/admin/projects/${project.slug || project.id}`}
                             className="font-medium hover:underline"
                           >
                             {project.name}
@@ -336,7 +336,7 @@ const ProjectsPage = () => {
                               <DropdownMenuLabel>Actions</DropdownMenuLabel>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
-                                onClick={() => router.push(`/admin/projects/${project.id}`)}
+                                onClick={() => router.push(`/admin/projects/${project.slug || project.id}`)}
                               >
                                 View Details
                               </DropdownMenuItem>
@@ -383,13 +383,13 @@ const ProjectsPage = () => {
                                       <AlertDialogFooter className="flex-col sm:flex-row gap-2">
                                         <AlertDialogCancel>Cancel</AlertDialogCancel>
                                         <AlertDialogAction
-                                          onClick={() => handleDeleteProject(project.id, false)}
+                                          onClick={() => handleDeleteProject(project.slug || project.id, false)}
                                           className="bg-orange-600 hover:bg-orange-700 text-white border-orange-600"
                                         >
                                           Soft Delete
                                         </AlertDialogAction>
                                         <AlertDialogAction
-                                          onClick={() => handleDeleteProject(project.id, true)}
+                                          onClick={() => handleDeleteProject(project.slug || project.id, true)}
                                           className="bg-red-600 hover:bg-red-700 text-white border-red-600"
                                         >
                                           Hard Delete (Permanent)

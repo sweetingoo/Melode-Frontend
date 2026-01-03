@@ -35,14 +35,14 @@ export const useDocuments = (params = {}, options = {}) => {
 };
 
 // Get single document query
-export const useDocument = (id, options = {}) => {
+export const useDocument = (slug, options = {}) => {
   return useQuery({
-    queryKey: documentKeys.detail(id),
+    queryKey: documentKeys.detail(slug),
     queryFn: async () => {
-      const response = await documentsService.getDocument(id);
+      const response = await documentsService.getDocument(slug);
       return response.data;
     },
-    enabled: !!id,
+    enabled: !!slug,
     staleTime: 5 * 60 * 1000, // 5 minutes
     ...options,
   });
@@ -70,28 +70,28 @@ export const useSearchDocuments = (params = {}, options = {}) => {
 };
 
 // Get document attachments query
-export const useDocumentAttachments = (id, options = {}) => {
+export const useDocumentAttachments = (slug, options = {}) => {
   return useQuery({
-    queryKey: documentKeys.attachments(id),
+    queryKey: documentKeys.attachments(slug),
     queryFn: async () => {
-      const response = await documentsService.getDocumentAttachments(id);
+      const response = await documentsService.getDocumentAttachments(slug);
       return response.data;
     },
-    enabled: !!id,
+    enabled: !!slug,
     staleTime: 5 * 60 * 1000, // 5 minutes
     ...options,
   });
 };
 
 // Get document audit logs query
-export const useDocumentAuditLogs = (id, params = {}, options = {}) => {
+export const useDocumentAuditLogs = (slug, params = {}, options = {}) => {
   return useQuery({
-    queryKey: documentKeys.auditLogs(id, params),
+    queryKey: documentKeys.auditLogs(slug, params),
     queryFn: async () => {
-      const response = await documentsService.getDocumentAuditLogs(id, params);
+      const response = await documentsService.getDocumentAuditLogs(slug, params);
       return response.data;
     },
-    enabled: !!id,
+    enabled: !!slug,
     staleTime: 30 * 1000, // 30 seconds
     ...options,
   });
@@ -132,13 +132,13 @@ export const useUpdateDocument = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, documentData }) => {
-      const response = await documentsService.updateDocument(id, documentData);
+    mutationFn: async ({ slug, documentData }) => {
+      const response = await documentsService.updateDocument(slug, documentData);
       return response.data;
     },
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: documentKeys.lists() });
-      queryClient.invalidateQueries({ queryKey: documentKeys.detail(variables.id) });
+      queryClient.invalidateQueries({ queryKey: documentKeys.detail(variables.slug) });
       toast.success("Document updated successfully", {
         description: `Document "${data.title || 'Untitled'}" has been updated.`,
       });
@@ -163,8 +163,8 @@ export const useDeleteDocument = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (id) => {
-      const response = await documentsService.deleteDocument(id);
+    mutationFn: async (slug) => {
+      const response = await documentsService.deleteDocument(slug);
       return response.data;
     },
     onSuccess: (data, variables) => {
@@ -194,12 +194,12 @@ export const useShareDocument = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, userIds }) => {
-      const response = await documentsService.shareDocument(id, userIds);
+    mutationFn: async ({ slug, userIds }) => {
+      const response = await documentsService.shareDocument(slug, userIds);
       return response.data;
     },
     onSuccess: (data, variables) => {
-      queryClient.invalidateQueries({ queryKey: documentKeys.detail(variables.id) });
+      queryClient.invalidateQueries({ queryKey: documentKeys.detail(variables.slug) });
       toast.success("Document shared successfully", {
         description: "The document has been shared with selected users.",
       });
@@ -224,12 +224,12 @@ export const useUnshareDocument = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, userIds }) => {
-      const response = await documentsService.unshareDocument(id, userIds);
+    mutationFn: async ({ slug, userIds }) => {
+      const response = await documentsService.unshareDocument(slug, userIds);
       return response.data;
     },
     onSuccess: (data, variables) => {
-      queryClient.invalidateQueries({ queryKey: documentKeys.detail(variables.id) });
+      queryClient.invalidateQueries({ queryKey: documentKeys.detail(variables.slug) });
       toast.success("Document unshared successfully", {
         description: "The document has been unshared with selected users.",
       });

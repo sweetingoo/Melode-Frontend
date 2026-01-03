@@ -12,12 +12,12 @@ export const documentCategoriesService = {
     }
   },
 
-  // Get category by ID
-  getCategory: async (id) => {
+  // Get category by slug
+  getCategory: async (slug) => {
     try {
-      return await api.get(`/documents/categories/${id}`);
+      return await api.get(`/documents/categories/${slug}`);
     } catch (error) {
-      console.error(`Get category ${id} failed:`, error);
+      console.error(`Get category ${slug} failed:`, error);
       throw error;
     }
   },
@@ -33,41 +33,41 @@ export const documentCategoriesService = {
   },
 
   // Update category
-  updateCategory: async (id, categoryData) => {
+  updateCategory: async (slug, categoryData) => {
     try {
-      return await api.put(`/documents/categories/${id}`, categoryData);
+      return await api.put(`/documents/categories/${slug}`, categoryData);
     } catch (error) {
-      console.error(`Update category ${id} failed:`, error);
+      console.error(`Update category ${slug} failed:`, error);
       throw error;
     }
   },
 
   // Delete category
-  deleteCategory: async (id) => {
+  deleteCategory: async (slug) => {
     try {
-      return await api.delete(`/documents/categories/${id}`);
+      return await api.delete(`/documents/categories/${slug}`);
     } catch (error) {
-      console.error(`Delete category ${id} failed:`, error);
+      console.error(`Delete category ${slug} failed:`, error);
       throw error;
     }
   },
 
   // Get category permissions
-  getCategoryPermissions: async (id) => {
+  getCategoryPermissions: async (slug) => {
     try {
-      return await api.get(`/documents/categories/${id}/permissions`);
+      return await api.get(`/documents/categories/${slug}/permissions`);
     } catch (error) {
-      console.error(`Get category ${id} permissions failed:`, error);
+      console.error(`Get category ${slug} permissions failed:`, error);
       throw error;
     }
   },
 
   // Update category permissions
-  updateCategoryPermissions: async (id, permissions) => {
+  updateCategoryPermissions: async (slug, permissions) => {
     try {
-      return await api.put(`/documents/categories/${id}/permissions`, permissions);
+      return await api.put(`/documents/categories/${slug}/permissions`, permissions);
     } catch (error) {
-      console.error(`Update category ${id} permissions failed:`, error);
+      console.error(`Update category ${slug} permissions failed:`, error);
       throw error;
     }
   },

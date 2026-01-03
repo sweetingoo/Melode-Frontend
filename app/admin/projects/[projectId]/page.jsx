@@ -98,7 +98,7 @@ import { useForms } from "@/hooks/useForms";
 const ProjectDetailPage = () => {
   const params = useParams();
   const router = useRouter();
-  const projectId = params.projectId;
+  const projectSlug = params.projectId || params.slug;
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isAddTaskModalOpen, setIsAddTaskModalOpen] = useState(false);
@@ -155,15 +155,15 @@ const ProjectDetailPage = () => {
   const canRemoveMember = hasPermission("project:remove_member");
 
   // API hooks
-  const { data: project, isLoading, error } = useProject(projectId);
-  const { data: projectTasksResponse, isLoading: tasksLoading } = useProjectTasks(projectId, {
+  const { data: project, isLoading, error } = useProject(projectSlug);
+  const { data: projectTasksResponse, isLoading: tasksLoading } = useProjectTasks(projectSlug, {
     page: 1,
     per_page: 100,
   });
   // Note: We're not using useTasks with project_id filter because it may not be supported
-  // Instead, we rely solely on the projectTasksResponse from the /projects/{id}/tasks endpoint
+  // Instead, we rely solely on the projectTasksResponse from the /projects/{slug}/tasks endpoint
   // This avoids network errors from unsupported filter parameters
-  const { data: membersResponse, isLoading: membersLoading } = useProjectMembers(projectId);
+  const { data: membersResponse, isLoading: membersLoading } = useProjectMembers(projectSlug);
   // Fetch tasks (without project filter) for the "Add Existing Task" modal
   // Load in smaller batches with pagination
   const { data: allTasksResponse, error: allTasksError, isLoading: allTasksLoading } = useTasks({ 
@@ -320,7 +320,8 @@ const ProjectDetailPage = () => {
   const selectedRoleId = taskFormData.assigned_to_role_id
     ? parseInt(taskFormData.assigned_to_role_id)
     : null;
-  const { data: roleUsersData } = useRoleUsers(selectedRoleId);
+  const selectedRole = roles.find(r => r.id === selectedRoleId || r.slug === selectedRoleId);
+  const { data: roleUsersData } = useRoleUsers(selectedRole?.slug || selectedRoleId);
   
   // Extract role users
   let roleUsers = [];
@@ -348,7 +349,7 @@ const ProjectDetailPage = () => {
       return [];
     }
     
-    const projectIdNum = parseInt(projectId);
+    const projectIdNum = project?.id ? parseInt(project.id) : null;
     const projectTaskIds = new Set(
       Array.isArray(projectTasks) ? projectTasks.map(t => t.id) : []
     );
@@ -367,7 +368,7 @@ const ProjectDetailPage = () => {
       }
       return true;
     });
-  }, [accumulatedTasks, allTasks, projectTasks, projectId]);
+  }, [accumulatedTasks, allTasks, projectTasks, project?.id]);
   
   // Get pagination info from response
   const tasksPagination = allTasksResponse?.pagination || allTasksResponse || {};
@@ -400,7 +401,7 @@ const ProjectDetailPage = () => {
 
     try {
       await updateProjectMutation.mutateAsync({
-        id: projectId,
+        slug: projectSlug,
         projectData: {
           name: projectFormData.name.trim(),
           description: projectFormData.description?.trim() || "",
@@ -414,7 +415,7 @@ const ProjectDetailPage = () => {
 
   const handleDeleteProject = async (force = false) => {
     try {
-      await deleteProjectMutation.mutateAsync({ id: projectId, force });
+      await deleteProjectMutation.mutateAsync({ slug: projectSlug, force });
       router.push("/admin/projects");
     } catch (error) {
       console.error("Failed to delete project:", error);
@@ -425,13 +426,14 @@ const ProjectDetailPage = () => {
     if (!selectedTaskId) return;
 
     try {
+      const selectedTask = allTasks.find(t => t.id === parseInt(selectedTaskId) || t.slug === selectedTaskId);
       await addTaskMutation.mutateAsync({
-        projectId,
-        taskId: parseInt(selectedTaskId),
+        projectSlug: projectSlug,
+        taskSlug: selectedTask?.slug || selectedTaskId,
       });
       // Invalidate queries to refresh the project tasks list
-      queryClient.invalidateQueries({ queryKey: projectKeys.tasks(projectId) });
-      queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) });
+      queryClient.invalidateQueries({ queryKey: projectKeys.tasks(projectSlug) });
+      queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectSlug) });
       queryClient.invalidateQueries({ queryKey: ["tasks"] }); // Also refresh all tasks
       setIsAddTaskModalOpen(false);
       setSelectedTaskId("");
@@ -442,18 +444,18 @@ const ProjectDetailPage = () => {
     }
   };
 
-  const handleRemoveTask = async (taskId) => {
+  const handleRemoveTask = async (taskSlug) => {
     try {
       await removeTaskMutation.mutateAsync({
-        projectId,
-        taskId,
+        projectSlug: projectSlug,
+        taskSlug: taskSlug,
       });
       // Invalidate queries to refresh the project tasks list
       queryClient.invalidateQueries({ 
-        queryKey: [...projectKeys.all, "tasks", projectId],
+        queryKey: [...projectKeys.all, "tasks", projectSlug],
         exact: false 
       });
-      queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) });
+      queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectSlug) });
       queryClient.invalidateQueries({ queryKey: ["tasks"] }); // Also refresh all tasks
     } catch (error) {
       console.error("Failed to remove task:", error);
@@ -466,9 +468,10 @@ const ProjectDetailPage = () => {
     try {
       // Add all selected members
       for (const userId of selectedMemberUserIds) {
+        const user = users.find(u => u.id === (typeof userId === 'number' ? userId : parseInt(userId)) || u.slug === userId);
         await addMemberMutation.mutateAsync({
-          projectId,
-          userId: typeof userId === 'number' ? userId : parseInt(userId),
+          projectSlug: projectSlug,
+          userId: typeof userId === 'number' ? userId : parseInt(userId), // Still use userId in body per API
         });
       }
       setIsAddMemberModalOpen(false);
@@ -478,11 +481,11 @@ const ProjectDetailPage = () => {
     }
   };
 
-  const handleRemoveMember = async (userId) => {
+  const handleRemoveMember = async (userSlug) => {
     try {
       await removeMemberMutation.mutateAsync({
-        projectId,
-        userId,
+        projectSlug: projectSlug,
+        userSlug: userSlug,
       });
     } catch (error) {
       console.error("Failed to remove member:", error);
@@ -564,7 +567,7 @@ const ProjectDetailPage = () => {
       assigned_to_asset_id: "",
       form_id: "",
       form_submission_id: "",
-      project_id: projectId, // Always set to current project
+      project_id: project?.id, // Always set to current project
     });
     setSelectedUserIds([]);
     setDueDate(null);
@@ -591,7 +594,7 @@ const ProjectDetailPage = () => {
         project_id: projectId, // Ensure project_id is always set to current project
       }));
     }
-  }, [isCreateTaskModalOpen, projectId]);
+  }, [isCreateTaskModalOpen, project?.id]);
 
   const handleCreateTask = async () => {
     // Validate form
@@ -604,7 +607,7 @@ const ProjectDetailPage = () => {
         title: taskFormData.title.trim(),
         task_type: taskFormData.task_type,
         status: taskFormData.status || "pending",
-        project_id: parseInt(projectId), // Always set to current project
+        project_id: project?.id ? parseInt(project.id) : undefined, // Always set to current project
       };
 
       // Only include optional fields if they have valid values
@@ -721,7 +724,7 @@ const ProjectDetailPage = () => {
         queryKey: [...projectKeys.all, "tasks", projectId],
         exact: false 
       });
-      queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) });
+      queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectSlug) });
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
       setIsCreateTaskModalOpen(false);
       resetTaskForm();
@@ -965,7 +968,7 @@ const ProjectDetailPage = () => {
                         <TableRow key={task.id}>
                           <TableCell>
                             <Link
-                              href={`/admin/tasks/${task.id}`}
+                              href={`/admin/tasks/${task.slug || task.id}`}
                               className="font-medium hover:underline"
                             >
                               {task.title}
@@ -999,7 +1002,7 @@ const ProjectDetailPage = () => {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => handleRemoveTask(task.id)}
+                                onClick={() => handleRemoveTask(task.slug || task.id)}
                               >
                                 <X className="h-4 w-4" />
                               </Button>
@@ -1088,7 +1091,7 @@ const ProjectDetailPage = () => {
                                   variant="ghost"
                                   size="sm"
                                   onClick={() =>
-                                    handleRemoveMember(member.user_id || member.id)
+                                    handleRemoveMember(member.user?.slug || member.user_slug || member.slug || member.user_id || member.id)
                                   }
                                 >
                                   <X className="h-4 w-4" />

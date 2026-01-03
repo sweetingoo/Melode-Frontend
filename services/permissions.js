@@ -29,12 +29,12 @@ export const permissionsService = {
     }
   },
 
-  // Get permission by ID
-  getPermission: async (id) => {
+  // Get permission by slug
+  getPermission: async (slug) => {
     try {
-      return await api.get(`/permissions/${id}`);
+      return await api.get(`/permissions/${slug}`);
     } catch (error) {
-      console.error(`Get permission ${id} failed:`, error);
+      console.error(`Get permission ${slug} failed:`, error);
       throw error;
     }
   },
@@ -50,21 +50,21 @@ export const permissionsService = {
   },
 
   // Update permission
-  updatePermission: async (id, permissionData) => {
+  updatePermission: async (slug, permissionData) => {
     try {
-      return await api.put(`/permissions/${id}`, permissionData);
+      return await api.put(`/permissions/${slug}`, permissionData);
     } catch (error) {
-      console.error(`Update permission ${id} failed:`, error);
+      console.error(`Update permission ${slug} failed:`, error);
       throw error;
     }
   },
 
   // Delete permission
-  deletePermission: async (id) => {
+  deletePermission: async (slug) => {
     try {
-      return await api.delete(`/permissions/${id}`);
+      return await api.delete(`/permissions/${slug}`);
     } catch (error) {
-      console.error(`Delete permission ${id} failed:`, error);
+      console.error(`Delete permission ${slug} failed:`, error);
       throw error;
     }
   },
@@ -135,21 +135,21 @@ export const permissionsService = {
   },
 
   // Get roles with specific permission
-  getRolesWithPermission: async (permissionId) => {
+  getRolesWithPermission: async (permissionSlug) => {
     try {
-      return await api.get(`/permissions/${permissionId}/roles`);
+      return await api.get(`/permissions/${permissionSlug}/roles`);
     } catch (error) {
-      console.error(`Get roles with permission ${permissionId} failed:`, error);
+      console.error(`Get roles with permission ${permissionSlug} failed:`, error);
       throw error;
     }
   },
 
   // Check user permissions
-  checkUserPermissions: async (userId) => {
+  checkUserPermissions: async (userSlug) => {
     try {
-      return await api.get(`/permissions/check/${userId}`);
+      return await api.get(`/permissions/check/${userSlug}`);
     } catch (error) {
-      console.error(`Check user permissions ${userId} failed:`, error);
+      console.error(`Check user permissions ${userSlug} failed:`, error);
       throw error;
     }
   },

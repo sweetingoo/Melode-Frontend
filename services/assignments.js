@@ -12,33 +12,33 @@ export const assignmentsService = {
     }
   },
 
-  // Get assignment by ID
-  getAssignment: async (id) => {
+  // Get assignment by slug
+  getAssignment: async (slug) => {
     try {
-      return await api.get(`/departments/assignments/${id}`);
+      return await api.get(`/departments/assignments/${slug}`);
     } catch (error) {
-      console.error(`Get assignment ${id} failed:`, error);
+      console.error(`Get assignment ${slug} failed:`, error);
       throw error;
     }
   },
 
   // Get assignments for a specific person
-  getEmployeeAssignments: async (employeeId) => {
+  getEmployeeAssignments: async (userSlug) => {
     try {
-      return await api.get(`/departments/users/${employeeId}/departments`);
+      return await api.get(`/departments/users/${userSlug}/departments`);
     } catch (error) {
-      console.error(`Get person assignments ${employeeId} failed:`, error);
+      console.error(`Get person assignments ${userSlug} failed:`, error);
       throw error;
     }
   },
 
   // Get assignments for a specific department
-  getDepartmentAssignments: async (departmentId) => {
+  getDepartmentAssignments: async (departmentSlug) => {
     try {
-      return await api.get(`/departments/${departmentId}/users`);
+      return await api.get(`/departments/${departmentSlug}/users`);
     } catch (error) {
       console.error(
-        `Get department assignments ${departmentId} failed:`,
+        `Get department assignments ${departmentSlug} failed:`,
         error
       );
       throw error;
@@ -66,24 +66,24 @@ export const assignmentsService = {
   },
 
   // Update assignment
-  updateAssignment: async (id, assignmentData) => {
+  updateAssignment: async (slug, assignmentData) => {
     try {
-      return await api.put(`/departments/assignments/${id}`, assignmentData);
+      return await api.put(`/departments/assignments/${slug}`, assignmentData);
     } catch (error) {
-      console.error(`Update assignment ${id} failed:`, error);
+      console.error(`Update assignment ${slug} failed:`, error);
       throw error;
     }
   },
 
   // Delete assignment
-  deleteAssignment: async (employeeId, departmentId) => {
+  deleteAssignment: async (userSlug, departmentSlug) => {
     try {
       return await api.delete(
-        `/departments/assignments/${employeeId}/${departmentId}`
+        `/departments/assignments/${userSlug}/${departmentSlug}`
       );
     } catch (error) {
       console.error(
-        `Delete assignment ${employeeId}/${departmentId} failed:`,
+        `Delete assignment ${userSlug}/${departmentSlug} failed:`,
         error
       );
       throw error;

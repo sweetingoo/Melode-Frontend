@@ -274,15 +274,19 @@ const MessagesPageContent = () => {
   }, []);
 
   // Mark message as seen when clicked
-  const handleMessageClick = (messageId) => {
+  const handleMessageClick = (message) => {
+    // message can be an object with slug or just an id
+    const messageSlug = message?.slug || message?.id || message;
+    const messageId = typeof message === 'object' ? message.id : message;
+
     // Remove from new messages when clicked
     newMessageIdsRef.current.delete(messageId);
     setNewMessageIds(new Set(newMessageIdsRef.current));
 
     if (isMobile) {
-      router.push(`/admin/messages/${messageId}`);
+      router.push(`/admin/messages/${messageSlug}`);
     } else {
-      router.push(`/admin/messages?message=${messageId}`);
+      router.push(`/admin/messages?message=${messageSlug}`);
     }
   };
 

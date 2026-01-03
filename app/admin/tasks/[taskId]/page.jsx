@@ -89,7 +89,7 @@ const TaskDetailPage = () => {
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const taskId = params.taskId;
+  const taskSlug = params.taskId || params.slug;
 
   // Check if we're coming from "My Tasks" (simplified view) or admin "Tasks" (full view)
   const isFromMyTasks = searchParams?.get("from") === "my-tasks";
@@ -123,14 +123,14 @@ const TaskDetailPage = () => {
     sort_order: 0,
   });
 
-  const { data: task, isLoading, error } = useTask(taskId);
+  const { data: task, isLoading, error } = useTask(taskSlug);
   const { data: usersResponse } = useUsers();
   const { data: locationsData } = useLocations();
   const { data: assetsData } = useAssets();
   const { data: rolesData } = useRoles();
   const { data: activeTaskTypes } = useActiveTaskTypes();
   const { data: formsResponse } = useForms();
-  const { data: project } = useProject(task?.project_id, { enabled: !!task?.project_id });
+  const { data: project } = useProject(task?.project_slug, { enabled: !!task?.project_slug });
   const { data: projectsResponse } = useProjects();
 
   // Handle different API response structures for forms
@@ -375,7 +375,7 @@ const TaskDetailPage = () => {
       }
 
       await updateTaskMutation.mutateAsync({
-        id: taskId,
+        slug: taskSlug,
         taskData,
       });
       setIsEditModalOpen(false);
@@ -386,7 +386,7 @@ const TaskDetailPage = () => {
 
   const handleDeleteTask = async () => {
     try {
-      await deleteTaskMutation.mutateAsync(taskId);
+      await deleteTaskMutation.mutateAsync(taskSlug);
       router.push("/admin/tasks");
     } catch (error) {
       console.error("Failed to delete task:", error);
@@ -428,7 +428,7 @@ const TaskDetailPage = () => {
       }
 
       await assignTaskMutation.mutateAsync({
-        id: taskId,
+        slug: taskSlug,
         assignmentData: assignment,
       });
       setIsAssignModalOpen(false);
@@ -440,7 +440,7 @@ const TaskDetailPage = () => {
   const handleCompleteTask = async () => {
     try {
       await completeTaskMutation.mutateAsync({
-        id: taskId,
+        slug: taskSlug,
         completionData,
       });
       setIsCompleteModalOpen(false);
@@ -595,7 +595,7 @@ const TaskDetailPage = () => {
             </Badge>
           )}
           {project && (
-            <Link href={`/admin/projects/${project.id}`}>
+            <Link href={`/admin/projects/${project.slug || project.id}`}>
               <Badge variant="outline" className="hover:bg-muted cursor-pointer">
                 <FolderKanban className="mr-1 h-3 w-3" />
                 {project.name}
@@ -695,7 +695,7 @@ const TaskDetailPage = () => {
                                 <FileText className="h-4 w-4 text-muted-foreground" />
                                 <span className="text-sm">Form ID: {task.form_id}</span>
                               </div>
-                              <Link href={`/admin/forms/${task.form_id}`}>
+                              <Link href={`/admin/forms/${task.form_slug || task.form_id}`}>
                                 <Button variant="ghost" size="sm">
                                   View Form
                                 </Button>
@@ -709,7 +709,7 @@ const TaskDetailPage = () => {
                                 <span className="text-sm">Submission ID: {task.form_submission_id}</span>
                               </div>
                               <Link
-                                href={`/admin/forms/${task.form_id || ''}/submissions/${task.form_submission_id}`}
+                                href={`/admin/forms/${task.form_slug || task.form_id || ''}/submissions/${task.form_submission_slug || task.form_submission_id}`}
                               >
                                 <Button variant="ghost" size="sm">
                                   View Submission
@@ -817,13 +817,15 @@ const TaskDetailPage = () => {
                 <CardContent className="space-y-4">
                   <FileAttachmentList
                     entityType="task"
-                    entityId={parseInt(taskId)}
+                    entitySlug={task?.slug}
+                    entityId={task?.id}
                     showTitle={false}
                   />
                   <Separator />
                   <MultiFileUpload
                     entityType="task"
-                    entityId={parseInt(taskId)}
+                    entitySlug={task?.slug}
+                    entityId={task?.id}
                     maxFiles={10}
                     maxSizeMB={10}
                     onUploadComplete={() => {
@@ -929,7 +931,7 @@ const TaskDetailPage = () => {
                           Project
                         </Label>
                         <Link
-                          href={`/admin/projects/${project.id}`}
+                          href={`/admin/projects/${project.slug || project.id}`}
                           className="block p-2 border rounded-md hover:bg-muted transition-colors"
                         >
                           <p className="text-sm font-medium">{project.name}</p>
@@ -967,7 +969,7 @@ const TaskDetailPage = () => {
                         <Label className="text-muted-foreground">Parent Task</Label>
                         <div className="flex items-center gap-2 mt-1">
                           <span className="text-sm">#{task.parent_task_id}</span>
-                          <Link href={`/admin/tasks/${task.parent_task_id}`}>
+                          <Link href={`/admin/tasks/${task.parent_task_slug || task.parent_task_id}`}>
                             <Button variant="ghost" size="sm" className="h-7 px-2 text-xs">
                               View
                             </Button>
@@ -988,7 +990,8 @@ const TaskDetailPage = () => {
             <CardContent className="pt-6">
               <CommentThread
                 entityType="task"
-                entityId={taskId}
+                entitySlug={taskSlug}
+                entityId={task?.id}
                 showHeader={true}
               />
             </CardContent>
@@ -1000,13 +1003,15 @@ const TaskDetailPage = () => {
           {isFromMyTasks ? (
             <SimpleAuditLogs
               resource="task"
-              resourceId={taskId}
+              resourceSlug={task?.slug}
+              resourceId={task?.id}
               title="Recent Activity"
             />
           ) : (
             <ResourceAuditLogs
               resource="task"
-              resourceId={taskId}
+              resourceSlug={task?.slug}
+              resourceId={task?.id}
               title="Activity History"
             />
           )}
@@ -1466,7 +1471,8 @@ const TaskDetailPage = () => {
 
       {/* Recurring Task History Modal */}
       <RecurringTaskHistory
-        taskId={taskId}
+        taskSlug={taskSlug}
+        taskId={task?.id}
         isOpen={showHistory}
         onClose={() => setShowHistory(false)}
       />

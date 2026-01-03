@@ -83,15 +83,15 @@ export const usePermissionsPaginated = (params = {}) => {
 };
 
 // Get single permission query
-export const usePermission = (id) => {
+export const usePermission = (slug) => {
   return useQuery({
-    queryKey: permissionKeys.detail(id),
+    queryKey: permissionKeys.detail(slug),
     queryFn: async () => {
-      const response = await permissionsService.getPermission(id);
+      const response = await permissionsService.getPermission(slug);
       // Handle both direct object response and wrapped response
       return response.data || response;
     },
-    enabled: !!id,
+    enabled: !!slug,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 };
@@ -155,29 +155,29 @@ export const useActions = () => {
 };
 
 // Get roles with specific permission query
-export const useRolesWithPermission = (permissionId) => {
+export const useRolesWithPermission = (permissionSlug) => {
   return useQuery({
-    queryKey: permissionKeys.rolesWithPermission(permissionId),
+    queryKey: permissionKeys.rolesWithPermission(permissionSlug),
     queryFn: async () => {
       const response = await permissionsService.getRolesWithPermission(
-        permissionId
+        permissionSlug
       );
       return response.data;
     },
-    enabled: !!permissionId,
+    enabled: !!permissionSlug,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 };
 
 // Check user permissions query
-export const useUserPermissions = (userId) => {
+export const useUserPermissions = (userSlug) => {
   return useQuery({
-    queryKey: permissionKeys.userPermissions(userId),
+    queryKey: permissionKeys.userPermissions(userSlug),
     queryFn: async () => {
-      const response = await permissionsService.checkUserPermissions(userId);
+      const response = await permissionsService.checkUserPermissions(userSlug);
       return response.data;
     },
-    enabled: !!userId,
+    enabled: !!userSlug,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 };
@@ -233,9 +233,9 @@ export const useUpdatePermission = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, permissionData }) => {
+    mutationFn: async ({ slug, permissionData }) => {
       const response = await permissionsService.updatePermission(
-        id,
+        slug,
         permissionData
       );
       return response.data;
@@ -243,7 +243,7 @@ export const useUpdatePermission = () => {
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: permissionKeys.lists() });
       queryClient.invalidateQueries({
-        queryKey: permissionKeys.detail(variables.id),
+        queryKey: permissionKeys.detail(variables.slug),
       });
       toast.success("Permission updated successfully", {
         description: "The permission has been updated.",
@@ -265,8 +265,8 @@ export const useDeletePermission = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (id) => {
-      const response = await permissionsService.deletePermission(id);
+    mutationFn: async (slug) => {
+      const response = await permissionsService.deletePermission(slug);
       return response.data;
     },
     onSuccess: (data, variables) => {

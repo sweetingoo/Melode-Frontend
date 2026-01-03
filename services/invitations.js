@@ -15,12 +15,12 @@ export const invitationsService = {
     }
   },
 
-  // Get invitation by ID
-  getInvitation: async (id) => {
+  // Get invitation by slug
+  getInvitation: async (slug) => {
     try {
-      return await api.get(`/invitations/${id}`);
+      return await api.get(`/invitations/${slug}`);
     } catch (error) {
-      console.error(`Get invitation ${id} failed:`, error);
+      console.error(`Get invitation ${slug} failed:`, error);
       throw error;
     }
   },
@@ -36,41 +36,41 @@ export const invitationsService = {
   },
 
   // Update invitation
-  updateInvitation: async (id, invitationData) => {
+  updateInvitation: async (slug, invitationData) => {
     try {
-      return await api.put(`/invitations/${id}`, invitationData);
+      return await api.put(`/invitations/${slug}`, invitationData);
     } catch (error) {
-      console.error(`Update invitation ${id} failed:`, error);
+      console.error(`Update invitation ${slug} failed:`, error);
       throw error;
     }
   },
 
   // Delete invitation
-  deleteInvitation: async (id) => {
+  deleteInvitation: async (slug) => {
     try {
-      return await api.delete(`/invitations/${id}`);
+      return await api.delete(`/invitations/${slug}`);
     } catch (error) {
-      console.error(`Delete invitation ${id} failed:`, error);
+      console.error(`Delete invitation ${slug} failed:`, error);
       throw error;
     }
   },
 
   // Resend invitation
-  resendInvitation: async (id) => {
+  resendInvitation: async (slug) => {
     try {
-      return await api.post(`/invitations/${id}/resend`);
+      return await api.post(`/invitations/${slug}/resend`);
     } catch (error) {
-      console.error(`Resend invitation ${id} failed:`, error);
+      console.error(`Resend invitation ${slug} failed:`, error);
       throw error;
     }
   },
 
   // Revoke invitation
-  revokeInvitation: async (id) => {
+  revokeInvitation: async (slug) => {
     try {
-      return await api.delete(`/invitations/${id}`);
+      return await api.delete(`/invitations/${slug}`);
     } catch (error) {
-      console.error(`Revoke invitation ${id} failed:`, error);
+      console.error(`Revoke invitation ${slug} failed:`, error);
       throw error;
     }
   },

@@ -21,7 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, ArrowLeft, Eye, FileText, Shield, Users, User, Link2, Tag, X } from "lucide-react";
+import { Loader2, ArrowLeft, Eye, FileText, Shield, Users, User, Link2, Tag, X, AlertCircle } from "lucide-react";
 import { useForm, useFormSubmissions } from "@/hooks/useForms";
 import { useUsers } from "@/hooks/useUsers";
 import { useCurrentUser } from "@/hooks/useAuth";
@@ -30,16 +30,16 @@ import { format } from "date-fns";
 const FormSubmissionsPage = () => {
   const params = useParams();
   const router = useRouter();
-  const formId = params.id;
+  const formSlug = params.id || params.slug;
   const [filterType, setFilterType] = useState("all"); // "all" or "my"
   const [categoryFilter, setCategoryFilter] = useState("all"); // "all", "uncategorized", or specific category
   const [statusFilter, setStatusFilter] = useState("all"); // "all" or specific status
 
-  const { data: form, isLoading: formLoading } = useForm(formId);
+  const { data: form, isLoading: formLoading, error: formError } = useForm(formSlug);
   
   // Build query params
   const queryParams = {
-    form_id: formId,
+    form_id: form?.id,
     ...(filterType === "my" ? { filter: "my" } : {}),
   };
   
@@ -59,7 +59,9 @@ const FormSubmissionsPage = () => {
   }
   
   const { data: submissionsResponse, isLoading: submissionsLoading } =
-    useFormSubmissions(queryParams);
+    useFormSubmissions(queryParams, {
+      enabled: !!form?.id, // Only fetch submissions when form is loaded and has an id
+    });
   const { data: usersResponse } = useUsers();
   const { data: currentUser } = useCurrentUser();
 
@@ -222,6 +224,34 @@ const FormSubmissionsPage = () => {
     );
   }
 
+  // Show error if form failed to load
+  if (formError) {
+    const errorMessage = formError?.response?.data?.detail || 
+                        formError?.response?.data?.message || 
+                        formError?.message || 
+                        "Failed to load form";
+    const is405 = formError?.response?.status === 405;
+    
+    return (
+      <div className="flex flex-col items-center justify-center py-12 space-y-4">
+        <AlertCircle className="h-12 w-12 text-destructive" />
+        <div className="text-center">
+          <h2 className="text-xl font-semibold mb-2">Error Loading Form</h2>
+          <p className="text-muted-foreground mb-4">{errorMessage}</p>
+          {is405 && (
+            <p className="text-sm text-muted-foreground mb-4">
+              The form endpoint returned "Method Not Allowed" (405). This may be a backend configuration issue.
+            </p>
+          )}
+          <Button onClick={() => router.back()} variant="outline">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Go Back
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -268,7 +298,7 @@ const FormSubmissionsPage = () => {
             </div>
           </div>
         </div>
-        <Link href={`/admin/forms/${formId}/submit`}>
+        <Link href={`/admin/forms/${formSlug}/submit`}>
           <Button>
             <FileText className="mr-2 h-4 w-4" />
             New Submission
@@ -376,7 +406,7 @@ const FormSubmissionsPage = () => {
               <p className="text-muted-foreground mb-4">
                 No one has submitted this form yet.
               </p>
-              <Link href={`/admin/forms/${formId}/submit`}>
+              <Link href={`/admin/forms/${formSlug}/submit`}>
                 <Button>
                   <FileText className="mr-2 h-4 w-4" />
                   Create First Submission
@@ -432,7 +462,7 @@ const FormSubmissionsPage = () => {
                       <TableCell>
                         {submission.submitted_by_user_id ? (
                           <Link
-                            href={`/admin/people-management/${submission.submitted_by_user_id}`}
+                            href={`/admin/people-management/${submission.submitted_by_user?.slug || submission.submitted_by_user_slug || submission.submitted_by_user_id}`}
                             className="text-primary hover:underline"
                           >
                             {getUserName(submission.submitted_by_user_id) || `User #${submission.submitted_by_user_id}`}
@@ -453,7 +483,7 @@ const FormSubmissionsPage = () => {
                       </TableCell>
                       <TableCell>
                         {taskId ? (
-                          <Link href={`/admin/tasks/${taskId}`}>
+                          <Link href={`/admin/tasks/${submission.task_slug || submission.processing_result?.task_creation?.task_slug || taskId}`}>
                             <Badge variant="secondary" className="cursor-pointer hover:bg-secondary/80">
                               <Link2 className="h-3 w-3 mr-1" />
                               Task #{taskId}
@@ -464,7 +494,7 @@ const FormSubmissionsPage = () => {
                         )}
                       </TableCell>
                       <TableCell>
-                        <Link href={`/admin/forms/${formId}/submissions/${submission.id}`}>
+                        <Link href={`/admin/forms/${formSlug}/submissions/${submission.slug || submission.id}`}>
                           <Button variant="ghost" size="sm">
                             <Eye className="mr-2 h-4 w-4" />
                             View

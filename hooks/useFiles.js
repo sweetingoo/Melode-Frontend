@@ -16,21 +16,21 @@ export const fileKeys = {
 // Get entity attachments query
 export const useEntityAttachments = (
   entityType,
-  entityId,
+  entitySlugOrId,
   includeInactive = false,
   options = {}
 ) => {
   return useQuery({
-    queryKey: fileKeys.entity(entityType, entityId),
+    queryKey: fileKeys.entity(entityType, entitySlugOrId),
     queryFn: async () => {
       const response = await filesService.getEntityAttachments(
         entityType,
-        entityId,
+        entitySlugOrId,
         includeInactive
       );
       return response;
     },
-    enabled: !!entityType && !!entityId,
+    enabled: !!entityType && !!entitySlugOrId,
     staleTime: 30 * 1000, // 30 seconds
     ...options,
   });
@@ -83,10 +83,12 @@ export const useAttachFiles = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ entityType, entityId, files, descriptions }) => {
+    mutationFn: async ({ entityType, entitySlug, entityId, files, descriptions }) => {
+      // Use slug if provided, fallback to id for backward compatibility
+      const identifier = entitySlug || entityId;
       const response = await filesService.attachFiles(
         entityType,
-        entityId,
+        identifier,
         files,
         descriptions
       );
@@ -98,8 +100,10 @@ export const useAttachFiles = () => {
         description: `${count} file(s) attached to ${variables.entityType}.`,
       });
       // Invalidate entity attachments
+      // Use the identifier (slug or id) that was actually used
+      const identifier = variables.entitySlug || variables.entityId;
       queryClient.invalidateQueries({
-        queryKey: fileKeys.entity(variables.entityType, variables.entityId),
+        queryKey: fileKeys.entity(variables.entityType, identifier),
       });
     },
     onError: (error) => {
@@ -120,10 +124,12 @@ export const useAttachExistingFiles = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ entityType, entityId, fileIds, descriptions }) => {
+    mutationFn: async ({ entityType, entitySlug, entityId, fileIds, descriptions }) => {
+      // Use slug if provided, fallback to id for backward compatibility
+      const identifier = entitySlug || entityId;
       const response = await filesService.attachExistingFiles(
         entityType,
-        entityId,
+        identifier,
         fileIds,
         descriptions
       );
@@ -132,8 +138,10 @@ export const useAttachExistingFiles = () => {
     onSuccess: (data, variables) => {
       toast.success("Files attached successfully!");
       // Invalidate entity attachments
+      // Use the identifier (slug or id) that was actually used
+      const identifier = variables.entitySlug || variables.entityId;
       queryClient.invalidateQueries({
-        queryKey: fileKeys.entity(variables.entityType, variables.entityId),
+        queryKey: fileKeys.entity(variables.entityType, identifier),
       });
     },
     onError: (error) => {
@@ -154,16 +162,20 @@ export const useDeleteAttachment = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ attachmentId, softDelete = true, entityType, entityId }) => {
-      const response = await filesService.deleteAttachment(attachmentId, softDelete);
-      return { ...response, attachmentId, entityType, entityId };
+    mutationFn: async ({ attachmentSlug, attachmentId, softDelete = true, entityType, entitySlug, entityId }) => {
+      // Use slug if provided, fallback to id for backward compatibility
+      const identifier = attachmentSlug || attachmentId;
+      const response = await filesService.deleteAttachment(identifier, softDelete);
+      return { ...response, attachmentSlug: identifier, attachmentId, entityType, entitySlug, entityId };
     },
     onSuccess: (data) => {
       toast.success("Attachment deleted successfully");
       // Invalidate entity attachments if entity info provided
-      if (data.entityType && data.entityId) {
+      // Use entitySlug or entityId from the original variables
+      if (data.entityType && (data.entitySlug || data.entityId)) {
+        const identifier = data.entitySlug || data.entityId;
         queryClient.invalidateQueries({
-          queryKey: fileKeys.entity(data.entityType, data.entityId),
+          queryKey: fileKeys.entity(data.entityType, identifier),
         });
       }
     },

@@ -30,42 +30,42 @@ export const useAssignments = (params = {}) => {
 };
 
 // Get assignments for a specific employee
-export const useEmployeeAssignments = (employeeId) => {
+export const useEmployeeAssignments = (userSlug) => {
   return useQuery({
-    queryKey: assignmentKeys.employee(employeeId),
+    queryKey: assignmentKeys.employee(userSlug),
     queryFn: async () => {
       const response =
-        await assignmentsService.getEmployeeAssignments(employeeId);
+        await assignmentsService.getEmployeeAssignments(userSlug);
       return response.data;
     },
-    enabled: !!employeeId,
+    enabled: !!userSlug,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 };
 
 // Get assignments for a specific department
-export const useDepartmentAssignments = (departmentId) => {
+export const useDepartmentAssignments = (departmentSlug) => {
   return useQuery({
-    queryKey: assignmentKeys.department(departmentId),
+    queryKey: assignmentKeys.department(departmentSlug),
     queryFn: async () => {
       const response =
-        await assignmentsService.getDepartmentAssignments(departmentId);
+        await assignmentsService.getDepartmentAssignments(departmentSlug);
       return response.data;
     },
-    enabled: !!departmentId,
+    enabled: !!departmentSlug,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 };
 
 // Get single assignment query
-export const useAssignment = (id) => {
+export const useAssignment = (slug) => {
   return useQuery({
-    queryKey: assignmentKeys.detail(id),
+    queryKey: assignmentKeys.detail(slug),
     queryFn: async () => {
-      const response = await assignmentsService.getAssignment(id);
+      const response = await assignmentsService.getAssignment(slug);
       return response.data;
     },
-    enabled: !!id,
+    enabled: !!slug,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 };
@@ -102,15 +102,15 @@ export const useUpdateAssignment = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, assignmentData }) => {
+    mutationFn: async ({ slug, assignmentData }) => {
       const response = await assignmentsService.updateAssignment(
-        id,
+        slug,
         assignmentData
       );
       return response.data;
     },
     onSuccess: (data, variables) => {
-      queryClient.setQueryData(assignmentKeys.detail(variables.id), data);
+      queryClient.setQueryData(assignmentKeys.detail(variables.slug), data);
       queryClient.invalidateQueries({ queryKey: assignmentKeys.lists() });
       toast.success("Assignment updated successfully", {
         description: "Assignment has been updated.",
@@ -132,19 +132,19 @@ export const useDeleteAssignment = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ employeeId, departmentId }) => {
+    mutationFn: async ({ userSlug, departmentSlug }) => {
       const response = await assignmentsService.deleteAssignment(
-        employeeId,
-        departmentId
+        userSlug,
+        departmentSlug
       );
       return response.data;
     },
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({
-        queryKey: assignmentKeys.employee(variables.employeeId),
+        queryKey: assignmentKeys.employee(variables.userSlug),
       });
       queryClient.invalidateQueries({
-        queryKey: assignmentKeys.department(variables.departmentId),
+        queryKey: assignmentKeys.department(variables.departmentSlug),
       });
       queryClient.invalidateQueries({ queryKey: assignmentKeys.lists() });
       toast.success("Assignment removed successfully", {

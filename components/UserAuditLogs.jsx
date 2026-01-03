@@ -41,13 +41,13 @@ import { useUserAuditLogs } from "@/hooks/useAuditLogs";
 import { format, formatDistanceToNow } from "date-fns";
 import { useIsMobile } from "@/hooks/use-mobile";
 
-const UserAuditLogs = ({ userId, title = "Activity History" }) => {
+const UserAuditLogs = ({ userId, userSlug, title = "Activity History" }) => {
   const [selectedLog, setSelectedLog] = useState(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [expandedRows, setExpandedRows] = useState(new Set());
   const isMobile = useIsMobile();
 
-  const { data: auditLogsData, isLoading, error } = useUserAuditLogs(userId, {
+  const { data: auditLogsData, isLoading, error } = useUserAuditLogs(userSlug || userId, {
     limit: 50,
   });
 

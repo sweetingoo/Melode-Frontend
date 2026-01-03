@@ -12,12 +12,12 @@ export const tasksService = {
     }
   },
 
-  // Get task by ID
-  getTask: async (id) => {
+  // Get task by slug
+  getTask: async (slug) => {
     try {
-      return await api.get(`/tasks/${id}`);
+      return await api.get(`/tasks/${slug}`);
     } catch (error) {
-      console.error(`Get task ${id} failed:`, error);
+      console.error(`Get task ${slug} failed:`, error);
       throw error;
     }
   },
@@ -33,41 +33,41 @@ export const tasksService = {
   },
 
   // Update task
-  updateTask: async (id, taskData) => {
+  updateTask: async (slug, taskData) => {
     try {
-      return await api.put(`/tasks/${id}`, taskData);
+      return await api.put(`/tasks/${slug}`, taskData);
     } catch (error) {
-      console.error(`Update task ${id} failed:`, error);
+      console.error(`Update task ${slug} failed:`, error);
       throw error;
     }
   },
 
   // Delete task
-  deleteTask: async (id) => {
+  deleteTask: async (slug) => {
     try {
-      return await api.delete(`/tasks/${id}`);
+      return await api.delete(`/tasks/${slug}`);
     } catch (error) {
-      console.error(`Delete task ${id} failed:`, error);
+      console.error(`Delete task ${slug} failed:`, error);
       throw error;
     }
   },
 
   // Assign/Reassign task
-  assignTask: async (id, assignmentData) => {
+  assignTask: async (slug, assignmentData) => {
     try {
-      return await api.put(`/tasks/${id}/assign`, assignmentData);
+      return await api.put(`/tasks/${slug}/assign`, assignmentData);
     } catch (error) {
-      console.error(`Assign task ${id} failed:`, error);
+      console.error(`Assign task ${slug} failed:`, error);
       throw error;
     }
   },
 
   // Complete task
-  completeTask: async (id, completionData) => {
+  completeTask: async (slug, completionData) => {
     try {
-      return await api.put(`/tasks/${id}/complete`, completionData);
+      return await api.put(`/tasks/${slug}/complete`, completionData);
     } catch (error) {
-      console.error(`Complete task ${id} failed:`, error);
+      console.error(`Complete task ${slug} failed:`, error);
       throw error;
     }
   },
@@ -93,21 +93,21 @@ export const tasksService = {
   },
 
   // Get tasks by user
-  getTasksByUser: async (userId, params = {}) => {
+  getTasksByUser: async (userSlug, params = {}) => {
     try {
-      return await api.get(`/tasks/user/${userId}`, { params });
+      return await api.get(`/tasks/user/${userSlug}`, { params });
     } catch (error) {
-      console.error(`Get tasks by user ${userId} failed:`, error);
+      console.error(`Get tasks by user ${userSlug} failed:`, error);
       throw error;
     }
   },
 
   // Get tasks by asset
-  getTasksByAsset: async (assetId, params = {}) => {
+  getTasksByAsset: async (assetSlug, params = {}) => {
     try {
-      return await api.get(`/tasks/asset/${assetId}`, { params });
+      return await api.get(`/tasks/asset/${assetSlug}`, { params });
     } catch (error) {
-      console.error(`Get tasks by asset ${assetId} failed:`, error);
+      console.error(`Get tasks by asset ${assetSlug} failed:`, error);
       throw error;
     }
   },
@@ -163,11 +163,11 @@ export const tasksService = {
   },
 
   // Get recurring task history
-  getRecurringTaskHistory: async (taskId) => {
+  getRecurringTaskHistory: async (taskSlug) => {
     try {
-      return await api.get(`/tasks/${taskId}/recurring-history`);
+      return await api.get(`/tasks/${taskSlug}/recurring-history`);
     } catch (error) {
-      console.error(`Get recurring task history for ${taskId} failed:`, error);
+      console.error(`Get recurring task history for ${taskSlug} failed:`, error);
       throw error;
     }
   },

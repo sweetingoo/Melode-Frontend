@@ -15,17 +15,17 @@ import { toast } from "sonner";
 const FormSubmitPage = () => {
   const params = useParams();
   const router = useRouter();
-  const formId = params.id;
+  const formSlug = params.id || params.slug;
   const resumeSubmissionId = params.resumeSubmissionId; // For resuming drafts
 
-  const { data: form, isLoading: formLoading } = useForm(formId);
+  const { data: form, isLoading: formLoading } = useForm(formSlug);
   const createSubmissionMutation = useCreateFormSubmission();
   const updateSubmissionMutation = useUpdateFormSubmission();
   // Use silent mode for form submissions to avoid multiple toasts
   const uploadFileMutation = useUploadFile({ silent: true });
 
   // Storage key for persisting form submission data
-  const storageKey = `form_submission_${formId}`;
+  const storageKey = `form_submission_${formSlug}`;
   
   const [submissionData, setSubmissionData] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -35,8 +35,8 @@ const FormSubmitPage = () => {
   
   // Load saved submission data from sessionStorage on mount
   useEffect(() => {
-    if (formId) {
-      const key = `form_submission_${formId}`;
+    if (formSlug) {
+      const key = `form_submission_${formSlug}`;
       try {
         const saved = sessionStorage.getItem(key);
         if (saved) {
@@ -55,7 +55,7 @@ const FormSubmitPage = () => {
         console.error("Failed to load saved submission:", error);
       }
     }
-  }, [formId]);
+  }, [formSlug]);
 
   // Save submission data to sessionStorage
   const saveSubmissionToStorage = (data, page, draftId) => {
@@ -282,7 +282,7 @@ const FormSubmitPage = () => {
             status: "submitted",
           })
         : await createSubmissionMutation.mutateAsync({
-            form_id: parseInt(formId),
+            form_id: form?.id,
             submission_data: processedSubmissionData,
             status: "submitted",
           });
@@ -301,15 +301,15 @@ const FormSubmitPage = () => {
         ) {
           // Individual tasks created - show success and navigate to submissions page
           // The toast notification will show the count from the hook
-          router.push(`/admin/forms/${formId}/submissions/${result.id}`);
+          router.push(`/admin/forms/${formSlug}/submissions/${result.slug || result.id}`);
         } else if (taskInfo.task_id) {
-          // Single collaborative task
-          router.push(`/admin/tasks/${taskInfo.task_id}`);
+          // Single collaborative task - task_id might still be ID from backend
+          router.push(`/admin/tasks/${taskInfo.task_slug || taskInfo.task_id}`);
         } else {
-          router.push(`/admin/forms/${formId}/submissions/${result.id}`);
+          router.push(`/admin/forms/${formSlug}/submissions/${result.slug || result.id}`);
         }
       } else {
-        router.push(`/admin/forms/${formId}/submissions/${result.id}`);
+        router.push(`/admin/forms/${formSlug}/submissions/${result.slug || result.id}`);
       }
     } catch (error) {
       console.error("Failed to submit form:", error);
@@ -468,7 +468,7 @@ const FormSubmitPage = () => {
             uploadFileMutation
               .mutateAsync({
                 file: file,
-                form_id: parseInt(formId),
+                form_id: form?.id,
                 field_id: fieldId,
               })
               .then((uploadResult) => {
@@ -507,7 +507,7 @@ const FormSubmitPage = () => {
               return uploadFileMutation
                 .mutateAsync({
                   file: file,
-                  form_id: parseInt(formId),
+                  form_id: form?.id,
                   field_id: fieldId,
                 })
                 .then((uploadResult) => {
@@ -751,7 +751,7 @@ const FormSubmitPage = () => {
 
             <div className="flex justify-between gap-2 pt-4 border-t">
               <div className="flex gap-2">
-                <Link href={`/admin/forms/${formId}`}>
+                <Link href={`/admin/forms/${formSlug}`}>
                   <Button type="button" variant="outline">
                     Cancel
                   </Button>

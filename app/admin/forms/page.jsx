@@ -326,7 +326,7 @@ const FormsPage = () => {
                     <TableRow key={form.id}>
                       <TableCell className="font-medium">
                         <Link
-                          href={`/admin/forms/${form.id}`}
+                          href={`/admin/forms/${form.slug || form.id}`}
                           className="hover:underline"
                         >
                           {form.form_title || form.form_name}
@@ -416,27 +416,27 @@ const FormsPage = () => {
                             <DropdownMenuLabel>Actions</DropdownMenuLabel>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem asChild>
-                              <Link href={`/admin/forms/${form.id}`}>
+                              <Link href={`/admin/forms/${form.slug || form.id}`}>
                                 <Eye className="mr-2 h-4 w-4" />
                                 View
                               </Link>
                             </DropdownMenuItem>
                             {canUpdateForm && (
                               <DropdownMenuItem asChild>
-                                <Link href={`/admin/forms/${form.id}/edit`}>
+                                <Link href={`/admin/forms/${form.slug || form.id}/edit`}>
                                   <Edit className="mr-2 h-4 w-4" />
                                   Edit
                                 </Link>
                               </DropdownMenuItem>
                             )}
                             <DropdownMenuItem asChild>
-                              <Link href={`/admin/forms/${form.id}/submit`}>
+                              <Link href={`/admin/forms/${form.slug || form.id}/submit`}>
                                 <FileText className="mr-2 h-4 w-4" />
                                 Submit
                               </Link>
                             </DropdownMenuItem>
                             <DropdownMenuItem asChild>
-                              <Link href={`/admin/forms/${form.id}/submissions`}>
+                              <Link href={`/admin/forms/${form.slug || form.id}/submissions`}>
                                 <FileText className="mr-2 h-4 w-4" />
                                 Submissions
                               </Link>

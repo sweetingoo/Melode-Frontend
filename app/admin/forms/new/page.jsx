@@ -697,7 +697,7 @@ const NewFormPage = () => {
 
       const result = await createFormMutation.mutateAsync(submitData);
       toast.success("Form created successfully");
-      router.push(`/admin/forms/${result.id}`);
+      router.push(`/admin/forms/${result.slug || result.id}`);
     } catch (error) {
       console.error("Failed to create form:", error);
     }

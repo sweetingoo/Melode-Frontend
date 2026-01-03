@@ -34,7 +34,7 @@ export const filesService = {
   },
 
   // Upload and attach multiple files to an entity
-  attachFiles: async (entityType, entityId, files, descriptions = []) => {
+  attachFiles: async (entityType, entitySlug, files, descriptions = []) => {
     try {
       const formData = new FormData();
 
@@ -49,7 +49,7 @@ export const filesService = {
       }
 
       const response = await api.post(
-        `/files/entities/${entityType}/${entityId}/attach`,
+        `/files/entities/${entityType}/${entitySlug}/attach`,
         formData
       );
       return response.data || response;
@@ -60,7 +60,7 @@ export const filesService = {
   },
 
   // Attach existing files to an entity
-  attachExistingFiles: async (entityType, entityId, fileIds, descriptions = []) => {
+  attachExistingFiles: async (entityType, entitySlug, fileIds, descriptions = []) => {
     try {
       const body = {
         file_ids: fileIds,
@@ -72,7 +72,7 @@ export const filesService = {
       }
 
       const response = await api.post(
-        `/files/entities/${entityType}/${entityId}/attach-existing`,
+        `/files/entities/${entityType}/${entitySlug}/attach-existing`,
         body
       );
       return response.data || response;
@@ -83,10 +83,10 @@ export const filesService = {
   },
 
   // Get all files attached to an entity
-  getEntityAttachments: async (entityType, entityId, includeInactive = false) => {
+  getEntityAttachments: async (entityType, entitySlug, includeInactive = false) => {
     try {
       const response = await api.get(
-        `/files/entities/${entityType}/${entityId}/attachments`,
+        `/files/entities/${entityType}/${entitySlug}/attachments`,
         {
           params: {
             include_inactive: includeInactive,
@@ -101,9 +101,9 @@ export const filesService = {
   },
 
   // Delete an attachment
-  deleteAttachment: async (attachmentId, softDelete = true) => {
+  deleteAttachment: async (attachmentSlug, softDelete = true) => {
     try {
-      const response = await api.delete(`/files/attachments/${attachmentId}`, {
+      const response = await api.delete(`/files/attachments/${attachmentSlug}`, {
         params: {
           soft_delete: softDelete,
         },
@@ -142,14 +142,25 @@ export const filesService = {
     }
   },
 
-  // Get pre-signed URL for a file by file_id
-  // Returns: { url: string, file_id: number, expires_in_seconds: number }
-  getFileUrl: async (fileId) => {
+  // Get pre-signed URL for a file by file_slug
+  // Returns: { url: string, file_slug: string, expires_in_seconds: number }
+  getFileUrl: async (fileSlug) => {
     try {
-      const response = await api.get(`/files/${fileId}/url`);
+      const response = await api.get(`/files/${fileSlug}/url`);
       return response.data || response;
     } catch (error) {
-      console.error(`Get file URL failed for file ${fileId}:`, error);
+      console.error(`Get file URL failed for file ${fileSlug}:`, error);
+      throw error;
+    }
+  },
+
+  // Delete a file
+  deleteFile: async (fileSlug) => {
+    try {
+      const response = await api.delete(`/files/delete/${fileSlug}`);
+      return response.data || response;
+    } catch (error) {
+      console.error(`Delete file ${fileSlug} failed:`, error);
       throw error;
     }
   },

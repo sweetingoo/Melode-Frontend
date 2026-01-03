@@ -162,14 +162,14 @@ export const useUsers = (params = {}, options = {}) => {
 };
 
 // Get single user query
-export const useUser = (id) => {
+export const useUser = (slug) => {
   return useQuery({
-    queryKey: userKeys.detail(id),
+    queryKey: userKeys.detail(slug),
     queryFn: async () => {
       // Fetch user data and roles in parallel
       const [userResponse, rolesResponse] = await Promise.all([
-        usersService.getUser(id),
-        usersService.getUserRoles(id).catch(() => ({ data: [] })),
+        usersService.getUser(slug),
+        usersService.getUserRoles(slug).catch(() => ({ data: [] })),
       ]);
 
       // Combine user data with roles
@@ -178,7 +178,7 @@ export const useUser = (id) => {
         roles: rolesResponse.data || [],
       };
     },
-    enabled: !!id,
+    enabled: !!slug,
     staleTime: 0, // Always refetch when invalidated
   });
 };
@@ -221,13 +221,13 @@ export const useUpdateUser = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, userData }) => {
-      const response = await usersService.updateUser(id, userData);
+    mutationFn: async ({ slug, userData }) => {
+      const response = await usersService.updateUser(slug, userData);
       return response.data;
     },
     onSuccess: (data, variables) => {
       // Update the user in cache
-      queryClient.setQueryData(userKeys.detail(variables.id), data);
+      queryClient.setQueryData(userKeys.detail(variables.slug), data);
 
       // Invalidate users list to refresh data
       queryClient.invalidateQueries({ queryKey: userKeys.lists() });
@@ -253,13 +253,13 @@ export const useDeleteUser = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (id) => {
-      const response = await usersService.deleteUser(id);
+    mutationFn: async (slug) => {
+      const response = await usersService.deleteUser(slug);
       return response.data;
     },
-    onSuccess: (data, id) => {
+    onSuccess: (data, slug) => {
       // Remove the user from cache
-      queryClient.removeQueries({ queryKey: userKeys.detail(id) });
+      queryClient.removeQueries({ queryKey: userKeys.detail(slug) });
 
       // Invalidate users list
       queryClient.invalidateQueries({ queryKey: userKeys.lists() });
@@ -285,13 +285,13 @@ export const useActivateUser = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (id) => {
-      const response = await usersService.activateUser(id);
+    mutationFn: async (slug) => {
+      const response = await usersService.activateUser(slug);
       return response.data;
     },
-    onSuccess: (data, id) => {
+    onSuccess: (data, slug) => {
       // Update the user in cache
-      queryClient.setQueryData(userKeys.detail(id), (oldData) => ({
+      queryClient.setQueryData(userKeys.detail(slug), (oldData) => ({
         ...oldData,
         is_active: true,
       }));
@@ -320,13 +320,13 @@ export const useDeactivateUser = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (id) => {
-      const response = await usersService.deactivateUser(id);
+    mutationFn: async (slug) => {
+      const response = await usersService.deactivateUser(slug);
       return response.data;
     },
-    onSuccess: (data, id) => {
+    onSuccess: (data, slug) => {
       // Update the user in cache
-      queryClient.setQueryData(userKeys.detail(id), (oldData) => ({
+      queryClient.setQueryData(userKeys.detail(slug), (oldData) => ({
         ...oldData,
         is_active: false,
       }));
@@ -355,13 +355,13 @@ export const useVerifyUser = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (id) => {
-      const response = await usersService.verifyUser(id);
+    mutationFn: async (slug) => {
+      const response = await usersService.verifyUser(slug);
       return response.data;
     },
-    onSuccess: (data, id) => {
+    onSuccess: (data, slug) => {
       // Update the user in cache
-      queryClient.setQueryData(userKeys.detail(id), (oldData) => ({
+      queryClient.setQueryData(userKeys.detail(slug), (oldData) => ({
         ...oldData,
         is_verified: true,
       }));
@@ -386,27 +386,27 @@ export const useVerifyUser = () => {
 };
 
 // Get user permissions query
-export const useUserPermissions = (id) => {
+export const useUserPermissions = (slug) => {
   return useQuery({
-    queryKey: userKeys.permissions(id),
+    queryKey: userKeys.permissions(slug),
     queryFn: async () => {
-      const response = await usersService.getUserPermissions(id);
+      const response = await usersService.getUserPermissions(slug);
       return response.data;
     },
-    enabled: !!id,
+    enabled: !!slug,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 };
 
 // Get user direct permissions query
-export const useUserDirectPermissions = (id) => {
+export const useUserDirectPermissions = (slug) => {
   return useQuery({
-    queryKey: userKeys.directPermissions(id),
+    queryKey: userKeys.directPermissions(slug),
     queryFn: async () => {
-      const response = await usersService.getUserDirectPermissions(id);
+      const response = await usersService.getUserDirectPermissions(slug);
       return response.data;
     },
-    enabled: !!id,
+    enabled: !!slug,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 };
@@ -416,17 +416,17 @@ export const useAssignDirectPermission = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, permissionId }) => {
+    mutationFn: async ({ slug, permissionSlug }) => {
       const response = await usersService.assignDirectPermission(
-        id,
-        permissionId
+        slug,
+        permissionSlug
       );
       return response.data;
     },
     onSuccess: (data, variables) => {
       // Invalidate the user query to refetch the updated data
       queryClient.invalidateQueries({
-        queryKey: userKeys.detail(variables.id),
+        queryKey: userKeys.detail(variables.slug),
       });
 
       toast.success("Permission assigned successfully", {
@@ -450,17 +450,17 @@ export const useRemoveDirectPermission = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, permissionId }) => {
+    mutationFn: async ({ slug, permissionSlug }) => {
       const response = await usersService.removeDirectPermission(
-        id,
-        permissionId
+        slug,
+        permissionSlug
       );
       return response.data;
     },
     onSuccess: (data, variables) => {
       // Invalidate the user query to refetch the updated data
       queryClient.invalidateQueries({
-        queryKey: userKeys.detail(variables.id),
+        queryKey: userKeys.detail(variables.slug),
       });
 
       toast.success("Permission removed successfully", {
@@ -480,14 +480,14 @@ export const useRemoveDirectPermission = () => {
 };
 
 // Get user roles query
-export const useUserRoles = (id) => {
+export const useUserRoles = (slug) => {
   return useQuery({
-    queryKey: userKeys.roles(id),
+    queryKey: userKeys.roles(slug),
     queryFn: async () => {
-      const response = await usersService.getUserRoles(id);
+      const response = await usersService.getUserRoles(slug);
       return response.data;
     },
-    enabled: !!id,
+    enabled: !!slug,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 };
@@ -497,10 +497,10 @@ export const useAssignRole = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, roleId, assignedBy = null, notes = null }) => {
+    mutationFn: async ({ userSlug, roleSlug, assignedBy = null, notes = null }) => {
       const response = await usersService.assignRole(
-        id,
-        roleId,
+        userSlug,
+        roleSlug,
         assignedBy,
         notes
       );
@@ -509,7 +509,7 @@ export const useAssignRole = () => {
     onSuccess: (data, variables) => {
       // Invalidate both user and roles queries to ensure fresh data
       queryClient.invalidateQueries({
-        queryKey: userKeys.detail(variables.id),
+        queryKey: userKeys.detail(variables.userSlug),
       });
 
       // Also invalidate the roles list to ensure role data is fresh
@@ -537,14 +537,14 @@ export const useRemoveRole = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, roleId }) => {
-      const response = await usersService.removeRole(id, roleId);
+    mutationFn: async ({ userSlug, roleSlug }) => {
+      const response = await usersService.removeRole(userSlug, roleSlug);
       return response.data;
     },
     onSuccess: (data, variables) => {
       // Invalidate both user and roles queries to ensure fresh data
       queryClient.invalidateQueries({
-        queryKey: userKeys.detail(variables.id),
+        queryKey: userKeys.detail(variables.userSlug),
       });
 
       // Also invalidate the roles list to ensure role data is fresh
@@ -591,14 +591,14 @@ export const useSendInvitationToUser = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ userId, options = {} }) => {
-      const response = await usersService.sendInvitationToUser(userId, options);
+    mutationFn: async ({ userSlug, options = {} }) => {
+      const response = await usersService.sendInvitationToUser(userSlug, options);
       return response.data;
     },
     onSuccess: (data, variables) => {
       // Invalidate user queries to refresh data
       queryClient.invalidateQueries({
-        queryKey: userKeys.detail(variables.userId),
+        queryKey: userKeys.detail(variables.userSlug),
       });
       queryClient.invalidateQueries({
         queryKey: userKeys.lists(),

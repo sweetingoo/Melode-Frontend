@@ -55,28 +55,28 @@ export const useResourceAuditLogs = (
 };
 
 // Get audit logs for a specific user
-export const useUserAuditLogs = (userId, params = {}, options = {}) => {
+export const useUserAuditLogs = (userSlug, params = {}, options = {}) => {
   return useQuery({
-    queryKey: auditLogKeys.user(userId, params),
+    queryKey: auditLogKeys.user(userSlug, params),
     queryFn: async () => {
-      const response = await auditLogsService.getUserAuditLogs(userId, params);
+      const response = await auditLogsService.getUserAuditLogs(userSlug, params);
       return response.data;
     },
-    enabled: !!userId,
+    enabled: !!userSlug,
     staleTime: 30 * 1000,
     ...options,
   });
 };
 
 // Get single audit log
-export const useAuditLog = (id, options = {}) => {
+export const useAuditLog = (slug, options = {}) => {
   return useQuery({
-    queryKey: auditLogKeys.detail(id),
+    queryKey: auditLogKeys.detail(slug),
     queryFn: async () => {
-      const response = await auditLogsService.getAuditLog(id);
+      const response = await auditLogsService.getAuditLog(slug);
       return response.data;
     },
-    enabled: !!id,
+    enabled: !!slug,
     staleTime: 5 * 60 * 1000, // 5 minutes
     ...options,
   });

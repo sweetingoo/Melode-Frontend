@@ -59,9 +59,9 @@ const MessageContent = ({ content, className }) => {
 const MessageDetailPage = () => {
   const params = useParams();
   const router = useRouter();
-  const messageId = params.id;
+  const messageSlug = params.id || params.slug;
   const { data: currentUser } = useCurrentUser();
-  const { data: message, isLoading } = useMessage(messageId);
+  const { data: message, isLoading } = useMessage(messageSlug);
   const markAsReadMutation = useMarkMessageAsRead();
   const acknowledgeMutation = useAcknowledgeMessage();
   
@@ -74,10 +74,10 @@ const MessageDetailPage = () => {
       const receipt = message.receipts?.find((r) => r.user_id === currentUser.id);
       if (!receipt?.is_read) {
         // Mark as read via web
-        markAsReadMutation.mutate({ id: messageId, readVia: "web" });
+        markAsReadMutation.mutate({ slug: messageSlug, readVia: "web" });
       }
     }
-  }, [message, currentUser, messageId]);
+  }, [message, currentUser, messageSlug]);
 
   const handleAcknowledge = async () => {
     if (!message?.requires_acknowledgement) return;
@@ -85,7 +85,7 @@ const MessageDetailPage = () => {
     setIsAcknowledging(true);
     try {
       await acknowledgeMutation.mutateAsync({
-        id: messageId,
+        slug: messageSlug,
         acknowledgementNote: acknowledgementNote,
       });
       setAcknowledgementNote("");

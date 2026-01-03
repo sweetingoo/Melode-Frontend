@@ -1100,7 +1100,7 @@ const Dashboard = () => {
               <CardContent>
                 <div className="space-y-2">
                   {myTasksData.items.slice(0, 5).map((task) => (
-                    <Link key={task.id} href={`/admin/my-tasks?task=${task.id}`}>
+                    <Link key={task.id} href={`/admin/my-tasks?task=${task.slug || task.id}`}>
                       <div className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors cursor-pointer">
                         <div className="flex-1">
                           <p className="font-medium text-sm">{task.title || task.name}</p>

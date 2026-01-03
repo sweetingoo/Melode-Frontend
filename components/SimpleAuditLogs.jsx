@@ -29,12 +29,12 @@ import { useResourceAuditLogs } from "@/hooks/useAuditLogs";
 import { format, formatDistanceToNow } from "date-fns";
 import { useIsMobile } from "@/hooks/use-mobile";
 
-const SimpleAuditLogs = ({ resource, resourceId, title = "Recent Activity" }) => {
+const SimpleAuditLogs = ({ resource, resourceId, resourceSlug, title = "Recent Activity" }) => {
   const isMobile = useIsMobile();
 
   const { data: auditLogsData, isLoading, error } = useResourceAuditLogs(
     resource,
-    resourceId,
+    resourceSlug || resourceId, // Use slug if provided, fallback to id for backward compatibility
     { limit: 10 } // Only show last 10 activities
   );
 

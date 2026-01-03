@@ -15,8 +15,8 @@ import { useFileReferences } from "@/hooks/useFileReferences";
 const DocumentPreviewPage = () => {
   const params = useParams();
   const router = useRouter();
-  const documentId = params?.id;
-  const { data: document, isLoading } = useDocument(documentId);
+  const documentSlug = params?.id || params?.slug;
+  const { data: document, isLoading } = useDocument(documentSlug);
   const { processedHtml, containerRef } = useFileReferences(document?.content);
 
   if (isLoading) {
@@ -134,7 +134,7 @@ const DocumentPreviewPage = () => {
       {/* Attachments */}
       <FileAttachmentList
         entityType="document"
-        entityId={document.id}
+        entitySlug={document.slug}
         showTitle={true}
       />
     </div>

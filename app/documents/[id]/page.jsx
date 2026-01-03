@@ -17,8 +17,8 @@ import { useFileReferences } from "@/hooks/useFileReferences";
 const DocumentViewPage = () => {
   const params = useParams();
   const router = useRouter();
-  const documentId = params?.id;
-  const { data: document, isLoading } = useDocument(documentId);
+  const documentSlug = params?.id || params?.slug;
+  const { data: document, isLoading } = useDocument(documentSlug);
   const { hasPermission } = usePermissionsCheck();
   const { processedHtml, containerRef } = useFileReferences(document?.content);
 
@@ -114,7 +114,7 @@ const DocumentViewPage = () => {
           {canUpdate && (
             <Button
               variant="outline"
-              onClick={() => router.push(`/admin/documents?edit=${document.id}`)}
+              onClick={() => router.push(`/admin/documents?edit=${document.slug || document.id}`)}
             >
               <Edit className="mr-2 h-4 w-4" />
               Edit
@@ -157,14 +157,14 @@ const DocumentViewPage = () => {
       {/* Attachments */}
       <FileAttachmentList
         entityType="document"
-        entityId={document.id}
+        entitySlug={document.slug}
         showTitle={true}
       />
 
       {/* Audit Logs */}
       <ResourceAuditLogs
         resource="document"
-        resourceId={document.id}
+        resourceSlug={document.slug}
         pageSize={10}
         title="Access History"
       />

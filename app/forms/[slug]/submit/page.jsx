@@ -333,16 +333,16 @@ const FormSubmitPage = () => {
             router.push(`/admin/tasks`);
           } else if (taskInfo.task_id) {
             // Single collaborative task
-            router.push(`/admin/tasks/${taskInfo.task_id}`);
+            router.push(`/admin/tasks/${taskInfo.task_slug || taskInfo.task_id}`);
           } else {
-            router.push(`/admin/forms/${form.id}/submissions/${result.id}`);
+            router.push(`/admin/forms/${form.slug || form.id}/submissions/${result.slug || result.id}`);
           }
         } else {
-          router.push(`/admin/forms/${form.id}/submissions/${result.id}`);
+          router.push(`/admin/forms/${form.slug || form.id}/submissions/${result.slug || result.id}`);
         }
       } else {
         // For anonymous users, show a success page
-        router.push(`/forms/${slug}/submitted?submission_id=${result.id}`);
+        router.push(`/forms/${slug}/submitted?submission_id=${result.slug || result.id}`);
       }
     } catch (error) {
       console.error("Failed to submit form:", error);

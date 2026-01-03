@@ -97,7 +97,7 @@ import UserAuditLogs from "@/components/UserAuditLogs";
 const UserEditPage = () => {
   const params = useParams();
   const router = useRouter();
-  const userId = params.userId;
+  const userSlug = params.userId || params.slug;
 
   const [activeTab, setActiveTab] = useState("basic");
   const [isCustomPermissionModalOpen, setIsCustomPermissionModalOpen] =
@@ -118,7 +118,7 @@ const UserEditPage = () => {
     data: userData,
     isLoading: userLoading,
     error: userError,
-  } = useUser(userId);
+  } = useUser(userSlug);
 
   // Extract roles, permissions, and direct_permissions from the main user data
   const userRoles = userData?.roles || [];
@@ -154,7 +154,7 @@ const UserEditPage = () => {
     data: employeeAssignmentsData,
     isLoading: assignmentsLoading,
     refetch: refetchAssignments,
-  } = useEmployeeAssignments(userId);
+  } = useEmployeeAssignments(userSlug);
   const createAssignmentMutation = useCreateAssignment();
   const deleteAssignmentMutation = useDeleteAssignment();
   const queryClient = useQueryClient();
@@ -667,7 +667,7 @@ const UserEditPage = () => {
     if (!transformedUser) return;
 
     try {
-      await deactivateUserMutation.mutateAsync(transformedUser.id);
+      await deactivateUserMutation.mutateAsync(userSlug);
     } catch (error) {
       console.error("Failed to deactivate user:", error);
     }
@@ -677,7 +677,7 @@ const UserEditPage = () => {
     if (!transformedUser) return;
 
     try {
-      await activateUserMutation.mutateAsync(transformedUser.id);
+      await activateUserMutation.mutateAsync(userSlug);
     } catch (error) {
       console.error("Failed to activate user:", error);
     }
@@ -687,7 +687,7 @@ const UserEditPage = () => {
     if (!transformedUser) return;
 
     try {
-      await verifyUserMutation.mutateAsync(transformedUser.id);
+      await verifyUserMutation.mutateAsync(userSlug);
     } catch (error) {
       console.error("Failed to verify user:", error);
     }
@@ -697,7 +697,7 @@ const UserEditPage = () => {
     if (!transformedUser) return;
 
     try {
-      await deleteUserMutation.mutateAsync(transformedUser.id);
+      await deleteUserMutation.mutateAsync(userSlug);
       router.push("/admin/people-management");
     } catch (error) {
       console.error("Failed to delete user:", error);
@@ -729,8 +729,8 @@ const UserEditPage = () => {
 
       try {
         await assignDirectPermissionMutation.mutateAsync({
-          id: userId,
-          permissionId: permissionId,
+          slug: userSlug,
+          permissionSlug: permission?.slug || permissionId,
         });
 
         // The mutation will automatically refresh the data, so we don't need to manually update state
@@ -747,8 +747,8 @@ const UserEditPage = () => {
     if (permission) {
       try {
         await removeDirectPermissionMutation.mutateAsync({
-          id: userId,
-          permissionId: permissionId,
+          slug: userSlug,
+          permissionSlug: permission?.slug || permissionId,
         });
 
         // The mutation will automatically refresh the data, so we don't need to manually update state
@@ -775,13 +775,13 @@ const UserEditPage = () => {
     }
   };
 
-  const handleRemoveRole = async (roleId) => {
-    if (!userId) return;
+  const handleRemoveRole = async (roleSlug) => {
+    if (!userSlug) return;
 
     try {
       await removeRoleMutation.mutateAsync({
-        id: userId,
-        roleId: roleId,
+        userSlug: userSlug,
+        roleSlug: roleSlug,
       });
     } catch (error) {
       console.error("Failed to remove role:", error);
@@ -2005,7 +2005,7 @@ const UserEditPage = () => {
 
         {/* Activity History Tab */}
         <TabsContent value="activity" className="space-y-6">
-          <UserAuditLogs userId={userId} title="User Activity History" />
+          <UserAuditLogs userSlug={userSlug} userId={userData?.id} title="User Activity History" />
         </TabsContent>
       </Tabs>
 

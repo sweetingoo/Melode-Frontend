@@ -22,12 +22,12 @@ export const taskTypesService = {
     }
   },
 
-  // Get task type by ID
-  getTaskType: async (id) => {
+  // Get task type by slug
+  getTaskType: async (slug) => {
     try {
-      return await api.get(`/task-types/${id}`);
+      return await api.get(`/task-types/${slug}`);
     } catch (error) {
-      console.error(`Get task type ${id} failed:`, error);
+      console.error(`Get task type ${slug} failed:`, error);
       throw error;
     }
   },
@@ -43,21 +43,21 @@ export const taskTypesService = {
   },
 
   // Update task type
-  updateTaskType: async (id, taskTypeData) => {
+  updateTaskType: async (slug, taskTypeData) => {
     try {
-      return await api.put(`/task-types/${id}`, taskTypeData);
+      return await api.put(`/task-types/${slug}`, taskTypeData);
     } catch (error) {
-      console.error(`Update task type ${id} failed:`, error);
+      console.error(`Update task type ${slug} failed:`, error);
       throw error;
     }
   },
 
   // Delete/deactivate task type
-  deleteTaskType: async (id) => {
+  deleteTaskType: async (slug) => {
     try {
-      return await api.delete(`/task-types/${id}`);
+      return await api.delete(`/task-types/${slug}`);
     } catch (error) {
-      console.error(`Delete task type ${id} failed:`, error);
+      console.error(`Delete task type ${slug} failed:`, error);
       throw error;
     }
   },

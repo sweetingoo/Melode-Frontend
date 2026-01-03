@@ -24,11 +24,13 @@ import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 
-const RecurringTaskHistory = ({ taskId, onClose, isOpen }) => {
+const RecurringTaskHistory = ({ taskSlug, taskId, onClose, isOpen }) => {
+    // Support both slug and id for backward compatibility
+    const identifier = taskSlug || taskId;
     const { data: history, isLoading, error } = useRecurringTaskHistory(
-        taskId,
+        identifier,
         {
-            enabled: isOpen && !!taskId,
+            enabled: isOpen && !!identifier,
         }
     );
 

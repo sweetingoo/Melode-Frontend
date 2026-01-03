@@ -53,11 +53,11 @@ export const clockService = {
   },
 
   // Edit clock record (manager)
-  updateClockRecord: async (id, clockData) => {
+  updateClockRecord: async (slug, clockData) => {
     try {
-      return await api.put(`/clock/records/${id}`, clockData);
+      return await api.put(`/clock/records/${slug}`, clockData);
     } catch (error) {
-      console.error(`Update clock record ${id} failed:`, error);
+      console.error(`Update clock record ${slug} failed:`, error);
       throw error;
     }
   },

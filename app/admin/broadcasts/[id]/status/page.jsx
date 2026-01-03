@@ -37,9 +37,9 @@ import { parseUTCDate } from "@/utils/time";
 const BroadcastStatusPage = () => {
   const params = useParams();
   const router = useRouter();
-  const broadcastId = params.id;
+  const broadcastSlug = params.id || params.slug;
   const { data: currentUser } = useCurrentUser();
-  const { data: broadcast, isLoading } = useMessage(broadcastId);
+  const { data: broadcast, isLoading } = useMessage(broadcastSlug);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all"); // "all", "read", "unread", "acknowledged", "not_acknowledged"
 
@@ -223,7 +223,7 @@ const BroadcastStatusPage = () => {
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `broadcast-${broadcastId}-status-${format(new Date(), "yyyy-MM-dd")}.csv`;
+    a.download = `broadcast-${broadcastSlug}-status-${format(new Date(), "yyyy-MM-dd")}.csv`;
     a.click();
     window.URL.revokeObjectURL(url);
   };

@@ -42,26 +42,23 @@ export const auditLogsService = {
   },
 
   // Get audit logs for a specific user
-  getUserAuditLogs: async (userId, params = {}) => {
+  getUserAuditLogs: async (userSlug, params = {}) => {
     try {
-      return await api.get("/audit-logs/", {
-        params: {
-          user_id: userId,
-          ...params,
-        },
+      return await api.get(`/audit-logs/user/${userSlug}`, {
+        params,
       });
     } catch (error) {
-      console.error(`Get audit logs for user ${userId} failed:`, error);
+      console.error(`Get audit logs for user ${userSlug} failed:`, error);
       throw error;
     }
   },
 
-  // Get audit log by ID
-  getAuditLog: async (id) => {
+  // Get audit log by slug
+  getAuditLog: async (slug) => {
     try {
-      return await api.get(`/audit-logs/${id}`);
+      return await api.get(`/audit-logs/${slug}`);
     } catch (error) {
-      console.error(`Get audit log ${id} failed:`, error);
+      console.error(`Get audit log ${slug} failed:`, error);
       throw error;
     }
   },

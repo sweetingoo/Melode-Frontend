@@ -41,16 +41,16 @@ export const formTypesService = {
   },
 
   /**
-   * Get form type by ID
-   * @param {number} id - Form type ID
+   * Get form type by slug
+   * @param {string} slug - Form type slug
    * @returns {Promise<Object>}
    */
-  getFormType: async (id) => {
+  getFormType: async (slug) => {
     try {
-      const response = await api.get(`/form-types/${id}`);
+      const response = await api.get(`/form-types/${slug}`);
       return response.data;
     } catch (error) {
-      console.error(`Get form type ${id} failed:`, error);
+      console.error(`Get form type ${slug} failed:`, error);
       throw error;
     }
   },
@@ -87,31 +87,31 @@ export const formTypesService = {
 
   /**
    * Update form type
-   * @param {number} id - Form type ID
+   * @param {string} slug - Form type slug
    * @param {Object} formTypeData - Updated form type data
    * @returns {Promise<Object>}
    */
-  updateFormType: async (id, formTypeData) => {
+  updateFormType: async (slug, formTypeData) => {
     try {
-      const response = await api.put(`/form-types/${id}`, formTypeData);
+      const response = await api.put(`/form-types/${slug}`, formTypeData);
       return response.data;
     } catch (error) {
-      console.error(`Update form type ${id} failed:`, error);
+      console.error(`Update form type ${slug} failed:`, error);
       throw error;
     }
   },
 
   /**
    * Delete form type (system types can only be deactivated)
-   * @param {number} id - Form type ID
+   * @param {string} slug - Form type slug
    * @returns {Promise<void>}
    */
-  deleteFormType: async (id) => {
+  deleteFormType: async (slug) => {
     try {
-      const response = await api.delete(`/form-types/${id}`);
+      const response = await api.delete(`/form-types/${slug}`);
       return response.data;
     } catch (error) {
-      console.error(`Delete form type ${id} failed:`, error);
+      console.error(`Delete form type ${slug} failed:`, error);
       throw error;
     }
   },

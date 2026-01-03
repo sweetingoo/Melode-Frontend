@@ -20,14 +20,15 @@ import { formatDistanceToNow } from "date-fns";
 
 const FileAttachmentList = ({
   entityType,
-  entityId,
+  entityId, // Keep for backward compatibility
+  entitySlug, // New prop for slug
   includeInactive = false,
   showTitle = true,
   className = "",
 }) => {
   const { data, isLoading, error } = useEntityAttachments(
     entityType,
-    entityId,
+    entitySlug || entityId, // Use slug if provided, fallback to id for backward compatibility
     includeInactive
   );
   const deleteAttachmentMutation = useDeleteAttachment();
@@ -82,13 +83,15 @@ const FileAttachmentList = ({
     }
   };
 
-  const handleDelete = async (attachmentId) => {
+  const handleDelete = async (attachment) => {
     try {
       await deleteAttachmentMutation.mutateAsync({
-        attachmentId,
+        attachmentSlug: attachment.slug,
+        attachmentId: attachment.id,
         softDelete: true,
         entityType,
-        entityId,
+        entitySlug: entitySlug || entityId,
+        entityId: entityId,
       });
     } catch (error) {
       console.error("Delete failed:", error);
@@ -243,7 +246,7 @@ const FileAttachmentList = ({
                       <AlertDialogFooter>
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
                         <AlertDialogAction
-                          onClick={() => handleDelete(id)}
+                          onClick={() => handleDelete(attachment)}
                           className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                         >
                           {deleteAttachmentMutation.isPending ? (

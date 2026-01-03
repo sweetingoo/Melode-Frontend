@@ -11,12 +11,12 @@ export const assetsService = {
     }
   },
 
-  getAsset: async (id) => {
+  getAsset: async (slug) => {
     try {
-      const response = await api.get(`/assets/${id}`);
+      const response = await api.get(`/assets/${slug}`);
       return response.data || response;
     } catch (error) {
-      console.error(`Get asset ${id} failed:`, error);
+      console.error(`Get asset ${slug} failed:`, error);
       throw error;
     }
   },
@@ -52,22 +52,22 @@ export const assetsService = {
     }
   },
 
-  updateAsset: async (id, assetData) => {
+  updateAsset: async (slug, assetData) => {
     try {
-      const response = await api.put(`/assets/${id}`, assetData);
+      const response = await api.put(`/assets/${slug}`, assetData);
       return response.data || response;
     } catch (error) {
-      console.error(`Update asset ${id} failed:`, error);
+      console.error(`Update asset ${slug} failed:`, error);
       throw error;
     }
   },
 
-  deleteAsset: async (id) => {
+  deleteAsset: async (slug) => {
     try {
-      const response = await api.delete(`/assets/${id}`);
+      const response = await api.delete(`/assets/${slug}`);
       return response.data || response;
     } catch (error) {
-      console.error(`Delete asset ${id} failed:`, error);
+      console.error(`Delete asset ${slug} failed:`, error);
       throw error;
     }
   },
@@ -82,32 +82,32 @@ export const assetsService = {
     }
   },
 
-  updateAssetAttributes: async (id, attributes) => {
+  updateAssetAttributes: async (slug, attributes) => {
     try {
-      const response = await api.put(`/assets/${id}/attributes`, attributes);
+      const response = await api.put(`/assets/${slug}/attributes`, attributes);
       return response.data || response;
     } catch (error) {
-      console.error(`Update asset attributes ${id} failed:`, error);
+      console.error(`Update asset attributes ${slug} failed:`, error);
       throw error;
     }
   },
 
-  updateAssetSensorData: async (id, sensorData) => {
+  updateAssetSensorData: async (slug, sensorData) => {
     try {
-      const response = await api.put(`/assets/${id}/sensor-data`, sensorData);
+      const response = await api.put(`/assets/${slug}/sensor-data`, sensorData);
       return response.data || response;
     } catch (error) {
-      console.error(`Update asset sensor data ${id} failed:`, error);
+      console.error(`Update asset sensor data ${slug} failed:`, error);
       throw error;
     }
   },
 
-  assignAsset: async (id, assignData) => {
+  assignAsset: async (slug, assignData) => {
     try {
-      const response = await api.put(`/assets/${id}/assign`, assignData);
+      const response = await api.put(`/assets/${slug}/assign`, assignData);
       return response.data || response;
     } catch (error) {
-      console.error(`Assign asset ${id} failed:`, error);
+      console.error(`Assign asset ${slug} failed:`, error);
       throw error;
     }
   },

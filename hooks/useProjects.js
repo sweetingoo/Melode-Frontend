@@ -27,14 +27,14 @@ export const useProjects = (params = {}, options = {}) => {
 };
 
 // Get single project query
-export const useProject = (id) => {
+export const useProject = (slug) => {
   return useQuery({
-    queryKey: projectKeys.detail(id),
+    queryKey: projectKeys.detail(slug),
     queryFn: async () => {
-      const response = await projectsService.getProject(id);
+      const response = await projectsService.getProject(slug);
       return response.data;
     },
-    enabled: !!id,
+    enabled: !!slug,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 };
@@ -74,12 +74,12 @@ export const useUpdateProject = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, projectData }) => {
-      const response = await projectsService.updateProject(id, projectData);
+    mutationFn: async ({ slug, projectData }) => {
+      const response = await projectsService.updateProject(slug, projectData);
       return response.data;
     },
     onSuccess: (data, variables) => {
-      queryClient.setQueryData(projectKeys.detail(variables.id), data);
+      queryClient.setQueryData(projectKeys.detail(variables.slug), data);
       queryClient.invalidateQueries({ queryKey: projectKeys.lists() });
       toast.success("Project updated successfully", {
         description: `Project "${data.name}" has been updated.`,
@@ -105,13 +105,13 @@ export const useDeleteProject = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, force = false }) => {
-      await projectsService.deleteProject(id, force);
-      return { id, force };
+    mutationFn: async ({ slug, force = false }) => {
+      await projectsService.deleteProject(slug, force);
+      return { slug, force };
     },
     onSuccess: (data) => {
-      const { id, force } = data;
-      queryClient.removeQueries({ queryKey: projectKeys.detail(id) });
+      const { slug, force } = data;
+      queryClient.removeQueries({ queryKey: projectKeys.detail(slug) });
       queryClient.invalidateQueries({ queryKey: projectKeys.lists() });
       
       if (force) {
@@ -140,14 +140,14 @@ export const useDeleteProject = () => {
 };
 
 // Get project tasks query
-export const useProjectTasks = (projectId, params = {}, options = {}) => {
+export const useProjectTasks = (projectSlug, params = {}, options = {}) => {
   return useQuery({
-    queryKey: projectKeys.tasks(projectId, params),
+    queryKey: projectKeys.tasks(projectSlug, params),
     queryFn: async () => {
-      const response = await projectsService.getProjectTasks(projectId, params);
+      const response = await projectsService.getProjectTasks(projectSlug, params);
       return response.data;
     },
-    enabled: !!projectId,
+    enabled: !!projectSlug,
     staleTime: 5 * 60 * 1000, // 5 minutes
     ...options,
   });
@@ -158,18 +158,18 @@ export const useAddTaskToProject = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ projectId, taskId }) => {
-      const response = await projectsService.addTaskToProject(projectId, taskId);
+    mutationFn: async ({ projectSlug, taskSlug }) => {
+      const response = await projectsService.addTaskToProject(projectSlug, taskSlug);
       return response.data;
     },
     onSuccess: (data, variables) => {
       // Invalidate project tasks queries (with and without params to match all variations)
       queryClient.invalidateQueries({ 
-        queryKey: [...projectKeys.all, "tasks", variables.projectId],
+        queryKey: [...projectKeys.all, "tasks", variables.projectSlug],
         exact: false // Match all queries that start with this key
       });
       // Also invalidate the project detail to refresh task count
-      queryClient.invalidateQueries({ queryKey: projectKeys.detail(variables.projectId) });
+      queryClient.invalidateQueries({ queryKey: projectKeys.detail(variables.projectSlug) });
       // Invalidate all tasks queries
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
       toast.success("Task added to project successfully");
@@ -194,18 +194,18 @@ export const useRemoveTaskFromProject = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ projectId, taskId }) => {
-      await projectsService.removeTaskFromProject(projectId, taskId);
-      return { projectId, taskId };
+    mutationFn: async ({ projectSlug, taskSlug }) => {
+      await projectsService.removeTaskFromProject(projectSlug, taskSlug);
+      return { projectSlug, taskSlug };
     },
     onSuccess: (data, variables) => {
       // Invalidate project tasks queries (with and without params to match all variations)
       queryClient.invalidateQueries({ 
-        queryKey: [...projectKeys.all, "tasks", variables.projectId],
+        queryKey: [...projectKeys.all, "tasks", variables.projectSlug],
         exact: false 
       });
       // Also invalidate the project detail to refresh task count
-      queryClient.invalidateQueries({ queryKey: projectKeys.detail(variables.projectId) });
+      queryClient.invalidateQueries({ queryKey: projectKeys.detail(variables.projectSlug) });
       // Invalidate all tasks queries
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
       toast.success("Task removed from project successfully");
@@ -226,14 +226,14 @@ export const useRemoveTaskFromProject = () => {
 };
 
 // Get project members query
-export const useProjectMembers = (projectId, options = {}) => {
+export const useProjectMembers = (projectSlug, options = {}) => {
   return useQuery({
-    queryKey: projectKeys.members(projectId),
+    queryKey: projectKeys.members(projectSlug),
     queryFn: async () => {
-      const response = await projectsService.getProjectMembers(projectId);
+      const response = await projectsService.getProjectMembers(projectSlug);
       return response.data;
     },
-    enabled: !!projectId,
+    enabled: !!projectSlug,
     staleTime: 5 * 60 * 1000, // 5 minutes
     ...options,
   });
@@ -244,13 +244,13 @@ export const useAddMemberToProject = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ projectId, userId }) => {
-      const response = await projectsService.addMemberToProject(projectId, userId);
+    mutationFn: async ({ projectSlug, userId }) => {
+      const response = await projectsService.addMemberToProject(projectSlug, userId);
       return response.data;
     },
     onSuccess: (data, variables) => {
-      queryClient.invalidateQueries({ queryKey: projectKeys.members(variables.projectId) });
-      queryClient.invalidateQueries({ queryKey: projectKeys.detail(variables.projectId) });
+      queryClient.invalidateQueries({ queryKey: projectKeys.members(variables.projectSlug) });
+      queryClient.invalidateQueries({ queryKey: projectKeys.detail(variables.projectSlug) });
       toast.success("Member added to project successfully");
     },
     onError: (error) => {
@@ -273,13 +273,13 @@ export const useRemoveMemberFromProject = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ projectId, userId }) => {
-      await projectsService.removeMemberFromProject(projectId, userId);
-      return { projectId, userId };
+    mutationFn: async ({ projectSlug, userSlug }) => {
+      await projectsService.removeMemberFromProject(projectSlug, userSlug);
+      return { projectSlug, userSlug };
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: projectKeys.members(data.projectId) });
-      queryClient.invalidateQueries({ queryKey: projectKeys.detail(data.projectId) });
+      queryClient.invalidateQueries({ queryKey: projectKeys.members(data.projectSlug) });
+      queryClient.invalidateQueries({ queryKey: projectKeys.detail(data.projectSlug) });
       toast.success("Member removed from project successfully");
     },
     onError: (error) => {

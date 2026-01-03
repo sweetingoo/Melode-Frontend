@@ -25,13 +25,13 @@ export const useActiveFormTypes = () => {
 };
 
 /**
- * Get form type by ID
+ * Get form type by slug
  */
-export const useFormType = (id) => {
+export const useFormType = (slug) => {
   return useQuery({
-    queryKey: ["formTypes", id],
-    queryFn: () => formTypesService.getFormType(id),
-    enabled: !!id,
+    queryKey: ["formTypes", slug],
+    queryFn: () => formTypesService.getFormType(slug),
+    enabled: !!slug,
     staleTime: 5 * 60 * 1000,
   });
 };
@@ -73,10 +73,10 @@ export const useUpdateFormType = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, data }) => formTypesService.updateFormType(id, data),
+    mutationFn: ({ slug, data }) => formTypesService.updateFormType(slug, data),
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["formTypes"] });
-      queryClient.invalidateQueries({ queryKey: ["formTypes", variables.id] });
+      queryClient.invalidateQueries({ queryKey: ["formTypes", variables.slug] });
       toast.success("Form type updated successfully");
     },
     onError: (error) => {
@@ -92,7 +92,7 @@ export const useDeleteFormType = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id) => formTypesService.deleteFormType(id),
+    mutationFn: (slug) => formTypesService.deleteFormType(slug),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["formTypes"] });
       toast.success("Form type deleted successfully");

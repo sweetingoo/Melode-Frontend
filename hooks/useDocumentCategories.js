@@ -33,28 +33,28 @@ export const useDocumentCategories = (options = {}) => {
 };
 
 // Get single category query
-export const useDocumentCategory = (id, options = {}) => {
+export const useDocumentCategory = (slug, options = {}) => {
   return useQuery({
-    queryKey: documentCategoryKeys.detail(id),
+    queryKey: documentCategoryKeys.detail(slug),
     queryFn: async () => {
-      const response = await documentCategoriesService.getCategory(id);
+      const response = await documentCategoriesService.getCategory(slug);
       return response.data;
     },
-    enabled: !!id,
+    enabled: !!slug,
     staleTime: 5 * 60 * 1000, // 5 minutes
     ...options,
   });
 };
 
 // Get category permissions query
-export const useDocumentCategoryPermissions = (id, options = {}) => {
+export const useDocumentCategoryPermissions = (slug, options = {}) => {
   return useQuery({
-    queryKey: documentCategoryKeys.permissions(id),
+    queryKey: documentCategoryKeys.permissions(slug),
     queryFn: async () => {
-      const response = await documentCategoriesService.getCategoryPermissions(id);
+      const response = await documentCategoriesService.getCategoryPermissions(slug);
       return response.data;
     },
-    enabled: !!id,
+    enabled: !!slug,
     staleTime: 5 * 60 * 1000, // 5 minutes
     ...options,
   });
@@ -95,13 +95,13 @@ export const useUpdateDocumentCategory = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, categoryData }) => {
-      const response = await documentCategoriesService.updateCategory(id, categoryData);
+    mutationFn: async ({ slug, categoryData }) => {
+      const response = await documentCategoriesService.updateCategory(slug, categoryData);
       return response.data;
     },
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: documentCategoryKeys.lists() });
-      queryClient.invalidateQueries({ queryKey: documentCategoryKeys.detail(variables.id) });
+      queryClient.invalidateQueries({ queryKey: documentCategoryKeys.detail(variables.slug) });
       toast.success("Category updated successfully", {
         description: `Category "${data.name || 'Untitled'}" has been updated.`,
       });
@@ -126,8 +126,8 @@ export const useDeleteDocumentCategory = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (id) => {
-      const response = await documentCategoriesService.deleteCategory(id);
+    mutationFn: async (slug) => {
+      const response = await documentCategoriesService.deleteCategory(slug);
       return response.data;
     },
     onSuccess: (data, variables) => {
@@ -157,13 +157,13 @@ export const useUpdateDocumentCategoryPermissions = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, permissions }) => {
-      const response = await documentCategoriesService.updateCategoryPermissions(id, permissions);
+    mutationFn: async ({ slug, permissions }) => {
+      const response = await documentCategoriesService.updateCategoryPermissions(slug, permissions);
       return response.data;
     },
     onSuccess: (data, variables) => {
-      queryClient.invalidateQueries({ queryKey: documentCategoryKeys.permissions(variables.id) });
-      queryClient.invalidateQueries({ queryKey: documentCategoryKeys.detail(variables.id) });
+      queryClient.invalidateQueries({ queryKey: documentCategoryKeys.permissions(variables.slug) });
+      queryClient.invalidateQueries({ queryKey: documentCategoryKeys.detail(variables.slug) });
       toast.success("Category permissions updated successfully", {
         description: "The category permissions have been updated.",
       });

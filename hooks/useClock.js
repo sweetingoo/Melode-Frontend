@@ -143,8 +143,8 @@ export const useUpdateClockRecord = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, clockData }) => {
-      const response = await clockService.updateClockRecord(id, clockData);
+    mutationFn: async ({ slug, clockData }) => {
+      const response = await clockService.updateClockRecord(slug, clockData);
       return response.data;
     },
     onSuccess: (data, variables) => {

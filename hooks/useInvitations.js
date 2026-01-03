@@ -205,13 +205,13 @@ export const useUpdateInvitation = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, data }) => {
-      const response = await invitationsAPI.updateInvitation(id, data);
+    mutationFn: async ({ slug, data }) => {
+      const response = await invitationsService.updateInvitation(slug, data);
       return response.data;
     },
     onSuccess: (data, variables) => {
       // Update the specific invitation in cache
-      queryClient.setQueryData(invitationKeys.detail(variables.id), data);
+      queryClient.setQueryData(invitationKeys.detail(variables.slug), data);
 
       // Invalidate invitations list
       queryClient.invalidateQueries({ queryKey: invitationKeys.all });
@@ -240,13 +240,13 @@ export const useDeleteInvitation = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (id) => {
-      const response = await invitationsService.deleteInvitation(id);
+    mutationFn: async (slug) => {
+      const response = await invitationsService.deleteInvitation(slug);
       return response.data;
     },
-    onSuccess: (data, id) => {
+    onSuccess: (data, slug) => {
       // Remove the invitation from cache
-      queryClient.removeQueries({ queryKey: invitationKeys.detail(id) });
+      queryClient.removeQueries({ queryKey: invitationKeys.detail(slug) });
 
       // Invalidate invitations list
       queryClient.invalidateQueries({ queryKey: invitationKeys.all });
@@ -274,8 +274,8 @@ export const useResendInvitation = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (id) => {
-      const response = await invitationsService.resendInvitation(id);
+    mutationFn: async (slug) => {
+      const response = await invitationsService.resendInvitation(slug);
       return response.data;
     },
     onSuccess: (data) => {
@@ -311,13 +311,13 @@ export const useRevokeInvitation = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (id) => {
-      const response = await invitationsService.revokeInvitation(id);
+    mutationFn: async (slug) => {
+      const response = await invitationsService.revokeInvitation(slug);
       return response.data;
     },
     onSuccess: (data) => {
       // Update the invitation in cache
-      queryClient.setQueryData(invitationKeys.detail(data.id), data);
+      queryClient.setQueryData(invitationKeys.detail(data.slug), data);
 
       // Invalidate invitations list
       queryClient.invalidateQueries({ queryKey: invitationKeys.all });

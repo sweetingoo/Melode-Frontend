@@ -36,7 +36,7 @@ const DocumentsPage = () => {
   const [permissionsCategory, setPermissionsCategory] = useState(null);
 
   const handleViewDocument = (document) => {
-    router.push(`/documents/${document.id}`);
+    router.push(`/documents/${document.slug || document.id}`);
   };
 
   const handleEditDocument = (document) => {

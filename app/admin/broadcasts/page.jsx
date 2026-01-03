@@ -360,7 +360,7 @@ const BroadcastsPage = () => {
                       !isRead && !isSent && "border-l-primary bg-primary/5",
                       isSent && "border-l-green-500 bg-green-50/30 dark:bg-green-950/10"
                     )}
-                    onClick={() => router.push(`/admin/broadcasts/${broadcast.id}`)}
+                    onClick={() => router.push(`/admin/broadcasts/${broadcast.slug || broadcast.id}`)}
                   >
                     <CardContent className="pt-4">
                       <div className="flex items-start justify-between gap-4">
@@ -451,7 +451,7 @@ const BroadcastsPage = () => {
                                   className="h-6 text-xs"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    router.push(`/admin/broadcasts/${broadcast.id}/status`);
+                                    router.push(`/admin/broadcasts/${broadcast.slug || broadcast.id}/status`);
                                   }}
                                 >
                                   View Status
