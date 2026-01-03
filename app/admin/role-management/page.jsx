@@ -451,7 +451,7 @@ const RoleManagementPage = () => {
         }
 
         await updateRoleMutation.mutateAsync({
-          id: editingRole.id,
+          slug: editingRole.slug || editingRole.id,
           roleData: updateData,
         });
       } else {
@@ -1152,7 +1152,7 @@ const RoleManagementPage = () => {
                                           <AlertDialogCancel>Cancel</AlertDialogCancel>
                                           <AlertDialogAction
                                             onClick={() =>
-                                              deleteRoleMutation.mutate(role.id)
+                                              deleteRoleMutation.mutate(role.slug || role.id)
                                             }
                                             className="bg-red-600 hover:bg-red-700"
                                           >
@@ -1324,7 +1324,7 @@ const RoleManagementPage = () => {
                                                     <AlertDialogAction
                                                       onClick={() =>
                                                         deleteRoleMutation.mutate(
-                                                          shiftRole.id
+                                                          shiftRole.slug || shiftRole.id
                                                         )
                                                       }
                                                       className="bg-red-600 hover:bg-red-700"

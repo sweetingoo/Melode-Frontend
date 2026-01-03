@@ -87,8 +87,9 @@ const DocumentEditor = ({ documentId, documentSlug, initialCategoryId = null, on
       // No need to upload pending images anymore
       const finalFormData = { ...formData };
 
-      if (documentId) {
-        await updateDocument.mutateAsync({ id: documentId, documentData: finalFormData });
+      if (documentId || documentSlug) {
+        const slug = document?.slug || documentSlug || documentId;
+        await updateDocument.mutateAsync({ slug: slug, documentData: finalFormData });
       } else {
         await createDocument.mutateAsync(finalFormData);
       }
@@ -101,7 +102,7 @@ const DocumentEditor = ({ documentId, documentSlug, initialCategoryId = null, on
     }
   };
 
-  if (documentLoading && documentId) {
+  if (documentLoading && (documentId || documentSlug)) {
     return (
       <Card>
         <CardContent className="py-8">
@@ -118,7 +119,7 @@ const DocumentEditor = ({ documentId, documentSlug, initialCategoryId = null, on
       <div className="space-y-6">
         <Card>
           <CardHeader>
-            <CardTitle>{documentId ? "Edit Document" : "Create Document"}</CardTitle>
+            <CardTitle>{(documentId || documentSlug) ? "Edit Document" : "Create Document"}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
@@ -198,7 +199,7 @@ const DocumentEditor = ({ documentId, documentSlug, initialCategoryId = null, on
         </Card>
 
         {/* File Attachments */}
-        {documentId && (
+        {(documentId || documentSlug) && (
           <>
             <Card>
               <CardHeader>
@@ -207,13 +208,15 @@ const DocumentEditor = ({ documentId, documentSlug, initialCategoryId = null, on
               <CardContent className="space-y-4">
                 <MultiFileUpload
                   entityType="document"
-                  entityId={documentId}
+                  entityId={document?.slug || documentSlug || documentId}
+                  entitySlug={document?.slug || documentSlug || documentId}
                   maxFiles={10}
                   maxSizeMB={50}
                 />
                 <FileAttachmentList
                   entityType="document"
-                  entityId={documentId}
+                  entityId={document?.slug || documentSlug || documentId}
+                  entitySlug={document?.slug || documentSlug || documentId}
                   showTitle={false}
                 />
               </CardContent>
@@ -239,7 +242,7 @@ const DocumentEditor = ({ documentId, documentSlug, initialCategoryId = null, on
             ) : (
               <>
                 <Save className="mr-2 h-4 w-4" />
-                {documentId ? "Update Document" : "Create Document"}
+                {(documentId || documentSlug) ? "Update Document" : "Create Document"}
               </>
             )}
           </Button>

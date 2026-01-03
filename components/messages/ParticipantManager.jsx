@@ -21,6 +21,7 @@ import { usePresence } from "@/hooks/usePresence";
 
 const ParticipantManager = ({
   conversationId,
+  conversationSlug,
   conversation,
   usersData,
   currentUser,
@@ -85,14 +86,15 @@ const ParticipantManager = ({
   };
 
   const handleRemoveConfirm = async () => {
-    if (!conversationId || !userToRemove) return;
+    const conversationIdentifier = conversationSlug || conversationId || conversation?.slug || conversation?.id;
+    if (!conversationIdentifier || !userToRemove) return;
     
-    const userId = typeof userToRemove.id === 'string' ? parseInt(userToRemove.id) : userToRemove.id;
+    const userSlug = userToRemove.slug || userToRemove.id;
     
     try {
       await removeParticipantMutation.mutateAsync({
-        conversationId,
-        userId,
+        conversationSlug: conversationIdentifier,
+        userSlug: userSlug,
       });
       setShowRemoveDialog(false);
       setUserToRemove(null);

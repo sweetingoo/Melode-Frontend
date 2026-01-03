@@ -224,14 +224,20 @@ const ConversationList = ({
     <ScrollArea className="flex-1">
       <div className="divide-y">
         {conversations.map((conversation) => {
-          // Normalize IDs for comparison (handle string/number mismatch)
+          // Normalize IDs/slugs for comparison (handle string/number mismatch)
           const normalizedSelectedId = selectedConversationId 
             ? String(selectedConversationId).trim() 
             : null;
-          const normalizedConversationId = conversation.id 
+          const normalizedConversationId = conversation.slug 
+            ? String(conversation.slug).trim()
+            : conversation.id 
             ? String(conversation.id).trim() 
             : null;
-          const isSelected = normalizedSelectedId === normalizedConversationId;
+          const normalizedConversationSlug = conversation.slug 
+            ? String(conversation.slug).trim()
+            : null;
+          const isSelected = normalizedSelectedId === normalizedConversationId || 
+                            normalizedSelectedId === normalizedConversationSlug;
           
           const participantNames = getParticipantNames(conversation);
           const avatars = getParticipantAvatars(conversation);
@@ -240,7 +246,7 @@ const ConversationList = ({
           return (
             <div
               key={conversation.id}
-              onClick={() => onConversationClick(conversation.id)}
+              onClick={() => onConversationClick(conversation.slug || conversation.id)}
               className={cn(
                 "px-4 py-3 cursor-pointer transition-all flex items-start gap-3 relative",
                 isSelected 

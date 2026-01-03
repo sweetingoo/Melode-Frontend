@@ -90,7 +90,7 @@ const CategoryDialog = ({ open, onOpenChange, category = null, parentCategory = 
       };
 
       if (category) {
-        await updateCategory.mutateAsync({ id: category.id, categoryData: submitData });
+        await updateCategory.mutateAsync({ slug: category.slug || category.id, categoryData: submitData });
       } else {
         await createCategory.mutateAsync(submitData);
       }

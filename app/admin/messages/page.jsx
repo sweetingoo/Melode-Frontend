@@ -120,7 +120,11 @@ const MessagesPageContent = () => {
   const totalPages = messagesData?.total_pages || 1;
   const total = messagesData?.total || 0;
   const selectedMessage = selectedMessageId
-    ? messages.find((m) => m.id.toString() === selectedMessageId)
+    ? messages.find((m) => 
+        m.slug === selectedMessageId || 
+        m.id?.toString() === selectedMessageId ||
+        m.id === selectedMessageId
+      )
     : null;
 
   const handleCreateMessage = async () => {
@@ -294,11 +298,16 @@ const MessagesPageContent = () => {
     router.push("/admin/messages");
   };
 
-  const handleConversationClick = (conversationId) => {
+  const handleConversationClick = (conversationIdOrSlug) => {
+    // conversationIdOrSlug can be either ID or slug
+    const conversationSlug = typeof conversationIdOrSlug === 'object' 
+      ? conversationIdOrSlug.slug || conversationIdOrSlug.id
+      : conversationIdOrSlug;
+    
     if (isMobile) {
-      router.push(`/admin/messages?conversation=${conversationId}`);
+      router.push(`/admin/messages?conversation=${conversationSlug}`);
     } else {
-      router.push(`/admin/messages?conversation=${conversationId}`);
+      router.push(`/admin/messages?conversation=${conversationSlug}`);
     }
   };
 
@@ -386,6 +395,7 @@ const MessagesPageContent = () => {
         {selectedConversationId ? (
           <ConversationView
             conversationId={selectedConversationId}
+            conversationSlug={selectedConversationId}
             isMobile={isMobile}
             onBack={handleBackToList}
             usersData={usersData}
@@ -423,8 +433,9 @@ const MessagesPageContent = () => {
               resetForm();
 
               // If message was added to a conversation, navigate to that conversation
-              if (result?.conversation_id) {
-                router.push(`/admin/messages?conversation=${result.conversation_id}`);
+              if (result?.conversation_id || result?.conversation_slug) {
+                const conversationSlug = result?.conversation_slug || result?.conversation_id;
+                router.push(`/admin/messages?conversation=${conversationSlug}`);
               }
             } catch (error) {
               console.error("Failed to send message:", error);

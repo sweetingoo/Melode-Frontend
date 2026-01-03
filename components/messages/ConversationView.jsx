@@ -65,6 +65,7 @@ const MessageContent = ({ content, className }) => {
 
 const ConversationView = ({
   conversationId,
+  conversationSlug,
   isMobile,
   onBack,
   usersData,
@@ -96,12 +97,15 @@ const ConversationView = ({
   const isLoadingInitialRef = useRef(true);
   const pendingMessageRef = useRef(null);
 
+  // Use slug if available, otherwise fallback to ID
+  const conversationIdentifier = conversationSlug || conversationId;
+  
   // Load messages for conversation - always load from page 1, then append older pages
   const { data: messagesData, isLoading: isLoadingMessages } = useConversationMessages(
-    conversationId,
+    conversationIdentifier,
     { page: 1, per_page: 20 },
     {
-      enabled: !!conversationId,
+      enabled: !!conversationIdentifier,
       onSuccess: (data) => {
         isLoadingInitialRef.current = false;
         // Check if there are more pages
@@ -127,8 +131,8 @@ const ConversationView = ({
   const conversationFromMessages = messagesData?.conversation || null;
 
   // Also fetch full conversation details (same structure as conversation list)
-  const { data: conversationData } = useConversation(conversationId, {
-    enabled: !!conversationId,
+  const { data: conversationData } = useConversation(conversationIdentifier, {
+    enabled: !!conversationIdentifier,
   });
 
   // Use conversation from details API (same as list) or fallback to conversation from messages
@@ -192,7 +196,7 @@ const ConversationView = ({
 
   // Batch fetch presence for conversation participants
   const { data: batchPresenceData } = useBatchPresence(participantIds, {
-    enabled: participantIds.length > 0 && !!conversationId,
+    enabled: participantIds.length > 0 && !!conversationIdentifier,
   });
 
   // Check if any participant is online
@@ -370,10 +374,11 @@ const ConversationView = ({
       }
 
       // Found unread message - mark it as read
+      const messageSlug = msg.slug || msg.id;
       markedAsReadRef.current.add(msg.id);
 
       markAsReadMutation.mutate({
-        id: msg.id,
+        slug: messageSlug,
         readVia: "web"
       }, {
         onError: (error) => {
@@ -416,12 +421,12 @@ const ConversationView = ({
   // Note: This is a simplified version. For full pagination, you'd need to fetch multiple pages
   // and merge them. For now, we'll just show a "load more" button.
   const handleLoadMore = async () => {
-    if (!hasMorePages || isLoadingMore || isLoadingMessages || !conversationId) return;
+    if (!hasMorePages || isLoadingMore || isLoadingMessages || !conversationIdentifier) return;
 
     setIsLoadingMore(true);
     try {
       const nextPage = currentPage + 1;
-      const response = await messagesService.getConversationMessages(conversationId, {
+      const response = await messagesService.getConversationMessages(conversationIdentifier, {
         page: nextPage,
         per_page: 20,
       });
@@ -433,7 +438,7 @@ const ConversationView = ({
       if (newMessages.length > 0 && total > 0) {
         // Update cache with merged messages (oldest first)
         queryClient.setQueryData(
-          messageKeys.conversationMessages(conversationId, { page: 1, per_page: 20 }),
+          messageKeys.conversationMessages(conversationIdentifier, { page: 1, per_page: 20 }),
           (oldData) => {
             if (!oldData) return oldData;
             // Prepend older messages to the beginning
@@ -460,15 +465,15 @@ const ConversationView = ({
   };
 
   const handleSendMessage = async () => {
-    if (!replyMessage.trim() || !conversationId) return;
+    if (!replyMessage.trim() || !conversationIdentifier) return;
 
     if (!currentUser) return;
 
     // Get conversation to determine target
     const conversationData = conversation || await queryClient.fetchQuery({
-      queryKey: messageKeys.conversationDetail(conversationId),
+      queryKey: messageKeys.conversationDetail(conversationIdentifier),
       queryFn: async () => {
-        const response = await messagesService.getConversation(conversationId);
+        const response = await messagesService.getConversation(conversationIdentifier);
         return response.data;
       },
     });
@@ -502,7 +507,7 @@ const ConversationView = ({
       content: messageContent,
       target_type: "user",
       target_user_ids: targetUserIds,
-      conversation_id: conversationId, // Include conversation_id to add to existing conversation
+      conversation_id: conversationData.id, // Include conversation_id to add to existing conversation (ID in body, not slug)
       content_delivery_mode: "full",
       send_email: deliveryChannels.send_email,
       send_sms: deliveryChannels.send_sms,
@@ -542,7 +547,7 @@ const ConversationView = ({
     });
   };
 
-  if (!conversationId) {
+  if (!conversationIdentifier) {
     return (
       <div className="flex-1 flex items-center justify-center bg-muted/20">
         <div className="text-center space-y-2">
@@ -600,7 +605,7 @@ const ConversationView = ({
                 Manage Participants
               </DropdownMenuItem>
               <DropdownMenuItem
-                onClick={() => router.push(`/admin/messages?conversation=${conversationId}`)}
+                onClick={() => router.push(`/admin/messages?conversation=${conversationIdentifier}`)}
               >
                 View Details
               </DropdownMenuItem>
@@ -867,7 +872,8 @@ const ConversationView = ({
             </DialogDescription>
           </DialogHeader>
           <ParticipantManager
-            conversationId={conversationId}
+            conversationId={conversationIdentifier}
+            conversationSlug={conversationIdentifier}
             conversation={conversation}
             usersData={usersData}
             currentUser={currentUser}

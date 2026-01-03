@@ -1,11 +1,11 @@
 "use client";
 
-import React, { useState } from "react";
-import { useRouter } from "next/navigation";
+import React, { useState, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, FolderTree, FileText } from "lucide-react";
+import { Plus, FolderTree, FileText, Loader2 } from "lucide-react";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
 import DocumentList from "@/components/documents/DocumentList";
 import CategoryTree from "@/components/documents/CategoryTree";
@@ -14,8 +14,9 @@ import DocumentSharingDialog from "@/components/documents/DocumentSharingDialog"
 import CategoryDialog from "@/components/documents/CategoryDialog";
 import CategoryPermissionsDialog from "@/components/documents/CategoryPermissionsDialog";
 
-const DocumentsPage = () => {
+const DocumentsPageContent = () => {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { hasPermission } = usePermissionsCheck();
 
   const canCreateDocument = hasPermission("document:create");
@@ -40,7 +41,7 @@ const DocumentsPage = () => {
   };
 
   const handleEditDocument = (document) => {
-    setEditingDocumentId(document.id);
+    setEditingDocumentId(document.slug || document.id);
     setIsEditDocumentOpen(true);
   };
 
@@ -49,7 +50,7 @@ const DocumentsPage = () => {
   };
 
   const handleShareDocument = (document) => {
-    setSharingDocumentId(document.id);
+    setSharingDocumentId(document.slug || document.id);
   };
 
   const handleCreateDocument = () => {
@@ -72,6 +73,15 @@ const DocumentsPage = () => {
     setPermissionsCategory(category);
     setIsPermissionsDialogOpen(true);
   };
+
+  // Handle edit query parameter from URL
+  useEffect(() => {
+    const editParam = searchParams?.get("edit");
+    if (editParam && !isEditDocumentOpen && !isCreateDocumentOpen) {
+      setEditingDocumentId(editParam);
+      setIsEditDocumentOpen(true);
+    }
+  }, [searchParams, isEditDocumentOpen, isCreateDocumentOpen]);
 
   return (
     <div className="space-y-6">
@@ -173,6 +183,7 @@ const DocumentsPage = () => {
           <div className="container max-w-4xl mx-auto py-8">
             <DocumentEditor
               documentId={editingDocumentId}
+              documentSlug={editingDocumentId}
               initialCategoryId={isCreateDocumentOpen ? selectedCategoryId : null}
               onSave={() => {
                 setIsCreateDocumentOpen(false);
@@ -197,6 +208,7 @@ const DocumentsPage = () => {
             if (!open) setSharingDocumentId(null);
           }}
           documentId={sharingDocumentId}
+          documentSlug={sharingDocumentId}
         />
       )}
 
@@ -224,6 +236,18 @@ const DocumentsPage = () => {
         category={permissionsCategory}
       />
     </div>
+  );
+};
+
+const DocumentsPage = () => {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    }>
+      <DocumentsPageContent />
+    </Suspense>
   );
 };
 

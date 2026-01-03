@@ -305,13 +305,14 @@ const MessageDetail = ({ message, isMobile, onBack, messages, usersData, rolesDa
       }
       
       // Found the latest unread message - mark it as read
+      const messageSlug = msg.slug || msg.id;
       markedAsReadRef.current.add(msg.id);
       
       console.log(`✅ Marking latest unread message ${msg.id} as read (from conversation with ${sortedThread.length} messages)`);
       
       // Mark as read via web (only for messages received from others)
       markAsReadMutation.mutate({ 
-        id: msg.id, 
+        slug: messageSlug, 
         readVia: "web" 
       }, {
         onError: (error) => {
@@ -483,7 +484,7 @@ const MessageDetail = ({ message, isMobile, onBack, messages, usersData, rolesDa
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem
-                onClick={() => router.push(`/admin/messages/${message.id}`)}
+                onClick={() => router.push(`/admin/messages/${message.slug || message.id}`)}
               >
                 <Eye className="h-4 w-4 mr-2" />
                 View Full Details
@@ -591,7 +592,7 @@ const MessageDetail = ({ message, isMobile, onBack, messages, usersData, rolesDa
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => router.push(`/admin/messages/${message.id}`)}
+              onClick={() => router.push(`/admin/messages/${message.slug || message.id}`)}
               className="text-xs h-7"
             >
               <Eye className="h-3 w-3 mr-1" />

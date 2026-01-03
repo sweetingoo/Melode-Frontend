@@ -963,12 +963,18 @@ const FormSubmissionDetailPage = () => {
                 <label className="text-muted-foreground">Submitted By</label>
                 <div className="mt-1">
                   {submission.submitted_by_user_id ? (
-                    <Link
-                      href={`/admin/people-management/${submission.submitted_by_user?.slug || submission.submitted_by_user_slug || submission.submitted_by_user_id}`}
-                      className="text-primary hover:underline"
-                    >
-                      {getUserName(submission.submitted_by_user_id) || `User #${submission.submitted_by_user_id}`}
-                    </Link>
+                    (submission.submitted_by_user?.slug || submission.submitted_by_user_slug) ? (
+                      <Link
+                        href={`/admin/people-management/${submission.submitted_by_user?.slug || submission.submitted_by_user_slug}`}
+                        className="text-primary hover:underline"
+                      >
+                        {getUserName(submission.submitted_by_user_id) || `User #${submission.submitted_by_user_id}`}
+                      </Link>
+                    ) : (
+                      <span className="text-muted-foreground">
+                        {getUserName(submission.submitted_by_user_id) || `User #${submission.submitted_by_user_id}`}
+                      </span>
+                    )
                   ) : (
                     <Badge variant="outline" className="text-muted-foreground">
                       Anonymous
@@ -1032,12 +1038,18 @@ const FormSubmissionDetailPage = () => {
                 <div>
                   <label className="text-muted-foreground">Reviewed By</label>
                   <div className="mt-1">
-                    <Link
-                      href={`/admin/people-management/${submission.reviewed_by_user?.slug || submission.reviewed_by_user_slug || submission.reviewed_by_user_id}`}
-                      className="text-primary hover:underline"
-                    >
-                      {getUserName(submission.reviewed_by_user_id) || `User #${submission.reviewed_by_user_id}`}
-                    </Link>
+                    {(submission.reviewed_by_user?.slug || submission.reviewed_by_user_slug) ? (
+                      <Link
+                        href={`/admin/people-management/${submission.reviewed_by_user?.slug || submission.reviewed_by_user_slug}`}
+                        className="text-primary hover:underline"
+                      >
+                        {getUserName(submission.reviewed_by_user_id) || `User #${submission.reviewed_by_user_id}`}
+                      </Link>
+                    ) : (
+                      <span className="text-muted-foreground">
+                        {getUserName(submission.reviewed_by_user_id) || `User #${submission.reviewed_by_user_id}`}
+                      </span>
+                    )}
                   </div>
                 </div>
               )}

@@ -43,7 +43,10 @@ const CategoryTree = ({
       return;
     }
     try {
-      await deleteCategoryMutation.mutateAsync(categoryId);
+      // Find the category to get its slug
+      const category = categories.find(c => c.id === categoryId || c.slug === categoryId);
+      const categorySlug = category?.slug || categoryId;
+      await deleteCategoryMutation.mutateAsync(categorySlug);
     } catch (error) {
       // Error handled by mutation
     }

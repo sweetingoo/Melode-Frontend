@@ -95,11 +95,11 @@ const NotificationsDropdown = () => {
       // Use preview route for shared documents (clean view without access history)
       router.push(`/documents/${notification.metadata.document_slug || notification.metadata.document_id}/preview`);
     } else if (notification.is_broadcast) {
-      router.push(`/admin/broadcasts/${notification.id}`);
+      router.push(`/admin/broadcasts/${notification.slug || notification.id}`);
     } else if (notification.conversation_id) {
       router.push(`/admin/messages?conversation=${notification.conversation_id}`);
     } else {
-      router.push(`/admin/messages/${notification.id}`);
+      router.push(`/admin/messages/${notification.slug || notification.id}`);
     }
     setIsOpen(false);
   };

@@ -913,7 +913,7 @@ const TasksPage = () => {
       }
 
       await updateTaskMutation.mutateAsync({
-        id: selectedTask.id,
+        slug: selectedTask.slug || selectedTask.id,
         taskData,
       });
       setIsEditModalOpen(false);

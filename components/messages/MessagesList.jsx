@@ -611,7 +611,7 @@ const MessagesList = ({
                     <DropdownMenuItem
                       onClick={(e) => {
                         e.stopPropagation();
-                        window.open(`/admin/messages/${latestMessage.id}`, "_blank");
+                        window.open(`/admin/messages/${latestMessage.slug || latestMessage.id}`, "_blank");
                       }}
                     >
                       <Eye className="h-4 w-4 mr-2" />

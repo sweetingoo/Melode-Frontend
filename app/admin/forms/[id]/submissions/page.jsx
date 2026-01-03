@@ -461,12 +461,18 @@ const FormSubmissionsPage = () => {
                       )}
                       <TableCell>
                         {submission.submitted_by_user_id ? (
-                          <Link
-                            href={`/admin/people-management/${submission.submitted_by_user?.slug || submission.submitted_by_user_slug || submission.submitted_by_user_id}`}
-                            className="text-primary hover:underline"
-                          >
-                            {getUserName(submission.submitted_by_user_id) || `User #${submission.submitted_by_user_id}`}
-                          </Link>
+                          (submission.submitted_by_user?.slug || submission.submitted_by_user_slug) ? (
+                            <Link
+                              href={`/admin/people-management/${submission.submitted_by_user?.slug || submission.submitted_by_user_slug}`}
+                              className="text-primary hover:underline"
+                            >
+                              {getUserName(submission.submitted_by_user_id) || `User #${submission.submitted_by_user_id}`}
+                            </Link>
+                          ) : (
+                            <span className="text-muted-foreground">
+                              {getUserName(submission.submitted_by_user_id) || `User #${submission.submitted_by_user_id}`}
+                            </span>
+                          )
                         ) : (
                           <Badge variant="outline" className="text-muted-foreground">
                             Anonymous

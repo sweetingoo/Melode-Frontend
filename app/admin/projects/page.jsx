@@ -176,7 +176,7 @@ const ProjectsPage = () => {
 
     try {
       await updateProjectMutation.mutateAsync({
-        id: selectedProject.id,
+        slug: selectedProject.slug || selectedProject.id,
         projectData: {
           name: projectFormData.name.trim(),
           description: projectFormData.description?.trim() || "",
