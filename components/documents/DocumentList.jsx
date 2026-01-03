@@ -292,7 +292,7 @@ const DocumentList = ({
                                 if (onViewDocument) {
                                   onViewDocument(document);
                                 } else {
-                                  router.push(`/documents/${document.id}`);
+                                  router.push(`/documents/${document.slug || document.id}`);
                                 }
                               }}
                             >

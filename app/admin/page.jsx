@@ -150,7 +150,7 @@ const Dashboard = () => {
           title: task.title || task.name || "Untitled Task",
           description: task.description || `Task #${task.id}`,
           timestamp: task.created_at || task.createdAt,
-          link: `/admin/tasks/${task.id}`,
+          link: `/admin/tasks/${task.slug || task.id}`,
           icon: CheckSquare,
           color: "blue",
         });
@@ -184,7 +184,7 @@ const Dashboard = () => {
           title: form.form_title || form.name || "Untitled Form",
           description: form.description || `Form #${form.id}`,
           timestamp: form.created_at || form.createdAt,
-          link: `/admin/forms/${form.id}`,
+          link: `/admin/forms/${form.slug || form.id}`,
           icon: FileText,
           color: "purple",
         });

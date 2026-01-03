@@ -41,9 +41,10 @@ const DocumentSharingDialog = ({ open, onOpenChange, documentId, documentSlug })
 
   // Generate shareable link
   const getShareLink = () => {
-    if (!documentId) return '';
+    const slug = document?.slug || documentSlug || documentId;
+    if (!slug) return '';
     const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
-    return `${baseUrl}/documents/${documentId}/preview`;
+    return `${baseUrl}/documents/${slug}/preview`;
   };
 
   // Copy share link to clipboard
@@ -74,8 +75,9 @@ const DocumentSharingDialog = ({ open, onOpenChange, documentId, documentSlug })
 
   const handleTogglePublic = async (checked) => {
     try {
+      const slug = document?.slug || documentSlug || documentId;
       await updateDocument.mutateAsync({
-        id: documentId,
+        slug: slug,
         documentData: { is_public: checked },
       });
       setIsPublic(checked);
@@ -86,15 +88,16 @@ const DocumentSharingDialog = ({ open, onOpenChange, documentId, documentSlug })
 
   const handleShare = async () => {
     try {
+      const slug = document?.slug || documentSlug || documentId;
       const currentShared = document?.shared_with_user_ids || [];
       const toAdd = sharedUserIds.filter((id) => !currentShared.includes(id));
       const toRemove = currentShared.filter((id) => !sharedUserIds.includes(id));
 
       if (toAdd.length > 0) {
-        await shareDocument.mutateAsync({ id: documentId, userIds: toAdd });
+        await shareDocument.mutateAsync({ slug: slug, userIds: toAdd });
       }
       if (toRemove.length > 0) {
-        await unshareDocument.mutateAsync({ id: documentId, userIds: toRemove });
+        await unshareDocument.mutateAsync({ slug: slug, userIds: toRemove });
       }
       onOpenChange(false);
     } catch (error) {

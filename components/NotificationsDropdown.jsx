@@ -90,10 +90,10 @@ const NotificationsDropdown = () => {
     // Check for link_url first (used by document notifications and other link-based notifications)
     if (notification.link_url) {
       router.push(notification.link_url);
-    } else if (notification.category === "document" && notification.metadata?.document_id) {
-      // Fallback: route to document preview if category is document and we have document_id
+    } else if (notification.category === "document" && (notification.metadata?.document_slug || notification.metadata?.document_id)) {
+      // Fallback: route to document preview if category is document and we have document_slug or document_id
       // Use preview route for shared documents (clean view without access history)
-      router.push(`/documents/${notification.metadata.document_id}/preview`);
+      router.push(`/documents/${notification.metadata.document_slug || notification.metadata.document_id}/preview`);
     } else if (notification.is_broadcast) {
       router.push(`/admin/broadcasts/${notification.id}`);
     } else if (notification.conversation_id) {
