@@ -66,8 +66,12 @@ const FormSubmissionDetailPage = () => {
     if (file.file_url || file.download_url || file.url) {
       // Open in new tab for preview
       window.open(file.file_url || file.download_url || file.url, '_blank');
+    } else if (file.file_slug || file.slug) {
+      // Use slug for path parameter (preferred)
+      const fileSlug = file.file_slug || file.slug;
+      window.open(`/api/v1/settings/files/${fileSlug}/download`, '_blank');
     } else if (file.file_id || file.id) {
-      // If we only have file ID, try to construct preview URL or download
+      // Fallback to ID only if slug is not available (for backward compatibility)
       const fileId = file.file_id || file.id;
       window.open(`/api/v1/settings/files/${fileId}/download`, '_blank');
     }
@@ -265,8 +269,11 @@ const FormSubmissionDetailPage = () => {
     if (file.file_url) {
       // If we have a direct URL, open it
       window.open(file.file_url, '_blank');
+    } else if (file.file_slug || file.slug) {
+      // Use slug for path parameter
+      downloadFileMutation.mutate(file.file_slug || file.slug);
     } else if (file.file_id) {
-      // Otherwise use the download hook
+      // Fallback to ID only if slug is not available (for backward compatibility)
       downloadFileMutation.mutate(file.file_id);
     }
   };

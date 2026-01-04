@@ -35,7 +35,7 @@ export default function MessagesDocumentation() {
             <div>
               <h3 className="font-semibold mb-2">What is Messages?</h3>
               <p className="text-sm text-muted-foreground">
-                The Messages feature allows you to send direct messages to individual users or groups, 
+                The Messages feature allows you to send direct messages to individual users or groups,
                 manage conversations, and track message history. It supports both one-on-one and group conversations.
               </p>
             </div>
@@ -107,7 +107,7 @@ export default function MessagesDocumentation() {
                 <li>Click on a conversation to open it</li>
                 <li>Type your reply in the message input at the bottom</li>
                 <li>Press Enter or click "Send" to reply</li>
-                <li>Messages are organized in conversation threads</li>
+                <li>Messages are organised in conversation threads</li>
               </ul>
               <FormMockup title="Conversation View" description="View and reply to messages in a conversation">
                 <div className="space-y-3">

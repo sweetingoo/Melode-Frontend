@@ -22,6 +22,7 @@ import {
   useDocument,
 } from "@/hooks/useDocuments";
 import { useDocumentCategories } from "@/hooks/useDocumentCategories";
+import { generateSlug } from "@/utils/slug";
 import { Loader2, Save } from "lucide-react";
 
 const DocumentEditor = ({ documentId, documentSlug, initialCategoryId = null, onSave, onCancel }) => {
@@ -61,10 +62,12 @@ const DocumentEditor = ({ documentId, documentSlug, initialCategoryId = null, on
 
   useEffect(() => {
     if (document) {
+      // Handle both category object and category_id
+      const categoryId = document.category?.id || document.category_id || null;
       setFormData({
         title: document.title || "",
         content: document.content || "",
-        category_id: document.category_id || null,
+        category_id: categoryId,
         status: document.status || "published",
         is_public: document.is_public || false,
       });
@@ -91,6 +94,13 @@ const DocumentEditor = ({ documentId, documentSlug, initialCategoryId = null, on
         const slug = document?.slug || documentSlug || documentId;
         await updateDocument.mutateAsync({ slug: slug, documentData: finalFormData });
       } else {
+        // Auto-generate unique slug from title when creating a new document
+        if (!finalFormData.slug && finalFormData.title) {
+          const baseSlug = generateSlug(finalFormData.title);
+          // Add timestamp to ensure uniqueness
+          const uniqueSuffix = Date.now().toString(36);
+          finalFormData.slug = `${baseSlug}-${uniqueSuffix}`;
+        }
         await createDocument.mutateAsync(finalFormData);
       }
       if (onSave) {
@@ -136,20 +146,32 @@ const DocumentEditor = ({ documentId, documentSlug, initialCategoryId = null, on
             <div className="space-y-2">
               <Label htmlFor="category_id">Category *</Label>
               <Select
-                value={formData.category_id?.toString() || ""}
+                key={`category-select-${flatCategories.length}-${formData.category_id}`}
+                value={
+                  formData.category_id && flatCategories.length > 0
+                    ? formData.category_id.toString()
+                    : ""
+                }
                 onValueChange={(value) =>
                   setFormData({ ...formData, category_id: parseInt(value) })
                 }
+                disabled={flatCategories.length === 0}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select category" />
                 </SelectTrigger>
                 <SelectContent>
-                  {flatCategories.map((cat) => (
-                    <SelectItem key={cat.id} value={cat.id.toString()}>
-                      {cat.displayName}
+                  {flatCategories.length === 0 ? (
+                    <SelectItem value="loading" disabled>
+                      Loading categories...
                     </SelectItem>
-                  ))}
+                  ) : (
+                    flatCategories.map((cat) => (
+                      <SelectItem key={cat.id} value={cat.id.toString()}>
+                        {cat.displayName}
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -199,7 +221,7 @@ const DocumentEditor = ({ documentId, documentSlug, initialCategoryId = null, on
         </Card>
 
         {/* File Attachments */}
-        {(documentId || documentSlug) && (
+        {document && document.slug && (
           <>
             <Card>
               <CardHeader>
@@ -208,15 +230,13 @@ const DocumentEditor = ({ documentId, documentSlug, initialCategoryId = null, on
               <CardContent className="space-y-4">
                 <MultiFileUpload
                   entityType="document"
-                  entityId={document?.slug || documentSlug || documentId}
-                  entitySlug={document?.slug || documentSlug || documentId}
+                  entitySlug={document.slug}
                   maxFiles={10}
                   maxSizeMB={50}
                 />
                 <FileAttachmentList
                   entityType="document"
-                  entityId={document?.slug || documentSlug || documentId}
-                  entitySlug={document?.slug || documentSlug || documentId}
+                  entitySlug={document.slug}
                   showTitle={false}
                 />
               </CardContent>

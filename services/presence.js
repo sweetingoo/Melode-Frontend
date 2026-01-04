@@ -3,11 +3,11 @@ import { api } from "./api-client";
 // Presence API service
 export const presenceService = {
   // Get single user presence status
-  getUserPresence: async (userId) => {
+  getUserPresence: async (userSlug) => {
     try {
-      return await api.get(`/users/presence/${userId}`);
+      return await api.get(`/users/presence/${userSlug}`);
     } catch (error) {
-      console.error(`Get user presence ${userId} failed:`, error);
+      console.error(`Get user presence ${userSlug} failed:`, error);
       throw error;
     }
   },

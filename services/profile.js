@@ -310,9 +310,9 @@ export const profileService = {
   },
 
   // Download file for custom fields
-  downloadFile: async (fileId) => {
+  downloadFile: async (fileSlug) => {
     try {
-      const response = await api.get(`/settings/files/${fileId}/download`);
+      const response = await api.get(`/settings/files/${fileSlug}/download`);
       return response.data || response;
     } catch (error) {
       console.error("File download failed:", error);

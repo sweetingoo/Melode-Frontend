@@ -213,7 +213,7 @@ const SetupCustomFieldsPage = () => {
                         >
                           Custom Fields Admin
                         </Button>{" "}
-                        to manage and customize them further
+                        to manage and customise them further
                       </span>
                     </div>
                   </div>

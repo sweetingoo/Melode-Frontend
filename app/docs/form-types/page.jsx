@@ -16,7 +16,7 @@ export default function FormTypesDocumentation() {
           <h1 className="text-4xl font-bold">Form Types</h1>
         </div>
         <p className="text-lg text-muted-foreground">
-          Create and manage form types to organize and categorize your forms.
+          Create and manage form types to organise and categorise your forms.
         </p>
       </div>
 
@@ -35,7 +35,7 @@ export default function FormTypesDocumentation() {
             <div>
               <h3 className="font-semibold mb-2">What are Form Types?</h3>
               <p className="text-sm text-muted-foreground">
-                Form Types are categories that help organize and classify your forms. They allow you to group 
+                Form Types are categories that help organise and classify your forms. They allow you to group 
                 related forms together, making it easier to find and manage forms. Each form must be assigned 
                 to a form type.
               </p>
@@ -73,7 +73,7 @@ export default function FormTypesDocumentation() {
               </ol>
               <DialogMockup
                 title="Create Form Type"
-                description="Add a new form type to organize your forms"
+                description="Add a new form type to organise your forms"
                 footer={
                   <>
                     <FormButton variant="outline" size="sm">Cancel</FormButton>
@@ -175,7 +175,7 @@ export default function FormTypesDocumentation() {
             <div>
               <h3 className="font-semibold mb-2">Viewing Forms by Type</h3>
               <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground ml-4">
-                <li>Form types help filter and organize forms</li>
+                <li>Form types help filter and organise forms</li>
                 <li>When creating forms, you select a form type</li>
                 <li>Forms can be filtered by form type in the forms list</li>
                 <li>Form types appear in form management interfaces</li>
@@ -209,9 +209,9 @@ export default function FormTypesDocumentation() {
             <div>
               <h3 className="font-semibold mb-2">Benefits of Form Types</h3>
               <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground ml-4">
-                <li>Better organization of forms</li>
+                <li>Better organisation of forms</li>
                 <li>Easier form discovery and filtering</li>
-                <li>Consistent categorization across the organization</li>
+                <li>Consistent categorisation across the organisation</li>
                 <li>Simplified form management</li>
                 <li>Reporting and analytics by form type</li>
               </ul>

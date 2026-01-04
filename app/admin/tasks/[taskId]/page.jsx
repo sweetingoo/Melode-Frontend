@@ -498,72 +498,78 @@ const TaskDetailPage = () => {
   return (
     <div className="space-y-4 md:space-y-6 p-4 md:p-0">
       {/* Header */}
-      <div className="flex flex-col gap-4">
-        <div className="flex items-center gap-2 md:gap-4">
-          <Button variant="ghost" size="icon" className="flex-shrink-0" onClick={() => router.back()}>
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <div className="flex-1 min-w-0">
-            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold break-words">{task.title}</h1>
+      <div className="flex flex-col gap-4 w-full">
+        {/* Title and Buttons Row - Desktop: side by side, Mobile: stacked */}
+        <div className="flex flex-col md:flex-row md:items-center gap-4 w-full">
+          {/* Title Section */}
+          <div className="flex items-center gap-2 md:gap-4 flex-1 min-w-0">
+            <Button variant="ghost" size="icon" className="flex-shrink-0" onClick={() => router.back()}>
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+            <div className="flex-1 min-w-0">
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold break-words">{task.title}</h1>
+            </div>
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            {(task.is_recurring || task.parent_task_id) && (
-              <Button
-                variant="outline"
-                onClick={() => setShowHistory(true)}
-                className="h-10 px-3 sm:px-4 text-sm"
-              >
-                <History className="mr-2 h-4 w-4" />
-                <span className="hidden sm:inline">History</span>
-              </Button>
-            )}
-            {task.status !== "completed" && (
-              <Button
-                onClick={() => setIsCompleteModalOpen(true)}
-                className="h-10 px-3 sm:px-4 text-sm"
-              >
-                <CheckCircle className="mr-2 h-4 w-4" />
-                <span className="hidden sm:inline">Complete</span>
-              </Button>
-            )}
+
+          {/* Action Buttons Section */}
+          <div className="flex items-center gap-2 flex-wrap pl-10 md:pl-0 md:flex-shrink-0">
+          {(task.is_recurring || task.parent_task_id) && (
             <Button
               variant="outline"
-              onClick={openEditModal}
-              className="h-10 px-3 sm:px-4 text-sm"
+              onClick={() => setShowHistory(true)}
+              className="h-10 px-3 sm:px-4 text-sm flex-shrink-0"
             >
-              <Edit className="mr-2 h-4 w-4" />
-              Edit
+              <History className="mr-2 h-4 w-4" />
+              <span className="hidden sm:inline">History</span>
             </Button>
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="destructive" className="h-10 px-3 sm:px-4 text-sm">
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  <span className="hidden sm:inline">Delete</span>
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Delete Task</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Are you sure you want to delete this task? This action cannot be undone.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={handleDeleteTask}
-                    className="bg-red-600 hover:bg-red-700"
-                  >
-                    Delete
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          </div>
+          )}
+          {task.status !== "completed" && (
+            <Button
+              onClick={() => setIsCompleteModalOpen(true)}
+              className="h-10 px-3 sm:px-4 text-sm flex-shrink-0"
+            >
+              <CheckCircle className="mr-2 h-4 w-4" />
+              <span className="hidden sm:inline">Complete</span>
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            onClick={openEditModal}
+            className="h-10 px-3 sm:px-4 text-sm flex-shrink-0"
+          >
+            <Edit className="mr-2 h-4 w-4" />
+            Edit
+          </Button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="destructive" className="h-10 px-3 sm:px-4 text-sm flex-shrink-0">
+                <Trash2 className="mr-2 h-4 w-4" />
+                <span className="hidden sm:inline">Delete</span>
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete Task</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Are you sure you want to delete this task? This action cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleDeleteTask}
+                  className="bg-red-600 hover:bg-red-700"
+                >
+                  Delete
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
         </div>
 
         {/* Status Badges Row */}
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 justify-end pl-10 md:pl-0">
           <Badge className={getStatusColor(task.status)}>
             {task.status || "N/A"}
           </Badge>
@@ -988,12 +994,21 @@ const TaskDetailPage = () => {
         <TabsContent value="comments" className="space-y-4">
           <Card>
             <CardContent className="pt-6">
+              {taskSlug ? (
               <CommentThread
                 entityType="task"
                 entitySlug={taskSlug}
-                entityId={task?.id}
                 showHeader={true}
               />
+              ) : isLoading ? (
+                <div className="text-center text-sm text-muted-foreground py-8">
+                  Loading task information...
+                </div>
+              ) : (
+                <div className="text-center text-sm text-muted-foreground py-8">
+                  Unable to load comments. Task information not available.
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

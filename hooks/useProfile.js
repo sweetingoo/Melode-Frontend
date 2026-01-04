@@ -771,8 +771,8 @@ export const useUploadFile = (options = {}) => {
 
 export const useDownloadFile = () => {
   return useMutation({
-    mutationFn: async (fileId) => {
-      const response = await profileService.downloadFile(fileId);
+    mutationFn: async (fileSlug) => {
+      const response = await profileService.downloadFile(fileSlug);
       return response;
     },
     onSuccess: (data) => {

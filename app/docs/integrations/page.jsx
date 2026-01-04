@@ -357,7 +357,7 @@ export default function IntegrationsDocumentation() {
                 <li><strong>From Email</strong>: The email address that appears as the sender</li>
                 <li><strong>From Name</strong>: The display name for email sender</li>
                 <li><strong>App Name</strong>: Application name used in emails</li>
-                <li><strong>Domain Name</strong>: Your organization's domain</li>
+                <li><strong>Domain Name</strong>: Your organisation's domain</li>
                 <li><strong>Frontend Base URL</strong>: Base URL for links in emails</li>
               </ul>
             </div>

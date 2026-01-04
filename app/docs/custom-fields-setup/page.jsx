@@ -149,7 +149,7 @@ export default function CustomFieldsSetupDocs() {
                 <li>Click the "Create" button for your chosen template</li>
                 <li>The system automatically creates all sections and fields</li>
                 <li>You'll receive a success notification</li>
-                <li>Navigate to "Manage Fields" to customize the created fields</li>
+                <li>Navigate to "Manage Fields" to customise the created fields</li>
               </ol>
             </div>
           </CardContent>
@@ -215,7 +215,7 @@ export default function CustomFieldsSetupDocs() {
             <div>
               <h3 className="font-semibold mb-2">After Creation</h3>
               <p className="text-sm text-muted-foreground">
-                Once created, you can customize these fields in the "Manage Fields" page. You can edit field names,
+                Once created, you can customise these fields in the "Manage Fields" page. You can edit field names,
                 add validation rules, change field types, reorder fields, and add or remove fields as needed.
               </p>
             </div>

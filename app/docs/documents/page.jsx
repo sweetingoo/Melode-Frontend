@@ -16,7 +16,7 @@ export default function DocumentsDocumentation() {
           <h1 className="text-4xl font-bold">Documents Management</h1>
         </div>
         <p className="text-lg text-muted-foreground">
-          Create, organize, and manage documents with hierarchical categories, permissions, and sharing capabilities.
+          Create, organise, and manage documents with hierarchical categories, permissions, and sharing capabilities.
         </p>
       </div>
 
@@ -28,7 +28,7 @@ export default function DocumentsDocumentation() {
               Categories and Subcategories
             </CardTitle>
             <CardDescription>
-              Organize documents using a hierarchical category structure
+              Organise documents using a hierarchical category structure
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -79,7 +79,7 @@ export default function DocumentsDocumentation() {
             <div>
               <h3 className="font-semibold mb-2">Permission Inheritance</h3>
               <p className="text-sm text-muted-foreground">
-                Subcategories automatically inherit permissions from their parent category by default. 
+                Subcategories automatically inherit permissions from their parent category by default.
                 You can override inherited permissions for specific categories when needed.
               </p>
             </div>

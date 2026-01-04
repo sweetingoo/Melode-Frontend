@@ -64,7 +64,7 @@ const getInitials = (name) => {
 const CommentItem = ({
   comment,
   entityType,
-  entityId,
+  entitySlug,
   currentUserId,
   isAdmin,
   depth = 0,
@@ -101,10 +101,10 @@ const CommentItem = ({
 
     await addCommentMutation.mutateAsync({
       entityType,
-      entityId,
+      entitySlug,
       commentData: {
         comment_text: replyText.trim(),
-        parent_comment_id: comment.id,
+        parent_comment_id: comment.id, // Keep ID in body for backward compatibility
       },
     });
 
@@ -115,10 +115,11 @@ const CommentItem = ({
   const handleEdit = async () => {
     if (!editText.trim()) return;
 
+    const commentSlug = comment.slug || comment.id; // Use slug if available, fallback to id
     await updateCommentMutation.mutateAsync({
       entityType,
-      entityId,
-      commentId: comment.id,
+      entitySlug,
+      commentSlug,
       commentData: {
         comment_text: editText.trim(),
       },
@@ -128,10 +129,11 @@ const CommentItem = ({
   };
 
   const handleDelete = async () => {
+    const commentSlug = comment.slug || comment.id; // Use slug if available, fallback to id
     await deleteCommentMutation.mutateAsync({
       entityType,
-      entityId,
-      commentId: comment.id,
+      entitySlug,
+      commentSlug,
     });
     setShowDeleteDialog(false);
   };
@@ -289,7 +291,7 @@ const CommentItem = ({
               key={replyItem.comment.id}
               comment={replyItem.comment}
               entityType={entityType}
-              entityId={entityId}
+              entitySlug={entitySlug}
               currentUserId={currentUserId}
               isAdmin={isAdmin}
               depth={replyItem.depth}
@@ -313,7 +315,7 @@ const CommentItem = ({
  */
 export const CommentThread = ({
   entityType,
-  entityId,
+  entitySlug,
   className,
   showHeader = true,
   initialPage = 1,
@@ -332,7 +334,7 @@ export const CommentThread = ({
     error,
   } = useComments(
     entityType,
-    entityId,
+    entitySlug,
     {
       page,
       per_page: perPage,
@@ -350,7 +352,7 @@ export const CommentThread = ({
 
     await addCommentMutation.mutateAsync({
       entityType,
-      entityId,
+      entitySlug,
       commentData: {
         comment_text: newCommentText.trim(),
         parent_comment_id: null,
@@ -372,7 +374,7 @@ export const CommentThread = ({
     // Handled in CommentItem component
   };
 
-  // Organize comments into threaded structure
+  // Organise comments into threaded structure
   const organizedComments = useMemo(() => {
     if (!commentsData?.comments) return [];
 
@@ -479,12 +481,12 @@ export const CommentThread = ({
               key={threadItem.comment.id}
               comment={threadItem.comment}
               entityType={entityType}
-              entityId={entityId}
+              entitySlug={entitySlug}
               currentUserId={currentUserId}
               isAdmin={isAdmin}
               depth={threadItem.depth}
               replies={threadItem.replies}
-              onReply={() => {}}
+              onReply={() => { }}
               onEdit={handleEdit}
               onDelete={handleDelete}
               isEditing={editingCommentId === threadItem.comment.id}

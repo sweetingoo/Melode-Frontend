@@ -122,12 +122,12 @@ export const assetsService = {
     }
   },
 
-  getAssetsByLocation: async (locationId) => {
+  getAssetsByLocation: async (locationSlug) => {
     try {
-      const response = await api.get(`/assets/location/${locationId}`);
+      const response = await api.get(`/assets/location/${locationSlug}`);
       return response.data || response;
     } catch (error) {
-      console.error(`Get assets by location ${locationId} failed:`, error);
+      console.error(`Get assets by location ${locationSlug} failed:`, error);
       throw error;
     }
   },

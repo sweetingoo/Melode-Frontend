@@ -8,7 +8,7 @@ export const assetsKeys = {
   detail: (id) => [...assetsKeys.all, "detail", id],
   byNumber: (number) => [...assetsKeys.all, "number", number],
   search: (params) => [...assetsKeys.all, "search", params],
-  byLocation: (locationId) => [...assetsKeys.all, "location", locationId],
+  byLocation: (locationSlug) => [...assetsKeys.all, "location", locationSlug],
   maintenanceNeeded: () => [...assetsKeys.all, "maintenance", "needed"],
   statistics: () => [...assetsKeys.all, "statistics"],
 };
@@ -593,11 +593,11 @@ export const useAssetStatistics = () => {
 };
 
 // Hook to get assets by location
-export const useAssetsByLocation = (locationId) => {
+export const useAssetsByLocation = (locationSlug) => {
   return useQuery({
-    queryKey: assetsKeys.byLocation(locationId),
+    queryKey: assetsKeys.byLocation(locationSlug),
     queryFn: async () => {
-      const response = await assetsService.getAssetsByLocation(locationId);
+      const response = await assetsService.getAssetsByLocation(locationSlug);
       if (response?.assets && Array.isArray(response.assets)) {
         return response.assets.map(assetsUtils.transformAsset);
       } else if (Array.isArray(response)) {
@@ -606,7 +606,7 @@ export const useAssetsByLocation = (locationId) => {
         return [];
       }
     },
-    enabled: !!locationId,
+    enabled: !!locationSlug,
     staleTime: 5 * 60 * 1000,
   });
 };

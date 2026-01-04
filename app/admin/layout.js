@@ -280,9 +280,16 @@ const settingsItems = [
 
 // Helper component for collapsible menu items that work in both expanded and collapsed states
 function CollapsibleMenuItem({ title, icon: Icon, items, pathname }) {
-  const { state } = useSidebar();
+  const { state, setOpenMobile, isMobile } = useSidebar();
   const isCollapsed = state === "collapsed";
   const [isMounted, setIsMounted] = useState(false);
+
+  // Handler to close mobile sidebar when link is clicked
+  const handleLinkClick = () => {
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+  };
 
   // Only render collapsible after mount to prevent hydration mismatch
   useEffect(() => {
@@ -310,6 +317,7 @@ function CollapsibleMenuItem({ title, icon: Icon, items, pathname }) {
                   <Link
                     href={item.url}
                     className="flex items-center gap-2 w-full"
+                    onClick={handleLinkClick}
                   >
                     <item.icon className="h-4 w-4" />
                     <span>{item.title}</span>
@@ -340,7 +348,7 @@ function CollapsibleMenuItem({ title, icon: Icon, items, pathname }) {
             return (
               <SidebarMenuSubItem key={item.title}>
                 <SidebarMenuSubButton asChild isActive={isActive}>
-                  <Link href={item.url} className="flex items-center gap-2">
+                  <Link href={item.url} className="flex items-center gap-2" onClick={handleLinkClick}>
                     <item.icon className="h-4 w-4" />
                     <span>{item.title}</span>
                   </Link>
@@ -370,7 +378,7 @@ function CollapsibleMenuItem({ title, icon: Icon, items, pathname }) {
               return (
                 <SidebarMenuSubItem key={item.title}>
                   <SidebarMenuSubButton asChild isActive={isActive}>
-                    <Link href={item.url} className="flex items-center gap-2">
+                    <Link href={item.url} className="flex items-center gap-2" onClick={handleLinkClick}>
                       <item.icon className="h-4 w-4" />
                       <span>{item.title}</span>
                     </Link>
@@ -382,6 +390,390 @@ function CollapsibleMenuItem({ title, icon: Icon, items, pathname }) {
         </CollapsibleContent>
       </SidebarMenuItem>
     </Collapsible>
+  );
+}
+
+// Component to handle mobile sidebar close on navigation
+function SidebarNavigationContent({
+  visibleMainMenuItems,
+  pathname,
+  unreadMessagesCount,
+  visiblePeopleAndAccessItems,
+  visibleOrganisationItems,
+  visibleMonitoringAndReportsItems,
+  visibleSettingsItems,
+  visibleDocsItems,
+  assignmentsByDepartment,
+  currentDepartment,
+  currentRole,
+  currentUserData,
+  currentAssignmentId,
+  switchDepartmentMutation,
+  departmentsLoading,
+  handleRoleSwitch,
+  returnToOriginalUserMutation,
+  logout,
+  isLoggingOut
+}) {
+  const { setOpenMobile, isMobile } = useSidebar();
+
+  // Handler to close mobile sidebar when link is clicked
+  const handleMobileLinkClick = () => {
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+  };
+
+  return (
+    <>
+      <SidebarContent>
+        <SidebarGroup>
+          <SidebarGroupLabel>Navigation</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {/* Main Navigation Items */}
+              {visibleMainMenuItems.map((item) => {
+                const isActive = pathname === item.url;
+                // Show unread count badge for Messages menu item
+                const showUnreadBadge = item.url === "/admin/messages" && unreadMessagesCount > 0;
+                return (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton
+                      asChild
+                      tooltip={item.title}
+                      isActive={isActive}
+                    >
+                      <Link
+                        href={item.url}
+                        className="flex items-center gap-2 relative"
+                        onClick={handleMobileLinkClick}
+                      >
+                        <item.icon className="h-4 w-4" />
+                        <span>{item.title}</span>
+                        {showUnreadBadge && (
+                          <span className="ml-auto h-5 min-w-[20px] px-1.5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center font-semibold">
+                            {unreadMessagesCount > 99 ? "99+" : unreadMessagesCount}
+                          </span>
+                        )}
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
+
+              {/* People & Access Management - Collapsible */}
+              {visiblePeopleAndAccessItems.length > 0 && (
+                <CollapsibleMenuItem
+                  title="People & Access"
+                  icon={Users}
+                  items={visiblePeopleAndAccessItems}
+                  pathname={pathname}
+                />
+              )}
+
+              {/* Organisation Management - Collapsible */}
+              {visibleOrganisationItems.length > 0 && (
+                <CollapsibleMenuItem
+                  title="Organisation"
+                  icon={Building2}
+                  items={visibleOrganisationItems}
+                  pathname={pathname}
+                />
+              )}
+
+              {/* Monitoring & Reports - Collapsible */}
+              {visibleMonitoringAndReportsItems.length > 0 && (
+                <CollapsibleMenuItem
+                  title="Monitoring & Reports"
+                  icon={BarChart3}
+                  items={visibleMonitoringAndReportsItems}
+                  pathname={pathname}
+                />
+              )}
+
+              {/* Settings - Collapsible */}
+              {visibleSettingsItems.length > 0 && (
+                <CollapsibleMenuItem
+                  title="Settings"
+                  icon={Settings}
+                  items={visibleSettingsItems}
+                  pathname={pathname}
+                />
+              )}
+
+              {/* Documentation - Collapsible */}
+              {visibleDocsItems.length > 0 && (
+                <CollapsibleMenuItem
+                  title="Documentation"
+                  icon={BookOpen}
+                  items={visibleDocsItems}
+                  pathname={pathname}
+                />
+              )}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      </SidebarContent>
+
+      <SidebarFooter>
+        {/* Role Switcher - Before Profile */}
+        {assignmentsByDepartment.length > 0 && (
+          <div className="px-2 py-2 border-b">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start px-2 py-2 h-auto group-data-[collapsible=icon]:w-auto group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:justify-center"
+                  disabled={
+                    switchDepartmentMutation.isPending ||
+                    departmentsLoading
+                  }
+                >
+                  <Building2 className="h-4 w-4 shrink-0" />
+                  <span className=" truncate min-w-0  block group-data-[collapsible=icon]:hidden">
+                    {currentDepartment?.name || (currentUserData?.is_superuser ? "Superuser" : "Select role")}
+                  </span>
+                  {(currentRole || (currentUserData?.is_superuser && !currentRole)) && (
+                    <span className="text-xs flex-1 text-right text-muted-foreground flex items-center justify-end gap-1 block group-data-[collapsible=icon]:hidden">
+                      {currentUserData?.is_superuser && !currentRole ? (
+                        <>
+                          <Crown className="h-3 w-3 text-yellow-600 dark:text-yellow-400" />
+                          <span>Superuser</span>
+                        </>
+                      ) : (
+                        currentRole?.display_name ||
+                        currentRole?.name ||
+                        currentRole?.role_name
+                      )}
+                    </span>
+                  )}
+                  {switchDepartmentMutation.isPending && (
+                    <Loader2 className="ml-2 h-4 w-4 animate-spin shrink-0" />
+                  )}
+                  <ChevronDown className="ml-auto h-4 w-4 opacity-50 group-data-[collapsible=icon]:hidden" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-56" align="start">
+                <DropdownMenuLabel>Switch Role</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {assignmentsByDepartment.map((deptGroup) => (
+                  <div key={deptGroup.department.id || deptGroup.department.name}>
+                    <DropdownMenuLabel className="text-xs font-semibold text-muted-foreground px-2 py-1.5">
+                      {deptGroup.department.name}
+                      {deptGroup.department.id === "superuser" && (
+                        <Crown className="h-3 w-3 inline-block ml-1 text-yellow-600" />
+                      )}
+                    </DropdownMenuLabel>
+
+                    {/* Job Roles Only - Shift roles are automatically available when job role is assigned */}
+                    {deptGroup.jobRoles.map((jobRoleAssignment) => {
+                      const isJobRoleActive =
+                        jobRoleAssignment.assignment_id === currentAssignmentId;
+
+                      return (
+                        jobRoleAssignment.assignment_id && (
+                          <DropdownMenuItem
+                            key={jobRoleAssignment.assignment_id}
+                            className={`cursor-pointer pl-6 ${isJobRoleActive ? "bg-accent" : ""}`}
+                            onClick={() =>
+                              handleRoleSwitch(jobRoleAssignment.assignment_id)
+                            }
+                            disabled={
+                              switchDepartmentMutation.isPending || isJobRoleActive
+                            }
+                          >
+                            <div className="flex items-center justify-between w-full">
+                              <div className="flex items-center gap-2">
+                                <Shield className="h-3 w-3 text-muted-foreground" />
+                                <span className="text-sm font-medium">
+                                  {jobRoleAssignment.role.display_name ||
+                                    jobRoleAssignment.role.name ||
+                                    jobRoleAssignment.role.role_name}
+                                </span>
+                              </div>
+                              {isJobRoleActive && (
+                                <Check className="h-3 w-3 text-primary" />
+                              )}
+                            </div>
+                          </DropdownMenuItem>
+                        )
+                      );
+                    })}
+
+                    {/* Other roles (fallback for roles without hierarchy) */}
+                    {deptGroup.roles.map((roleAssignment) => {
+                      const isSuperuserRole =
+                        roleAssignment.role.slug === "superuser" ||
+                        roleAssignment.role.name === "superuser" ||
+                        roleAssignment.role.role_type === "superuser" ||
+                        deptGroup.department.id === "superuser";
+
+                      // For Superuser role, check if it's active (no assignment_id means superuser mode)
+                      const isActive = isSuperuserRole
+                        ? (!roleAssignment.assignment_id && !currentAssignmentId) ||
+                        (roleAssignment.assignment_id === currentAssignmentId)
+                        : roleAssignment.assignment_id === currentAssignmentId;
+
+                      return (
+                        <DropdownMenuItem
+                          key={roleAssignment.assignment_id || `role-${roleAssignment.role.id}`}
+                          className={`cursor-pointer pl-6 ${isActive ? "bg-accent" : ""}`}
+                          onClick={() => {
+                            // For superuser role, handle specially
+                            if (isSuperuserRole) {
+                              // Superuser doesn't need an assignment_id - it's a system role
+                              // If there's an assignment_id, use it; otherwise use a special value
+                              if (roleAssignment.assignment_id) {
+                                handleRoleSwitch(roleAssignment.assignment_id);
+                              } else {
+                                // For Superuser without assignment_id, clear assignment_id to switch to superuser mode
+                                // This means no assignment_id in localStorage = superuser mode
+                                if (typeof window !== "undefined") {
+                                  localStorage.removeItem("assignment_id");
+                                  localStorage.removeItem("activeRoleId");
+                                }
+                                // Invalidate queries to refresh
+                                switchDepartmentMutation.mutate(null);
+                              }
+                              return;
+                            }
+                            if (roleAssignment.assignment_id) {
+                              handleRoleSwitch(roleAssignment.assignment_id);
+                            }
+                          }}
+                          disabled={
+                            switchDepartmentMutation.isPending ||
+                            // Disable if this role is already active
+                            isActive ||
+                            // For non-superuser roles, disable if no assignment_id
+                            (!isSuperuserRole && !roleAssignment.assignment_id)
+                          }
+                        >
+                          <div className="flex items-center justify-between w-full">
+                            <div className="flex items-center gap-2">
+                              {isSuperuserRole ? (
+                                <Crown className="h-3 w-3 text-yellow-600 dark:text-yellow-400" />
+                              ) : (
+                                <Shield className="h-3 w-3 text-muted-foreground" />
+                              )}
+                              <span className="text-sm font-medium">
+                                {roleAssignment.role.display_name ||
+                                  roleAssignment.role.name ||
+                                  roleAssignment.role.role_name}
+                              </span>
+                            </div>
+                            {(isActive || (isSuperuserRole && currentUserData?.is_superuser && !roleAssignment.assignment_id && !currentAssignmentId)) && (
+                              <Check className="h-3 w-3 text-primary" />
+                            )}
+                          </div>
+                        </DropdownMenuItem>
+                      );
+                    })}
+
+                    {assignmentsByDepartment.indexOf(deptGroup) <
+                      assignmentsByDepartment.length - 1 && (
+                        <DropdownMenuSeparator />
+                      )}
+                  </div>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        )}
+
+        {/* Profile Section */}
+        <div className="px-2 py-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                className="w-full justify-start px-2 py-2 h-auto group-data-[collapsible=icon]:w-auto group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:justify-center"
+              >
+                <div className="flex items-center gap-2 w-full group-data-[collapsible=icon]:justify-center">
+                  <Avatar className="h-6 w-6">
+                    <AvatarImage
+                      src={currentUserData?.avatar_url}
+                      alt={currentUserData?.full_name || "User"}
+                    />
+                    <AvatarFallback>
+                      {currentUserData?.full_name
+                        ?.split(" ")
+                        .map((n) => n[0])
+                        .join("")
+                        .toUpperCase() || "U"}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex flex-col items-start flex-1 min-w-0 group-data-[collapsible=icon]:hidden">
+                    <span className="text-sm font-medium truncate w-full">
+                      {currentUserData?.full_name || "User"}
+                    </span>
+                    <span className="text-xs text-muted-foreground truncate w-full">
+                      {currentUserData?.email || "No email"}
+                    </span>
+                  </div>
+                  <ChevronDown className="ml-auto h-4 w-4 opacity-50 group-data-[collapsible=icon]:hidden" />
+                </div>
+
+                {/* Hijack Session Indicator */}
+                {typeof window !== "undefined" &&
+                  localStorage.getItem("hijackSession") && (
+                    <div className="mt-2 p-2 bg-orange-100 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-md group-data-[collapsible=icon]:hidden">
+                      <div className="flex items-center gap-2 text-xs text-orange-800 dark:text-orange-200">
+                        <Shield className="h-3 w-3" />
+                        <span className="font-medium">
+                          Hijacked Session
+                        </span>
+                      </div>
+                      <div className="text-xs text-orange-600 dark:text-orange-300 mt-1">
+                        Acting as another user
+                      </div>
+                    </div>
+                  )}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-56">
+              <DropdownMenuItem className="cursor-pointer">
+                <User className="mr-2 h-4 w-4" />
+                <Link href="/admin/profile" onClick={handleMobileLinkClick}>Your Profile</Link>
+              </DropdownMenuItem>
+
+              {/* Return to Original User - only show if hijacked */}
+              {typeof window !== "undefined" &&
+                localStorage.getItem("hijackSession") && (
+                  <DropdownMenuItem
+                    className="cursor-pointer"
+                    onClick={() => {
+                      returnToOriginalUserMutation.mutate();
+                    }}
+                    disabled={returnToOriginalUserMutation.isPending}
+                  >
+                    {returnToOriginalUserMutation.isPending ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Shield className="mr-2 h-4 w-4" />
+                    )}
+                    Return to Original User
+                  </DropdownMenuItem>
+                )}
+
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="cursor-pointer text-destructive focus:text-destructive"
+                onClick={logout}
+                disabled={isLoggingOut}
+              >
+                {isLoggingOut ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <LogOut className="mr-2 h-4 w-4" />
+                )}
+                Logout
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </SidebarFooter>
+    </>
   );
 }
 
@@ -452,12 +844,12 @@ export default function AdminLayout({ children }) {
   // Extract permissions from roles if top-level permissions array is empty
   const currentUserPermissions = React.useMemo(() => {
     if (!currentUserData) return [];
-    
+
     // If top-level permissions exist, use them
     if (currentUserData.permissions && currentUserData.permissions.length > 0) {
       return currentUserData.permissions;
     }
-    
+
     // Otherwise, extract from roles
     if (currentUserData.roles && Array.isArray(currentUserData.roles)) {
       const allRolePermissions = [];
@@ -468,10 +860,10 @@ export default function AdminLayout({ children }) {
       });
       return allRolePermissions;
     }
-    
+
     return [];
   }, [currentUserData]);
-  
+
   const currentUserDirectPermissions =
     currentUserData?.direct_permissions || [];
 
@@ -1054,362 +1446,27 @@ export default function AdminLayout({ children }) {
               </div>
             </SidebarHeader>
 
-            <SidebarContent>
-              <SidebarGroup>
-                <SidebarGroupLabel>Navigation</SidebarGroupLabel>
-                <SidebarGroupContent>
-                  <SidebarMenu>
-                    {/* Main Navigation Items */}
-                    {visibleMainMenuItems.map((item) => {
-                      const isActive = pathname === item.url;
-                      // Show unread count badge for Messages menu item
-                      const showUnreadBadge = item.url === "/admin/messages" && unreadMessagesCount > 0;
-                      return (
-                        <SidebarMenuItem key={item.title}>
-                          <SidebarMenuButton
-                            asChild
-                            tooltip={item.title}
-                            isActive={isActive}
-                          >
-                            <Link
-                              href={item.url}
-                              className="flex items-center gap-2 relative"
-                            >
-                              <item.icon className="h-4 w-4" />
-                              <span>{item.title}</span>
-                              {showUnreadBadge && (
-                                <span className="ml-auto h-5 min-w-[20px] px-1.5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center font-semibold">
-                                  {unreadMessagesCount > 99 ? "99+" : unreadMessagesCount}
-                                </span>
-                              )}
-                            </Link>
-                          </SidebarMenuButton>
-                        </SidebarMenuItem>
-                      );
-                    })}
-
-                    {/* People & Access Management - Collapsible */}
-                    {visiblePeopleAndAccessItems.length > 0 && (
-                      <CollapsibleMenuItem
-                        title="People & Access"
-                        icon={Users}
-                        items={visiblePeopleAndAccessItems}
-                        pathname={pathname}
-                      />
-                    )}
-
-                    {/* Organisation Management - Collapsible */}
-                    {visibleOrganisationItems.length > 0 && (
-                      <CollapsibleMenuItem
-                        title="Organisation"
-                        icon={Building2}
-                        items={visibleOrganisationItems}
-                        pathname={pathname}
-                      />
-                    )}
-
-                    {/* Monitoring & Reports - Collapsible */}
-                    {visibleMonitoringAndReportsItems.length > 0 && (
-                      <CollapsibleMenuItem
-                        title="Monitoring & Reports"
-                        icon={BarChart3}
-                        items={visibleMonitoringAndReportsItems}
-                        pathname={pathname}
-                      />
-                    )}
-
-                    {/* Settings - Collapsible */}
-                    {visibleSettingsItems.length > 0 && (
-                      <CollapsibleMenuItem
-                        title="Settings"
-                        icon={Settings}
-                        items={visibleSettingsItems}
-                        pathname={pathname}
-                      />
-                    )}
-                  </SidebarMenu>
-                </SidebarGroupContent>
-              </SidebarGroup>
-            </SidebarContent>
-
-            <SidebarFooter>
-              {/* Role Switcher - Before Profile */}
-              {assignmentsByDepartment.length > 0 && (
-                <div className="px-2 py-2 border-b">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        className="w-full justify-start px-2 py-2 h-auto group-data-[collapsible=icon]:w-auto group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:justify-center"
-                        disabled={
-                          switchDepartmentMutation.isPending ||
-                          departmentsLoading
-                        }
-                      >
-                        <Building2 className="h-4 w-4 shrink-0" />
-                        <span className=" truncate min-w-0  block group-data-[collapsible=icon]:hidden">
-                          {currentDepartment?.name || (currentUserData?.is_superuser ? "Superuser" : "Select role")}
-                        </span>
-                        {(currentRole || (currentUserData?.is_superuser && !currentRole)) && (
-                          <span className="text-xs flex-1 text-right text-muted-foreground flex items-center justify-end gap-1 block group-data-[collapsible=icon]:hidden">
-                            {currentUserData?.is_superuser && !currentRole ? (
-                              <>
-                                <Crown className="h-3 w-3 text-yellow-600 dark:text-yellow-400" />
-                                <span>Superuser</span>
-                              </>
-                            ) : (
-                              currentRole?.display_name ||
-                              currentRole?.name ||
-                              currentRole?.role_name
-                            )}
-                          </span>
-                        )}
-                        {switchDepartmentMutation.isPending && (
-                          <Loader2 className="ml-2 h-4 w-4 animate-spin shrink-0" />
-                        )}
-                        <ChevronDown className="ml-auto h-4 w-4 opacity-50 group-data-[collapsible=icon]:hidden" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent className="w-56" align="start">
-                      <DropdownMenuLabel>Switch Role</DropdownMenuLabel>
-                      <DropdownMenuSeparator />
-                      {assignmentsByDepartment.map((deptGroup) => (
-                        <div key={deptGroup.department.id || deptGroup.department.name}>
-                          <DropdownMenuLabel className="text-xs font-semibold text-muted-foreground px-2 py-1.5">
-                            {deptGroup.department.name}
-                            {deptGroup.department.id === "superuser" && (
-                              <Crown className="h-3 w-3 inline-block ml-1 text-yellow-600" />
-                            )}
-                          </DropdownMenuLabel>
-
-                          {/* Job Roles Only - Shift roles are automatically available when job role is assigned */}
-                          {deptGroup.jobRoles.map((jobRoleAssignment) => {
-                            const isJobRoleActive =
-                              jobRoleAssignment.assignment_id === currentAssignmentId;
-
-                            return (
-                              jobRoleAssignment.assignment_id && (
-                                <DropdownMenuItem
-                                  key={jobRoleAssignment.assignment_id}
-                                  className={`cursor-pointer pl-6 ${isJobRoleActive ? "bg-accent" : ""}`}
-                                  onClick={() =>
-                                    handleRoleSwitch(jobRoleAssignment.assignment_id)
-                                  }
-                                  disabled={
-                                    switchDepartmentMutation.isPending || isJobRoleActive
-                                  }
-                                >
-                                  <div className="flex items-center justify-between w-full">
-                                    <div className="flex items-center gap-2">
-                                      <Shield className="h-3 w-3 text-muted-foreground" />
-                                      <span className="text-sm font-medium">
-                                        {jobRoleAssignment.role.display_name ||
-                                          jobRoleAssignment.role.name ||
-                                          jobRoleAssignment.role.role_name}
-                                      </span>
-                                    </div>
-                                    {isJobRoleActive && (
-                                      <Check className="h-3 w-3 text-primary" />
-                                    )}
-                                  </div>
-                                </DropdownMenuItem>
-                              )
-                            );
-                          })}
-
-                          {/* Other roles (fallback for roles without hierarchy) */}
-                          {deptGroup.roles.map((roleAssignment) => {
-                            const isSuperuserRole =
-                              roleAssignment.role.slug === "superuser" ||
-                              roleAssignment.role.name === "superuser" ||
-                              roleAssignment.role.role_type === "superuser" ||
-                              deptGroup.department.id === "superuser";
-
-                            // For Superuser role, check if it's active (no assignment_id means superuser mode)
-                            const isActive = isSuperuserRole
-                              ? (!roleAssignment.assignment_id && !currentAssignmentId) ||
-                              (roleAssignment.assignment_id === currentAssignmentId)
-                              : roleAssignment.assignment_id === currentAssignmentId;
-
-                            return (
-                              <DropdownMenuItem
-                                key={roleAssignment.assignment_id || `role-${roleAssignment.role.id}`}
-                                className={`cursor-pointer pl-6 ${isActive ? "bg-accent" : ""}`}
-                                onClick={() => {
-                                  // For superuser role, handle specially
-                                  if (isSuperuserRole) {
-                                    // Superuser doesn't need an assignment_id - it's a system role
-                                    // If there's an assignment_id, use it; otherwise use a special value
-                                    if (roleAssignment.assignment_id) {
-                                      handleRoleSwitch(roleAssignment.assignment_id);
-                                    } else {
-                                      // For Superuser without assignment_id, clear assignment_id to switch to superuser mode
-                                      // This means no assignment_id in localStorage = superuser mode
-                                      if (typeof window !== "undefined") {
-                                        localStorage.removeItem("assignment_id");
-                                        localStorage.removeItem("activeRoleId");
-                                      }
-                                      // Invalidate queries to refresh
-                                      switchDepartmentMutation.mutate(null);
-                                    }
-                                    return;
-                                  }
-                                  if (roleAssignment.assignment_id) {
-                                    handleRoleSwitch(roleAssignment.assignment_id);
-                                  }
-                                }}
-                                disabled={
-                                  switchDepartmentMutation.isPending ||
-                                  // Disable if this role is already active
-                                  isActive ||
-                                  // For non-superuser roles, disable if no assignment_id
-                                  (!isSuperuserRole && !roleAssignment.assignment_id)
-                                }
-                              >
-                                <div className="flex items-center justify-between w-full">
-                                  <div className="flex items-center gap-2">
-                                    {isSuperuserRole ? (
-                                      <Crown className="h-3 w-3 text-yellow-600 dark:text-yellow-400" />
-                                    ) : (
-                                      <Shield className="h-3 w-3 text-muted-foreground" />
-                                    )}
-                                    <span className="text-sm font-medium">
-                                      {roleAssignment.role.display_name ||
-                                        roleAssignment.role.name ||
-                                        roleAssignment.role.role_name}
-                                    </span>
-                                  </div>
-                                  {(isActive || (isSuperuserRole && currentUserData?.is_superuser && !roleAssignment.assignment_id && !currentAssignmentId)) && (
-                                    <Check className="h-3 w-3 text-primary" />
-                                  )}
-                                </div>
-                              </DropdownMenuItem>
-                            );
-                          })}
-
-                          {assignmentsByDepartment.indexOf(deptGroup) <
-                            assignmentsByDepartment.length - 1 && (
-                              <DropdownMenuSeparator />
-                            )}
-                        </div>
-                      ))}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              )}
-
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    className="w-full justify-start px-2 py-2 h-auto"
-                  >
-                    <div className="flex items-center gap-2 w-full">
-                      <Avatar className="h-8 w-8">
-                        <AvatarImage
-                          src={
-                            currentUserData?.avatar_url ||
-                            currentUserData?.avatar ||
-                            "/placeholder-avatar.jpg"
-                          }
-                          alt="User avatar"
-                        />
-                        <AvatarFallback className="text-sm font-semibold">
-                          {currentUserData
-                            ? (
-                              currentUserData.first_name?.[0] ||
-                              currentUserData.email?.[0] ||
-                              "U"
-                            ).toUpperCase()
-                            : "U"}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex flex-col items-start group-data-[collapsible=icon]:hidden min-w-0 flex-1">
-                        <span
-                          className="text-sm font-medium truncate w-full"
-                          title={
-                            currentUserData
-                              ? currentUserData.display_name ||
-                              `${currentUserData.first_name || ""} ${currentUserData.last_name || ""
-                                }`.trim() ||
-                              currentUserData.email ||
-                              "User"
-                              : "Loading..."
-                          }
-                        >
-                          {currentUserData
-                            ? currentUserData.display_name ||
-                            `${currentUserData.first_name || ""} ${currentUserData.last_name || ""
-                              }`.trim() ||
-                            currentUserData.email ||
-                            "User"
-                            : "Loading..."}
-                        </span>
-                        <span
-                          className="text-xs text-muted-foreground truncate w-full"
-                          title={
-                            currentUserData
-                              ? currentUserData.email || "No email"
-                              : "Loading..."
-                          }
-                        >
-                          {currentUserData
-                            ? currentUserData.email || "No email"
-                            : "Loading..."}
-                        </span>
-                      </div>
-                      <ChevronDown className="ml-auto h-4 w-4 opacity-50 group-data-[collapsible=icon]:hidden" />
-                    </div>
-
-                    {/* Hijack Session Indicator */}
-                    {typeof window !== "undefined" &&
-                      localStorage.getItem("hijackSession") && (
-                        <div className="mt-2 p-2 bg-orange-100 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-md group-data-[collapsible=icon]:hidden">
-                          <div className="flex items-center gap-2 text-xs text-orange-800 dark:text-orange-200">
-                            <Shield className="h-3 w-3" />
-                            <span className="font-medium">
-                              Hijacked Session
-                            </span>
-                          </div>
-                          <div className="text-xs text-orange-600 dark:text-orange-300 mt-1">
-                            Acting as another user
-                          </div>
-                        </div>
-                      )}
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-56">
-                  <DropdownMenuItem className="cursor-pointer">
-                    <User className="mr-2 h-4 w-4" />
-                    <Link href="/admin/profile">Your Profile</Link>
-                  </DropdownMenuItem>
-
-                  {/* Return to Original User - only show if hijacked */}
-                  {typeof window !== "undefined" &&
-                    localStorage.getItem("hijackSession") && (
-                      <DropdownMenuItem
-                        className="cursor-pointer text-orange-600"
-                        onClick={() => returnToOriginalUserMutation.mutate()}
-                        disabled={returnToOriginalUserMutation.isPending}
-                      >
-                        <Shield className="mr-2 h-4 w-4" />
-                        {returnToOriginalUserMutation.isPending
-                          ? "Returning..."
-                          : "Return to Original User"}
-                      </DropdownMenuItem>
-                    )}
-
-                  <DropdownMenuItem
-                    className="cursor-pointer text-red-600"
-                    onClick={() => logout()}
-                    disabled={isLoggingOut}
-                  >
-                    <LogOut className="mr-2 h-4 w-4" />
-                    <span>{isLoggingOut ? "Logging out..." : "Logout"}</span>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </SidebarFooter>
+            <SidebarNavigationContent
+              visibleMainMenuItems={visibleMainMenuItems}
+              pathname={pathname}
+              unreadMessagesCount={unreadMessagesCount}
+              visiblePeopleAndAccessItems={visiblePeopleAndAccessItems}
+              visibleOrganisationItems={visibleOrganisationItems}
+              visibleMonitoringAndReportsItems={visibleMonitoringAndReportsItems}
+              visibleSettingsItems={visibleSettingsItems}
+              visibleDocsItems={[]}
+              assignmentsByDepartment={assignmentsByDepartment}
+              currentDepartment={currentDepartment}
+              currentRole={currentRole}
+              currentUserData={currentUserData}
+              currentAssignmentId={currentAssignmentId}
+              switchDepartmentMutation={switchDepartmentMutation}
+              departmentsLoading={departmentsLoading}
+              handleRoleSwitch={handleRoleSwitch}
+              returnToOriginalUserMutation={returnToOriginalUserMutation}
+              logout={logout}
+              isLoggingOut={isLoggingOut}
+            />
             <SidebarRail />
           </Sidebar>
 
@@ -1474,7 +1531,7 @@ export default function AdminLayout({ children }) {
 
         {/* Session Continuation Modal */}
         {sessionModal}
-        
+
       </SidebarProvider>
     </AuthGuard>
   );

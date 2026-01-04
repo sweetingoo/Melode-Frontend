@@ -9,8 +9,8 @@ import { useCurrentUser } from "@/hooks/useAuth";
 export const presenceKeys = {
   all: ["presence"],
   online: () => [...presenceKeys.all, "online"],
-  user: (userId) => [...presenceKeys.all, "user", userId],
-  batch: (userIds) => [...presenceKeys.all, "batch", userIds],
+  user: (userSlug) => [...presenceKeys.all, "user", userSlug],
+  batch: (userIds) => [...presenceKeys.all, "batch", userIds], // Keep IDs for batch query params
 };
 
 /**
@@ -136,12 +136,12 @@ export const usePresence = () => {
 
   // Get user presence (online/offline with last_seen)
   const getUserPresence = useCallback(
-    async (userId) => {
+    async (userSlug) => {
       try {
-        const response = await presenceService.getUserPresence(userId);
+        const response = await presenceService.getUserPresence(userSlug);
         return response.data;
       } catch (error) {
-        console.error(`Failed to get presence for user ${userId}:`, error);
+        console.error(`Failed to get presence for user ${userSlug}:`, error);
         return null;
       }
     },
@@ -170,11 +170,11 @@ export const usePresence = () => {
 /**
  * Hook to get presence for a single user
  */
-export const useUserPresence = (userId, options = {}) => {
+export const useUserPresence = (userSlug, options = {}) => {
   return useQuery({
-    queryKey: presenceKeys.user(userId),
+    queryKey: presenceKeys.user(userSlug),
     queryFn: async () => {
-      const response = await presenceService.getUserPresence(userId);
+      const response = await presenceService.getUserPresence(userSlug);
       return response.data;
     },
     enabled: !!userId && (options.enabled !== false),

@@ -35,6 +35,7 @@ const DocumentsPageContent = () => {
   const [parentCategory, setParentCategory] = useState(null);
   const [isPermissionsDialogOpen, setIsPermissionsDialogOpen] = useState(false);
   const [permissionsCategory, setPermissionsCategory] = useState(null);
+  const [isClosingEditor, setIsClosingEditor] = useState(false);
 
   const handleViewDocument = (document) => {
     router.push(`/documents/${document.slug || document.id}`);
@@ -77,35 +78,41 @@ const DocumentsPageContent = () => {
   // Handle edit query parameter from URL
   useEffect(() => {
     const editParam = searchParams?.get("edit");
-    if (editParam && !isEditDocumentOpen && !isCreateDocumentOpen) {
+    if (editParam && !isEditDocumentOpen && !isCreateDocumentOpen && !isClosingEditor) {
       setEditingDocumentId(editParam);
       setIsEditDocumentOpen(true);
     }
-  }, [searchParams, isEditDocumentOpen, isCreateDocumentOpen]);
+  }, [searchParams, isEditDocumentOpen, isCreateDocumentOpen, isClosingEditor]);
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-muted-foreground">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+        <div className="min-w-0 flex-1 pr-2 sm:pr-4">
+          <p className="text-muted-foreground text-sm sm:text-base">
             Manage policies, handbooks, and other documents
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0">
           {canManageCategories && (
             <Button
               variant="outline"
               onClick={() => {
                 setViewMode(viewMode === "categories" ? "list" : "categories");
               }}
+              className="w-full sm:w-auto whitespace-nowrap"
+              size="sm"
             >
               <FolderTree className="mr-2 h-4 w-4" />
               {viewMode === "categories" ? "Documents" : "Categories"}
             </Button>
           )}
           {canCreateDocument && (
-            <Button onClick={handleCreateDocument}>
+            <Button
+              onClick={handleCreateDocument}
+              className="w-full sm:w-auto whitespace-nowrap"
+              size="sm"
+            >
               <Plus className="mr-2 h-4 w-4" />
               Create Document
             </Button>
@@ -186,14 +193,34 @@ const DocumentsPageContent = () => {
               documentSlug={editingDocumentId}
               initialCategoryId={isCreateDocumentOpen ? selectedCategoryId : null}
               onSave={() => {
+                setIsClosingEditor(true);
                 setIsCreateDocumentOpen(false);
                 setIsEditDocumentOpen(false);
                 setEditingDocumentId(null);
+                // Remove edit query parameter from URL
+                if (searchParams?.get("edit")) {
+                  const newSearchParams = new URLSearchParams(searchParams.toString());
+                  newSearchParams.delete("edit");
+                  const queryString = newSearchParams.toString();
+                  router.replace(queryString ? `/admin/documents?${queryString}` : '/admin/documents');
+                }
+                // Reset closing flag after a short delay to allow URL update to complete
+                setTimeout(() => setIsClosingEditor(false), 100);
               }}
               onCancel={() => {
+                setIsClosingEditor(true);
                 setIsCreateDocumentOpen(false);
                 setIsEditDocumentOpen(false);
                 setEditingDocumentId(null);
+                // Remove edit query parameter from URL
+                if (searchParams?.get("edit")) {
+                  const newSearchParams = new URLSearchParams(searchParams.toString());
+                  newSearchParams.delete("edit");
+                  const queryString = newSearchParams.toString();
+                  router.replace(queryString ? `/admin/documents?${queryString}` : '/admin/documents');
+                }
+                // Reset closing flag after a short delay to allow URL update to complete
+                setTimeout(() => setIsClosingEditor(false), 100);
               }}
             />
           </div>

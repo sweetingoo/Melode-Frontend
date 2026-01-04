@@ -51,6 +51,7 @@ import {
   Network,
   RefreshCw,
   X,
+  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -67,6 +68,9 @@ import {
 } from "@/hooks/usePermissions";
 import { useDepartments, useCreateDepartment } from "@/hooks/useDepartments";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
+import { useQueryClient } from "@tanstack/react-query";
+import { permissionsService } from "@/services/permissions";
+import { permissionKeys } from "@/hooks/usePermissions";
 import {
   Select,
   SelectContent,
@@ -87,6 +91,10 @@ const RoleManagementPage = () => {
   const [managingRole, setManagingRole] = useState(null);
   const [searchPermissionTerm, setSearchPermissionTerm] = useState("");
   const [selectedPermissions, setSelectedPermissions] = useState(new Set());
+  const [loadedPermissionsPages, setLoadedPermissionsPages] = useState([1]);
+  const [isLoadingMorePermissions, setIsLoadingMorePermissions] = useState(false);
+  const [accumulatedPermissions, setAccumulatedPermissions] = useState([]);
+  const queryClient = useQueryClient();
   const [quickCreateDepartmentData, setQuickCreateDepartmentData] = useState({
     name: "",
     code: "",
@@ -135,8 +143,21 @@ const RoleManagementPage = () => {
 
   // Transform API data
   const allRoles = rolesData ? rolesData.map(roleUtils.transformRole) : [];
+  
+  // Get total count from API response
+  const totalPermissionsCount = React.useMemo(() => {
+    if (!permissionsData) return 0;
+    return permissionsData.total || permissionsData.total_count || 0;
+  }, [permissionsData]);
+
   // Handle new paginated response structure: { permissions: [], total: 96, ... }
+  // Use accumulated permissions if available, otherwise use first page
   const allPermissions = React.useMemo(() => {
+    // If we have accumulated permissions, use those
+    if (accumulatedPermissions.length > 0) {
+      return accumulatedPermissions;
+    }
+
     if (!permissionsData) return [];
 
     let permissionsArray = [];
@@ -161,7 +182,24 @@ const RoleManagementPage = () => {
     }
 
     return permissionsArray.map(permissionUtils.transformPermission);
-  }, [permissionsData]);
+  }, [permissionsData, accumulatedPermissions]);
+
+  // Initialize accumulated permissions when permissionsData changes and modal is open
+  React.useEffect(() => {
+    if (isPermissionsModalOpen && permissionsData && accumulatedPermissions.length === 0) {
+      let permissionsArray = [];
+      if (permissionsData.permissions && Array.isArray(permissionsData.permissions)) {
+        permissionsArray = permissionsData.permissions;
+      } else if (Array.isArray(permissionsData)) {
+        permissionsArray = permissionsData;
+      }
+      
+      if (permissionsArray.length > 0) {
+        const transformed = permissionsArray.map(permissionUtils.transformPermission);
+        setAccumulatedPermissions(transformed);
+      }
+    }
+  }, [isPermissionsModalOpen, permissionsData, accumulatedPermissions.length]);
   const departments = departmentsData?.departments || departmentsData?.data || departmentsData || [];
 
   // Group roles by department and job role (hierarchical structure)
@@ -338,6 +376,10 @@ const RoleManagementPage = () => {
       }
 
       setManagingRole(role);
+      // Reset accumulated permissions and loaded pages when opening modal
+      setAccumulatedPermissions([]);
+      setLoadedPermissionsPages([1]);
+      
       // Debug: Log the role permissions data structure
       console.log('Role permissions:', role.permissions);
       console.log('All permissions:', allPermissions.slice(0, 3)); // Show first 3 for debugging
@@ -363,6 +405,65 @@ const RoleManagementPage = () => {
       setIsPermissionsModalOpen(true);
     }
   };
+
+  // Load more permissions when scrolling
+  const loadMorePermissions = React.useCallback(async () => {
+    if (isLoadingMorePermissions || !permissionsData) return;
+
+    const perPage = permissionsData.per_page || 50;
+    const totalPages = Math.ceil(totalPermissionsCount / perPage);
+    const nextPage = Math.max(...loadedPermissionsPages) + 1;
+
+    if (nextPage > totalPages) return; // No more pages
+
+    setIsLoadingMorePermissions(true);
+    try {
+      const response = await permissionsService.getPermissions({
+        page: nextPage,
+        per_page: perPage,
+      });
+
+      const responseData = response?.data || response;
+      let newPermissionsArray = [];
+
+      if (responseData?.permissions && Array.isArray(responseData.permissions)) {
+        newPermissionsArray = responseData.permissions;
+      } else if (Array.isArray(responseData)) {
+        newPermissionsArray = responseData;
+      }
+
+      if (newPermissionsArray.length > 0) {
+        const transformed = newPermissionsArray.map(permissionUtils.transformPermission);
+        setAccumulatedPermissions((prev) => [...prev, ...transformed]);
+        setLoadedPermissionsPages((prev) => [...prev, nextPage]);
+      }
+    } catch (error) {
+      console.error("Failed to load more permissions:", error);
+      toast.error("Failed to load more permissions");
+    } finally {
+      setIsLoadingMorePermissions(false);
+    }
+  }, [isLoadingMorePermissions, permissionsData, totalPermissionsCount, loadedPermissionsPages]);
+
+  // Handle scroll to load more
+  const handlePermissionsScroll = React.useCallback(
+    (e) => {
+      const { scrollTop, scrollHeight, clientHeight } = e.target;
+      const scrollPercentage = (scrollTop + clientHeight) / scrollHeight;
+
+      // Load more when scrolled to 80% of the content
+      if (scrollPercentage > 0.8 && !isLoadingMorePermissions) {
+        const perPage = permissionsData?.per_page || 50;
+        const totalPages = Math.ceil(totalPermissionsCount / perPage);
+        const currentMaxPage = Math.max(...loadedPermissionsPages);
+
+        if (currentMaxPage < totalPages) {
+          loadMorePermissions();
+        }
+      }
+    },
+    [isLoadingMorePermissions, permissionsData, totalPermissionsCount, loadedPermissionsPages, loadMorePermissions]
+  );
 
   // Utility function to generate slug from display name
   const generateSlug = (text) => {
@@ -624,6 +725,10 @@ const RoleManagementPage = () => {
         setManagingRole(null);
         setSelectedPermissions(new Set());
         setSearchPermissionTerm("");
+        // Reset accumulated permissions and loaded pages
+        setAccumulatedPermissions([]);
+        setLoadedPermissionsPages([1]);
+        setIsLoadingMorePermissions(false);
       } catch (error) {
         console.error("Failed to save permissions:", error);
       }
@@ -635,6 +740,10 @@ const RoleManagementPage = () => {
     setManagingRole(null);
     setSelectedPermissions(new Set());
     setSearchPermissionTerm("");
+    // Reset accumulated permissions and loaded pages
+    setAccumulatedPermissions([]);
+    setLoadedPermissionsPages([1]);
+    setIsLoadingMorePermissions(false);
   };
 
   return (
@@ -2026,7 +2135,7 @@ const RoleManagementPage = () => {
                 </div>
                 <p className="text-xs text-muted-foreground">
                   Currently selected: {selectedPermissions.size} permission(s) •
-                  Total available: {allPermissions.length} permission(s)
+                  Total available: {totalPermissionsCount} permission(s)
                 </p>
               </div>
             )}
@@ -2050,7 +2159,10 @@ const RoleManagementPage = () => {
             </div>
 
             {/* Permissions Table */}
-            <div className="border rounded-lg max-h-96 overflow-auto">
+            <div 
+              className="border rounded-lg max-h-96 overflow-auto"
+              onScroll={handlePermissionsScroll}
+            >
               {permissionsLoading ? (
                 <div className="p-4 space-y-3">
                   {[...Array(5)].map((_, i) => (
@@ -2148,6 +2260,23 @@ const RoleManagementPage = () => {
                     )}
                   </TableBody>
                 </Table>
+              )}
+              {/* Loading indicator for more permissions */}
+              {isLoadingMorePermissions && (
+                <div className="flex items-center justify-center py-4 border-t">
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  <span className="text-sm text-muted-foreground">Loading more permissions...</span>
+                </div>
+              )}
+              {/* Show message if all permissions are loaded */}
+              {!isLoadingMorePermissions && 
+               allPermissions.length > 0 && 
+               allPermissions.length >= totalPermissionsCount && (
+                <div className="flex items-center justify-center py-2 border-t">
+                  <span className="text-xs text-muted-foreground">
+                    All {totalPermissionsCount} permissions loaded
+                  </span>
+                </div>
               )}
             </div>
 

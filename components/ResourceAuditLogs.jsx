@@ -75,6 +75,10 @@ const ResourceAuditLogs = ({ resource, resourceId, resourceSlug, title = "Activi
     if (auditLogsData.audit_logs) return auditLogsData.audit_logs;
     if (auditLogsData.data) return auditLogsData.data;
     if (auditLogsData.results) return auditLogsData.results;
+    // Debug logging in development
+    if (process.env.NODE_ENV === 'development' && auditLogsData) {
+      console.log('Audit logs data structure:', auditLogsData);
+    }
     return [];
   }, [auditLogsData]);
 
@@ -192,7 +196,12 @@ const ResourceAuditLogs = ({ resource, resourceId, resourceSlug, title = "Activi
         </CardHeader>
         <CardContent>
           <div className="text-center py-8 text-muted-foreground">
-            Failed to load activity history
+            <p>Failed to load activity history</p>
+            {process.env.NODE_ENV === 'development' && (
+              <p className="text-xs mt-2 text-red-500">
+                {error?.message || error?.response?.data?.detail || 'Unknown error'}
+              </p>
+            )}
           </div>
         </CardContent>
       </Card>

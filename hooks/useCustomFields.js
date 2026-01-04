@@ -8,7 +8,7 @@ export const customFieldSectionKeys = {
   lists: () => [...customFieldSectionKeys.all, "list"],
   list: (params) => [...customFieldSectionKeys.lists(), params],
   details: () => [...customFieldSectionKeys.all, "detail"],
-  detail: (id) => [...customFieldSectionKeys.details(), id],
+  detail: (slug) => [...customFieldSectionKeys.details(), slug],
   searches: () => [...customFieldSectionKeys.all, "search"],
   search: (searchData) => [...customFieldSectionKeys.searches(), searchData],
 };
@@ -105,15 +105,15 @@ export const useCustomFieldSectionsPaginated = (params = {}) => {
 };
 
 // Get single custom field section query
-export const useCustomFieldSection = (id) => {
+export const useCustomFieldSection = (slug) => {
   return useQuery({
-    queryKey: customFieldSectionKeys.detail(id),
+    queryKey: customFieldSectionKeys.detail(slug),
     queryFn: async () => {
-      const response = await customFieldsService.getCustomFieldSection(id);
+      const response = await customFieldsService.getCustomFieldSection(slug);
       // Handle both direct object response and wrapped response
       return response.data || response;
     },
-    enabled: !!id,
+    enabled: !!slug,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 };
@@ -173,13 +173,13 @@ export const useUpdateCustomFieldSection = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, sectionData }) => {
-      console.log("Update Section - Input:", { id, sectionData });
+    mutationFn: async ({ slug, sectionData }) => {
+      console.log("Update Section - Input:", { slug, sectionData });
       const transformedData =
         customFieldSectionUtils.transformSectionForAPI(sectionData);
       console.log("Update Section - Transformed:", transformedData);
       const response = await customFieldsService.updateCustomFieldSection(
-        id,
+        slug,
         transformedData
       );
       console.log("Update Section - Response:", response);
@@ -188,7 +188,7 @@ export const useUpdateCustomFieldSection = () => {
     onSuccess: (data, variables) => {
       // Update the specific section in cache
       queryClient.setQueryData(
-        customFieldSectionKeys.detail(variables.id),
+        customFieldSectionKeys.detail(variables.slug),
         data
       );
 
@@ -217,14 +217,14 @@ export const useDeleteCustomFieldSection = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (id) => {
-      const response = await customFieldsService.deleteCustomFieldSection(id);
+    mutationFn: async (slug) => {
+      const response = await customFieldsService.deleteCustomFieldSection(slug);
       return response.data || response;
     },
-    onSuccess: (data, id) => {
+    onSuccess: (data, slug) => {
       // Remove from cache
       queryClient.removeQueries({
-        queryKey: customFieldSectionKeys.detail(id),
+        queryKey: customFieldSectionKeys.detail(slug),
       });
 
       // Invalidate lists to refetch
@@ -252,16 +252,16 @@ export const useHardDeleteCustomFieldSection = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (id) => {
+    mutationFn: async (slug) => {
       const response = await customFieldsService.hardDeleteCustomFieldSection(
-        id
+        slug
       );
       return response.data || response;
     },
-    onSuccess: (data, id) => {
+    onSuccess: (data, slug) => {
       // Remove from cache
       queryClient.removeQueries({
-        queryKey: customFieldSectionKeys.detail(id),
+        queryKey: customFieldSectionKeys.detail(slug),
       });
 
       // Invalidate lists to refetch
@@ -285,37 +285,37 @@ export const useHardDeleteCustomFieldSection = () => {
 };
 
 // Preview hooks
-export const useCustomFieldsHierarchy = (entityType, entityId = 1) => {
+export const useCustomFieldsHierarchy = (entityType, entitySlug) => {
   return useQuery({
     queryKey: [
       ...customFieldSectionKeys.all,
       "hierarchy",
       entityType,
-      entityId,
+      entitySlug,
     ],
     queryFn: async () => {
       const response = await customFieldsService.getCustomFieldsHierarchy(
         entityType,
-        entityId
+        entitySlug
       );
       return response.data || response;
     },
-    enabled: !!entityType,
+    enabled: !!entityType && !!entitySlug,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 };
 
-export const useCustomFieldsPreview = (entityType, entityId = 1) => {
+export const useCustomFieldsPreview = (entityType, entitySlug) => {
   return useQuery({
-    queryKey: [...customFieldSectionKeys.all, "preview", entityType, entityId],
+    queryKey: [...customFieldSectionKeys.all, "preview", entityType, entitySlug],
     queryFn: async () => {
       const response = await customFieldsService.getCustomFieldsPreview(
         entityType,
-        entityId
+        entitySlug
       );
       return response.data || response;
     },
-    enabled: !!entityType,
+    enabled: !!entityType && !!entitySlug,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 };

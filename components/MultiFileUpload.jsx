@@ -243,7 +243,7 @@ const MultiFileUpload = ({
       return;
     }
 
-    if (!entityType || !entityId) {
+    if (!entityType || (!entitySlug && !entityId)) {
       toast.error("Entity information is required");
       return;
     }

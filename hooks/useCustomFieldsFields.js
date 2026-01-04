@@ -8,7 +8,7 @@ export const customFieldsKeys = {
   lists: () => [...customFieldsKeys.all, "list"],
   list: (params) => [...customFieldsKeys.lists(), params],
   details: () => [...customFieldsKeys.all, "detail"],
-  detail: (id) => [...customFieldsKeys.details(), id],
+  detail: (slug) => [...customFieldsKeys.details(), slug],
   searches: () => [...customFieldsKeys.all, "search"],
   search: (searchData) => [...customFieldsKeys.searches(), searchData],
 };
@@ -123,15 +123,15 @@ export const useCustomFieldsPaginated = (params = {}) => {
 };
 
 // Get single custom field query
-export const useCustomField = (id) => {
+export const useCustomField = (slug) => {
   return useQuery({
-    queryKey: customFieldsKeys.detail(id),
+    queryKey: customFieldsKeys.detail(slug),
     queryFn: async () => {
-      const response = await customFieldsFieldsService.getCustomField(id);
+      const response = await customFieldsFieldsService.getCustomField(slug);
       // Handle both direct object response and wrapped response
       return response.data || response;
     },
-    enabled: !!id,
+    enabled: !!slug,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 };
@@ -190,12 +190,12 @@ export const useUpdateCustomField = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, fieldData }) => {
-      console.log("Update Field - Input:", { id, fieldData });
+    mutationFn: async ({ slug, fieldData }) => {
+      console.log("Update Field - Input:", { slug, fieldData });
       const transformedData = customFieldsUtils.transformFieldForAPI(fieldData);
       console.log("Update Field - Transformed:", transformedData);
       const response = await customFieldsFieldsService.updateCustomField(
-        id,
+        slug,
         transformedData
       );
       console.log("Update Field - Response:", response);
@@ -203,7 +203,7 @@ export const useUpdateCustomField = () => {
     },
     onSuccess: (data, variables) => {
       // Update the specific field in cache
-      queryClient.setQueryData(customFieldsKeys.detail(variables.id), data);
+      queryClient.setQueryData(customFieldsKeys.detail(variables.slug), data);
 
       // Invalidate lists to refetch
       queryClient.invalidateQueries({
@@ -230,14 +230,14 @@ export const useDeleteCustomField = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (id) => {
-      const response = await customFieldsFieldsService.deleteCustomField(id);
+    mutationFn: async (slug) => {
+      const response = await customFieldsFieldsService.deleteCustomField(slug);
       return response.data || response;
     },
-    onSuccess: (data, id) => {
+    onSuccess: (data, slug) => {
       // Remove from cache
       queryClient.removeQueries({
-        queryKey: customFieldsKeys.detail(id),
+        queryKey: customFieldsKeys.detail(slug),
       });
 
       // Invalidate lists to refetch
@@ -265,16 +265,16 @@ export const useHardDeleteCustomField = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (id) => {
+    mutationFn: async (slug) => {
       const response = await customFieldsFieldsService.hardDeleteCustomField(
-        id
+        slug
       );
       return response.data || response;
     },
-    onSuccess: (data, id) => {
+    onSuccess: (data, slug) => {
       // Remove from cache
       queryClient.removeQueries({
-        queryKey: customFieldsKeys.detail(id),
+        queryKey: customFieldsKeys.detail(slug),
       });
 
       // Invalidate lists to refetch

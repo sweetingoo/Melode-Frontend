@@ -88,7 +88,7 @@ export default function PreferencesPage() {
     }
   }, [preferences?.additional_preferences?.notification_preferences]);
 
-  // Check if email/SMS is configured at organization level
+  // Check if email/SMS is configured at organisation level
   const isEmailConfigured = organisationData?.integration_config?.sendgrid_api_key ? true : false;
   const isSMSConfigured = organisationData?.integration_config?.twilio_account_sid &&
     organisationData?.integration_config?.twilio_auth_token &&

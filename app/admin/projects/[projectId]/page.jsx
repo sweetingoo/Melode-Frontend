@@ -588,10 +588,10 @@ const ProjectDetailPage = () => {
   
   // Initialize project_id when modal opens
   React.useEffect(() => {
-    if (isCreateTaskModalOpen) {
+    if (isCreateTaskModalOpen && project?.id) {
       setTaskFormData(prev => ({
         ...prev,
-        project_id: projectId, // Ensure project_id is always set to current project
+        project_id: project.id, // Ensure project_id is always set to current project
       }));
     }
   }, [isCreateTaskModalOpen, project?.id]);
@@ -719,9 +719,15 @@ const ProjectDetailPage = () => {
       }
 
       await createTaskMutation.mutateAsync(taskData);
-      // Invalidate project tasks queries to refresh the list
-      queryClient.invalidateQueries({ 
-        queryKey: [...projectKeys.all, "tasks", projectId],
+      // Invalidate and refetch project tasks queries to refresh the list immediately
+      // Use projectSlug consistently to match the query key structure
+      await queryClient.invalidateQueries({ 
+        queryKey: [...projectKeys.all, "tasks", projectSlug],
+        exact: false 
+      });
+      // Explicitly refetch to ensure immediate update
+      await queryClient.refetchQueries({ 
+        queryKey: [...projectKeys.all, "tasks", projectSlug],
         exact: false 
       });
       queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectSlug) });

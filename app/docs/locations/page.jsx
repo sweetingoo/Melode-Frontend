@@ -299,7 +299,7 @@ export default function LocationsDocs() {
               <h3 className="font-semibold mb-2">Map View</h3>
               <p className="text-sm text-muted-foreground">
                 If GPS coordinates are set, locations may be displayed on a map view,
-                making it easy to visualize where your organisation operates geographically.
+                making it easy to visualise where your organisation operates geographically.
               </p>
             </div>
           </CardContent>
@@ -334,7 +334,7 @@ export default function LocationsDocs() {
               <div>
                 <h3 className="font-semibold mb-2">Reporting</h3>
                 <p className="text-sm text-muted-foreground">
-                  Location data is used in various reports to analyze work patterns, resource allocation,
+                  Location data is used in various reports to analyse work patterns, resource allocation,
                   and operational efficiency by location.
                 </p>
               </div>

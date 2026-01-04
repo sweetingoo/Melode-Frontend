@@ -36,19 +36,31 @@ import {
   User,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { useUserAuditLogs } from "@/hooks/useAuditLogs";
 import { format, formatDistanceToNow } from "date-fns";
 import { useIsMobile } from "@/hooks/use-mobile";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
-const UserAuditLogs = ({ userId, userSlug, title = "Activity History" }) => {
+const UserAuditLogs = ({ userId, userSlug, title = "Activity History", pageSize: initialPageSize = 10 }) => {
   const [selectedLog, setSelectedLog] = useState(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [expandedRows, setExpandedRows] = useState(new Set());
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(initialPageSize);
   const isMobile = useIsMobile();
 
   const { data: auditLogsData, isLoading, error } = useUserAuditLogs(userSlug || userId, {
-    limit: 50,
+    limit: pageSize,
+    offset: (currentPage - 1) * pageSize,
   });
 
   // Extract audit logs from response
@@ -58,8 +70,16 @@ const UserAuditLogs = ({ userId, userSlug, title = "Activity History" }) => {
     if (auditLogsData.audit_logs) return auditLogsData.audit_logs;
     if (auditLogsData.data) return auditLogsData.data;
     if (auditLogsData.results) return auditLogsData.results;
+    // Debug logging in development
+    if (process.env.NODE_ENV === 'development' && auditLogsData) {
+      console.log('User audit logs data structure:', auditLogsData);
+    }
     return [];
   }, [auditLogsData]);
+
+  // Extract pagination info
+  const totalCount = auditLogsData?.total_count || auditLogsData?.total || auditLogs.length;
+  const totalPages = Math.ceil(totalCount / pageSize);
 
   // Get severity color
   const getSeverityColor = (severity) => {
@@ -396,6 +416,55 @@ const UserAuditLogs = ({ userId, userSlug, title = "Activity History" }) => {
               </Table>
             </div>
           )}
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between mt-4 pt-4 border-t">
+              <div className="flex items-center gap-2">
+                <Label className="text-sm">Page size:</Label>
+                <Select
+                  value={pageSize.toString()}
+                  onValueChange={(value) => {
+                    setPageSize(parseInt(value));
+                    setCurrentPage(1);
+                  }}
+                >
+                  <SelectTrigger className="w-20">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="25">25</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                    <SelectItem value="100">100</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1 || isLoading}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <span className="text-sm">
+                  Page {currentPage} of {totalPages} ({totalCount} total)
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    setCurrentPage((p) => Math.min(totalPages, p + 1))
+                  }
+                  disabled={currentPage === totalPages || isLoading}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -413,11 +482,16 @@ const UserAuditLogs = ({ userId, userSlug, title = "Activity History" }) => {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label className="text-muted-foreground">ID</Label>
-                  <p className="font-mono text-sm">{selectedLog.id}</p>
+                  <p className="font-mono text-sm">{selectedLog.id || selectedLog.slug || "—"}</p>
                 </div>
                 <div>
                   <Label className="text-muted-foreground">Timestamp</Label>
                   <p>{format(new Date(selectedLog.created_at), "PPP p")}</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {formatDistanceToNow(new Date(selectedLog.created_at), {
+                      addSuffix: true,
+                    })}
+                  </p>
                 </div>
                 <div>
                   <Label className="text-muted-foreground">Action</Label>
@@ -427,19 +501,25 @@ const UserAuditLogs = ({ userId, userSlug, title = "Activity History" }) => {
                   </div>
                 </div>
                 <div>
+                  <Label className="text-muted-foreground">Severity</Label>
+                  <Badge className={getSeverityColor(selectedLog.severity)}>
+                    {selectedLog.severity || "info"}
+                  </Badge>
+                </div>
+                <div>
                   <Label className="text-muted-foreground">Resource</Label>
-                  <p>{selectedLog.resource || "—"}</p>
+                  <p>{selectedLog.resource ? selectedLog.resource.charAt(0).toUpperCase() + selectedLog.resource.slice(1) : "—"}</p>
                 </div>
                 <div>
                   <Label className="text-muted-foreground">Resource ID</Label>
-                  <p className="font-mono text-sm">{selectedLog.resource_id || "—"}</p>
+                  <p className="font-mono text-sm">{selectedLog.resource_id || selectedLog.resource_slug || "—"}</p>
                 </div>
-                <div>
-                  <Label className="text-muted-foreground">Severity</Label>
-                  <Badge className={getSeverityColor(selectedLog.severity)}>
-                    {selectedLog.severity}
-                  </Badge>
-                </div>
+                {selectedLog.resource_slug && (
+                  <div>
+                    <Label className="text-muted-foreground">Resource Slug</Label>
+                    <p className="font-mono text-sm">{selectedLog.resource_slug}</p>
+                  </div>
+                )}
                 <div>
                   <Label className="text-muted-foreground">IP Address</Label>
                   <p className="font-mono text-sm">{selectedLog.ip_address || "—"}</p>
@@ -454,6 +534,20 @@ const UserAuditLogs = ({ userId, userSlug, title = "Activity History" }) => {
                   <div>
                     <Label className="text-muted-foreground">User Agent</Label>
                     <p className="text-xs break-all">{selectedLog.user_agent}</p>
+                  </div>
+                )}
+                {selectedLog.message && (
+                  <div className="col-span-2">
+                    <Label className="text-muted-foreground">Message</Label>
+                    <p className="text-sm">{selectedLog.message}</p>
+                  </div>
+                )}
+                {selectedLog.metadata && (
+                  <div className="col-span-2">
+                    <Label className="text-muted-foreground">Metadata</Label>
+                    <pre className="mt-1 p-2 bg-muted rounded text-xs overflow-auto">
+                      {JSON.stringify(parseJSON(selectedLog.metadata), null, 2)}
+                    </pre>
                   </div>
                 )}
               </div>

@@ -57,7 +57,7 @@ export default function CustomFieldsManagementDocs() {
             <div>
               <h3 className="font-semibold mb-4">Management Page Layout</h3>
               <p className="text-sm text-muted-foreground mb-4">
-                The Custom Fields Management page is organized into sections and fields:
+                The Custom Fields Management page is organised into sections and fields:
               </p>
               <FormMockup
                 title="Custom Fields Management"

@@ -162,12 +162,14 @@ const DocumentViewPage = () => {
       />
 
       {/* Audit Logs */}
+      {document.slug && (
       <ResourceAuditLogs
         resource="document"
         resourceSlug={document.slug}
         pageSize={10}
         title="Access History"
       />
+      )}
     </div>
   );
 };

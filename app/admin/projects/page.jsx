@@ -217,7 +217,7 @@ const ProjectsPage = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <p className="text-muted-foreground">Manage and organize your projects</p>
+          <p className="text-muted-foreground">Manage and organise your projects</p>
         </div>
         {canCreateProject && (
           <Button onClick={openCreateModal} size="sm" className="shrink-0">
@@ -470,7 +470,7 @@ const ProjectsPage = () => {
           <DialogHeader>
             <DialogTitle>Create New Project</DialogTitle>
             <DialogDescription>
-              Create a new project to organize and group related tasks.
+              Create a new project to organise and group related tasks.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">

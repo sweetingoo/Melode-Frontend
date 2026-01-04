@@ -114,7 +114,7 @@ const documentationCategories = [
       },
       {
         title: "Documents Management",
-        description: "Create, organize, and manage documents with categories and permissions",
+        description: "Create, organise, and manage documents with categories and permissions",
         href: "/docs/documents",
         icon: BookOpen,
       },

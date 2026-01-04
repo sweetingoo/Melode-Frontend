@@ -15,12 +15,12 @@ export const employeesService = {
     }
   },
 
-  // Get person by ID (user by ID)
-  getEmployee: async (id) => {
+  // Get person by slug (user by slug)
+  getEmployee: async (slug) => {
     try {
-      return await api.get(`/users/${id}`);
+      return await api.get(`/users/${slug}`);
     } catch (error) {
-      console.error(`Get person ${id} failed:`, error);
+      console.error(`Get person ${slug} failed:`, error);
       throw error;
     }
   },
@@ -36,21 +36,21 @@ export const employeesService = {
   },
 
   // Update person (update user with employee fields)
-  updateEmployee: async (id, employeeData) => {
+  updateEmployee: async (slug, employeeData) => {
     try {
-      return await api.put(`/users/${id}`, employeeData);
+      return await api.put(`/users/${slug}`, employeeData);
     } catch (error) {
-      console.error(`Update person ${id} failed:`, error);
+      console.error(`Update person ${slug} failed:`, error);
       throw error;
     }
   },
 
   // Delete person (delete user)
-  deleteEmployee: async (id) => {
+  deleteEmployee: async (slug) => {
     try {
-      return await api.delete(`/users/${id}`);
+      return await api.delete(`/users/${slug}`);
     } catch (error) {
-      console.error(`Delete person ${id} failed:`, error);
+      console.error(`Delete person ${slug} failed:`, error);
       throw error;
     }
   },

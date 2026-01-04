@@ -1,0 +1,51 @@
+# Cursor Rules for Melode Frontend
+
+## Project Context
+This is a Next.js frontend application for the Melode project. The codebase uses React, Next.js, and modern JavaScript/JSX patterns.
+
+## Code Style & Conventions
+- Use functional components with hooks
+- Follow existing code patterns and structure
+- Use consistent naming conventions (camelCase for variables/functions, PascalCase for components)
+- Prefer explicit imports over default imports when possible
+- Use British English spelling: use 's' instead of 'z' (e.g., "organise" not "organize", "customise" not "customize")
+
+## File Organization
+- Components go in `/components`
+- Hooks go in `/hooks`
+- Services/API clients go in `/services`
+- Utilities go in `/utils`
+- Pages/routes go in `/app` following Next.js App Router structure
+
+## Documentation
+- **NEVER create documentation files unless explicitly asked by the user**
+- Do not create README files, markdown files, or any documentation unless the user specifically requests it
+- Do not proactively create documentation even if it seems helpful
+- Only create documentation files when the user explicitly asks for them
+- Focus on code implementation rather than documentation
+
+## Database & Migrations
+- Do not create migrations manually
+- Let the backend handle database migrations
+- Use --autogenerate. The DATABASE_URL is already in .env
+
+## Testing
+- Maintain existing test patterns
+- Tests are located in `__tests__` directory
+- Use Jest for unit tests and Playwright for E2E tests
+
+## Code Quality
+- Write clean, maintainable code
+- Follow existing error handling patterns
+- Use TypeScript-style JSDoc comments when helpful
+- Ensure code is properly formatted and linted
+
+## API Integration
+- Use the existing API client patterns in `/services`
+- Follow the established authentication and token management patterns
+- Handle errors gracefully using existing error handling utilities
+- **ALWAYS use slugs (strings) instead of IDs (integers) for all API path parameters**
+- Use `entitySlug`, `userSlug`, `taskSlug`, `projectSlug`, etc. for path parameters
+- Request bodies and query parameters may still use IDs where appropriate (as per migration guide)
+- When working with entities, always pass `slug` values to API endpoints, not `id` values
+

@@ -8,7 +8,7 @@ export const employeeKeys = {
   lists: () => [...employeeKeys.all, "list"],
   list: (params) => [...employeeKeys.lists(), params],
   details: () => [...employeeKeys.all, "detail"],
-  detail: (id) => [...employeeKeys.details(), id],
+  detail: (slug) => [...employeeKeys.details(), slug],
   hierarchy: () => [...employeeKeys.all, "hierarchy"],
 };
 
@@ -25,14 +25,14 @@ export const useEmployees = (params = {}) => {
 };
 
 // Get single employee query
-export const useEmployee = (id) => {
+export const useEmployee = (slug) => {
   return useQuery({
-    queryKey: employeeKeys.detail(id),
+    queryKey: employeeKeys.detail(slug),
     queryFn: async () => {
-      const response = await employeesService.getEmployee(id);
+      const response = await employeesService.getEmployee(slug);
       return response.data;
     },
-    enabled: !!id,
+    enabled: !!slug,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 };
@@ -70,15 +70,15 @@ export const useUpdateEmployee = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, employeeData }) => {
+    mutationFn: async ({ slug, employeeData }) => {
       const response = await employeesService.updateEmployee(
-        id,
+        slug,
         employeeData
       );
       return response.data;
     },
     onSuccess: (data, variables) => {
-      queryClient.setQueryData(employeeKeys.detail(variables.id), data);
+      queryClient.setQueryData(employeeKeys.detail(variables.slug), data);
       queryClient.invalidateQueries({ queryKey: employeeKeys.lists() });
       toast.success("Person updated successfully", {
         description: `Person has been updated.`,
@@ -100,12 +100,12 @@ export const useDeleteEmployee = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (id) => {
-      const response = await employeesService.deleteEmployee(id);
+    mutationFn: async (slug) => {
+      const response = await employeesService.deleteEmployee(slug);
       return response.data;
     },
-    onSuccess: (data, id) => {
-      queryClient.removeQueries({ queryKey: employeeKeys.detail(id) });
+    onSuccess: (data, slug) => {
+      queryClient.removeQueries({ queryKey: employeeKeys.detail(slug) });
       queryClient.invalidateQueries({ queryKey: employeeKeys.lists() });
       toast.success("Person deleted successfully", {
         description: "The person has been removed.",

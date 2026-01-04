@@ -35,8 +35,8 @@ export default function BroadcastsDocumentation() {
             <div>
               <h3 className="font-semibold mb-2">What are Broadcasts?</h3>
               <p className="text-sm text-muted-foreground">
-                Broadcasts are one-to-many messages that allow you to send announcements, updates, or important 
-                information to multiple recipients at once. Unlike regular messages, broadcasts support acknowledgment 
+                Broadcasts are one-to-many messages that allow you to send announcements, updates, or important
+                information to multiple recipients at once. Unlike regular messages, broadcasts support acknowledgment
                 tracking and delivery status monitoring.
               </p>
             </div>
@@ -148,7 +148,7 @@ export default function BroadcastsDocumentation() {
               <h3 className="font-semibold mb-2">Broadcast Options</h3>
               <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground ml-4">
                 <li><strong>Priority</strong>: Set message priority (affects notification urgency)</li>
-                <li><strong>Category</strong>: Organize broadcasts by category</li>
+                <li><strong>Category</strong>: Organise broadcasts by category</li>
                 <li><strong>Require Acknowledgment</strong>: Require recipients to acknowledge receipt</li>
                 <li><strong>Delivery Methods</strong>: Send via email, SMS, or both</li>
                 <li><strong>Scheduled Delivery</strong>: Schedule broadcasts for future delivery</li>
@@ -274,7 +274,7 @@ export default function BroadcastsDocumentation() {
                 <li>Sent broadcasts are highlighted in green</li>
                 <li>Unread broadcasts are highlighted with a blue border</li>
                 <li>Priority badges indicate message urgency</li>
-                <li>Category badges help organize broadcasts</li>
+                <li>Category badges help organise broadcasts</li>
               </ul>
             </div>
           </CardContent>

@@ -121,7 +121,7 @@ const CategoryDialog = ({ open, onOpenChange, category = null, parentCategory = 
           <DialogDescription>
             {category
               ? "Update the category details below."
-              : "Create a new category to organize documents."}
+              : "Create a new category to organise documents."}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>

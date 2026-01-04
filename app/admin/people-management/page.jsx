@@ -69,13 +69,13 @@ import {
   useDeactivateUser,
   useActivateUser,
   useCreateUser,
-  useRoles,
   useSendInvitationToUser,
   userUtils,
 } from "@/hooks/useUsers";
-import { useCreateRole } from "@/hooks/useRoles";
 import { useHijackUser, useCurrentUser } from "@/hooks/useAuth";
 import { useInvitations, invitationUtils } from "@/hooks/useInvitations";
+import { useDepartments } from "@/hooks/useDepartments";
+import { useRoles } from "@/hooks/useRoles";
 import {
   Dialog,
   DialogContent,
@@ -108,20 +108,16 @@ const UserManagementPage = () => {
     password: "",
     bio: "",
     send_invite: true,
+    department_id: "",
     role_id: "",
   });
   const [validationErrors, setValidationErrors] = useState({});
-  const [isCreateRoleModalOpen, setIsCreateRoleModalOpen] = useState(false);
-  const [roleFormData, setRoleFormData] = useState({
-    displayName: "",
-    roleName: "",
-    description: "",
-    priority: 50,
-  });
   const itemsPerPage = 10;
 
   // API hooks
   const { data: usersResponse, isLoading, error, refetch } = useUsers();
+  const { data: departmentsData, isLoading: departmentsLoading } = useDepartments();
+  const departments = departmentsData?.departments || departmentsData?.data || departmentsData || [];
   const { data: rolesData, isLoading: rolesLoading } = useRoles();
   const roles = rolesData || [];
   const { data: invitations = [], isLoading: invitationsLoading } = useInvitations();
@@ -131,7 +127,6 @@ const UserManagementPage = () => {
   const createUserMutation = useCreateUser();
   const hijackUserMutation = useHijackUser();
   const sendInvitationMutation = useSendInvitationToUser();
-  const createRoleMutation = useCreateRole();
 
   // Get current user for permission checks
   const { data: currentUserData } = useCurrentUser();
@@ -250,8 +245,8 @@ const UserManagementPage = () => {
   const filteredUsers = transformedUsers.filter(
     (user) =>
       user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (user.email && user.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (user.username && user.username.toLowerCase().includes(searchTerm.toLowerCase())) ||
       userUtils.getStatus(user).toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -267,44 +262,50 @@ const UserManagementPage = () => {
     // For now, we'll just update the local state
   };
 
-  const handleDeleteUser = async (userId) => {
+  const handleDeleteUser = async (userSlug) => {
     try {
-      await deleteUserMutation.mutateAsync(userId);
+      await deleteUserMutation.mutateAsync(userSlug);
     } catch (error) {
       console.error("Failed to delete user:", error);
     }
   };
 
-  const handleDeactivateUser = async (userId) => {
+  const handleDeactivateUser = async (userSlug) => {
     try {
-      await deactivateUserMutation.mutateAsync(userId);
+      await deactivateUserMutation.mutateAsync(userSlug);
     } catch (error) {
       console.error("Failed to deactivate user:", error);
     }
   };
 
-  const handleActivateUser = async (userId) => {
+  const handleActivateUser = async (userSlug) => {
     try {
-      await activateUserMutation.mutateAsync(userId);
+      await activateUserMutation.mutateAsync(userSlug);
     } catch (error) {
       console.error("Failed to activate user:", error);
     }
   };
 
-  const handleHijackUser = async (userId) => {
+  const handleHijackUser = async (userSlug) => {
     try {
-      await hijackUserMutation.mutateAsync(userId);
+      await hijackUserMutation.mutateAsync(userSlug);
     } catch (error) {
       console.error("Failed to hijack user:", error);
     }
   };
 
   const handleSendInvitation = async (user) => {
+    if (!user.email) {
+      toast.error("Cannot send invitation", {
+        description: "This user does not have an email address.",
+      });
+      return;
+    }
     try {
       // Use the new user-specific endpoint
       sendInvitationMutation.mutate(
         {
-          userId: user.id,
+          userSlug: user.slug || user.id, // Use slug, fallback to id if slug not available
           options: {
             expires_in_days: 7, // Default to 7 days
           },
@@ -324,9 +325,15 @@ const UserManagementPage = () => {
   const validateUserForm = () => {
     const errors = {};
 
-    if (!userFormData.email) {
-      errors.email = "Email is required";
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userFormData.email)) {
+    // Email is only required if sending an invite
+    if (userFormData.send_invite) {
+      if (!userFormData.email) {
+        errors.email = "Email is required when sending an invitation";
+      } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userFormData.email)) {
+        errors.email = "Please enter a valid email address";
+      }
+    } else if (userFormData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userFormData.email)) {
+      // If email is provided but not required, still validate format
       errors.email = "Please enter a valid email address";
     }
 
@@ -344,6 +351,14 @@ const UserManagementPage = () => {
       errors.password = "Password must be at least 8 characters";
     }
 
+    if (!userFormData.department_id) {
+      errors.department_id = "Department is required";
+    }
+
+    if (!userFormData.role_id) {
+      errors.role_id = "Role is required";
+    }
+
     if (
       userFormData.phone_number &&
       !/^\+?[\d\s-()]+$/.test(userFormData.phone_number)
@@ -355,43 +370,26 @@ const UserManagementPage = () => {
     return Object.keys(errors).length === 0;
   };
 
-  const handleCreateRole = async () => {
-    if (!roleFormData.displayName || !roleFormData.roleName) {
-      return;
-    }
-
-    try {
-      const result = await createRoleMutation.mutateAsync({
-        display_name: roleFormData.displayName,
-        name: roleFormData.roleName,
-        description: roleFormData.description,
-        priority: roleFormData.priority,
-      });
-      setIsCreateRoleModalOpen(false);
-      // Reset form
-      setRoleFormData({
-        displayName: "",
-        roleName: "",
-        description: "",
-        priority: 50,
-      });
-      // Auto-select the newly created role
-      if (result && result.id) {
-        setUserFormData({ ...userFormData, role_id: result.id.toString() });
-      }
-    } catch (error) {
-      console.error("Failed to create role:", error);
-    }
-  };
-
   const handleCreateUser = () => {
     if (!validateUserForm()) {
       return;
     }
 
+    // Generate random username if not provided
+    const generateRandomUsername = () => {
+      const timestamp = Date.now().toString(36);
+      const randomStr = Math.random().toString(36).substring(2, 8);
+      const firstName = userFormData.first_name?.toLowerCase().replace(/\s+/g, '') || 'user';
+      const lastName = userFormData.last_name?.toLowerCase().replace(/\s+/g, '') || '';
+      return `${firstName}${lastName ? `_${lastName}` : ''}_${randomStr}${timestamp}`;
+    };
+
+    // Convert empty email string to null
+    const emailValue = userFormData.email?.trim() || null;
+
     const userData = {
-      email: userFormData.email,
-      username: userFormData.username || undefined,
+      email: emailValue,
+      username: userFormData.username || generateRandomUsername(),
       first_name: userFormData.first_name,
       last_name: userFormData.last_name,
       title: userFormData.title || undefined,
@@ -399,7 +397,8 @@ const UserManagementPage = () => {
       password: userFormData.password,
       bio: userFormData.bio || undefined,
       send_invite: userFormData.send_invite,
-      role_id: userFormData.role_id ? parseInt(userFormData.role_id) : 0,
+      department_id: parseInt(userFormData.department_id),
+      role_id: parseInt(userFormData.role_id),
     };
 
     createUserMutation.mutate(userData, {
@@ -415,7 +414,7 @@ const UserManagementPage = () => {
           password: "",
           bio: "",
           send_invite: true,
-          role_id: "",
+          department_id: "",
         });
         setValidationErrors({});
         // Refetch users to show all users in the table
@@ -778,6 +777,13 @@ const UserManagementPage = () => {
                     </TableCell>
                     <TableCell>
                       {(() => {
+                        if (!user.email) {
+                          return (
+                            <span className="text-xs text-muted-foreground">
+                              No email
+                            </span>
+                          );
+                        }
                         const invitation = getUserInvitation(user.email);
                         if (!invitation) {
                           return (
@@ -856,15 +862,15 @@ const UserManagementPage = () => {
                                     person? They will not be able to log in to the
                                     system.
                                     <br />
-                                    <strong>Person:</strong> {user.name} (
-                                    {user.email})
+                                    <strong>Person:</strong> {user.name}
+                                    {user.email && ` (${user.email})`}
                                   </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
                                   <AlertDialogCancel>Cancel</AlertDialogCancel>
                                   <AlertDialogAction
                                     onClick={() =>
-                                      handleDeactivateUser(user.id)
+                                      handleDeactivateUser(user.slug || user.id)
                                     }
                                     className="bg-orange-600 hover:bg-orange-700"
                                   >
@@ -895,14 +901,14 @@ const UserManagementPage = () => {
                                     Are you sure you want to activate this person?
                                     They will be able to log in to the system.
                                     <br />
-                                    <strong>Person:</strong> {user.name} (
-                                    {user.email})
+                                    <strong>Person:</strong> {user.name}
+                                    {user.email && ` (${user.email})`}
                                   </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
                                   <AlertDialogCancel>Cancel</AlertDialogCancel>
                                   <AlertDialogAction
-                                    onClick={() => handleActivateUser(user.id)}
+                                    onClick={() => handleActivateUser(user.slug || user.id)}
                                     className="bg-green-600 hover:bg-green-700"
                                   >
                                     Activate Person
@@ -936,8 +942,8 @@ const UserManagementPage = () => {
                                     and can perform actions on their behalf.
                                     <br />
                                     <br />
-                                    <strong>Target User:</strong> {user.name} (
-                                    {user.email})
+                                    <strong>Target User:</strong> {user.name}
+                                    {user.email && ` (${user.email})`}
                                     <br />
                                     <strong>Warning:</strong> This action will log
                                     you out of your current session and log you in
@@ -947,7 +953,7 @@ const UserManagementPage = () => {
                                 <AlertDialogFooter>
                                   <AlertDialogCancel>Cancel</AlertDialogCancel>
                                   <AlertDialogAction
-                                    onClick={() => handleHijackUser(user.id)}
+                                    onClick={() => handleHijackUser(user.slug || user.id)}
                                     className="bg-blue-600 hover:bg-blue-700"
                                   >
                                     Hijack User
@@ -964,7 +970,7 @@ const UserManagementPage = () => {
                             <AlertDialogTrigger asChild>
                               <DropdownMenuItem
                                 className="text-purple-600 focus:text-purple-600"
-                                disabled={sendInvitationMutation.isPending}
+                                disabled={sendInvitationMutation.isPending || !user.email}
                                 onSelect={(e) => e.preventDefault()}
                               >
                                 <Mail className="mr-2 h-4 w-4" />
@@ -977,22 +983,33 @@ const UserManagementPage = () => {
                                   Invite to Set Password
                                 </AlertDialogTitle>
                                 <AlertDialogDescription>
-                                  Send an invitation email to this user so they can set their password and access their account.
-                                  <br />
-                                  <br />
-                                  <strong>User:</strong> {user.name} ({user.email})
-                                  <br />
-                                  {!user.isVerified ? (
+                                  {!user.email ? (
                                     <>
-                                      <strong>Status:</strong> User needs to set password
+                                      This user does not have an email address and cannot receive an invitation.
                                       <br />
-                                      <strong>Note:</strong> The user account is active. They will receive an email with a link to set their password.
+                                      <br />
+                                      <strong>User:</strong> {user.name} (No email)
                                     </>
                                   ) : (
                                     <>
-                                      <strong>Status:</strong> User is verified
+                                      Send an invitation email to this user so they can set their password and access their account.
                                       <br />
-                                      <strong>Note:</strong> This will send an invitation email. If the user already has an active invitation, it will be replaced with a new one.
+                                      <br />
+                                      <strong>User:</strong> {user.name} ({user.email})
+                                      <br />
+                                      {!user.isVerified ? (
+                                        <>
+                                          <strong>Status:</strong> User needs to set password
+                                          <br />
+                                          <strong>Note:</strong> The user account is active. They will receive an email with a link to set their password.
+                                        </>
+                                      ) : (
+                                        <>
+                                          <strong>Status:</strong> User is verified
+                                          <br />
+                                          <strong>Note:</strong> This will send an invitation email. If the user already has an active invitation, it will be replaced with a new one.
+                                        </>
+                                      )}
                                     </>
                                   )}
                                 </AlertDialogDescription>
@@ -1002,7 +1019,7 @@ const UserManagementPage = () => {
                                 <AlertDialogAction
                                   onClick={() => handleSendInvitation(user)}
                                   className="bg-purple-600 hover:bg-purple-700"
-                                  disabled={sendInvitationMutation.isPending}
+                                  disabled={sendInvitationMutation.isPending || !user.email}
                                 >
                                   {sendInvitationMutation.isPending ? (
                                     <>
@@ -1040,14 +1057,14 @@ const UserManagementPage = () => {
                                     This action cannot be undone and will
                                     permanently remove the person from the system.
                                     <br />
-                                    <strong>Person:</strong> {user.name} (
-                                    {user.email})
+                                    <strong>Person:</strong> {user.name}
+                                    {user.email && ` (${user.email})`}
                                   </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
                                   <AlertDialogCancel>Cancel</AlertDialogCancel>
                                   <AlertDialogAction
-                                    onClick={() => handleDeleteUser(user.id)}
+                                    onClick={() => handleDeleteUser(user.slug || user.id)}
                                     className="bg-red-600 hover:bg-red-700"
                                   >
                                     Delete Person
@@ -1127,7 +1144,7 @@ const UserManagementPage = () => {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="email">
-                  Email <span className="text-red-500">*</span>
+                  Email {userFormData.send_invite && <span className="text-red-500">*</span>}
                 </Label>
                 <Input
                   id="email"
@@ -1145,6 +1162,11 @@ const UserManagementPage = () => {
                 {validationErrors.email && (
                   <p className="text-sm text-red-500">
                     {validationErrors.email}
+                  </p>
+                )}
+                {userFormData.send_invite && (
+                  <p className="text-xs text-muted-foreground">
+                    Email is required when sending an invitation
                   </p>
                 )}
               </div>
@@ -1322,78 +1344,137 @@ const UserManagementPage = () => {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="role_id">Role</Label>
-                <div className="flex gap-2">
-                  <Select
-                    value={userFormData.role_id || "__none__"}
-                    onValueChange={(value) =>
-                      setUserFormData({
-                        ...userFormData,
-                        role_id: value === "__none__" ? "" : value,
-                      })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select role" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">No Role</SelectItem>
-                      {rolesLoading ? (
-                        <SelectItem value="loading" disabled>
-                          Loading roles...
-                        </SelectItem>
-                      ) : roles.length === 0 ? (
-                        <SelectItem value="no-roles" disabled>
-                          No roles available
-                        </SelectItem>
-                      ) : (
-                        roles
-                          .filter(
-                            (role) =>
-                              role.role_type !== "shift_role" &&
-                              role.roleType !== "shift_role" &&
-                              !role.parent_role_id &&
-                              !role.parentRoleId
-                          )
-                          .map((role) => (
-                            <SelectItem key={role.id} value={role.id.toString()}>
-                              {role.display_name ||
-                                role.name ||
-                                role.role_name ||
-                                `Role ${role.id}`}
-                            </SelectItem>
-                          ))
-                      )}
-                    </SelectContent>
-                  </Select>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    onClick={() => setIsCreateRoleModalOpen(true)}
-                    title="Create new role"
-                  >
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-              <div className="flex items-center space-x-2 pt-8">
-                <input
-                  type="checkbox"
-                  id="send_invite"
-                  checked={userFormData.send_invite}
-                  onChange={(e) =>
+                <Label htmlFor="department_id">
+                  Department <span className="text-red-500">*</span>
+                </Label>
+                <Select
+                  value={userFormData.department_id || ""}
+                  onValueChange={(value) => {
                     setUserFormData({
                       ...userFormData,
-                      send_invite: e.target.checked,
-                    })
-                  }
-                  className="rounded border-gray-300"
-                />
-                <Label htmlFor="send_invite" className="cursor-pointer">
-                  Send Invitation Email
-                </Label>
+                      department_id: value,
+                      role_id: "", // Reset role when department changes
+                    });
+                    if (validationErrors.department_id) {
+                      setValidationErrors({
+                        ...validationErrors,
+                        department_id: "",
+                      });
+                    }
+                    if (validationErrors.role_id) {
+                      setValidationErrors({
+                        ...validationErrors,
+                        role_id: "",
+                      });
+                    }
+                  }}
+                >
+                  <SelectTrigger className={validationErrors.department_id ? "border-red-500" : ""}>
+                    <SelectValue placeholder="Select department" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {departmentsLoading ? (
+                      <SelectItem value="loading" disabled>
+                        Loading departments...
+                      </SelectItem>
+                    ) : departments.length === 0 ? (
+                      <SelectItem value="no-departments" disabled>
+                        No departments available
+                      </SelectItem>
+                    ) : (
+                      departments.map((dept) => (
+                        <SelectItem key={dept.id} value={dept.id.toString()}>
+                          {dept.name || dept.display_name || `Department ${dept.id}`}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+                {validationErrors.department_id && (
+                  <p className="text-sm text-red-500">
+                    {validationErrors.department_id}
+                  </p>
+                )}
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="role_id">
+                  Role <span className="text-red-500">*</span>
+                </Label>
+                <Select
+                  value={userFormData.role_id || ""}
+                  onValueChange={(value) => {
+                    setUserFormData({
+                      ...userFormData,
+                      role_id: value,
+                    });
+                    if (validationErrors.role_id) {
+                      setValidationErrors({
+                        ...validationErrors,
+                        role_id: "",
+                      });
+                    }
+                  }}
+                  disabled={!userFormData.department_id}
+                >
+                  <SelectTrigger className={validationErrors.role_id ? "border-red-500" : ""}>
+                    <SelectValue placeholder={userFormData.department_id ? "Select role" : "Select department first"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {!userFormData.department_id ? (
+                      <SelectItem value="no-dept" disabled>
+                        Please select a department first
+                      </SelectItem>
+                    ) : rolesLoading ? (
+                      <SelectItem value="loading" disabled>
+                        Loading roles...
+                      </SelectItem>
+                    ) : (() => {
+                      // Filter roles by selected department
+                      const departmentRoles = roles.filter(
+                        (role) =>
+                          (role.department_id || role.departmentId) === parseInt(userFormData.department_id) &&
+                          (role.role_type === "job_role" || role.roleType === "job_role" || !role.role_type) &&
+                          !role.parent_role_id &&
+                          !role.parentRoleId
+                      );
+                      return departmentRoles.length === 0 ? (
+                        <SelectItem value="no-roles" disabled>
+                          No roles available for this department
+                        </SelectItem>
+                      ) : (
+                        departmentRoles.map((role) => (
+                          <SelectItem key={role.id} value={role.id.toString()}>
+                            {role.display_name || role.name || role.role_name || `Role ${role.id}`}
+                          </SelectItem>
+                        ))
+                      );
+                    })()}
+                  </SelectContent>
+                </Select>
+                {validationErrors.role_id && (
+                  <p className="text-sm text-red-500">
+                    {validationErrors.role_id}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="send_invite"
+                checked={userFormData.send_invite}
+                onChange={(e) =>
+                  setUserFormData({
+                    ...userFormData,
+                    send_invite: e.target.checked,
+                  })
+                }
+                className="rounded border-gray-300"
+              />
+              <Label htmlFor="send_invite" className="cursor-pointer">
+                Send Invitation Email
+              </Label>
             </div>
           </div>
           <DialogFooter>
@@ -1426,115 +1507,6 @@ const UserManagementPage = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Create Role Modal */}
-      <Dialog open={isCreateRoleModalOpen} onOpenChange={setIsCreateRoleModalOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Create New Role</DialogTitle>
-            <DialogDescription>
-              Create a new role for your organisation.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="role-display-name">
-                Display Name <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                id="role-display-name"
-                placeholder="e.g., Senior Doctor"
-                value={roleFormData.displayName}
-                onChange={(e) =>
-                  setRoleFormData({
-                    ...roleFormData,
-                    displayName: e.target.value,
-                  })
-                }
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="role-name">
-                Role Name <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                id="role-name"
-                placeholder="e.g., senior_doctor"
-                value={roleFormData.roleName}
-                onChange={(e) =>
-                  setRoleFormData({
-                    ...roleFormData,
-                    roleName: e.target.value.toLowerCase().replace(/\s+/g, "_"),
-                  })
-                }
-              />
-              <p className="text-xs text-muted-foreground">
-                Lowercase with underscores only. Cannot be changed after creation.
-              </p>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="role-description">Description</Label>
-              <Textarea
-                id="role-description"
-                placeholder="Describe this role's purpose and responsibilities"
-                value={roleFormData.description}
-                onChange={(e) =>
-                  setRoleFormData({
-                    ...roleFormData,
-                    description: e.target.value,
-                  })
-                }
-                className="resize-none"
-                rows={3}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="role-priority">Priority</Label>
-              <Input
-                id="role-priority"
-                type="number"
-                value={roleFormData.priority}
-                onChange={(e) =>
-                  setRoleFormData({
-                    ...roleFormData,
-                    priority: parseInt(e.target.value) || 50,
-                  })
-                }
-                min="1"
-                max="100"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setIsCreateRoleModalOpen(false);
-                setRoleFormData({
-                  displayName: "",
-                  roleName: "",
-                  description: "",
-                  priority: 50,
-                });
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleCreateRole}
-              disabled={
-                createRoleMutation.isPending ||
-                !roleFormData.displayName ||
-                !roleFormData.roleName
-              }
-            >
-              {createRoleMutation.isPending && (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              )}
-              Create Role
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };

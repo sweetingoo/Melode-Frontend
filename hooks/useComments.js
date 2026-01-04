@@ -5,60 +5,60 @@ import { toast } from "sonner";
 // Comment query keys
 export const commentKeys = {
   all: ["comments"],
-  entity: (entityType, entityId) => [...commentKeys.all, entityType, entityId],
-  list: (entityType, entityId, params) => [
-    ...commentKeys.entity(entityType, entityId),
+  entity: (entityType, entitySlug) => [...commentKeys.all, entityType, entitySlug],
+  list: (entityType, entitySlug, params) => [
+    ...commentKeys.entity(entityType, entitySlug),
     "list",
     params,
   ],
-  detail: (entityType, entityId, commentId) => [
-    ...commentKeys.entity(entityType, entityId),
+  detail: (entityType, entitySlug, commentSlug) => [
+    ...commentKeys.entity(entityType, entitySlug),
     "detail",
-    commentId,
+    commentSlug,
   ],
-  replies: (entityType, entityId, commentId) => [
-    ...commentKeys.entity(entityType, entityId),
+  replies: (entityType, entitySlug, commentSlug) => [
+    ...commentKeys.entity(entityType, entitySlug),
     "replies",
-    commentId,
+    commentSlug,
   ],
 };
 
 // Get comments for entity query
 export const useComments = (
   entityType,
-  entityId,
+  entitySlug,
   params = {},
   options = {}
 ) => {
   return useQuery({
-    queryKey: commentKeys.list(entityType, entityId, params),
+    queryKey: commentKeys.list(entityType, entitySlug, params),
     queryFn: async () => {
       const response = await commentsService.getComments(
         entityType,
-        entityId,
+        entitySlug,
         params
       );
       return response.data;
     },
-    enabled: !!entityType && !!entityId,
+    enabled: !!entityType && !!entitySlug,
     staleTime: 2 * 60 * 1000, // 2 minutes
     ...options,
   });
 };
 
 // Get single comment query
-export const useComment = (entityType, entityId, commentId, options = {}) => {
+export const useComment = (entityType, entitySlug, commentSlug, options = {}) => {
   return useQuery({
-    queryKey: commentKeys.detail(entityType, entityId, commentId),
+    queryKey: commentKeys.detail(entityType, entitySlug, commentSlug),
     queryFn: async () => {
       const response = await commentsService.getComment(
         entityType,
-        entityId,
-        commentId
+        entitySlug,
+        commentSlug
       );
       return response.data;
     },
-    enabled: !!entityType && !!entityId && !!commentId,
+    enabled: !!entityType && !!entitySlug && !!commentSlug,
     staleTime: 2 * 60 * 1000, // 2 minutes
     ...options,
   });
@@ -67,21 +67,21 @@ export const useComment = (entityType, entityId, commentId, options = {}) => {
 // Get replies to a comment query
 export const useCommentReplies = (
   entityType,
-  entityId,
-  commentId,
+  entitySlug,
+  commentSlug,
   options = {}
 ) => {
   return useQuery({
-    queryKey: commentKeys.replies(entityType, entityId, commentId),
+    queryKey: commentKeys.replies(entityType, entitySlug, commentSlug),
     queryFn: async () => {
       const response = await commentsService.getReplies(
         entityType,
-        entityId,
-        commentId
+        entitySlug,
+        commentSlug
       );
       return response.data;
     },
-    enabled: !!entityType && !!entityId && !!commentId,
+    enabled: !!entityType && !!entitySlug && !!commentSlug,
     staleTime: 2 * 60 * 1000, // 2 minutes
     ...options,
   });
@@ -92,27 +92,28 @@ export const useAddComment = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ entityType, entityId, commentData }) => {
+    mutationFn: async ({ entityType, entitySlug, commentData }) => {
       const response = await commentsService.addComment(
         entityType,
-        entityId,
+        entitySlug,
         commentData
       );
-      return { data: response.data, entityType, entityId };
+      return { data: response.data, entityType, entitySlug };
     },
-    onSuccess: ({ data, entityType, entityId }) => {
+    onSuccess: ({ data, entityType, entitySlug }) => {
       // Invalidate comments list for this entity
       queryClient.invalidateQueries({
-        queryKey: commentKeys.entity(entityType, entityId),
+        queryKey: commentKeys.entity(entityType, entitySlug),
       });
 
       // If this is a reply, also invalidate the parent comment's replies
-      if (data.parent_comment_id) {
+      if (data.parent_comment_slug || data.parent_comment_id) {
+        const parentSlug = data.parent_comment_slug || data.parent_comment_id;
         queryClient.invalidateQueries({
           queryKey: commentKeys.replies(
             entityType,
-            entityId,
-            data.parent_comment_id
+            entitySlug,
+            parentSlug
           ),
         });
       }
@@ -139,25 +140,25 @@ export const useUpdateComment = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ entityType, entityId, commentId, commentData }) => {
+    mutationFn: async ({ entityType, entitySlug, commentSlug, commentData }) => {
       const response = await commentsService.updateComment(
         entityType,
-        entityId,
-        commentId,
+        entitySlug,
+        commentSlug,
         commentData
       );
-      return { data: response.data, entityType, entityId, commentId };
+      return { data: response.data, entityType, entitySlug, commentSlug };
     },
-    onSuccess: ({ data, entityType, entityId, commentId }) => {
+    onSuccess: ({ data, entityType, entitySlug, commentSlug }) => {
       // Update the comment in cache
       queryClient.setQueryData(
-        commentKeys.detail(entityType, entityId, commentId),
+        commentKeys.detail(entityType, entitySlug, commentSlug),
         data
       );
 
       // Invalidate comments list to refresh
       queryClient.invalidateQueries({
-        queryKey: commentKeys.entity(entityType, entityId),
+        queryKey: commentKeys.entity(entityType, entitySlug),
       });
 
       toast.success("Comment updated successfully");
@@ -189,19 +190,19 @@ export const useDeleteComment = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ entityType, entityId, commentId }) => {
-      await commentsService.deleteComment(entityType, entityId, commentId);
-      return { entityType, entityId, commentId };
+    mutationFn: async ({ entityType, entitySlug, commentSlug }) => {
+      await commentsService.deleteComment(entityType, entitySlug, commentSlug);
+      return { entityType, entitySlug, commentSlug };
     },
-    onSuccess: ({ entityType, entityId, commentId }) => {
+    onSuccess: ({ entityType, entitySlug, commentSlug }) => {
       // Remove the comment from cache
       queryClient.removeQueries({
-        queryKey: commentKeys.detail(entityType, entityId, commentId),
+        queryKey: commentKeys.detail(entityType, entitySlug, commentSlug),
       });
 
       // Invalidate comments list to refresh
       queryClient.invalidateQueries({
-        queryKey: commentKeys.entity(entityType, entityId),
+        queryKey: commentKeys.entity(entityType, entitySlug),
       });
 
       toast.success("Comment deleted successfully");

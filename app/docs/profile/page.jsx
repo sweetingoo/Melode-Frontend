@@ -30,7 +30,7 @@ export default function ProfileDocs() {
               <h3 className="font-semibold mb-2">What is Profile Management?</h3>
               <p className="text-sm text-muted-foreground">
                 Your profile contains your personal information, account settings, preferences, and security options.
-                You can update your profile to keep your information current and customize your experience.
+                You can update your profile to keep your information current and customise your experience.
               </p>
             </div>
             <div>

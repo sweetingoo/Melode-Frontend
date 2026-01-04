@@ -277,9 +277,15 @@ const UserManagementPage = () => {
   const validateUserForm = () => {
     const errors = {};
 
-    if (!userFormData.email) {
-      errors.email = "Email is required";
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userFormData.email)) {
+    // Email is only required if sending an invite
+    if (userFormData.send_invite) {
+      if (!userFormData.email) {
+        errors.email = "Email is required when sending an invitation";
+      } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userFormData.email)) {
+        errors.email = "Please enter a valid email address";
+      }
+    } else if (userFormData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userFormData.email)) {
+      // If email is provided but not required, still validate format
       errors.email = "Please enter a valid email address";
     }
 
@@ -1020,7 +1026,7 @@ const UserManagementPage = () => {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="email">
-                  Email <span className="text-red-500">*</span>
+                  Email {userFormData.send_invite && <span className="text-red-500">*</span>}
                 </Label>
                 <Input
                   id="email"
@@ -1038,6 +1044,11 @@ const UserManagementPage = () => {
                 {validationErrors.email && (
                   <p className="text-sm text-red-500">
                     {validationErrors.email}
+                  </p>
+                )}
+                {userFormData.send_invite && (
+                  <p className="text-xs text-muted-foreground">
+                    Email is required when sending an invitation
                   </p>
                 )}
               </div>

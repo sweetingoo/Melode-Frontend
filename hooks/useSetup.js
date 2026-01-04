@@ -164,7 +164,7 @@ export const useCreateOrganization = () => {
       queryClient.invalidateQueries({ queryKey: setupKeys.all });
       queryClient.invalidateQueries({ queryKey: ["configuration"] });
       toast.success("Organisation created", {
-        description: "The organization has been created successfully.",
+        description: "The organisation has been created successfully.",
       });
     },
     onError: (error) => {

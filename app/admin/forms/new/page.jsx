@@ -2306,7 +2306,7 @@ const NewFormPage = () => {
                 <div className="space-y-2 pt-2 border-t">
                   <Label htmlFor="categories">Categories</Label>
                   <p className="text-xs text-muted-foreground">
-                    Define categories to organize submissions. Backend users can assign categories when reviewing submissions.
+                    Define categories to organise submissions. Backend users can assign categories when reviewing submissions.
                   </p>
                   <div className="space-y-2">
                     <div className="flex gap-2">

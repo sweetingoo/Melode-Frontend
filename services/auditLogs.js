@@ -23,18 +23,29 @@ export const auditLogsService = {
   },
 
   // Get audit logs for a specific resource
-  getResourceAuditLogs: async (resource, resourceId, params = {}) => {
+  getResourceAuditLogs: async (resource, resourceIdOrSlug, params = {}) => {
     try {
+      // Determine if it's a slug (UUID-like string) or ID (number)
+      // Slugs are typically UUIDs (36 chars with hyphens), contain hyphens, or are longer strings
+      // IDs are typically numbers or short numeric strings
+      const isNumericId = !isNaN(resourceIdOrSlug) && !isNaN(parseFloat(resourceIdOrSlug)) && 
+                          parseFloat(resourceIdOrSlug).toString() === resourceIdOrSlug.toString();
+      const isSlug = !isNumericId && typeof resourceIdOrSlug === 'string';
+      
       return await api.get("/audit-logs/", {
         params: {
           resource,
-          resource_id: resourceId,
+          // Use resource_slug for slugs, resource_id for numeric IDs
+          ...(isSlug 
+            ? { resource_slug: resourceIdOrSlug }
+            : { resource_id: resourceIdOrSlug }
+          ),
           ...params,
         },
       });
     } catch (error) {
       console.error(
-        `Get audit logs for ${resource} ${resourceId} failed:`,
+        `Get audit logs for ${resource} ${resourceIdOrSlug} failed:`,
         error
       );
       throw error;

@@ -104,10 +104,13 @@ const FormSubmissionDetailPage = () => {
     if (file.file_url || file.download_url || file.url) {
       // Open in new tab for preview
       window.open(file.file_url || file.download_url || file.url, '_blank');
+    } else if (file.file_slug || file.slug) {
+      // Use slug for path parameter (preferred)
+      const fileSlug = file.file_slug || file.slug;
+      window.open(`/api/v1/settings/files/${fileSlug}/download`, '_blank');
     } else if (file.file_id || file.id) {
-      // If we only have file ID, try to construct preview URL or download
+      // Fallback to ID only if slug is not available (for backward compatibility)
       const fileId = file.file_id || file.id;
-      // You might need to adjust this URL based on your API
       window.open(`/api/v1/settings/files/${fileId}/download`, '_blank');
     }
   };
@@ -355,8 +358,11 @@ const FormSubmissionDetailPage = () => {
     if (file.file_url) {
       // If we have a direct URL, open it
       window.open(file.file_url, '_blank');
+    } else if (file.file_slug || file.slug) {
+      // Use slug for path parameter (preferred)
+      downloadFileMutation.mutate(file.file_slug || file.slug);
     } else if (file.file_id) {
-      // Otherwise use the download hook
+      // Fallback to ID only if slug is not available (for backward compatibility)
       downloadFileMutation.mutate(file.file_id);
     }
   };
@@ -419,6 +425,7 @@ const FormSubmissionDetailPage = () => {
     }
 
     // Handle file field with just a number (file ID) - fallback case
+    // Note: This should ideally use file slug, but we handle ID for backward compatibility
     if (isFileField && typeof formatted === 'number') {
       return (
         <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-md border">
@@ -431,7 +438,11 @@ const FormSubmissionDetailPage = () => {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => window.open(`/api/v1/settings/files/${formatted}/download`, '_blank')}
+              onClick={() => {
+                // Use slug if available, fallback to ID for backward compatibility
+                const fileSlug = formatted; // API should accept slug, but we pass ID as fallback
+                window.open(`/api/v1/settings/files/${fileSlug}/download`, '_blank');
+              }}
               title="View/Preview file"
             >
               <Eye className="h-4 w-4 mr-2" />
@@ -1141,7 +1152,6 @@ const FormSubmissionDetailPage = () => {
           <CommentThread
             entityType="form_submission"
             entitySlug={submission?.slug}
-            entityId={submission?.id}
             showHeader={true}
           />
         </CardContent>

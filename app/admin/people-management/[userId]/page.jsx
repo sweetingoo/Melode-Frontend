@@ -27,6 +27,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -75,8 +76,6 @@ import {
   useUserRoles,
   useAssignDirectPermission,
   useRemoveDirectPermission,
-  useAssignRole,
-  useRemoveRole,
   useRoles,
   userUtils,
 } from "@/hooks/useUsers";
@@ -103,7 +102,6 @@ const UserEditPage = () => {
   const [isCustomPermissionModalOpen, setIsCustomPermissionModalOpen] =
     useState(false);
   const [searchPermissionTerm, setSearchPermissionTerm] = useState("");
-  const [selectedRoleId, setSelectedRoleId] = useState("");
   const [isAssignDepartmentModalOpen, setIsAssignDepartmentModalOpen] =
     useState(false);
   const [isAddRoleToDepartmentModalOpen, setIsAddRoleToDepartmentModalOpen] =
@@ -125,6 +123,17 @@ const UserEditPage = () => {
   const userPermissions = userData?.permissions || [];
   const userDirectPermissions = userData?.direct_permissions || [];
 
+  // Transform user data
+  const transformedUser = React.useMemo(() => {
+    return userData ? userUtils.transformUser(userData) : null;
+  }, [userData]);
+
+  // Use the actual slug from user data if available, otherwise fall back to params
+  // This ensures we always use the slug for API calls, even if the URL had an ID
+  const actualUserSlug = React.useMemo(() => {
+    return transformedUser?.slug || userData?.slug || userSlug;
+  }, [transformedUser, userData, userSlug]);
+
   const updateUserMutation = useUpdateUser();
   const deleteUserMutation = useDeleteUser();
   const deactivateUserMutation = useDeactivateUser();
@@ -132,8 +141,6 @@ const UserEditPage = () => {
   const verifyUserMutation = useVerifyUser();
   const assignDirectPermissionMutation = useAssignDirectPermission();
   const removeDirectPermissionMutation = useRemoveDirectPermission();
-  const assignRoleMutation = useAssignRole();
-  const removeRoleMutation = useRemoveRole();
 
   // Department and Assignment hooks
   const { data: departmentsData, isLoading: departmentsLoading } =
@@ -154,15 +161,10 @@ const UserEditPage = () => {
     data: employeeAssignmentsData,
     isLoading: assignmentsLoading,
     refetch: refetchAssignments,
-  } = useEmployeeAssignments(userSlug);
+  } = useEmployeeAssignments(actualUserSlug);
   const createAssignmentMutation = useCreateAssignment();
   const deleteAssignmentMutation = useDeleteAssignment();
   const queryClient = useQueryClient();
-
-  // Transform user data
-  const transformedUser = React.useMemo(() => {
-    return userData ? userUtils.transformUser(userData) : null;
-  }, [userData]);
 
   // Get available roles from API (needed for Superuser role lookup)
   const { data: rolesData, isLoading: rolesLoading } = useRoles();
@@ -643,11 +645,14 @@ const UserEditPage = () => {
   };
 
   const handleSave = async () => {
-    if (!transformedUser) return;
+    if (!transformedUser || !actualUserSlug) {
+      toast.error("Cannot save: User data not loaded");
+      return;
+    }
 
     try {
       await updateUserMutation.mutateAsync({
-        id: transformedUser.id,
+        slug: actualUserSlug,
         userData: {
           first_name: formData.firstName,
           last_name: formData.lastName,
@@ -658,8 +663,10 @@ const UserEditPage = () => {
           bio: formData.bio,
         },
       });
+      // Success toast is handled by the mutation hook
     } catch (error) {
       console.error("Failed to update user:", error);
+      // Error toast is handled by the mutation hook
     }
   };
 
@@ -667,7 +674,7 @@ const UserEditPage = () => {
     if (!transformedUser) return;
 
     try {
-      await deactivateUserMutation.mutateAsync(userSlug);
+      await deactivateUserMutation.mutateAsync(actualUserSlug);
     } catch (error) {
       console.error("Failed to deactivate user:", error);
     }
@@ -677,7 +684,7 @@ const UserEditPage = () => {
     if (!transformedUser) return;
 
     try {
-      await activateUserMutation.mutateAsync(userSlug);
+      await activateUserMutation.mutateAsync(actualUserSlug);
     } catch (error) {
       console.error("Failed to activate user:", error);
     }
@@ -687,7 +694,7 @@ const UserEditPage = () => {
     if (!transformedUser) return;
 
     try {
-      await verifyUserMutation.mutateAsync(userSlug);
+      await verifyUserMutation.mutateAsync(actualUserSlug);
     } catch (error) {
       console.error("Failed to verify user:", error);
     }
@@ -697,7 +704,7 @@ const UserEditPage = () => {
     if (!transformedUser) return;
 
     try {
-      await deleteUserMutation.mutateAsync(userSlug);
+      await deleteUserMutation.mutateAsync(actualUserSlug);
       router.push("/admin/people-management");
     } catch (error) {
       console.error("Failed to delete user:", error);
@@ -705,7 +712,7 @@ const UserEditPage = () => {
   };
 
   const handleAddCustomPermission = async (permissionId) => {
-    if (!userId) return;
+    if (!actualUserSlug) return;
 
     const permission = availablePermissions.find((p) => p.id === permissionId);
     if (permission) {
@@ -729,7 +736,7 @@ const UserEditPage = () => {
 
       try {
         await assignDirectPermissionMutation.mutateAsync({
-          slug: userSlug,
+          slug: actualUserSlug,
           permissionSlug: permission?.slug || permissionId,
         });
 
@@ -741,13 +748,13 @@ const UserEditPage = () => {
   };
 
   const handleRemoveCustomPermission = async (permissionId) => {
-    if (!userId) return;
+    if (!actualUserSlug) return;
 
     const permission = availablePermissions.find((p) => p.id === permissionId);
     if (permission) {
       try {
         await removeDirectPermissionMutation.mutateAsync({
-          slug: userSlug,
+          slug: actualUserSlug,
           permissionSlug: permission?.slug || permissionId,
         });
 
@@ -758,42 +765,12 @@ const UserEditPage = () => {
     }
   };
 
-  const handleAssignRole = async () => {
-    if (!userId || !selectedRoleId) return;
-
-    try {
-      await assignRoleMutation.mutateAsync({
-        id: userId,
-        roleId: parseInt(selectedRoleId),
-        assignedBy: userId, // Using current user as assigned_by
-        notes: `Role assigned via admin panel`,
-      });
-      // Reset the selected role ID after successful assignment
-      setSelectedRoleId("");
-    } catch (error) {
-      console.error("Failed to assign role:", error);
-    }
-  };
-
-  const handleRemoveRole = async (roleSlug) => {
-    if (!userSlug) return;
-
-    try {
-      await removeRoleMutation.mutateAsync({
-        userSlug: userSlug,
-        roleSlug: roleSlug,
-      });
-    } catch (error) {
-      console.error("Failed to remove role:", error);
-    }
-  };
-
   const handleAssignDepartment = async () => {
-    if (!userId || !selectedDepartmentId || !selectedRoleForDepartment) return;
+    if (!userData?.id || !selectedDepartmentId || !selectedRoleForDepartment) return;
 
     try {
       await createAssignmentMutation.mutateAsync({
-        user_id: parseInt(userId),
+        user_id: userData.id, // Use ID in request body (correct)
         department_id: parseInt(selectedDepartmentId),
         role_id: parseInt(selectedRoleForDepartment),
       });
@@ -801,20 +778,20 @@ const UserEditPage = () => {
       setSelectedDepartmentId("");
       setSelectedRoleForDepartment("");
       refetchAssignments();
-      // Invalidate user query to refresh permissions
-      queryClient.invalidateQueries({ queryKey: userKeys.detail(userId) });
+      // Invalidate user query to refresh permissions - use slug for query key
+      queryClient.invalidateQueries({ queryKey: userKeys.detail(actualUserSlug) });
     } catch (error) {
       console.error("Failed to assign department:", error);
     }
   };
 
   const handleAddRoleToDepartment = async () => {
-    if (!userId || !selectedDepartmentForRole || !selectedRoleForDepartment)
+    if (!userData?.id || !selectedDepartmentForRole || !selectedRoleForDepartment)
       return;
 
     try {
       await createAssignmentMutation.mutateAsync({
-        user_id: parseInt(userId),
+        user_id: userData.id, // Use ID in request body (correct)
         department_id: selectedDepartmentForRole.department.id,
         role_id: parseInt(selectedRoleForDepartment),
       });
@@ -822,24 +799,52 @@ const UserEditPage = () => {
       setSelectedDepartmentForRole(null);
       setSelectedRoleForDepartment("");
       refetchAssignments();
-      // Invalidate user query to refresh permissions
-      queryClient.invalidateQueries({ queryKey: userKeys.detail(userId) });
+      // Invalidate user query to refresh permissions - use slug for query key
+      queryClient.invalidateQueries({ queryKey: userKeys.detail(actualUserSlug) });
     } catch (error) {
       console.error("Failed to add role to department:", error);
     }
   };
 
   const handleRemoveAssignment = async (departmentId, assignmentId) => {
-    if (!userId) return;
+    if (!actualUserSlug) return;
+
+    // Find the department to get its slug - check both assignmentsByDepartment and departments list
+    let departmentSlug = departmentId;
+    
+    // First try to find in assignmentsByDepartment
+    const deptFromAssignments = assignmentsByDepartment.find(
+      (dept) => dept.department.id === departmentId || dept.department.slug === departmentId
+    );
+    if (deptFromAssignments?.department?.slug) {
+      departmentSlug = deptFromAssignments.department.slug;
+    } else {
+      // Try to find in departments list
+      const deptFromList = departments.find(
+        (dept) => dept.id === departmentId || dept.slug === departmentId
+      );
+      if (deptFromList?.slug) {
+        departmentSlug = deptFromList.slug;
+      } else {
+        // Try to find in employeeAssignmentsData
+        const assignment = employeeAssignmentsData?.find(
+          (a) => (a.department_id === departmentId || a.department?.id === departmentId) &&
+                 (a.assignment_id === assignmentId || a.id === assignmentId)
+        );
+        if (assignment?.department?.slug) {
+          departmentSlug = assignment.department.slug;
+        }
+      }
+    }
 
     try {
       await deleteAssignmentMutation.mutateAsync({
-        employeeId: userId,
-        departmentId: departmentId,
+        userSlug: actualUserSlug,
+        departmentSlug: departmentSlug,
       });
       refetchAssignments();
-      // Invalidate user query to refresh permissions
-      queryClient.invalidateQueries({ queryKey: userKeys.detail(userId) });
+      // Invalidate user query to refresh permissions - use slug for query key
+      queryClient.invalidateQueries({ queryKey: userKeys.detail(actualUserSlug) });
     } catch (error) {
       console.error("Failed to remove assignment:", error);
     }
@@ -2005,7 +2010,7 @@ const UserEditPage = () => {
 
         {/* Activity History Tab */}
         <TabsContent value="activity" className="space-y-6">
-          <UserAuditLogs userSlug={userSlug} userId={userData?.id} title="User Activity History" />
+          <UserAuditLogs userSlug={actualUserSlug} userId={userData?.id} title="User Activity History" pageSize={10} />
         </TabsContent>
       </Tabs>
 
@@ -2419,6 +2424,7 @@ const UserEditPage = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
     </div>
   );
 };

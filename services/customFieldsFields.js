@@ -20,12 +20,12 @@ export const customFieldsFieldsService = {
     }
   },
 
-  // Get custom field by ID
-  getCustomField: async (id) => {
+  // Get custom field by slug
+  getCustomField: async (slug) => {
     try {
-      return await api.get(`/settings/custom-fields/${id}`);
+      return await api.get(`/settings/custom-fields/${slug}`);
     } catch (error) {
-      console.error(`Get custom field ${id} failed:`, error);
+      console.error(`Get custom field ${slug} failed:`, error);
       throw error;
     }
   },
@@ -44,37 +44,37 @@ export const customFieldsFieldsService = {
   },
 
   // Update custom field
-  updateCustomField: async (id, fieldData) => {
+  updateCustomField: async (slug, fieldData) => {
     try {
-      console.log("Update Custom Field Service - ID:", id, "Data:", fieldData);
+      console.log("Update Custom Field Service - Slug:", slug, "Data:", fieldData);
       const response = await api.put(
-        `/settings/custom-fields/${id}`,
+        `/settings/custom-fields/${slug}`,
         fieldData
       );
       console.log("Update Custom Field Service - Response:", response);
       return response;
     } catch (error) {
-      console.error(`Update custom field ${id} failed:`, error);
+      console.error(`Update custom field ${slug} failed:`, error);
       throw error;
     }
   },
 
   // Delete custom field (soft delete)
-  deleteCustomField: async (id) => {
+  deleteCustomField: async (slug) => {
     try {
-      return await api.delete(`/settings/custom-fields/${id}`);
+      return await api.delete(`/settings/custom-fields/${slug}`);
     } catch (error) {
-      console.error(`Delete custom field ${id} failed:`, error);
+      console.error(`Delete custom field ${slug} failed:`, error);
       throw error;
     }
   },
 
   // Hard delete custom field
-  hardDeleteCustomField: async (id) => {
+  hardDeleteCustomField: async (slug) => {
     try {
-      return await api.delete(`/settings/custom-fields/${id}/hard`);
+      return await api.delete(`/settings/custom-fields/${slug}/hard`);
     } catch (error) {
-      console.error(`Hard delete custom field ${id} failed:`, error);
+      console.error(`Hard delete custom field ${slug} failed:`, error);
       throw error;
     }
   },

@@ -114,7 +114,9 @@ const BroadcastStatusPage = () => {
         (r) =>
           r.first_name?.toLowerCase().includes(term) ||
           r.last_name?.toLowerCase().includes(term) ||
-          r.email?.toLowerCase().includes(term)
+          r.user_name?.toLowerCase().includes(term) ||
+          r.email?.toLowerCase().includes(term) ||
+          r.user_email?.toLowerCase().includes(term)
       );
     }
 
@@ -196,8 +198,8 @@ const BroadcastStatusPage = () => {
           : []),
       ],
       ...filteredRecipients.map((r) => [
-        `${r.first_name || ""} ${r.last_name || ""}`.trim() || "N/A",
-        r.email || "N/A",
+        r.user_name || `${r.first_name || ""} ${r.last_name || ""}`.trim() || r.display_name || r.full_name || "N/A",
+        r.user_email || r.email || "N/A",
         r.is_read ? "Yes" : "No",
         r.read_at ? (() => {
           const date = parseUTCDate(r.read_at);
@@ -382,7 +384,19 @@ const BroadcastStatusPage = () => {
                       <div className="flex items-center gap-2">
                         <User className="h-4 w-4 text-muted-foreground" />
                         <span className="font-semibold">
-                          {recipient.first_name} {recipient.last_name}
+                          {(() => {
+                            // Check for user_name first (from API response)
+                            if (recipient.user_name) {
+                              return recipient.user_name;
+                            }
+                            // Then try first_name + last_name
+                            const fullName = `${recipient.first_name || ""} ${recipient.last_name || ""}`.trim();
+                            if (fullName) {
+                              return fullName;
+                            }
+                            // Fallback to other name fields
+                            return recipient.display_name || recipient.full_name || recipient.user_email || recipient.email || recipient.username || "Unknown User";
+                          })()}
                         </span>
                         {recipient.is_read ? (
                           <Badge variant="outline" className="bg-green-50 text-green-800 dark:bg-green-900/20 dark:text-green-200 border-green-200 dark:border-green-800">
@@ -399,7 +413,7 @@ const BroadcastStatusPage = () => {
                           getAcknowledgementBadge(recipient.acknowledgement_status)}
                       </div>
                       <p className="text-sm text-muted-foreground">
-                        {recipient.email}
+                        {recipient.user_email || recipient.email || "No email"}
                       </p>
                       <div className="flex items-center gap-4 text-xs text-muted-foreground">
                         {recipient.read_at && (

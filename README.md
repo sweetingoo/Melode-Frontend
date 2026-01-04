@@ -19,7 +19,7 @@ This is a [Next.js](https://nextjs.org) project for the Melode application, a co
 - **Auto-Generated IDs**: Automatic field ID and form name generation
 
 ### Document Management
-- **Hierarchical Categories**: Create categories and subcategories for organizing documents
+- **Hierarchical Categories**: Create categories and subcategories for organising documents
 - **Rich Text Editor**: Create documents with full formatting support (Tiptap editor)
 - **File Attachments**: Attach multiple files to documents
 - **Permission-Based Access**: Category-level permissions with inheritance from parent categories

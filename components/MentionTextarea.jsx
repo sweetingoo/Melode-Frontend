@@ -240,7 +240,7 @@ const MentionTextarea = ({
             const spaceBelow = viewportHeight - containerBottom - padding;
             const spaceAbove = containerTop - padding;
             
-            // Determine vertical position - prioritize above if near bottom of screen
+            // Determine vertical position - prioritise above if near bottom of screen
             let top;
             const isNearBottom = containerBottom > viewportHeight * 0.7; // If container is in bottom 30% of screen
             

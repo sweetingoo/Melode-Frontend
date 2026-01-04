@@ -626,6 +626,7 @@ export const userUtils = {
   transformUser: (apiUser) => {
     return {
       id: apiUser.id,
+      slug: apiUser.slug, // Include slug for API path parameters
       name:
         `${apiUser.first_name || ""} ${apiUser.last_name || ""}`.trim() ||
         "Unknown User",
