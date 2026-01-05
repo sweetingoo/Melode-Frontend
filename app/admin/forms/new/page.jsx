@@ -26,32 +26,33 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { 
-  ArrowLeft, 
-  Loader2, 
-  Plus, 
-  Trash2, 
-  Info, 
-  GripVertical, 
-  Edit2, 
-  Eye, 
-  Type, 
-  Mail, 
-  Phone, 
-  Calendar, 
-  CheckSquare, 
-  List, 
-  Upload, 
-  FileText, 
-  Image, 
-  Minus, 
+import {
+  ArrowLeft,
+  Loader2,
+  Plus,
+  Trash2,
+  Info,
+  GripVertical,
+  Edit2,
+  Eye,
+  Type,
+  Mail,
+  Phone,
+  Calendar,
+  CheckSquare,
+  List,
+  Upload,
+  FileText,
+  Image,
+  Minus,
   FileDown,
   PenTool,
   Hash,
   AlignLeft,
   ChevronDown,
   ChevronUp,
-  Sparkles
+  Sparkles,
+  Play
 } from "lucide-react";
 import {
   Collapsible,
@@ -142,6 +143,7 @@ const fieldTypes = [
   // Display-only field types
   { value: "text_block", label: "Text Block (Display Only)" },
   { value: "image_block", label: "Image Block (Display Only)" },
+  { value: "youtube_video_embed", label: "YouTube Video Embed (Display Only)" },
   { value: "line_break", label: "Line Break (Display Only)" },
   { value: "page_break", label: "Page Break (Display Only)" },
   { value: "download_link", label: "Download Link (Display Only)" },
@@ -165,11 +167,12 @@ const generateFieldIdFromLabel = (label) => {
 
 // Helper function to generate random field ID for display-only fields
 const generateDisplayFieldId = (fieldType) => {
-  const prefix = fieldType === 'text_block' ? 'txt' : 
-                 fieldType === 'image_block' ? 'img' : 
-                 fieldType === 'line_break' ? 'line' : 
-                 fieldType === 'page_break' ? 'page' : 
-                 fieldType === 'download_link' ? 'download' : 'display';
+  const prefix = fieldType === 'text_block' ? 'txt' :
+    fieldType === 'image_block' ? 'img' :
+      fieldType === 'youtube_video_embed' ? 'yt' :
+        fieldType === 'line_break' ? 'line' :
+          fieldType === 'page_break' ? 'page' :
+            fieldType === 'download_link' ? 'download' : 'display';
   const random = Math.random().toString(36).substring(2, 9);
   const timestamp = Date.now().toString(36);
   return `${prefix}_${timestamp}_${random}`;
@@ -191,7 +194,7 @@ const NewFormPage = () => {
 
   // Track if component is mounted to avoid hydration errors
   const [isMounted, setIsMounted] = useState(false);
-  
+
   useEffect(() => {
     setIsMounted(true);
   }, []);
@@ -273,7 +276,8 @@ const NewFormPage = () => {
     image_url: "", // for image_block (direct URL)
     image_file: null, // for image_block (uploaded file)
     image_file_id: null, // for image_block (uploaded file ID after upload)
-    alt_text: "", // for image_block
+    alt_text: "", // for image_block and youtube_video_embed
+    video_url: "", // for youtube_video_embed
     download_url: "", // for download_link
     // Conditional visibility
     conditional_visibility: null, // { depends_on_field, show_when, value }
@@ -288,14 +292,14 @@ const NewFormPage = () => {
   const [assignedToRoleId, setAssignedToRoleId] = useState("");
   const [selectedUserIds, setSelectedUserIds] = useState([]);
   const [createIndividualAssignments, setCreateIndividualAssignments] = useState(false);
-  
+
   // View submissions permissions state
   const [viewSubmissionsRoleIds, setViewSubmissionsRoleIds] = useState([]);
   const [viewSubmissionsUserIds, setViewSubmissionsUserIds] = useState([]);
-  
+
   // Category input state
   const [newCategoryValue, setNewCategoryValue] = useState("");
-  
+
   // Status input state
   const [newStatusValue, setNewStatusValue] = useState("");
   const [isCreateRoleModalOpen, setIsCreateRoleModalOpen] = useState(false);
@@ -367,7 +371,7 @@ const NewFormPage = () => {
 
   const handleAddField = () => {
     // Display-only field types that auto-generate field_id
-    const displayOnlyTypes = ['text_block', 'image_block', 'line_break', 'page_break', 'download_link'];
+    const displayOnlyTypes = ['text_block', 'image_block', 'youtube_video_embed', 'line_break', 'page_break', 'download_link'];
     const isDisplayOnly = displayOnlyTypes.includes(newField.field_type);
 
     // Auto-generate field_id if not provided
@@ -408,6 +412,12 @@ const NewFormPage = () => {
       return;
     }
 
+    // For youtube_video_embed, require video_url
+    if (newField.field_type === 'youtube_video_embed' && !newField.video_url) {
+      toast.error("YouTube video URL is required for YouTube video embed");
+      return;
+    }
+
     // For download_link, require download_url
     if (newField.field_type === 'download_link' && !newField.download_url) {
       toast.error("Download URL is required for download link");
@@ -443,6 +453,14 @@ const NewFormPage = () => {
       // For image_block, use image_url (download_url from upload or direct URL)
       if (newField.image_url) {
         field.image_url = newField.image_url;
+      }
+      if (newField.alt_text) {
+        field.alt_text = newField.alt_text;
+      }
+    } else if (newField.field_type === 'youtube_video_embed') {
+      // For youtube_video_embed, use video_url and alt_text
+      if (newField.video_url) {
+        field.video_url = newField.video_url;
       }
       if (newField.alt_text) {
         field.alt_text = newField.alt_text;
@@ -567,6 +585,8 @@ const NewFormPage = () => {
       image_file: null,
       image_file_id: null,
       alt_text: "",
+      video_url: "",
+      download_url: "",
     });
     setNewOption({ value: "", label: "" });
     setAllowAllFileTypes(false);
@@ -604,7 +624,7 @@ const NewFormPage = () => {
   const handleDrop = (e, dropIndex) => {
     e.preventDefault();
     setDragOverIndex(null);
-    
+
     if (draggedIndex === null || draggedIndex === dropIndex) {
       setDraggedIndex(null);
       return;
@@ -664,12 +684,12 @@ const NewFormPage = () => {
       .replace(/[^a-z0-9_-]/g, '') // Remove invalid characters
       .replace(/_+/g, '_') // Replace multiple underscores with single
       .replace(/^_+|_+$/g, ''); // Remove leading/trailing underscores
-    
+
     if (!sanitizedFormName || sanitizedFormName.length === 0) {
       toast.error("Form name is invalid. Please use only lowercase letters, numbers, hyphens, and underscores.");
       return;
     }
-    
+
     if (sanitizedFormName !== formData.form_name) {
       toast.error("Form name contains invalid characters. Only lowercase letters, numbers, hyphens, and underscores are allowed.");
       // Update form data with sanitized name
@@ -739,8 +759,8 @@ const NewFormPage = () => {
                       const title = e.target.value;
                       // Auto-generate form_name from title
                       const autoFormName = title ? generateFieldIdFromLabel(title) : '';
-                      setFormData({ 
-                        ...formData, 
+                      setFormData({
+                        ...formData,
                         form_title: title,
                         form_name: formData.form_name || autoFormName
                       });
@@ -1044,1018 +1064,1061 @@ const NewFormPage = () => {
                   <CollapsibleContent>
                     <div className="p-4 border rounded-md space-y-4 mt-2 bg-card">
                       {/* Field Type Selection */}
-                  <div>
-                    <Label htmlFor="field_type">Field Type *</Label>
-                    <Select
-                      value={newField.field_type}
-                      onValueChange={(value) => {
-                        const displayOnlyTypes = ['text_block', 'image_block', 'line_break', 'page_break', 'download_link'];
-                        const isDisplayOnly = displayOnlyTypes.includes(value);
-                        setNewField({ 
-                          ...newField, 
-                          field_type: value,
-                          // Reset field_id when type changes (will be auto-generated)
-                          field_id: isDisplayOnly ? '' : newField.field_id
-                        });
-                      }}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {fieldTypes.map((type) => (
-                          <SelectItem key={type.value} value={type.value}>
-                            {type.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                      <div>
+                        <Label htmlFor="field_type">Field Type *</Label>
+                        <Select
+                          value={newField.field_type}
+                          onValueChange={(value) => {
+                            const displayOnlyTypes = ['text_block', 'image_block', 'youtube_video_embed', 'line_break', 'page_break', 'download_link'];
+                            const isDisplayOnly = displayOnlyTypes.includes(value);
+                            setNewField({
+                              ...newField,
+                              field_type: value,
+                              // Reset field_id when type changes (will be auto-generated)
+                              field_id: isDisplayOnly ? '' : newField.field_id
+                            });
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {fieldTypes.map((type) => (
+                              <SelectItem key={type.value} value={type.value}>
+                                {type.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
 
-                  {/* Display-only field descriptions */}
-                  {['line_break', 'page_break'].includes(newField.field_type) && (
-                    <div className="p-4 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-md">
-                      <div className="flex items-start gap-3">
-                        <div className="mt-0.5">
-                          {newField.field_type === 'line_break' ? (
-                            <div className="text-2xl">─</div>
-                          ) : (
-                            <div className="text-2xl">📄</div>
+                      {/* Display-only field descriptions */}
+                      {['line_break', 'page_break'].includes(newField.field_type) && (
+                        <div className="p-4 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-md">
+                          <div className="flex items-start gap-3">
+                            <div className="mt-0.5">
+                              {newField.field_type === 'line_break' ? (
+                                <div className="text-2xl">─</div>
+                              ) : (
+                                <div className="text-2xl">📄</div>
+                              )}
+                            </div>
+                            <div className="flex-1">
+                              <h4 className="font-medium text-sm mb-1">
+                                {newField.field_type === 'line_break' ? 'Line Break' : 'Page Break'}
+                              </h4>
+                              <p className="text-xs text-muted-foreground">
+                                {newField.field_type === 'line_break'
+                                  ? 'This will render as a horizontal line separator in the form. No additional configuration needed.'
+                                  : 'This will create a page break for multi-page forms. Users will see Previous/Next buttons and a progress indicator when filling out the form.'}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Label - required for most fields */}
+                      {!['line_break', 'page_break'].includes(newField.field_type) && (
+                        <div>
+                          <Label htmlFor="field_label">
+                            Label {!['text_block', 'image_block', 'download_link'].includes(newField.field_type) && '*'}
+                          </Label>
+                          <Input
+                            id="field_label"
+                            value={newField.label}
+                            onChange={(e) => {
+                              const label = e.target.value;
+                              // Auto-generate field_id from label for regular fields
+                              const displayOnlyTypes = ['text_block', 'image_block', 'youtube_video_embed', 'line_break', 'page_break', 'download_link'];
+                              const isDisplayOnly = displayOnlyTypes.includes(newField.field_type);
+                              const autoFieldId = !isDisplayOnly && label ? generateFieldIdFromLabel(label) : newField.field_id;
+                              setNewField({
+                                ...newField,
+                                label: label,
+                                field_id: autoFieldId || newField.field_id
+                              });
+                            }}
+                            placeholder={
+                              ['text_block', 'image_block', 'download_link'].includes(newField.field_type)
+                                ? "Optional label for this display element"
+                                : "e.g., Equipment Name (Field ID will be auto-generated)"
+                            }
+                          />
+                          {!['text_block', 'image_block', 'line_break', 'page_break', 'download_link'].includes(newField.field_type) && newField.label && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Field ID: <code className="px-1 py-0.5 bg-muted rounded text-xs">{generateFieldIdFromLabel(newField.label) || 'Will be generated'}</code>
+                            </p>
                           )}
                         </div>
-                        <div className="flex-1">
-                          <h4 className="font-medium text-sm mb-1">
-                            {newField.field_type === 'line_break' ? 'Line Break' : 'Page Break'}
-                          </h4>
-                          <p className="text-xs text-muted-foreground">
-                            {newField.field_type === 'line_break' 
-                              ? 'This will render as a horizontal line separator in the form. No additional configuration needed.'
-                              : 'This will create a page break for multi-page forms. Users will see Previous/Next buttons and a progress indicator when filling out the form.'}
+                      )}
+
+                      {/* Field ID - show as read-only for auto-generated, editable override */}
+                      {!['text_block', 'image_block', 'line_break', 'page_break', 'download_link'].includes(newField.field_type) && newField.label && (
+                        <div>
+                          <Label htmlFor="field_id">Field ID (Auto-generated, click to override)</Label>
+                          <Input
+                            id="field_id"
+                            value={newField.field_id || generateFieldIdFromLabel(newField.label)}
+                            onChange={(e) =>
+                              setNewField({ ...newField, field_id: e.target.value })
+                            }
+                            placeholder="Auto-generated from label"
+                            className="font-mono text-sm"
+                          />
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Automatically generated from label. You can override it if needed.
                           </p>
                         </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Label - required for most fields */}
-                  {!['line_break', 'page_break'].includes(newField.field_type) && (
-                    <div>
-                      <Label htmlFor="field_label">
-                        Label {!['text_block', 'image_block', 'download_link'].includes(newField.field_type) && '*'}
-                      </Label>
-                      <Input
-                        id="field_label"
-                        value={newField.label}
-                        onChange={(e) => {
-                          const label = e.target.value;
-                          // Auto-generate field_id from label for regular fields
-                          const displayOnlyTypes = ['text_block', 'image_block', 'line_break', 'page_break', 'download_link'];
-                          const isDisplayOnly = displayOnlyTypes.includes(newField.field_type);
-                          const autoFieldId = !isDisplayOnly && label ? generateFieldIdFromLabel(label) : newField.field_id;
-                          setNewField({ 
-                            ...newField, 
-                            label: label,
-                            field_id: autoFieldId || newField.field_id
-                          });
-                        }}
-                        placeholder={
-                          ['text_block', 'image_block', 'download_link'].includes(newField.field_type)
-                            ? "Optional label for this display element"
-                            : "e.g., Equipment Name (Field ID will be auto-generated)"
-                        }
-                      />
-                      {!['text_block', 'image_block', 'line_break', 'page_break', 'download_link'].includes(newField.field_type) && newField.label && (
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Field ID: <code className="px-1 py-0.5 bg-muted rounded text-xs">{generateFieldIdFromLabel(newField.label) || 'Will be generated'}</code>
-                        </p>
                       )}
-                    </div>
-                  )}
 
-                  {/* Field ID - show as read-only for auto-generated, editable override */}
-                  {!['text_block', 'image_block', 'line_break', 'page_break', 'download_link'].includes(newField.field_type) && newField.label && (
-                    <div>
-                      <Label htmlFor="field_id">Field ID (Auto-generated, click to override)</Label>
-                      <Input
-                        id="field_id"
-                        value={newField.field_id || generateFieldIdFromLabel(newField.label)}
-                        onChange={(e) =>
-                          setNewField({ ...newField, field_id: e.target.value })
-                        }
-                        placeholder="Auto-generated from label"
-                        className="font-mono text-sm"
-                      />
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Automatically generated from label. You can override it if needed.
-                      </p>
-                    </div>
-                  )}
-                  
-                  {/* Required checkbox - hidden for display-only fields */}
-                  {!['text_block', 'image_block', 'line_break', 'page_break'].includes(newField.field_type) && (
-                    <div className="flex items-center space-x-2">
-                      <Checkbox
-                        id="field_required"
-                        checked={newField.required}
-                        onCheckedChange={(checked) =>
-                          setNewField({ ...newField, required: checked })
-                        }
-                      />
-                      <Label htmlFor="field_required">Required</Label>
-                    </div>
-                  )}
+                      {/* Required checkbox - hidden for display-only fields */}
+                      {!['text_block', 'image_block', 'line_break', 'page_break'].includes(newField.field_type) && (
+                        <div className="flex items-center space-x-2">
+                          <Checkbox
+                            id="field_required"
+                            checked={newField.required}
+                            onCheckedChange={(checked) =>
+                              setNewField({ ...newField, required: checked })
+                            }
+                          />
+                          <Label htmlFor="field_required">Required</Label>
+                        </div>
+                      )}
 
-                  {/* Basic Field Settings - Collapsible */}
-                  {!['line_break', 'page_break'].includes(newField.field_type) && (
-                    <Collapsible defaultOpen>
-                      <CollapsibleTrigger asChild>
-                        <Button type="button" variant="ghost" className="w-full justify-between -ml-4 -mr-4">
-                          <span className="text-sm font-medium">Basic Settings</span>
-                          <ChevronDown className="h-4 w-4" />
-                        </Button>
-                      </CollapsibleTrigger>
-                      <CollapsibleContent className="space-y-3">
-                        {/* Placeholder - hidden for display-only fields */}
-                        {!['text_block', 'image_block', 'line_break', 'page_break', 'download_link'].includes(newField.field_type) && (
-                          <div>
-                            <Label htmlFor="field_placeholder">Placeholder</Label>
-                            <Input
-                              id="field_placeholder"
-                              value={newField.placeholder}
-                              onChange={(e) =>
-                                setNewField({ ...newField, placeholder: e.target.value })
-                              }
-                              placeholder="Enter placeholder text"
-                            />
-                          </div>
-                        )}
-
-                        {/* Help Text - only show for fields that use it */}
-                        {!['text_block', 'image_block', 'line_break', 'page_break', 'download_link'].includes(newField.field_type) && (
-                          <div>
-                            <Label htmlFor="field_help_text">Help Text (Optional)</Label>
-                            <Textarea
-                              id="field_help_text"
-                              value={newField.help_text}
-                              onChange={(e) =>
-                                setNewField({ ...newField, help_text: e.target.value })
-                              }
-                              placeholder={
-                                ['boolean', 'checkbox'].includes(newField.field_type)
-                                  ? "This text will appear next to the checkbox"
-                                  : "Additional instructions or guidance for users (shown as placeholder or helper text)"
-                              }
-                              rows={2}
-                            />
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {['boolean', 'checkbox'].includes(newField.field_type)
-                                ? "This text will be displayed as the checkbox label"
-                                : "This text appears as placeholder text or helper text below the field"}
-                            </p>
-                          </div>
-                        )}
-                      </CollapsibleContent>
-                    </Collapsible>
-                  )}
-
-                  {/* Text Block Configuration */}
-                  {newField.field_type === "text_block" && (
-                    <div className="space-y-2 pt-2 border-t">
-                      <div className="p-3 bg-muted rounded-md mb-3">
-                        <p className="text-xs text-muted-foreground">
-                          <strong>Text Block:</strong> Use the visual editor below to format your text content. You can add images, links, and apply various formatting options.
-                        </p>
-                      </div>
-                      <Label htmlFor="text_block_content" className="text-sm font-medium">
-                        Content *
-                      </Label>
-                      <RichTextEditor
-                        value={newField.content}
-                        onChange={(content) =>
-                          setNewField({ ...newField, content })
-                        }
-                        placeholder="Enter text content..."
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Use the toolbar above to format your text. You can add images, links, lists, and apply various text formatting options.
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Image Block Configuration */}
-                  {newField.field_type === "image_block" && (
-                    <div className="space-y-2 pt-2 border-t">
-                      <div className="p-3 bg-muted rounded-md mb-3">
-                        <p className="text-xs text-muted-foreground">
-                          <strong>Image Block:</strong> This will display an image in the form. You can provide a direct URL or upload an image file.
-                        </p>
-                      </div>
-                      <Label className="text-sm font-medium">Image Configuration</Label>
-                      
-                      {/* Tabs for Upload vs URL */}
-                      <Tabs defaultValue={newField.image_file_id ? "upload" : "url"} className="w-full">
-                        <TabsList className="grid w-full grid-cols-2">
-                          <TabsTrigger value="url">Direct URL</TabsTrigger>
-                          <TabsTrigger value="upload">Upload Image</TabsTrigger>
-                        </TabsList>
-                        
-                        <TabsContent value="url" className="space-y-2">
-                          <div>
-                            <Label htmlFor="image_block_url" className="text-xs">
-                              Image URL *
-                            </Label>
-                            <Input
-                              id="image_block_url"
-                              value={newField.image_url}
-                              onChange={(e) =>
-                                setNewField({ 
-                                  ...newField, 
-                                  image_url: e.target.value,
-                                  image_file: null,
-                                  image_file_id: null
-                                })
-                              }
-                              placeholder="https://example.com/image.png"
-                            />
-                            <p className="text-xs text-muted-foreground mt-1">
-                              Enter the full URL to the image
-                            </p>
-                          </div>
-                        </TabsContent>
-                        
-                        <TabsContent value="upload" className="space-y-2">
-                          <div>
-                            <Label htmlFor="image_block_file" className="text-xs">
-                              Upload Image *
-                            </Label>
-                            <Input
-                              id="image_block_file"
-                              type="file"
-                              accept="image/*"
-                              onChange={async (e) => {
-                                const file = e.target.files?.[0];
-                                if (file) {
-                                  try {
-                                    setNewField({ 
-                                      ...newField, 
-                                      image_file: file,
-                                      image_url: "" // Clear URL when uploading
-                                    });
-                                    
-                                    // Upload the image without form_id or field_id
-                                    // The endpoint will detect it's an image file and apply image validation
-                                    const uploadResult = await uploadFileMutation.mutateAsync({
-                                      file: file
-                                      // No form_id or field_id needed for image_block fields
-                                    });
-                                    
-                                    // Get API base URL from environment or use default
-                                    const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://melode-api-prod.onrender.com/api/v1';
-                                    
-                                    // Helper to ensure URL is absolute (uses backend API URL)
-                                    const ensureAbsoluteUrl = (url) => {
-                                      if (!url) return null;
-                                      // If already absolute (starts with http:// or https://), return as is
-                                      if (/^https?:\/\//i.test(url)) {
-                                        return url;
-                                      }
-                                      // If relative, check if it already starts with /api/v1
-                                      // The apiBaseUrl already includes /api/v1, so we need to handle this carefully
-                                      let cleanPath = url.startsWith('/') ? url : `/${url}`;
-                                      
-                                      // If path already starts with /api/v1, use it as is with the base URL
-                                      // Otherwise, append it to the base URL
-                                      if (cleanPath.startsWith('/api/v1/')) {
-                                        // Extract the path after /api/v1
-                                        const pathAfterApi = cleanPath.substring('/api/v1'.length);
-                                        // Ensure apiBaseUrl doesn't end with / to avoid double slashes
-                                        const cleanBase = apiBaseUrl.endsWith('/') ? apiBaseUrl.slice(0, -1) : apiBaseUrl;
-                                        return `${cleanBase}${pathAfterApi}`;
-                                      } else {
-                                        // Path doesn't start with /api/v1, append directly
-                                        const cleanBase = apiBaseUrl.endsWith('/') ? apiBaseUrl.slice(0, -1) : apiBaseUrl;
-                                        return `${cleanBase}${cleanPath}`;
-                                      }
-                                    };
-                                    
-                                    // Use file_reference_url for storage (permanent reference)
-                                    // Backend will replace this with fresh pre-signed URLs when serving
-                                    const fileReferenceUrl = ensureAbsoluteUrl(uploadResult.file_reference_url) || 
-                                                             ensureAbsoluteUrl(uploadResult.file_reference) ||
-                                                             (uploadResult.id ? `${apiBaseUrl}/files/${uploadResult.id}/download` : null) ||
-                                                             (uploadResult.file_id ? `${apiBaseUrl}/files/${uploadResult.file_id}/download` : null);
-                                    
-                                    // Fallback to download_url if file_reference_url not available
-                                    const imageUrl = fileReferenceUrl || uploadResult.download_url || uploadResult.url || uploadResult.file_url;
-                                    
-                                    if (!imageUrl) {
-                                      throw new Error("No file reference URL or download URL received from upload");
-                                    }
-                                    
-                                    setNewField({ 
-                                      ...newField, 
-                                      image_file: file,
-                                      image_url: imageUrl // Store file_reference_url (backend handles URL replacement)
-                                    });
-                                    
-                                    toast.success("Image uploaded successfully");
-                                  } catch (error) {
-                                    console.error("Failed to upload image:", error);
-                                    toast.error("Failed to upload image", {
-                                      description: error.response?.data?.detail || error.message
-                                    });
-                                    setNewField({ 
-                                      ...newField, 
-                                      image_file: null,
-                                      image_url: ""
-                                    });
+                      {/* Basic Field Settings - Collapsible */}
+                      {!['line_break', 'page_break'].includes(newField.field_type) && (
+                        <Collapsible defaultOpen>
+                          <CollapsibleTrigger asChild>
+                            <Button type="button" variant="ghost" className="w-full justify-between -ml-4 -mr-4">
+                              <span className="text-sm font-medium">Basic Settings</span>
+                              <ChevronDown className="h-4 w-4" />
+                            </Button>
+                          </CollapsibleTrigger>
+                          <CollapsibleContent className="space-y-3">
+                            {/* Placeholder - hidden for display-only fields */}
+                            {!['text_block', 'image_block', 'line_break', 'page_break', 'download_link'].includes(newField.field_type) && (
+                              <div>
+                                <Label htmlFor="field_placeholder">Placeholder</Label>
+                                <Input
+                                  id="field_placeholder"
+                                  value={newField.placeholder}
+                                  onChange={(e) =>
+                                    setNewField({ ...newField, placeholder: e.target.value })
                                   }
+                                  placeholder="Enter placeholder text"
+                                />
+                              </div>
+                            )}
+
+                            {/* Help Text - only show for fields that use it */}
+                            {!['text_block', 'image_block', 'line_break', 'page_break', 'download_link'].includes(newField.field_type) && (
+                              <div>
+                                <Label htmlFor="field_help_text">Help Text (Optional)</Label>
+                                <Textarea
+                                  id="field_help_text"
+                                  value={newField.help_text}
+                                  onChange={(e) =>
+                                    setNewField({ ...newField, help_text: e.target.value })
+                                  }
+                                  placeholder={
+                                    ['boolean', 'checkbox'].includes(newField.field_type)
+                                      ? "This text will appear next to the checkbox"
+                                      : "Additional instructions or guidance for users (shown as placeholder or helper text)"
+                                  }
+                                  rows={2}
+                                />
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  {['boolean', 'checkbox'].includes(newField.field_type)
+                                    ? "This text will be displayed as the checkbox label"
+                                    : "This text appears as placeholder text or helper text below the field"}
+                                </p>
+                              </div>
+                            )}
+                          </CollapsibleContent>
+                        </Collapsible>
+                      )}
+
+                      {/* Text Block Configuration */}
+                      {newField.field_type === "text_block" && (
+                        <div className="space-y-2 pt-2 border-t">
+                          <div className="p-3 bg-muted rounded-md mb-3">
+                            <p className="text-xs text-muted-foreground">
+                              <strong>Text Block:</strong> Use the visual editor below to format your text content. You can add images, links, and apply various formatting options.
+                            </p>
+                          </div>
+                          <Label htmlFor="text_block_content" className="text-sm font-medium">
+                            Content *
+                          </Label>
+                          <RichTextEditor
+                            value={newField.content}
+                            onChange={(content) =>
+                              setNewField({ ...newField, content })
+                            }
+                            placeholder="Enter text content..."
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Use the toolbar above to format your text. You can add images, links, lists, and apply various text formatting options.
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Image Block Configuration */}
+                      {newField.field_type === "image_block" && (
+                        <div className="space-y-2 pt-2 border-t">
+                          <div className="p-3 bg-muted rounded-md mb-3">
+                            <p className="text-xs text-muted-foreground">
+                              <strong>Image Block:</strong> This will display an image in the form. You can provide a direct URL or upload an image file.
+                            </p>
+                          </div>
+                          <Label className="text-sm font-medium">Image Configuration</Label>
+
+                          {/* Tabs for Upload vs URL */}
+                          <Tabs defaultValue={newField.image_file_id ? "upload" : "url"} className="w-full">
+                            <TabsList className="grid w-full grid-cols-2">
+                              <TabsTrigger value="url">Direct URL</TabsTrigger>
+                              <TabsTrigger value="upload">Upload Image</TabsTrigger>
+                            </TabsList>
+
+                            <TabsContent value="url" className="space-y-2">
+                              <div>
+                                <Label htmlFor="image_block_url" className="text-xs">
+                                  Image URL *
+                                </Label>
+                                <Input
+                                  id="image_block_url"
+                                  value={newField.image_url}
+                                  onChange={(e) =>
+                                    setNewField({
+                                      ...newField,
+                                      image_url: e.target.value,
+                                      image_file: null,
+                                      image_file_id: null
+                                    })
+                                  }
+                                  placeholder="https://example.com/image.png"
+                                />
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  Enter the full URL to the image
+                                </p>
+                              </div>
+                            </TabsContent>
+
+                            <TabsContent value="upload" className="space-y-2">
+                              <div>
+                                <Label htmlFor="image_block_file" className="text-xs">
+                                  Upload Image *
+                                </Label>
+                                <Input
+                                  id="image_block_file"
+                                  type="file"
+                                  accept="image/*"
+                                  onChange={async (e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) {
+                                      try {
+                                        setNewField({
+                                          ...newField,
+                                          image_file: file,
+                                          image_url: "" // Clear URL when uploading
+                                        });
+
+                                        // Upload the image without form_id or field_id
+                                        // The endpoint will detect it's an image file and apply image validation
+                                        const uploadResult = await uploadFileMutation.mutateAsync({
+                                          file: file
+                                          // No form_id or field_id needed for image_block fields
+                                        });
+
+                                        // Get API base URL from environment or use default
+                                        const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://melode-api-prod.onrender.com/api/v1';
+
+                                        // Helper to ensure URL is absolute (uses backend API URL)
+                                        const ensureAbsoluteUrl = (url) => {
+                                          if (!url) return null;
+                                          // If already absolute (starts with http:// or https://), return as is
+                                          if (/^https?:\/\//i.test(url)) {
+                                            return url;
+                                          }
+                                          // If relative, check if it already starts with /api/v1
+                                          // The apiBaseUrl already includes /api/v1, so we need to handle this carefully
+                                          let cleanPath = url.startsWith('/') ? url : `/${url}`;
+
+                                          // If path already starts with /api/v1, use it as is with the base URL
+                                          // Otherwise, append it to the base URL
+                                          if (cleanPath.startsWith('/api/v1/')) {
+                                            // Extract the path after /api/v1
+                                            const pathAfterApi = cleanPath.substring('/api/v1'.length);
+                                            // Ensure apiBaseUrl doesn't end with / to avoid double slashes
+                                            const cleanBase = apiBaseUrl.endsWith('/') ? apiBaseUrl.slice(0, -1) : apiBaseUrl;
+                                            return `${cleanBase}${pathAfterApi}`;
+                                          } else {
+                                            // Path doesn't start with /api/v1, append directly
+                                            const cleanBase = apiBaseUrl.endsWith('/') ? apiBaseUrl.slice(0, -1) : apiBaseUrl;
+                                            return `${cleanBase}${cleanPath}`;
+                                          }
+                                        };
+
+                                        // Use file_reference_url for storage (permanent reference)
+                                        // Backend will replace this with fresh pre-signed URLs when serving
+                                        const fileReferenceUrl = ensureAbsoluteUrl(uploadResult.file_reference_url) ||
+                                          ensureAbsoluteUrl(uploadResult.file_reference) ||
+                                          (uploadResult.id ? `${apiBaseUrl}/files/${uploadResult.id}/download` : null) ||
+                                          (uploadResult.file_id ? `${apiBaseUrl}/files/${uploadResult.file_id}/download` : null);
+
+                                        // Fallback to download_url if file_reference_url not available
+                                        const imageUrl = fileReferenceUrl || uploadResult.download_url || uploadResult.url || uploadResult.file_url;
+
+                                        if (!imageUrl) {
+                                          throw new Error("No file reference URL or download URL received from upload");
+                                        }
+
+                                        setNewField({
+                                          ...newField,
+                                          image_file: file,
+                                          image_url: imageUrl // Store file_reference_url (backend handles URL replacement)
+                                        });
+
+                                        toast.success("Image uploaded successfully");
+                                      } catch (error) {
+                                        console.error("Failed to upload image:", error);
+                                        toast.error("Failed to upload image", {
+                                          description: error.response?.data?.detail || error.message
+                                        });
+                                        setNewField({
+                                          ...newField,
+                                          image_file: null,
+                                          image_url: ""
+                                        });
+                                      }
+                                    }
+                                  }}
+                                />
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  Upload an image file (JPG, PNG, GIF, etc.)
+                                </p>
+                                {newField.image_file && (
+                                  <div className="mt-2 p-2 bg-muted rounded-md">
+                                    <p className="text-xs font-medium">Selected: {newField.image_file.name}</p>
+                                    {newField.image_file_id && (
+                                      <p className="text-xs text-muted-foreground">Uploaded successfully</p>
+                                    )}
+                                    {uploadFileMutation.isPending && (
+                                      <p className="text-xs text-muted-foreground">Uploading...</p>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            </TabsContent>
+                          </Tabs>
+
+                          <div>
+                            <Label htmlFor="image_block_alt" className="text-xs">
+                              Alt Text
+                            </Label>
+                            <Input
+                              id="image_block_alt"
+                              value={newField.alt_text}
+                              onChange={(e) =>
+                                setNewField({ ...newField, alt_text: e.target.value })
+                              }
+                              placeholder="Descriptive text for accessibility"
+                            />
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Optional: Alt text for screen readers and accessibility
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* YouTube Video Embed Configuration */}
+                      {newField.field_type === "youtube_video_embed" && (
+                        <div className="space-y-2 pt-2 border-t">
+                          <div className="p-3 bg-muted rounded-md mb-3">
+                            <p className="text-xs text-muted-foreground">
+                              <strong>YouTube Video Embed:</strong> This will display a YouTube video embedded in the form. Provide a YouTube video URL (watch URL or short URL).
+                            </p>
+                          </div>
+                          <div>
+                            <Label htmlFor="youtube_video_url" className="text-sm font-medium">
+                              YouTube Video URL *
+                            </Label>
+                            <Input
+                              id="youtube_video_url"
+                              value={newField.video_url || ''}
+                              onChange={(e) =>
+                                setNewField({ ...newField, video_url: e.target.value })
+                              }
+                              placeholder="https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+                            />
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Enter a YouTube video URL (e.g., https://www.youtube.com/watch?v=VIDEO_ID or https://youtu.be/VIDEO_ID)
+                            </p>
+                          </div>
+                          <div>
+                            <Label htmlFor="youtube_video_alt" className="text-xs">
+                              Alt Text
+                            </Label>
+                            <Input
+                              id="youtube_video_alt"
+                              value={newField.alt_text || ''}
+                              onChange={(e) =>
+                                setNewField({ ...newField, alt_text: e.target.value })
+                              }
+                              placeholder="Descriptive text for accessibility"
+                            />
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Optional: Alt text for screen readers and accessibility
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Download Link Info */}
+                      {newField.field_type === "download_link" && (
+                        <div className="p-4 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-md">
+                          <div className="flex items-start gap-3">
+                            <div className="mt-0.5 text-2xl">📥</div>
+                            <div className="flex-1">
+                              <h4 className="font-medium text-sm mb-1">Download Link</h4>
+                              <p className="text-xs text-muted-foreground mb-3">
+                                This will display a download button in the form. Users can click it to download files or documents.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Options for select, radio, and multiselect fields */}
+                      {(newField.field_type === "select" ||
+                        newField.field_type === "radio" ||
+                        newField.field_type === "multiselect") && (
+                          <div className="space-y-2 pt-2 border-t">
+                            <Label>Options *</Label>
+                            <div className="grid grid-cols-2 gap-2">
+                              <Input
+                                value={newOption.value}
+                                onChange={(e) =>
+                                  setNewOption({ ...newOption, value: e.target.value })
+                                }
+                                placeholder="Option value"
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    handleAddOption();
+                                  }
+                                }}
+                              />
+                              <Input
+                                value={newOption.label}
+                                onChange={(e) =>
+                                  setNewOption({ ...newOption, label: e.target.value })
+                                }
+                                placeholder="Option label (optional)"
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    handleAddOption();
+                                  }
+                                }}
+                              />
+                            </div>
+                            <Button
+                              type="button"
+                              onClick={handleAddOption}
+                              variant="outline"
+                              size="sm"
+                            >
+                              <Plus className="h-4 w-4 mr-2" />
+                              Add Option
+                            </Button>
+                            {newField.options.length > 0 && (
+                              <div className="space-y-1">
+                                {newField.options.map((option, index) => (
+                                  <div
+                                    key={index}
+                                    className="flex items-center justify-between p-2 bg-muted rounded-md"
+                                  >
+                                    <span className="text-sm">
+                                      {option.label || option.value} ({option.value})
+                                    </span>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => handleRemoveOption(index)}
+                                      className="h-6 w-6"
+                                    >
+                                      <Trash2 className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                      {/* Validation Options - Collapsible */}
+                      {!['text_block', 'image_block', 'line_break', 'page_break', 'download_link', 'boolean', 'signature'].includes(newField.field_type) &&
+                        (['text', 'textarea', 'email', 'phone', 'number', 'date'].includes(newField.field_type) ||
+                          newField.validation.min ||
+                          newField.validation.max ||
+                          newField.validation.min_length ||
+                          newField.validation.max_length ||
+                          newField.validation.pattern) && (
+                          <Collapsible>
+                            <div className="pt-2 border-t">
+                              <CollapsibleTrigger asChild>
+                                <Button type="button" variant="ghost" className="w-full justify-between -ml-4 -mr-4">
+                                  <div className="flex items-center gap-2">
+                                    <Label className="text-sm font-medium">Validation Rules</Label>
+                                    {(newField.validation.min || newField.validation.max || newField.validation.min_length || newField.validation.max_length || newField.validation.pattern) && (
+                                      <Badge variant="secondary" className="text-xs">Active</Badge>
+                                    )}
+                                  </div>
+                                  <ChevronDown className="h-4 w-4" />
+                                </Button>
+                              </CollapsibleTrigger>
+                              <CollapsibleContent className="space-y-3 pt-2">
+                                <div className="flex items-center justify-end">
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                      setNewField({
+                                        ...newField,
+                                        validation: {
+                                          min: "",
+                                          max: "",
+                                          min_length: "",
+                                          max_length: "",
+                                          pattern: "",
+                                        }
+                                      });
+                                    }}
+                                    className="h-6 text-xs"
+                                  >
+                                    Clear All
+                                  </Button>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                  {(newField.field_type === "text" ||
+                                    newField.field_type === "textarea" ||
+                                    newField.field_type === "email" ||
+                                    newField.field_type === "phone") && (
+                                      <>
+                                        <div>
+                                          <Label htmlFor="min_length" className="text-xs">
+                                            Min Length
+                                          </Label>
+                                          <Input
+                                            id="min_length"
+                                            type="number"
+                                            value={newField.validation.min_length}
+                                            onChange={(e) =>
+                                              setNewField({
+                                                ...newField,
+                                                validation: {
+                                                  ...newField.validation,
+                                                  min_length: e.target.value,
+                                                },
+                                              })
+                                            }
+                                            placeholder="Min length"
+                                          />
+                                        </div>
+                                        <div>
+                                          <Label htmlFor="max_length" className="text-xs">
+                                            Max Length
+                                          </Label>
+                                          <Input
+                                            id="max_length"
+                                            type="number"
+                                            value={newField.validation.max_length}
+                                            onChange={(e) =>
+                                              setNewField({
+                                                ...newField,
+                                                validation: {
+                                                  ...newField.validation,
+                                                  max_length: e.target.value,
+                                                },
+                                              })
+                                            }
+                                            placeholder="Max length"
+                                          />
+                                        </div>
+                                      </>
+                                    )}
+                                  {(newField.field_type === "number") && (
+                                    <>
+                                      <div>
+                                        <Label htmlFor="min_value" className="text-xs">
+                                          Min Value
+                                        </Label>
+                                        <Input
+                                          id="min_value"
+                                          type="number"
+                                          value={newField.validation.min}
+                                          onChange={(e) =>
+                                            setNewField({
+                                              ...newField,
+                                              validation: {
+                                                ...newField.validation,
+                                                min: e.target.value,
+                                              },
+                                            })
+                                          }
+                                          placeholder="Min value"
+                                        />
+                                      </div>
+                                      <div>
+                                        <Label htmlFor="max_value" className="text-xs">
+                                          Max Value
+                                        </Label>
+                                        <Input
+                                          id="max_value"
+                                          type="number"
+                                          value={newField.validation.max}
+                                          onChange={(e) =>
+                                            setNewField({
+                                              ...newField,
+                                              validation: {
+                                                ...newField.validation,
+                                                max: e.target.value,
+                                              },
+                                            })
+                                          }
+                                          placeholder="Max value"
+                                        />
+                                      </div>
+                                    </>
+                                  )}
+                                  {(newField.field_type === "date") && (
+                                    <>
+                                      <div>
+                                        <Label htmlFor="min_date" className="text-xs">
+                                          Min Date
+                                        </Label>
+                                        <Input
+                                          id="min_date"
+                                          type="date"
+                                          value={newField.validation.min}
+                                          onChange={(e) =>
+                                            setNewField({
+                                              ...newField,
+                                              validation: {
+                                                ...newField.validation,
+                                                min: e.target.value,
+                                              },
+                                            })
+                                          }
+                                        />
+                                      </div>
+                                      <div>
+                                        <Label htmlFor="max_date" className="text-xs">
+                                          Max Date
+                                        </Label>
+                                        <Input
+                                          id="max_date"
+                                          type="date"
+                                          value={newField.validation.max}
+                                          onChange={(e) =>
+                                            setNewField({
+                                              ...newField,
+                                              validation: {
+                                                ...newField.validation,
+                                                max: e.target.value,
+                                              },
+                                            })
+                                          }
+                                        />
+                                      </div>
+                                    </>
+                                  )}
+                                </div>
+                                {(newField.field_type === "text" ||
+                                  newField.field_type === "email" ||
+                                  newField.field_type === "phone") && (
+                                    <div>
+                                      <Label htmlFor="pattern" className="text-xs">
+                                        Pattern (Regex)
+                                      </Label>
+                                      <Input
+                                        id="pattern"
+                                        value={newField.validation.pattern}
+                                        onChange={(e) =>
+                                          setNewField({
+                                            ...newField,
+                                            validation: {
+                                              ...newField.validation,
+                                              pattern: e.target.value,
+                                            },
+                                          })
+                                        }
+                                        placeholder="e.g., ^[A-Za-z\\s]+$"
+                                      />
+                                      <p className="text-xs text-muted-foreground mt-1">
+                                        Regular expression pattern for validation
+                                      </p>
+                                    </div>
+                                  )}
+                                <p className="text-xs text-muted-foreground">
+                                  Leave empty if no validation is needed
+                                </p>
+                              </CollapsibleContent>
+                            </div>
+                          </Collapsible>
+                        )}
+
+                      {/* File Field Configuration */}
+                      {newField.field_type === "file" && (
+                        <div className="space-y-4 pt-2 border-t">
+                          <Label className="text-sm font-medium">
+                            File Configuration
+                          </Label>
+
+                          {/* Allow Multiple Files Option */}
+                          <div className="flex items-center space-x-2">
+                            <Checkbox
+                              id="allow_multiple_files"
+                              checked={newField.field_options?.allowMultiple || false}
+                              onCheckedChange={(checked) => {
+                                setNewField({
+                                  ...newField,
+                                  field_options: {
+                                    ...newField.field_options,
+                                    allowMultiple: checked,
+                                  },
+                                });
+                              }}
+                            />
+                            <Label htmlFor="allow_multiple_files" className="text-sm font-normal cursor-pointer">
+                              Allow multiple file uploads
+                            </Label>
+                          </div>
+
+                          {/* Allow All File Types Option */}
+                          <div className="flex items-center space-x-2">
+                            <Checkbox
+                              id="allow_all_file_types"
+                              checked={allowAllFileTypes}
+                              onCheckedChange={(checked) => {
+                                setAllowAllFileTypes(checked);
+                                if (checked) {
+                                  setNewField({
+                                    ...newField,
+                                    allowed_types: "",
+                                  });
                                 }
                               }}
                             />
-                            <p className="text-xs text-muted-foreground mt-1">
-                              Upload an image file (JPG, PNG, GIF, etc.)
-                            </p>
-                            {newField.image_file && (
-                              <div className="mt-2 p-2 bg-muted rounded-md">
-                                <p className="text-xs font-medium">Selected: {newField.image_file.name}</p>
-                                {newField.image_file_id && (
-                                  <p className="text-xs text-muted-foreground">Uploaded successfully</p>
-                                )}
-                                {uploadFileMutation.isPending && (
-                                  <p className="text-xs text-muted-foreground">Uploading...</p>
-                                )}
-                              </div>
-                            )}
+                            <Label htmlFor="allow_all_file_types" className="text-sm font-normal cursor-pointer">
+                              Allow all file types (no restrictions)
+                            </Label>
                           </div>
-                        </TabsContent>
-                      </Tabs>
-                      
-                      <div>
-                        <Label htmlFor="image_block_alt" className="text-xs">
-                          Alt Text
-                        </Label>
-                        <Input
-                          id="image_block_alt"
-                          value={newField.alt_text}
-                          onChange={(e) =>
-                            setNewField({ ...newField, alt_text: e.target.value })
-                          }
-                          placeholder="Descriptive text for accessibility"
-                        />
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Optional: Alt text for screen readers and accessibility
-                        </p>
-                      </div>
-                    </div>
-                  )}
 
-                  {/* Download Link Info */}
-                  {newField.field_type === "download_link" && (
-                    <div className="p-4 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-md">
-                      <div className="flex items-start gap-3">
-                        <div className="mt-0.5 text-2xl">📥</div>
-                        <div className="flex-1">
-                          <h4 className="font-medium text-sm mb-1">Download Link</h4>
-                          <p className="text-xs text-muted-foreground mb-3">
-                            This will display a download button in the form. Users can click it to download files or documents.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Options for select, radio, and multiselect fields */}
-                  {(newField.field_type === "select" ||
-                    newField.field_type === "radio" ||
-                    newField.field_type === "multiselect") && (
-                      <div className="space-y-2 pt-2 border-t">
-                        <Label>Options *</Label>
-                        <div className="grid grid-cols-2 gap-2">
-                          <Input
-                            value={newOption.value}
-                            onChange={(e) =>
-                              setNewOption({ ...newOption, value: e.target.value })
-                            }
-                            placeholder="Option value"
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                e.preventDefault();
-                                handleAddOption();
-                              }
-                            }}
-                          />
-                          <Input
-                            value={newOption.label}
-                            onChange={(e) =>
-                              setNewOption({ ...newOption, label: e.target.value })
-                            }
-                            placeholder="Option label (optional)"
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                e.preventDefault();
-                                handleAddOption();
-                              }
-                            }}
-                          />
-                        </div>
-                        <Button
-                          type="button"
-                          onClick={handleAddOption}
-                          variant="outline"
-                          size="sm"
-                        >
-                          <Plus className="h-4 w-4 mr-2" />
-                          Add Option
-                        </Button>
-                        {newField.options.length > 0 && (
-                          <div className="space-y-1">
-                            {newField.options.map((option, index) => (
-                              <div
-                                key={index}
-                                className="flex items-center justify-between p-2 bg-muted rounded-md"
-                              >
-                                <span className="text-sm">
-                                  {option.label || option.value} ({option.value})
-                                </span>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => handleRemoveOption(index)}
-                                  className="h-6 w-6"
-                                >
-                                  <Trash2 className="h-3 w-3" />
-                                </Button>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                  {/* Validation Options - Collapsible */}
-                  {!['text_block', 'image_block', 'line_break', 'page_break', 'download_link', 'boolean', 'signature'].includes(newField.field_type) && 
-                   (['text', 'textarea', 'email', 'phone', 'number', 'date'].includes(newField.field_type) ||
-                    newField.validation.min || 
-                    newField.validation.max || 
-                    newField.validation.min_length || 
-                    newField.validation.max_length || 
-                    newField.validation.pattern) && (
-                  <Collapsible>
-                    <div className="pt-2 border-t">
-                      <CollapsibleTrigger asChild>
-                        <Button type="button" variant="ghost" className="w-full justify-between -ml-4 -mr-4">
-                          <div className="flex items-center gap-2">
-                            <Label className="text-sm font-medium">Validation Rules</Label>
-                            {(newField.validation.min || newField.validation.max || newField.validation.min_length || newField.validation.max_length || newField.validation.pattern) && (
-                              <Badge variant="secondary" className="text-xs">Active</Badge>
-                            )}
-                          </div>
-                          <ChevronDown className="h-4 w-4" />
-                        </Button>
-                      </CollapsibleTrigger>
-                      <CollapsibleContent className="space-y-3 pt-2">
-                        <div className="flex items-center justify-end">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              setNewField({
-                                ...newField,
-                                validation: {
-                                  min: "",
-                                  max: "",
-                                  min_length: "",
-                                  max_length: "",
-                                  pattern: "",
-                                }
-                              });
-                            }}
-                            className="h-6 text-xs"
-                          >
-                            Clear All
-                          </Button>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                      {(newField.field_type === "text" ||
-                        newField.field_type === "textarea" ||
-                        newField.field_type === "email" ||
-                        newField.field_type === "phone") && (
-                          <>
-                            <div>
-                              <Label htmlFor="min_length" className="text-xs">
-                                Min Length
+                          {/* File Type Selection */}
+                          {!allowAllFileTypes && (
+                            <div className="space-y-3">
+                              <Label className="text-xs font-medium">
+                                Allowed File Types
                               </Label>
-                              <Input
-                                id="min_length"
-                                type="number"
-                                value={newField.validation.min_length}
-                                onChange={(e) =>
-                                  setNewField({
-                                    ...newField,
-                                    validation: {
-                                      ...newField.validation,
-                                      min_length: e.target.value,
-                                    },
-                                  })
-                                }
-                                placeholder="Min length"
-                              />
-                            </div>
-                            <div>
-                              <Label htmlFor="max_length" className="text-xs">
-                                Max Length
-                              </Label>
-                              <Input
-                                id="max_length"
-                                type="number"
-                                value={newField.validation.max_length}
-                                onChange={(e) =>
-                                  setNewField({
-                                    ...newField,
-                                    validation: {
-                                      ...newField.validation,
-                                      max_length: e.target.value,
-                                    },
-                                  })
-                                }
-                                placeholder="Max length"
-                              />
-                            </div>
-                          </>
-                        )}
-                      {(newField.field_type === "number") && (
-                        <>
-                          <div>
-                            <Label htmlFor="min_value" className="text-xs">
-                              Min Value
-                            </Label>
-                            <Input
-                              id="min_value"
-                              type="number"
-                              value={newField.validation.min}
-                              onChange={(e) =>
-                                setNewField({
-                                  ...newField,
-                                  validation: {
-                                    ...newField.validation,
-                                    min: e.target.value,
-                                  },
-                                })
-                              }
-                              placeholder="Min value"
-                            />
-                          </div>
-                          <div>
-                            <Label htmlFor="max_value" className="text-xs">
-                              Max Value
-                            </Label>
-                            <Input
-                              id="max_value"
-                              type="number"
-                              value={newField.validation.max}
-                              onChange={(e) =>
-                                setNewField({
-                                  ...newField,
-                                  validation: {
-                                    ...newField.validation,
-                                    max: e.target.value,
-                                  },
-                                })
-                              }
-                              placeholder="Max value"
-                            />
-                          </div>
-                        </>
-                      )}
-                      {(newField.field_type === "date") && (
-                        <>
-                          <div>
-                            <Label htmlFor="min_date" className="text-xs">
-                              Min Date
-                            </Label>
-                            <Input
-                              id="min_date"
-                              type="date"
-                              value={newField.validation.min}
-                              onChange={(e) =>
-                                setNewField({
-                                  ...newField,
-                                  validation: {
-                                    ...newField.validation,
-                                    min: e.target.value,
-                                  },
-                                })
-                              }
-                            />
-                          </div>
-                          <div>
-                            <Label htmlFor="max_date" className="text-xs">
-                              Max Date
-                            </Label>
-                            <Input
-                              id="max_date"
-                              type="date"
-                              value={newField.validation.max}
-                              onChange={(e) =>
-                                setNewField({
-                                  ...newField,
-                                  validation: {
-                                    ...newField.validation,
-                                    max: e.target.value,
-                                  },
-                                })
-                              }
-                            />
-                          </div>
-                        </>
-                      )}
-                    </div>
-                    {(newField.field_type === "text" ||
-                      newField.field_type === "email" ||
-                      newField.field_type === "phone") && (
-                        <div>
-                          <Label htmlFor="pattern" className="text-xs">
-                            Pattern (Regex)
-                          </Label>
-                          <Input
-                            id="pattern"
-                            value={newField.validation.pattern}
-                            onChange={(e) =>
-                              setNewField({
-                                ...newField,
-                                validation: {
-                                  ...newField.validation,
-                                  pattern: e.target.value,
-                                },
-                              })
-                            }
-                            placeholder="e.g., ^[A-Za-z\\s]+$"
-                          />
-                          <p className="text-xs text-muted-foreground mt-1">
-                            Regular expression pattern for validation
-                          </p>
-                        </div>
-                      )}
-                      <p className="text-xs text-muted-foreground">
-                        Leave empty if no validation is needed
-                      </p>
-                    </CollapsibleContent>
-                  </div>
-                </Collapsible>
-                )}
+                              <div className="space-y-3 max-h-64 overflow-y-auto border rounded-md p-3">
+                                {Object.entries(FILE_TYPE_CATEGORIES).map(([categoryKey, category]) => {
+                                  const selectedTypes = newField.allowed_types
+                                    ? newField.allowed_types.split(",").map((t) => t.trim())
+                                    : [];
 
-                  {/* File Field Configuration */}
-                  {newField.field_type === "file" && (
-                    <div className="space-y-4 pt-2 border-t">
-                      <Label className="text-sm font-medium">
-                        File Configuration
-                      </Label>
+                                  const categoryTypes = category.types.map((t) => t.value);
+                                  const allCategorySelected = categoryTypes.every((type) =>
+                                    selectedTypes.includes(type)
+                                  );
+                                  const someCategorySelected = categoryTypes.some((type) =>
+                                    selectedTypes.includes(type)
+                                  );
 
-                      {/* Allow Multiple Files Option */}
-                      <div className="flex items-center space-x-2">
-                        <Checkbox
-                          id="allow_multiple_files"
-                          checked={newField.field_options?.allowMultiple || false}
-                          onCheckedChange={(checked) => {
-                            setNewField({
-                              ...newField,
-                              field_options: {
-                                ...newField.field_options,
-                                allowMultiple: checked,
-                              },
-                            });
-                          }}
-                        />
-                        <Label htmlFor="allow_multiple_files" className="text-sm font-normal cursor-pointer">
-                          Allow multiple file uploads
-                        </Label>
-                      </div>
-
-                      {/* Allow All File Types Option */}
-                      <div className="flex items-center space-x-2">
-                        <Checkbox
-                          id="allow_all_file_types"
-                          checked={allowAllFileTypes}
-                          onCheckedChange={(checked) => {
-                            setAllowAllFileTypes(checked);
-                            if (checked) {
-                              setNewField({
-                                ...newField,
-                                allowed_types: "",
-                              });
-                            }
-                          }}
-                        />
-                        <Label htmlFor="allow_all_file_types" className="text-sm font-normal cursor-pointer">
-                          Allow all file types (no restrictions)
-                        </Label>
-                      </div>
-
-                      {/* File Type Selection */}
-                      {!allowAllFileTypes && (
-                        <div className="space-y-3">
-                          <Label className="text-xs font-medium">
-                            Allowed File Types
-                          </Label>
-                          <div className="space-y-3 max-h-64 overflow-y-auto border rounded-md p-3">
-                            {Object.entries(FILE_TYPE_CATEGORIES).map(([categoryKey, category]) => {
-                              const selectedTypes = newField.allowed_types
-                                ? newField.allowed_types.split(",").map((t) => t.trim())
-                                : [];
-
-                              const categoryTypes = category.types.map((t) => t.value);
-                              const allCategorySelected = categoryTypes.every((type) =>
-                                selectedTypes.includes(type)
-                              );
-                              const someCategorySelected = categoryTypes.some((type) =>
-                                selectedTypes.includes(type)
-                              );
-
-                              const handleCategoryToggle = (checked) => {
-                                let newTypes = [...selectedTypes];
-                                if (checked) {
-                                  // Add all category types
-                                  categoryTypes.forEach((type) => {
-                                    if (!newTypes.includes(type)) {
-                                      newTypes.push(type);
+                                  const handleCategoryToggle = (checked) => {
+                                    let newTypes = [...selectedTypes];
+                                    if (checked) {
+                                      // Add all category types
+                                      categoryTypes.forEach((type) => {
+                                        if (!newTypes.includes(type)) {
+                                          newTypes.push(type);
+                                        }
+                                      });
+                                    } else {
+                                      // Remove all category types
+                                      newTypes = newTypes.filter((type) => !categoryTypes.includes(type));
                                     }
-                                  });
-                                } else {
-                                  // Remove all category types
-                                  newTypes = newTypes.filter((type) => !categoryTypes.includes(type));
-                                }
-                                setNewField({
-                                  ...newField,
-                                  allowed_types: newTypes.join(", "),
-                                });
-                              };
+                                    setNewField({
+                                      ...newField,
+                                      allowed_types: newTypes.join(", "),
+                                    });
+                                  };
 
-                              const handleTypeToggle = (typeValue, checked) => {
-                                let newTypes = [...selectedTypes];
-                                if (checked) {
-                                  if (!newTypes.includes(typeValue)) {
-                                    newTypes.push(typeValue);
-                                  }
-                                } else {
-                                  newTypes = newTypes.filter((t) => t !== typeValue);
-                                }
-                                setNewField({
-                                  ...newField,
-                                  allowed_types: newTypes.join(", "),
-                                });
-                              };
+                                  const handleTypeToggle = (typeValue, checked) => {
+                                    let newTypes = [...selectedTypes];
+                                    if (checked) {
+                                      if (!newTypes.includes(typeValue)) {
+                                        newTypes.push(typeValue);
+                                      }
+                                    } else {
+                                      newTypes = newTypes.filter((t) => t !== typeValue);
+                                    }
+                                    setNewField({
+                                      ...newField,
+                                      allowed_types: newTypes.join(", "),
+                                    });
+                                  };
 
-                              return (
-                                <div key={categoryKey} className="space-y-2">
-                                  <div className="flex items-center space-x-2">
-                                    <Checkbox
-                                      id={`category-${categoryKey}`}
-                                      checked={allCategorySelected}
-                                      onCheckedChange={handleCategoryToggle}
-                                    />
-                                    <Label
-                                      htmlFor={`category-${categoryKey}`}
-                                      className="text-sm font-medium cursor-pointer"
-                                    >
-                                      {category.label}
-                                    </Label>
-                                  </div>
-                                  <div className="ml-6 space-y-1.5">
-                                    {category.types.map((type) => (
-                                      <div key={type.value} className="flex items-center space-x-2">
+                                  return (
+                                    <div key={categoryKey} className="space-y-2">
+                                      <div className="flex items-center space-x-2">
                                         <Checkbox
-                                          id={`type-${type.value}`}
-                                          checked={selectedTypes.includes(type.value)}
-                                          onCheckedChange={(checked) =>
-                                            handleTypeToggle(type.value, checked)
-                                          }
+                                          id={`category-${categoryKey}`}
+                                          checked={allCategorySelected}
+                                          onCheckedChange={handleCategoryToggle}
                                         />
                                         <Label
-                                          htmlFor={`type-${type.value}`}
-                                          className="text-xs font-normal cursor-pointer"
+                                          htmlFor={`category-${categoryKey}`}
+                                          className="text-sm font-medium cursor-pointer"
                                         >
-                                          {type.label}
+                                          {category.label}
                                         </Label>
                                       </div>
-                                    ))}
-                                  </div>
+                                      <div className="ml-6 space-y-1.5">
+                                        {category.types.map((type) => (
+                                          <div key={type.value} className="flex items-center space-x-2">
+                                            <Checkbox
+                                              id={`type-${type.value}`}
+                                              checked={selectedTypes.includes(type.value)}
+                                              onCheckedChange={(checked) =>
+                                                handleTypeToggle(type.value, checked)
+                                              }
+                                            />
+                                            <Label
+                                              htmlFor={`type-${type.value}`}
+                                              className="text-xs font-normal cursor-pointer"
+                                            >
+                                              {type.label}
+                                            </Label>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                              {newField.allowed_types && (
+                                <div className="text-xs text-muted-foreground">
+                                  Selected: {newField.allowed_types.split(",").length} type(s)
                                 </div>
-                              );
-                            })}
-                          </div>
-                          {newField.allowed_types && (
-                            <div className="text-xs text-muted-foreground">
-                              Selected: {newField.allowed_types.split(",").length} type(s)
+                              )}
                             </div>
                           )}
+
+                          {/* Max File Size */}
+                          <div>
+                            <Label htmlFor="max_size_mb" className="text-xs">
+                              Max File Size (MB)
+                            </Label>
+                            <Input
+                              id="max_size_mb"
+                              type="number"
+                              min="0"
+                              step="0.1"
+                              value={newField.max_size_mb}
+                              onChange={(e) =>
+                                setNewField({
+                                  ...newField,
+                                  max_size_mb: e.target.value,
+                                })
+                              }
+                              placeholder="e.g., 5 (leave empty for no limit)"
+                            />
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Maximum file size in megabytes. Leave empty for no size limit.
+                            </p>
+                          </div>
                         </div>
                       )}
 
-                      {/* Max File Size */}
-                      <div>
-                        <Label htmlFor="max_size_mb" className="text-xs">
-                          Max File Size (MB)
-                        </Label>
-                        <Input
-                          id="max_size_mb"
-                          type="number"
-                          min="0"
-                          step="0.1"
-                          value={newField.max_size_mb}
-                          onChange={(e) =>
-                            setNewField({
-                              ...newField,
-                              max_size_mb: e.target.value,
-                            })
-                          }
-                          placeholder="e.g., 5 (leave empty for no limit)"
-                        />
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Maximum file size in megabytes. Leave empty for no size limit.
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* JSON Field Configuration */}
-                  {newField.field_type === "json" && (
-                    <div className="space-y-2 pt-2 border-t">
-                      <Label className="text-sm font-medium">
-                        JSON Schema Validation
-                      </Label>
-                      <Textarea
-                        id="json_schema"
-                        value={newField.json_schema}
-                        onChange={(e) =>
-                          setNewField({
-                            ...newField,
-                            json_schema: e.target.value,
-                          })
-                        }
-                        placeholder='{"type": "object", "properties": {"key1": {"type": "string"}}}'
-                        rows={6}
-                        className="font-mono text-sm"
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Enter JSON schema for validation (optional)
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Download Link Configuration */}
-                  {newField.field_type === "download_link" && (
-                    <div className="space-y-2 pt-2 border-t">
-                      <div>
-                        <Label htmlFor="download_link_url" className="text-sm font-medium">
-                          Download URL *
-                        </Label>
-                        <Input
-                          id="download_link_url"
-                          value={newField.download_url}
-                          onChange={(e) =>
-                            setNewField({ ...newField, download_url: e.target.value })
-                          }
-                          placeholder="https://example.com/document.pdf"
-                        />
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Enter the full URL to the file or document that users can download
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Conditional Visibility Configuration - Collapsible */}
-                  {!['text_block', 'image_block', 'line_break', 'page_break', 'download_link'].includes(newField.field_type) && (
-                    <Collapsible>
-                      <div className="pt-2 border-t">
-                        <CollapsibleTrigger asChild>
-                          <Button type="button" variant="ghost" className="w-full justify-between -ml-4 -mr-4">
-                            <div className="flex items-center gap-2">
-                              <Label className="text-sm font-medium">Conditional Visibility</Label>
-                              {newField.conditional_visibility?.depends_on_field && (
-                                <Badge variant="secondary" className="text-xs">Active</Badge>
-                              )}
-                            </div>
-                            <ChevronDown className="h-4 w-4" />
-                          </Button>
-                        </CollapsibleTrigger>
-                        <CollapsibleContent className="space-y-3 pt-2">
-                        <div>
-                          <Label htmlFor="depends_on_field" className="text-xs">
-                            Show this field when
+                      {/* JSON Field Configuration */}
+                      {newField.field_type === "json" && (
+                        <div className="space-y-2 pt-2 border-t">
+                          <Label className="text-sm font-medium">
+                            JSON Schema Validation
                           </Label>
-                          <Select
-                            value={newField.conditional_visibility?.depends_on_field || ''}
-                            onValueChange={(value) =>
+                          <Textarea
+                            id="json_schema"
+                            value={newField.json_schema}
+                            onChange={(e) =>
                               setNewField({
                                 ...newField,
-                                conditional_visibility: {
-                                  ...newField.conditional_visibility,
-                                  depends_on_field: value || null,
-                                },
+                                json_schema: e.target.value,
                               })
                             }
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select a field..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {formData.form_fields.fields
-                                .filter(f => f.field_id !== newField.field_id && 
-                                  !['text_block', 'image_block', 'line_break', 'page_break', 'download_link'].includes(f.field_type?.toLowerCase()))
-                                .map((f) => (
-                                  <SelectItem key={f.field_id || f.field_name} value={f.field_id || f.field_name}>
-                                    {f.label || f.field_id || f.field_name}
-                                  </SelectItem>
-                                ))}
-                            </SelectContent>
-                          </Select>
+                            placeholder='{"type": "object", "properties": {"key1": {"type": "string"}}}'
+                            rows={6}
+                            className="font-mono text-sm"
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Enter JSON schema for validation (optional)
+                          </p>
                         </div>
-                        {newField.conditional_visibility?.depends_on_field && (
-                          <>
-                            <div>
-                              <Label htmlFor="show_when" className="text-xs">
-                                Condition
-                              </Label>
-                              <Select
-                                value={newField.conditional_visibility?.show_when || ''}
-                                onValueChange={(value) =>
-                                  setNewField({
-                                    ...newField,
-                                    conditional_visibility: {
-                                      ...newField.conditional_visibility,
-                                      show_when: value || null,
-                                    },
-                                  })
-                                }
-                              >
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select condition..." />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="equals">Equals</SelectItem>
-                                  <SelectItem value="not_equals">Not Equals</SelectItem>
-                                  <SelectItem value="contains">Contains</SelectItem>
-                                  <SelectItem value="is_empty">Is Empty</SelectItem>
-                                  <SelectItem value="is_not_empty">Is Not Empty</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            {newField.conditional_visibility?.show_when && 
-                             ['equals', 'not_equals', 'contains'].includes(newField.conditional_visibility.show_when) && (
+                      )}
+
+                      {/* Download Link Configuration */}
+                      {newField.field_type === "download_link" && (
+                        <div className="space-y-2 pt-2 border-t">
+                          <div>
+                            <Label htmlFor="download_link_url" className="text-sm font-medium">
+                              Download URL *
+                            </Label>
+                            <Input
+                              id="download_link_url"
+                              value={newField.download_url}
+                              onChange={(e) =>
+                                setNewField({ ...newField, download_url: e.target.value })
+                              }
+                              placeholder="https://example.com/document.pdf"
+                            />
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Enter the full URL to the file or document that users can download
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Conditional Visibility Configuration - Collapsible */}
+                      {!['text_block', 'image_block', 'line_break', 'page_break', 'download_link'].includes(newField.field_type) && (
+                        <Collapsible>
+                          <div className="pt-2 border-t">
+                            <CollapsibleTrigger asChild>
+                              <Button type="button" variant="ghost" className="w-full justify-between -ml-4 -mr-4">
+                                <div className="flex items-center gap-2">
+                                  <Label className="text-sm font-medium">Conditional Visibility</Label>
+                                  {newField.conditional_visibility?.depends_on_field && (
+                                    <Badge variant="secondary" className="text-xs">Active</Badge>
+                                  )}
+                                </div>
+                                <ChevronDown className="h-4 w-4" />
+                              </Button>
+                            </CollapsibleTrigger>
+                            <CollapsibleContent className="space-y-3 pt-2">
                               <div>
-                                <Label htmlFor="conditional_value" className="text-xs">
-                                  Value
+                                <Label htmlFor="depends_on_field" className="text-xs">
+                                  Show this field when
                                 </Label>
-                                <Input
-                                  id="conditional_value"
-                                  value={newField.conditional_visibility?.value || ''}
-                                  onChange={(e) =>
+                                <Select
+                                  value={newField.conditional_visibility?.depends_on_field || ''}
+                                  onValueChange={(value) =>
                                     setNewField({
                                       ...newField,
                                       conditional_visibility: {
                                         ...newField.conditional_visibility,
-                                        value: e.target.value || null,
+                                        depends_on_field: value || null,
                                       },
                                     })
                                   }
-                                  placeholder="Enter value to match"
-                                />
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Select a field..." />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {formData.form_fields.fields
+                                      .filter(f => f.field_id !== newField.field_id &&
+                                        !['text_block', 'image_block', 'line_break', 'page_break', 'download_link'].includes(f.field_type?.toLowerCase()))
+                                      .map((f) => (
+                                        <SelectItem key={f.field_id || f.field_name} value={f.field_id || f.field_name}>
+                                          {f.label || f.field_id || f.field_name}
+                                        </SelectItem>
+                                      ))}
+                                  </SelectContent>
+                                </Select>
                               </div>
-                            )}
-                          </>
-                        )}
-                          <p className="text-xs text-muted-foreground">
-                            This field will only be visible when the condition is met
-                          </p>
-                        </CollapsibleContent>
-                      </div>
-                    </Collapsible>
-                  )}
+                              {newField.conditional_visibility?.depends_on_field && (
+                                <>
+                                  <div>
+                                    <Label htmlFor="show_when" className="text-xs">
+                                      Condition
+                                    </Label>
+                                    <Select
+                                      value={newField.conditional_visibility?.show_when || ''}
+                                      onValueChange={(value) =>
+                                        setNewField({
+                                          ...newField,
+                                          conditional_visibility: {
+                                            ...newField.conditional_visibility,
+                                            show_when: value || null,
+                                          },
+                                        })
+                                      }
+                                    >
+                                      <SelectTrigger>
+                                        <SelectValue placeholder="Select condition..." />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="equals">Equals</SelectItem>
+                                        <SelectItem value="not_equals">Not Equals</SelectItem>
+                                        <SelectItem value="contains">Contains</SelectItem>
+                                        <SelectItem value="is_empty">Is Empty</SelectItem>
+                                        <SelectItem value="is_not_empty">Is Not Empty</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                  {newField.conditional_visibility?.show_when &&
+                                    ['equals', 'not_equals', 'contains'].includes(newField.conditional_visibility.show_when) && (
+                                      <div>
+                                        <Label htmlFor="conditional_value" className="text-xs">
+                                          Value
+                                        </Label>
+                                        <Input
+                                          id="conditional_value"
+                                          value={newField.conditional_visibility?.value || ''}
+                                          onChange={(e) =>
+                                            setNewField({
+                                              ...newField,
+                                              conditional_visibility: {
+                                                ...newField.conditional_visibility,
+                                                value: e.target.value || null,
+                                              },
+                                            })
+                                          }
+                                          placeholder="Enter value to match"
+                                        />
+                                      </div>
+                                    )}
+                                </>
+                              )}
+                              <p className="text-xs text-muted-foreground">
+                                This field will only be visible when the condition is met
+                              </p>
+                            </CollapsibleContent>
+                          </div>
+                        </Collapsible>
+                      )}
 
-                  {/* File Expiry Date Support */}
-                  {newField.field_type === "file" && (
-                    <div className="space-y-2 pt-2 border-t">
-                      <div className="flex items-center space-x-2">
-                        <Checkbox
-                          id="file_expiry_date"
-                          checked={newField.file_expiry_date || false}
-                          onCheckedChange={(checked) =>
-                            setNewField({ ...newField, file_expiry_date: checked })
-                          }
-                        />
-                        <Label htmlFor="file_expiry_date" className="text-sm font-normal">
-                          Require expiry date for uploaded files
-                        </Label>
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        When enabled, users will be required to provide an expiry date when uploading files (e.g., for certificates)
-                      </p>
-                    </div>
-                  )}
+                      {/* File Expiry Date Support */}
+                      {newField.field_type === "file" && (
+                        <div className="space-y-2 pt-2 border-t">
+                          <div className="flex items-center space-x-2">
+                            <Checkbox
+                              id="file_expiry_date"
+                              checked={newField.file_expiry_date || false}
+                              onCheckedChange={(checked) =>
+                                setNewField({ ...newField, file_expiry_date: checked })
+                              }
+                            />
+                            <Label htmlFor="file_expiry_date" className="text-sm font-normal">
+                              Require expiry date for uploaded files
+                            </Label>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            When enabled, users will be required to provide an expiry date when uploading files (e.g., for certificates)
+                          </p>
+                        </div>
+                      )}
 
                       <Button
                         type="button"
@@ -2098,6 +2161,7 @@ const NewFormPage = () => {
                             signature: PenTool,
                             text_block: FileText,
                             image_block: Image,
+                            youtube_video_embed: Play,
                             line_break: Minus,
                             page_break: FileText,
                             download_link: FileDown,
@@ -2106,8 +2170,8 @@ const NewFormPage = () => {
                           return icons[type?.toLowerCase()] || Type;
                         };
                         const FieldIcon = getFieldIcon(field.field_type);
-                        const isDisplayOnly = ['text_block', 'image_block', 'line_break', 'page_break', 'download_link'].includes(field.field_type?.toLowerCase());
-                        
+                        const isDisplayOnly = ['text_block', 'image_block', 'youtube_video_embed', 'line_break', 'page_break', 'download_link'].includes(field.field_type?.toLowerCase());
+
                         return (
                           <div
                             key={index}
@@ -2117,11 +2181,9 @@ const NewFormPage = () => {
                             onDragLeave={handleDragLeave}
                             onDrop={(e) => handleDrop(e, index)}
                             onDragEnd={handleDragEnd}
-                            className={`group relative flex items-center gap-3 p-3 border rounded-lg bg-card hover:bg-muted/50 transition-colors ${
-                              draggedIndex === index ? 'opacity-50 cursor-grabbing' : 'cursor-grab'
-                            } ${
-                              dragOverIndex === index && draggedIndex !== index ? 'border-primary border-2 bg-primary/5' : ''
-                            }`}
+                            className={`group relative flex items-center gap-3 p-3 border rounded-lg bg-card hover:bg-muted/50 transition-colors ${draggedIndex === index ? 'opacity-50 cursor-grabbing' : 'cursor-grab'
+                              } ${dragOverIndex === index && draggedIndex !== index ? 'border-primary border-2 bg-primary/5' : ''
+                              }`}
                           >
                             <div className="flex items-center gap-2 text-muted-foreground cursor-grab active:cursor-grabbing">
                               <GripVertical className="h-4 w-4" />
@@ -2487,7 +2549,7 @@ const NewFormPage = () => {
                       Control who can fill out and submit this form.
                     </p>
                   </div>
-                  
+
                   <div className="space-y-3">
                     <div>
                       <Label>Allowed Roles</Label>

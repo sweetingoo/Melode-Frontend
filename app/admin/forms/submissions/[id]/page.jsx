@@ -606,7 +606,7 @@ const FormSubmissionDetailPage = () => {
                     const fieldType = field.field_type?.toLowerCase();
 
                     // Display-only field types that don't have submission data
-                    const displayOnlyTypes = ['text_block', 'image_block', 'line_break', 'page_break'];
+                    const displayOnlyTypes = ['text_block', 'image_block', 'youtube_video_embed', 'line_break', 'page_break'];
                     const isDisplayOnly = displayOnlyTypes.includes(fieldType);
 
                     // For display-only fields, render them directly without submission data
@@ -620,6 +620,7 @@ const FormSubmissionDetailPage = () => {
                         // Preserve display-only field properties
                         content: field.content,
                         image_url: field.image_url,
+                        video_url: field.video_url,
                         alt_text: field.alt_text,
                       };
 

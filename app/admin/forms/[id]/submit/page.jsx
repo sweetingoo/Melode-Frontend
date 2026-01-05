@@ -225,7 +225,7 @@ const FormSubmitPage = () => {
       // Validate all required fields across all pages
       const allFields = form.form_fields?.fields || [];
       const errors = {};
-      const displayOnlyTypes = ['text_block', 'image_block', 'line_break', 'page_break', 'download_link'];
+      const displayOnlyTypes = ['text_block', 'image_block', 'youtube_video_embed', 'line_break', 'page_break', 'download_link'];
 
       for (const field of allFields) {
         const fieldType = field.field_type?.toLowerCase();
@@ -677,7 +677,7 @@ const FormSubmitPage = () => {
                   const fieldType = field.field_type?.toLowerCase();
                   
                   // Display-only fields don't need value, onChange, or error handling
-                  const isDisplayOnly = ['text_block', 'image_block', 'line_break', 'page_break', 'download_link'].includes(fieldType);
+                  const isDisplayOnly = ['text_block', 'image_block', 'youtube_video_embed', 'line_break', 'page_break', 'download_link'].includes(fieldType);
                   
                   // Debug logging for image blocks
                   if (fieldType === 'image_block' && process.env.NODE_ENV === 'development') {

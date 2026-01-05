@@ -506,6 +506,90 @@ const CustomFieldRenderer = ({
           </div>
         );
 
+      case 'youtube_video_embed': {
+        // Check multiple possible field name variations
+        const videoUrl = field.video_url || field.field_video_url || field.videoUrl;
+        const videoAltText = field.alt_text || field.field_alt_text || field.altText;
+        const videoLabel = field.label || field.field_label || field.name;
+        
+        // Helper function to convert YouTube URL to embed format
+        const getYouTubeEmbedUrl = (url) => {
+          if (!url) return null;
+          
+          // Handle various YouTube URL formats
+          // https://www.youtube.com/watch?v=VIDEO_ID
+          // https://youtube.com/watch?v=VIDEO_ID
+          // https://youtu.be/VIDEO_ID
+          // https://www.youtube.com/embed/VIDEO_ID
+          // https://youtube.com/embed/VIDEO_ID
+          
+          let videoId = null;
+          
+          // Check if already an embed URL
+          const embedMatch = url.match(/youtube\.com\/embed\/([a-zA-Z0-9_-]+)/);
+          if (embedMatch) {
+            videoId = embedMatch[1];
+          } else {
+            // Extract video ID from watch URL
+            const watchMatch = url.match(/[?&]v=([a-zA-Z0-9_-]+)/);
+            if (watchMatch) {
+              videoId = watchMatch[1];
+            } else {
+              // Extract from youtu.be short URL
+              const shortMatch = url.match(/youtu\.be\/([a-zA-Z0-9_-]+)/);
+              if (shortMatch) {
+                videoId = shortMatch[1];
+              }
+            }
+          }
+          
+          if (videoId) {
+            return `https://www.youtube.com/embed/${videoId}`;
+          }
+          
+          return null;
+        };
+        
+        const embedUrl = getYouTubeEmbedUrl(videoUrl);
+        
+        return (
+          <div 
+            className="space-y-2 w-full my-4"
+            style={{ 
+              position: 'relative', 
+              display: 'block',
+              clear: 'both',
+              overflow: 'visible'
+            }}
+          >
+            {videoLabel && (
+              <h4 className="text-sm font-semibold">{videoLabel}</h4>
+            )}
+            {embedUrl ? (
+              <div className="relative w-full" style={{ paddingBottom: '56.25%', height: 0, overflow: 'hidden' }}>
+                <iframe
+                  src={embedUrl}
+                  title={videoAltText || videoLabel || 'YouTube video'}
+                  className="absolute top-0 left-0 w-full h-full border rounded-md"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                  style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
+                />
+              </div>
+            ) : videoUrl ? (
+              <div className="p-4 border border-dashed rounded-md text-center text-sm text-muted-foreground">
+                <p>Invalid YouTube URL format</p>
+                <p className="text-xs mt-2">Please provide a valid YouTube URL (e.g., https://www.youtube.com/watch?v=VIDEO_ID)</p>
+              </div>
+            ) : (
+              <div className="p-4 border border-dashed rounded-md text-center text-sm text-muted-foreground">
+                <p>No video URL provided</p>
+              </div>
+            )}
+          </div>
+        );
+      }
+
       case 'signature':
         return <SignatureFieldRenderer 
           field={field} 
@@ -530,7 +614,7 @@ const CustomFieldRenderer = ({
   };
 
   // Check if this is a display-only field
-  const isDisplayOnly = ['text_block', 'image_block', 'line_break', 'page_break', 'download_link'].includes(fieldType?.toLowerCase());
+  const isDisplayOnly = ['text_block', 'image_block', 'line_break', 'page_break', 'download_link', 'youtube_video_embed'].includes(fieldType?.toLowerCase());
 
   // For display-only fields, render without the standard label/description wrapper
   if (isDisplayOnly) {

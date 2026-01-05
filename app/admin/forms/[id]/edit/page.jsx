@@ -46,7 +46,8 @@ import {
   FileDown,
   PenTool,
   Hash,
-  AlignLeft
+  AlignLeft,
+  Play
 } from "lucide-react";
 
 // Predefined file type categories for easy selection
@@ -155,6 +156,7 @@ const fieldTypes = [
   // Display-only field types
   { value: "text_block", label: "Text Block (Display Only)" },
   { value: "image_block", label: "Image Block (Display Only)" },
+  { value: "youtube_video_embed", label: "YouTube Video Embed (Display Only)" },
   { value: "line_break", label: "Line Break (Display Only)" },
   { value: "page_break", label: "Page Break (Display Only)" },
   { value: "download_link", label: "Download Link (Display Only)" },
@@ -270,7 +272,8 @@ const EditFormPage = () => {
     image_url: "", // for image_block
     image_file: null, // for image_block (uploaded file)
     image_file_id: null, // for image_block (uploaded file ID after upload)
-    alt_text: "", // for image_block
+    alt_text: "", // for image_block and youtube_video_embed
+    video_url: "", // for youtube_video_embed
     download_url: "", // for download_link
     // Conditional visibility
     conditional_visibility: null, // { depends_on_field, show_when, value }
@@ -364,7 +367,7 @@ const EditFormPage = () => {
 
   const handleAddField = () => {
     // Display-only field types that auto-generate field_id
-    const displayOnlyTypes = ['text_block', 'image_block', 'line_break', 'page_break', 'download_link'];
+    const displayOnlyTypes = ['text_block', 'image_block', 'youtube_video_embed', 'line_break', 'page_break', 'download_link'];
     const isDisplayOnly = displayOnlyTypes.includes(newField.field_type);
 
     // Auto-generate field_id if not provided
@@ -405,6 +408,12 @@ const EditFormPage = () => {
       return;
     }
 
+    // For youtube_video_embed, require video_url
+    if (newField.field_type === 'youtube_video_embed' && !newField.video_url) {
+      toast.error("YouTube video URL is required for YouTube video embed");
+      return;
+    }
+
     // For download_link, require download_url
     if (newField.field_type === 'download_link' && !newField.download_url) {
       toast.error("Download URL is required for download link");
@@ -440,6 +449,14 @@ const EditFormPage = () => {
       // For image_block, use image_url (download_url from upload or direct URL)
       if (newField.image_url) {
         field.image_url = newField.image_url;
+      }
+      if (newField.alt_text) {
+        field.alt_text = newField.alt_text;
+      }
+    } else if (newField.field_type === 'youtube_video_embed') {
+      // For youtube_video_embed, use video_url and alt_text
+      if (newField.video_url) {
+        field.video_url = newField.video_url;
       }
       if (newField.alt_text) {
         field.alt_text = newField.alt_text;
@@ -814,7 +831,7 @@ const EditFormPage = () => {
                     <Select
                       value={newField.field_type}
                       onValueChange={(value) => {
-                        const displayOnlyTypes = ['text_block', 'image_block', 'line_break', 'page_break', 'download_link'];
+                        const displayOnlyTypes = ['text_block', 'image_block', 'youtube_video_embed', 'line_break', 'page_break', 'download_link'];
                         const isDisplayOnly = displayOnlyTypes.includes(value);
                         setNewField({ 
                           ...newField, 
@@ -874,7 +891,7 @@ const EditFormPage = () => {
                         onChange={(e) => {
                           const label = e.target.value;
                           // Auto-generate field_id from label for regular fields
-                          const displayOnlyTypes = ['text_block', 'image_block', 'line_break', 'page_break', 'download_link'];
+                          const displayOnlyTypes = ['text_block', 'image_block', 'youtube_video_embed', 'line_break', 'page_break', 'download_link'];
                           const isDisplayOnly = displayOnlyTypes.includes(newField.field_type);
                           const autoFieldId = !isDisplayOnly && label ? generateFieldIdFromLabel(label) : newField.field_id;
                           setNewField({ 
@@ -1150,6 +1167,49 @@ const EditFormPage = () => {
                         <Input
                           id="image_block_alt"
                           value={newField.alt_text}
+                          onChange={(e) =>
+                            setNewField({ ...newField, alt_text: e.target.value })
+                          }
+                          placeholder="Descriptive text for accessibility"
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Optional: Alt text for screen readers and accessibility
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* YouTube Video Embed Configuration */}
+                  {newField.field_type === "youtube_video_embed" && (
+                    <div className="space-y-2 pt-2 border-t">
+                      <div className="p-3 bg-muted rounded-md mb-3">
+                        <p className="text-xs text-muted-foreground">
+                          <strong>YouTube Video Embed:</strong> This will display a YouTube video embedded in the form. Provide a YouTube video URL (watch URL or short URL).
+                        </p>
+                      </div>
+                      <div>
+                        <Label htmlFor="youtube_video_url" className="text-sm font-medium">
+                          YouTube Video URL *
+                        </Label>
+                        <Input
+                          id="youtube_video_url"
+                          value={newField.video_url || ''}
+                          onChange={(e) =>
+                            setNewField({ ...newField, video_url: e.target.value })
+                          }
+                          placeholder="https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Enter a YouTube video URL (e.g., https://www.youtube.com/watch?v=VIDEO_ID or https://youtu.be/VIDEO_ID)
+                        </p>
+                      </div>
+                      <div>
+                        <Label htmlFor="youtube_video_alt" className="text-xs">
+                          Alt Text
+                        </Label>
+                        <Input
+                          id="youtube_video_alt"
+                          value={newField.alt_text || ''}
                           onChange={(e) =>
                             setNewField({ ...newField, alt_text: e.target.value })
                           }
@@ -1811,6 +1871,7 @@ const EditFormPage = () => {
                           signature: PenTool,
                           text_block: FileText,
                           image_block: Image,
+                          youtube_video_embed: Play,
                           line_break: Minus,
                           page_break: FileText,
                           download_link: FileDown,
@@ -1819,7 +1880,7 @@ const EditFormPage = () => {
                         return icons[type?.toLowerCase()] || Type;
                       };
                       const FieldIcon = getFieldIcon(field.field_type);
-                      const isDisplayOnly = ['text_block', 'image_block', 'line_break', 'page_break', 'download_link'].includes(field.field_type?.toLowerCase());
+                      const isDisplayOnly = ['text_block', 'image_block', 'youtube_video_embed', 'line_break', 'page_break', 'download_link'].includes(field.field_type?.toLowerCase());
                       
                       return (
                         <div
