@@ -47,8 +47,12 @@ import {
   PenTool,
   Hash,
   AlignLeft,
-  Play
+  Play,
+  Tag,
+  X
 } from "lucide-react";
+import CategoryTypeSelector from "@/components/CategoryTypeSelector";
+import { useActiveCategoryTypes, useCreateCategoryType } from "@/hooks/useCategoryTypes";
 
 // Predefined file type categories for easy selection
 const FILE_TYPE_CATEGORIES = {
@@ -111,7 +115,7 @@ import { useUploadFile } from "@/hooks/useProfile";
 import { toast } from "sonner";
 import RichTextEditor from "@/components/RichTextEditor";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Users, Shield, X, Tag } from "lucide-react";
+import { Users, Shield } from "lucide-react";
 import UserMentionSelector from "@/components/UserMentionSelector";
 
 // Helper function to generate field ID from label
@@ -183,6 +187,12 @@ const EditFormPage = () => {
 
   useEffect(() => {
     if (form) {
+      // Convert categories to integers if they're strings (for backward compatibility)
+      const categories = form.form_config?.categories || [];
+      const normalizedCategories = categories.map((cat) => 
+        typeof cat === 'string' ? parseInt(cat) : cat
+      ).filter((cat) => !isNaN(cat) && cat !== null && cat !== undefined);
+
       setFormData({
         form_name: form.form_name || "",
         form_title: form.form_title || "",
@@ -192,22 +202,25 @@ const EditFormPage = () => {
         is_template: form.is_template !== undefined ? form.is_template : false,
         slug: form.slug || "",
         form_fields: form.form_fields || { fields: [], sections: [] },
-        form_config: form.form_config || {
-          layout: "single_column",
-          submit_button_text: "Submit",
-          success_message: "Form submitted successfully",
-          allow_draft: false,
-          auto_save: false,
-          mandatory_completion: false,
-          categories: [],
-          statuses: [],
-          automation: {
-            auto_create_tasks: false,
-            create_individual_tasks: false,
-            task_assignee_role: "",
-            due_time_minutes: 30,
-            escalation_enabled: false,
-          },
+        form_config: {
+          ...(form.form_config || {
+            layout: "single_column",
+            submit_button_text: "Submit",
+            success_message: "Form submitted successfully",
+            allow_draft: false,
+            auto_save: false,
+            mandatory_completion: false,
+            categories: [],
+            statuses: [],
+            automation: {
+              auto_create_tasks: false,
+              create_individual_tasks: false,
+              task_assignee_role: "",
+              due_time_minutes: 30,
+              escalation_enabled: false,
+            },
+          }),
+          categories: normalizedCategories,
         },
         access_config: form.access_config || {
           public_access: false,
@@ -294,8 +307,35 @@ const EditFormPage = () => {
   const [viewSubmissionsUserIds, setViewSubmissionsUserIds] = useState([]);
   const [isCreateRoleModalOpen, setIsCreateRoleModalOpen] = useState(false);
   
-  // Category input state
-  const [newCategoryValue, setNewCategoryValue] = useState("");
+  // Category input state - now using category type IDs
+  const [selectedCategoryTypeId, setSelectedCategoryTypeId] = useState("");
+  const [isQuickCreateCategoryTypeOpen, setIsQuickCreateCategoryTypeOpen] = useState(false);
+  const [quickCreateCategoryTypeData, setQuickCreateCategoryTypeData] = useState({
+    name: "",
+    display_name: "",
+    description: "",
+    icon: "",
+    color: "#6B7280",
+    sort_order: 0,
+  });
+  
+  // Get category types for display
+  const { data: categoryTypesData } = useActiveCategoryTypes();
+  const createCategoryTypeMutation = useCreateCategoryType();
+  
+  // Extract category types from response
+  let categoryTypes = [];
+  if (categoryTypesData) {
+    if (Array.isArray(categoryTypesData)) {
+      categoryTypes = categoryTypesData;
+    } else if (categoryTypesData.category_types && Array.isArray(categoryTypesData.category_types)) {
+      categoryTypes = categoryTypesData.category_types;
+    } else if (categoryTypesData.data && Array.isArray(categoryTypesData.data)) {
+      categoryTypes = categoryTypesData.data;
+    } else if (categoryTypesData.results && Array.isArray(categoryTypesData.results)) {
+      categoryTypes = categoryTypesData.results;
+    }
+  }
   
   // Status input state
   const [newStatusValue, setNewStatusValue] = useState("");
@@ -641,6 +681,54 @@ const EditFormPage = () => {
     setDragOverIndex(null);
   };
 
+  const handleQuickCreateCategoryType = async () => {
+    if (!quickCreateCategoryTypeData.display_name) {
+      toast.error("Display name is required");
+      return;
+    }
+    
+    // Ensure name is generated from display name
+    const autoName = quickCreateCategoryTypeData.display_name.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
+    if (!autoName) {
+      toast.error("Display name must contain at least one letter or number");
+      return;
+    }
+
+    try {
+      const result = await createCategoryTypeMutation.mutateAsync({
+        ...quickCreateCategoryTypeData,
+        name: autoName,
+      });
+      
+      // Auto-select the new category type and add it to the form
+      setTimeout(() => {
+        const newCategoryId = result.id;
+        if (!formData.form_config.categories?.includes(newCategoryId)) {
+          setFormData({
+            ...formData,
+            form_config: {
+              ...formData.form_config,
+              categories: [...(formData.form_config.categories || []), newCategoryId],
+            },
+          });
+        }
+        setSelectedCategoryTypeId(newCategoryId.toString());
+      }, 100);
+      
+      setIsQuickCreateCategoryTypeOpen(false);
+      setQuickCreateCategoryTypeData({
+        name: "",
+        display_name: "",
+        description: "",
+        icon: "",
+        color: "#6B7280",
+        sort_order: 0,
+      });
+    } catch (error) {
+      console.error("Failed to create category type:", error);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -665,6 +753,15 @@ const EditFormPage = () => {
 
     try {
       const submitData = { ...formData };
+
+      // Ensure form_config is properly included with categories
+      submitData.form_config = {
+        ...submitData.form_config,
+        // Ensure categories are integers (category_type_id values)
+        categories: (submitData.form_config?.categories || []).map((cat) => 
+          typeof cat === 'string' ? parseInt(cat) : cat
+        ).filter((cat) => !isNaN(cat) && cat !== null && cat !== undefined),
+      };
 
       // Add assignment fields based on mode
       if (assignmentMode === "role" && assignedToRoleId) {
@@ -2078,79 +2175,79 @@ const EditFormPage = () => {
                   </p>
                   <div className="space-y-2">
                     <div className="flex gap-2">
-                      <Input
-                        id="new_category"
-                        value={newCategoryValue}
-                        onChange={(e) => setNewCategoryValue(e.target.value)}
-                        placeholder="Enter category name (e.g., Computer, Email)"
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            const value = newCategoryValue.trim();
-                            if (value && !formData.form_config.categories?.includes(value)) {
-                              setFormData({
-                                ...formData,
-                                form_config: {
-                                  ...formData.form_config,
-                                  categories: [...(formData.form_config.categories || []), value],
-                                },
-                              });
-                              setNewCategoryValue("");
-                            }
-                          }
-                        }}
-                      />
+                      <div className="flex-1">
+                        <CategoryTypeSelector
+                          value={selectedCategoryTypeId}
+                          onValueChange={setSelectedCategoryTypeId}
+                          placeholder="Select a category type"
+                          showIcon={true}
+                          showColor={true}
+                        />
+                      </div>
                       <Button
                         type="button"
                         variant="outline"
                         size="icon"
                         onClick={() => {
-                          const value = newCategoryValue.trim();
-                          if (value && !formData.form_config.categories?.includes(value)) {
-                            setFormData({
-                              ...formData,
-                              form_config: {
-                                ...formData.form_config,
-                                categories: [...(formData.form_config.categories || []), value],
-                              },
-                            });
-                            setNewCategoryValue("");
+                          if (selectedCategoryTypeId) {
+                            // Add selected category type
+                            const categoryId = parseInt(selectedCategoryTypeId);
+                            if (categoryId && !formData.form_config.categories?.includes(categoryId)) {
+                              setFormData({
+                                ...formData,
+                                form_config: {
+                                  ...formData.form_config,
+                                  categories: [...(formData.form_config.categories || []), categoryId],
+                                },
+                              });
+                              setSelectedCategoryTypeId("");
+                            }
+                          } else {
+                            // Open quick create dialog
+                            setIsQuickCreateCategoryTypeOpen(true);
                           }
                         }}
+                        title={selectedCategoryTypeId ? "Add category type" : "Create new category type"}
                       >
                         <Plus className="h-4 w-4" />
                       </Button>
                     </div>
                     {formData.form_config.categories && formData.form_config.categories.length > 0 && (
                       <div className="flex flex-wrap gap-2">
-                        {formData.form_config.categories.map((category, index) => (
-                          <Badge
-                            key={index}
-                            variant="secondary"
-                            className="flex items-center gap-1"
-                          >
-                            <Tag className="h-3 w-3" />
-                            {category}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const newCategories = formData.form_config.categories.filter(
-                                  (_, i) => i !== index
-                                );
-                                setFormData({
-                                  ...formData,
-                                  form_config: {
-                                    ...formData.form_config,
-                                    categories: newCategories,
-                                  },
-                                });
-                              }}
-                              className="ml-1 hover:bg-secondary/80 rounded-full p-0.5"
+                        {formData.form_config.categories.map((categoryId, index) => {
+                          const categoryType = categoryTypes.find((ct) => ct.id === categoryId);
+                          return (
+                            <Badge
+                              key={index}
+                              variant="secondary"
+                              className="flex items-center gap-1"
                             >
-                              <X className="h-3 w-3" />
-                            </button>
-                          </Badge>
-                        ))}
+                              {categoryType?.icon && (
+                                <span className="text-xs">{categoryType.icon}</span>
+                              )}
+                              <Tag className="h-3 w-3" />
+                              {categoryType?.display_name || categoryType?.name || `Category ${categoryId}`}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const newCategories = formData.form_config.categories.filter(
+                                    (_, i) => i !== index
+                                  );
+                                  setFormData({
+                                    ...formData,
+                                    form_config: {
+                                      ...formData.form_config,
+                                      categories: newCategories,
+                                    },
+                                  });
+                                }}
+                                className="ml-1 hover:bg-secondary/80 rounded-full p-0.5"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </Badge>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -2876,6 +2973,139 @@ const EditFormPage = () => {
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               )}
               Create Role
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Quick Create Category Type Dialog */}
+      <Dialog open={isQuickCreateCategoryTypeOpen} onOpenChange={setIsQuickCreateCategoryTypeOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create New Category Type</DialogTitle>
+            <DialogDescription>
+              Quickly create a new category type. It will be automatically added to the form.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="quick-category-display_name">Display Name *</Label>
+              <Input
+                id="quick-category-display_name"
+                value={quickCreateCategoryTypeData.display_name}
+                onChange={(e) => {
+                  const displayName = e.target.value;
+                  const autoName = displayName.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
+                  setQuickCreateCategoryTypeData({
+                    ...quickCreateCategoryTypeData,
+                    display_name: displayName,
+                    name: autoName,
+                  });
+                }}
+                placeholder="e.g., Medical"
+              />
+            </div>
+            <div>
+              <Label htmlFor="quick-category-name">Name (Unique Identifier) *</Label>
+              <Input
+                id="quick-category-name"
+                value={quickCreateCategoryTypeData.name}
+                disabled
+                className="font-mono bg-muted"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Auto-generated from display name. Lowercase letters, numbers, and underscores only.
+              </p>
+            </div>
+            <div>
+              <Label htmlFor="quick-category-description">Description</Label>
+              <Textarea
+                id="quick-category-description"
+                value={quickCreateCategoryTypeData.description}
+                onChange={(e) =>
+                  setQuickCreateCategoryTypeData({
+                    ...quickCreateCategoryTypeData,
+                    description: e.target.value,
+                  })
+                }
+                placeholder="Describe this category type..."
+                rows={3}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="quick-category-icon">Icon (Emoji)</Label>
+                <Input
+                  id="quick-category-icon"
+                  value={quickCreateCategoryTypeData.icon}
+                  onChange={(e) =>
+                    setQuickCreateCategoryTypeData({
+                      ...quickCreateCategoryTypeData,
+                      icon: e.target.value,
+                    })
+                  }
+                  placeholder="🏥"
+                  maxLength={2}
+                />
+              </div>
+              <div>
+                <Label htmlFor="quick-category-color">Color</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="quick-category-color"
+                    type="color"
+                    value={quickCreateCategoryTypeData.color}
+                    onChange={(e) =>
+                      setQuickCreateCategoryTypeData({
+                        ...quickCreateCategoryTypeData,
+                        color: e.target.value,
+                      })
+                    }
+                    className="w-20 h-10"
+                  />
+                  <Input
+                    value={quickCreateCategoryTypeData.color}
+                    onChange={(e) =>
+                      setQuickCreateCategoryTypeData({
+                        ...quickCreateCategoryTypeData,
+                        color: e.target.value,
+                      })
+                    }
+                    placeholder="#6B7280"
+                    className="font-mono"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsQuickCreateCategoryTypeOpen(false);
+                setQuickCreateCategoryTypeData({
+                  name: "",
+                  display_name: "",
+                  description: "",
+                  icon: "",
+                  color: "#6B7280",
+                  sort_order: 0,
+                });
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleQuickCreateCategoryType}
+              disabled={
+                createCategoryTypeMutation.isPending ||
+                !quickCreateCategoryTypeData.display_name
+              }
+            >
+              {createCategoryTypeMutation.isPending && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
+              Create & Add
             </Button>
           </DialogFooter>
         </DialogContent>
