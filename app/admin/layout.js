@@ -68,6 +68,7 @@ import {
   BookOpen,
   Plug,
   Package,
+  Tag,
 } from "lucide-react";
 import { assets } from "../assets/assets";
 import Image from "next/image";
@@ -236,6 +237,12 @@ const organisationItems = [
     icon: Package,
     url: "/admin/asset-types",
     permission: "asset_type:read", // Permission to read asset types
+  },
+  {
+    title: "Category Types",
+    icon: Tag,
+    url: "/admin/category-types",
+    permission: "category_type:list", // Permission to list category types
   },
   {
     title: "Form Types",

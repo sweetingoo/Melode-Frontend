@@ -15,6 +15,7 @@ export { messagesService } from "./messages";
 export { notificationsService } from "./notifications";
 export { documentsService } from "./documents";
 export { documentCategoriesService } from "./documentCategories";
+export { categoryTypesService } from "./categoryTypes";
 
 // Re-export the main API client and utilities
 export { api, apiUtils } from "./api-client";
