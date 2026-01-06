@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import { useMessage } from "@/hooks/useMessages";
 import { useCurrentUser } from "@/hooks/useAuth";
+import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow, format } from "date-fns";
 import { parseUTCDate } from "@/utils/time";
@@ -39,9 +40,13 @@ const BroadcastStatusPage = () => {
   const router = useRouter();
   const broadcastSlug = params.id || params.slug;
   const { data: currentUser } = useCurrentUser();
+  const { hasPermission } = usePermissionsCheck();
   const { data: broadcast, isLoading } = useMessage(broadcastSlug);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all"); // "all", "read", "unread", "acknowledged", "not_acknowledged"
+  
+  // Check if user can create broadcasts (communal outbox access)
+  const canCreateBroadcast = hasPermission("broadcast:create") || hasPermission("BROADCAST_CREATE");
 
   if (isLoading) {
     return (
@@ -70,7 +75,8 @@ const BroadcastStatusPage = () => {
   // Check if current user is the creator
   const isCreator = currentUser?.id === broadcast.created_by_user_id;
 
-  if (!isCreator) {
+  // Allow access if user is creator OR has create permission (communal outbox)
+  if (!isCreator && !canCreateBroadcast) {
     return (
       <div className="p-4">
         <Card>

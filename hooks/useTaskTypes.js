@@ -33,6 +33,13 @@ export const useTaskTypes = (params = {}) => {
       return response.data;
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
+    retry: (failureCount, error) => {
+      // Don't retry on 403 Forbidden (permission denied)
+      if (error?.response?.status === 403) {
+        return false;
+      }
+      return failureCount < 3;
+    },
   });
 };
 
@@ -66,6 +73,16 @@ export const useCreateTaskType = () => {
     },
     onError: (error) => {
       console.error("Create task type error:", error);
+      // Handle 403 Forbidden (permission denied)
+      if (error?.response?.status === 403) {
+        const errorMessage =
+          error?.response?.data?.detail ||
+          "Permission denied: You do not have permission to create task types";
+        toast.error("Permission Denied", {
+          description: errorMessage,
+        });
+        return;
+      }
       const errorMessage =
         error?.response?.data?.message ||
         error?.response?.data?.detail ||
@@ -97,6 +114,16 @@ export const useUpdateTaskType = () => {
     },
     onError: (error) => {
       console.error("Update task type error:", error);
+      // Handle 403 Forbidden (permission denied)
+      if (error?.response?.status === 403) {
+        const errorMessage =
+          error?.response?.data?.detail ||
+          "Permission denied: You do not have permission to update task types";
+        toast.error("Permission Denied", {
+          description: errorMessage,
+        });
+        return;
+      }
       const errorMessage =
         error?.response?.data?.message ||
         error?.response?.data?.detail ||
@@ -128,6 +155,16 @@ export const useDeleteTaskType = () => {
     },
     onError: (error) => {
       console.error("Delete task type error:", error);
+      // Handle 403 Forbidden (permission denied)
+      if (error?.response?.status === 403) {
+        const errorMessage =
+          error?.response?.data?.detail ||
+          "Permission denied: You do not have permission to delete task types";
+        toast.error("Permission Denied", {
+          description: errorMessage,
+        });
+        return;
+      }
       const errorMessage =
         error?.response?.data?.message ||
         error?.response?.data?.detail ||

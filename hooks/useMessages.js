@@ -384,6 +384,20 @@ export const useBroadcastInbox = (params = {}, options = {}) => {
   });
 };
 
+// Get all broadcasts (communal outbox - for users with create permission)
+export const useAllBroadcasts = (params = {}, options = {}) => {
+  return useQuery({
+    queryKey: [...messageKeys.broadcasts(), "all", params],
+    queryFn: async () => {
+      const response = await messagesService.getBroadcasts(params);
+      return response.data;
+    },
+    staleTime: 0, // Always consider stale so SSE updates trigger refetch
+    refetchOnWindowFocus: true,
+    ...options,
+  });
+};
+
 // Get unread messages count query (for conversations only)
 export const useUnreadMessagesCount = (options = {}) => {
   return useQuery({

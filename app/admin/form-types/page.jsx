@@ -55,6 +55,11 @@ import {
   Shield,
 } from "lucide-react";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   useFormTypes,
   useCreateFormType,
   useUpdateFormType,
@@ -231,13 +236,27 @@ const FormTypesPage = () => {
               Manage form types for your organisation
             </p>
           </div>
-          {canCreate && (
+          {canCreate ? (
             <DialogTrigger asChild>
               <Button onClick={resetForm}>
                 <Plus className="mr-2 h-4 w-4" />
                 Create Form Type
               </Button>
             </DialogTrigger>
+          ) : (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span>
+                  <Button disabled>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Create Form Type
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>You do not have permission to create form types</p>
+              </TooltipContent>
+            </Tooltip>
           )}
         </div>
         {canCreate && (

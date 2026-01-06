@@ -16,13 +16,23 @@ export const assetsKeys = {
 export const assetsUtils = {
   transformAsset: (asset) => ({
     id: asset.id,
+    slug: asset.slug,
     assetNumber: asset.asset_number || asset.assetNumber,
     asset_number: asset.asset_number || asset.assetNumber,
     name: asset.name || asset.assetName,
     assetName: asset.name || asset.assetName,
     description: asset.description || "",
-    assetType: asset.asset_type || asset.assetType || "",
-    asset_type: asset.asset_type || asset.assetType || "",
+    // New: asset_type_id (required)
+    assetTypeId: asset.asset_type_id || asset.assetTypeId || null,
+    asset_type_id: asset.asset_type_id || asset.assetTypeId || null,
+    // Deprecated: asset_type (for backward compatibility)
+    assetType: asset.asset_type || asset.assetType || null,
+    asset_type: asset.asset_type || asset.assetType || null,
+    // New: asset type display fields from response
+    assetTypeName: asset.asset_type_name || asset.assetTypeName || null,
+    asset_type_name: asset.asset_type_name || asset.assetTypeName || null,
+    assetTypeDisplayName: asset.asset_type_display_name || asset.assetTypeDisplayName || null,
+    asset_type_display_name: asset.asset_type_display_name || asset.assetTypeDisplayName || null,
     category: asset.category || "",
     subcategory: asset.subcategory || "",
     status: asset.status || "active",
@@ -121,20 +131,27 @@ export const assetsUtils = {
     if (asset.description !== undefined && asset.description !== "") {
       data.description = asset.description;
     }
-    // asset_type is REQUIRED - must have at least 1 character
-    if (
-      asset.hasOwnProperty("asset_type") ||
-      asset.hasOwnProperty("assetType")
-    ) {
-      const assetType = asset.asset_type || asset.assetType || "";
-      // Always include asset_type if it's defined (even if empty - validation happens on API side)
-      // But ideally it should have a value
-      if (assetType && assetType.trim().length > 0) {
-        data.asset_type = assetType;
-      } else if (asset.hasOwnProperty("asset_type")) {
-        // If the property exists but is empty, we still need to include it as it's required
-        // The API will validate it has at least 1 character
-        data.asset_type = assetType;
+    // Handle asset_type_id - REQUIRED field by API (new approach)
+    // Check snake_case first (form uses asset_type_id), then camelCase
+    // Priority: asset_type_id > assetTypeId
+    const assetTypeId =
+      asset.asset_type_id !== undefined
+        ? asset.asset_type_id
+        : asset.assetTypeId;
+    if (assetTypeId !== undefined && assetTypeId !== null) {
+      data.asset_type_id = assetTypeId;
+    }
+
+    // Handle asset_type - DEPRECATED but kept for backward compatibility
+    // Only include if asset_type_id is not provided
+    if (!data.asset_type_id) {
+      if (asset.hasOwnProperty("asset_type") || asset.hasOwnProperty("assetType")) {
+        const assetType = asset.asset_type || asset.assetType || "";
+        if (assetType && assetType.trim().length > 0) {
+          data.asset_type = assetType;
+        } else if (asset.hasOwnProperty("asset_type")) {
+          data.asset_type = assetType;
+        }
       }
     }
     if (asset.category !== undefined && asset.category !== "") {
@@ -414,7 +431,7 @@ export const useUpdateAsset = () => {
   return useMutation({
     mutationFn: async ({ slug, assetData }) => {
       const transformedData = assetsUtils.transformAssetForAPI(assetData);
-      const response = await assetsService.updateAsset(slug, transformedData);
+      const response = await assetsService.updateAsset(slug || assetData.slug, transformedData);
       return assetsUtils.transformAsset(response);
     },
     onSuccess: (data, variables) => {

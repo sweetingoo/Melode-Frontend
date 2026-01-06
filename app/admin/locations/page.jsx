@@ -86,6 +86,12 @@ import {
   useMoveLocation,
   locationsUtils,
 } from "@/hooks/useLocations";
+import {
+  useActiveLocationTypes,
+  useCreateLocationType,
+} from "@/hooks/useLocationTypes";
+import { useQueryClient } from "@tanstack/react-query";
+import { Loader2 } from "lucide-react";
 import MultiFileUpload from "@/components/MultiFileUpload";
 import FileAttachmentList from "@/components/FileAttachmentList";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
@@ -98,11 +104,19 @@ const LocationsPage = () => {
   const [isHierarchyModalOpen, setIsHierarchyModalOpen] = useState(false);
   const [isMoveModalOpen, setIsMoveModalOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isQuickCreateLocationTypeOpen, setIsQuickCreateLocationTypeOpen] = useState(false);
   const [selectedLocation, setSelectedLocation] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedType, setSelectedType] = useState("all");
   const [viewMode, setViewMode] = useState("list");
   const [expandedNodes, setExpandedNodes] = useState(new Set());
+  const [quickCreateLocationTypeData, setQuickCreateLocationTypeData] = useState({
+    name: "",
+    display_name: "",
+    description: "",
+    icon: "",
+    color: "#6B7280",
+  });
 
   // API hooks
   const { data: locations = [], isLoading: locationsLoading } = useLocations();
@@ -110,6 +124,9 @@ const LocationsPage = () => {
     useRootLocations();
   const { data: statistics, isLoading: statisticsLoading } =
     useLocationStatistics();
+  const queryClient = useQueryClient();
+  const { data: locationTypes = [], isLoading: locationTypesLoading } = useActiveLocationTypes();
+  const createLocationTypeMutation = useCreateLocationType();
   // createLocationMutation removed - now handled in add-location page
   const updateLocationMutation = useUpdateLocation();
   const deleteLocationMutation = useDeleteLocation();
@@ -125,7 +142,7 @@ const LocationsPage = () => {
   const [locationFormData, setLocationFormData] = useState({
     name: "",
     description: "",
-    location_type: "",
+    location_type_id: null,
     parent_location_id: null,
     address: "",
     coordinates: "",
@@ -290,15 +307,6 @@ const LocationsPage = () => {
   ];
   */
 
-  const locationTypes = [
-    { value: "site", label: "Site", icon: Building2 },
-    { value: "building", label: "Building", icon: Building2 },
-    { value: "room", label: "Room", icon: Home },
-    { value: "area", label: "Area", icon: MapPin },
-    { value: "zone", label: "Zone", icon: Layers },
-    { value: "floor", label: "Floor", icon: Layers },
-    { value: "wing", label: "Wing", icon: FolderTree },
-  ];
 
   // No need to flatten - API returns flat array
 
@@ -325,12 +333,19 @@ const LocationsPage = () => {
       );
     }
 
-    // Type filter
+    // Type filter - use location_type_id if available, fallback to location_type string
     if (selectedType !== "all") {
-      filtered = filtered.filter(
-        (location) =>
+      filtered = filtered.filter((location) => {
+        // Try location_type_id first (new approach)
+        if (location.locationTypeId || location.location_type_id) {
+          const typeId = location.locationTypeId || location.location_type_id;
+          return typeId.toString() === selectedType;
+        }
+        // Fallback to location_type string (backward compatibility)
+        return (
           (location.locationType || location.location_type) === selectedType
-      );
+        );
+      });
     }
 
     return filtered;
@@ -346,7 +361,7 @@ const LocationsPage = () => {
     setLocationFormData({
       name: location.name || location.locationName || "",
       description: location.description || "",
-      location_type: location.locationType || location.location_type || "",
+      location_type_id: location.locationTypeId || location.location_type_id || null,
       parent_location_id:
         location.parentLocationId || location.parentId || null,
       address: location.address || "",
@@ -394,7 +409,7 @@ const LocationsPage = () => {
     if (!selectedLocation) return;
 
     // Validate required fields
-    if (!locationFormData.name || !locationFormData.location_type) {
+    if (!locationFormData.name || !locationFormData.location_type_id) {
       toast.error("Please fill in all required fields", {
         description: "Location name and type are required.",
       });
@@ -403,7 +418,7 @@ const LocationsPage = () => {
 
     updateLocationMutation.mutate(
       {
-        id: selectedLocation.id,
+        slug: selectedLocation.slug || selectedLocation.id,
         locationData: locationFormData,
       },
       {
@@ -418,7 +433,7 @@ const LocationsPage = () => {
   const handleConfirmDelete = () => {
     if (!selectedLocation) return;
 
-    deleteLocationMutation.mutate(selectedLocation.id, {
+    deleteLocationMutation.mutate(selectedLocation.slug || selectedLocation.id, {
       onSuccess: () => {
         setIsDeleteDialogOpen(false);
         setSelectedLocation(null);
@@ -448,6 +463,50 @@ const LocationsPage = () => {
     );
   };
 
+  const handleQuickCreateLocationType = async () => {
+    if (!quickCreateLocationTypeData.display_name) {
+      toast.error("Display name is required");
+      return;
+    }
+    
+    // Ensure name is generated from display name
+    const autoName = quickCreateLocationTypeData.display_name.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
+    if (!autoName) {
+      toast.error("Display name must contain at least one letter or number");
+      return;
+    }
+
+    try {
+      const result = await createLocationTypeMutation.mutateAsync({
+        name: autoName,
+        display_name: quickCreateLocationTypeData.display_name,
+        description: quickCreateLocationTypeData.description || "",
+        icon: quickCreateLocationTypeData.icon || "",
+        color: quickCreateLocationTypeData.color || "#6B7280",
+        sort_order: 0,
+      });
+      
+      // Wait for query invalidation to complete, then auto-select the new one
+      setTimeout(() => {
+        setLocationFormData({
+          ...locationFormData,
+          location_type_id: result.id,
+        });
+      }, 100);
+      
+      setIsQuickCreateLocationTypeOpen(false);
+      setQuickCreateLocationTypeData({
+        name: "",
+        display_name: "",
+        description: "",
+        icon: "",
+        color: "#6B7280",
+      });
+    } catch (error) {
+      console.error("Failed to create location type:", error);
+    }
+  };
+
   const toggleNode = (nodeId) => {
     const newExpanded = new Set(expandedNodes);
     if (newExpanded.has(nodeId)) {
@@ -458,14 +517,31 @@ const LocationsPage = () => {
     setExpandedNodes(newExpanded);
   };
 
-  const getLocationTypeIcon = (type) => {
-    const typeObj = locationTypes.find((t) => t.value === type);
-    return typeObj ? typeObj.icon : Building2;
+  const getLocationTypeIcon = (location) => {
+    // Try to get icon from location_type_obj first
+    if (location.locationTypeObj || location.location_type_obj) {
+      const typeObj = location.locationTypeObj || location.location_type_obj;
+      if (typeObj?.icon) {
+        return typeObj.icon;
+      }
+    }
+    // Fallback to default icon
+    return Building2;
   };
 
-  const getLocationTypeLabel = (type) => {
-    const typeObj = locationTypes.find((t) => t.value === type);
-    return typeObj ? typeObj.label : "Site";
+  const getLocationTypeLabel = (location) => {
+    // Try to get display_name from location_type_obj first
+    if (location.locationTypeObj || location.location_type_obj) {
+      const typeObj = location.locationTypeObj || location.location_type_obj;
+      if (typeObj?.display_name) {
+        return typeObj.display_name;
+      }
+      if (typeObj?.name) {
+        return typeObj.name;
+      }
+    }
+    // Fallback to location_type string or default
+    return location.locationType || location.location_type || "Site";
   };
 
   const getStatusBadge = (status) => {
@@ -501,9 +577,8 @@ const LocationsPage = () => {
     );
     const hasChildren = children.length > 0;
     const isExpanded = expandedNodes.has(location.id.toString());
-    const TypeIcon = getLocationTypeIcon(
-      location.locationType || location.location_type
-    );
+    const typeIcon = getLocationTypeIcon(location);
+    const TypeIcon = typeof typeIcon === "string" ? Building2 : typeIcon;
 
     return (
       <div key={location.id} className="w-full">
@@ -528,7 +603,11 @@ const LocationsPage = () => {
           ) : (
             <div className="w-6" />
           )}
-          <TypeIcon className="h-4 w-4 text-muted-foreground" />
+          {typeof typeIcon === "string" ? (
+            <span className="text-base">{typeIcon}</span>
+          ) : (
+            <TypeIcon className="h-4 w-4 text-muted-foreground" />
+          )}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <span className="font-medium truncate">{location.name}</span>
@@ -540,9 +619,7 @@ const LocationsPage = () => {
               {getStatusBadge(location.status)}
             </div>
             <div className="text-sm text-muted-foreground truncate">
-              {getLocationTypeLabel(
-                location.locationType || location.location_type
-              )}{" "}
+              {getLocationTypeLabel(location)}{" "}
               • {location.address || "N/A"}
             </div>
           </div>
@@ -743,11 +820,17 @@ const LocationsPage = () => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Types</SelectItem>
-                {locationTypes.map((type) => (
-                  <SelectItem key={type.value} value={type.value}>
-                    {type.label}
+                {locationTypesLoading ? (
+                  <SelectItem value="loading" disabled>
+                    Loading types...
                   </SelectItem>
-                ))}
+                ) : (
+                  locationTypes.map((type) => (
+                    <SelectItem key={type.id} value={type.id.toString()}>
+                      {type.display_name || type.name}
+                    </SelectItem>
+                  ))
+                )}
               </SelectContent>
             </Select>
             {(searchQuery || selectedType !== "all") && (
@@ -876,9 +959,8 @@ const LocationsPage = () => {
                     </TableHeader>
                     <TableBody>
                       {filteredLocations.map((location) => {
-                        const TypeIcon = getLocationTypeIcon(
-                          location.locationType
-                        );
+                        const typeIcon = getLocationTypeIcon(location);
+                        const TypeIcon = typeof typeIcon === "string" ? Building2 : typeIcon;
                         const parentLocation = locations.find(
                           (l) =>
                             l.id === location.parentLocationId ||
@@ -891,16 +973,17 @@ const LocationsPage = () => {
                             </TableCell>
                             <TableCell>
                               <div className="flex items-center gap-2">
-                                <TypeIcon className="h-4 w-4 text-muted-foreground" />
+                                {typeof typeIcon === "string" ? (
+                                  <span className="text-base">{typeIcon}</span>
+                                ) : (
+                                  <TypeIcon className="h-4 w-4 text-muted-foreground" />
+                                )}
                                 {location.name}
                               </div>
                             </TableCell>
                             <TableCell>
                               <Badge variant="secondary">
-                                {getLocationTypeLabel(
-                                  location.locationType ||
-                                  location.location_type
-                                )}
+                                {getLocationTypeLabel(location)}
                               </Badge>
                             </TableCell>
                             <TableCell>
@@ -1080,32 +1163,53 @@ const LocationsPage = () => {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="edit-location-type">Location Type *</Label>
-                <Select
-                  value={locationFormData.location_type}
-                  onValueChange={(value) =>
-                    setLocationFormData({
-                      ...locationFormData,
-                      location_type: value,
-                    })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {locationTypes.map((type) => {
-                      const Icon = type.icon;
-                      return (
-                        <SelectItem key={type.value} value={type.value}>
-                          <div className="flex items-center gap-2">
-                            <Icon className="h-4 w-4" />
-                            {type.label}
-                          </div>
+                <div className="flex gap-2">
+                  <Select
+                    value={locationFormData.location_type_id?.toString() || ""}
+                    onValueChange={(value) =>
+                      setLocationFormData({
+                        ...locationFormData,
+                        location_type_id: value ? parseInt(value) : null,
+                      })
+                    }
+                    disabled={locationTypesLoading}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={locationTypesLoading ? "Loading types..." : "Select type"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {locationTypesLoading ? (
+                        <SelectItem value="loading" disabled>
+                          Loading location types...
                         </SelectItem>
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
+                      ) : locationTypes.length === 0 ? (
+                        <SelectItem value="none" disabled>
+                          No location types available
+                        </SelectItem>
+                      ) : (
+                        locationTypes.map((type) => (
+                          <SelectItem key={type.id} value={type.id.toString()}>
+                            <div className="flex items-center gap-2">
+                              {type.icon && (
+                                <span className="text-base">{type.icon}</span>
+                              )}
+                              {type.display_name || type.name}
+                            </div>
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setIsQuickCreateLocationTypeOpen(true)}
+                    title="Create new location type"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="edit-parent-location">Parent Location</Label>
@@ -1272,10 +1376,7 @@ const LocationsPage = () => {
                   <Label className="text-muted-foreground">Type</Label>
                   <div className="mt-1">
                     <Badge variant="secondary">
-                      {getLocationTypeLabel(
-                        selectedLocation.locationType ||
-                        selectedLocation.location_type
-                      )}
+                      {getLocationTypeLabel(selectedLocation)}
                     </Badge>
                   </div>
                 </div>
@@ -1433,10 +1534,7 @@ const LocationsPage = () => {
                   <div className="text-sm text-muted-foreground">
                     {selectedLocation.displayName &&
                       `${selectedLocation.displayName} • `}
-                    {getLocationTypeLabel(
-                      selectedLocation.locationType ||
-                      selectedLocation.location_type
-                    )}
+                    {getLocationTypeLabel(selectedLocation)}
                   </div>
                   {(() => {
                     const children = locations.filter(
@@ -1581,6 +1679,138 @@ const LocationsPage = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Quick Create Location Type Dialog */}
+      <Dialog open={isQuickCreateLocationTypeOpen} onOpenChange={setIsQuickCreateLocationTypeOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create New Location Type</DialogTitle>
+            <DialogDescription>
+              Quickly create a new location type. It will be automatically selected.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="quick-display_name">Display Name *</Label>
+              <Input
+                id="quick-display_name"
+                value={quickCreateLocationTypeData.display_name}
+                onChange={(e) => {
+                  const displayName = e.target.value;
+                  const autoName = displayName.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
+                  setQuickCreateLocationTypeData({
+                    ...quickCreateLocationTypeData,
+                    display_name: displayName,
+                    name: autoName,
+                  });
+                }}
+                placeholder="e.g., Ward"
+              />
+            </div>
+            <div>
+              <Label htmlFor="quick-name">Name (Unique Identifier) *</Label>
+              <Input
+                id="quick-name"
+                value={quickCreateLocationTypeData.name}
+                disabled
+                className="font-mono bg-muted"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Auto-generated from display name. Lowercase letters, numbers, and underscores only.
+              </p>
+            </div>
+            <div>
+              <Label htmlFor="quick-description">Description</Label>
+              <Textarea
+                id="quick-description"
+                value={quickCreateLocationTypeData.description}
+                onChange={(e) =>
+                  setQuickCreateLocationTypeData({
+                    ...quickCreateLocationTypeData,
+                    description: e.target.value,
+                  })
+                }
+                placeholder="Optional description..."
+                rows={2}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="quick-icon">Icon (Emoji)</Label>
+                <Input
+                  id="quick-icon"
+                  value={quickCreateLocationTypeData.icon}
+                  onChange={(e) =>
+                    setQuickCreateLocationTypeData({
+                      ...quickCreateLocationTypeData,
+                      icon: e.target.value,
+                    })
+                  }
+                  placeholder="🏥"
+                  maxLength={2}
+                />
+              </div>
+              <div>
+                <Label htmlFor="quick-color">Color</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="quick-color"
+                    type="color"
+                    value={quickCreateLocationTypeData.color}
+                    onChange={(e) =>
+                      setQuickCreateLocationTypeData({
+                        ...quickCreateLocationTypeData,
+                        color: e.target.value,
+                      })
+                    }
+                    className="w-20 h-10"
+                  />
+                  <Input
+                    value={quickCreateLocationTypeData.color}
+                    onChange={(e) =>
+                      setQuickCreateLocationTypeData({
+                        ...quickCreateLocationTypeData,
+                        color: e.target.value,
+                      })
+                    }
+                    placeholder="#6B7280"
+                    className="font-mono"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsQuickCreateLocationTypeOpen(false);
+                setQuickCreateLocationTypeData({
+                  name: "",
+                  display_name: "",
+                  description: "",
+                  icon: "",
+                  color: "#6B7280",
+                });
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleQuickCreateLocationType}
+              disabled={
+                createLocationTypeMutation.isPending ||
+                !quickCreateLocationTypeData.display_name
+              }
+            >
+              {createLocationTypeMutation.isPending && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
+              Create & Select
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

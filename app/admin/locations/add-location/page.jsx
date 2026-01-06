@@ -22,30 +22,49 @@ import {
   MapPin,
   ArrowLeft,
   RefreshCw,
+  Plus,
+  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useLocations, useCreateLocation } from "@/hooks/useLocations";
-
-const locationTypes = [
-  { value: "site", label: "Site", icon: Building2 },
-  { value: "building", label: "Building", icon: Building2 },
-  { value: "room", label: "Room", icon: Home },
-  { value: "area", label: "Area", icon: MapPin },
-  { value: "zone", label: "Zone", icon: Layers },
-  { value: "floor", label: "Floor", icon: Layers },
-  { value: "wing", label: "Wing", icon: FolderTree },
-];
+import {
+  useActiveLocationTypes,
+  useCreateLocationType,
+} from "@/hooks/useLocationTypes";
+import { useQueryClient } from "@tanstack/react-query";
+import { locationTypeKeys } from "@/hooks/useLocationTypes";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 const AddLocationPage = () => {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { data: locations = [], isLoading: locationsLoading } = useLocations();
+  const { data: locationTypes = [], isLoading: locationTypesLoading } = useActiveLocationTypes();
   const createLocationMutation = useCreateLocation();
+  const createLocationTypeMutation = useCreateLocationType();
+
+  // Quick create location type state
+  const [isQuickCreateOpen, setIsQuickCreateOpen] = useState(false);
+  const [quickCreateData, setQuickCreateData] = useState({
+    name: "",
+    display_name: "",
+    description: "",
+    icon: "",
+    color: "#6B7280",
+  });
 
   // Form data - matching API schema
   const [locationFormData, setLocationFormData] = useState({
     name: "",
     description: "",
-    location_type: "",
+    location_type_id: null,
     parent_location_id: null,
     address: "",
     coordinates: "",
@@ -61,11 +80,55 @@ const AddLocationPage = () => {
     is_active: true,
   });
 
+  const handleQuickCreateLocationType = async () => {
+    if (!quickCreateData.display_name) {
+      toast.error("Display name is required");
+      return;
+    }
+    
+    // Ensure name is generated from display name
+    const autoName = quickCreateData.display_name.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
+    if (!autoName) {
+      toast.error("Display name must contain at least one letter or number");
+      return;
+    }
+
+    try {
+      const result = await createLocationTypeMutation.mutateAsync({
+        name: autoName,
+        display_name: quickCreateData.display_name,
+        description: quickCreateData.description || "",
+        icon: quickCreateData.icon || "",
+        color: quickCreateData.color || "#6B7280",
+        sort_order: 0,
+      });
+      
+      // Wait for query invalidation to complete, then auto-select the new one
+      setTimeout(() => {
+        setLocationFormData({
+          ...locationFormData,
+          location_type_id: result.id,
+        });
+      }, 100);
+      
+      setIsQuickCreateOpen(false);
+      setQuickCreateData({
+        name: "",
+        display_name: "",
+        description: "",
+        icon: "",
+        color: "#6B7280",
+      });
+    } catch (error) {
+      console.error("Failed to create location type:", error);
+    }
+  };
+
   const handleSubmit = () => {
     // Validate required fields
     if (
       !locationFormData.name ||
-      !locationFormData.location_type ||
+      !locationFormData.location_type_id ||
       !locationFormData.address
     ) {
       toast.error("Please fill in all required fields", {
@@ -73,9 +136,6 @@ const AddLocationPage = () => {
       });
       return;
     }
-
-    // Debug: Log form data before sending
-    console.log("Form data before mutation:", locationFormData);
 
     createLocationMutation.mutate(locationFormData, {
       onSuccess: () => {
@@ -154,32 +214,53 @@ const AddLocationPage = () => {
                   <Label htmlFor="location-type">
                     Location Type <span className="text-red-500">*</span>
                   </Label>
-                  <Select
-                    value={locationFormData.location_type}
-                    onValueChange={(value) =>
-                      setLocationFormData({
-                        ...locationFormData,
-                        location_type: value,
-                      })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {locationTypes.map((type) => {
-                        const Icon = type.icon;
-                        return (
-                          <SelectItem key={type.value} value={type.value}>
-                            <div className="flex items-center gap-2">
-                              <Icon className="h-4 w-4" />
-                              {type.label}
-                            </div>
+                  <div className="flex gap-2">
+                    <Select
+                      value={locationFormData.location_type_id?.toString() || ""}
+                      onValueChange={(value) =>
+                        setLocationFormData({
+                          ...locationFormData,
+                          location_type_id: value ? parseInt(value) : null,
+                        })
+                      }
+                      disabled={locationTypesLoading}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder={locationTypesLoading ? "Loading types..." : "Select type"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {locationTypesLoading ? (
+                          <SelectItem value="loading" disabled>
+                            Loading location types...
                           </SelectItem>
-                        );
-                      })}
-                    </SelectContent>
-                  </Select>
+                        ) : locationTypes.length === 0 ? (
+                          <SelectItem value="none" disabled>
+                            No location types available
+                          </SelectItem>
+                        ) : (
+                          locationTypes.map((type) => (
+                            <SelectItem key={type.id} value={type.id.toString()}>
+                              <div className="flex items-center gap-2">
+                                {type.icon && (
+                                  <span className="text-base">{type.icon}</span>
+                                )}
+                                {type.display_name || type.name}
+                              </div>
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={() => setIsQuickCreateOpen(true)}
+                      title="Create new location type"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
 
                 <div className="space-y-2">
@@ -491,6 +572,139 @@ const AddLocationPage = () => {
           )}
         </Button>
       </div>
+
+      {/* Quick Create Location Type Dialog */}
+      <Dialog open={isQuickCreateOpen} onOpenChange={setIsQuickCreateOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create New Location Type</DialogTitle>
+            <DialogDescription>
+              Quickly create a new location type. It will be automatically selected.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="quick-display_name">Display Name *</Label>
+              <Input
+                id="quick-display_name"
+                value={quickCreateData.display_name}
+                onChange={(e) => {
+                  const displayName = e.target.value;
+                  const autoName = displayName.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
+                  setQuickCreateData({
+                    ...quickCreateData,
+                    display_name: displayName,
+                    name: autoName,
+                  });
+                }}
+                placeholder="e.g., Ward"
+              />
+            </div>
+            <div>
+              <Label htmlFor="quick-name">Name (Unique Identifier) *</Label>
+              <Input
+                id="quick-name"
+                value={quickCreateData.name}
+                disabled
+                className="font-mono bg-muted"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Auto-generated from display name. Lowercase letters, numbers, and underscores only.
+              </p>
+            </div>
+            <div>
+              <Label htmlFor="quick-description">Description</Label>
+              <Textarea
+                id="quick-description"
+                value={quickCreateData.description}
+                onChange={(e) =>
+                  setQuickCreateData({
+                    ...quickCreateData,
+                    description: e.target.value,
+                  })
+                }
+                placeholder="Optional description..."
+                rows={2}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="quick-icon">Icon (Emoji)</Label>
+                <Input
+                  id="quick-icon"
+                  value={quickCreateData.icon}
+                  onChange={(e) =>
+                    setQuickCreateData({
+                      ...quickCreateData,
+                      icon: e.target.value,
+                    })
+                  }
+                  placeholder="🏥"
+                  maxLength={2}
+                />
+              </div>
+              <div>
+                <Label htmlFor="quick-color">Color</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="quick-color"
+                    type="color"
+                    value={quickCreateData.color}
+                    onChange={(e) =>
+                      setQuickCreateData({
+                        ...quickCreateData,
+                        color: e.target.value,
+                      })
+                    }
+                    className="w-20 h-10"
+                  />
+                  <Input
+                    value={quickCreateData.color}
+                    onChange={(e) =>
+                      setQuickCreateData({
+                        ...quickCreateData,
+                        color: e.target.value,
+                      })
+                    }
+                    placeholder="#6B7280"
+                    className="font-mono"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsQuickCreateOpen(false);
+                setQuickCreateData({
+                  name: "",
+                  display_name: "",
+                  description: "",
+                  icon: "",
+                  color: "#6B7280",
+                });
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleQuickCreateLocationType}
+              disabled={
+                createLocationTypeMutation.isPending ||
+                !quickCreateData.name ||
+                !quickCreateData.display_name
+              }
+            >
+              {createLocationTypeMutation.isPending && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
+              Create & Select
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

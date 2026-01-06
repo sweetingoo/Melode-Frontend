@@ -33,15 +33,10 @@ export const assetsService = {
 
   createAsset: async (assetData) => {
     try {
-      console.log(
-        "createAsset - sending data:",
-        JSON.stringify(assetData, null, 2)
-      );
       const response = await api.post("/assets/", assetData);
       return response.data || response;
     } catch (error) {
       console.error("Create asset failed:", error);
-      console.error("Request payload was:", JSON.stringify(assetData, null, 2));
       if (error.response?.data) {
         console.error(
           "API error response:",

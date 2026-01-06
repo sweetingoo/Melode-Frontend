@@ -23,24 +23,10 @@ export const locationsService = {
 
   createLocation: async (locationData) => {
     try {
-      // Debug: Log the data being sent to API
-      console.log(
-        "createLocation - sending data:",
-        JSON.stringify(locationData, null, 2)
-      );
-      console.log(
-        "createLocation - location_type:",
-        locationData.location_type
-      );
-
       const response = await api.post("/locations/", locationData);
       return response.data || response;
     } catch (error) {
       console.error("Create location failed:", error);
-      console.error(
-        "Request payload was:",
-        JSON.stringify(locationData, null, 2)
-      );
       if (error.response?.data) {
         console.error(
           "API error response:",

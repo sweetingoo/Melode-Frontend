@@ -49,8 +49,7 @@ import {
   Trash2,
   Loader2,
   Shield,
-  Palette,
-  Type,
+  Package,
 } from "lucide-react";
 import {
   Tooltip,
@@ -58,18 +57,19 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import {
-  useTaskTypes,
-  useCreateTaskType,
-  useUpdateTaskType,
-  useDeleteTaskType,
-} from "@/hooks/useTaskTypes";
+  useAssetTypes,
+  useCreateAssetType,
+  useUpdateAssetType,
+  useDeleteAssetType,
+} from "@/hooks/useAssetTypes";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
+import { toast } from "sonner";
 
-const TaskTypesPage = () => {
+const AssetTypesPage = () => {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [selectedTaskType, setSelectedTaskType] = useState(null);
-  const [taskTypeFormData, setTaskTypeFormData] = useState({
+  const [selectedAssetType, setSelectedAssetType] = useState(null);
+  const [assetTypeFormData, setAssetTypeFormData] = useState({
     name: "",
     display_name: "",
     description: "",
@@ -78,73 +78,95 @@ const TaskTypesPage = () => {
     sort_order: 0,
   });
 
-  const { data: taskTypesResponse, isLoading, error: taskTypesError } = useTaskTypes();
-  const createTaskTypeMutation = useCreateTaskType();
-  const updateTaskTypeMutation = useUpdateTaskType();
-  const deleteTaskTypeMutation = useDeleteTaskType();
+  const { data: assetTypesResponse, isLoading, error: assetTypesError } = useAssetTypes();
+  const createAssetTypeMutation = useCreateAssetType();
+  const updateAssetTypeMutation = useUpdateAssetType();
+  const deleteAssetTypeMutation = useDeleteAssetType();
 
   // Permission checks
   const { hasPermission } = usePermissionsCheck();
-  const canCreateTaskType = hasPermission("task_type:create");
-  const canUpdateTaskType = hasPermission("task_type:update");
-  const canDeleteTaskType = hasPermission("task_type:delete");
+  const canCreateAssetType = hasPermission("asset_type:create");
+  const canUpdateAssetType = hasPermission("asset_type:update");
+  const canDeleteAssetType = hasPermission("asset_type:delete");
 
-  // Extract task types from response
-  let taskTypes = [];
-  if (taskTypesResponse) {
-    if (Array.isArray(taskTypesResponse)) {
-      taskTypes = taskTypesResponse;
-    } else if (taskTypesResponse.task_types && Array.isArray(taskTypesResponse.task_types)) {
-      taskTypes = taskTypesResponse.task_types;
-    } else if (taskTypesResponse.data && Array.isArray(taskTypesResponse.data)) {
-      taskTypes = taskTypesResponse.data;
-    } else if (taskTypesResponse.results && Array.isArray(taskTypesResponse.results)) {
-      taskTypes = taskTypesResponse.results;
+  // Extract asset types from response
+  let assetTypes = [];
+  if (assetTypesResponse) {
+    if (Array.isArray(assetTypesResponse)) {
+      assetTypes = assetTypesResponse;
+    } else if (assetTypesResponse.asset_types && Array.isArray(assetTypesResponse.asset_types)) {
+      assetTypes = assetTypesResponse.asset_types;
+    } else if (assetTypesResponse.data && Array.isArray(assetTypesResponse.data)) {
+      assetTypes = assetTypesResponse.data;
+    } else if (assetTypesResponse.results && Array.isArray(assetTypesResponse.results)) {
+      assetTypes = assetTypesResponse.results;
     }
   }
 
   // Sort by sort_order, then by display_name
-  const sortedTaskTypes = [...taskTypes].sort((a, b) => {
+  const sortedAssetTypes = [...assetTypes].sort((a, b) => {
     if (a.sort_order !== b.sort_order) {
       return (a.sort_order || 0) - (b.sort_order || 0);
     }
     return (a.display_name || a.name).localeCompare(b.display_name || b.name);
   });
 
-  const handleCreateTaskType = async () => {
+  const handleCreateAssetType = async () => {
+    if (!assetTypeFormData.display_name) {
+      toast.error("Display name is required");
+      return;
+    }
+    
+    // Ensure name is generated from display name
+    const autoName = assetTypeFormData.display_name.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
+    if (!autoName) {
+      toast.error("Display name must contain at least one letter or number");
+      return;
+    }
+    
     try {
-      await createTaskTypeMutation.mutateAsync(taskTypeFormData);
+      await createAssetTypeMutation.mutateAsync({
+        ...assetTypeFormData,
+        name: autoName,
+      });
       setIsCreateModalOpen(false);
       resetForm();
     } catch (error) {
-      console.error("Failed to create task type:", error);
+      console.error("Failed to create asset type:", error);
     }
   };
 
-  const handleUpdateTaskType = async () => {
+  const handleUpdateAssetType = async () => {
+    if (!assetTypeFormData.display_name) {
+      toast.error("Display name is required");
+      return;
+    }
+    
     try {
-      await updateTaskTypeMutation.mutateAsync({
-        id: selectedTaskType.id,
-        taskTypeData: taskTypeFormData,
+      // Don't send name in update - it's immutable after creation
+      const { name, ...updateData } = assetTypeFormData;
+      await updateAssetTypeMutation.mutateAsync({
+        slug: selectedAssetType.slug,
+        assetTypeData: updateData,
       });
       setIsEditModalOpen(false);
-      setSelectedTaskType(null);
+      setSelectedAssetType(null);
       resetForm();
     } catch (error) {
-      console.error("Failed to update task type:", error);
+      console.error("Failed to update asset type:", error);
     }
   };
 
-  const handleDeleteTaskType = async (taskTypeId) => {
+  const handleDeleteAssetType = async (slug) => {
     try {
-      await deleteTaskTypeMutation.mutateAsync(taskTypeId);
+      await deleteAssetTypeMutation.mutateAsync(slug);
     } catch (error) {
-      console.error("Failed to delete task type:", error);
+      console.error("Failed to delete asset type:", error);
     }
   };
 
   const resetForm = () => {
-    setTaskTypeFormData({
+    setAssetTypeFormData({
       name: "",
       display_name: "",
       description: "",
@@ -154,15 +176,15 @@ const TaskTypesPage = () => {
     });
   };
 
-  const openEditModal = (taskType) => {
-    setSelectedTaskType(taskType);
-    setTaskTypeFormData({
-      name: taskType.name || "",
-      display_name: taskType.display_name || "",
-      description: taskType.description || "",
-      icon: taskType.icon || "",
-      color: taskType.color || "#6B7280",
-      sort_order: taskType.sort_order || 0,
+  const openEditModal = (assetType) => {
+    setSelectedAssetType(assetType);
+    setAssetTypeFormData({
+      name: assetType.name || "",
+      display_name: assetType.display_name || "",
+      description: assetType.description || "",
+      icon: assetType.icon || "",
+      color: assetType.color || "#6B7280",
+      sort_order: assetType.sort_order || 0,
     });
     setIsEditModalOpen(true);
   };
@@ -172,15 +194,15 @@ const TaskTypesPage = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <h1 className="text-xl sm:text-2xl font-bold">Task Types</h1>
+          <h1 className="text-xl sm:text-2xl font-bold">Asset Types</h1>
           <p className="text-sm sm:text-base text-muted-foreground">
-            Manage task types for your organisation
+            Manage asset types for your organisation
           </p>
         </div>
-        {canCreateTaskType ? (
+        {canCreateAssetType ? (
           <Button onClick={() => setIsCreateModalOpen(true)} size="sm" className="shrink-0">
             <Plus className="mr-2 h-4 w-4" />
-            Create Task Type
+            Create Asset Type
           </Button>
         ) : (
           <Tooltip>
@@ -188,38 +210,38 @@ const TaskTypesPage = () => {
               <span>
                 <Button disabled size="sm" className="shrink-0">
                   <Plus className="mr-2 h-4 w-4" />
-                  Create Task Type
+                  Create Asset Type
                 </Button>
               </span>
             </TooltipTrigger>
             <TooltipContent>
-              <p>You do not have permission to create task types</p>
+              <p>You do not have permission to create asset types</p>
             </TooltipContent>
           </Tooltip>
         )}
       </div>
 
-      {/* Task Types Table */}
+      {/* Asset Types Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Task Types</CardTitle>
+          <CardTitle>Asset Types</CardTitle>
         </CardHeader>
         <CardContent>
           {isLoading ? (
             <div className="flex items-center justify-center py-8">
               <Loader2 className="h-6 w-6 animate-spin" />
             </div>
-          ) : taskTypesError?.response?.status === 403 ? (
+          ) : assetTypesError?.response?.status === 403 ? (
             <div className="text-center py-8">
               <Shield className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
               <h3 className="text-lg font-semibold mb-2">Access Denied</h3>
               <p className="text-muted-foreground">
-                {taskTypesError?.response?.data?.detail || "You do not have permission to view task types."}
+                {assetTypesError?.response?.data?.detail || "You do not have permission to view asset types."}
               </p>
             </div>
-          ) : sortedTaskTypes.length === 0 ? (
+          ) : sortedAssetTypes.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
-              No task types found. Create your first task type to get started.
+              No asset types found. Create your first asset type to get started.
             </div>
           ) : (
             <div className="rounded-md border">
@@ -237,39 +259,39 @@ const TaskTypesPage = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {sortedTaskTypes.map((taskType) => (
-                    <TableRow key={taskType.id}>
+                  {sortedAssetTypes.map((assetType) => (
+                    <TableRow key={assetType.id}>
                       <TableCell>
-                        {taskType.icon ? (
-                          <span className="text-2xl">{taskType.icon}</span>
+                        {assetType.icon ? (
+                          <span className="text-2xl">{assetType.icon}</span>
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         )}
                       </TableCell>
                       <TableCell className="font-mono text-sm">
-                        {taskType.name}
+                        {assetType.name}
                       </TableCell>
                       <TableCell className="font-medium">
-                        {taskType.display_name || taskType.name}
+                        {assetType.display_name || assetType.name}
                       </TableCell>
                       <TableCell>
                         <span className="text-sm text-muted-foreground">
-                          {taskType.description || "—"}
+                          {assetType.description || "—"}
                         </span>
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <div
                             className="w-6 h-6 rounded border"
-                            style={{ backgroundColor: taskType.color || "#6B7280" }}
+                            style={{ backgroundColor: assetType.color || "#6B7280" }}
                           />
                           <span className="text-sm font-mono">
-                            {taskType.color || "#6B7280"}
+                            {assetType.color || "#6B7280"}
                           </span>
                         </div>
                       </TableCell>
                       <TableCell>
-                        {taskType.is_system ? (
+                        {assetType.is_system ? (
                           <Badge variant="outline" className="bg-blue-500/10">
                             <Shield className="mr-1 h-3 w-3" />
                             System
@@ -279,7 +301,7 @@ const TaskTypesPage = () => {
                         )}
                       </TableCell>
                       <TableCell>
-                        {taskType.is_active ? (
+                        {assetType.is_active ? (
                           <Badge className="bg-green-500/10 text-green-600">
                             Active
                           </Badge>
@@ -295,15 +317,15 @@ const TaskTypesPage = () => {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            {canUpdateTaskType && (
-                              <DropdownMenuItem onClick={() => openEditModal(taskType)}>
+                            {canUpdateAssetType && (
+                              <DropdownMenuItem onClick={() => openEditModal(assetType)}>
                                 <Edit className="mr-2 h-4 w-4" />
                                 Edit
                               </DropdownMenuItem>
                             )}
-                            {!taskType.is_system && canDeleteTaskType && (
+                            {!assetType.is_system && canDeleteAssetType && (
                               <>
-                                {canUpdateTaskType && <DropdownMenuSeparator />}
+                                {canUpdateAssetType && <DropdownMenuSeparator />}
                                 <AlertDialog>
                                   <AlertDialogTrigger asChild>
                                     <DropdownMenuItem
@@ -316,17 +338,17 @@ const TaskTypesPage = () => {
                                   </AlertDialogTrigger>
                                   <AlertDialogContent>
                                     <AlertDialogHeader>
-                                      <AlertDialogTitle>Delete Task Type</AlertDialogTitle>
+                                      <AlertDialogTitle>Delete Asset Type</AlertDialogTitle>
                                       <AlertDialogDescription>
-                                        Are you sure you want to delete this task type? This
-                                        action cannot be undone. Make sure no active tasks are
-                                        using this task type.
+                                        Are you sure you want to delete this asset type? This
+                                        action cannot be undone. Make sure no active assets are
+                                        using this asset type.
                                       </AlertDialogDescription>
                                     </AlertDialogHeader>
                                     <AlertDialogFooter>
                                       <AlertDialogCancel>Cancel</AlertDialogCancel>
                                       <AlertDialogAction
-                                        onClick={() => handleDeleteTaskType(taskType.id)}
+                                        onClick={() => handleDeleteAssetType(assetType.slug)}
                                         className="bg-red-600 hover:bg-red-700"
                                       >
                                         Delete
@@ -336,7 +358,7 @@ const TaskTypesPage = () => {
                                 </AlertDialog>
                               </>
                             )}
-                            {(!canUpdateTaskType || (!taskType.is_system && !canDeleteTaskType)) && (
+                            {(!canUpdateAssetType || (!assetType.is_system && !canDeleteAssetType)) && (
                               <DropdownMenuLabel className="text-xs text-muted-foreground">
                                 No actions available
                               </DropdownMenuLabel>
@@ -353,60 +375,57 @@ const TaskTypesPage = () => {
         </CardContent>
       </Card>
 
-      {/* Create Task Type Modal */}
+      {/* Create Asset Type Modal */}
       <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Create New Task Type</DialogTitle>
+            <DialogTitle>Create New Asset Type</DialogTitle>
             <DialogDescription>
-              Create a new task type for your organisation.
+              Create a new asset type for your organisation.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label htmlFor="name">Name (Unique Identifier) *</Label>
-              <Input
-                id="name"
-                value={taskTypeFormData.name}
-                onChange={(e) =>
-                  setTaskTypeFormData({
-                    ...taskTypeFormData,
-                    name: e.target.value.toLowerCase().replace(/\s+/g, "_"),
-                  })
-                }
-                placeholder="e.g., patient_care"
-                className="font-mono"
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                Lowercase letters, numbers, and underscores only. Used internally.
-              </p>
-            </div>
-            <div>
               <Label htmlFor="display_name">Display Name *</Label>
               <Input
                 id="display_name"
-                value={taskTypeFormData.display_name}
-                onChange={(e) =>
-                  setTaskTypeFormData({
-                    ...taskTypeFormData,
-                    display_name: e.target.value,
-                  })
-                }
-                placeholder="e.g., Patient Care"
+                value={assetTypeFormData.display_name}
+                onChange={(e) => {
+                  const displayName = e.target.value;
+                  const autoName = displayName.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
+                  setAssetTypeFormData({
+                    ...assetTypeFormData,
+                    display_name: displayName,
+                    name: autoName,
+                  });
+                }}
+                placeholder="e.g., Fridge"
               />
+            </div>
+            <div>
+              <Label htmlFor="name">Name (Unique Identifier) *</Label>
+              <Input
+                id="name"
+                value={assetTypeFormData.name}
+                disabled
+                className="font-mono bg-muted"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Auto-generated from display name. Lowercase letters, numbers, and underscores only. Used internally.
+              </p>
             </div>
             <div>
               <Label htmlFor="description">Description</Label>
               <Textarea
                 id="description"
-                value={taskTypeFormData.description}
+                value={assetTypeFormData.description}
                 onChange={(e) =>
-                  setTaskTypeFormData({
-                    ...taskTypeFormData,
+                  setAssetTypeFormData({
+                    ...assetTypeFormData,
                     description: e.target.value,
                   })
                 }
-                placeholder="Describe this task type..."
+                placeholder="Describe this asset type..."
                 rows={3}
               />
             </div>
@@ -415,14 +434,14 @@ const TaskTypesPage = () => {
                 <Label htmlFor="icon">Icon (Emoji)</Label>
                 <Input
                   id="icon"
-                  value={taskTypeFormData.icon}
+                  value={assetTypeFormData.icon}
                   onChange={(e) =>
-                    setTaskTypeFormData({
-                      ...taskTypeFormData,
+                    setAssetTypeFormData({
+                      ...assetTypeFormData,
                       icon: e.target.value,
                     })
                   }
-                  placeholder="👨‍⚕️"
+                  placeholder="🧊"
                   maxLength={2}
                 />
               </div>
@@ -432,20 +451,20 @@ const TaskTypesPage = () => {
                   <Input
                     id="color"
                     type="color"
-                    value={taskTypeFormData.color}
+                    value={assetTypeFormData.color}
                     onChange={(e) =>
-                      setTaskTypeFormData({
-                        ...taskTypeFormData,
+                      setAssetTypeFormData({
+                        ...assetTypeFormData,
                         color: e.target.value,
                       })
                     }
                     className="w-20 h-10"
                   />
                   <Input
-                    value={taskTypeFormData.color}
+                    value={assetTypeFormData.color}
                     onChange={(e) =>
-                      setTaskTypeFormData({
-                        ...taskTypeFormData,
+                      setAssetTypeFormData({
+                        ...assetTypeFormData,
                         color: e.target.value,
                       })
                     }
@@ -460,10 +479,10 @@ const TaskTypesPage = () => {
               <Input
                 id="sort_order"
                 type="number"
-                value={taskTypeFormData.sort_order}
+                value={assetTypeFormData.sort_order}
                 onChange={(e) =>
-                  setTaskTypeFormData({
-                    ...taskTypeFormData,
+                  setAssetTypeFormData({
+                    ...assetTypeFormData,
                     sort_order: parseInt(e.target.value) || 0,
                   })
                 }
@@ -485,72 +504,86 @@ const TaskTypesPage = () => {
               Cancel
             </Button>
             <Button
-              onClick={handleCreateTaskType}
+              onClick={handleCreateAssetType}
               disabled={
-                createTaskTypeMutation.isPending ||
-                !taskTypeFormData.name ||
-                !taskTypeFormData.display_name
+                createAssetTypeMutation.isPending ||
+                !assetTypeFormData.display_name
               }
             >
-              {createTaskTypeMutation.isPending && (
+              {createAssetTypeMutation.isPending && (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               )}
-              Create Task Type
+              Create Asset Type
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Edit Task Type Modal */}
+      {/* Edit Asset Type Modal */}
       <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit Task Type</DialogTitle>
+            <DialogTitle>Edit Asset Type</DialogTitle>
             <DialogDescription>
-              Update task type details.
+              Update asset type details.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label htmlFor="edit-name">Name (Unique Identifier)</Label>
-              <Input
-                id="edit-name"
-                value={taskTypeFormData.name}
-                disabled={selectedTaskType?.is_system}
-                className="font-mono"
-              />
-              {selectedTaskType?.is_system && (
-                <p className="text-xs text-muted-foreground mt-1">
-                  System task types cannot have their name changed.
-                </p>
-              )}
-            </div>
-            <div>
               <Label htmlFor="edit-display_name">Display Name *</Label>
               <Input
                 id="edit-display_name"
-                value={taskTypeFormData.display_name}
-                onChange={(e) =>
-                  setTaskTypeFormData({
-                    ...taskTypeFormData,
-                    display_name: e.target.value,
-                  })
-                }
-                placeholder="e.g., Patient Care"
+                value={assetTypeFormData.display_name}
+                onChange={(e) => {
+                  const displayName = e.target.value;
+                  // Only auto-generate name if it's not a system type (system types keep their original name)
+                  if (!selectedAssetType?.is_system) {
+                    const autoName = displayName.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
+                    setAssetTypeFormData({
+                      ...assetTypeFormData,
+                      display_name: displayName,
+                      name: autoName,
+                    });
+                  } else {
+                    setAssetTypeFormData({
+                      ...assetTypeFormData,
+                      display_name: displayName,
+                    });
+                  }
+                }}
+                placeholder="e.g., Fridge"
               />
+            </div>
+            <div>
+              <Label htmlFor="edit-name">Name (Unique Identifier)</Label>
+              <Input
+                id="edit-name"
+                value={assetTypeFormData.name}
+                disabled
+                className="font-mono bg-muted"
+              />
+              {selectedAssetType?.is_system ? (
+                <p className="text-xs text-muted-foreground mt-1">
+                  System asset types cannot have their name changed.
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Auto-generated from display name. Cannot be changed after creation.
+                </p>
+              )}
             </div>
             <div>
               <Label htmlFor="edit-description">Description</Label>
               <Textarea
                 id="edit-description"
-                value={taskTypeFormData.description}
+                value={assetTypeFormData.description}
                 onChange={(e) =>
-                  setTaskTypeFormData({
-                    ...taskTypeFormData,
+                  setAssetTypeFormData({
+                    ...assetTypeFormData,
                     description: e.target.value,
                   })
                 }
-                placeholder="Describe this task type..."
+                placeholder="Describe this asset type..."
                 rows={3}
               />
             </div>
@@ -559,14 +592,14 @@ const TaskTypesPage = () => {
                 <Label htmlFor="edit-icon">Icon (Emoji)</Label>
                 <Input
                   id="edit-icon"
-                  value={taskTypeFormData.icon}
+                  value={assetTypeFormData.icon}
                   onChange={(e) =>
-                    setTaskTypeFormData({
-                      ...taskTypeFormData,
+                    setAssetTypeFormData({
+                      ...assetTypeFormData,
                       icon: e.target.value,
                     })
                   }
-                  placeholder="👨‍⚕️"
+                  placeholder="🧊"
                   maxLength={2}
                 />
               </div>
@@ -576,20 +609,20 @@ const TaskTypesPage = () => {
                   <Input
                     id="edit-color"
                     type="color"
-                    value={taskTypeFormData.color}
+                    value={assetTypeFormData.color}
                     onChange={(e) =>
-                      setTaskTypeFormData({
-                        ...taskTypeFormData,
+                      setAssetTypeFormData({
+                        ...assetTypeFormData,
                         color: e.target.value,
                       })
                     }
                     className="w-20 h-10"
                   />
                   <Input
-                    value={taskTypeFormData.color}
+                    value={assetTypeFormData.color}
                     onChange={(e) =>
-                      setTaskTypeFormData({
-                        ...taskTypeFormData,
+                      setAssetTypeFormData({
+                        ...assetTypeFormData,
                         color: e.target.value,
                       })
                     }
@@ -604,10 +637,10 @@ const TaskTypesPage = () => {
               <Input
                 id="edit-sort_order"
                 type="number"
-                value={taskTypeFormData.sort_order}
+                value={assetTypeFormData.sort_order}
                 onChange={(e) =>
-                  setTaskTypeFormData({
-                    ...taskTypeFormData,
+                  setAssetTypeFormData({
+                    ...assetTypeFormData,
                     sort_order: parseInt(e.target.value) || 0,
                   })
                 }
@@ -620,23 +653,23 @@ const TaskTypesPage = () => {
               variant="outline"
               onClick={() => {
                 setIsEditModalOpen(false);
-                setSelectedTaskType(null);
+                setSelectedAssetType(null);
                 resetForm();
               }}
             >
               Cancel
             </Button>
             <Button
-              onClick={handleUpdateTaskType}
+              onClick={handleUpdateAssetType}
               disabled={
-                updateTaskTypeMutation.isPending ||
-                !taskTypeFormData.display_name
+                updateAssetTypeMutation.isPending ||
+                !assetTypeFormData.display_name
               }
             >
-              {updateTaskTypeMutation.isPending && (
+              {updateAssetTypeMutation.isPending && (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               )}
-              Update Task Type
+              Update Asset Type
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -645,5 +678,4 @@ const TaskTypesPage = () => {
   );
 };
 
-export default TaskTypesPage;
-
+export default AssetTypesPage;

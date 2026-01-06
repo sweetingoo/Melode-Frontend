@@ -18,11 +18,20 @@ export const locationsKeys = {
 export const locationsUtils = {
   transformLocation: (location) => ({
     id: location.id,
+    slug: location.slug,
     name: location.name || location.locationName,
     locationName: location.name || location.locationName,
     locationCode: location.location_code || location.locationCode || "",
     description: location.description || "",
-    locationType: location.location_type || location.locationType,
+    // New: location_type_id (required)
+    locationTypeId: location.location_type_id || location.locationTypeId || null,
+    location_type_id: location.location_type_id || location.locationTypeId || null,
+    // Deprecated: location_type (for backward compatibility)
+    locationType: location.location_type || location.locationType || null,
+    location_type: location.location_type || location.locationType || null,
+    // New: location_type_obj (full LocationType object if included)
+    locationTypeObj: location.location_type_obj || location.locationTypeObj || null,
+    location_type_obj: location.location_type_obj || location.locationTypeObj || null,
     parentLocationId: location.parent_location_id || location.parentId || null,
     parentId: location.parent_location_id || location.parentId || null,
     address: location.address || "",
@@ -73,15 +82,25 @@ export const locationsUtils = {
       data.description = location.description || "";
     }
 
-    // Handle location_type - REQUIRED field by API
-    // Check snake_case first (form uses location_type), then camelCase
-    // ALWAYS include this field if the property exists in the object
-    // Use hasOwnProperty to ensure we check if the key exists, not just its value
-    if (location.hasOwnProperty("location_type")) {
-      // Include the field even if it's an empty string (validation happens on API side)
-      data.location_type = location.location_type;
-    } else if (location.hasOwnProperty("locationType")) {
-      data.location_type = location.locationType;
+    // Handle location_type_id - REQUIRED field by API (new approach)
+    // Check snake_case first (form uses location_type_id), then camelCase
+    // Priority: location_type_id > locationTypeId
+    const locationTypeId =
+      location.location_type_id !== undefined
+        ? location.location_type_id
+        : location.locationTypeId;
+    if (locationTypeId !== undefined && locationTypeId !== null) {
+      data.location_type_id = locationTypeId;
+    }
+
+    // Handle location_type - DEPRECATED but kept for backward compatibility
+    // Only include if location_type_id is not provided
+    if (!data.location_type_id) {
+      if (location.hasOwnProperty("location_type")) {
+        data.location_type = location.location_type;
+      } else if (location.hasOwnProperty("locationType")) {
+        data.location_type = location.locationType;
+      }
     }
 
     // Handle parent_location_id - check both camelCase and snake_case
@@ -230,47 +249,8 @@ export const useCreateLocation = () => {
 
   return useMutation({
     mutationFn: async (locationData) => {
-      // Debug: Log original form data
-      console.log(
-        "Original location data:",
-        JSON.stringify(locationData, null, 2)
-      );
-      console.log("location_type in original:", locationData.location_type);
-      console.log(
-        "Has location_type property?",
-        locationData.hasOwnProperty("location_type")
-      );
-
       const transformedData =
         locationsUtils.transformLocationForAPI(locationData);
-
-      // Debug: Log the transformed data to verify location_type is included
-      console.log(
-        "Transformed location data:",
-        JSON.stringify(transformedData, null, 2)
-      );
-      console.log(
-        "location_type in transformed:",
-        transformedData.location_type
-      );
-      console.log(
-        "Has location_type in transformed?",
-        transformedData.hasOwnProperty("location_type")
-      );
-
-      // CRITICAL FIX: Ensure location_type is ALWAYS included if it exists in original data
-      // Even if the transformation missed it somehow, we must include it (required by API)
-      if (!transformedData.hasOwnProperty("location_type")) {
-        if (locationData.hasOwnProperty("location_type")) {
-          transformedData.location_type = locationData.location_type || "";
-          console.warn("FIXED: Added missing location_type from original data");
-        } else if (locationData.hasOwnProperty("locationType")) {
-          transformedData.location_type = locationData.locationType || "";
-          console.warn(
-            "FIXED: Added missing location_type from original data (camelCase)"
-          );
-        }
-      }
 
       const response = await locationsService.createLocation(transformedData);
       return locationsUtils.transformLocation(response);

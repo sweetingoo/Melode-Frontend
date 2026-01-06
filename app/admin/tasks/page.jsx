@@ -104,6 +104,11 @@ import {
 } from "@/hooks/useTasks";
 import { useUsers } from "@/hooks/useUsers";
 import { useLocations, useCreateLocation } from "@/hooks/useLocations";
+import {
+  useActiveLocationTypes,
+  useCreateLocationType,
+} from "@/hooks/useLocationTypes";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAssets } from "@/hooks/useAssets";
 import { useRoles, useRoleUsers } from "@/hooks/useRoles";
 import { useActiveTaskTypes, useCreateTaskType } from "@/hooks/useTaskTypes";
@@ -177,6 +182,14 @@ const TasksPage = () => {
   const [createIndividualTasks, setCreateIndividualTasks] = useState(false);
   const [isCreateTaskTypeModalOpen, setIsCreateTaskTypeModalOpen] = useState(false);
   const [isCreateLocationModalOpen, setIsCreateLocationModalOpen] = useState(false);
+  const [isQuickCreateLocationTypeOpen, setIsQuickCreateLocationTypeOpen] = useState(false);
+  const [quickCreateLocationTypeData, setQuickCreateLocationTypeData] = useState({
+    name: "",
+    display_name: "",
+    description: "",
+    icon: "",
+    color: "#6B7280",
+  });
   const [taskTypeFormData, setTaskTypeFormData] = useState({
     name: "",
     display_name: "",
@@ -194,7 +207,7 @@ const TasksPage = () => {
   const [locationFormData, setLocationFormData] = useState({
     name: "",
     description: "",
-    location_type: "",
+    location_type_id: null,
     parent_location_id: null,
     address: "",
     coordinates: "",
@@ -278,6 +291,9 @@ const TasksPage = () => {
   const { data: statsData, isLoading: statsLoading, error: statsError } = useTaskStats();
   const { data: usersResponse } = useUsers();
   const { data: locationsData } = useLocations();
+  const queryClient = useQueryClient();
+  const { data: locationTypes = [], isLoading: locationTypesLoading } = useActiveLocationTypes();
+  const createLocationTypeMutation = useCreateLocationType();
   const { data: assetsData } = useAssets();
   const { data: rolesData } = useRoles();
   const { data: activeTaskTypes } = useActiveTaskTypes();
@@ -659,7 +675,7 @@ const TasksPage = () => {
   };
 
   const handleCreateLocation = async () => {
-    if (!locationFormData.name || !locationFormData.location_type || !locationFormData.address) {
+    if (!locationFormData.name || !locationFormData.location_type_id || !locationFormData.address) {
       return;
     }
 
@@ -670,7 +686,7 @@ const TasksPage = () => {
       setLocationFormData({
         name: "",
         description: "",
-        location_type: "",
+        location_type_id: null,
         parent_location_id: null,
         address: "",
         coordinates: "",
@@ -693,6 +709,50 @@ const TasksPage = () => {
       // The mutation should already invalidate the cache, but we can force a refetch if needed
     } catch (error) {
       console.error("Failed to create location:", error);
+    }
+  };
+
+  const handleQuickCreateLocationType = async () => {
+    if (!quickCreateLocationTypeData.display_name) {
+      toast.error("Display name is required");
+      return;
+    }
+    
+    // Ensure name is generated from display name
+    const autoName = quickCreateLocationTypeData.display_name.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
+    if (!autoName) {
+      toast.error("Display name must contain at least one letter or number");
+      return;
+    }
+
+    try {
+      const result = await createLocationTypeMutation.mutateAsync({
+        name: autoName,
+        display_name: quickCreateLocationTypeData.display_name,
+        description: quickCreateLocationTypeData.description || "",
+        icon: quickCreateLocationTypeData.icon || "",
+        color: quickCreateLocationTypeData.color || "#6B7280",
+        sort_order: 0,
+      });
+      
+      // Wait for query invalidation to complete, then auto-select the new one
+      setTimeout(() => {
+        setLocationFormData({
+          ...locationFormData,
+          location_type_id: result.id,
+        });
+      }, 100);
+      
+      setIsQuickCreateLocationTypeOpen(false);
+      setQuickCreateLocationTypeData({
+        name: "",
+        display_name: "",
+        description: "",
+        icon: "",
+        color: "#6B7280",
+      });
+    } catch (error) {
+      console.error("Failed to create location type:", error);
     }
   };
 
@@ -3653,25 +3713,39 @@ const TasksPage = () => {
                   Location Type <span className="text-red-500">*</span>
                 </Label>
                 <Select
-                  value={locationFormData.location_type}
+                  value={locationFormData.location_type_id?.toString() || ""}
                   onValueChange={(value) =>
                     setLocationFormData({
                       ...locationFormData,
-                      location_type: value,
+                      location_type_id: value ? parseInt(value) : null,
                     })
                   }
+                  disabled={locationTypesLoading}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select type" />
+                    <SelectValue placeholder={locationTypesLoading ? "Loading types..." : "Select type"} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="site">Site</SelectItem>
-                    <SelectItem value="building">Building</SelectItem>
-                    <SelectItem value="room">Room</SelectItem>
-                    <SelectItem value="area">Area</SelectItem>
-                    <SelectItem value="zone">Zone</SelectItem>
-                    <SelectItem value="floor">Floor</SelectItem>
-                    <SelectItem value="wing">Wing</SelectItem>
+                    {locationTypesLoading ? (
+                      <SelectItem value="loading" disabled>
+                        Loading location types...
+                      </SelectItem>
+                    ) : locationTypes.length === 0 ? (
+                      <SelectItem value="none" disabled>
+                        No location types available
+                      </SelectItem>
+                    ) : (
+                      locationTypes.map((type) => (
+                        <SelectItem key={type.id} value={type.id.toString()}>
+                          <div className="flex items-center gap-2">
+                            {type.icon && (
+                              <span className="text-base">{type.icon}</span>
+                            )}
+                            {type.display_name || type.name}
+                          </div>
+                        </SelectItem>
+                      ))
+                    )}
                   </SelectContent>
                 </Select>
               </div>
@@ -3881,7 +3955,7 @@ const TasksPage = () => {
               disabled={
                 createLocationMutation.isPending ||
                 !locationFormData.name ||
-                !locationFormData.location_type ||
+                !locationFormData.location_type_id ||
                 !locationFormData.address
               }
             >
@@ -3889,6 +3963,139 @@ const TasksPage = () => {
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               )}
               Create Location
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Quick Create Location Type Dialog */}
+      <Dialog open={isQuickCreateLocationTypeOpen} onOpenChange={setIsQuickCreateLocationTypeOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create New Location Type</DialogTitle>
+            <DialogDescription>
+              Quickly create a new location type. It will be automatically selected.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="quick-display_name">Display Name *</Label>
+              <Input
+                id="quick-display_name"
+                value={quickCreateLocationTypeData.display_name}
+                onChange={(e) => {
+                  const displayName = e.target.value;
+                  const autoName = displayName.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
+                  setQuickCreateLocationTypeData({
+                    ...quickCreateLocationTypeData,
+                    display_name: displayName,
+                    name: autoName,
+                  });
+                }}
+                placeholder="e.g., Ward"
+              />
+            </div>
+            <div>
+              <Label htmlFor="quick-name">Name (Unique Identifier) *</Label>
+              <Input
+                id="quick-name"
+                value={quickCreateLocationTypeData.name}
+                disabled
+                className="font-mono bg-muted"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Auto-generated from display name. Lowercase letters, numbers, and underscores only.
+              </p>
+            </div>
+            <div>
+              <Label htmlFor="quick-description">Description</Label>
+              <Textarea
+                id="quick-description"
+                value={quickCreateLocationTypeData.description}
+                onChange={(e) =>
+                  setQuickCreateLocationTypeData({
+                    ...quickCreateLocationTypeData,
+                    description: e.target.value,
+                  })
+                }
+                placeholder="Optional description..."
+                rows={2}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="quick-icon">Icon (Emoji)</Label>
+                <Input
+                  id="quick-icon"
+                  value={quickCreateLocationTypeData.icon}
+                  onChange={(e) =>
+                    setQuickCreateLocationTypeData({
+                      ...quickCreateLocationTypeData,
+                      icon: e.target.value,
+                    })
+                  }
+                  placeholder="🏥"
+                  maxLength={2}
+                />
+              </div>
+              <div>
+                <Label htmlFor="quick-color">Color</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="quick-color"
+                    type="color"
+                    value={quickCreateLocationTypeData.color}
+                    onChange={(e) =>
+                      setQuickCreateLocationTypeData({
+                        ...quickCreateLocationTypeData,
+                        color: e.target.value,
+                      })
+                    }
+                    className="w-20 h-10"
+                  />
+                  <Input
+                    value={quickCreateLocationTypeData.color}
+                    onChange={(e) =>
+                      setQuickCreateLocationTypeData({
+                        ...quickCreateLocationTypeData,
+                        color: e.target.value,
+                      })
+                    }
+                    placeholder="#6B7280"
+                    className="font-mono"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsQuickCreateLocationTypeOpen(false);
+                setQuickCreateLocationTypeData({
+                  name: "",
+                  display_name: "",
+                  description: "",
+                  icon: "",
+                  color: "#6B7280",
+                });
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleQuickCreateLocationType}
+              disabled={
+                createLocationTypeMutation.isPending ||
+                !quickCreateLocationTypeData.name ||
+                !quickCreateLocationTypeData.display_name
+              }
+            >
+              {createLocationTypeMutation.isPending && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
+              Create & Select
             </Button>
           </DialogFooter>
         </DialogContent>

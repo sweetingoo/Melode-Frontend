@@ -33,7 +33,7 @@ import {
   BarChart3,
   Megaphone,
 } from "lucide-react";
-import { useBroadcastInbox } from "@/hooks/useMessages";
+import { useBroadcastInbox, useAllBroadcasts } from "@/hooks/useMessages";
 import { useUsers } from "@/hooks/useUsers";
 import { useRoles } from "@/hooks/useRoles";
 import { useCreateMessage } from "@/hooks/useMessages";
@@ -66,16 +66,36 @@ const BroadcastsPage = () => {
     search: "",
   });
 
-  const { data, isLoading, error } = useBroadcastInbox({
+  // If user can create broadcasts, show all broadcasts (communal outbox)
+  // Otherwise, show only their received broadcasts
+  const shouldShowAllBroadcasts = canCreateBroadcast;
+  
+  const { data: inboxData, isLoading: inboxLoading, error: inboxError } = useBroadcastInbox({
     page,
     per_page: 20,
     ...(filters.category && filters.category !== "all" && { category: filters.category }),
     ...(filters.priority && filters.priority !== "all" && { priority: filters.priority }),
     ...(filters.unread_only && { unread_only: true }),
     ...(filters.unacknowledged_only && { unacknowledged_only: true }),
+  }, {
+    enabled: !shouldShowAllBroadcasts, // Only fetch inbox if user doesn't have create permission
   });
 
-  // Show all broadcasts (both sent and received)
+  const { data: allBroadcastsData, isLoading: allBroadcastsLoading, error: allBroadcastsError } = useAllBroadcasts({
+    page,
+    per_page: 20,
+    ...(filters.category && filters.category !== "all" && { category: filters.category }),
+    ...(filters.priority && filters.priority !== "all" && { priority: filters.priority }),
+  }, {
+    enabled: shouldShowAllBroadcasts, // Only fetch all broadcasts if user has create permission
+  });
+
+  // Use the appropriate data source based on permissions
+  const data = shouldShowAllBroadcasts ? allBroadcastsData : inboxData;
+  const isLoading = shouldShowAllBroadcasts ? allBroadcastsLoading : inboxLoading;
+  const error = shouldShowAllBroadcasts ? allBroadcastsError : inboxError;
+
+  // Show all broadcasts (communal outbox for users with create permission, or received broadcasts for others)
   const broadcasts = data?.messages || data?.data || [];
   const total = data?.total || 0;
   const totalPages = data?.total_pages || Math.ceil(total / 20);
@@ -169,8 +189,8 @@ const BroadcastsPage = () => {
     );
   }, [broadcasts, filters.search]);
 
-  // Check if user has permission to read broadcasts
-  if (!canReadBroadcast) {
+  // Check if user has permission to read broadcasts OR create broadcasts (communal outbox)
+  if (!canReadBroadcast && !canCreateBroadcast) {
     return (
       <div className="p-4">
         <Card>
@@ -320,6 +340,11 @@ const BroadcastsPage = () => {
         <CardHeader>
           <CardTitle className="text-lg">
             {isLoading ? "Loading..." : `${total} Broadcast${total !== 1 ? "s" : ""}`}
+            {shouldShowAllBroadcasts && (
+              <span className="text-sm font-normal text-muted-foreground ml-2">
+                (Communal Outbox)
+              </span>
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -340,7 +365,11 @@ const BroadcastsPage = () => {
                 const receipt = broadcast.receipts?.find(
                   (r) => r.user_id === broadcast.current_user_id
                 );
-                const isSent = currentUser?.id === broadcast.created_by_user_id;
+                // For communal outbox, all broadcasts shown are sent broadcasts
+                // For inbox view, check if current user sent it
+                const isSent = shouldShowAllBroadcasts 
+                  ? true // In communal outbox, all are sent broadcasts
+                  : currentUser?.id === broadcast.created_by_user_id;
                 
                 // Calculate acknowledgment stats for sent broadcasts
                 const ackStats = isSent && broadcast.requires_acknowledgement ? (() => {
@@ -389,12 +418,16 @@ const BroadcastsPage = () => {
                               <>
                                 <Badge variant="outline" className="bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-300 border-green-200 dark:border-green-800">
                                   <Send className="h-3 w-3 mr-1" />
-                                  Sent by you
+                                  {shouldShowAllBroadcasts && currentUser?.id !== broadcast.created_by_user_id
+                                    ? `Sent by ${broadcast.created_by_user?.first_name || broadcast.created_by_user?.email || "Unknown"}`
+                                    : "Sent by you"}
                                 </Badge>
-                                <Badge variant="outline" className="bg-muted text-muted-foreground">
-                                  <Info className="h-3 w-3 mr-1" />
-                                  No action needed
-                                </Badge>
+                                {currentUser?.id === broadcast.created_by_user_id && (
+                                  <Badge variant="outline" className="bg-muted text-muted-foreground">
+                                    <Info className="h-3 w-3 mr-1" />
+                                    No action needed
+                                  </Badge>
+                                )}
                               </>
                             )}
                           </div>

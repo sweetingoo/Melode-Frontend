@@ -10,6 +10,13 @@ export const useFormTypes = (params = {}) => {
     queryKey: ["formTypes", params],
     queryFn: () => formTypesService.getFormTypes(params),
     staleTime: 5 * 60 * 1000, // 5 minutes
+    retry: (failureCount, error) => {
+      // Don't retry on 403 Forbidden (permission denied)
+      if (error?.response?.status === 403) {
+        return false;
+      }
+      return failureCount < 3;
+    },
   });
 };
 
@@ -61,6 +68,16 @@ export const useCreateFormType = () => {
       toast.success("Form type created successfully");
     },
     onError: (error) => {
+      // Handle 403 Forbidden (permission denied)
+      if (error?.response?.status === 403) {
+        const errorMessage =
+          error?.response?.data?.detail ||
+          "Permission denied: You do not have permission to create form types";
+        toast.error("Permission Denied", {
+          description: errorMessage,
+        });
+        return;
+      }
       toast.error(error.response?.data?.detail || "Failed to create form type");
     },
   });
@@ -80,6 +97,16 @@ export const useUpdateFormType = () => {
       toast.success("Form type updated successfully");
     },
     onError: (error) => {
+      // Handle 403 Forbidden (permission denied)
+      if (error?.response?.status === 403) {
+        const errorMessage =
+          error?.response?.data?.detail ||
+          "Permission denied: You do not have permission to update form types";
+        toast.error("Permission Denied", {
+          description: errorMessage,
+        });
+        return;
+      }
       toast.error(error.response?.data?.detail || "Failed to update form type");
     },
   });
@@ -98,6 +125,16 @@ export const useDeleteFormType = () => {
       toast.success("Form type deleted successfully");
     },
     onError: (error) => {
+      // Handle 403 Forbidden (permission denied)
+      if (error?.response?.status === 403) {
+        const errorMessage =
+          error?.response?.data?.detail ||
+          "Permission denied: You do not have permission to delete form types";
+        toast.error("Permission Denied", {
+          description: errorMessage,
+        });
+        return;
+      }
       const errorMessage = error.response?.data?.detail || "Failed to delete form type";
       toast.error(errorMessage);
     },

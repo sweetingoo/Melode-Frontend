@@ -67,6 +67,7 @@ import {
   Megaphone,
   BookOpen,
   Plug,
+  Package,
 } from "lucide-react";
 import { assets } from "../assets/assets";
 import Image from "next/image";
@@ -223,6 +224,18 @@ const organisationItems = [
     icon: Type,
     url: "/admin/task-types",
     permission: "task_types:read", // Permission to read task types
+  },
+  {
+    title: "Location Types",
+    icon: MapPin,
+    url: "/admin/location-types",
+    permission: "location_type:read", // Permission to read location types
+  },
+  {
+    title: "Asset Types",
+    icon: Package,
+    url: "/admin/asset-types",
+    permission: "asset_type:read", // Permission to read asset types
   },
   {
     title: "Form Types",
