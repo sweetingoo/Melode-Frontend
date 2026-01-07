@@ -1299,6 +1299,7 @@ function ConfigurationPageContent() {
                             return;
                           }
                         }
+                        markFieldModified('s3_enabled');
                         setS3Enabled(checked);
                         if (checked) {
                           // Enable: Restore original values if they exist and are not masked
@@ -1371,7 +1372,8 @@ function ConfigurationPageContent() {
                               return keyId || "";
                             })()
                           }
-                          onChange={(e) =>
+                          onChange={(e) => {
+                            markFieldModified('s3_access_key_id');
                             setOrganisationData((prev) => ({
                               ...prev,
                               integration_config: {
@@ -1386,8 +1388,8 @@ function ConfigurationPageContent() {
                                   access_key_id: e.target.value || null,
                                 },
                               },
-                            }))
-                          }
+                            }));
+                          }}
                           placeholder={
                             organisationData.integration_config?.s3_storage?.access_key_id && isMaskedValue(organisationData.integration_config.s3_storage.access_key_id)
                               ? "•••••••• (Click to update)"
@@ -1420,6 +1422,7 @@ function ConfigurationPageContent() {
                             }
                             onChange={(e) => {
                               setS3SecretKeyChanged(true);
+                              markFieldModified('s3_secret_access_key');
                               setOrganisationData((prev) => ({
                                 ...prev,
                                 integration_config: {
@@ -1483,7 +1486,8 @@ function ConfigurationPageContent() {
                         <Input
                           id="s3_bucket_name"
                           value={organisationData.integration_config?.s3_storage?.bucket_name || ""}
-                          onChange={(e) =>
+                          onChange={(e) => {
+                            markFieldModified('s3_bucket_name');
                             setOrganisationData((prev) => ({
                               ...prev,
                               integration_config: {
@@ -1498,8 +1502,8 @@ function ConfigurationPageContent() {
                                   bucket_name: e.target.value || null,
                                 },
                               },
-                            }))
-                          }
+                            }));
+                          }}
                           placeholder="my-bucket-name"
                         />
                       </div>
@@ -1510,7 +1514,8 @@ function ConfigurationPageContent() {
                         <Input
                           id="s3_region"
                           value={organisationData.integration_config?.s3_storage?.region || "eu-west-2"}
-                          onChange={(e) =>
+                          onChange={(e) => {
+                            markFieldModified('s3_region');
                             setOrganisationData((prev) => ({
                               ...prev,
                               integration_config: {
@@ -1525,8 +1530,8 @@ function ConfigurationPageContent() {
                                   region: e.target.value || "eu-west-2",
                                 },
                               },
-                            }))
-                          }
+                            }));
+                          }}
                           placeholder="eu-west-2"
                         />
                         <p className="text-xs text-muted-foreground">
@@ -2132,8 +2137,15 @@ function ConfigurationPageContent() {
 
               <Button
                 onClick={async () => {
-                  // Validate S3 configuration if enabled
-                  if (s3Enabled) {
+                  // Check if user modified any S3-related fields
+                  const s3FieldsModified = userModifiedFields.has('s3_access_key_id') ||
+                                         userModifiedFields.has('s3_secret_access_key') ||
+                                         userModifiedFields.has('s3_bucket_name') ||
+                                         userModifiedFields.has('s3_region') ||
+                                         userModifiedFields.has('s3_enabled');
+                  
+                  // Only validate S3 configuration if user actually modified S3 fields
+                  if (s3FieldsModified && s3Enabled) {
                     const s3Config = organisationData.integration_config?.s3_storage;
                     if (!s3Config?.access_key_id || !s3Config?.bucket_name || !s3Config?.region) {
                       toast.error("S3 Storage requires Access Key ID, Bucket Name, and Region");
