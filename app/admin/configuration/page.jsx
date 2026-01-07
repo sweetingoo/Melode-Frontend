@@ -232,6 +232,48 @@ function ConfigurationPageContent() {
   const uploadFileMutation = useUploadFile({ silent: true });
   const [logoUploading, setLogoUploading] = useState(false);
 
+  // Helper function to detect if a value is masked (from backend sanitization)
+  // Masked values contain "..." in the middle
+  const isMaskedValue = (value) => {
+    return typeof value === 'string' && value.includes('...');
+  };
+
+  // Helper function to sanitize integration_config before sending to backend
+  // Removes masked values (they should not be sent back to preserve real values)
+  const sanitizeIntegrationConfig = (config) => {
+    if (!config) return config;
+    
+    const sanitized = { ...config };
+    
+    // Remove masked sensitive fields - backend will preserve existing values
+    if (isMaskedValue(sanitized.sendgrid_api_key)) {
+      delete sanitized.sendgrid_api_key;
+    }
+    if (isMaskedValue(sanitized.twilio_account_sid)) {
+      delete sanitized.twilio_account_sid;
+    }
+    if (isMaskedValue(sanitized.twilio_auth_token)) {
+      delete sanitized.twilio_auth_token;
+    }
+    if (isMaskedValue(sanitized.twilio_from_number)) {
+      delete sanitized.twilio_from_number;
+    }
+    
+    // Handle S3 storage nested object
+    if (sanitized.s3_storage) {
+      const s3Sanitized = { ...sanitized.s3_storage };
+      if (isMaskedValue(s3Sanitized.access_key_id)) {
+        delete s3Sanitized.access_key_id;
+      }
+      if (isMaskedValue(s3Sanitized.secret_access_key)) {
+        delete s3Sanitized.secret_access_key;
+      }
+      sanitized.s3_storage = s3Sanitized;
+    }
+    
+    return sanitized;
+  };
+
   // Load organisation data when it's fetched from API
   useEffect(() => {
     if (organisationResponse) {
@@ -811,11 +853,14 @@ function ConfigurationPageContent() {
                   <Button
                     onClick={async () => {
                       try {
+                        // Sanitize integration_config to remove masked values
+                        const sanitizedConfig = sanitizeIntegrationConfig(organisationData.integration_config);
+                        
                         // Ensure integration_config is included with all fields
                         const payloadToSend = {
                           ...organisationData,
                           integration_config: {
-                            ...organisationData.integration_config,
+                            ...sanitizedConfig,
                             // Explicitly include email styling fields
                             email_header_content: organisationData.integration_config?.email_header_content ?? null,
                             email_header_logo_url: organisationData.integration_config?.email_header_logo_url ?? null,
@@ -881,18 +926,21 @@ function ConfigurationPageContent() {
                       onCheckedChange={(checked) => {
                         setEmailEnabled(checked);
                         if (checked) {
-                          // Enable: Restore original value if it exists
+                          // Enable: Restore original value if it exists and is not masked
+                          const valueToRestore = originalEmailConfig && !isMaskedValue(originalEmailConfig) 
+                            ? originalEmailConfig 
+                            : null;
                           setOrganisationData((prev) => ({
                             ...prev,
                             integration_config: {
                               ...prev.integration_config,
-                              sendgrid_api_key: originalEmailConfig || null,
+                              sendgrid_api_key: valueToRestore,
                             },
                           }));
                         } else {
-                          // Disable: Clear the key and store current value
+                          // Disable: Clear the key and store current value (only if not masked)
                           const currentKey = organisationData.integration_config?.sendgrid_api_key;
-                          if (currentKey) {
+                          if (currentKey && !isMaskedValue(currentKey)) {
                             setOriginalEmailConfig(currentKey);
                           }
                           setOrganisationData((prev) => ({
@@ -918,7 +966,16 @@ function ConfigurationPageContent() {
                     <Input
                       id="sendgrid_api_key"
                       type="password"
-                      value={organisationData.integration_config?.sendgrid_api_key || ""}
+                      value={
+                        (() => {
+                          const key = organisationData.integration_config?.sendgrid_api_key;
+                          // If masked, show placeholder; otherwise show actual value
+                          if (key && isMaskedValue(key)) {
+                            return "";
+                          }
+                          return key || "";
+                        })()
+                      }
                       onChange={(e) =>
                         setOrganisationData((prev) => ({
                           ...prev,
@@ -928,7 +985,11 @@ function ConfigurationPageContent() {
                           },
                         }))
                       }
-                      placeholder="SG.xxxxxxxxxxxxxxxxxxxx"
+                      placeholder={
+                        organisationData.integration_config?.sendgrid_api_key && isMaskedValue(organisationData.integration_config.sendgrid_api_key)
+                          ? "•••••••• (Click to update)"
+                          : "SG.xxxxxxxxxxxxxxxxxxxx"
+                      }
                     />
                     <p className="text-sm text-muted-foreground">
                       Required for sending emails. Get your API key from SendGrid dashboard.
@@ -963,25 +1024,41 @@ function ConfigurationPageContent() {
                       onCheckedChange={(checked) => {
                         setSmsEnabled(checked);
                         if (checked) {
-                          // Enable: Restore original values if they exist
+                          // Enable: Restore original values if they exist and are not masked
+                          const accountSid = originalSMSConfig?.twilio_account_sid && !isMaskedValue(originalSMSConfig.twilio_account_sid)
+                            ? originalSMSConfig.twilio_account_sid
+                            : null;
+                          const authToken = originalSMSConfig?.twilio_auth_token && !isMaskedValue(originalSMSConfig.twilio_auth_token)
+                            ? originalSMSConfig.twilio_auth_token
+                            : null;
+                          const fromNumber = originalSMSConfig?.twilio_from_number && !isMaskedValue(originalSMSConfig.twilio_from_number)
+                            ? originalSMSConfig.twilio_from_number
+                            : null;
                           setOrganisationData((prev) => ({
                             ...prev,
                             integration_config: {
                               ...prev.integration_config,
-                              twilio_account_sid: originalSMSConfig?.twilio_account_sid || null,
-                              twilio_auth_token: originalSMSConfig?.twilio_auth_token || null,
-                              twilio_from_number: originalSMSConfig?.twilio_from_number || null,
+                              twilio_account_sid: accountSid,
+                              twilio_auth_token: authToken,
+                              twilio_from_number: fromNumber,
                             },
                           }));
                         } else {
-                          // Disable: Clear all SMS keys and store current values
+                          // Disable: Clear all SMS keys and store current values (only if not masked)
                           const currentConfig = {
                             twilio_account_sid: organisationData.integration_config?.twilio_account_sid,
                             twilio_auth_token: organisationData.integration_config?.twilio_auth_token,
                             twilio_from_number: organisationData.integration_config?.twilio_from_number,
                           };
-                          if (currentConfig.twilio_account_sid || currentConfig.twilio_auth_token || currentConfig.twilio_from_number) {
-                            setOriginalSMSConfig(currentConfig);
+                          // Only store if values exist and are not masked
+                          if ((currentConfig.twilio_account_sid && !isMaskedValue(currentConfig.twilio_account_sid)) ||
+                              (currentConfig.twilio_auth_token && !isMaskedValue(currentConfig.twilio_auth_token)) ||
+                              (currentConfig.twilio_from_number && !isMaskedValue(currentConfig.twilio_from_number))) {
+                            setOriginalSMSConfig({
+                              twilio_account_sid: currentConfig.twilio_account_sid && !isMaskedValue(currentConfig.twilio_account_sid) ? currentConfig.twilio_account_sid : null,
+                              twilio_auth_token: currentConfig.twilio_auth_token && !isMaskedValue(currentConfig.twilio_auth_token) ? currentConfig.twilio_auth_token : null,
+                              twilio_from_number: currentConfig.twilio_from_number && !isMaskedValue(currentConfig.twilio_from_number) ? currentConfig.twilio_from_number : null,
+                            });
                           }
                           setOrganisationData((prev) => ({
                             ...prev,
@@ -1004,7 +1081,17 @@ function ConfigurationPageContent() {
                         <Label htmlFor="twilio_account_sid">Twilio Account SID</Label>
                         <Input
                           id="twilio_account_sid"
-                          value={organisationData.integration_config?.twilio_account_sid || ""}
+                          type="password"
+                          value={
+                            (() => {
+                              const sid = organisationData.integration_config?.twilio_account_sid;
+                              // If masked, show placeholder; otherwise show actual value
+                              if (sid && isMaskedValue(sid)) {
+                                return "";
+                              }
+                              return sid || "";
+                            })()
+                          }
                           onChange={(e) =>
                             setOrganisationData((prev) => ({
                               ...prev,
@@ -1014,7 +1101,11 @@ function ConfigurationPageContent() {
                               },
                             }))
                           }
-                          placeholder="ACxxxxxxxxxxxxxxxxxxxx"
+                          placeholder={
+                            organisationData.integration_config?.twilio_account_sid && isMaskedValue(organisationData.integration_config.twilio_account_sid)
+                              ? "•••••••• (Click to update)"
+                              : "ACxxxxxxxxxxxxxxxxxxxx"
+                          }
                         />
                       </div>
                       <div className="space-y-2">
@@ -1022,7 +1113,16 @@ function ConfigurationPageContent() {
                         <Input
                           id="twilio_auth_token"
                           type="password"
-                          value={organisationData.integration_config?.twilio_auth_token || ""}
+                          value={
+                            (() => {
+                              const token = organisationData.integration_config?.twilio_auth_token;
+                              // If masked, show placeholder; otherwise show actual value
+                              if (token && isMaskedValue(token)) {
+                                return "";
+                              }
+                              return token || "";
+                            })()
+                          }
                           onChange={(e) =>
                             setOrganisationData((prev) => ({
                               ...prev,
@@ -1032,7 +1132,11 @@ function ConfigurationPageContent() {
                               },
                             }))
                           }
-                          placeholder="Your auth token"
+                          placeholder={
+                            organisationData.integration_config?.twilio_auth_token && isMaskedValue(organisationData.integration_config.twilio_auth_token)
+                              ? "•••••••• (Click to update)"
+                              : "Your auth token"
+                          }
                         />
                       </div>
                     </div>
@@ -1040,7 +1144,17 @@ function ConfigurationPageContent() {
                       <Label htmlFor="twilio_from_number">Twilio From Number</Label>
                       <Input
                         id="twilio_from_number"
-                        value={organisationData.integration_config?.twilio_from_number || ""}
+                        type="password"
+                        value={
+                          (() => {
+                            const number = organisationData.integration_config?.twilio_from_number;
+                            // If masked, show placeholder; otherwise show actual value
+                            if (number && isMaskedValue(number)) {
+                              return "";
+                            }
+                            return number || "";
+                          })()
+                        }
                         onChange={(e) =>
                           setOrganisationData((prev) => ({
                             ...prev,
@@ -1050,7 +1164,11 @@ function ConfigurationPageContent() {
                             },
                           }))
                         }
-                        placeholder="+1234567890"
+                        placeholder={
+                          organisationData.integration_config?.twilio_from_number && isMaskedValue(organisationData.integration_config.twilio_from_number)
+                            ? "•••••••• (Click to update)"
+                            : "+1234567890"
+                        }
                       />
                       <p className="text-sm text-muted-foreground">
                         Required for sending SMS. Get credentials from Twilio console. Format: E.164 (e.g., +1234567890)
@@ -1096,25 +1214,40 @@ function ConfigurationPageContent() {
                         }
                         setS3Enabled(checked);
                         if (checked) {
-                          // Enable: Restore original values if they exist
+                          // Enable: Restore original values if they exist and are not masked
+                          const accessKeyId = originalS3Config?.access_key_id && !isMaskedValue(originalS3Config.access_key_id)
+                            ? originalS3Config.access_key_id
+                            : null;
+                          const secretAccessKey = originalS3Config?.secret_access_key && !isMaskedValue(originalS3Config.secret_access_key)
+                            ? originalS3Config.secret_access_key
+                            : null;
                           setOrganisationData((prev) => ({
                             ...prev,
                             integration_config: {
                               ...prev.integration_config,
                               s3_storage: {
                                 enabled: true,
-                                access_key_id: originalS3Config?.access_key_id || null,
-                                secret_access_key: originalS3Config?.secret_access_key || null,
+                                access_key_id: accessKeyId,
+                                secret_access_key: secretAccessKey,
                                 bucket_name: originalS3Config?.bucket_name || null,
                                 region: originalS3Config?.region || "eu-west-2",
                               },
                             },
                           }));
                         } else {
-                          // Disable: Store current config and clear enabled flag
+                          // Disable: Store current config and clear enabled flag (only if not masked)
                           const currentConfig = organisationData.integration_config?.s3_storage;
                           if (currentConfig) {
-                            setOriginalS3Config(currentConfig);
+                            // Only store if values are not masked
+                            setOriginalS3Config({
+                              ...currentConfig,
+                              access_key_id: currentConfig.access_key_id && !isMaskedValue(currentConfig.access_key_id) 
+                                ? currentConfig.access_key_id 
+                                : originalS3Config?.access_key_id || null,
+                              secret_access_key: currentConfig.secret_access_key && !isMaskedValue(currentConfig.secret_access_key)
+                                ? currentConfig.secret_access_key
+                                : originalS3Config?.secret_access_key || null,
+                            });
                           }
                           setOrganisationData((prev) => ({
                             ...prev,
@@ -1140,7 +1273,17 @@ function ConfigurationPageContent() {
                         </Label>
                         <Input
                           id="s3_access_key_id"
-                          value={organisationData.integration_config?.s3_storage?.access_key_id || ""}
+                          type="password"
+                          value={
+                            (() => {
+                              const keyId = organisationData.integration_config?.s3_storage?.access_key_id;
+                              // If masked, show placeholder; otherwise show actual value
+                              if (keyId && isMaskedValue(keyId)) {
+                                return "";
+                              }
+                              return keyId || "";
+                            })()
+                          }
                           onChange={(e) =>
                             setOrganisationData((prev) => ({
                               ...prev,
@@ -1158,7 +1301,11 @@ function ConfigurationPageContent() {
                               },
                             }))
                           }
-                          placeholder="AKIAIOSFODNN7EXAMPLE"
+                          placeholder={
+                            organisationData.integration_config?.s3_storage?.access_key_id && isMaskedValue(organisationData.integration_config.s3_storage.access_key_id)
+                              ? "•••••••• (Click to update)"
+                              : "AKIAIOSFODNN7EXAMPLE"
+                          }
                         />
                       </div>
                       <div className="space-y-2">
@@ -1170,11 +1317,19 @@ function ConfigurationPageContent() {
                             id="s3_secret_access_key"
                             type={s3SecretKeyChanged ? "text" : "password"}
                             value={
-                              s3SecretKeyChanged
-                                ? organisationData.integration_config?.s3_storage?.secret_access_key || ""
-                                : organisationData.integration_config?.s3_storage?.secret_access_key
-                                  ? "••••••••••••••••"
-                                  : ""
+                              (() => {
+                                const secretKey = organisationData.integration_config?.s3_storage?.secret_access_key;
+                                // If masked, show empty (will use placeholder); if changed, show actual value
+                                if (s3SecretKeyChanged) {
+                                  return secretKey || "";
+                                }
+                                // If masked, return empty so placeholder shows
+                                if (secretKey && isMaskedValue(secretKey)) {
+                                  return "";
+                                }
+                                // Otherwise show dots for password field
+                                return secretKey ? "••••••••••••••••" : "";
+                              })()
                             }
                             onChange={(e) => {
                               setS3SecretKeyChanged(true);
@@ -1194,7 +1349,15 @@ function ConfigurationPageContent() {
                                 },
                               }));
                             }}
-                            placeholder="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+                            placeholder={
+                              (() => {
+                                const secretKey = organisationData.integration_config?.s3_storage?.secret_access_key;
+                                if (secretKey && isMaskedValue(secretKey)) {
+                                  return "•••••••• (Click to update)";
+                                }
+                                return "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY";
+                              })()
+                            }
                             className="pr-10"
                           />
                           {organisationData.integration_config?.s3_storage?.secret_access_key && (
@@ -1213,7 +1376,12 @@ function ConfigurationPageContent() {
                             </Button>
                           )}
                         </div>
-                        {!s3SecretKeyChanged && organisationData.integration_config?.s3_storage?.secret_access_key && (
+                        {!s3SecretKeyChanged && organisationData.integration_config?.s3_storage?.secret_access_key && isMaskedValue(organisationData.integration_config.s3_storage.secret_access_key) && (
+                          <p className="text-xs text-muted-foreground">
+                            Secret key is configured but masked. Click to enter a new value or update.
+                          </p>
+                        )}
+                        {!s3SecretKeyChanged && organisationData.integration_config?.s3_storage?.secret_access_key && !isMaskedValue(organisationData.integration_config.s3_storage.secret_access_key) && (
                           <p className="text-xs text-muted-foreground">
                             Secret key is masked. Click the eye icon to view or update.
                           </p>
@@ -1875,7 +2043,8 @@ function ConfigurationPageContent() {
                       return;
                     }
                     // If secret key hasn't been changed, keep the original (don't send empty string)
-                    if (!s3SecretKeyChanged && originalS3Config?.secret_access_key) {
+                    // But only if the original is not masked
+                    if (!s3SecretKeyChanged && originalS3Config?.secret_access_key && !isMaskedValue(originalS3Config.secret_access_key)) {
                       setOrganisationData((prev) => ({
                         ...prev,
                         integration_config: {
@@ -1886,19 +2055,29 @@ function ConfigurationPageContent() {
                           },
                         },
                       }));
-                    } else if (!s3Config?.secret_access_key) {
-                      toast.error("S3 Storage requires Secret Access Key");
-                      return;
+                    } else if (!s3Config?.secret_access_key || isMaskedValue(s3Config.secret_access_key)) {
+                      // If the current value is masked, we need a new value
+                      if (!s3SecretKeyChanged) {
+                        toast.error("S3 Storage requires Secret Access Key. Please enter a new value.");
+                        return;
+                      }
+                      if (!s3Config?.secret_access_key) {
+                        toast.error("S3 Storage requires Secret Access Key");
+                        return;
+                      }
                     }
                   }
                   
                   try {
+                    // Sanitize integration_config to remove masked values (preserve real values on backend)
+                    const sanitizedConfig = sanitizeIntegrationConfig(organisationData.integration_config);
+                    
                     // Ensure all integration_config fields are preserved, including email styling
                     // Backend will merge this with existing config
                     const payloadToSend = {
                       ...organisationData,
                       integration_config: {
-                        ...organisationData.integration_config,
+                        ...sanitizedConfig,
                         // Explicitly ensure email styling fields are included (even if null)
                         // This ensures they're sent to the backend for merging
                         email_header_content: organisationData.integration_config?.email_header_content ?? null,
