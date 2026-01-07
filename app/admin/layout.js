@@ -111,12 +111,6 @@ const mainMenuItems = [
     permission: null, // My Tasks is visible to all users
   },
   {
-    title: "Check In/Out",
-    icon: Clock,
-    url: "/clock",
-    permission: "clock:in", // Permission to clock in
-  },
-  {
     title: "Session History",
     icon: History,
     url: "/clock/history",
