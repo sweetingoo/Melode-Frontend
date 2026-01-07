@@ -175,7 +175,9 @@ const AssetsPage = () => {
   const queryClient = useQueryClient();
   const { data: locations = [] } = useLocations();
   const { data: locationTypes = [], isLoading: locationTypesLoading } = useActiveLocationTypes();
+  const { data: assetTypes = [], isLoading: assetTypesLoading } = useActiveAssetTypes();
   const createLocationTypeMutation = useCreateLocationType();
+  const createAssetTypeMutation = useCreateAssetType();
   const { data: maintenanceNeeded = [] } = useAssetsNeedingMaintenance();
   const { data: usersResponse, isLoading: usersLoading } = useUsers();
   const { data: rolesData } = useRoles();
@@ -539,6 +541,50 @@ const AssetsPage = () => {
       });
     } catch (error) {
       console.error("Failed to create location type:", error);
+    }
+  };
+
+  const handleQuickCreateAssetType = async () => {
+    if (!quickCreateAssetTypeData.display_name) {
+      toast.error("Display name is required");
+      return;
+    }
+    
+    // Ensure name is generated from display name
+    const autoName = quickCreateAssetTypeData.display_name.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
+    if (!autoName) {
+      toast.error("Display name must contain at least one letter or number");
+      return;
+    }
+
+    try {
+      const result = await createAssetTypeMutation.mutateAsync({
+        name: autoName,
+        display_name: quickCreateAssetTypeData.display_name,
+        description: quickCreateAssetTypeData.description || "",
+        icon: quickCreateAssetTypeData.icon || "",
+        color: quickCreateAssetTypeData.color || "#6B7280",
+        sort_order: 0,
+      });
+      
+      // Wait for query invalidation to complete, then auto-select the new one
+      setTimeout(() => {
+        setAssetFormData({
+          ...assetFormData,
+          asset_type_id: result.id,
+        });
+      }, 100);
+      
+      setIsQuickCreateAssetTypeOpen(false);
+      setQuickCreateAssetTypeData({
+        name: "",
+        display_name: "",
+        description: "",
+        icon: "",
+        color: "#6B7280",
+      });
+    } catch (error) {
+      console.error("Failed to create asset type:", error);
     }
   };
 

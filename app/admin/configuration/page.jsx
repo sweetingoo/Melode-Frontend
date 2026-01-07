@@ -86,6 +86,9 @@ import {
   Plug,
 } from "lucide-react";
 import { toast } from "sonner";
+import RichTextEditor from "@/components/RichTextEditor";
+import { useUploadFile } from "@/hooks/useProfile";
+import { Upload, Image as ImageIcon } from "lucide-react";
 
 function ConfigurationPageContent() {
   const searchParams = useSearchParams();
@@ -196,6 +199,12 @@ function ConfigurationPageContent() {
       list_unsubscribe_url: null,
       list_unsubscribe_mailto: null,
       list_unsubscribe_one_click: true,
+      email_header_content: null,
+      email_header_logo_url: null,
+      email_primary_color: null,
+      email_secondary_color: null,
+      email_footer_content: null,
+      email_footer_disclaimer: null,
       s3_storage: {
         enabled: false,
         access_key_id: null,
@@ -218,33 +227,44 @@ function ConfigurationPageContent() {
   
   // Track if secret access key has been changed (for masking)
   const [s3SecretKeyChanged, setS3SecretKeyChanged] = useState(false);
+  
+  // File upload mutation for logo
+  const uploadFileMutation = useUploadFile({ silent: true });
+  const [logoUploading, setLogoUploading] = useState(false);
 
   // Load organisation data when it's fetched from API
   useEffect(() => {
     if (organisationResponse) {
-      const integrationConfig = organisationResponse.integration_config || {
-        sendgrid_api_key: null,
-        twilio_account_sid: null,
-        twilio_auth_token: null,
-        twilio_from_number: null,
-        from_email: null,
-        from_name: null,
-        app_name: null,
-        domain_name: null,
-        frontend_base_url: null,
-        enable_two_way_communication: false,
-        enable_email_replies: false,
-        enable_sms_replies: false,
-        list_unsubscribe_url: null,
-        list_unsubscribe_mailto: null,
-        list_unsubscribe_one_click: true,
-      s3_storage: integrationConfig.s3_storage || {
-        enabled: false,
-        access_key_id: null,
-        secret_access_key: null,
-        bucket_name: null,
-        region: "eu-west-2",
-      },
+      const integrationConfig = organisationResponse.integration_config || {};
+      const mergedIntegrationConfig = {
+        sendgrid_api_key: integrationConfig.sendgrid_api_key || null,
+        twilio_account_sid: integrationConfig.twilio_account_sid || null,
+        twilio_auth_token: integrationConfig.twilio_auth_token || null,
+        twilio_from_number: integrationConfig.twilio_from_number || null,
+        from_email: integrationConfig.from_email || null,
+        from_name: integrationConfig.from_name || null,
+        app_name: integrationConfig.app_name || null,
+        domain_name: integrationConfig.domain_name || null,
+        frontend_base_url: integrationConfig.frontend_base_url || null,
+        enable_two_way_communication: integrationConfig.enable_two_way_communication || false,
+        enable_email_replies: integrationConfig.enable_email_replies || false,
+        enable_sms_replies: integrationConfig.enable_sms_replies || false,
+        list_unsubscribe_url: integrationConfig.list_unsubscribe_url || null,
+        list_unsubscribe_mailto: integrationConfig.list_unsubscribe_mailto || null,
+        list_unsubscribe_one_click: integrationConfig.list_unsubscribe_one_click !== false,
+        email_header_content: integrationConfig.email_header_content || null,
+        email_header_logo_url: integrationConfig.email_header_logo_url || null,
+        email_primary_color: integrationConfig.email_primary_color || null,
+        email_secondary_color: integrationConfig.email_secondary_color || null,
+        email_footer_content: integrationConfig.email_footer_content || null,
+        email_footer_disclaimer: integrationConfig.email_footer_disclaimer || null,
+        s3_storage: integrationConfig.s3_storage || {
+          enabled: false,
+          access_key_id: null,
+          secret_access_key: null,
+          bucket_name: null,
+          region: "eu-west-2",
+        },
       };
 
       setOrganisationData({
@@ -252,33 +272,33 @@ function ConfigurationPageContent() {
         organisation_code: organisationResponse.organisation_code || "",
         description: organisationResponse.description || "",
         is_active: organisationResponse.is_active !== false,
-        integration_config: integrationConfig,
+        integration_config: mergedIntegrationConfig,
       });
 
       // Set enabled state based on whether keys exist
-      const hasEmailConfig = !!integrationConfig.sendgrid_api_key;
-      const hasSMSConfig = !!(integrationConfig.twilio_account_sid && 
-                              integrationConfig.twilio_auth_token && 
-                              integrationConfig.twilio_from_number);
+      const hasEmailConfig = !!mergedIntegrationConfig.sendgrid_api_key;
+      const hasSMSConfig = !!(mergedIntegrationConfig.twilio_account_sid && 
+                              mergedIntegrationConfig.twilio_auth_token && 
+                              mergedIntegrationConfig.twilio_from_number);
       
       setEmailEnabled(hasEmailConfig);
       setSmsEnabled(hasSMSConfig);
       
       // Set S3 enabled state
-      const hasS3Config = !!(integrationConfig.s3_storage?.enabled && 
-                            integrationConfig.s3_storage?.access_key_id && 
-                            integrationConfig.s3_storage?.secret_access_key && 
-                            integrationConfig.s3_storage?.bucket_name);
+      const hasS3Config = !!(mergedIntegrationConfig.s3_storage?.enabled && 
+                            mergedIntegrationConfig.s3_storage?.access_key_id && 
+                            mergedIntegrationConfig.s3_storage?.secret_access_key && 
+                            mergedIntegrationConfig.s3_storage?.bucket_name);
       setS3Enabled(hasS3Config);
 
       // Store original values (always store, even if null, so we can restore)
-      setOriginalEmailConfig(integrationConfig.sendgrid_api_key || null);
+      setOriginalEmailConfig(mergedIntegrationConfig.sendgrid_api_key || null);
       setOriginalSMSConfig({
-        twilio_account_sid: integrationConfig.twilio_account_sid || null,
-        twilio_auth_token: integrationConfig.twilio_auth_token || null,
-        twilio_from_number: integrationConfig.twilio_from_number || null,
+        twilio_account_sid: mergedIntegrationConfig.twilio_account_sid || null,
+        twilio_auth_token: mergedIntegrationConfig.twilio_auth_token || null,
+        twilio_from_number: mergedIntegrationConfig.twilio_from_number || null,
       });
-      setOriginalS3Config(integrationConfig.s3_storage || null);
+      setOriginalS3Config(mergedIntegrationConfig.s3_storage || null);
       setS3SecretKeyChanged(false);
     }
   }, [organisationResponse]);
@@ -1508,6 +1528,279 @@ function ConfigurationPageContent() {
                       }))
                     }
                   />
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Email Styling Configuration */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold">Email Styling Configuration</h3>
+                <p className="text-sm text-muted-foreground">
+                  Customise the appearance of emails sent by the system. All fields are optional.
+                </p>
+
+                {/* Header Logo */}
+                <div className="space-y-2">
+                  <Label htmlFor="email_header_logo_url">Email Header Logo</Label>
+                  <div className="space-y-2">
+                    <div className="flex gap-2">
+                      <Input
+                        id="email_header_logo_url"
+                        type="url"
+                        value={organisationData.integration_config?.email_header_logo_url || ""}
+                        onChange={(e) =>
+                          setOrganisationData((prev) => ({
+                            ...prev,
+                            integration_config: {
+                              ...prev.integration_config,
+                              email_header_logo_url: e.target.value || null,
+                            },
+                          }))
+                        }
+                        placeholder="https://example.com/logo.png"
+                        className="flex-1"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          const input = document.createElement("input");
+                          input.setAttribute("type", "file");
+                          input.setAttribute("accept", "image/*");
+                          input.click();
+                          input.onchange = async () => {
+                            const file = input.files?.[0];
+                            if (!file) return;
+                            
+                            // Check file size (max 10MB)
+                            if (file.size > 10 * 1024 * 1024) {
+                              toast.error("Image size must be less than 10MB");
+                              return;
+                            }
+                            
+                            try {
+                              setLogoUploading(true);
+                              const uploadResult = await uploadFileMutation.mutateAsync({
+                                file: file,
+                              });
+                              
+                              const downloadUrl = uploadResult.download_url || uploadResult.url || uploadResult.file_url;
+                              if (downloadUrl) {
+                                setOrganisationData((prev) => ({
+                                  ...prev,
+                                  integration_config: {
+                                    ...prev.integration_config,
+                                    email_header_logo_url: downloadUrl,
+                                  },
+                                }));
+                                toast.success("Logo uploaded successfully");
+                              } else {
+                                throw new Error("No download URL received");
+                              }
+                            } catch (error) {
+                              console.error("Logo upload failed:", error);
+                              toast.error("Failed to upload logo", {
+                                description: error?.response?.data?.detail || error?.message || "Please try again",
+                              });
+                            } finally {
+                              setLogoUploading(false);
+                            }
+                          };
+                        }}
+                        disabled={logoUploading}
+                      >
+                        {logoUploading ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Uploading...
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="mr-2 h-4 w-4" />
+                            Upload Logo
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                    {organisationData.integration_config?.email_header_logo_url && (
+                      <div className="flex items-center gap-2 p-2 bg-muted rounded-lg">
+                        <ImageIcon className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm text-muted-foreground truncate flex-1">
+                          {organisationData.integration_config.email_header_logo_url}
+                        </span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() =>
+                            setOrganisationData((prev) => ({
+                              ...prev,
+                              integration_config: {
+                                ...prev.integration_config,
+                                email_header_logo_url: null,
+                              },
+                            }))
+                          }
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      Upload a logo file or enter a direct URL (must be http/https). Max 2,048 characters.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Colors */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="email_primary_color">Primary Color</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        id="email_primary_color"
+                        type="color"
+                        value={organisationData.integration_config?.email_primary_color || "#11b9b7"}
+                        onChange={(e) =>
+                          setOrganisationData((prev) => ({
+                            ...prev,
+                            integration_config: {
+                              ...prev.integration_config,
+                              email_primary_color: e.target.value || null,
+                            },
+                          }))
+                        }
+                        className="w-20 h-10"
+                      />
+                      <Input
+                        value={organisationData.integration_config?.email_primary_color || ""}
+                        onChange={(e) =>
+                          setOrganisationData((prev) => ({
+                            ...prev,
+                            integration_config: {
+                              ...prev.integration_config,
+                              email_primary_color: e.target.value || null,
+                            },
+                          }))
+                        }
+                        placeholder="#11b9b7"
+                        className="flex-1 font-mono"
+                        maxLength={7}
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Used for buttons and primary elements. Format: #RRGGBB
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="email_secondary_color">Secondary Color</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        id="email_secondary_color"
+                        type="color"
+                        value={organisationData.integration_config?.email_secondary_color || "#2c3e50"}
+                        onChange={(e) =>
+                          setOrganisationData((prev) => ({
+                            ...prev,
+                            integration_config: {
+                              ...prev.integration_config,
+                              email_secondary_color: e.target.value || null,
+                            },
+                          }))
+                        }
+                        className="w-20 h-10"
+                      />
+                      <Input
+                        value={organisationData.integration_config?.email_secondary_color || ""}
+                        onChange={(e) =>
+                          setOrganisationData((prev) => ({
+                            ...prev,
+                            integration_config: {
+                              ...prev.integration_config,
+                              email_secondary_color: e.target.value || null,
+                            },
+                          }))
+                        }
+                        placeholder="#2c3e50"
+                        className="flex-1 font-mono"
+                        maxLength={7}
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Used for secondary elements. Format: #RRGGBB
+                    </p>
+                  </div>
+                </div>
+
+                {/* Header Content */}
+                <div className="space-y-2">
+                  <Label htmlFor="email_header_content">Email Header Content (HTML)</Label>
+                  <div className="border rounded-lg">
+                    <RichTextEditor
+                      value={organisationData.integration_config?.email_header_content || ""}
+                      onChange={(html) =>
+                        setOrganisationData((prev) => ({
+                          ...prev,
+                          integration_config: {
+                            ...prev.integration_config,
+                            email_header_content: html || null,
+                          },
+                        }))
+                      }
+                      placeholder="Enter HTML content for email header..."
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Custom HTML content displayed at the top of emails. Max 50,000 characters.
+                  </p>
+                </div>
+
+                {/* Footer Content */}
+                <div className="space-y-2">
+                  <Label htmlFor="email_footer_content">Email Footer Content (HTML)</Label>
+                  <div className="border rounded-lg">
+                    <RichTextEditor
+                      value={organisationData.integration_config?.email_footer_content || ""}
+                      onChange={(html) =>
+                        setOrganisationData((prev) => ({
+                          ...prev,
+                          integration_config: {
+                            ...prev.integration_config,
+                            email_footer_content: html || null,
+                          },
+                        }))
+                      }
+                      placeholder="Enter HTML content for email footer..."
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Custom HTML content displayed at the bottom of emails. Max 50,000 characters.
+                  </p>
+                </div>
+
+                {/* Footer Disclaimer */}
+                <div className="space-y-2">
+                  <Label htmlFor="email_footer_disclaimer">Footer Disclaimer</Label>
+                  <Textarea
+                    id="email_footer_disclaimer"
+                    value={organisationData.integration_config?.email_footer_disclaimer || ""}
+                    onChange={(e) =>
+                      setOrganisationData((prev) => ({
+                        ...prev,
+                        integration_config: {
+                          ...prev.integration_config,
+                          email_footer_disclaimer: e.target.value || null,
+                        },
+                      }))
+                    }
+                    placeholder="Enter disclaimer text for email footer..."
+                    rows={4}
+                    maxLength={1000}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Plain text disclaimer displayed in email footer. Max 1,000 characters.
+                  </p>
                 </div>
               </div>
 
