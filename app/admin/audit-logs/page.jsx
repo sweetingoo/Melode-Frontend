@@ -207,6 +207,11 @@ const AuditLogsPage = () => {
     "file",
     "location",
     "department",
+    "category_type",
+    "asset_type",
+    "location_type",
+    "task_type",
+    "form_type",
   ];
 
   // Severity levels
