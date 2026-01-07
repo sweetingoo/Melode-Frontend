@@ -811,7 +811,21 @@ function ConfigurationPageContent() {
                   <Button
                     onClick={async () => {
                       try {
-                        await updateOrganisationMutation.mutateAsync(organisationData);
+                        // Ensure integration_config is included with all fields
+                        const payloadToSend = {
+                          ...organisationData,
+                          integration_config: {
+                            ...organisationData.integration_config,
+                            // Explicitly include email styling fields
+                            email_header_content: organisationData.integration_config?.email_header_content ?? null,
+                            email_header_logo_url: organisationData.integration_config?.email_header_logo_url ?? null,
+                            email_primary_color: organisationData.integration_config?.email_primary_color ?? null,
+                            email_secondary_color: organisationData.integration_config?.email_secondary_color ?? null,
+                            email_footer_content: organisationData.integration_config?.email_footer_content ?? null,
+                            email_footer_disclaimer: organisationData.integration_config?.email_footer_disclaimer ?? null,
+                          },
+                        };
+                        await updateOrganisationMutation.mutateAsync(payloadToSend);
                       } catch (error) {
                         // Error handled by mutation
                       }
@@ -1656,7 +1670,7 @@ function ConfigurationPageContent() {
                 {/* Colors */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="email_primary_color">Primary Color</Label>
+                    <Label htmlFor="email_primary_color">Primary Colour</Label>
                     <div className="flex gap-2">
                       <Input
                         id="email_primary_color"
@@ -1694,7 +1708,7 @@ function ConfigurationPageContent() {
                     </p>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="email_secondary_color">Secondary Color</Label>
+                    <Label htmlFor="email_secondary_color">Secondary Colour</Label>
                     <div className="flex gap-2">
                       <Input
                         id="email_secondary_color"
@@ -1879,7 +1893,23 @@ function ConfigurationPageContent() {
                   }
                   
                   try {
-                    await updateOrganisationMutation.mutateAsync(organisationData);
+                    // Ensure all integration_config fields are preserved, including email styling
+                    // Backend will merge this with existing config
+                    const payloadToSend = {
+                      ...organisationData,
+                      integration_config: {
+                        ...organisationData.integration_config,
+                        // Explicitly ensure email styling fields are included (even if null)
+                        // This ensures they're sent to the backend for merging
+                        email_header_content: organisationData.integration_config?.email_header_content ?? null,
+                        email_header_logo_url: organisationData.integration_config?.email_header_logo_url ?? null,
+                        email_primary_color: organisationData.integration_config?.email_primary_color ?? null,
+                        email_secondary_color: organisationData.integration_config?.email_secondary_color ?? null,
+                        email_footer_content: organisationData.integration_config?.email_footer_content ?? null,
+                        email_footer_disclaimer: organisationData.integration_config?.email_footer_disclaimer ?? null,
+                      },
+                    };
+                    await updateOrganisationMutation.mutateAsync(payloadToSend);
                     setS3SecretKeyChanged(false); // Reset after successful save
                   } catch (error) {
                     // Error handled by mutation

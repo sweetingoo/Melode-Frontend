@@ -101,11 +101,33 @@ export const configurationService = {
         organization_code: organisationData.organisation_code || organisationData.organization_code,
         description: organisationData.description,
         is_active: organisationData.is_active,
-        // Include integration_config if provided
-        ...(organisationData.integration_config && {
+        // Always include integration_config if it exists
+        // Backend will merge with existing config, so we send all fields including email styling
+        ...(organisationData.integration_config !== undefined && {
           integration_config: organisationData.integration_config,
         }),
       };
+      
+      // Debug: Log integration_config to verify email styling fields are included
+      if (process.env.NODE_ENV === 'development' && requestData.integration_config) {
+        console.log('Updating organisation with integration_config:', {
+          hasEmailHeaderContent: !!requestData.integration_config.email_header_content,
+          hasEmailHeaderLogoUrl: !!requestData.integration_config.email_header_logo_url,
+          hasEmailPrimaryColor: !!requestData.integration_config.email_primary_color,
+          hasEmailSecondaryColor: !!requestData.integration_config.email_secondary_color,
+          hasEmailFooterContent: !!requestData.integration_config.email_footer_content,
+          hasEmailFooterDisclaimer: !!requestData.integration_config.email_footer_disclaimer,
+          emailStylingFields: {
+            email_header_content: requestData.integration_config.email_header_content,
+            email_header_logo_url: requestData.integration_config.email_header_logo_url,
+            email_primary_color: requestData.integration_config.email_primary_color,
+            email_secondary_color: requestData.integration_config.email_secondary_color,
+            email_footer_content: requestData.integration_config.email_footer_content,
+            email_footer_disclaimer: requestData.integration_config.email_footer_disclaimer,
+          },
+        });
+      }
+      
       return await api.put("/settings/organizations/", requestData);
     } catch (error) {
       console.error("Update organisation failed:", error);
