@@ -228,6 +228,9 @@ function ConfigurationPageContent() {
   // Track if secret access key has been changed (for masking)
   const [s3SecretKeyChanged, setS3SecretKeyChanged] = useState(false);
   
+  // Track which fields the user has actually modified (to only send changed fields)
+  const [userModifiedFields, setUserModifiedFields] = useState(new Set());
+  
   // File upload mutation for logo
   const uploadFileMutation = useUploadFile({ silent: true });
   const [logoUploading, setLogoUploading] = useState(false);
@@ -238,40 +241,120 @@ function ConfigurationPageContent() {
     return typeof value === 'string' && value.includes('...');
   };
 
-  // Helper function to sanitize integration_config before sending to backend
-  // Removes masked values (they should not be sent back to preserve real values)
-  const sanitizeIntegrationConfig = (config) => {
-    if (!config) return config;
+  // Helper function to build update payload - only includes fields user actually changed
+  // Removes masked values and only includes modified fields
+  const buildUpdatePayload = (config, modifiedFields) => {
+    if (!config) return {};
     
-    const sanitized = { ...config };
+    const payload = {};
     
-    // Remove masked sensitive fields - backend will preserve existing values
-    if (isMaskedValue(sanitized.sendgrid_api_key)) {
-      delete sanitized.sendgrid_api_key;
+    // Only include fields that the user actually modified
+    // Never include masked values (they will be rejected by API)
+    
+    // Email styling fields (safe to send, not masked)
+    if (modifiedFields.has('email_header_content')) {
+      payload.email_header_content = config.email_header_content ?? null;
     }
-    if (isMaskedValue(sanitized.twilio_account_sid)) {
-      delete sanitized.twilio_account_sid;
+    if (modifiedFields.has('email_header_logo_url')) {
+      payload.email_header_logo_url = config.email_header_logo_url ?? null;
     }
-    if (isMaskedValue(sanitized.twilio_auth_token)) {
-      delete sanitized.twilio_auth_token;
+    if (modifiedFields.has('email_primary_color')) {
+      payload.email_primary_color = config.email_primary_color ?? null;
     }
-    if (isMaskedValue(sanitized.twilio_from_number)) {
-      delete sanitized.twilio_from_number;
+    if (modifiedFields.has('email_secondary_color')) {
+      payload.email_secondary_color = config.email_secondary_color ?? null;
+    }
+    if (modifiedFields.has('email_footer_content')) {
+      payload.email_footer_content = config.email_footer_content ?? null;
+    }
+    if (modifiedFields.has('email_footer_disclaimer')) {
+      payload.email_footer_disclaimer = config.email_footer_disclaimer ?? null;
+    }
+    
+    // Sensitive fields - only include if user changed them AND they're not masked
+    if (modifiedFields.has('sendgrid_api_key') && !isMaskedValue(config.sendgrid_api_key)) {
+      payload.sendgrid_api_key = config.sendgrid_api_key;
+    }
+    if (modifiedFields.has('twilio_account_sid') && !isMaskedValue(config.twilio_account_sid)) {
+      payload.twilio_account_sid = config.twilio_account_sid;
+    }
+    if (modifiedFields.has('twilio_auth_token') && !isMaskedValue(config.twilio_auth_token)) {
+      payload.twilio_auth_token = config.twilio_auth_token;
+    }
+    if (modifiedFields.has('twilio_from_number') && !isMaskedValue(config.twilio_from_number)) {
+      payload.twilio_from_number = config.twilio_from_number;
+    }
+    
+    // Other non-sensitive fields
+    if (modifiedFields.has('from_email')) {
+      payload.from_email = config.from_email ?? null;
+    }
+    if (modifiedFields.has('from_name')) {
+      payload.from_name = config.from_name ?? null;
+    }
+    if (modifiedFields.has('app_name')) {
+      payload.app_name = config.app_name ?? null;
+    }
+    if (modifiedFields.has('domain_name')) {
+      payload.domain_name = config.domain_name ?? null;
+    }
+    if (modifiedFields.has('frontend_base_url')) {
+      payload.frontend_base_url = config.frontend_base_url ?? null;
+    }
+    if (modifiedFields.has('enable_two_way_communication')) {
+      payload.enable_two_way_communication = config.enable_two_way_communication ?? false;
+    }
+    if (modifiedFields.has('enable_email_replies')) {
+      payload.enable_email_replies = config.enable_email_replies ?? false;
+    }
+    if (modifiedFields.has('enable_sms_replies')) {
+      payload.enable_sms_replies = config.enable_sms_replies ?? false;
+    }
+    if (modifiedFields.has('list_unsubscribe_url')) {
+      payload.list_unsubscribe_url = config.list_unsubscribe_url ?? null;
+    }
+    if (modifiedFields.has('list_unsubscribe_mailto')) {
+      payload.list_unsubscribe_mailto = config.list_unsubscribe_mailto ?? null;
+    }
+    if (modifiedFields.has('list_unsubscribe_one_click')) {
+      payload.list_unsubscribe_one_click = config.list_unsubscribe_one_click !== false;
     }
     
     // Handle S3 storage nested object
-    if (sanitized.s3_storage) {
-      const s3Sanitized = { ...sanitized.s3_storage };
-      if (isMaskedValue(s3Sanitized.access_key_id)) {
-        delete s3Sanitized.access_key_id;
+    if (config.s3_storage) {
+      const s3Modified = new Set();
+      if (modifiedFields.has('s3_access_key_id')) s3Modified.add('access_key_id');
+      if (modifiedFields.has('s3_secret_access_key')) s3Modified.add('secret_access_key');
+      if (modifiedFields.has('s3_bucket_name')) s3Modified.add('bucket_name');
+      if (modifiedFields.has('s3_region')) s3Modified.add('region');
+      if (modifiedFields.has('s3_enabled')) s3Modified.add('enabled');
+      
+      if (s3Modified.size > 0) {
+        payload.s3_storage = {};
+        if (s3Modified.has('access_key_id') && !isMaskedValue(config.s3_storage.access_key_id)) {
+          payload.s3_storage.access_key_id = config.s3_storage.access_key_id;
+        }
+        if (s3Modified.has('secret_access_key') && !isMaskedValue(config.s3_storage.secret_access_key)) {
+          payload.s3_storage.secret_access_key = config.s3_storage.secret_access_key;
+        }
+        if (s3Modified.has('bucket_name')) {
+          payload.s3_storage.bucket_name = config.s3_storage.bucket_name ?? null;
+        }
+        if (s3Modified.has('region')) {
+          payload.s3_storage.region = config.s3_storage.region ?? "eu-west-2";
+        }
+        if (s3Modified.has('enabled')) {
+          payload.s3_storage.enabled = config.s3_storage.enabled ?? false;
+        }
       }
-      if (isMaskedValue(s3Sanitized.secret_access_key)) {
-        delete s3Sanitized.secret_access_key;
-      }
-      sanitized.s3_storage = s3Sanitized;
     }
     
-    return sanitized;
+    return payload;
+  };
+  
+  // Helper to mark a field as modified
+  const markFieldModified = (fieldName) => {
+    setUserModifiedFields((prev) => new Set(prev).add(fieldName));
   };
 
   // Load organisation data when it's fetched from API
@@ -342,6 +425,8 @@ function ConfigurationPageContent() {
       });
       setOriginalS3Config(mergedIntegrationConfig.s3_storage || null);
       setS3SecretKeyChanged(false);
+      // Reset modified fields when loading new data
+      setUserModifiedFields(new Set());
     }
   }, [organisationResponse]);
 
@@ -853,24 +938,25 @@ function ConfigurationPageContent() {
                   <Button
                     onClick={async () => {
                       try {
-                        // Sanitize integration_config to remove masked values
-                        const sanitizedConfig = sanitizeIntegrationConfig(organisationData.integration_config);
+                        // Only send fields that user actually changed
+                        const integrationConfigUpdate = buildUpdatePayload(
+                          organisationData.integration_config,
+                          userModifiedFields
+                        );
                         
-                        // Ensure integration_config is included with all fields
                         const payloadToSend = {
-                          ...organisationData,
-                          integration_config: {
-                            ...sanitizedConfig,
-                            // Explicitly include email styling fields
-                            email_header_content: organisationData.integration_config?.email_header_content ?? null,
-                            email_header_logo_url: organisationData.integration_config?.email_header_logo_url ?? null,
-                            email_primary_color: organisationData.integration_config?.email_primary_color ?? null,
-                            email_secondary_color: organisationData.integration_config?.email_secondary_color ?? null,
-                            email_footer_content: organisationData.integration_config?.email_footer_content ?? null,
-                            email_footer_disclaimer: organisationData.integration_config?.email_footer_disclaimer ?? null,
-                          },
+                          organisation_name: organisationData.organisation_name,
+                          organisation_code: organisationData.organisation_code,
+                          description: organisationData.description,
+                          is_active: organisationData.is_active,
+                          ...(Object.keys(integrationConfigUpdate).length > 0 && {
+                            integration_config: integrationConfigUpdate,
+                          }),
                         };
+                        
                         await updateOrganisationMutation.mutateAsync(payloadToSend);
+                        // Clear modified fields after successful save
+                        setUserModifiedFields(new Set());
                       } catch (error) {
                         // Error handled by mutation
                       }
@@ -976,15 +1062,16 @@ function ConfigurationPageContent() {
                           return key || "";
                         })()
                       }
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        markFieldModified('sendgrid_api_key');
                         setOrganisationData((prev) => ({
                           ...prev,
                           integration_config: {
                             ...prev.integration_config,
                             sendgrid_api_key: e.target.value || null,
                           },
-                        }))
-                      }
+                        }));
+                      }}
                       placeholder={
                         organisationData.integration_config?.sendgrid_api_key && isMaskedValue(organisationData.integration_config.sendgrid_api_key)
                           ? "•••••••• (Click to update)"
@@ -1731,15 +1818,16 @@ function ConfigurationPageContent() {
                         id="email_header_logo_url"
                         type="url"
                         value={organisationData.integration_config?.email_header_logo_url || ""}
-                        onChange={(e) =>
+                        onChange={(e) => {
+                          markFieldModified('email_header_logo_url');
                           setOrganisationData((prev) => ({
                             ...prev,
                             integration_config: {
                               ...prev.integration_config,
                               email_header_logo_url: e.target.value || null,
                             },
-                          }))
-                        }
+                          }));
+                        }}
                         placeholder="https://example.com/logo.png"
                         className="flex-1"
                       />
@@ -1769,6 +1857,7 @@ function ConfigurationPageContent() {
                               
                               const downloadUrl = uploadResult.download_url || uploadResult.url || uploadResult.file_url;
                               if (downloadUrl) {
+                                markFieldModified('email_header_logo_url');
                                 setOrganisationData((prev) => ({
                                   ...prev,
                                   integration_config: {
@@ -1815,15 +1904,16 @@ function ConfigurationPageContent() {
                           type="button"
                           variant="ghost"
                           size="sm"
-                          onClick={() =>
+                          onClick={() => {
+                            markFieldModified('email_header_logo_url');
                             setOrganisationData((prev) => ({
                               ...prev,
                               integration_config: {
                                 ...prev.integration_config,
                                 email_header_logo_url: null,
                               },
-                            }))
-                          }
+                            }));
+                          }}
                         >
                           <X className="h-4 w-4" />
                         </Button>
@@ -1844,28 +1934,30 @@ function ConfigurationPageContent() {
                         id="email_primary_color"
                         type="color"
                         value={organisationData.integration_config?.email_primary_color || "#11b9b7"}
-                        onChange={(e) =>
+                        onChange={(e) => {
+                          markFieldModified('email_primary_color');
                           setOrganisationData((prev) => ({
                             ...prev,
                             integration_config: {
                               ...prev.integration_config,
                               email_primary_color: e.target.value || null,
                             },
-                          }))
-                        }
+                          }));
+                        }}
                         className="w-20 h-10"
                       />
                       <Input
                         value={organisationData.integration_config?.email_primary_color || ""}
-                        onChange={(e) =>
+                        onChange={(e) => {
+                          markFieldModified('email_primary_color');
                           setOrganisationData((prev) => ({
                             ...prev,
                             integration_config: {
                               ...prev.integration_config,
                               email_primary_color: e.target.value || null,
                             },
-                          }))
-                        }
+                          }));
+                        }}
                         placeholder="#11b9b7"
                         className="flex-1 font-mono"
                         maxLength={7}
@@ -1882,28 +1974,30 @@ function ConfigurationPageContent() {
                         id="email_secondary_color"
                         type="color"
                         value={organisationData.integration_config?.email_secondary_color || "#2c3e50"}
-                        onChange={(e) =>
+                        onChange={(e) => {
+                          markFieldModified('email_secondary_color');
                           setOrganisationData((prev) => ({
                             ...prev,
                             integration_config: {
                               ...prev.integration_config,
                               email_secondary_color: e.target.value || null,
                             },
-                          }))
-                        }
+                          }));
+                        }}
                         className="w-20 h-10"
                       />
                       <Input
                         value={organisationData.integration_config?.email_secondary_color || ""}
-                        onChange={(e) =>
+                        onChange={(e) => {
+                          markFieldModified('email_secondary_color');
                           setOrganisationData((prev) => ({
                             ...prev,
                             integration_config: {
                               ...prev.integration_config,
                               email_secondary_color: e.target.value || null,
                             },
-                          }))
-                        }
+                          }));
+                        }}
                         placeholder="#2c3e50"
                         className="flex-1 font-mono"
                         maxLength={7}
@@ -1921,15 +2015,16 @@ function ConfigurationPageContent() {
                   <div className="border rounded-lg">
                     <RichTextEditor
                       value={organisationData.integration_config?.email_header_content || ""}
-                      onChange={(html) =>
+                      onChange={(html) => {
+                        markFieldModified('email_header_content');
                         setOrganisationData((prev) => ({
                           ...prev,
                           integration_config: {
                             ...prev.integration_config,
                             email_header_content: html || null,
                           },
-                        }))
-                      }
+                        }));
+                      }}
                       placeholder="Enter HTML content for email header..."
                     />
                   </div>
@@ -1944,15 +2039,16 @@ function ConfigurationPageContent() {
                   <div className="border rounded-lg">
                     <RichTextEditor
                       value={organisationData.integration_config?.email_footer_content || ""}
-                      onChange={(html) =>
+                      onChange={(html) => {
+                        markFieldModified('email_footer_content');
                         setOrganisationData((prev) => ({
                           ...prev,
                           integration_config: {
                             ...prev.integration_config,
                             email_footer_content: html || null,
                           },
-                        }))
-                      }
+                        }));
+                      }}
                       placeholder="Enter HTML content for email footer..."
                     />
                   </div>
@@ -1967,15 +2063,16 @@ function ConfigurationPageContent() {
                   <Textarea
                     id="email_footer_disclaimer"
                     value={organisationData.integration_config?.email_footer_disclaimer || ""}
-                    onChange={(e) =>
+                    onChange={(e) => {
+                      markFieldModified('email_footer_disclaimer');
                       setOrganisationData((prev) => ({
                         ...prev,
                         integration_config: {
                           ...prev.integration_config,
                           email_footer_disclaimer: e.target.value || null,
                         },
-                      }))
-                    }
+                      }));
+                    }}
                     placeholder="Enter disclaimer text for email footer..."
                     rows={4}
                     maxLength={1000}
@@ -2069,27 +2166,26 @@ function ConfigurationPageContent() {
                   }
                   
                   try {
-                    // Sanitize integration_config to remove masked values (preserve real values on backend)
-                    const sanitizedConfig = sanitizeIntegrationConfig(organisationData.integration_config);
+                    // Only send fields that user actually changed
+                    const integrationConfigUpdate = buildUpdatePayload(
+                      organisationData.integration_config,
+                      userModifiedFields
+                    );
                     
-                    // Ensure all integration_config fields are preserved, including email styling
-                    // Backend will merge this with existing config
                     const payloadToSend = {
-                      ...organisationData,
-                      integration_config: {
-                        ...sanitizedConfig,
-                        // Explicitly ensure email styling fields are included (even if null)
-                        // This ensures they're sent to the backend for merging
-                        email_header_content: organisationData.integration_config?.email_header_content ?? null,
-                        email_header_logo_url: organisationData.integration_config?.email_header_logo_url ?? null,
-                        email_primary_color: organisationData.integration_config?.email_primary_color ?? null,
-                        email_secondary_color: organisationData.integration_config?.email_secondary_color ?? null,
-                        email_footer_content: organisationData.integration_config?.email_footer_content ?? null,
-                        email_footer_disclaimer: organisationData.integration_config?.email_footer_disclaimer ?? null,
-                      },
+                      organisation_name: organisationData.organisation_name,
+                      organisation_code: organisationData.organisation_code,
+                      description: organisationData.description,
+                      is_active: organisationData.is_active,
+                      ...(Object.keys(integrationConfigUpdate).length > 0 && {
+                        integration_config: integrationConfigUpdate,
+                      }),
                     };
+                    
                     await updateOrganisationMutation.mutateAsync(payloadToSend);
                     setS3SecretKeyChanged(false); // Reset after successful save
+                    // Clear modified fields after successful save
+                    setUserModifiedFields(new Set());
                   } catch (error) {
                     // Error handled by mutation
                   }
