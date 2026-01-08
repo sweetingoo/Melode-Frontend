@@ -388,6 +388,24 @@ const MyTasksPage = () => {
                             </div>
                           )}
 
+                          {/* Progress */}
+                          {task.progress_percentage !== undefined && task.progress_percentage !== null && (
+                            <div className="space-y-1">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs text-muted-foreground">Progress</span>
+                                <span className="text-xs font-medium">{task.progress_percentage}%</span>
+                              </div>
+                              <div className="w-full bg-muted rounded-full h-2">
+                                <div
+                                  className="bg-primary h-2 rounded-full transition-all"
+                                  style={{
+                                    width: `${task.progress_percentage}%`,
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          )}
+
                           {/* Due Date */}
                           <div className="flex items-center gap-4 flex-wrap text-sm">
                             {task.due_date ? (

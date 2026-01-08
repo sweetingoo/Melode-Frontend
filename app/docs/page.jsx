@@ -27,6 +27,7 @@ import {
   Search,
   X,
   FolderKanban,
+  Tag,
 } from "lucide-react";
 
 const documentationCategories = [
@@ -165,9 +166,21 @@ const documentationCategories = [
         icon: MapPin,
       },
       {
+        title: "Location Types",
+        description: "Configure and manage location categories",
+        href: "/docs/location-types",
+        icon: MapPin,
+      },
+      {
         title: "Assets",
         description: "Track and manage organisational assets",
         href: "/docs/assets",
+        icon: Images,
+      },
+      {
+        title: "Asset Types",
+        description: "Configure and manage asset categories",
+        href: "/docs/asset-types",
         icon: Images,
       },
       {
@@ -175,6 +188,12 @@ const documentationCategories = [
         description: "Organise your company into departments",
         href: "/docs/departments",
         icon: Building2,
+      },
+      {
+        title: "Category Types",
+        description: "Configure category systems for content organisation",
+        href: "/docs/category-types",
+        icon: Tag,
       },
     ],
   },
@@ -184,6 +203,12 @@ const documentationCategories = [
     icon: Settings,
     color: "text-gray-600 dark:text-gray-400",
     features: [
+      {
+        title: "Initial Setup",
+        description: "Complete the one-time initial setup process",
+        href: "/docs/setup",
+        icon: Settings,
+      },
       {
         title: "Active People",
         description: "Monitor active check-in sessions across the organisation",
@@ -197,10 +222,22 @@ const documentationCategories = [
         icon: Settings,
       },
       {
+        title: "Organisation Branding",
+        description: "Configure organisation logos and visual identity",
+        href: "/docs/organization-branding",
+        icon: Images,
+      },
+      {
         title: "Integrations",
         description: "Configure SendGrid, Twilio, S3 Storage, and other integrations",
         href: "/docs/integrations",
         icon: Zap,
+      },
+      {
+        title: "PDF Generation",
+        description: "Generate PDFs from forms and submissions with branding",
+        href: "/docs/pdf-generation",
+        icon: FileText,
       },
       {
         title: "Audit Logs",

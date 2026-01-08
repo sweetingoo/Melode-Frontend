@@ -376,7 +376,7 @@ function CollapsibleMenuItem({ title, icon: Icon, items, pathname }) {
   }
 
   return (
-    <Collapsible defaultOpen className="group/collapsible">
+    <Collapsible defaultOpen={false} className="group/collapsible">
       <SidebarMenuItem>
         <CollapsibleTrigger asChild>
           <SidebarMenuButton tooltip={title}>

@@ -89,6 +89,103 @@ import { toast } from "sonner";
 import RichTextEditor from "@/components/RichTextEditor";
 import { useUploadFile } from "@/hooks/useProfile";
 import { Upload, Image as ImageIcon } from "lucide-react";
+import { filesService } from "@/services/files";
+
+// Utility function to extract file reference from URL or value
+const extractFileReference = (value) => {
+  if (!value) return null;
+  
+  // If it's already a file reference (slug or ID), return it
+  if (typeof value === 'string' && !value.startsWith('http')) {
+    return value;
+  }
+  
+  // If it's a URL, try to extract file reference
+  try {
+    const url = new URL(value);
+    // Check if it's a file API endpoint: /files/{slug}/download or /files/{id}/download
+    const match = url.pathname.match(/\/files\/([^\/]+)\/(download|url)/);
+    if (match) {
+      return match[1]; // Return the slug or ID
+    }
+  } catch {
+    // Not a valid URL, might be a direct reference
+    return value;
+  }
+  
+  return null;
+};
+
+// Component to handle logo image with file reference - generates fresh URLs on demand
+const LogoImage = ({ fileReference, alt, className, onError: onErrorProp }) => {
+  const [imageSrc, setImageSrc] = useState(null);
+  const [hasError, setHasError] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Fetch fresh signed URL from file reference
+  useEffect(() => {
+    if (!fileReference) {
+      setImageSrc(null);
+      setIsLoading(false);
+      return;
+    }
+
+    const fetchFreshUrl = async () => {
+      try {
+        setIsLoading(true);
+        setHasError(false);
+        
+        // Get fresh signed URL from file reference
+        const response = await filesService.getFileUrl(fileReference);
+        if (response && response.url) {
+          setImageSrc(response.url);
+        } else {
+          throw new Error('No URL received from file service');
+        }
+      } catch (error) {
+        console.error('Failed to fetch file URL:', error);
+        setHasError(true);
+        setImageSrc(null);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchFreshUrl();
+  }, [fileReference]);
+
+  const handleError = (e) => {
+    setHasError(true);
+    if (onErrorProp) {
+      onErrorProp(e);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className={`${className} flex items-center justify-center bg-muted-foreground/10`}>
+        <Loader2 className="h-6 w-6 text-muted-foreground animate-spin" />
+      </div>
+    );
+  }
+
+  if (hasError || !imageSrc) {
+    return (
+      <div className={`${className} flex items-center justify-center bg-muted-foreground/10`}>
+        <ImageIcon className="h-8 w-8 text-muted-foreground" />
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={imageSrc}
+      alt={alt}
+      className={className}
+      onError={handleError}
+    />
+  );
+};
 
 function ConfigurationPageContent() {
   const searchParams = useSearchParams();
@@ -155,8 +252,8 @@ function ConfigurationPageContent() {
     return [];
   }, [settingsData]);
 
-  // Get organisation data
-  const { data: organisationResponse, isLoading: organisationLoading } = useOrganisation();
+  // Get organisation data with refetch function
+  const { data: organisationResponse, isLoading: organisationLoading, refetch: refetchOrganisation } = useOrganisation();
 
   // Mutations
   const createSettingMutation = useCreateSetting();
@@ -183,6 +280,10 @@ function ConfigurationPageContent() {
     organisation_code: "",
     description: "",
     is_active: true,
+    branding_config: {
+      organization_logo_url: null,
+      logo_url: null,
+    },
     integration_config: {
       sendgrid_api_key: null,
       twilio_account_sid: null,
@@ -234,6 +335,7 @@ function ConfigurationPageContent() {
   // File upload mutation for logo
   const uploadFileMutation = useUploadFile({ silent: true });
   const [logoUploading, setLogoUploading] = useState(false);
+  const [orgLogoUploading, setOrgLogoUploading] = useState(false);
 
   // Helper function to detect if a value is masked (from backend sanitization)
   // Masked values contain "..." in the middle
@@ -241,15 +343,27 @@ function ConfigurationPageContent() {
     return typeof value === 'string' && value.includes('...');
   };
 
-  // Helper function to build update payload - only includes fields user actually changed
-  // Removes masked values and only includes modified fields
-  const buildUpdatePayload = (config, modifiedFields) => {
-    if (!config) return {};
+  // Helper function to build branding_config update payload
+  const buildBrandingConfigPayload = (brandingConfig, modifiedFields) => {
+    if (!brandingConfig) return {};
     
     const payload = {};
     
-    // Only include fields that the user actually modified
-    // Never include masked values (they will be rejected by API)
+    if (modifiedFields.has('organization_logo_url')) {
+      payload.organization_logo_url = brandingConfig.organization_logo_url ?? null;
+    }
+    if (modifiedFields.has('logo_url')) {
+      payload.logo_url = brandingConfig.logo_url ?? null;
+    }
+    
+    return payload;
+  };
+
+  // Helper function to build integration_config update payload (renamed from buildUpdatePayload)
+  const buildIntegrationConfigPayload = (config, modifiedFields) => {
+    if (!config) return {};
+    
+    const payload = {};
     
     // Email styling fields (safe to send, not masked)
     if (modifiedFields.has('email_header_content')) {
@@ -392,11 +506,19 @@ function ConfigurationPageContent() {
         },
       };
 
+      // Load branding_config from API response
+      const brandingConfig = organisationResponse.branding_config || {};
+      const mergedBrandingConfig = {
+        organization_logo_url: brandingConfig.organization_logo_url || null,
+        logo_url: brandingConfig.logo_url || null,
+      };
+
       setOrganisationData({
         organisation_name: organisationResponse.organisation_name || "",
         organisation_code: organisationResponse.organisation_code || "",
         description: organisationResponse.description || "",
         is_active: organisationResponse.is_active !== false,
+        branding_config: mergedBrandingConfig,
         integration_config: mergedIntegrationConfig,
       });
 
@@ -939,8 +1061,12 @@ function ConfigurationPageContent() {
                     onClick={async () => {
                       try {
                         // Only send fields that user actually changed
-                        const integrationConfigUpdate = buildUpdatePayload(
+                        const integrationConfigUpdate = buildIntegrationConfigPayload(
                           organisationData.integration_config,
+                          userModifiedFields
+                        );
+                        const brandingConfigUpdate = buildBrandingConfigPayload(
+                          organisationData.branding_config,
                           userModifiedFields
                         );
                         
@@ -951,6 +1077,9 @@ function ConfigurationPageContent() {
                           is_active: organisationData.is_active,
                           ...(Object.keys(integrationConfigUpdate).length > 0 && {
                             integration_config: integrationConfigUpdate,
+                          }),
+                          ...(Object.keys(brandingConfigUpdate).length > 0 && {
+                            branding_config: brandingConfigUpdate,
                           }),
                         };
                         
@@ -1829,6 +1958,200 @@ function ConfigurationPageContent() {
 
               <Separator />
 
+              {/* Branding Configuration */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold">Branding Configuration</h3>
+                <p className="text-sm text-muted-foreground">
+                  Configure organisation branding for PDFs and documents. The organisation logo will appear in PDF headers.
+                </p>
+
+                {/* Organization Logo */}
+                <div className="space-y-2">
+                  <Label>Organisation Logo</Label>
+                  <p className="text-xs text-muted-foreground">
+                    This logo will be used in PDF documents generated by the system. Recommended size: max 2.5 inches width, 0.75 inches height.
+                  </p>
+                  <div className="space-y-2">
+                    {organisationData.branding_config?.organization_logo_url ? (
+                      <div className="space-y-2 w-full">
+                        <div className="flex items-center gap-3 p-3 bg-muted rounded-lg border w-full min-w-0">
+                          <div className="flex-shrink-0 h-16 w-16 flex items-center justify-center bg-background rounded border overflow-hidden">
+                            <LogoImage
+                              fileReference={extractFileReference(organisationData.branding_config.organization_logo_url)}
+                              alt="Organisation Logo"
+                              className="h-full w-full object-contain"
+                            />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-medium mb-1">Current Logo</p>
+                            <p className="text-xs text-muted-foreground">Logo is set and will appear in PDF documents</p>
+                          </div>
+                          <div className="flex gap-2 flex-shrink-0">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                const input = document.createElement("input");
+                                input.setAttribute("type", "file");
+                                input.setAttribute("accept", "image/*");
+                                input.click();
+                                input.onchange = async () => {
+                                  const file = input.files?.[0];
+                                  if (!file) return;
+                                  
+                                  // Check file size (max 10MB)
+                                  if (file.size > 10 * 1024 * 1024) {
+                                    toast.error("Image size must be less than 10MB");
+                                    return;
+                                  }
+                                  
+                                  try {
+                                    setOrgLogoUploading(true);
+                                    const uploadResult = await uploadFileMutation.mutateAsync({
+                                      file: file,
+                                    });
+                                    
+                                    // Store file reference (slug or ID) instead of signed URL
+                                    const fileReference = uploadResult.file_slug || 
+                                                         uploadResult.slug || 
+                                                         uploadResult.file_reference_id ||
+                                                         uploadResult.id || 
+                                                         uploadResult.file_id;
+                                    
+                                    if (fileReference) {
+                                      markFieldModified('organization_logo_url');
+                          setOrganisationData((prev) => ({
+                            ...prev,
+                                        branding_config: {
+                                          ...prev.branding_config,
+                                          organization_logo_url: fileReference, // Store reference, not URL
+                            },
+                          }));
+                                      toast.success("Logo updated successfully");
+                                    } else {
+                                      throw new Error("No file reference received from upload");
+                                    }
+                                  } catch (error) {
+                                    console.error("Logo upload failed:", error);
+                                    toast.error("Failed to upload logo", {
+                                      description: error?.response?.data?.detail || error?.message || "Please try again",
+                                    });
+                                  } finally {
+                                    setOrgLogoUploading(false);
+                                  }
+                                };
+                              }}
+                              disabled={orgLogoUploading}
+                            >
+                              {orgLogoUploading ? (
+                                <>
+                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                  Uploading...
+                                </>
+                              ) : (
+                                <>
+                                  <Upload className="mr-2 h-4 w-4" />
+                                  Replace
+                                </>
+                              )}
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                markFieldModified('organization_logo_url');
+                                setOrganisationData((prev) => ({
+                                  ...prev,
+                                  branding_config: {
+                                    ...prev.branding_config,
+                                    organization_logo_url: null,
+                                  },
+                                }));
+                              }}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          const input = document.createElement("input");
+                          input.setAttribute("type", "file");
+                          input.setAttribute("accept", "image/*");
+                          input.click();
+                          input.onchange = async () => {
+                            const file = input.files?.[0];
+                            if (!file) return;
+                            
+                            // Check file size (max 10MB)
+                            if (file.size > 10 * 1024 * 1024) {
+                              toast.error("Image size must be less than 10MB");
+                              return;
+                            }
+                            
+                            try {
+                              setOrgLogoUploading(true);
+                              const uploadResult = await uploadFileMutation.mutateAsync({
+                                file: file,
+                              });
+                              
+                              // Store file reference (slug or ID) instead of signed URL
+                              const fileReference = uploadResult.file_slug || 
+                                                   uploadResult.slug || 
+                                                   uploadResult.file_reference_id ||
+                                                   uploadResult.id || 
+                                                   uploadResult.file_id;
+                              
+                              if (fileReference) {
+                                markFieldModified('organization_logo_url');
+                                setOrganisationData((prev) => ({
+                                  ...prev,
+                                  branding_config: {
+                                    ...prev.branding_config,
+                                    organization_logo_url: fileReference, // Store reference, not URL
+                                  },
+                                }));
+                                toast.success("Logo uploaded successfully");
+                              } else {
+                                throw new Error("No file reference received from upload");
+                              }
+                            } catch (error) {
+                              console.error("Logo upload failed:", error);
+                              toast.error("Failed to upload logo", {
+                                description: error?.response?.data?.detail || error?.message || "Please try again",
+                              });
+                            } finally {
+                              setOrgLogoUploading(false);
+                            }
+                          };
+                        }}
+                        disabled={orgLogoUploading}
+                      >
+                        {orgLogoUploading ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Uploading...
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="mr-2 h-4 w-4" />
+                            Upload Logo
+                          </>
+                        )}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <Separator />
+
               {/* Email Styling Configuration */}
               <div className="space-y-4">
                 <h3 className="text-lg font-semibold">Email Styling Configuration</h3>
@@ -1838,26 +2161,113 @@ function ConfigurationPageContent() {
 
                 {/* Header Logo */}
                 <div className="space-y-2">
-                  <Label htmlFor="email_header_logo_url">Email Header Logo</Label>
+                  <Label>Email Header Logo</Label>
                   <div className="space-y-2">
-                    <div className="flex gap-2">
-                      <Input
-                        id="email_header_logo_url"
-                        type="url"
-                        value={organisationData.integration_config?.email_header_logo_url || ""}
-                        onChange={(e) => {
-                          markFieldModified('email_header_logo_url');
-                          setOrganisationData((prev) => ({
-                            ...prev,
-                            integration_config: {
-                              ...prev.integration_config,
-                              email_header_logo_url: e.target.value || null,
-                            },
-                          }));
+                    {organisationData.integration_config?.email_header_logo_url ? (
+                      <div className="space-y-2 w-full">
+                        <div className="flex items-center gap-3 p-3 bg-muted rounded-lg border w-full min-w-0">
+                          <div className="flex-shrink-0 h-16 w-16 flex items-center justify-center bg-background rounded border overflow-hidden">
+                            <LogoImage
+                              fileReference={extractFileReference(organisationData.integration_config.email_header_logo_url)}
+                              alt="Email Header Logo"
+                              className="h-full w-full object-contain"
+                            />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-medium mb-1">Current Logo</p>
+                            <p className="text-xs text-muted-foreground">Logo is set and will appear in email headers</p>
+                          </div>
+                          <div className="flex gap-2 flex-shrink-0">
+                      <Button
+                        type="button"
+                        variant="outline"
+                              size="sm"
+                        onClick={() => {
+                          const input = document.createElement("input");
+                          input.setAttribute("type", "file");
+                          input.setAttribute("accept", "image/*");
+                          input.click();
+                          input.onchange = async () => {
+                            const file = input.files?.[0];
+                            if (!file) return;
+                            
+                            // Check file size (max 10MB)
+                            if (file.size > 10 * 1024 * 1024) {
+                              toast.error("Image size must be less than 10MB");
+                              return;
+                            }
+                            
+                            try {
+                              setLogoUploading(true);
+                              const uploadResult = await uploadFileMutation.mutateAsync({
+                                file: file,
+                              });
+                              
+                                    // Store file reference (slug or ID) instead of signed URL
+                                    const fileReference = uploadResult.file_slug || 
+                                                         uploadResult.slug || 
+                                                         uploadResult.file_reference_id ||
+                                                         uploadResult.id || 
+                                                         uploadResult.file_id;
+                                    
+                                    if (fileReference) {
+                                markFieldModified('email_header_logo_url');
+                                setOrganisationData((prev) => ({
+                                  ...prev,
+                                  integration_config: {
+                                    ...prev.integration_config,
+                                          email_header_logo_url: fileReference, // Store reference, not URL
+                                  },
+                                }));
+                                      toast.success("Logo updated successfully");
+                              } else {
+                                      throw new Error("No file reference received from upload");
+                              }
+                            } catch (error) {
+                              console.error("Logo upload failed:", error);
+                              toast.error("Failed to upload logo", {
+                                description: error?.response?.data?.detail || error?.message || "Please try again",
+                              });
+                            } finally {
+                              setLogoUploading(false);
+                            }
+                          };
                         }}
-                        placeholder="https://example.com/logo.png"
-                        className="flex-1"
-                      />
+                        disabled={logoUploading}
+                      >
+                        {logoUploading ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Uploading...
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="mr-2 h-4 w-4" />
+                                  Replace
+                          </>
+                        )}
+                      </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            markFieldModified('email_header_logo_url');
+                            setOrganisationData((prev) => ({
+                              ...prev,
+                              integration_config: {
+                                ...prev.integration_config,
+                                email_header_logo_url: null,
+                              },
+                            }));
+                          }}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                        </div>
+                      </div>
+                    ) : (
                       <Button
                         type="button"
                         variant="outline"
@@ -1882,19 +2292,25 @@ function ConfigurationPageContent() {
                                 file: file,
                               });
                               
-                              const downloadUrl = uploadResult.download_url || uploadResult.url || uploadResult.file_url;
-                              if (downloadUrl) {
+                              // Store file reference (slug or ID) instead of signed URL
+                              const fileReference = uploadResult.file_slug || 
+                                                   uploadResult.slug || 
+                                                   uploadResult.file_reference_id ||
+                                                   uploadResult.id || 
+                                                   uploadResult.file_id;
+                              
+                              if (fileReference) {
                                 markFieldModified('email_header_logo_url');
                                 setOrganisationData((prev) => ({
                                   ...prev,
                                   integration_config: {
                                     ...prev.integration_config,
-                                    email_header_logo_url: downloadUrl,
+                                    email_header_logo_url: fileReference, // Store reference, not URL
                                   },
                                 }));
                                 toast.success("Logo uploaded successfully");
                               } else {
-                                throw new Error("No download URL received");
+                                throw new Error("No file reference received from upload");
                               }
                             } catch (error) {
                               console.error("Logo upload failed:", error);
@@ -1920,35 +2336,7 @@ function ConfigurationPageContent() {
                           </>
                         )}
                       </Button>
-                    </div>
-                    {organisationData.integration_config?.email_header_logo_url && (
-                      <div className="flex items-center gap-2 p-2 bg-muted rounded-lg">
-                        <ImageIcon className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm text-muted-foreground truncate flex-1">
-                          {organisationData.integration_config.email_header_logo_url}
-                        </span>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            markFieldModified('email_header_logo_url');
-                            setOrganisationData((prev) => ({
-                              ...prev,
-                              integration_config: {
-                                ...prev.integration_config,
-                                email_header_logo_url: null,
-                              },
-                            }));
-                          }}
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
                     )}
-                    <p className="text-xs text-muted-foreground">
-                      Upload a logo file or enter a direct URL (must be http/https). Max 2,048 characters.
-                    </p>
                   </div>
                 </div>
 
@@ -2201,8 +2589,12 @@ function ConfigurationPageContent() {
                   
                   try {
                     // Only send fields that user actually changed
-                    const integrationConfigUpdate = buildUpdatePayload(
+                    const integrationConfigUpdate = buildIntegrationConfigPayload(
                       organisationData.integration_config,
+                      userModifiedFields
+                    );
+                    const brandingConfigUpdate = buildBrandingConfigPayload(
+                      organisationData.branding_config,
                       userModifiedFields
                     );
                     
@@ -2213,6 +2605,9 @@ function ConfigurationPageContent() {
                       is_active: organisationData.is_active,
                       ...(Object.keys(integrationConfigUpdate).length > 0 && {
                         integration_config: integrationConfigUpdate,
+                      }),
+                      ...(Object.keys(brandingConfigUpdate).length > 0 && {
+                        branding_config: brandingConfigUpdate,
                       }),
                     };
                     

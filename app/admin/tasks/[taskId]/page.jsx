@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -122,8 +122,26 @@ const TaskDetailPage = () => {
     color: "#6B7280",
     sort_order: 0,
   });
+  const [localProgress, setLocalProgress] = useState(null);
+  const progressUpdateTimeoutRef = useRef(null);
 
   const { data: task, isLoading, error } = useTask(taskSlug);
+  
+  // Sync local progress with task progress
+  useEffect(() => {
+    if (task?.progress_percentage !== undefined) {
+      setLocalProgress(null); // Reset local progress when task updates
+    }
+  }, [task?.progress_percentage]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (progressUpdateTimeoutRef.current) {
+        clearTimeout(progressUpdateTimeoutRef.current);
+      }
+    };
+  }, []);
   const { data: usersResponse } = useUsers();
   const { data: locationsData } = useLocations();
   const { data: assetsData } = useAssets();
@@ -669,19 +687,145 @@ const TaskDetailPage = () => {
                     </>
                   )}
 
-                  {/* Progress Bar */}
+                  {/* Progress Bar with Update */}
                   <div>
                     <div className="flex items-center justify-between mb-2">
                       <Label className="text-muted-foreground">Progress</Label>
-                      <span className="text-sm font-medium">{task.progress_percentage || 0}%</span>
+                      <span className="text-sm font-medium">
+                        {localProgress !== null ? localProgress : (task.progress_percentage || 0)}%
+                      </span>
                     </div>
-                    <div className="w-full bg-muted rounded-full h-2.5">
+                    <div className="w-full bg-muted rounded-full h-2.5 mb-3">
                       <div
-                        className="bg-primary h-2.5 rounded-full transition-all"
+                        className="bg-primary h-2.5 rounded-full transition-all duration-150"
                         style={{
-                          width: `${task.progress_percentage || 0}%`,
+                          width: `${localProgress !== null ? localProgress : (task.progress_percentage || 0)}%`,
                         }}
                       />
+                    </div>
+                    {/* Progress Update Controls */}
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1 relative">
+                          {/* Background track for better visibility */}
+                          <div className="absolute inset-0 h-4 bg-muted rounded-lg border border-border"></div>
+                          {/* Filled progress track overlay */}
+                          <div 
+                            className="absolute left-0 top-0 h-4 bg-primary rounded-lg transition-all duration-150"
+                            style={{
+                              width: `${localProgress !== null ? localProgress : (task.progress_percentage || 0)}%`,
+                            }}
+                          ></div>
+                          <input
+                            type="range"
+                            min="0"
+                            max="100"
+                            step="1"
+                            value={localProgress !== null ? localProgress : (task.progress_percentage || 0)}
+                            onChange={(e) => {
+                              const newProgress = parseInt(e.target.value);
+                              // Update local state immediately for smooth UI
+                              setLocalProgress(newProgress);
+                              
+                              // Clear existing timeout
+                              if (progressUpdateTimeoutRef.current) {
+                                clearTimeout(progressUpdateTimeoutRef.current);
+                              }
+                              
+                              // Debounce API call - update after 300ms of no changes
+                              progressUpdateTimeoutRef.current = setTimeout(() => {
+                                updateTaskMutation.mutate({
+                                  slug: taskSlug,
+                                  taskData: { progress_percentage: newProgress },
+                                }, {
+                                  onSuccess: () => {
+                                    // Clear local progress after successful update
+                                    setLocalProgress(null);
+                                  }
+                                });
+                              }, 300);
+                            }}
+                            onMouseUp={(e) => {
+                              // Update immediately when user releases the slider
+                              const newProgress = parseInt(e.target.value);
+                              if (progressUpdateTimeoutRef.current) {
+                                clearTimeout(progressUpdateTimeoutRef.current);
+                              }
+                              updateTaskMutation.mutate({
+                                slug: taskSlug,
+                                taskData: { progress_percentage: newProgress },
+                              }, {
+                                onSuccess: () => {
+                                  setLocalProgress(null);
+                                }
+                              });
+                            }}
+                            onTouchEnd={(e) => {
+                              // Also handle touch events for mobile devices
+                              const newProgress = parseInt(e.target.value);
+                              if (progressUpdateTimeoutRef.current) {
+                                clearTimeout(progressUpdateTimeoutRef.current);
+                              }
+                              updateTaskMutation.mutate({
+                                slug: taskSlug,
+                                taskData: { progress_percentage: newProgress },
+                              }, {
+                                onSuccess: () => {
+                                  setLocalProgress(null);
+                                }
+                              });
+                            }}
+                            className="relative w-full h-4 bg-transparent rounded-lg appearance-none cursor-pointer transition-all focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed z-10"
+                            disabled={updateTaskMutation.isPending}
+                          />
+                        </div>
+                        <Input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={localProgress !== null ? localProgress : (task.progress_percentage || 0)}
+                          onChange={(e) => {
+                            const value = parseInt(e.target.value);
+                            if (!isNaN(value) && value >= 0 && value <= 100) {
+                              setLocalProgress(value);
+                            }
+                          }}
+                          onBlur={(e) => {
+                            const value = parseInt(e.target.value);
+                            if (isNaN(value) || value < 0 || value > 100) {
+                              // Reset to current task value if invalid
+                              setLocalProgress(null);
+                            } else {
+                              // Update immediately on blur
+                              if (progressUpdateTimeoutRef.current) {
+                                clearTimeout(progressUpdateTimeoutRef.current);
+                              }
+                              updateTaskMutation.mutate({
+                                slug: taskSlug,
+                                taskData: { progress_percentage: value },
+                              }, {
+                                onSuccess: () => {
+                                  setLocalProgress(null);
+                                }
+                              });
+                            }
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.currentTarget.blur();
+                            }
+                          }}
+                          className="w-20 h-8 text-center"
+                          disabled={updateTaskMutation.isPending}
+                        />
+                        <span className="text-sm text-muted-foreground">%</span>
+                      </div>
+                      {updateTaskMutation.isPending && (
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                          <span>Updating progress...</span>
+                        </div>
+                      )}
                     </div>
                   </div>
 

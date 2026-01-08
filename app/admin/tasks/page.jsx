@@ -1694,6 +1694,23 @@ const TasksPage = () => {
                           )}
                         </div>
                       </div>
+                      {/* Progress */}
+                      {task.progress_percentage !== undefined && task.progress_percentage !== null && (
+                        <div>
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-muted-foreground text-xs">Progress</span>
+                            <span className="text-xs font-medium">{task.progress_percentage}%</span>
+                          </div>
+                          <div className="w-full bg-muted rounded-full h-1.5">
+                            <div
+                              className="bg-primary h-1.5 rounded-full transition-all"
+                              style={{
+                                width: `${task.progress_percentage}%`,
+                              }}
+                            />
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Due Date */}
@@ -1720,14 +1737,15 @@ const TasksPage = () => {
               <Table className="w-full">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[20%]">Title</TableHead>
-                    <TableHead className="w-[12%]">Project</TableHead>
-                    <TableHead className="w-[12%]">Type</TableHead>
-                    <TableHead className="w-[10%]">Status</TableHead>
-                    <TableHead className="w-[10%]">Priority</TableHead>
-                    <TableHead className="w-[15%]">Assigned To</TableHead>
-                    <TableHead className="w-[13%]">Due Date</TableHead>
-                    <TableHead className="w-[8%]">Actions</TableHead>
+                    <TableHead className="w-[18%]">Title</TableHead>
+                    <TableHead className="w-[10%]">Project</TableHead>
+                    <TableHead className="w-[10%]">Type</TableHead>
+                    <TableHead className="w-[9%]">Status</TableHead>
+                    <TableHead className="w-[9%]">Priority</TableHead>
+                    <TableHead className="w-[10%]">Progress</TableHead>
+                    <TableHead className="w-[13%]">Assigned To</TableHead>
+                    <TableHead className="w-[11%]">Due Date</TableHead>
+                    <TableHead className="w-[10%]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1823,6 +1841,23 @@ const TasksPage = () => {
                         <Badge className={getPriorityColor(task.priority)}>
                           {task.priority || "N/A"}
                         </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {task.progress_percentage !== undefined && task.progress_percentage !== null ? (
+                          <div className="flex items-center gap-2 min-w-[80px]">
+                            <div className="flex-1 bg-muted rounded-full h-2">
+                              <div
+                                className="bg-primary h-2 rounded-full transition-all"
+                                style={{
+                                  width: `${task.progress_percentage}%`,
+                                }}
+                              />
+                            </div>
+                            <span className="text-xs font-medium w-10 text-right">{task.progress_percentage}%</span>
+                          </div>
+                        ) : (
+                          <span className="text-sm text-muted-foreground">—</span>
+                        )}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">

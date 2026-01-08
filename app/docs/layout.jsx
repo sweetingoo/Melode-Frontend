@@ -68,6 +68,8 @@ import {
     Bell,
     FileSpreadsheet,
     Database,
+    Package,
+    Image,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 
@@ -142,6 +144,11 @@ const documentationCategories = [
         title: "Getting Started",
         icon: BookOpen,
         features: [
+            {
+                title: "Initial Setup",
+                href: "/docs/setup",
+                icon: Settings,
+            },
             {
                 title: "Dashboard",
                 href: "/docs/dashboard",
@@ -272,14 +279,29 @@ const documentationCategories = [
                 icon: MapPin,
             },
             {
+                title: "Location Types",
+                href: "/docs/location-types",
+                icon: MapPin,
+            },
+            {
                 title: "Assets",
                 href: "/docs/assets",
                 icon: Images,
             },
             {
+                title: "Asset Types",
+                href: "/docs/asset-types",
+                icon: Package,
+            },
+            {
                 title: "Departments",
                 href: "/docs/departments",
                 icon: Building2,
+            },
+            {
+                title: "Category Types",
+                href: "/docs/category-types",
+                icon: Tag,
             },
         ],
     },
@@ -298,6 +320,11 @@ const documentationCategories = [
                 icon: Settings,
             },
             {
+                title: "Organisation Branding",
+                href: "/docs/organization-branding",
+                icon: Image,
+            },
+            {
                 title: "Integrations",
                 href: "/docs/integrations",
                 icon: Zap,
@@ -310,6 +337,11 @@ const documentationCategories = [
             {
                 title: "Audit Logs",
                 href: "/docs/audit-logs",
+                icon: FileText,
+            },
+            {
+                title: "PDF Generation",
+                href: "/docs/pdf-generation",
                 icon: FileText,
             },
         ],
@@ -338,7 +370,7 @@ function CollapsibleMenuItem({ title, icon: Icon, items, pathname }) {
     const isActive = items.some((item) => pathname === item.href);
 
     return (
-        <Collapsible defaultOpen={isActive} className="group/collapsible">
+        <Collapsible defaultOpen={false} className="group/collapsible">
             <SidebarMenuItem>
                 <CollapsibleTrigger asChild>
                     <SidebarMenuButton tooltip={title} isActive={isActive}>

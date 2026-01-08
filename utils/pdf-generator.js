@@ -1,6 +1,560 @@
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
+import { api } from "@/services/api-client";
+import { filesService } from "@/services/files";
+
+/**
+ * Extract file reference from URL or value
+ * @param {string} value - URL or file reference
+ * @returns {string|null} File reference (slug or ID) or null
+ */
+const extractFileReference = (value) => {
+  if (!value) return null;
+  
+  // If it's already a file reference (slug or ID, not a URL), return it
+  if (typeof value === 'string' && !value.startsWith('http')) {
+    return value;
+  }
+  
+  // If it's a URL, try to extract file reference
+  try {
+    const url = new URL(value);
+    // Check if it's a file API endpoint: /files/{slug}/download or /files/{id}/download
+    const match = url.pathname.match(/\/files\/([^\/]+)\/(download|url)/);
+    if (match) {
+      return match[1]; // Return the slug or ID
+    }
+  } catch {
+    // Not a valid URL, might be a direct reference
+    return value;
+  }
+  
+  return null;
+};
+
+/**
+ * Get organization logo URL and reference from API
+ * @returns {Promise<{url: string|null, reference: string|null}>} Logo URL and reference or nulls if not available
+ */
+const getOrganizationLogoUrl = async () => {
+  try {
+    console.log("Fetching organization logo...");
+    const response = await api.get("/settings/organizations/");
+    const data = response.data;
+    
+    // Handle paginated response structure: { organizations: [...], total, page, ... }
+    const organisation = data?.organizations?.[0] || data;
+    
+    if (!organisation) {
+      console.warn("No organisation found in response");
+      return { url: null, reference: null };
+    }
+    
+    // Extract logo reference from branding_config
+    const brandingConfig = organisation.branding_config || {};
+    console.log("Branding config:", brandingConfig);
+    
+    // Priority: organization_logo_url > logo_url (legacy)
+    const logoReference = brandingConfig.organization_logo_url || brandingConfig.logo_url;
+    
+    if (!logoReference) {
+      console.warn("No logo reference found in branding_config");
+      return { url: null, reference: null };
+    }
+    
+    console.log("Logo reference found:", logoReference, "Type:", typeof logoReference);
+    
+    // Convert to string for processing (handles both string and number IDs)
+    const logoRefString = String(logoReference);
+    
+    // Check if it's a full HTTP/HTTPS URL
+    const isFullUrl = logoRefString.startsWith('http://') || logoRefString.startsWith('https://');
+    
+    if (isFullUrl) {
+      // It's already a full URL (for backward compatibility with old data)
+      console.log("Using logo as direct URL:", logoRefString);
+      return { url: logoRefString, reference: null };
+    }
+    
+    // It's a file reference (slug or ID), get fresh signed URL
+    console.log("Logo is a file reference, fetching fresh URL for:", logoRefString);
+    try {
+      const fileUrlResponse = await filesService.getFileUrl(logoRefString);
+      const url = fileUrlResponse?.url || fileUrlResponse;
+      console.log("Got fresh logo URL:", url ? "Success" : "Failed");
+      return { url: url || null, reference: logoRefString };
+    } catch (error) {
+      console.error("Failed to get file URL for logo reference:", error);
+      // Return the reference anyway so we can try API download
+      return { url: null, reference: logoRefString };
+    }
+  } catch (error) {
+    console.error("Failed to fetch organization logo:", error);
+    return { url: null, reference: null };
+  }
+};
+
+/**
+ * Load image from URL and convert to base64 data URL
+ * Handles CORS issues with S3 URLs by using canvas method
+ * @param {string} imageUrl - The image URL
+ * @param {string} fileReference - Optional file reference (ID/slug) to use API download if CORS fails
+ * @returns {Promise<string|null>} Base64 data URL or null if failed
+ */
+const loadImageAsDataUrl = async (imageUrl, fileReference = null) => {
+  try {
+    console.log("Loading image from URL:", imageUrl.substring(0, 100) + "...");
+    
+    // Check if it's an S3 URL - these often have CORS issues
+    const isS3Url = imageUrl.includes('s3.amazonaws.com') || imageUrl.includes('amazonaws.com');
+    
+    if (isS3Url) {
+      // For S3 URLs, try canvas method first (works if CORS allows it)
+      console.log("S3 URL detected, trying canvas method to bypass CORS...");
+      const canvasResult = await loadImageViaCanvas(imageUrl);
+      if (canvasResult) {
+        return canvasResult;
+      }
+      
+      // If canvas fails and we have a file reference, try API download
+      if (fileReference) {
+        console.log("Canvas method failed, trying API download for file reference:", fileReference);
+        return await loadImageViaAPI(fileReference);
+      }
+      
+      return null;
+    }
+    
+    // For non-S3 URLs, try standard fetch first
+    try {
+      const response = await fetch(imageUrl, {
+        mode: 'cors',
+        credentials: 'include',
+      });
+      
+      if (!response.ok) {
+        console.error(`Failed to load image: HTTP ${response.status} ${response.statusText}`);
+        // Fallback to canvas method or API if we have file reference
+        if (fileReference) {
+          return await loadImageViaAPI(fileReference);
+        }
+        return await loadImageViaCanvas(imageUrl);
+      }
+      
+      console.log("Image fetch successful, converting to blob...");
+      const blob = await response.blob();
+      console.log("Blob created, size:", blob.size, "type:", blob.type);
+      
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          console.log("Image converted to data URL, length:", reader.result?.length || 0);
+          resolve(reader.result);
+        };
+        reader.onerror = (error) => {
+          console.error("FileReader error:", error);
+          reject(error);
+        };
+        reader.readAsDataURL(blob);
+      });
+    } catch (fetchError) {
+      console.warn("Fetch failed, trying alternative methods:", fetchError);
+      // Fallback to API download if we have file reference
+      if (fileReference) {
+        return await loadImageViaAPI(fileReference);
+      }
+      // Otherwise try canvas
+      return await loadImageViaCanvas(imageUrl);
+    }
+  } catch (error) {
+    console.error("Failed to load image:", error);
+    console.error("Error details:", error.message, error.stack);
+    return null;
+  }
+};
+
+/**
+ * Load image via API download endpoint to bypass CORS
+ * @param {string} fileReference - File reference (ID or slug)
+ * @returns {Promise<string|null>} Base64 data URL or null if failed
+ */
+const loadImageViaAPI = async (fileReference) => {
+  try {
+    console.log("Downloading image via API for file reference:", fileReference);
+    
+    // Try /files/{slug}/download first, then fallback to /settings/files/{slug}/download
+    let response;
+    try {
+      response = await api.get(`/files/${fileReference}/download`, {
+        responseType: 'blob',
+      });
+    } catch (error) {
+      console.log("First endpoint failed, trying /settings/files endpoint:", error.message);
+      // Fallback to settings endpoint
+      try {
+        response = await api.get(`/settings/files/${fileReference}/download`, {
+          responseType: 'blob',
+        });
+      } catch (secondError) {
+        console.error("Both download endpoints failed:", secondError);
+        return null;
+      }
+    }
+    
+    const blob = response.data;
+    const contentType = response.headers['content-type'] || blob.type;
+    console.log("Blob downloaded via API, size:", blob.size, "type:", contentType);
+    
+    // Check if the response is actually JSON (error message or redirect)
+    if (contentType && contentType.includes('application/json')) {
+      console.warn("API returned JSON instead of image blob, attempting to parse...");
+      try {
+        const text = await blob.text();
+        const jsonData = JSON.parse(text);
+        console.log("Parsed JSON response:", jsonData);
+        
+        // If JSON contains a URL, try using that
+        if (jsonData.url || jsonData.download_url || jsonData.file_url) {
+          const url = jsonData.url || jsonData.download_url || jsonData.file_url;
+          console.log("Found URL in JSON response, trying to use it:", url);
+          // Try canvas method with this URL
+          return await loadImageViaCanvas(url);
+        }
+        
+        // If JSON contains an error, log it
+        if (jsonData.error || jsonData.message) {
+          console.error("API returned error:", jsonData.error || jsonData.message);
+        }
+        
+        return null;
+      } catch (parseError) {
+        console.error("Failed to parse JSON response:", parseError);
+        return null;
+      }
+    }
+    
+    // If it's not an image type, it's probably not valid
+    if (!contentType || (!contentType.startsWith('image/') && !contentType.includes('svg'))) {
+      console.warn("Response is not an image type:", contentType);
+      // Still try to use it, might work
+    }
+    
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        console.log("Image downloaded via API and converted to data URL");
+        resolve(reader.result);
+      };
+      reader.onerror = (error) => {
+        console.error("FileReader error for API download:", error);
+        reject(error);
+      };
+      reader.readAsDataURL(blob);
+    });
+  } catch (error) {
+    console.error("Failed to download image via API:", error);
+    return null;
+  }
+};
+
+/**
+ * Load image via canvas to bypass CORS restrictions
+ * This method works for images that can be loaded into an Image element
+ * @param {string} imageUrl - The image URL
+ * @returns {Promise<string|null>} Base64 data URL or null if failed
+ */
+const loadImageViaCanvas = async (imageUrl) => {
+  return new Promise((resolve) => {
+    try {
+      const img = new Image();
+      // Set crossOrigin to anonymous to attempt CORS
+      img.crossOrigin = 'anonymous';
+      
+      img.onload = () => {
+        try {
+          // Create canvas and draw image
+          const canvas = document.createElement('canvas');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0);
+          
+          // Convert to data URL - preserve original format if possible
+          let dataUrl;
+          if (imageUrl.toLowerCase().includes('.svg')) {
+            // For SVG, convert to PNG via canvas
+            dataUrl = canvas.toDataURL('image/png');
+          } else if (imageUrl.toLowerCase().includes('.png')) {
+            dataUrl = canvas.toDataURL('image/png');
+          } else {
+            dataUrl = canvas.toDataURL('image/jpeg', 0.95);
+          }
+          
+          console.log("Image loaded via canvas, converted to data URL, size:", dataUrl.length);
+          resolve(dataUrl);
+        } catch (canvasError) {
+          console.error("Canvas conversion failed:", canvasError);
+          resolve(null);
+        }
+      };
+      
+      img.onerror = (error) => {
+        console.error("Image load via canvas failed:", error);
+        // If canvas method fails due to CORS, try using the API to download
+        // But we need the file reference for that, so we'll return null
+        resolve(null);
+      };
+      
+      // Set timeout
+      const timeout = setTimeout(() => {
+        if (!img.complete) {
+          console.warn("Image load timeout via canvas");
+          resolve(null);
+        }
+      }, 10000); // 10 second timeout
+      
+      // Clear timeout on load
+      const originalOnload = img.onload;
+      img.onload = () => {
+        clearTimeout(timeout);
+        originalOnload();
+      };
+      
+      img.src = imageUrl;
+    } catch (error) {
+      console.error("Canvas method failed:", error);
+      resolve(null);
+    }
+  });
+};
+
+/**
+ * Add organization logo to jsPDF document (top-right corner)
+ * @param {jsPDF} pdf - The jsPDF instance
+ * @param {number} pageWidth - Page width in mm
+ * @param {number} pageHeight - Page height in mm
+ * @param {number} margin - Page margin in mm
+ * @returns {Promise<void>}
+ */
+const addLogoToJsPDF = async (pdf, pageWidth, pageHeight, margin = 20) => {
+  try {
+    console.log("Starting to add logo to PDF...");
+    const { url: logoUrl, reference: logoReference } = await getOrganizationLogoUrl();
+    if (!logoUrl && !logoReference) {
+      console.warn("No logo URL or reference returned, skipping logo addition");
+      return; // No logo available, skip
+    }
+    
+    if (logoUrl) {
+      console.log("Logo URL obtained, loading image:", logoUrl.substring(0, 50) + "...");
+    } else {
+      console.log("No logo URL, but have reference, will use API download:", logoReference);
+    }
+    
+    let imageDataUrl = await loadImageAsDataUrl(logoUrl, logoReference);
+    
+    // If all methods failed, we can't load the logo due to CORS restrictions
+    if (!imageDataUrl) {
+      console.warn(
+        "⚠️ Cannot load organization logo for PDF due to CORS restrictions. " +
+        "The S3 signed URL does not allow cross-origin requests from the browser. " +
+        "To fix this, the backend needs to either:\n" +
+        "1. Configure S3 CORS to allow the frontend domain, or\n" +
+        "2. Provide a proxy endpoint that serves files with proper CORS headers.\n" +
+        "PDF will be generated without the logo."
+      );
+      return; // Failed to load image, skip gracefully
+    }
+    
+    console.log("Image loaded as data URL, creating image element...");
+    // Validate that the data URL is actually an image (not JSON or other content)
+    if (!imageDataUrl.startsWith('data:image/')) {
+      console.error("Data URL is not an image format:", imageDataUrl.substring(0, 100));
+      return; // Skip logo if data URL is invalid
+    }
+    
+    // Create image element to get dimensions
+    const img = new Image();
+    await new Promise((resolve, reject) => {
+      img.onload = () => {
+        console.log("Image element loaded, dimensions:", img.width, "x", img.height);
+        resolve();
+      };
+      img.onerror = (error) => {
+        console.error("Failed to load logo image element:", error);
+        // Try to see what the data URL contains
+        if (imageDataUrl.length < 200) {
+          console.error("Data URL content (first 200 chars):", imageDataUrl);
+        }
+        reject(new Error("Image load failed"));
+      };
+      img.src = imageDataUrl;
+    });
+    
+    // Logo size constraints: max width 2.5 inches (63.5mm), max height 0.75 inches (19.05mm)
+    const maxWidth = 63.5; // 2.5 inches in mm
+    const maxHeight = 19.05; // 0.75 inches in mm
+    
+    // Calculate dimensions maintaining aspect ratio
+    let imgWidth = (img.width * 0.264583); // Convert pixels to mm
+    let imgHeight = (img.height * 0.264583);
+    
+    console.log("Original image size (mm):", imgWidth, "x", imgHeight);
+    
+    // Scale down if too large
+    if (imgWidth > maxWidth) {
+      const scale = maxWidth / imgWidth;
+      imgWidth = maxWidth;
+      imgHeight = imgHeight * scale;
+    }
+    if (imgHeight > maxHeight) {
+      const scale = maxHeight / imgHeight;
+      imgHeight = maxHeight;
+      imgWidth = imgWidth * scale;
+    }
+    
+    console.log("Scaled image size (mm):", imgWidth, "x", imgHeight);
+    
+    // Position: top-right corner
+    const logoX = pageWidth - margin - imgWidth;
+    const logoY = margin;
+    
+    console.log("Logo position (mm):", logoX, ",", logoY);
+    
+    // Determine image format from data URL MIME type
+    let imageFormat = 'JPEG'; // Default
+    if (imageDataUrl.startsWith('data:image/')) {
+      const mimeMatch = imageDataUrl.match(/data:image\/([^;]+)/);
+      if (mimeMatch) {
+        const mimeType = mimeMatch[1].toUpperCase();
+        if (mimeType === 'PNG') {
+          imageFormat = 'PNG';
+        } else if (mimeType === 'JPEG' || mimeType === 'JPG') {
+          imageFormat = 'JPEG';
+        }
+      }
+    }
+    
+    console.log("Image format:", imageFormat);
+    
+    // Add logo to all pages
+    const totalPages = pdf.internal.getNumberOfPages();
+    console.log("Total pages in PDF:", totalPages);
+    
+    if (totalPages === 0) {
+      console.error("PDF has no pages, cannot add logo");
+      return;
+    }
+    
+    for (let i = 1; i <= totalPages; i++) {
+      pdf.setPage(i);
+      pdf.addImage(imageDataUrl, imageFormat, logoX, logoY, imgWidth, imgHeight);
+      console.log(`Logo added to page ${i}`);
+    }
+    
+    console.log(`✅ Logo successfully added to ${totalPages} page(s)`);
+  } catch (error) {
+    console.error("❌ Failed to add logo to PDF:", error);
+    console.error("Error details:", error.message, error.stack);
+    // Continue without logo if it fails
+  }
+};
+
+/**
+ * Add organization logo to pdf-lib document (top-right corner)
+ * @param {PDFDocument} pdfDoc - The pdf-lib PDFDocument instance
+ * @param {number} pageWidth - Page width in points
+ * @param {number} pageHeight - Page height in points
+ * @param {number} margin - Page margin in points
+ * @returns {Promise<void>}
+ */
+const addLogoToPdfLib = async (pdfDoc, pageWidth, pageHeight, margin = 72) => {
+  try {
+    const { url: logoUrl, reference: logoReference } = await getOrganizationLogoUrl();
+    if (!logoUrl && !logoReference) {
+      console.warn("No logo URL or reference available for PDF");
+      return; // No logo available, skip
+    }
+    
+    if (logoUrl) {
+      console.log("Logo URL obtained for pdf-lib, loading image:", logoUrl.substring(0, 50) + "...");
+    } else {
+      console.log("No logo URL, but have reference for pdf-lib, will use API download:", logoReference);
+    }
+    
+    const imageDataUrl = await loadImageAsDataUrl(logoUrl, logoReference);
+    if (!imageDataUrl) {
+      console.warn("Failed to load logo image as data URL");
+      return; // Failed to load image, skip
+    }
+    
+    // Create image element to get dimensions
+    const img = new Image();
+    await new Promise((resolve, reject) => {
+      img.onload = resolve;
+      img.onerror = () => {
+        console.warn("Failed to load logo image element");
+        reject(new Error("Image load failed"));
+      };
+      img.src = imageDataUrl;
+    });
+    
+    // Logo size constraints: max width 2.5 inches (180 points), max height 0.75 inches (54 points)
+    const maxWidth = 180; // 2.5 inches in points
+    const maxHeight = 54; // 0.75 inches in points
+    
+    // Calculate dimensions maintaining aspect ratio
+    // Convert pixels to points (1 pixel = 0.75 points at 96 DPI)
+    let imgWidth = img.width * 0.75;
+    let imgHeight = img.height * 0.75;
+    
+    // Scale down if too large
+    if (imgWidth > maxWidth) {
+      const scale = maxWidth / imgWidth;
+      imgWidth = maxWidth;
+      imgHeight = imgHeight * scale;
+    }
+    if (imgHeight > maxHeight) {
+      const scale = maxHeight / imgHeight;
+      imgHeight = maxHeight;
+      imgWidth = imgWidth * scale;
+    }
+    
+    // Position: top-right corner
+    const logoX = pageWidth - margin - imgWidth;
+    const logoY = pageHeight - margin - imgHeight;
+    
+    // Embed image in PDF - detect format from data URL
+    let image;
+    if (imageDataUrl.startsWith('data:image/png')) {
+      image = await pdfDoc.embedPng(imageDataUrl);
+    } else {
+      image = await pdfDoc.embedJpg(imageDataUrl);
+    }
+    
+    // Add logo to all pages
+    const pages = pdfDoc.getPages();
+    if (pages.length === 0) {
+      console.warn("PDF has no pages, cannot add logo");
+      return;
+    }
+    
+    pages.forEach((page) => {
+      page.drawImage(image, {
+        x: logoX,
+        y: logoY,
+        width: imgWidth,
+        height: imgHeight,
+      });
+    });
+    
+    console.log(`Logo added to ${pages.length} page(s) using pdf-lib`);
+  } catch (error) {
+    console.warn("Failed to add logo to PDF:", error);
+    // Continue without logo if it fails
+  }
+};
 
 /**
  * Generate PDF from form submission
@@ -85,6 +639,11 @@ export const generateFormSubmissionPDF = async ({
       pdf.addImage(canvas.toDataURL("image/png"), "PNG", 0, position, imgWidth, imgHeight);
       heightLeft -= pageHeight;
     }
+
+    // Add organization logo to all pages
+    const pdfPageWidth = pdf.internal.pageSize.getWidth();
+    const pdfPageHeight = pdf.internal.pageSize.getHeight();
+    await addLogoToJsPDF(pdf, pdfPageWidth, pdfPageHeight, 20);
 
     // Clean up
     document.body.removeChild(tempContainer);
@@ -286,6 +845,9 @@ export const generateFormSubmissionPDFFromData = async ({
         pageHeight - 10
       );
     }
+
+    // Add organization logo to all pages
+    await addLogoToJsPDF(pdf, pageWidth, pageHeight, margin);
 
     // Save PDF
     pdf.save(filename);
@@ -785,6 +1347,9 @@ export const generateFormPDFFromData = async ({
       );
     }
 
+    // Add organization logo to all pages
+    await addLogoToJsPDF(pdf, pageWidth, pageHeight, margin);
+
     console.log("=== REACHED SAVE SECTION ===");
     
     // Validate PDF was created
@@ -1136,6 +1701,9 @@ export const generateFillableFormPDF = async ({
       borderWidth: 1,
     });
     addText("(MM/DD/YYYY)", margin + 35, yPosition + 2, 7, false, rgb(0.6, 0.6, 0.6));
+
+    // Add organization logo to all pages
+    await addLogoToPdfLib(pdfDoc, width, height, margin);
 
     // Save PDF
     const pdfBytes = await pdfDoc.save();

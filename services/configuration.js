@@ -106,6 +106,11 @@ export const configurationService = {
         ...(organisationData.integration_config !== undefined && {
           integration_config: organisationData.integration_config,
         }),
+        // Always include branding_config if it exists
+        // Backend will merge with existing config
+        ...(organisationData.branding_config !== undefined && {
+          branding_config: organisationData.branding_config,
+        }),
       };
       
       // Debug: Log integration_config to verify email styling fields are included
