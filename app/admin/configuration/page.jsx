@@ -1010,6 +1010,8 @@ function ConfigurationPageContent() {
                       id="email-enabled"
                       checked={emailEnabled}
                       onCheckedChange={(checked) => {
+                        // Note: Enabling/disabling Email doesn't modify the fields themselves,
+                        // it just shows/hides them. We don't need to mark fields as modified here.
                         setEmailEnabled(checked);
                         if (checked) {
                           // Enable: Restore original value if it exists and is not masked
@@ -1109,6 +1111,8 @@ function ConfigurationPageContent() {
                       id="sms-enabled"
                       checked={smsEnabled}
                       onCheckedChange={(checked) => {
+                        // Note: Enabling/disabling SMS doesn't modify the fields themselves,
+                        // it just shows/hides them. We don't need to mark fields as modified here.
                         setSmsEnabled(checked);
                         if (checked) {
                           // Enable: Restore original values if they exist and are not masked
@@ -1179,15 +1183,16 @@ function ConfigurationPageContent() {
                               return sid || "";
                             })()
                           }
-                          onChange={(e) =>
+                          onChange={(e) => {
+                            markFieldModified('twilio_account_sid');
                             setOrganisationData((prev) => ({
                               ...prev,
                               integration_config: {
                                 ...prev.integration_config,
                                 twilio_account_sid: e.target.value || null,
                               },
-                            }))
-                          }
+                            }));
+                          }}
                           placeholder={
                             organisationData.integration_config?.twilio_account_sid && isMaskedValue(organisationData.integration_config.twilio_account_sid)
                               ? "•••••••• (Click to update)"
@@ -1210,15 +1215,16 @@ function ConfigurationPageContent() {
                               return token || "";
                             })()
                           }
-                          onChange={(e) =>
+                          onChange={(e) => {
+                            markFieldModified('twilio_auth_token');
                             setOrganisationData((prev) => ({
                               ...prev,
                               integration_config: {
                                 ...prev.integration_config,
                                 twilio_auth_token: e.target.value || null,
                               },
-                            }))
-                          }
+                            }));
+                          }}
                           placeholder={
                             organisationData.integration_config?.twilio_auth_token && isMaskedValue(organisationData.integration_config.twilio_auth_token)
                               ? "•••••••• (Click to update)"
@@ -1242,15 +1248,16 @@ function ConfigurationPageContent() {
                             return number || "";
                           })()
                         }
-                        onChange={(e) =>
+                        onChange={(e) => {
+                          markFieldModified('twilio_from_number');
                           setOrganisationData((prev) => ({
                             ...prev,
                             integration_config: {
                               ...prev.integration_config,
                               twilio_from_number: e.target.value || null,
                             },
-                          }))
-                        }
+                          }));
+                        }}
                         placeholder={
                           organisationData.integration_config?.twilio_from_number && isMaskedValue(organisationData.integration_config.twilio_from_number)
                             ? "•••••••• (Click to update)"
@@ -1576,15 +1583,16 @@ function ConfigurationPageContent() {
                       id="from_email"
                       type="email"
                       value={organisationData.integration_config?.from_email || ""}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        markFieldModified('from_email');
                         setOrganisationData((prev) => ({
                           ...prev,
                           integration_config: {
                             ...prev.integration_config,
                             from_email: e.target.value || null,
                           },
-                        }))
-                      }
+                        }));
+                      }}
                       placeholder="noreply@example.com"
                     />
                   </div>
@@ -1593,15 +1601,16 @@ function ConfigurationPageContent() {
                     <Input
                       id="from_name"
                       value={organisationData.integration_config?.from_name || ""}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        markFieldModified('from_name');
                         setOrganisationData((prev) => ({
                           ...prev,
                           integration_config: {
                             ...prev.integration_config,
                             from_name: e.target.value || null,
                           },
-                        }))
-                      }
+                        }));
+                      }}
                       placeholder="Melode"
                     />
                   </div>
@@ -1610,15 +1619,16 @@ function ConfigurationPageContent() {
                     <Input
                       id="app_name"
                       value={organisationData.integration_config?.app_name || ""}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        markFieldModified('app_name');
                         setOrganisationData((prev) => ({
                           ...prev,
                           integration_config: {
                             ...prev.integration_config,
                             app_name: e.target.value || null,
                           },
-                        }))
-                      }
+                        }));
+                      }}
                       placeholder="Melode"
                     />
                   </div>
@@ -1627,15 +1637,16 @@ function ConfigurationPageContent() {
                     <Input
                       id="domain_name"
                       value={organisationData.integration_config?.domain_name || ""}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        markFieldModified('domain_name');
                         setOrganisationData((prev) => ({
                           ...prev,
                           integration_config: {
                             ...prev.integration_config,
                             domain_name: e.target.value || null,
                           },
-                        }))
-                      }
+                        }));
+                      }}
                       placeholder="melode.co.uk"
                     />
                   </div>
@@ -1645,15 +1656,16 @@ function ConfigurationPageContent() {
                       id="frontend_base_url"
                       type="url"
                       value={organisationData.integration_config?.frontend_base_url || ""}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        markFieldModified('frontend_base_url');
                         setOrganisationData((prev) => ({
                           ...prev,
                           integration_config: {
                             ...prev.integration_config,
                             frontend_base_url: e.target.value || null,
                           },
-                        }))
-                      }
+                        }));
+                      }}
                       placeholder="https://app.melode.co.uk"
                     />
                   </div>
@@ -1676,7 +1688,12 @@ function ConfigurationPageContent() {
                     <Switch
                       id="enable_two_way_communication"
                       checked={organisationData.integration_config?.enable_two_way_communication || false}
-                      onCheckedChange={(checked) =>
+                      onCheckedChange={(checked) => {
+                        markFieldModified('enable_two_way_communication');
+                        if (checked === false) {
+                          markFieldModified('enable_email_replies');
+                          markFieldModified('enable_sms_replies');
+                        }
                         setOrganisationData((prev) => ({
                           ...prev,
                           integration_config: {
@@ -1688,8 +1705,8 @@ function ConfigurationPageContent() {
                               enable_sms_replies: false,
                             }),
                           },
-                        }))
-                      }
+                        }));
+                      }}
                     />
                   </div>
                   <div className="flex items-center justify-between">
@@ -1702,15 +1719,16 @@ function ConfigurationPageContent() {
                     <Switch
                       id="enable_email_replies"
                       checked={organisationData.integration_config?.enable_email_replies || false}
-                      onCheckedChange={(checked) =>
+                      onCheckedChange={(checked) => {
+                        markFieldModified('enable_email_replies');
                         setOrganisationData((prev) => ({
                           ...prev,
                           integration_config: {
                             ...prev.integration_config,
                             enable_email_replies: checked,
                           },
-                        }))
-                      }
+                        }));
+                      }}
                       disabled={!organisationData.integration_config?.enable_two_way_communication}
                     />
                   </div>
@@ -1724,15 +1742,16 @@ function ConfigurationPageContent() {
                     <Switch
                       id="enable_sms_replies"
                       checked={organisationData.integration_config?.enable_sms_replies || false}
-                      onCheckedChange={(checked) =>
+                      onCheckedChange={(checked) => {
+                        markFieldModified('enable_sms_replies');
                         setOrganisationData((prev) => ({
                           ...prev,
                           integration_config: {
                             ...prev.integration_config,
                             enable_sms_replies: checked,
                           },
-                        }))
-                      }
+                        }));
+                      }}
                       disabled={!organisationData.integration_config?.enable_two_way_communication}
                     />
                   </div>
@@ -1751,15 +1770,16 @@ function ConfigurationPageContent() {
                       id="list_unsubscribe_url"
                       type="url"
                       value={organisationData.integration_config?.list_unsubscribe_url || ""}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        markFieldModified('list_unsubscribe_url');
                         setOrganisationData((prev) => ({
                           ...prev,
                           integration_config: {
                             ...prev.integration_config,
                             list_unsubscribe_url: e.target.value || null,
                           },
-                        }))
-                      }
+                        }));
+                      }}
                       placeholder="https://app.melode.co.uk/unsubscribe"
                     />
                   </div>
@@ -1769,15 +1789,16 @@ function ConfigurationPageContent() {
                       id="list_unsubscribe_mailto"
                       type="email"
                       value={organisationData.integration_config?.list_unsubscribe_mailto || ""}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        markFieldModified('list_unsubscribe_mailto');
                         setOrganisationData((prev) => ({
                           ...prev,
                           integration_config: {
                             ...prev.integration_config,
                             list_unsubscribe_mailto: e.target.value || null,
                           },
-                        }))
-                      }
+                        }));
+                      }}
                       placeholder="mailto:unsubscribe@melode.co.uk"
                     />
                   </div>
@@ -1792,15 +1813,16 @@ function ConfigurationPageContent() {
                   <Switch
                     id="list_unsubscribe_one_click"
                     checked={organisationData.integration_config?.list_unsubscribe_one_click !== false}
-                    onCheckedChange={(checked) =>
+                    onCheckedChange={(checked) => {
+                      markFieldModified('list_unsubscribe_one_click');
                       setOrganisationData((prev) => ({
                         ...prev,
                         integration_config: {
                           ...prev.integration_config,
                           list_unsubscribe_one_click: checked,
                         },
-                      }))
-                    }
+                      }));
+                    }}
                   />
                 </div>
               </div>
