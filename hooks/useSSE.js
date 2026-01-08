@@ -226,13 +226,50 @@ export const useSSE = () => {
           break;
         }
 
-        case "notification:created": {
-          // event.data contains the notification object
-          const notificationData = event.data;
+        case "broadcast:created": {
+          // event.data contains the broadcast object
+          const broadcastData = event.data;
           
-          // Invalidate notifications list
+          console.log("SSE: Processing broadcast:created event", broadcastData);
+          
+          if (broadcastData && broadcastData.id) {
+            // Update broadcast detail cache if viewing that broadcast
+            if (broadcastData.slug) {
+              queryClient.setQueryData([...messageKeys.broadcasts(), "detail", broadcastData.slug], broadcastData);
+            }
+            
+            // Dispatch custom event to notify components about new broadcast
+            if (typeof window !== "undefined") {
+              window.dispatchEvent(new CustomEvent("sse-broadcast-created", {
+                detail: { type: "broadcast:created", data: broadcastData }
+              }));
+            }
+          }
+          
+          // Invalidate broadcast queries to refresh lists
+          queryClient.invalidateQueries({ queryKey: messageKeys.broadcasts(), exact: false });
+          queryClient.invalidateQueries({ queryKey: messageKeys.broadcastInbox(), exact: false });
+          
+          // Also invalidate notifications (broadcasts with message_type: "notification" or "alert" still trigger notification:created)
           queryClient.invalidateQueries({ queryKey: notificationKeys.lists() });
           queryClient.invalidateQueries({ queryKey: notificationKeys.unreadCount() });
+          
+          console.log("SSE: Invalidated broadcast queries");
+          break;
+        }
+
+        case "notification:created": {
+          // event.data contains the notification object
+          // Note: Broadcasts are excluded from notifications endpoint, but broadcasts with message_type: "notification" or "alert" 
+          // may still trigger this event. The backend should filter out broadcasts from /notifications endpoint.
+          const notificationData = event.data;
+          
+          // Only invalidate if it's not a broadcast (broadcasts are handled by broadcast:created event)
+          if (!notificationData?.is_broadcast) {
+            // Invalidate notifications list
+            queryClient.invalidateQueries({ queryKey: notificationKeys.lists() });
+            queryClient.invalidateQueries({ queryKey: notificationKeys.unreadCount() });
+          }
           break;
         }
 

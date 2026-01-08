@@ -28,7 +28,7 @@ import {
   Download,
   Filter,
 } from "lucide-react";
-import { useMessage } from "@/hooks/useMessages";
+import { useBroadcast } from "@/hooks/useMessages";
 import { useCurrentUser } from "@/hooks/useAuth";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
 import { cn } from "@/lib/utils";
@@ -41,12 +41,14 @@ const BroadcastStatusPage = () => {
   const broadcastSlug = params.id || params.slug;
   const { data: currentUser } = useCurrentUser();
   const { hasPermission } = usePermissionsCheck();
-  const { data: broadcast, isLoading } = useMessage(broadcastSlug);
+  const { data: broadcast, isLoading } = useBroadcast(broadcastSlug);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all"); // "all", "read", "unread", "acknowledged", "not_acknowledged"
   
-  // Check if user can create broadcasts (communal outbox access)
-  const canCreateBroadcast = hasPermission("broadcast:create") || hasPermission("BROADCAST_CREATE");
+  // Check if user can send broadcasts (communal outbox access)
+  // Creators can always view status, others need BROADCAST_SEND or BROADCAST_READ
+  const canSendBroadcasts = hasPermission("broadcast:create") || hasPermission("BROADCAST_CREATE") || hasPermission("broadcast:send") || hasPermission("BROADCAST_SEND");
+  const canReadBroadcast = hasPermission("broadcast:read") || hasPermission("BROADCAST_READ");
 
   if (isLoading) {
     return (
@@ -73,16 +75,16 @@ const BroadcastStatusPage = () => {
   }
 
   // Check if current user is the creator
-  const isCreator = currentUser?.id === broadcast.created_by_user_id;
+  const isCreator = currentUser?.id === broadcast?.created_by_user_id;
 
-  // Allow access if user is creator OR has create permission (communal outbox)
-  if (!isCreator && !canCreateBroadcast) {
+  // Allow access if user is creator OR has send/read permission
+  if (!isCreator && !canSendBroadcasts && !canReadBroadcast) {
     return (
       <div className="p-4">
         <Card>
           <CardContent className="pt-6">
             <div className="text-center text-red-600">
-              You can only view status for broadcasts you created
+              You can only view status for broadcasts you created or if you have BROADCAST_SEND or BROADCAST_READ permission
             </div>
           </CardContent>
         </Card>

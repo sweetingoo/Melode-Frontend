@@ -198,7 +198,7 @@ class SSEService {
                       // Handle event
                       console.log("SSE: Complete event parsed:", currentEvent.type, currentEvent.data);
                       
-                      if (currentEvent.type && (currentEvent.type.startsWith("message:") || currentEvent.type.startsWith("notification:"))) {
+                      if (currentEvent.type && (currentEvent.type.startsWith("message:") || currentEvent.type.startsWith("notification:") || currentEvent.type.startsWith("broadcast:"))) {
                         console.log("SSE: Dispatching event:", currentEvent.type);
                         if (onEvent) {
                           onEvent({

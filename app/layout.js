@@ -14,7 +14,18 @@ export async function generateMetadata() {
   let description = "Melode Management Platform";
   
   try {
+    // Only try to fetch organization if we're in a context where auth might be available
+    // During SSR metadata generation, auth tokens may not be available, so we'll gracefully fail
     const response = await configurationService.getOrganisation();
+    
+    // If response is null (403 handled gracefully), skip processing
+    if (!response || !response.data) {
+      return {
+        title: "Melode",
+        description: description,
+      };
+    }
+    
     const data = response.data;
     
     // Handle paginated response structure: { organizations: [...], total, page, ... }
@@ -25,8 +36,11 @@ export async function generateMetadata() {
       description = `Melode : ${orgName} Management Platform`;
     }
   } catch (error) {
-    // If fetching fails, use default description
-    console.warn("Failed to fetch organization name for metadata:", error);
+    // If fetching fails (e.g., 403 Forbidden during SSR), use default description
+    // Don't log as error - this is expected behavior when auth is not available during metadata generation
+    if (error?.response?.status !== 403) {
+      console.warn("Failed to fetch organization name for metadata:", error);
+    }
   }
   
   return {

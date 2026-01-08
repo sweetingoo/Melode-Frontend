@@ -87,6 +87,12 @@ export const configurationService = {
     try {
       return await api.get("/settings/organizations/");
     } catch (error) {
+      // Silently handle 403 errors during metadata generation (expected during SSR)
+      if (error.response?.status === 403) {
+        // Return a mock response structure to prevent errors from propagating
+        // This allows metadata generation to gracefully handle the missing auth
+        return { data: null };
+      }
       console.error("Get organisation failed:", error);
       throw error;
     }

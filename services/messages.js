@@ -12,12 +12,16 @@ export const messagesService = {
         }
     },
 
-    // Get all broadcasts (admin view)
+    // Get broadcasts
+    // GET /api/v1/broadcasts?my_broadcasts=false (requires BROADCAST_SEND - returns ALL broadcasts)
+    // GET /api/v1/broadcasts?my_broadcasts=true (no permission check needed - returns broadcasts created by current user)
+    // Backend should filter by created_by_user_id when my_broadcasts=true
     getBroadcasts: async (params = {}) => {
         try {
-            // Use is_broadcast=true to get only broadcasts
-            const queryParams = { ...params, is_broadcast: true };
-            return await api.get("/messages", { params: queryParams });
+            // Use new broadcasts endpoint
+            // If my_broadcasts is not specified, default to false (list all broadcasts - requires BROADCAST_SEND)
+            const queryParams = { ...params, my_broadcasts: params.my_broadcasts ?? false };
+            return await api.get("/broadcasts", { params: queryParams });
         } catch (error) {
             console.error("Get broadcasts failed:", error);
             throw error;
@@ -34,12 +38,60 @@ export const messagesService = {
         }
     },
 
+    // Get broadcast by slug
+    // GET /api/v1/broadcasts/{broadcast_id}
+    // Requires BROADCAST_READ if user is not recipient/creator
+    getBroadcast: async (slug) => {
+        try {
+            return await api.get(`/broadcasts/${slug}`);
+        } catch (error) {
+            console.error(`Get broadcast ${slug} failed:`, error);
+            throw error;
+        }
+    },
+
     // Create message
     createMessage: async (messageData) => {
         try {
             return await api.post("/messages", messageData);
         } catch (error) {
             console.error("Create message failed:", error);
+            throw error;
+        }
+    },
+
+    // Create broadcast
+    // POST /api/v1/broadcasts (requires BROADCAST_SEND)
+    createBroadcast: async (broadcastData) => {
+        try {
+            const response = await api.post("/broadcasts", broadcastData);
+            // Log response in development for debugging
+            if (process.env.NODE_ENV === "development") {
+                console.log("Create broadcast response:", response);
+            }
+            return response;
+        } catch (error) {
+            console.error("Create broadcast failed:", error);
+            // Log full error details in development
+            if (process.env.NODE_ENV === "development") {
+                console.error("Broadcast error details:", {
+                    message: error.message,
+                    response: error.response?.data,
+                    status: error.response?.status,
+                });
+            }
+            throw error;
+        }
+    },
+
+    // Update broadcast
+    // PUT /api/v1/broadcasts/{broadcast_id}
+    // Requires BROADCAST_UPDATE if user is not creator
+    updateBroadcast: async (slug, broadcastData) => {
+        try {
+            return await api.put(`/broadcasts/${slug}`, broadcastData);
+        } catch (error) {
+            console.error(`Update broadcast ${slug} failed:`, error);
             throw error;
         }
     },
@@ -60,6 +112,25 @@ export const messagesService = {
             return await api.post(`/messages/${slug}/read`, requestBody);
         } catch (error) {
             console.error(`Mark message ${slug} as read failed:`, error);
+            throw error;
+        }
+    },
+
+    // Mark broadcast as read
+    // POST /api/v1/broadcasts/{broadcast_id}/read (no permission check needed)
+    markBroadcastAsRead: async (slug, readVia = "web") => {
+        try {
+            // Get user agent and IP if available
+            const userAgent = typeof navigator !== "undefined" ? navigator.userAgent : undefined;
+            
+            const requestBody = {
+                read_via: readVia,
+                ...(userAgent && { user_agent: userAgent }),
+            };
+            
+            return await api.post(`/broadcasts/${slug}/read`, requestBody);
+        } catch (error) {
+            console.error(`Mark broadcast ${slug} as read failed:`, error);
             throw error;
         }
     },
@@ -89,14 +160,31 @@ export const messagesService = {
         }
     },
 
+    // Acknowledge broadcast
+    // POST /api/v1/broadcasts/{broadcast_id}/acknowledge (no permission check needed)
+    acknowledgeBroadcast: async (slug, acknowledgementStatus, acknowledgementNote = "") => {
+        try {
+            return await api.post(`/broadcasts/${slug}/acknowledge`, {
+                acknowledgement_status: acknowledgementStatus, // "agreed" or "disagreed"
+                acknowledgement_note: acknowledgementNote,
+            });
+        } catch (error) {
+            console.error(`Acknowledge broadcast ${slug} failed:`, error);
+            throw error;
+        }
+    },
+
     // Get broadcast inbox
+    // GET /api/v1/broadcasts/inbox (no permission check needed - user's own inbox)
+    // Backend should return broadcasts where the current user is a recipient
+    // Filters by: recipient user_id matches current authenticated user
     getBroadcastInbox: async (params = {}) => {
         try {
             // Support both new pagination params (limit/offset) and legacy (page/per_page)
             const queryParams = { ...params };
             // If page/per_page provided, keep them as backend expects page/per_page
             // Backend defaults: page=1, per_page=20, max per_page=100
-            return await api.get("/messages/inbox", { params: queryParams });
+            return await api.get("/broadcasts/inbox", { params: queryParams });
         } catch (error) {
             console.error("Get broadcast inbox failed:", error);
             throw error;

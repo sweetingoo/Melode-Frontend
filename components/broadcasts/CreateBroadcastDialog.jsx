@@ -158,10 +158,11 @@ const CreateBroadcastDialog = ({
       send_push: formData.send_push,
       priority: formData.priority,
       requires_acknowledgement: formData.requires_acknowledgement,
-      conversation_id: null, // Set to null to create a broadcast (automatically sets is_broadcast=true)
+      // Don't include conversation_id - broadcasts are created via /broadcasts endpoint
     };
 
     // Set target based on selection
+    // Backend expects target_type to be one of: 'user', 'role', 'department'
     if (formData.target_type === "role" && selectedRoleId) {
       submitData.target_type = "role";
       submitData.target_id = parseInt(selectedRoleId);
@@ -171,8 +172,8 @@ const CreateBroadcastDialog = ({
         typeof id === "string" ? parseInt(id) : id
       );
     } else if (selectedUserIds.length > 0) {
-      // Fallback to target_user_ids
-      submitData.target_type = "target_user_ids";
+      // If users are selected but target_type wasn't "user", default to "user"
+      submitData.target_type = "user";
       submitData.target_user_ids = selectedUserIds.map((id) =>
         typeof id === "string" ? parseInt(id) : id
       );
@@ -275,7 +276,6 @@ const CreateBroadcastDialog = ({
                   <SelectContent>
                     <SelectItem value="user">Specific Users</SelectItem>
                     <SelectItem value="role">Role (Group)</SelectItem>
-                    <SelectItem value="target_user_ids">User IDs List</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -338,7 +338,7 @@ const CreateBroadcastDialog = ({
                 </div>
               )}
 
-              {(formData.target_type === "user" || formData.target_type === "target_user_ids") && (
+              {formData.target_type === "user" && (
                 <div className="space-y-2">
                   <Label>Select Users</Label>
                   <div className="space-y-2">

@@ -47,23 +47,37 @@ export const useMessage = (slug, options = {}) => {
   });
 };
 
+// Get single broadcast query
+export const useBroadcast = (slug, options = {}) => {
+  return useQuery({
+    queryKey: [...messageKeys.broadcasts(), "detail", slug],
+    queryFn: async () => {
+      const response = await messagesService.getBroadcast(slug);
+      return response.data;
+    },
+    enabled: !!slug,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    ...options,
+  });
+};
+
 // Create message mutation with optimistic updates
 export const useCreateMessage = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async (messageData) => {
-      // If conversation_id is explicitly null or undefined, ensure it's null for broadcasts
-      // This automatically sets is_broadcast=true on the backend
-      const broadcastData = {
-        ...messageData,
-        // If conversation_id is not provided or is null, set it to null explicitly for broadcasts
-        ...(messageData.conversation_id === null || messageData.conversation_id === undefined 
-          ? { conversation_id: null } 
-          : {}),
-      };
-      const response = await messagesService.createMessage(broadcastData);
-      return response.data;
+      // If conversation_id is explicitly null or undefined, it's a broadcast - use broadcast endpoint
+      if (messageData.conversation_id === null || messageData.conversation_id === undefined) {
+        // Remove conversation_id from broadcast data (not needed for broadcast endpoint)
+        const { conversation_id, ...broadcastData } = messageData;
+        const response = await messagesService.createBroadcast(broadcastData);
+        // Handle both direct data and wrapped response.data
+        return response.data || response;
+      }
+      // Otherwise, it's a regular message
+      const response = await messagesService.createMessage(messageData);
+      return response.data || response;
     },
     onMutate: async (messageData) => {
       // Cancel any outgoing refetches to avoid overwriting optimistic update
@@ -170,9 +184,23 @@ export const useCreateMessage = () => {
       // Invalidate to ensure consistency
       queryClient.invalidateQueries({ queryKey: messageKeys.lists() });
       queryClient.invalidateQueries({ queryKey: messageKeys.conversationList() });
+      
+      // If it's a broadcast (no conversation_id), invalidate broadcast queries
+      if (!variables.conversation_id) {
+        queryClient.invalidateQueries({ queryKey: messageKeys.broadcasts() });
+        queryClient.invalidateQueries({ queryKey: messageKeys.broadcastInbox() });
+      }
+      
+      // Show success toast for broadcasts
+      if (!variables.conversation_id) {
+        toast.success("Broadcast sent successfully", {
+          description: "The broadcast has been sent to all recipients.",
+        });
+      }
     },
     onError: (error, variables, context) => {
       const conversationId = variables.conversation_id || context?.conversationId;
+      const isBroadcast = !variables.conversation_id;
       
       // Remove optimistic message on error
       if (conversationId && context?.optimisticMessage) {
@@ -204,6 +232,7 @@ export const useCreateMessage = () => {
       const errorMessage =
         error?.response?.data?.message ||
         error?.response?.data?.detail ||
+        error?.message ||
         "Failed to create message";
       
       // Strip HTML tags from error message
@@ -216,7 +245,7 @@ export const useCreateMessage = () => {
         ? errorMessage.map((e) => stripHtml(e.msg || e)).join(", ")
         : stripHtml(errorMessage);
       
-      toast.error("Failed to send message", {
+      toast.error(isBroadcast ? "Failed to send broadcast" : "Failed to send message", {
         description: cleanErrorMessage,
       });
     },
@@ -228,7 +257,12 @@ export const useMarkMessageAsRead = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ slug, readVia = "web" }) => {
+    mutationFn: async ({ slug, readVia = "web", isBroadcast = false }) => {
+      // Use broadcast endpoint if it's a broadcast
+      if (isBroadcast) {
+        const response = await messagesService.markBroadcastAsRead(slug, readVia);
+        return response.data;
+      }
       const response = await messagesService.markAsRead(slug, readVia);
       return response.data;
     },
@@ -263,6 +297,12 @@ export const useMarkMessageAsRead = () => {
       
       // Invalidate messages list to refresh read status
       queryClient.invalidateQueries({ queryKey: messageKeys.lists() });
+      
+      // If it's a broadcast, invalidate broadcast queries
+      if (variables.isBroadcast) {
+        queryClient.invalidateQueries({ queryKey: messageKeys.broadcasts() });
+        queryClient.invalidateQueries({ queryKey: messageKeys.broadcastInbox() });
+      }
     },
     onError: (error) => {
       console.error("Mark message as read error:", error);
@@ -324,7 +364,16 @@ export const useAcknowledgeMessageWithStatus = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ slug, acknowledgementStatus, acknowledgementNote = "" }) => {
+    mutationFn: async ({ slug, acknowledgementStatus, acknowledgementNote = "", isBroadcast = false }) => {
+      // Use broadcast endpoint if it's a broadcast
+      if (isBroadcast) {
+        const response = await messagesService.acknowledgeBroadcast(
+          slug,
+          acknowledgementStatus,
+          acknowledgementNote
+        );
+        return response.data;
+      }
       const response = await messagesService.acknowledgeMessageWithStatus(
         slug,
         acknowledgementStatus,
@@ -349,6 +398,11 @@ export const useAcknowledgeMessageWithStatus = () => {
       // Invalidate messages list and broadcast inbox to refresh acknowledgement status
       queryClient.invalidateQueries({ queryKey: messageKeys.lists() });
       queryClient.invalidateQueries({ queryKey: messageKeys.broadcastInbox() });
+      
+      // If it's a broadcast, invalidate broadcast queries
+      if (variables.isBroadcast) {
+        queryClient.invalidateQueries({ queryKey: messageKeys.broadcasts() });
+      }
       
       const statusText = variables.acknowledgementStatus === "agreed" ? "agreed" : "disagreed";
       toast.success("Broadcast acknowledged", {
@@ -384,12 +438,14 @@ export const useBroadcastInbox = (params = {}, options = {}) => {
   });
 };
 
-// Get all broadcasts (communal outbox - for users with create permission)
+// Get all broadcasts sent by current user (outbox - for users with BROADCAST_SEND permission)
+// GET /api/v1/broadcasts?my_broadcasts=true (shows broadcasts created by current user)
 export const useAllBroadcasts = (params = {}, options = {}) => {
   return useQuery({
-    queryKey: [...messageKeys.broadcasts(), "all", params],
+    queryKey: [...messageKeys.broadcasts(), "outbox", params],
     queryFn: async () => {
-      const response = await messagesService.getBroadcasts(params);
+      // Set my_broadcasts=true to get broadcasts created by current user
+      const response = await messagesService.getBroadcasts({ ...params, my_broadcasts: true });
       return response.data;
     },
     staleTime: 0, // Always consider stale so SSE updates trigger refetch

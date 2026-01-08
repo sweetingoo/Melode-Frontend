@@ -32,7 +32,7 @@ import {
   X,
   BarChart3,
 } from "lucide-react";
-import { useMessage, useMarkMessageAsRead, useAcknowledgeMessageWithStatus } from "@/hooks/useMessages";
+import { useBroadcast, useMarkMessageAsRead, useAcknowledgeMessageWithStatus } from "@/hooks/useMessages";
 import { useCurrentUser } from "@/hooks/useAuth";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
 import { cn } from "@/lib/utils";
@@ -46,17 +46,22 @@ const BroadcastDetailPage = () => {
   const router = useRouter();
   const broadcastSlug = params.id || params.slug;
   const { data: currentUser } = useCurrentUser();
-  const { data: broadcast, isLoading } = useMessage(broadcastSlug);
+  const { data: broadcast, isLoading } = useBroadcast(broadcastSlug);
   const markAsReadMutation = useMarkMessageAsRead();
   const acknowledgeMutation = useAcknowledgeMessageWithStatus();
   const { hasPermission } = usePermissionsCheck();
   const { processedHtml, containerRef } = useFileReferences(broadcast?.content);
   
-  // Check if this is actually a broadcast
-  const isBroadcast = broadcast?.is_broadcast === true;
+  // Check if current user is recipient or creator
+  const isCreator = currentUser?.id === broadcast?.created_by_user_id;
+  const isRecipient = broadcast?.receipts?.some(
+    (r) => r.user_id === currentUser?.id
+  ) || false;
   
-  // Check broadcast read permission
-  const canReadBroadcast = hasPermission("broadcast:read") || hasPermission("BROADCAST_READ") || hasPermission("message:read");
+  // Permission check: Recipients and creators can always view (no permission check needed)
+  // Others need BROADCAST_READ permission
+  const canReadBroadcast = isCreator || isRecipient || 
+    hasPermission("broadcast:read") || hasPermission("BROADCAST_READ") || hasPermission("message:read");
 
   const [acknowledgementNote, setAcknowledgementNote] = useState("");
   const [showAcknowledgeDialog, setShowAcknowledgeDialog] = useState(false);
@@ -69,7 +74,7 @@ const BroadcastDetailPage = () => {
         (r) => r.user_id === currentUser.id
       );
       if (!receipt?.is_read) {
-        markAsReadMutation.mutate({ slug: broadcastSlug, readVia: "web" });
+        markAsReadMutation.mutate({ slug: broadcastSlug, readVia: "web", isBroadcast: true });
       }
     }
   }, [broadcast, currentUser, broadcastSlug]);
@@ -113,23 +118,7 @@ const BroadcastDetailPage = () => {
     );
   }
 
-  // Verify this is actually a broadcast
-  if (!isBroadcast) {
-    return (
-      <div className="p-4">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-center text-red-600">
-              This is not a broadcast. Please use the messages page for regular messages.
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  // Check if current user is the creator
-  const isCreator = currentUser?.id === broadcast.created_by_user_id;
+  // Check if current user is the creator (already set above)
   
   const receipt = broadcast.receipts?.find(
     (r) => r.user_id === currentUser?.id
@@ -165,6 +154,7 @@ const BroadcastDetailPage = () => {
         slug: broadcastSlug,
         acknowledgementStatus: pendingAckStatus,
         acknowledgementNote: acknowledgementNote.trim() || undefined,
+        isBroadcast: true,
       },
       {
         onSuccess: () => {

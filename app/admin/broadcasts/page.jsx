@@ -13,6 +13,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import {
@@ -49,6 +55,7 @@ const BroadcastsPage = () => {
   const router = useRouter();
   const [page, setPage] = useState(1);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [activeTab, setActiveTab] = useState("inbox"); // "inbox" or "outbox"
   const { data: usersData } = useUsers();
   const { data: rolesData } = useRoles();
   const createMessageMutation = useCreateMessage();
@@ -56,7 +63,8 @@ const BroadcastsPage = () => {
   const { data: currentUser } = useCurrentUser();
   
   // Check broadcast permissions
-  const canCreateBroadcast = hasPermission("broadcast:create") || hasPermission("BROADCAST_CREATE");
+  // BROADCAST_SEND is used for creating broadcasts and viewing communal outbox
+  const canCreateBroadcast = hasPermission("broadcast:create") || hasPermission("BROADCAST_CREATE") || hasPermission("broadcast:send") || hasPermission("BROADCAST_SEND");
   const canReadBroadcast = hasPermission("broadcast:read") || hasPermission("BROADCAST_READ") || hasPermission("message:read");
   const [filters, setFilters] = useState({
     category: "all",
@@ -66,10 +74,7 @@ const BroadcastsPage = () => {
     search: "",
   });
 
-  // If user can create broadcasts, show all broadcasts (communal outbox)
-  // Otherwise, show only their received broadcasts
-  const shouldShowAllBroadcasts = canCreateBroadcast;
-  
+  // Fetch inbox data (always available)
   const { data: inboxData, isLoading: inboxLoading, error: inboxError } = useBroadcastInbox({
     page,
     per_page: 20,
@@ -78,38 +83,74 @@ const BroadcastsPage = () => {
     ...(filters.unread_only && { unread_only: true }),
     ...(filters.unacknowledged_only && { unacknowledged_only: true }),
   }, {
-    enabled: !shouldShowAllBroadcasts, // Only fetch inbox if user doesn't have create permission
+    enabled: activeTab === "inbox", // Only fetch when inbox tab is active
   });
 
+  // Fetch outbox data (only for users with BROADCAST_SEND permission)
+  // Always fetch first page to get counts for tab badge, even if tab is not active
   const { data: allBroadcastsData, isLoading: allBroadcastsLoading, error: allBroadcastsError } = useAllBroadcasts({
+    page: 1, // Always fetch first page for counts
+    per_page: 20,
+  }, {
+    enabled: canCreateBroadcast, // Fetch if user has permission (for tab badge count)
+  });
+  
+  // Fetch full outbox data when outbox tab is active (with filters and pagination)
+  const { data: outboxData, isLoading: outboxLoading, error: outboxError } = useAllBroadcasts({
     page,
     per_page: 20,
     ...(filters.category && filters.category !== "all" && { category: filters.category }),
     ...(filters.priority && filters.priority !== "all" && { priority: filters.priority }),
   }, {
-    enabled: shouldShowAllBroadcasts, // Only fetch all broadcasts if user has create permission
+    enabled: activeTab === "outbox" && canCreateBroadcast, // Only fetch when outbox tab is active and user has permission
   });
 
-  // Use the appropriate data source based on permissions
-  const data = shouldShowAllBroadcasts ? allBroadcastsData : inboxData;
-  const isLoading = shouldShowAllBroadcasts ? allBroadcastsLoading : inboxLoading;
-  const error = shouldShowAllBroadcasts ? allBroadcastsError : inboxError;
+  // Separate data for inbox and outbox
+  // Backend returns broadcasts in different formats: { broadcasts: [...] }, { messages: [...] }, or { data: [...] }
+  const inboxBroadcasts = inboxData?.broadcasts || inboxData?.messages || inboxData?.data || [];
+  
+  // Helper to extract broadcasts array from response
+  const getBroadcastsArray = (data) => {
+    if (!data) return [];
+    return data.broadcasts || data.messages || data.data || [];
+  };
+  
+  // For outbox: use outboxData when available and tab is active, otherwise use allBroadcastsData
+  // allBroadcastsData is always fetched for badge count
+  const outboxDataForDisplay = activeTab === "outbox" 
+    ? (outboxData || allBroadcastsData)
+    : allBroadcastsData;
+  
+  const outboxBroadcasts = getBroadcastsArray(outboxDataForDisplay);
+  const inboxTotal = inboxData?.total || inboxBroadcasts.length;
+  const outboxTotal = outboxDataForDisplay?.total || outboxBroadcasts.length;
+  
+  // Debug logging
+  if (process.env.NODE_ENV === "development") {
+    console.log("Outbox Debug:", {
+      activeTab,
+      outboxData: outboxData ? { ...outboxData, broadcasts: outboxData.broadcasts?.length || 0 } : null,
+      allBroadcastsData: allBroadcastsData ? { ...allBroadcastsData, broadcasts: allBroadcastsData.broadcasts?.length || 0 } : null,
+      outboxDataForDisplay: outboxDataForDisplay ? { ...outboxDataForDisplay, broadcasts: outboxDataForDisplay.broadcasts?.length || 0 } : null,
+      outboxBroadcasts,
+      outboxBroadcastsLength: outboxBroadcasts.length,
+      outboxTotal,
+      filters,
+    });
+  }
+  const inboxTotalPages = inboxData?.total_pages || inboxData?.page_size ? Math.ceil(inboxTotal / (inboxData?.page_size || 20)) : Math.ceil(inboxTotal / 20);
+  const outboxTotalPages = outboxDataForDisplay?.total_pages || outboxDataForDisplay?.page_size ? Math.ceil(outboxTotal / (outboxDataForDisplay?.page_size || 20)) : Math.ceil(outboxTotal / 20);
 
-  // Show all broadcasts (communal outbox for users with create permission, or received broadcasts for others)
-  const broadcasts = data?.messages || data?.data || [];
-  const total = data?.total || 0;
-  const totalPages = data?.total_pages || Math.ceil(total / 20);
-
-  // Extract unique categories from broadcasts
+  // Extract unique categories from both inbox and outbox
   const categories = useMemo(() => {
     const cats = new Set();
-    broadcasts.forEach((broadcast) => {
+    [...inboxBroadcasts, ...outboxBroadcasts].forEach((broadcast) => {
       if (broadcast.category) {
         cats.add(broadcast.category);
       }
     });
     return Array.from(cats).sort();
-  }, [broadcasts]);
+  }, [inboxBroadcasts, outboxBroadcasts]);
 
   const getPriorityBadge = (priority) => {
     const variants = {
@@ -178,16 +219,77 @@ const BroadcastsPage = () => {
     return null;
   };
 
-  const filteredBroadcasts = useMemo(() => {
-    if (!filters.search) return broadcasts;
-    const term = filters.search.toLowerCase();
-    return broadcasts.filter(
-      (broadcast) =>
-        broadcast.title?.toLowerCase().includes(term) ||
-        broadcast.content?.toLowerCase().includes(term) ||
-        broadcast.category?.toLowerCase().includes(term)
-    );
-  }, [broadcasts, filters.search]);
+  // Filter broadcasts for inbox
+  // Backend /broadcasts/inbox endpoint should already filter by recipient
+  // We only apply client-side filters (search, category, priority, unread, unacknowledged)
+  const filteredInboxBroadcasts = useMemo(() => {
+    let filtered = inboxBroadcasts;
+    
+    if (filters.search) {
+      const term = filters.search.toLowerCase();
+      filtered = filtered.filter(
+        (broadcast) =>
+          broadcast.title?.toLowerCase().includes(term) ||
+          broadcast.content?.toLowerCase().includes(term) ||
+          broadcast.category?.toLowerCase().includes(term)
+      );
+    }
+    
+    if (filters.category && filters.category !== "all") {
+      filtered = filtered.filter((broadcast) => broadcast.category === filters.category);
+    }
+    
+    if (filters.priority && filters.priority !== "all") {
+      filtered = filtered.filter((broadcast) => broadcast.priority === filters.priority);
+    }
+    
+    if (filters.unread_only) {
+      filtered = filtered.filter((broadcast) => !getReadStatus(broadcast));
+    }
+    
+    if (filters.unacknowledged_only) {
+      filtered = filtered.filter((broadcast) => {
+        if (!broadcast.requires_acknowledgement) return false;
+        const status = getAcknowledgementStatus(broadcast);
+        return !status || status === "not_acknowledged";
+      });
+    }
+    
+    return filtered;
+  }, [inboxBroadcasts, filters]);
+
+  // Filter broadcasts for outbox
+  // Backend /broadcasts?my_broadcasts=true endpoint should already filter by created_by_user_id
+  // We only apply client-side filters (search, category, priority)
+  const filteredOutboxBroadcasts = useMemo(() => {
+    // Ensure we have an array
+    if (!Array.isArray(outboxBroadcasts)) {
+      console.warn("outboxBroadcasts is not an array:", outboxBroadcasts);
+      return [];
+    }
+    
+    let filtered = outboxBroadcasts;
+    
+    if (filters.search) {
+      const term = filters.search.toLowerCase();
+      filtered = filtered.filter(
+        (broadcast) =>
+          broadcast.title?.toLowerCase().includes(term) ||
+          broadcast.content?.toLowerCase().includes(term) ||
+          broadcast.category?.toLowerCase().includes(term)
+      );
+    }
+    
+    if (filters.category && filters.category !== "all") {
+      filtered = filtered.filter((broadcast) => broadcast.category === filters.category);
+    }
+    
+    if (filters.priority && filters.priority !== "all") {
+      filtered = filtered.filter((broadcast) => broadcast.priority === filters.priority);
+    }
+    
+    return filtered;
+  }, [outboxBroadcasts, filters]);
 
   // Check if user has permission to read broadcasts OR create broadcasts (communal outbox)
   if (!canReadBroadcast && !canCreateBroadcast) {
@@ -204,13 +306,28 @@ const BroadcastsPage = () => {
     );
   }
 
-  if (error) {
+  // Check for errors
+  if (activeTab === "inbox" && inboxError) {
     return (
       <div className="p-4">
         <Card>
           <CardContent className="pt-6">
             <div className="text-center text-red-600">
-              Failed to load broadcasts. Please try again.
+              Failed to load inbox broadcasts. Please try again.
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+  
+  if (activeTab === "outbox" && allBroadcastsError) {
+    return (
+      <div className="p-4">
+        <Card>
+          <CardContent className="pt-6">
+            <div className="text-center text-red-600">
+              Failed to load outbox broadcasts. Please try again.
             </div>
           </CardContent>
         </Card>
@@ -230,7 +347,34 @@ const BroadcastsPage = () => {
         )}
       </div>
 
-      {/* Filters */}
+      {/* Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="inbox" className="flex items-center gap-2">
+            <Mail className="h-4 w-4" />
+            Inbox
+            {inboxData && (
+              <Badge variant="secondary" className="ml-1">
+                {inboxData?.total || inboxData?.messages?.length || 0}
+              </Badge>
+            )}
+          </TabsTrigger>
+          {canCreateBroadcast && (
+            <TabsTrigger value="outbox" className="flex items-center gap-2">
+              <Send className="h-4 w-4" />
+              Outbox
+              {allBroadcastsData && (
+                <Badge variant="secondary" className="ml-1">
+                  {allBroadcastsData?.total || allBroadcastsData?.broadcasts?.length || allBroadcastsData?.messages?.length || 0}
+                </Badge>
+              )}
+            </TabsTrigger>
+          )}
+        </TabsList>
+
+        {/* Inbox Tab */}
+        <TabsContent value="inbox" className="space-y-4">
+          {/* Filters */}
       <Card>
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
@@ -339,37 +483,32 @@ const BroadcastsPage = () => {
       <Card>
         <CardHeader>
           <CardTitle className="text-lg">
-            {isLoading ? "Loading..." : `${total} Broadcast${total !== 1 ? "s" : ""}`}
-            {shouldShowAllBroadcasts && (
-              <span className="text-sm font-normal text-muted-foreground ml-2">
-                (Communal Outbox)
-              </span>
-            )}
+            {inboxLoading ? "Loading..." : `${filteredInboxBroadcasts.length} Broadcast${filteredInboxBroadcasts.length !== 1 ? "s" : ""}`}
+            <span className="text-sm font-normal text-muted-foreground ml-2">
+              (Received)
+            </span>
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {isLoading ? (
+          {inboxLoading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
-          ) : filteredBroadcasts.length === 0 ? (
+          ) : filteredInboxBroadcasts.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
               <Megaphone className="h-12 w-12 mx-auto mb-4 opacity-50" />
               <p>No broadcasts found</p>
             </div>
           ) : (
             <div className="space-y-3">
-              {filteredBroadcasts.map((broadcast) => {
+              {filteredInboxBroadcasts.map((broadcast) => {
                 const isRead = getReadStatus(broadcast);
                 const ackStatus = getAcknowledgementStatus(broadcast);
                 const receipt = broadcast.receipts?.find(
                   (r) => r.user_id === broadcast.current_user_id
                 );
-                // For communal outbox, all broadcasts shown are sent broadcasts
                 // For inbox view, check if current user sent it
-                const isSent = shouldShowAllBroadcasts 
-                  ? true // In communal outbox, all are sent broadcasts
-                  : currentUser?.id === broadcast.created_by_user_id;
+                const isSent = currentUser?.id === broadcast.created_by_user_id;
                 
                 // Calculate acknowledgment stats for sent broadcasts
                 const ackStats = isSent && broadcast.requires_acknowledgement ? (() => {
@@ -418,16 +557,12 @@ const BroadcastsPage = () => {
                               <>
                                 <Badge variant="outline" className="bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-300 border-green-200 dark:border-green-800">
                                   <Send className="h-3 w-3 mr-1" />
-                                  {shouldShowAllBroadcasts && currentUser?.id !== broadcast.created_by_user_id
-                                    ? `Sent by ${broadcast.created_by_user?.first_name || broadcast.created_by_user?.email || "Unknown"}`
-                                    : "Sent by you"}
+                                  Sent by you
                                 </Badge>
-                                {currentUser?.id === broadcast.created_by_user_id && (
-                                  <Badge variant="outline" className="bg-muted text-muted-foreground">
-                                    <Info className="h-3 w-3 mr-1" />
-                                    No action needed
-                                  </Badge>
-                                )}
+                                <Badge variant="outline" className="bg-muted text-muted-foreground">
+                                  <Info className="h-3 w-3 mr-1" />
+                                  No action needed
+                                </Badge>
                               </>
                             )}
                           </div>
@@ -516,10 +651,10 @@ const BroadcastsPage = () => {
           )}
 
           {/* Pagination */}
-          {!isLoading && totalPages > 1 && (
+          {!inboxLoading && inboxTotalPages > 1 && (
             <div className="flex items-center justify-between mt-6">
               <div className="text-sm text-muted-foreground">
-                Page {page} of {totalPages}
+                Page {page} of {inboxTotalPages}
               </div>
               <div className="flex items-center gap-2">
                 <Button
@@ -533,8 +668,8 @@ const BroadcastsPage = () => {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={page === totalPages}
+                  onClick={() => setPage((p) => Math.min(inboxTotalPages, p + 1))}
+                  disabled={page === inboxTotalPages}
                 >
                   Next
                 </Button>
@@ -543,6 +678,238 @@ const BroadcastsPage = () => {
           )}
         </CardContent>
       </Card>
+        </TabsContent>
+
+        {/* Outbox Tab */}
+        {canCreateBroadcast && (
+          <TabsContent value="outbox" className="space-y-4">
+            {/* Filters */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Filter className="h-4 w-4" />
+                  Filters
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {/* Search */}
+                  <div className="space-y-2">
+                    <Label>Search</Label>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Search broadcasts..."
+                        value={filters.search}
+                        onChange={(e) =>
+                          setFilters({ ...filters, search: e.target.value })
+                        }
+                        className="pl-9"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Category */}
+                  <div className="space-y-2">
+                    <Label>Category</Label>
+                    <Select
+                      value={filters.category}
+                      onValueChange={(value) =>
+                        setFilters({ ...filters, category: value })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="All categories" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All categories</SelectItem>
+                        {categories.map((cat) => (
+                          <SelectItem key={cat} value={cat}>
+                            {cat}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Priority */}
+                  <div className="space-y-2">
+                    <Label>Priority</Label>
+                    <Select
+                      value={filters.priority}
+                      onValueChange={(value) =>
+                        setFilters({ ...filters, priority: value })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="All priorities" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All priorities</SelectItem>
+                        <SelectItem value="low">Low</SelectItem>
+                        <SelectItem value="normal">Normal</SelectItem>
+                        <SelectItem value="high">High</SelectItem>
+                        <SelectItem value="urgent">Urgent</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Broadcasts List */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">
+                  {outboxLoading ? "Loading..." : `${filteredOutboxBroadcasts.length} Broadcast${filteredOutboxBroadcasts.length !== 1 ? "s" : ""}`}
+                  <span className="text-sm font-normal text-muted-foreground ml-2">
+                    (Sent)
+                  </span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {outboxLoading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                  </div>
+                ) : filteredOutboxBroadcasts.length === 0 ? (
+                  <div className="text-center py-12 text-muted-foreground">
+                    <Megaphone className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>No broadcasts found</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {filteredOutboxBroadcasts.map((broadcast) => {
+                      // In outbox, all broadcasts are sent broadcasts
+                      const isSent = true;
+                      
+                      // Calculate acknowledgment stats for sent broadcasts
+                      const ackStats = isSent && broadcast.requires_acknowledgement ? (() => {
+                        const receipts = broadcast.receipts || [];
+                        const totalRecipients = receipts.length;
+                        const acknowledged = receipts.filter(r => r.acknowledgement_status).length;
+                        const agreed = receipts.filter(r => r.acknowledgement_status === "agreed").length;
+                        const disagreed = receipts.filter(r => r.acknowledgement_status === "disagreed").length;
+                        return { totalRecipients, acknowledged, agreed, disagreed };
+                      })() : null;
+
+                      return (
+                        <Card
+                          key={broadcast.id}
+                          className={cn(
+                            "cursor-pointer hover:bg-muted/50 transition-colors border-l-4",
+                            "border-l-green-500 bg-green-50/30 dark:bg-green-950/10"
+                          )}
+                          onClick={() => router.push(`/admin/broadcasts/${broadcast.slug || broadcast.id}`)}
+                        >
+                          <CardContent className="p-4">
+                            <div className="flex items-start justify-between gap-4">
+                              <div className="flex-1 space-y-2">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <h3 className="font-semibold text-lg">{broadcast.title}</h3>
+                                  {broadcast.category && (
+                                    <Badge variant="outline">{broadcast.category}</Badge>
+                                  )}
+                                  {getPriorityBadge(broadcast.priority)}
+                                </div>
+                                <p className="text-sm text-muted-foreground line-clamp-2">
+                                  {broadcast.summary || broadcast.content?.replace(/<[^>]*>/g, "").substring(0, 100) || "No content"}
+                                </p>
+                                <div className="flex items-center gap-4 text-xs text-muted-foreground flex-wrap">
+                                  <div className="flex items-center gap-1">
+                                    <User className="h-3 w-3" />
+                                    <span>
+                                      {broadcast.created_by_user?.first_name} {broadcast.created_by_user?.last_name || broadcast.created_by_user?.email || "Unknown"}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <Clock className="h-3 w-3" />
+                                    <span>
+                                      {broadcast.created_at
+                                        ? formatDistanceToNow(parseUTCDate(broadcast.created_at), { addSuffix: true })
+                                        : "Unknown time"}
+                                    </span>
+                                  </div>
+                                  {ackStats && (
+                                    <>
+                                      <div className="flex items-center gap-1">
+                                        <Users className="h-3 w-3" />
+                                        <span>{ackStats.totalRecipients} recipients</span>
+                                      </div>
+                                      <div className="flex items-center gap-1 text-green-600 dark:text-green-400">
+                                        <CheckCircle2 className="h-3 w-3" />
+                                        <span>{ackStats.acknowledged} acknowledged</span>
+                                      </div>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {broadcast.send_email && (
+                                  <Badge variant="outline" className="flex items-center gap-1">
+                                    <Mail className="h-3 w-3" />
+                                  </Badge>
+                                )}
+                                {broadcast.send_sms && (
+                                  <Badge variant="outline" className="flex items-center gap-1">
+                                    <Bell className="h-3 w-3" />
+                                  </Badge>
+                                )}
+                                {broadcast.send_push && (
+                                  <Badge variant="outline" className="flex items-center gap-1">
+                                    <Bell className="h-3 w-3" />
+                                  </Badge>
+                                )}
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    router.push(`/admin/broadcasts/${broadcast.slug || broadcast.id}/status`);
+                                  }}
+                                >
+                                  <BarChart3 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Pagination */}
+                {!outboxLoading && outboxTotalPages > 1 && (
+                  <div className="flex items-center justify-between mt-6">
+                    <div className="text-sm text-muted-foreground">
+                      Page {page} of {outboxTotalPages}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setPage((p) => Math.max(1, p - 1))}
+                        disabled={page === 1}
+                      >
+                        Previous
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setPage((p) => Math.min(outboxTotalPages, p + 1))}
+                        disabled={page === outboxTotalPages}
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
+      </Tabs>
 
       {/* Create Broadcast Dialog */}
       <CreateBroadcastDialog

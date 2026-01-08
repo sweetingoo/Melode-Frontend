@@ -103,6 +103,10 @@ apiClient.interceptors.response.use(
     return response;
   },
   (error) => {
+    // Check if this is a metadata generation request (403 during SSR is expected)
+    const isMetadataRequest = error.config?.url?.includes("/settings/organizations/");
+    const is403ForMetadata = error.response?.status === 403 && isMetadataRequest;
+    
     // Handle common error scenarios
     if (error.response) {
       // Server responded with error status
@@ -137,10 +141,14 @@ apiClient.interceptors.response.use(
           break;
         case 403:
           // Forbidden
-          console.error(
-            "Access forbidden:",
-            data.message || "You do not have permission to access this resource"
-          );
+          // Don't log 403 errors for metadata generation endpoints (expected during SSR)
+          const isMetadataRequest = config?.url?.includes("/settings/organizations/");
+          if (!isMetadataRequest) {
+            console.error(
+              "Access forbidden:",
+              data.message || "You do not have permission to access this resource"
+            );
+          }
           break;
         case 404:
           // Not found - log as warning instead of error for better UX
@@ -175,9 +183,12 @@ apiClient.interceptors.response.use(
 
       // Log error in development
       // Don't log 404s for clock/current endpoint (user not clocked in is a valid state)
+      // Don't log 403s for metadata generation endpoints (expected during SSR)
+      const isClockCurrentRequest = error.response?.status === 404 && error.response?.config?.url?.includes("/clock/current");
       if (
         process.env.NODE_ENV === "development" &&
-        !(error.response?.status === 404 && error.response?.config?.url?.includes("/clock/current"))
+        !isClockCurrentRequest &&
+        !is403ForMetadata
       ) {
         console.error("API Error Response:", {
           status: error.response?.status,
@@ -185,6 +196,17 @@ apiClient.interceptors.response.use(
           data: error.response?.data,
           url: error.response?.config?.url,
         });
+      }
+      
+      // For 403 errors on metadata requests, create a custom error that won't be logged
+      if (is403ForMetadata) {
+        // Create a silent error that can be caught but won't log
+        const silentError = new Error("403 Forbidden (expected during SSR)");
+        silentError.response = error.response;
+        silentError.config = error.config;
+        silentError.isAxiosError = true;
+        silentError.silent = true; // Flag to indicate this should be handled silently
+        return Promise.reject(silentError);
       }
     } else if (error.request) {
       // Request was made but no response received
@@ -272,6 +294,9 @@ export const api = {
         // For tasks endpoint, log as warning instead of error to reduce console noise
         // The error is already handled in the hooks/components
         console.warn(`Network error fetching tasks from ${url}. This may be due to connectivity issues or the endpoint not supporting certain filters.`);
+      } else if (error.response?.status === 403 && url.includes("/settings/organizations/")) {
+        // Silently handle 403 errors for metadata generation (expected during SSR)
+        // Don't log as error - this is expected behavior
       } else {
         console.error(`GET request failed for ${url}:`, error);
       }
