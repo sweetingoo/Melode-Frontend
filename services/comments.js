@@ -5,12 +5,17 @@ export const commentsService = {
   // Add comment to entity
   addComment: async (entityType, entitySlug, commentData) => {
     try {
+      // Backend requires entity_id in the body
+      // If not provided in commentData, use entitySlug (which might be the ID)
+      // or we'll need to fetch the entity to get its ID
+      const entityId = commentData.entity_id || entitySlug;
+      
       return await api.post(
         `/settings/entities/${entityType}/${entitySlug}/comments`,
         {
           ...commentData,
           entity_type: entityType,
-          entity_id: commentData.entity_id, // Keep entity_id in body if provided (for backward compatibility)
+          entity_id: entityId, // Required by backend
         }
       );
     } catch (error) {

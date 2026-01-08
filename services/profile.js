@@ -122,18 +122,54 @@ export const profileService = {
     }
   },
 
-  // Upload avatar
+  // Upload avatar - uses file upload endpoint then updates profile
   uploadAvatar: async (file) => {
     try {
+      // Step 1: Upload file using the file upload endpoint
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await api.post("/profile/me/photo", formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
+      // Use the same endpoint as other file uploads
+      const uploadResponse = await api.post('/settings/files/upload', formData);
+      const uploadData = uploadResponse.data || uploadResponse;
+      
+      console.log('File upload response:', uploadData);
+      
+      // Extract file ID (the file reference ID) from upload response
+      // The backend returns 'id' as the file reference ID
+      const fileId = uploadData?.id || 
+                    uploadData?.file_id ||
+                    uploadData?.file_reference_id;
+      
+      if (!fileId) {
+        console.error('Upload response missing file ID:', uploadData);
+        throw new Error("No file ID received from upload");
+      }
+
+      console.log('Extracted file ID:', fileId);
+
+      // Step 2: Update profile with the file ID (file reference)
+      const updateResponse = await api.put("/profile/me", {
+        avatar_url: fileId
       });
-      return response.data || response;
+      
+      const responseData = updateResponse.data || updateResponse;
+      
+      // Return the file ID - ignore the avatar_url from response as it might be a temporary S3 URL
+      // We want to store the file ID, not the URL
+      return {
+        id: fileId,
+        file_reference_id: fileId,
+        file_id: fileId,
+        // Remove avatar_url from response if it's a URL (we want to use the file ID instead)
+        ...(responseData && typeof responseData === 'object' 
+          ? Object.fromEntries(
+              Object.entries(responseData).filter(([key]) => key !== 'avatar_url')
+            )
+          : {}),
+        // Explicitly set avatar_url to the file ID
+        avatar_url: fileId
+      };
     } catch (error) {
       console.error("Upload avatar failed:", error);
       throw error;

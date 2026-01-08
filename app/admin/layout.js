@@ -77,6 +77,7 @@ import { ClockInOutButton } from "@/components/ClockInOutButton";
 import { User, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { AvatarWithUrl } from "@/components/AvatarWithUrl";
 import {
   useAuth,
   useCurrentUser,
@@ -704,19 +705,18 @@ function SidebarNavigationContent({
                 className="w-full justify-start px-2 py-2 h-auto group-data-[collapsible=icon]:w-auto group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:justify-center"
               >
                 <div className="flex items-center gap-2 w-full group-data-[collapsible=icon]:justify-center">
-                  <Avatar className="h-6 w-6">
-                    <AvatarImage
-                      src={currentUserData?.avatar_url}
-                      alt={currentUserData?.full_name || "User"}
-                    />
-                    <AvatarFallback>
-                      {currentUserData?.full_name
+                  <AvatarWithUrl
+                    avatarValue={currentUserData?.avatar_url}
+                    alt={currentUserData?.full_name || "User"}
+                    fallback={
+                      currentUserData?.full_name
                         ?.split(" ")
                         .map((n) => n[0])
                         .join("")
-                        .toUpperCase() || "U"}
-                    </AvatarFallback>
-                  </Avatar>
+                        .toUpperCase() || "U"
+                    }
+                    className="h-6 w-6"
+                  />
                   <div className="flex flex-col items-start flex-1 min-w-0 group-data-[collapsible=icon]:hidden">
                     <span className="text-sm font-medium truncate w-full">
                       {currentUserData?.full_name || "User"}

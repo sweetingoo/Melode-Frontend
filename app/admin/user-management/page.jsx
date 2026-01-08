@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { AvatarWithUrl } from "@/components/AvatarWithUrl";
 import {
   Table,
   TableBody,
@@ -671,12 +672,13 @@ const UserManagementPage = () => {
                   <TableRow key={user.id}>
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-3">
-                        <Avatar className="h-10 w-10">
-                          <AvatarImage src={user.avatarUrl} alt={user.name} />
-                          <AvatarFallback className="bg-primary/10 text-primary font-medium">
-                            {user.initials}
-                          </AvatarFallback>
-                        </Avatar>
+                        <AvatarWithUrl
+                          avatarValue={user.avatarUrl}
+                          alt={user.name}
+                          fallback={user.initials}
+                          className="h-10 w-10"
+                          fallbackProps={{ className: "bg-primary/10 text-primary font-medium" }}
+                        />
                         <div className="flex flex-col">
                           <span className="font-medium">{user.name}</span>
                           <span className="text-sm text-muted-foreground">

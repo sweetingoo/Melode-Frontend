@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { profileService } from "@/services/profile";
 import { authKeys } from "@/hooks/useAuth";
 import { toast } from "sonner";
+import { extractAvatarFileReference } from "@/utils/avatar";
 
 // Query keys for profile
 export const profileKeys = {
@@ -18,30 +19,38 @@ export const profileKeys = {
 
 // Utility functions for data transformation
 export const profileUtils = {
-  transformProfile: (profile) => ({
-    id: profile.id,
-    firstName: profile.first_name || profile.firstName,
-    lastName: profile.last_name || profile.lastName,
-    email: profile.email,
-    phone: profile.phone,
-    address: profile.address,
-    bio: profile.bio,
-    department: profile.department,
-    jobTitle: profile.job_title || profile.jobTitle,
-    joinDate: profile.join_date || profile.joinDate,
-    avatar: profile.avatar_url || profile.avatar,
-    isActive: profile.is_active !== undefined ? profile.is_active : true,
-    createdAt: profile.created_at || profile.createdAt,
-    updatedAt: profile.updated_at || profile.updatedAt,
-    // Additional computed fields
-    fullName: `${profile.first_name || profile.firstName || ""} ${profile.last_name || profile.lastName || ""
-      }`.trim(),
-    initials: `${(profile.first_name || profile.firstName || "").charAt(0)}${(
-      profile.last_name ||
-      profile.lastName ||
-      ""
-    ).charAt(0)}`.toUpperCase(),
-  }),
+  transformProfile: (profile) => {
+    // Extract file reference from avatar URL if it's a URL, otherwise use as-is
+    const avatarValue = profile.avatar_url || profile.avatar;
+    const avatarFileReference = avatarValue ? extractAvatarFileReference(avatarValue) : null;
+    
+    return {
+      id: profile.id,
+      firstName: profile.first_name || profile.firstName,
+      lastName: profile.last_name || profile.lastName,
+      email: profile.email,
+      phone: profile.phone,
+      address: profile.address,
+      bio: profile.bio,
+      department: profile.department,
+      jobTitle: profile.job_title || profile.jobTitle,
+      joinDate: profile.join_date || profile.joinDate,
+      // Store file reference instead of S3 URL
+      avatar: avatarFileReference || avatarValue || null,
+      avatar_url: avatarFileReference || avatarValue || null, // Keep both for compatibility
+      isActive: profile.is_active !== undefined ? profile.is_active : true,
+      createdAt: profile.created_at || profile.createdAt,
+      updatedAt: profile.updated_at || profile.updatedAt,
+      // Additional computed fields
+      fullName: `${profile.first_name || profile.firstName || ""} ${profile.last_name || profile.lastName || ""
+        }`.trim(),
+      initials: `${(profile.first_name || profile.firstName || "").charAt(0)}${(
+        profile.last_name ||
+        profile.lastName ||
+        ""
+      ).charAt(0)}`.toUpperCase(),
+    };
+  },
 
   transformProfileForAPI: (profile) => ({
     bio: profile.bio,
@@ -294,22 +303,53 @@ export const useUploadAvatar = () => {
   return useMutation({
     mutationFn: async (file) => {
       const response = await profileService.uploadAvatar(file);
+      // Return the file reference from the response
       return response;
     },
     onSuccess: (data) => {
-      // Update the profile in cache with new avatar URL
+      console.log('Avatar upload response:', data);
+      
+      // Extract file ID (file reference) from the response
+      // The uploadAvatar service returns the file ID as 'id' or 'file_reference_id'
+      let fileReference = data?.id || 
+                         data?.file_reference_id ||
+                         data?.file_id;
+      
+      console.log('Extracted file reference:', fileReference);
+
+      // Use file reference if available - this is the file ID we want to store
+      // IMPORTANT: Don't use data.avatar_url from the update response as it might be a temporary S3 URL
+      // We want to store the file ID, not the URL
+      if (!fileReference) {
+        console.warn('No file reference found in upload response:', data);
+        // Try to extract from nested response data
+        const nestedData = data?.data || data;
+        const fallbackId = nestedData?.id || nestedData?.file_reference_id || nestedData?.file_id;
+        if (fallbackId) {
+          console.log('Using fallback file ID:', fallbackId);
+          fileReference = fallbackId;
+        } else {
+          console.error('Cannot proceed without file ID');
+          return;
+        }
+      }
+      
+      const avatarValue = fileReference;
+
+      // Update the profile in cache with file reference (file ID)
       queryClient.setQueryData(profileKeys.me(), (oldData) => {
         if (oldData) {
           return {
             ...oldData,
-            avatar: data, // The API returns the avatar URL as a string
-            avatar_url: data, // Also update avatar_url for consistency
+            avatar: avatarValue, // Store file ID (file reference) instead of temporary URL
+            avatar_url: avatarValue, // Also update avatar_url with file ID
           };
         }
         return oldData;
       });
 
-      // Invalidate the current user query to refresh the sidebar and other components
+      // Invalidate profile and current user queries to refresh the sidebar and other components
+      queryClient.invalidateQueries({ queryKey: profileKeys.me() });
       queryClient.invalidateQueries({ queryKey: authKeys.currentUser() });
 
       toast.success("Avatar uploaded successfully!", {

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Card,
   CardContent,
@@ -16,6 +16,7 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { AvatarWithUrl } from "@/components/AvatarWithUrl";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   User,
@@ -99,13 +100,25 @@ export default function ProfilePage() {
   // Handle avatar upload success
   useEffect(() => {
     if (uploadAvatarMutation.isSuccess && uploadAvatarMutation.data) {
-      console.log('Avatar upload success, updating formData with:', uploadAvatarMutation.data);
-      setFormData(prev => ({
-        ...prev,
-        avatar: uploadAvatarMutation.data
-      }));
-      // Clear preview after successful upload (server URL will be used)
-      setAvatarPreview(null);
+      console.log('Avatar upload success, data:', uploadAvatarMutation.data);
+      
+      // Extract file ID (file reference) from upload response
+      const uploadData = uploadAvatarMutation.data;
+      const fileReference = uploadData?.id || 
+                           uploadData?.file_reference_id ||
+                           uploadData?.file_id;
+      
+      if (fileReference) {
+        // Update formData immediately with file reference so avatar displays right away
+        setFormData(prev => ({
+          ...prev,
+          avatar: fileReference
+        }));
+        console.log('Updated formData.avatar with file reference:', fileReference);
+        
+        // Don't clear preview immediately - let AvatarWithUrl's onImageLoad callback handle it
+        // This ensures the preview stays visible until the uploaded image is fully loaded
+      }
     }
   }, [uploadAvatarMutation.isSuccess, uploadAvatarMutation.data]);
 
@@ -131,6 +144,7 @@ export default function ProfilePage() {
   });
   const [isDragOver, setIsDragOver] = useState(false);
   const [avatarPreview, setAvatarPreview] = useState(null);
+  const fileInputRef = useRef(null);
 
   // Password Change State
   const [passwordData, setPasswordData] = useState({
@@ -168,8 +182,9 @@ export default function ProfilePage() {
       });
       setFormData(prev => ({
         bio: profileData.bio || "",
-        // Only update avatar if we don't have a more recent one from upload
-        avatar: prev.avatar || profileData.avatar_url || profileData.avatar || "",
+        // Use file reference from profile (already extracted in transformProfile)
+        // Only update if we don't have a more recent one from upload
+        avatar: prev.avatar || profileData.avatar || profileData.avatar_url || "",
       }));
     }
   }, [profileData]);
@@ -958,20 +973,26 @@ export default function ProfilePage() {
               <div className="space-y-4">
                 <Label className="text-sm font-medium">Profile Image</Label>
                 <div className="flex items-center gap-6">
-                  <Avatar className="h-20 w-20">
-                    <AvatarImage
-                      src={
-                        avatarPreview ||
-                        formData.avatar ||
-                        profileData?.avatar_url ||
-                        profileData?.avatar ||
-                        "/placeholder-avatar.jpg"
-                      }
+                  {avatarPreview ? (
+                    <Avatar className="h-20 w-20">
+                      <AvatarImage src={avatarPreview} alt={profileData?.fullName || "Profile"} />
+                      <AvatarFallback className="text-lg">
+                        {profileData?.initials || "AU"}
+                      </AvatarFallback>
+                    </Avatar>
+                  ) : (
+                    <AvatarWithUrl
+                      avatarValue={formData.avatar || profileData?.avatar_url || profileData?.avatar}
+                      alt={profileData?.fullName || "Profile"}
+                      fallback={profileData?.initials || "AU"}
+                      className="h-20 w-20"
+                      fallbackProps={{ className: "text-lg" }}
+                      onImageLoad={() => {
+                        // Clear preview once the uploaded image has loaded
+                        setAvatarPreview(null);
+                      }}
                     />
-                    <AvatarFallback className="text-lg">
-                      {profileData?.initials || "AU"}
-                    </AvatarFallback>
-                  </Avatar>
+                  )}
                   <div className="space-y-3">
                     {/* Drag and Drop Area */}
                     <div
@@ -985,12 +1006,14 @@ export default function ProfilePage() {
                       onDragOver={handleDragOver}
                       onDragLeave={handleDragLeave}
                       onDrop={handleDrop}
+                      onClick={() => !uploadAvatarMutation.isPending && fileInputRef.current?.click()}
                     >
                       <input
+                        ref={fileInputRef}
                         type="file"
                         accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
                         onChange={handleAvatarUpload}
-                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                        className="hidden"
                         disabled={uploadAvatarMutation.isPending}
                       />
                       <div className="flex flex-col items-center space-y-2">
