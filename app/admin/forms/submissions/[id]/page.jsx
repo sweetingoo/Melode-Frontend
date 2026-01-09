@@ -283,9 +283,24 @@ const FormSubmissionDetailPage = () => {
     const formatted = formatFieldValue(field, value);
     const fieldType = field.field_type?.toLowerCase();
     const isFileField = fieldType === 'file';
+    const isSignatureField = fieldType === 'signature';
 
     if (formatted === null) {
       return <p className="text-muted-foreground italic">No value provided</p>;
+    }
+
+    // Handle signature fields - display as image if it's a data URI
+    if (isSignatureField && typeof formatted === 'string' && formatted.startsWith('data:image')) {
+      return (
+        <div className="mt-2">
+          <img 
+            src={formatted} 
+            alt="Signature" 
+            className="max-w-full h-auto border rounded-md bg-white"
+            style={{ maxHeight: '200px' }}
+          />
+        </div>
+      );
     }
 
     // Handle file objects (single file) - check for file_id or id property

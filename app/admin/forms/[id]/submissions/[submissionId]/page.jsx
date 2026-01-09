@@ -369,8 +369,24 @@ const FormSubmissionDetailPage = () => {
 
   // Helper to render field value with better visual representation
   const renderFieldValue = (field, value) => {
+    const fieldType = field?.field_type?.toLowerCase();
+    const isSignatureField = fieldType === 'signature';
+    
+    // Handle signature fields - display as image if it's a data URI
+    if (isSignatureField && typeof value === 'string' && value.startsWith('data:image')) {
+      return (
+        <div className="mt-2">
+          <img 
+            src={value} 
+            alt="Signature" 
+            className="max-w-full h-auto border rounded-md bg-white"
+            style={{ maxHeight: '200px' }}
+          />
+        </div>
+      );
+    }
+    
     const formatted = formatFieldValue(field, value);
-    const fieldType = field.field_type?.toLowerCase();
     const isFileField = fieldType === 'file';
     
     if (formatted === null) {
