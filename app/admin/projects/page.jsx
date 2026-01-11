@@ -51,6 +51,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -80,6 +87,7 @@ import { cn } from "@/lib/utils";
 const ProjectsPage = () => {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -87,6 +95,7 @@ const ProjectsPage = () => {
   const [projectFormData, setProjectFormData] = useState({
     name: "",
     description: "",
+    status: "active",
   });
 
   const itemsPerPage = 20;
@@ -103,6 +112,7 @@ const ProjectsPage = () => {
     page: currentPage,
     per_page: itemsPerPage,
     search: searchTerm || undefined,
+    status: statusFilter !== "all" ? statusFilter : undefined,
   });
 
   const createProjectMutation = useCreateProject();
@@ -134,6 +144,7 @@ const ProjectsPage = () => {
     setProjectFormData({
       name: "",
       description: "",
+      status: "active",
     });
     setSelectedProject(null);
   };
@@ -148,6 +159,7 @@ const ProjectsPage = () => {
     setProjectFormData({
       name: project.name || "",
       description: project.description || "",
+      status: project.status || "active",
     });
     setIsEditModalOpen(true);
   };
@@ -161,6 +173,7 @@ const ProjectsPage = () => {
       await createProjectMutation.mutateAsync({
         name: projectFormData.name.trim(),
         description: projectFormData.description?.trim() || "",
+        status: projectFormData.status || "active",
       });
       setIsCreateModalOpen(false);
       resetForm();
@@ -180,6 +193,7 @@ const ProjectsPage = () => {
         projectData: {
           name: projectFormData.name.trim(),
           description: projectFormData.description?.trim() || "",
+          status: projectFormData.status || "active",
         },
       });
       setIsEditModalOpen(false);
@@ -243,6 +257,25 @@ const ProjectsPage = () => {
                 className="pl-9"
               />
             </div>
+            <div className="w-full sm:w-[180px]">
+              <Select
+                value={statusFilter}
+                onValueChange={(value) => {
+                  setStatusFilter(value);
+                  setCurrentPage(1);
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Filter by status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Statuses</SelectItem>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="inactive">Inactive</SelectItem>
+                  <SelectItem value="archived">Archived</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -281,6 +314,7 @@ const ProjectsPage = () => {
                     <TableRow>
                       <TableHead>Name</TableHead>
                       <TableHead>Description</TableHead>
+                      <TableHead>Status</TableHead>
                       <TableHead>Tasks</TableHead>
                       <TableHead>Members</TableHead>
                       <TableHead>Created</TableHead>
@@ -302,6 +336,32 @@ const ProjectsPage = () => {
                           <span className="text-sm text-muted-foreground line-clamp-1">
                             {project.description || "No description"}
                           </span>
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={
+                              project.status === "active"
+                                ? "default"
+                                : project.status === "archived"
+                                ? "secondary"
+                                : "outline"
+                            }
+                            className={
+                              project.status === "active"
+                                ? "bg-green-600 hover:bg-green-700"
+                                : project.status === "archived"
+                                ? "bg-gray-600 hover:bg-gray-700"
+                                : ""
+                            }
+                          >
+                            {project.status === "active"
+                              ? "Active"
+                              : project.status === "inactive"
+                              ? "Inactive"
+                              : project.status === "archived"
+                              ? "Archived"
+                              : project.status || "Active"}
+                          </Badge>
                         </TableCell>
                         <TableCell>
                           <Badge variant="secondary">
@@ -369,7 +429,7 @@ const ProjectsPage = () => {
                                           <div className="bg-muted p-3 rounded-md space-y-2">
                                             <p className="text-sm font-medium">Soft Delete (Default):</p>
                                             <p className="text-sm text-muted-foreground">
-                                              Deactivates the project. It can be restored later. 
+                                              Archives the project (sets status to "archived"). It can be restored later. 
                                               Tasks will be unassigned from the project.
                                             </p>
                                             <p className="text-sm font-medium mt-3">Hard Delete (Permanent):</p>
@@ -497,6 +557,24 @@ const ProjectsPage = () => {
                 rows={4}
               />
             </div>
+            <div>
+              <Label htmlFor="project-status">Status</Label>
+              <Select
+                value={projectFormData.status}
+                onValueChange={(value) =>
+                  setProjectFormData({ ...projectFormData, status: value })
+                }
+              >
+                <SelectTrigger id="project-status">
+                  <SelectValue placeholder="Select status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="inactive">Inactive</SelectItem>
+                  <SelectItem value="archived">Archived</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <DialogFooter className="gap-2">
             <Button
@@ -555,6 +633,24 @@ const ProjectsPage = () => {
                 placeholder="Enter project description (optional)"
                 rows={4}
               />
+            </div>
+            <div>
+              <Label htmlFor="edit-project-status">Status</Label>
+              <Select
+                value={projectFormData.status}
+                onValueChange={(value) =>
+                  setProjectFormData({ ...projectFormData, status: value })
+                }
+              >
+                <SelectTrigger id="edit-project-status">
+                  <SelectValue placeholder="Select status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="inactive">Inactive</SelectItem>
+                  <SelectItem value="archived">Archived</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <DialogFooter className="gap-2">

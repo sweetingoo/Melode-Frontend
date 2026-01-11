@@ -119,8 +119,8 @@ export const useDeleteProject = () => {
           description: "The project has been permanently removed from the database.",
         });
       } else {
-        toast.success("Project deactivated", {
-          description: "The project has been deactivated. You can restore it later if needed.",
+        toast.success("Project archived", {
+          description: "The project has been archived. You can restore it later if needed.",
         });
       }
     },
