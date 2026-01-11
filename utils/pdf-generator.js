@@ -767,10 +767,11 @@ export const generateFormSubmissionPDFFromData = async ({
       pdf.setFontSize(10);
       yPosition += sectionSpacing;
 
-      fields.forEach((field) => {
+      for (const field of fields) {
         const fieldId = field.field_id || field.id;
         const fieldLabel = field.field_label || field.label || fieldId;
         const value = displayData[fieldId];
+        const fieldType = (field.field_type || "").toLowerCase();
 
         if (value !== undefined && value !== null && value !== "") {
           checkPageBreak(lineHeight * 2);
@@ -780,30 +781,113 @@ export const generateFormSubmissionPDFFromData = async ({
           addText(`${fieldLabel}:`, 10, true);
           pdf.setFont(undefined, "normal");
 
-          // Field value
-          let displayValue = value;
+          // Handle signature fields - embed as image if it's a data URL
+          if (fieldType === "signature" && typeof value === "string" && value.startsWith("data:image")) {
+            try {
+              // Create image element to get dimensions
+              const img = new Image();
+              await new Promise((resolve, reject) => {
+                let timeoutId;
+                
+                const cleanup = () => {
+                  if (timeoutId) clearTimeout(timeoutId);
+                };
+                
+                img.onload = () => {
+                  cleanup();
+                  resolve();
+                };
+                
+                img.onerror = () => {
+                  cleanup();
+                  reject(new Error("Failed to load signature image"));
+                };
+                
+                // Set timeout to prevent hanging
+                timeoutId = setTimeout(() => {
+                  cleanup();
+                  reject(new Error("Image load timeout"));
+                }, 5000);
+                
+                // Set src after setting up handlers
+                img.src = value;
+                
+                // Check if image is already loaded (cached data URLs load instantly)
+                if (img.complete && img.naturalWidth > 0) {
+                  cleanup();
+                  resolve();
+                }
+              });
 
-          // Format value based on field type
-          if (field.field_type === "file") {
-            if (Array.isArray(value)) {
-              displayValue = value
-                .map((file) => file.file_name || file.name || `File #${file.file_id || file.id}`)
-                .join(", ");
-            } else if (typeof value === "object" && value.file_name) {
-              displayValue = value.file_name;
-            } else {
-              displayValue = `File #${value}`;
+              // Calculate image dimensions to fit within page width
+              const maxWidth = pageWidth - 2 * margin;
+              const maxHeight = 50; // Max height in mm
+              let imgWidth = (img.width * 0.264583); // Convert pixels to mm
+              let imgHeight = (img.height * 0.264583);
+
+              // Scale down if too large
+              if (imgWidth > maxWidth) {
+                const scale = maxWidth / imgWidth;
+                imgWidth = maxWidth;
+                imgHeight = imgHeight * scale;
+              }
+              if (imgHeight > maxHeight) {
+                const scale = maxHeight / imgHeight;
+                imgHeight = maxHeight;
+                imgWidth = imgWidth * scale;
+              }
+
+              checkPageBreak(imgHeight + 5);
+
+              // Determine image format from data URL
+              let imageFormat = "PNG"; // Default
+              if (value.startsWith("data:image/")) {
+                const mimeMatch = value.match(/data:image\/([^;]+)/);
+                if (mimeMatch) {
+                  const mimeType = mimeMatch[1].toUpperCase();
+                  if (mimeType === "PNG") {
+                    imageFormat = "PNG";
+                  } else if (mimeType === "JPEG" || mimeType === "JPG") {
+                    imageFormat = "JPEG";
+                  }
+                }
+              }
+
+              // Add signature image to PDF
+              pdf.addImage(value, imageFormat, margin, yPosition, imgWidth, imgHeight);
+              yPosition += imgHeight + 5;
+            } catch (imgError) {
+              console.warn("Failed to embed signature image in PDF:", imgError);
+              // Fallback to text if image embedding fails
+              addText("Signature (image failed to load)", 10);
+              yPosition += 3;
             }
-          } else if (Array.isArray(value)) {
-            displayValue = value.join(", ");
-          } else if (typeof value === "object") {
-            displayValue = JSON.stringify(value, null, 2);
-          }
+          } else {
+            // Field value for non-signature fields
+            let displayValue = value;
 
-          addText(String(displayValue), 10);
-          yPosition += 3;
+            // Format value based on field type
+            if (field.field_type === "file") {
+              if (Array.isArray(value)) {
+                displayValue = value
+                  .map((file) => file.file_name || file.name || `File #${file.file_id || file.id}`)
+                  .join(", ");
+              } else if (typeof value === "object" && value.file_name) {
+                displayValue = value.file_name;
+              } else {
+                displayValue = `File #${value}`;
+              }
+            } else if (Array.isArray(value)) {
+              displayValue = value.join(", ");
+            } else if (typeof value === "object") {
+              displayValue = JSON.stringify(value, null, 2);
+            }
+
+            addText(String(displayValue), 10);
+            yPosition += 3;
+          }
         }
-      });
+      }
     }
 
     // Notes
