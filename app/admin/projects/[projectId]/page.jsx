@@ -64,6 +64,9 @@ import {
   Image as ImageIcon,
   Info,
   Repeat,
+  FileText,
+  Activity,
+  Download,
 } from "lucide-react";
 import UserMentionSelector from "@/components/UserMentionSelector";
 import {
@@ -76,6 +79,8 @@ import {
   useRemoveTaskFromProject,
   useAddMemberToProject,
   useRemoveMemberFromProject,
+  useProjectFiles,
+  useProjectActivity,
 } from "@/hooks/useProjects";
 import { useTasks, useCreateTask } from "@/hooks/useTasks";
 import { useQueryClient } from "@tanstack/react-query";
@@ -164,6 +169,11 @@ const ProjectDetailPage = () => {
   // Instead, we rely solely on the projectTasksResponse from the /projects/{slug}/tasks endpoint
   // This avoids network errors from unsupported filter parameters
   const { data: membersResponse, isLoading: membersLoading } = useProjectMembers(projectSlug);
+  const { data: filesResponse, isLoading: filesLoading } = useProjectFiles(projectSlug);
+  const { data: activityResponse, isLoading: activityLoading } = useProjectActivity(projectSlug, {
+    page: 1,
+    per_page: 100,
+  });
   // Fetch tasks (without project filter) for the "Add Existing Task" modal
   // Load in smaller batches with pagination
   const { data: allTasksResponse, error: allTasksError, isLoading: allTasksLoading } = useTasks({ 
@@ -195,6 +205,8 @@ const ProjectDetailPage = () => {
   // Use only the project tasks from the dedicated endpoint (no need to merge with project_id filter)
   const projectTasks = Array.isArray(projectTasksFromEndpoint) ? projectTasksFromEndpoint : [];
   const members = membersResponse?.members || membersResponse?.data || membersResponse || [];
+  const files = filesResponse?.attachments || filesResponse?.data || filesResponse || [];
+  const activityLogs = activityResponse?.audit_logs || activityResponse?.data || activityResponse || [];
   
   // Extract allTasks - handle different API response structures (same as tasks page)
   let allTasks = [];
@@ -888,7 +900,7 @@ const ProjectDetailPage = () => {
         </CardContent>
       </Card>
 
-      {/* Tabs for Tasks and Members */}
+      {/* Tabs for Tasks, Members, Activity, and Files */}
       <Tabs defaultValue="tasks" className="space-y-4">
         <TabsList>
           <TabsTrigger value="tasks">
@@ -898,6 +910,14 @@ const ProjectDetailPage = () => {
           <TabsTrigger value="members">
             <Users className="mr-2 h-4 w-4" />
             Members ({Array.isArray(members) ? members.length : 0})
+          </TabsTrigger>
+          <TabsTrigger value="activity">
+            <Activity className="mr-2 h-4 w-4" />
+            Activity ({Array.isArray(activityLogs) ? activityLogs.length : 0})
+          </TabsTrigger>
+          <TabsTrigger value="files">
+            <FileText className="mr-2 h-4 w-4" />
+            Files ({Array.isArray(files) ? files.length : 0})
           </TabsTrigger>
         </TabsList>
 
@@ -1107,6 +1127,205 @@ const ProjectDetailPage = () => {
                           </TableRow>
                         );
                       })}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Activity Tab */}
+        <TabsContent value="activity" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Project Activity</CardTitle>
+              <p className="text-sm text-muted-foreground mt-2">
+                Summary of all task activity within this project
+              </p>
+            </CardHeader>
+            <CardContent>
+              {activityLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin" />
+                </div>
+              ) : activityResponse?.permissionDenied ? (
+                <div className="text-center py-12">
+                  <Activity className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+                  <p className="text-muted-foreground">Activity access restricted</p>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    You need SYSTEM_MONITOR permission to view activity logs
+                  </p>
+                </div>
+              ) : !Array.isArray(activityLogs) || activityLogs.length === 0 ? (
+                <div className="text-center py-12">
+                  <Activity className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+                  <p className="text-muted-foreground">No activity recorded for this project</p>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Activity will appear here as tasks are created, updated, or completed
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {activityLogs.map((log) => (
+                    <div
+                      key={log.id}
+                      className="flex items-start gap-4 p-4 border rounded-lg hover:bg-muted/50 transition-colors"
+                    >
+                      <div className="flex-shrink-0 mt-1">
+                        <div className="h-2 w-2 rounded-full bg-primary" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-medium text-sm">
+                            {log.user?.display_name || log.user?.email || "Unknown User"}
+                          </span>
+                          <Badge variant="outline" className="text-xs">
+                            {log.action}
+                          </Badge>
+                          {log.task_title && (
+                            <span className="text-sm text-muted-foreground">
+                              on task: <span className="font-medium">{log.task_title}</span>
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground mb-2">
+                          {log.resource} • {log.severity || "info"}
+                        </p>
+                        {log.details && typeof log.details === "object" && (
+                          <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded">
+                            {JSON.stringify(log.details, null, 2)}
+                          </div>
+                        )}
+                        <p className="text-xs text-muted-foreground mt-2">
+                          {format(new Date(log.created_at), "MMM dd, yyyy 'at' HH:mm")}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Files Tab */}
+        <TabsContent value="files" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Project Files</CardTitle>
+              <p className="text-sm text-muted-foreground mt-2">
+                All files attached to this project, its tasks, and task comments
+              </p>
+            </CardHeader>
+            <CardContent>
+              {filesLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin" />
+                </div>
+              ) : !Array.isArray(files) || files.length === 0 ? (
+                <div className="text-center py-12">
+                  <FileText className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+                  <p className="text-muted-foreground">No files attached to this project</p>
+                </div>
+              ) : (
+                <div className="rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>File Name</TableHead>
+                        <TableHead>Source</TableHead>
+                        <TableHead>Size</TableHead>
+                        <TableHead>Type</TableHead>
+                        <TableHead>Uploaded</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {files.map((file) => (
+                        <TableRow key={file.id || file.file_id}>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <FileText className="h-4 w-4 text-muted-foreground" />
+                              <span className="font-medium">
+                                {file.file_name || file.name || "Unknown File"}
+                              </span>
+                            </div>
+                            {file.description && (
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {file.description}
+                              </p>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-col gap-1">
+                              <Badge 
+                                variant={
+                                  file.source_type === "project" 
+                                    ? "default" 
+                                    : file.source_type === "task"
+                                    ? "secondary"
+                                    : "outline"
+                                }
+                                className="text-xs w-fit"
+                              >
+                                {file.source_type || "Unknown"}
+                              </Badge>
+                              {file.source_type === "task" && file.source_slug && (
+                                <Link
+                                  href={`/admin/tasks/${file.source_slug}`}
+                                  className="text-xs text-primary hover:underline"
+                                >
+                                  {file.source_name || "View Task"}
+                                </Link>
+                              )}
+                              {file.source_type === "comment" && file.task_slug && (
+                                <Link
+                                  href={`/admin/tasks/${file.task_slug}`}
+                                  className="text-xs text-primary hover:underline"
+                                >
+                                  {file.task_title || "View Task"}
+                                </Link>
+                              )}
+                              {file.source_type === "project" && (
+                                <span className="text-xs text-muted-foreground">
+                                  Project
+                                </span>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {file.file_size_bytes
+                              ? `${(file.file_size_bytes / 1024).toFixed(2)} KB`
+                              : "N/A"}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="text-xs">
+                              {file.content_type || "Unknown"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            {file.created_at
+                              ? format(new Date(file.created_at), "MMM dd, yyyy")
+                              : "N/A"}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {file.download_url && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  if (file.download_url) {
+                                    window.open(file.download_url, "_blank");
+                                  }
+                                }}
+                              >
+                                <Download className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
                     </TableBody>
                   </Table>
                 </div>
