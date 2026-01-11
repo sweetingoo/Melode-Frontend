@@ -192,12 +192,6 @@ const peopleAndAccessItems = [
 // Organisation Management group
 const organisationItems = [
   {
-    title: "Integrations",
-    icon: Plug,
-    url: "/admin/configuration?tab=integrations",
-    permission: "SUPERUSER_ROLE_ONLY", // Only visible when assigned to Superuser role
-  },
-  {
     title: "Locations",
     icon: MapPin,
     url: "/admin/locations",
@@ -216,12 +210,6 @@ const organisationItems = [
     permission: "departments:read", // Permission to read departments
   },
   {
-    title: "Task Types",
-    icon: Type,
-    url: "/admin/task-types",
-    permission: "task_types:read", // Permission to read task types
-  },
-  {
     title: "Location Types",
     icon: MapPin,
     url: "/admin/location-types",
@@ -232,30 +220,6 @@ const organisationItems = [
     icon: Package,
     url: "/admin/asset-types",
     permission: "asset_type:read", // Permission to read asset types
-  },
-  {
-    title: "Category Types",
-    icon: Tag,
-    url: "/admin/category-types",
-    permission: "category_type:list", // Permission to list category types
-  },
-  {
-    title: "Form Types",
-    icon: FileText,
-    url: "/admin/form-types",
-    permission: "form_type:list", // Permission to list form types
-  },
-  {
-    title: "Custom Fields",
-    icon: Database,
-    url: "/admin/custom-fields-admin",
-    permission: "custom_field:read", // Permission to read custom fields
-  },
-  {
-    title: "Settings",
-    icon: Settings,
-    url: "/admin/configuration?tab=organisation",
-    permission: "SUPERUSER_ROLE_ONLY", // Only visible when assigned to Superuser role
   },
 ];
 
@@ -288,6 +252,30 @@ const settingsItems = [
     icon: Settings,
     url: "/admin/configuration",
     permission: "SUPERUSER_ROLE_ONLY", // Only visible when assigned to Superuser role - Overall application configurations
+  },
+  {
+    title: "Task Types",
+    icon: Type,
+    url: "/admin/task-types",
+    permission: "task_types:read", // Permission to read task types
+  },
+  {
+    title: "Category Types",
+    icon: Tag,
+    url: "/admin/category-types",
+    permission: "category_type:list", // Permission to list category types
+  },
+  {
+    title: "Form Types",
+    icon: FileText,
+    url: "/admin/form-types",
+    permission: "form_type:list", // Permission to list form types
+  },
+  {
+    title: "Custom Fields",
+    icon: Database,
+    url: "/admin/custom-fields-admin",
+    permission: "custom_field:read", // Permission to read custom fields
   },
 ];
 
