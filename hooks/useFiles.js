@@ -207,3 +207,99 @@ export const useDownloadFile = () => {
   });
 };
 
+// Comment attachment hooks
+// Query keys for comment attachments
+export const commentAttachmentKeys = {
+  all: ["comment-attachments"],
+  comment: (commentSlug) => [...commentAttachmentKeys.all, commentSlug],
+};
+
+// Get comment attachments query
+export const useCommentAttachments = (
+  commentSlug,
+  includeInactive = false,
+  options = {}
+) => {
+  return useQuery({
+    queryKey: [...commentAttachmentKeys.comment(commentSlug), includeInactive],
+    queryFn: async () => {
+      const response = await filesService.getCommentAttachments(
+        commentSlug,
+        includeInactive
+      );
+      return response;
+    },
+    enabled: !!commentSlug,
+    staleTime: 30 * 1000, // 30 seconds
+    ...options,
+  });
+};
+
+// Attach files to comment mutation
+export const useAttachFilesToComment = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ commentSlug, files, descriptions }) => {
+      const response = await filesService.attachFilesToComment(
+        commentSlug,
+        files,
+        descriptions
+      );
+      return { ...response, commentSlug };
+    },
+    onSuccess: (data) => {
+      const count = data.total_files || data.uploaded_files?.length || 0;
+      toast.success("Files attached successfully!", {
+        description: `${count} file(s) attached to comment.`,
+      });
+      // Invalidate comment attachments
+      queryClient.invalidateQueries({
+        queryKey: commentAttachmentKeys.comment(data.commentSlug),
+      });
+    },
+    onError: (error) => {
+      console.error("Attach files to comment error:", error);
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.response?.data?.detail ||
+        "Failed to attach files";
+      toast.error("Attach failed", {
+        description: errorMessage,
+      });
+    },
+  });
+};
+
+// Attach existing files to comment mutation
+export const useAttachExistingFilesToComment = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ commentSlug, fileIds, descriptions }) => {
+      const response = await filesService.attachExistingFilesToComment(
+        commentSlug,
+        fileIds,
+        descriptions
+      );
+      return { ...response, commentSlug };
+    },
+    onSuccess: (data) => {
+      toast.success("Files attached successfully!");
+      // Invalidate comment attachments
+      queryClient.invalidateQueries({
+        queryKey: commentAttachmentKeys.comment(data.commentSlug),
+      });
+    },
+    onError: (error) => {
+      console.error("Attach existing files to comment error:", error);
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.response?.data?.detail ||
+        "Failed to attach files";
+      toast.error("Attach failed", {
+        description: errorMessage,
+      });
+    },
+  });
+};

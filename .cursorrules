@@ -49,3 +49,11 @@ This is a Next.js frontend application for the Melode project. The codebase uses
 - Request bodies and query parameters may still use IDs where appropriate (as per migration guide)
 - When working with entities, always pass `slug` values to API endpoints, not `id` values
 
+## File Handling
+- **NEVER store or use direct S3 signed URLs directly** - they expire and become invalid
+- **ALWAYS use file references (file_slug) instead of signed URLs** for persistent storage
+- When displaying or downloading files, use `file_slug` with `filesService.getFileUrl(fileSlug)` to get a fresh signed URL
+- The backend provides both `file_slug` (persistent reference) and `download_url` (temporary signed URL) in responses
+- Prefer `file_slug` over `download_url` - use `download_url` only as a fallback if `file_slug` is not available
+- Store file references (slugs) in state/database, not signed URLs
+

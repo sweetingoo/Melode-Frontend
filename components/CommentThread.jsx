@@ -1,9 +1,11 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { useComments, useAddComment, useUpdateComment, useDeleteComment } from "@/hooks/useComments";
 import { useCurrentUser } from "@/hooks/useAuth";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
+import { useCommentAttachments, useAttachFilesToComment } from "@/hooks/useFiles";
+import { filesService } from "@/services/files";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -17,7 +19,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { MessageSquare, Reply, Edit2, Trash2, Send, X } from "lucide-react";
+import { MessageSquare, Reply, Edit2, Trash2, Send, X, Paperclip, Download, FileText, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { parseTime } from "@/utils/time";
 
@@ -59,6 +61,105 @@ const getInitials = (name) => {
 };
 
 /**
+ * Comment Attachments Display Component
+ */
+const CommentAttachments = ({ commentSlug }) => {
+  const { data, isLoading } = useCommentAttachments(commentSlug);
+
+  if (isLoading || !data?.attachments || data.attachments.length === 0) {
+    return null;
+  }
+
+  const formatFileSize = (bytes) => {
+    if (!bytes) return "Unknown size";
+    if (bytes === 0) return "0 Bytes";
+    const k = 1024;
+    const sizes = ["Bytes", "KB", "MB", "GB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+  };
+
+  const handleDownload = async (fileSlug, downloadUrl) => {
+    // Prefer using file_slug to get a fresh signed URL, fallback to download_url if available
+    if (fileSlug) {
+      try {
+        const { url } = await filesService.getFileUrl(fileSlug);
+        window.open(url, "_blank");
+      } catch (error) {
+        console.error("Failed to get file URL:", error);
+        // Fallback to download_url if available
+        if (downloadUrl) {
+          window.open(downloadUrl, "_blank");
+        }
+      }
+    } else if (downloadUrl) {
+      // Fallback to download_url if file_slug not available
+      window.open(downloadUrl, "_blank");
+    }
+  };
+
+  const getFileIcon = (fileName) => {
+    const extension = fileName?.split(".").pop()?.toLowerCase();
+    switch (extension) {
+      case "pdf":
+        return "📄";
+      case "doc":
+      case "docx":
+        return "📝";
+      case "xls":
+      case "xlsx":
+        return "📊";
+      case "jpg":
+      case "jpeg":
+      case "png":
+      case "gif":
+      case "webp":
+        return "🖼️";
+      case "zip":
+      case "rar":
+        return "📦";
+      default:
+        return "📎";
+    }
+  };
+
+  return (
+    <div className="mt-2 space-y-1">
+      {data.attachments.map((attachment) => {
+        const fileSlug = attachment.file_slug || attachment.file?.slug;
+        const downloadUrl = attachment.download_url || attachment.file?.download_url;
+        
+        return (
+          <div
+            key={attachment.id}
+            className="flex items-center gap-2 p-2 bg-muted/50 rounded border text-sm"
+          >
+            <span className="text-lg">{getFileIcon(attachment.file_name)}</span>
+            <div className="flex-1 min-w-0">
+              <p className="font-medium truncate">{attachment.file_name}</p>
+              <p className="text-xs text-muted-foreground">
+                {formatFileSize(attachment.file_size_bytes)}
+              </p>
+            </div>
+            {(fileSlug || downloadUrl) && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={() => handleDownload(fileSlug, downloadUrl)}
+                title="Download"
+              >
+                <Download className="h-3 w-3" />
+              </Button>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+/**
  * Single Comment Component
  */
 const CommentItem = ({
@@ -78,8 +179,11 @@ const CommentItem = ({
 }) => {
   const [showReplyInput, setShowReplyInput] = useState(false);
   const [replyText, setReplyText] = useState("");
+  const [replyFiles, setReplyFiles] = useState([]);
   const [editText, setEditText] = useState(comment.comment_text);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const replyFileInputRef = useRef(null);
+  const commentSlug = comment.slug || comment.id;
 
   // Sync editText when comment changes or editing starts
   useEffect(() => {
@@ -91,25 +195,48 @@ const CommentItem = ({
   const addCommentMutation = useAddComment();
   const updateCommentMutation = useUpdateComment();
   const deleteCommentMutation = useDeleteComment();
+  const attachFilesToCommentMutation = useAttachFilesToComment();
 
   const canEdit = currentUserId === comment.created_by_user_id || isAdmin;
   const canDelete = currentUserId === comment.created_by_user_id || isAdmin;
   const hasReplies = (replies && replies.length > 0) || comment.replies_count > 0;
 
   const handleReply = async () => {
-    if (!replyText.trim()) return;
+    if (!replyText.trim() && replyFiles.length === 0) return;
 
-    await addCommentMutation.mutateAsync({
+    const replyResult = await addCommentMutation.mutateAsync({
       entityType,
       entitySlug,
       commentData: {
-        comment_text: replyText.trim(),
+        comment_text: replyText.trim() || "",
         parent_comment_id: comment.id, // Keep ID in body for backward compatibility
       },
     });
 
+    // Attach files if any were selected
+    if (replyFiles.length > 0 && replyResult?.data?.slug) {
+      try {
+        await attachFilesToCommentMutation.mutateAsync({
+          commentSlug: replyResult.data.slug,
+          files: replyFiles,
+        });
+      } catch (error) {
+        console.error("Failed to attach files to reply:", error);
+      }
+    }
+
     setReplyText("");
+    setReplyFiles([]);
     setShowReplyInput(false);
+  };
+
+  const handleReplyFileSelect = (e) => {
+    const files = Array.from(e.target.files || []);
+    setReplyFiles((prev) => [...prev, ...files]);
+  };
+
+  const removeReplyFile = (index) => {
+    setReplyFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleEdit = async () => {
@@ -190,6 +317,8 @@ const CommentItem = ({
           <p className="text-sm text-foreground whitespace-pre-wrap">
             {comment.comment_text}
           </p>
+          {/* Comment Attachments */}
+          {commentSlug && <CommentAttachments commentSlug={commentSlug} />}
           <div className="flex items-center gap-3">
             <Button
               variant="ghost"
@@ -260,11 +389,58 @@ const CommentItem = ({
             placeholder="Write a reply..."
             className="min-h-[60px]"
           />
+          {/* File Upload for Reply */}
+          <div className="space-y-2">
+            <input
+              ref={replyFileInputRef}
+              type="file"
+              multiple
+              className="hidden"
+              onChange={handleReplyFileSelect}
+            />
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => replyFileInputRef.current?.click()}
+              >
+                <Paperclip className="h-4 w-4 mr-1" />
+                Attach Files
+              </Button>
+              {replyFiles.length > 0 && (
+                <span className="text-xs text-muted-foreground">
+                  {replyFiles.length} file(s) selected
+                </span>
+              )}
+            </div>
+            {replyFiles.length > 0 && (
+              <div className="space-y-1">
+                {replyFiles.map((file, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center justify-between p-2 bg-muted/50 rounded text-xs"
+                  >
+                    <span className="truncate flex-1">{file.name}</span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-5 w-5"
+                      onClick={() => removeReplyFile(index)}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
           <div className="flex gap-2">
             <Button
               size="sm"
               onClick={handleReply}
-              disabled={!replyText.trim() || addCommentMutation.isPending}
+              disabled={(!replyText.trim() && replyFiles.length === 0) || addCommentMutation.isPending || attachFilesToCommentMutation.isPending}
             >
               <Send className="h-4 w-4 mr-1" />
               Reply
@@ -275,6 +451,7 @@ const CommentItem = ({
               onClick={() => {
                 setShowReplyInput(false);
                 setReplyText("");
+                setReplyFiles([]);
               }}
             >
               Cancel
@@ -323,7 +500,9 @@ export const CommentThread = ({
 }) => {
   const [page, setPage] = useState(initialPage);
   const [newCommentText, setNewCommentText] = useState("");
+  const [newCommentFiles, setNewCommentFiles] = useState([]);
   const [editingCommentId, setEditingCommentId] = useState(null);
+  const newCommentFileInputRef = useRef(null);
   const { data: currentUser } = useCurrentUser();
   const { hasWildcardPermissions } = usePermissionsCheck();
 
@@ -343,23 +522,46 @@ export const CommentThread = ({
   );
 
   const addCommentMutation = useAddComment();
+  const attachFilesToCommentMutation = useAttachFilesToComment();
 
   const currentUserId = currentUser?.id || currentUser?.user_id;
   const isAdmin = hasWildcardPermissions;
 
   const handleAddComment = async () => {
-    if (!newCommentText.trim()) return;
+    if (!newCommentText.trim() && newCommentFiles.length === 0) return;
 
-    await addCommentMutation.mutateAsync({
+    const commentResult = await addCommentMutation.mutateAsync({
       entityType,
       entitySlug,
       commentData: {
-        comment_text: newCommentText.trim(),
+        comment_text: newCommentText.trim() || "",
         parent_comment_id: null,
       },
     });
 
+    // Attach files if any were selected
+    if (newCommentFiles.length > 0 && commentResult?.data?.slug) {
+      try {
+        await attachFilesToCommentMutation.mutateAsync({
+          commentSlug: commentResult.data.slug,
+          files: newCommentFiles,
+        });
+      } catch (error) {
+        console.error("Failed to attach files to comment:", error);
+      }
+    }
+
     setNewCommentText("");
+    setNewCommentFiles([]);
+  };
+
+  const handleNewCommentFileSelect = (e) => {
+    const files = Array.from(e.target.files || []);
+    setNewCommentFiles((prev) => [...prev, ...files]);
+  };
+
+  const removeNewCommentFile = (index) => {
+    setNewCommentFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleEdit = (commentId) => {
@@ -453,14 +655,61 @@ export const CommentThread = ({
           placeholder="Add a comment..."
           className="min-h-[100px]"
         />
+        {/* File Upload for New Comment */}
+        <div className="space-y-2">
+          <input
+            ref={newCommentFileInputRef}
+            type="file"
+            multiple
+            className="hidden"
+            onChange={handleNewCommentFileSelect}
+          />
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => newCommentFileInputRef.current?.click()}
+            >
+              <Paperclip className="h-4 w-4 mr-1" />
+              Attach Files
+            </Button>
+            {newCommentFiles.length > 0 && (
+              <span className="text-xs text-muted-foreground">
+                {newCommentFiles.length} file(s) selected
+              </span>
+            )}
+          </div>
+          {newCommentFiles.length > 0 && (
+            <div className="space-y-1">
+              {newCommentFiles.map((file, index) => (
+                <div
+                  key={index}
+                  className="flex items-center justify-between p-2 bg-muted/50 rounded text-xs"
+                >
+                  <span className="truncate flex-1">{file.name}</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-5 w-5"
+                    onClick={() => removeNewCommentFile(index)}
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
         <div className="flex justify-end">
           <Button
             onClick={handleAddComment}
-            disabled={!newCommentText.trim() || addCommentMutation.isPending}
+            disabled={(!newCommentText.trim() && newCommentFiles.length === 0) || addCommentMutation.isPending || attachFilesToCommentMutation.isPending}
             size="sm"
           >
             <Send className="h-4 w-4 mr-1" />
-            {addCommentMutation.isPending ? "Posting..." : "Post Comment"}
+            {addCommentMutation.isPending || attachFilesToCommentMutation.isPending ? "Posting..." : "Post Comment"}
           </Button>
         </div>
       </div>

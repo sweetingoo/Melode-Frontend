@@ -164,5 +164,73 @@ export const filesService = {
       throw error;
     }
   },
+
+  // Comment-specific attachment methods
+  // Attach files to a comment
+  attachFilesToComment: async (commentSlug, files, descriptions = []) => {
+    try {
+      const formData = new FormData();
+
+      // Append all files
+      files.forEach((file) => {
+        formData.append("files", file);
+      });
+
+      // Add descriptions as JSON array if provided
+      if (descriptions && descriptions.length > 0) {
+        formData.append("descriptions", JSON.stringify(descriptions));
+      }
+
+      const response = await api.post(
+        `/files/entities/entity_comment/${commentSlug}/attach`,
+        formData
+      );
+      return response.data || response;
+    } catch (error) {
+      console.error("Attach files to comment failed:", error);
+      throw error;
+    }
+  },
+
+  // Attach existing files to a comment
+  attachExistingFilesToComment: async (commentSlug, fileIds, descriptions = []) => {
+    try {
+      const body = {
+        file_ids: fileIds,
+      };
+
+      // Add descriptions if provided
+      if (descriptions && descriptions.length > 0) {
+        body.descriptions = descriptions;
+      }
+
+      const response = await api.post(
+        `/files/entities/entity_comment/${commentSlug}/attach-existing`,
+        body
+      );
+      return response.data || response;
+    } catch (error) {
+      console.error("Attach existing files to comment failed:", error);
+      throw error;
+    }
+  },
+
+  // Get attachments for a comment
+  getCommentAttachments: async (commentSlug, includeInactive = false) => {
+    try {
+      const response = await api.get(
+        `/files/entities/entity_comment/${commentSlug}/attachments`,
+        {
+          params: {
+            include_inactive: includeInactive,
+          },
+        }
+      );
+      return response.data || response;
+    } catch (error) {
+      console.error("Get comment attachments failed:", error);
+      throw error;
+    }
+  },
 };
 
