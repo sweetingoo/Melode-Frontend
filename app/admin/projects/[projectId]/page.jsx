@@ -117,6 +117,7 @@ const ProjectDetailPage = () => {
   const [projectFormData, setProjectFormData] = useState({
     name: "",
     description: "",
+    status: "active",
   });
   const [taskFormData, setTaskFormData] = useState({
     title: "",
@@ -401,6 +402,7 @@ const ProjectDetailPage = () => {
       setProjectFormData({
         name: project.name || "",
         description: project.description || "",
+        status: project.status || "active",
       });
       setIsEditModalOpen(true);
     }
@@ -417,6 +419,7 @@ const ProjectDetailPage = () => {
         projectData: {
           name: projectFormData.name.trim(),
           description: projectFormData.description?.trim() || "",
+          status: projectFormData.status || "active",
         },
       });
       setIsEditModalOpen(false);
@@ -866,7 +869,7 @@ const ProjectDetailPage = () => {
             <Label className="text-muted-foreground">Description</Label>
             <p className="mt-1">{project.description || "No description provided"}</p>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
             <div>
               <Label className="text-muted-foreground flex items-center gap-2">
                 <CheckSquare className="h-4 w-4" />
@@ -895,6 +898,31 @@ const ProjectDetailPage = () => {
                   ? format(new Date(project.created_at), "MMM dd, yyyy")
                   : "N/A"}
               </p>
+            </div>
+            <div>
+              <Label className="text-muted-foreground flex items-center gap-2">
+                <Info className="h-4 w-4" />
+                Status
+              </Label>
+              <div className="mt-1">
+                <Badge
+                  variant={
+                    project.status === "active"
+                      ? "default"
+                      : project.status === "archived"
+                      ? "secondary"
+                      : "outline"
+                  }
+                >
+                  {project.status === "active"
+                    ? "Active"
+                    : project.status === "inactive"
+                    ? "Inactive"
+                    : project.status === "archived"
+                    ? "Archived"
+                    : project.status || "Active"}
+                </Badge>
+              </div>
             </div>
           </div>
         </CardContent>
@@ -1366,6 +1394,24 @@ const ProjectDetailPage = () => {
                 rows={4}
                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
               />
+            </div>
+            <div>
+              <Label htmlFor="edit-project-status">Status</Label>
+              <Select
+                value={projectFormData.status}
+                onValueChange={(value) =>
+                  setProjectFormData({ ...projectFormData, status: value })
+                }
+              >
+                <SelectTrigger id="edit-project-status">
+                  <SelectValue placeholder="Select status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="inactive">Inactive</SelectItem>
+                  <SelectItem value="archived">Archived</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <DialogFooter className="gap-2">
