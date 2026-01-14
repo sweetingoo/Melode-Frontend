@@ -15,6 +15,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { AvatarWithUrl } from "@/components/AvatarWithUrl";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -62,6 +68,11 @@ import {
 import CustomFieldRenderer from "@/components/CustomFieldRenderer";
 import MultiFileUpload from "@/components/MultiFileUpload";
 import FileAttachmentList from "@/components/FileAttachmentList";
+import { ComplianceFieldCard } from "@/components/ComplianceFieldCard";
+import { ComplianceUploadModal } from "@/components/ComplianceUploadModal";
+import { ComplianceHistory } from "@/components/ComplianceHistory";
+import { useEntityCompliance, useUploadCompliance, useRenewCompliance, useComplianceHistory } from "@/hooks/useCompliance";
+import { filesService } from "@/services/files";
 
 export default function ProfilePage() {
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
@@ -79,6 +90,13 @@ export default function ProfilePage() {
   const [customFieldsErrors, setCustomFieldsErrors] = useState({});
   const [hasCustomFieldsChanges, setHasCustomFieldsChanges] = useState(false);
   const [isUpdatingCustomFields, setIsUpdatingCustomFields] = useState(false);
+
+  // Compliance State
+  const [uploadModalOpen, setUploadModalOpen] = useState(false);
+  const [historyModalOpen, setHistoryModalOpen] = useState(false);
+  const [selectedComplianceField, setSelectedComplianceField] = useState(null);
+  const [selectedComplianceValue, setSelectedComplianceValue] = useState(null);
+  const [isRenewal, setIsRenewal] = useState(false);
 
   // API Hooks
   const {
@@ -130,12 +148,146 @@ export default function ProfilePage() {
   const regenerateBackupCodesMutation = useRegenerateBackupCodes();
 
   // Custom Fields Hooks
-  const { data: userCustomFields, isLoading: userCustomFieldsLoading } = useUserCustomFields(profileData?.id);
-  const { data: customFieldsHierarchy, isLoading: customFieldsHierarchyLoading } = useUserCustomFieldsHierarchy(profileData?.id);
+  const { data: userCustomFields, isLoading: userCustomFieldsLoading } = useUserCustomFields(profileData?.slug);
+  const { data: customFieldsHierarchy, isLoading: customFieldsHierarchyLoading } = useUserCustomFieldsHierarchy(profileData?.slug);
   const updateUserCustomFieldMutation = useUpdateUserCustomField();
   const bulkUpdateUserCustomFieldsMutation = useBulkUpdateUserCustomFields();
   const addUserGroupEntryMutation = useAddUserGroupEntry();
   const uploadFileMutation = useUploadFile();
+
+  // Get compliance data to check for missing required fields
+  // Only fetch if profile slug is available
+  const { data: complianceData, refetch: refetchCompliance } = useEntityCompliance(
+    "user",
+    profileData?.slug || null,
+    profileData?.role?.slug || null,
+    null
+  );
+
+  // Compliance Hooks
+  const uploadComplianceMutation = useUploadCompliance();
+  const renewComplianceMutation = useRenewCompliance();
+
+  // Check if there are missing required compliance fields
+  const hasMissingRequiredCompliance = complianceData?.required_missing_count > 0;
+  const missingComplianceCount = complianceData?.required_missing_count || 0;
+
+  // Check for missing required regular custom fields
+  const missingRequiredCustomFieldsCount = React.useMemo(() => {
+    if (!customFieldsHierarchy?.sections) {
+      return 0;
+    }
+
+    let missingCount = 0;
+    customFieldsHierarchy.sections.forEach((section) => {
+      section.fields?.forEach((field) => {
+        // Skip compliance fields - they're handled separately
+        const isComplianceField = complianceData?.compliance_fields?.some(cf => cf.custom_field_id === field.id);
+        if (isComplianceField) {
+          return;
+        }
+
+        if (field.is_required && field.is_active !== false) {
+          // Check if field has a value from userCustomFields or customFieldsData
+          let hasValue = false;
+          
+          if (userCustomFields?.sections) {
+            const fieldValue = userCustomFields.sections
+              ?.flatMap(s => s.fields || [])
+              .find(f => f.id === field.id);
+            
+            if (fieldValue?.value_data) {
+              // Check if value_data has actual content
+              if (typeof fieldValue.value_data === 'object') {
+                hasValue = Object.keys(fieldValue.value_data).length > 0 && 
+                          (fieldValue.value_data.value !== undefined && fieldValue.value_data.value !== null && fieldValue.value_data.value !== '');
+              } else {
+                hasValue = true;
+              }
+            }
+          }
+          
+          // Also check customFieldsData as fallback
+          if (!hasValue && customFieldsData[field.id] !== undefined && customFieldsData[field.id] !== null && customFieldsData[field.id] !== '') {
+            hasValue = true;
+          }
+          
+          if (!hasValue) {
+            missingCount++;
+          }
+        }
+      });
+    });
+    return missingCount;
+  }, [customFieldsHierarchy, userCustomFields, customFieldsData, complianceData]);
+
+  const totalMissingRequired = missingComplianceCount + missingRequiredCustomFieldsCount;
+  const hasMissingRequired = totalMissingRequired > 0;
+
+  // Compliance Handlers
+  const handleComplianceUpload = (field) => {
+    setSelectedComplianceField(field);
+    setSelectedComplianceValue(null);
+    setIsRenewal(false);
+    setUploadModalOpen(true);
+  };
+
+  const handleComplianceRenew = (value, field) => {
+    setSelectedComplianceValue(value);
+    setSelectedComplianceField(field);
+    setIsRenewal(true);
+    setUploadModalOpen(true);
+  };
+
+  const handleComplianceViewHistory = async (field, value) => {
+    if (!value || !value.id || value.id === 0) {
+      return;
+    }
+    setSelectedComplianceField(field);
+    setSelectedComplianceValue(value);
+    setHistoryModalOpen(true);
+  };
+
+  const handleComplianceDownload = async (file) => {
+    if (file.file_reference_id || file.id) {
+      try {
+        const response = await filesService.getFileUrl(file.file_reference_id || file.id);
+        const url = response.url || response;
+        if (url) {
+          window.open(url, "_blank");
+        }
+      } catch (error) {
+        console.error("Failed to get file URL:", error);
+        if (file.download_url) {
+          window.open(file.download_url, "_blank");
+        }
+      }
+    } else if (file.download_url) {
+      window.open(file.download_url, "_blank");
+    }
+  };
+
+  const handleComplianceUploadSubmit = async (uploadData) => {
+    if (isRenewal && selectedComplianceValue) {
+      await renewComplianceMutation.mutateAsync({
+        valueSlug: selectedComplianceValue.slug,
+        renewalData: uploadData,
+      });
+    } else {
+      await uploadComplianceMutation.mutateAsync(uploadData);
+    }
+    setUploadModalOpen(false);
+    refetchCompliance();
+  };
+
+  // Get history for selected compliance field
+  const { data: complianceHistoryData, isLoading: complianceHistoryLoading } = useComplianceHistory(
+    selectedComplianceField?.slug || selectedComplianceField?.field_slug || "",
+    "user",
+    profileData?.slug || "",
+    1,
+    50
+  );
 
   // Local state for form data (only editable fields)
   const [formData, setFormData] = useState({
@@ -535,9 +687,9 @@ export default function ProfilePage() {
 
         // Then update the field with the file ID
         updateUserCustomFieldMutation.mutate({
-          fieldId,
+          fieldSlug: field.slug || field.field_name,
           valueData: { file_id: uploadResult.id },
-          userId: profileData.id
+          userSlug: profileData.slug
         });
       } catch (error) {
         console.error(`Failed to upload file for field ${field.field_name}:`, error);
@@ -548,9 +700,9 @@ export default function ProfilePage() {
       const formattedValue = formatFieldValueForAPI(field, value);
 
       updateUserCustomFieldMutation.mutate({
-        fieldId,
+        fieldSlug: field.slug || field.field_name,
         valueData: formattedValue,
-        userId: profileData.id
+        userSlug: profileData.slug
       });
     }
   };
@@ -640,8 +792,8 @@ export default function ProfilePage() {
     }
 
     if (updates.length > 0) {
-      if (!profileData?.id) {
-        toast.error("User ID not available");
+      if (!profileData?.slug) {
+        toast.error("User slug not available");
         return;
       }
 
@@ -670,9 +822,9 @@ export default function ProfilePage() {
 
               // Then update the field with the file ID
               await updateUserCustomFieldMutation.mutateAsync({
-                fieldId: update.field_id,
+                fieldSlug: field.slug || field.field_name,
                 valueData: { file_id: uploadResult.id },
-                userId: profileData.id
+                userSlug: profileData.slug
               });
             } catch (error) {
               console.error(`Failed to upload file for field ${field.field_name}:`, error);
@@ -684,9 +836,9 @@ export default function ProfilePage() {
 
             // Update field one by one
             await updateUserCustomFieldMutation.mutateAsync({
-              fieldId: update.field_id,
+              fieldSlug: field.slug || field.field_name,
               valueData: formattedValue,
-              userId: profileData.id
+              userSlug: profileData.slug
             });
           }
 
@@ -947,9 +1099,26 @@ export default function ProfilePage() {
               <span className="hidden sm:inline">Multi-Factor Auth</span>
               <span className="sm:hidden">MFA</span>
             </TabsTrigger>
-            <TabsTrigger value="additional" className="whitespace-nowrap">
+            <TabsTrigger value="additional" className="whitespace-nowrap relative">
               <span className="hidden sm:inline">Additional Info</span>
               <span className="sm:hidden">Additional</span>
+              {hasMissingRequired && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Badge 
+                        variant="destructive" 
+                        className="ml-2 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs"
+                      >
+                        {totalMissingRequired}
+                      </Badge>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>{totalMissingRequired} required {totalMissingRequired === 1 ? 'field' : 'fields'} missing</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
             </TabsTrigger>
             <TabsTrigger value="files" className="whitespace-nowrap">Files</TabsTrigger>
           </TabsList>
@@ -973,26 +1142,28 @@ export default function ProfilePage() {
               <div className="space-y-4">
                 <Label className="text-sm font-medium">Profile Image</Label>
                 <div className="flex items-center gap-6">
-                  {avatarPreview ? (
-                    <Avatar className="h-20 w-20">
-                      <AvatarImage src={avatarPreview} alt={profileData?.fullName || "Profile"} />
-                      <AvatarFallback className="text-lg">
-                        {profileData?.initials || "AU"}
-                      </AvatarFallback>
-                    </Avatar>
-                  ) : (
-                    <AvatarWithUrl
-                      avatarValue={formData.avatar || profileData?.avatar_url || profileData?.avatar}
-                      alt={profileData?.fullName || "Profile"}
-                      fallback={profileData?.initials || "AU"}
-                      className="h-20 w-20"
-                      fallbackProps={{ className: "text-lg" }}
-                      onImageLoad={() => {
-                        // Clear preview once the uploaded image has loaded
-                        setAvatarPreview(null);
-                      }}
-                    />
-                  )}
+                  <div className="relative">
+                    {avatarPreview ? (
+                      <Avatar className="h-20 w-20">
+                        <AvatarImage src={avatarPreview} alt={profileData?.fullName || "Profile"} />
+                        <AvatarFallback className="text-lg">
+                          {profileData?.initials || "AU"}
+                        </AvatarFallback>
+                      </Avatar>
+                    ) : (
+                      <AvatarWithUrl
+                        avatarValue={formData.avatar || profileData?.avatar_url || profileData?.avatar}
+                        alt={profileData?.fullName || "Profile"}
+                        fallback={profileData?.initials || "AU"}
+                        className="h-20 w-20"
+                        fallbackProps={{ className: "text-lg" }}
+                        onImageLoad={() => {
+                          // Clear preview once the uploaded image has loaded
+                          setAvatarPreview(null);
+                        }}
+                      />
+                    )}
+                  </div>
                   <div className="space-y-3">
                     {/* Drag and Drop Area */}
                     <div
@@ -1193,6 +1364,7 @@ export default function ProfilePage() {
               </div>
             </CardContent>
           </Card>
+
         </TabsContent>
 
         {/* Change Password Tab */}
@@ -1621,7 +1793,7 @@ export default function ProfilePage() {
           {/* Custom Fields Section - First Row */}
           {customFieldsHierarchy && customFieldsHierarchy.sections &&
             customFieldsHierarchy.sections.filter(section => section.is_active !== false).length > 0 && (
-              <Card>
+            <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <User className="h-5 w-5" />
@@ -1639,34 +1811,117 @@ export default function ProfilePage() {
                     </div>
                   ) : (
                     <>
-                      {customFieldsHierarchy.sections
+                      {/* Debug logging */}
+                      {(() => {
+                        console.log("Profile - Compliance fields debug:", {
+                          complianceFieldsCount: complianceData?.compliance_fields?.length || 0,
+                          complianceFields: complianceData?.compliance_fields,
+                          sectionsCount: customFieldsHierarchy?.sections?.length || 0,
+                          sections: customFieldsHierarchy?.sections,
+                        });
+                        return null;
+                      })()}
+                      
+                      {(customFieldsHierarchy?.sections || [])
                         .filter(section => section.is_active !== false) // Only show active sections
-                        .map((section) => (
-                          <div key={section.id} className="space-y-4">
-                            <div className="border-b pb-2">
-                              <h3 className="text-lg font-semibold">{section.section_name}</h3>
-                              {section.subsections && section.subsections.length > 0 && (
-                                <p className="text-sm text-muted-foreground">
-                                  Subsections: {section.subsections.join(', ')}
-                                </p>
-                              )}
-                            </div>
+                        .map((section) => {
+                          // Get all fields in this section (both compliance and non-compliance) from hierarchy
+                          const allFields = section.fields?.filter(field => field.is_active !== false) || [];
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                              {section.fields
-                                ?.filter(field => field.is_active !== false) // Only show active fields
-                                ?.map((field) => (
-                                  <CustomFieldRenderer
-                                    key={field.id}
-                                    field={field}
-                                    value={customFieldsData[field.id] || ''}
-                                    onChange={handleCustomFieldChange}
-                                    error={customFieldsErrors[field.id]}
-                                  />
-                                ))}
+                          // Create a map of compliance fields by field ID for quick lookup
+                          const complianceFieldsMap = new Map();
+                          if (complianceData?.compliance_fields) {
+                            complianceData.compliance_fields.forEach((cf) => {
+                              complianceFieldsMap.set(cf.custom_field_id, cf);
+                            });
+                          }
+
+                          // Don't render section if it has no fields at all
+                          if (allFields.length === 0) {
+                            return null;
+                          }
+
+                          // Separate compliance and regular fields
+                          const complianceFieldsInSection = [];
+                          const regularFieldsInSection = [];
+                          
+                          allFields.forEach((field) => {
+                            const complianceFieldValue = complianceFieldsMap.get(field.id);
+                            if (complianceFieldValue) {
+                              complianceFieldsInSection.push({ field, complianceFieldValue });
+                            } else {
+                              regularFieldsInSection.push(field);
+                            }
+                          });
+
+                          return (
+                            <div key={section.id} className="space-y-4">
+                              <div className="border-b pb-2">
+                                <h3 className="text-lg font-semibold">{section.section_name}</h3>
+                                {section.section_description && (
+                                  <p className="text-sm text-muted-foreground mt-1">
+                                    {section.section_description}
+                                  </p>
+                                )}
+                                {section.subsections && section.subsections.length > 0 && (
+                                  <p className="text-xs text-muted-foreground mt-1">
+                                    Subsections: {section.subsections.join(', ')}
+                                  </p>
+                                )}
+                              </div>
+
+                              <div className="space-y-6">
+                                {/* Regular Custom Fields in Grid Layout */}
+                                {regularFieldsInSection.length > 0 && (
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    {regularFieldsInSection.map((field) => (
+                                      <CustomFieldRenderer
+                                        key={field.id}
+                                        field={field}
+                                        value={customFieldsData[field.id] || ''}
+                                        onChange={handleCustomFieldChange}
+                                        error={customFieldsErrors[field.id]}
+                                      />
+                                    ))}
+                                  </div>
+                                )}
+
+                                {/* Compliance Fields as Full-Width Cards */}
+                                {complianceFieldsInSection.length > 0 && (
+                                  <div className="space-y-4">
+                                    {complianceFieldsInSection.map(({ field, complianceFieldValue }) => {
+                                      const complianceField = {
+                                        id: complianceFieldValue.custom_field_id,
+                                        slug: complianceFieldValue.field_slug || complianceFieldValue.slug,
+                                        field_name: complianceFieldValue.field_name || field.field_name || "Unknown Field",
+                                        field_label: complianceFieldValue.field_label || field.field_label || complianceFieldValue.field_name || "Unknown Field",
+                                        field_description: complianceFieldValue.field_description || field.field_description,
+                                        requires_approval: complianceFieldValue.requires_approval,
+                                        compliance_config: complianceFieldValue.compliance_config || null,
+                                        sub_field_definitions: complianceFieldValue.sub_field_definitions || null,
+                                      };
+
+                                      return (
+                                        <ComplianceFieldCard
+                                          key={complianceFieldValue.id || complianceFieldValue.custom_field_id || field.id}
+                                          field={complianceField}
+                                          value={complianceFieldValue}
+                                          onUpload={handleComplianceUpload}
+                                          onRenew={handleComplianceRenew}
+                                          onViewHistory={handleComplianceViewHistory}
+                                          onDownload={handleComplianceDownload}
+                                          isAdmin={false}
+                                          canUpload={true}
+                                        />
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
+
 
                       <div className="flex justify-between items-center pt-4 border-t">
                         <div className="text-sm text-muted-foreground">
@@ -1700,8 +1955,9 @@ export default function ProfilePage() {
               </Card>
             )}
 
-          {/* Custom Fields Empty State */}
-          {!customFieldsHierarchyLoading && (!customFieldsHierarchy || !customFieldsHierarchy.sections || customFieldsHierarchy.sections.length === 0) && (
+          {/* Custom Fields Empty State - Show compliance fields even if no custom fields */}
+          {!customFieldsHierarchyLoading && (!customFieldsHierarchy || !customFieldsHierarchy.sections || customFieldsHierarchy.sections.length === 0) && 
+           (!complianceData?.compliance_fields || complianceData.compliance_fields.length === 0) && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -1989,7 +2245,42 @@ export default function ProfilePage() {
             </div>
           )}
         </TabsContent>
+
       </Tabs>
+
+      {/* Compliance Upload Modal */}
+      {(selectedComplianceField || (isRenewal && selectedComplianceValue)) && (
+        <ComplianceUploadModal
+          open={uploadModalOpen}
+          onOpenChange={setUploadModalOpen}
+          field={selectedComplianceField || (selectedComplianceValue ? {
+            slug: selectedComplianceValue.field_slug || selectedComplianceValue.slug,
+            field_name: selectedComplianceValue.field_name,
+            field_label: selectedComplianceValue.field_label,
+            field_description: selectedComplianceValue.field_description,
+            compliance_config: selectedComplianceValue.compliance_config,
+            sub_field_definitions: selectedComplianceValue.sub_field_definitions,
+          } : null)}
+          entityType="user"
+          entitySlug={profileData?.slug || ""}
+          onUpload={handleComplianceUploadSubmit}
+          isRenewal={isRenewal}
+          existingValue={selectedComplianceValue}
+        />
+      )}
+
+      {/* Compliance History Modal */}
+      {selectedComplianceField && (
+        <ComplianceHistory
+          open={historyModalOpen}
+          onOpenChange={setHistoryModalOpen}
+          field={selectedComplianceField}
+          history={complianceHistoryData?.history || []}
+          isLoading={complianceHistoryLoading}
+          onDownload={handleComplianceDownload}
+          isAdmin={false}
+        />
+      )}
     </div>
   );
 }

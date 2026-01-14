@@ -20,7 +20,8 @@ const CustomFieldRenderer = ({
   field, 
   value, 
   onChange, 
-  error 
+  error,
+  readOnly = false
 }) => {
   const fieldId = `custom-field-${field.id}`;
   const isRequired = field.is_required || field.required;
@@ -43,6 +44,8 @@ const CustomFieldRenderer = ({
             placeholder={field.field_description || `Enter ${field.field_label || field.name}`}
             maxLength={field.max_length}
             className={error ? 'border-red-500' : ''}
+            disabled={readOnly}
+            readOnly={readOnly}
           />
         );
 
@@ -55,6 +58,8 @@ const CustomFieldRenderer = ({
             onChange={(e) => handleChange(e.target.value)}
             placeholder={field.field_description || `Enter ${field.field_label || field.name}`}
             className={error ? 'border-red-500' : ''}
+            disabled={readOnly}
+            readOnly={readOnly}
           />
         );
 
@@ -70,6 +75,8 @@ const CustomFieldRenderer = ({
             min={field.min_value}
             max={field.max_value}
             className={error ? 'border-red-500' : ''}
+            disabled={readOnly}
+            readOnly={readOnly}
           />
         );
 
@@ -86,6 +93,8 @@ const CustomFieldRenderer = ({
             min={field.min_value}
             max={field.max_value}
             className={error ? 'border-red-500' : ''}
+            disabled={readOnly}
+            readOnly={readOnly}
           />
         );
 
@@ -100,6 +109,8 @@ const CustomFieldRenderer = ({
             maxLength={field.max_length}
             rows={4}
             className={error ? 'border-red-500' : ''}
+            disabled={readOnly}
+            readOnly={readOnly}
           />
         );
 
@@ -111,6 +122,7 @@ const CustomFieldRenderer = ({
               id={fieldId}
               checked={value === true || value === 'true'}
               onCheckedChange={(checked) => handleChange(checked)}
+              disabled={readOnly}
             />
             <Label htmlFor={fieldId} className="text-sm font-normal">
               {field.field_description || field.field_label || field.name}
@@ -125,6 +137,7 @@ const CustomFieldRenderer = ({
           <Select
             value={value || ''}
             onValueChange={handleChange}
+            disabled={readOnly}
           >
             <SelectTrigger className={error ? 'border-red-500' : ''}>
               <SelectValue placeholder={field.field_description || `Select ${field.field_label || field.name}`} />
@@ -152,10 +165,11 @@ const CustomFieldRenderer = ({
             value={value || ''}
             onValueChange={handleChange}
             className={error ? 'border-red-500' : ''}
+            disabled={readOnly}
           >
             {radioOptions.map((option, index) => (
               <div key={index} className="flex items-center space-x-2">
-                <RadioGroupItem value={option.value || option} id={`${fieldId}-${index}`} />
+                <RadioGroupItem value={option.value || option} id={`${fieldId}-${index}`} disabled={readOnly} />
                 <Label htmlFor={`${fieldId}-${index}`} className="text-sm font-normal">
                   {option.label || option}
                 </Label>
@@ -175,19 +189,22 @@ const CustomFieldRenderer = ({
                   !value && "text-muted-foreground",
                   error && "border-red-500"
                 )}
+                disabled={readOnly}
               >
                 <CalendarIcon className="mr-2 h-4 w-4" />
                 {value ? format(new Date(value), "PPP") : <span>Pick a date</span>}
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-auto p-0">
-              <Calendar
-                mode="single"
-                selected={value ? new Date(value) : undefined}
-                onSelect={(date) => handleChange(date ? date.toISOString().split('T')[0] : '')}
-                initialFocus
-              />
-            </PopoverContent>
+            {!readOnly && (
+              <PopoverContent className="w-auto p-0">
+                <Calendar
+                  mode="single"
+                  selected={value ? new Date(value) : undefined}
+                  onSelect={(date) => handleChange(date ? date.toISOString().split('T')[0] : '')}
+                  initialFocus
+                />
+              </PopoverContent>
+            )}
           </Popover>
         );
 
@@ -201,6 +218,8 @@ const CustomFieldRenderer = ({
               value={value || ''}
               onChange={(e) => handleChange(e.target.value)}
               className={error ? 'border-red-500' : ''}
+              disabled={readOnly}
+              readOnly={readOnly}
             />
           </div>
         );
@@ -213,6 +232,8 @@ const CustomFieldRenderer = ({
             value={value || ''}
             onChange={(e) => handleChange(e.target.value)}
             className={error ? 'border-red-500' : ''}
+            disabled={readOnly}
+            readOnly={readOnly}
           />
         );
 
@@ -225,6 +246,8 @@ const CustomFieldRenderer = ({
             onChange={(e) => handleChange(e.target.value)}
             placeholder={field.field_description || `Enter ${field.field_label || field.name}`}
             className={error ? 'border-red-500' : ''}
+            disabled={readOnly}
+            readOnly={readOnly}
           />
         );
 
@@ -237,6 +260,8 @@ const CustomFieldRenderer = ({
             onChange={(e) => handleChange(e.target.value)}
             placeholder={field.field_description || `Enter ${field.field_label || field.name}`}
             className={error ? 'border-red-500' : ''}
+            disabled={readOnly}
+            readOnly={readOnly}
           />
         );
 

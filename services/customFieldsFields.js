@@ -23,7 +23,11 @@ export const customFieldsFieldsService = {
   // Get custom field by slug
   getCustomField: async (slug) => {
     try {
-      return await api.get(`/settings/custom-fields/${slug}`);
+      const response = await api.get(`/settings/custom-fields/${slug}`);
+      console.log("getCustomField - Raw API response:", response);
+      // Axios returns { data: {...}, status: 200, ... }
+      // The actual field object is in response.data
+      return response.data;
     } catch (error) {
       console.error(`Get custom field ${slug} failed:`, error);
       throw error;

@@ -24,31 +24,42 @@ export const profileUtils = {
     const avatarValue = profile.avatar_url || profile.avatar;
     const avatarFileReference = avatarValue ? extractAvatarFileReference(avatarValue) : null;
     
+    // Get primary role (first role in the array, or a specific role if marked as primary)
+    const roles = profile.roles || [];
+    const primaryRole = roles.find(r => r.is_default) || roles[0] || null;
+    
     return {
       id: profile.id,
+      slug: profile.slug, // Include slug for API calls
       firstName: profile.first_name || profile.firstName,
       lastName: profile.last_name || profile.lastName,
       email: profile.email,
-      phone: profile.phone,
+      phone: profile.phone || profile.phone_number,
       address: profile.address,
       bio: profile.bio,
       department: profile.department,
-      jobTitle: profile.job_title || profile.jobTitle,
+      jobTitle: profile.job_title || profile.jobTitle || profile.title,
       joinDate: profile.join_date || profile.joinDate,
+      username: profile.username,
       // Store file reference instead of S3 URL
       avatar: avatarFileReference || avatarValue || null,
       avatar_url: avatarFileReference || avatarValue || null, // Keep both for compatibility
       isActive: profile.is_active !== undefined ? profile.is_active : true,
+      isSuperuser: profile.is_superuser || false,
       createdAt: profile.created_at || profile.createdAt,
       updatedAt: profile.updated_at || profile.updatedAt,
+      // Role information
+      roles: roles, // Array of all roles
+      role: primaryRole, // Primary/default role
+      permissions: profile.permissions || [],
       // Additional computed fields
       fullName: `${profile.first_name || profile.firstName || ""} ${profile.last_name || profile.lastName || ""
-        }`.trim(),
+        }`.trim() || profile.display_name,
       initials: `${(profile.first_name || profile.firstName || "").charAt(0)}${(
         profile.last_name ||
         profile.lastName ||
         ""
-      ).charAt(0)}`.toUpperCase(),
+      ).charAt(0)}`.toUpperCase() || "AU",
     };
   },
 

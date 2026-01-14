@@ -56,4 +56,9 @@ This is a Next.js frontend application for the Melode project. The codebase uses
 - The backend provides both `file_slug` (persistent reference) and `download_url` (temporary signed URL) in responses
 - Prefer `file_slug` over `download_url` - use `download_url` only as a fallback if `file_slug` is not available
 - Store file references (slugs) in state/database, not signed URLs
+- **ALWAYS use the generic upload endpoint** (`/settings/files/upload` via `profileService.uploadFile` or `useUploadFile` hook) for all file uploads
+- **NEVER upload files directly to entity-specific endpoints** (e.g., compliance upload endpoint)
+- Upload flow: First upload file using generic endpoint → Get file_slug from response → Send file_slug to entity-specific endpoint
+- The generic upload endpoint returns a file reference (file_slug/id) which should be stored, not the file itself
+- For compliance uploads: Upload file using `profileService.uploadFile()`, then send the returned `file_slug` to the compliance endpoint
 

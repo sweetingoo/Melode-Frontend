@@ -98,6 +98,7 @@ import {
 } from "@/hooks/useAssetTypes";
 import { useQueryClient } from "@tanstack/react-query";
 import { useUsers } from "@/hooks/useUsers";
+import { ComplianceSection } from "@/components/ComplianceSection";
 import { useRoles, useCreateRole } from "@/hooks/useRoles";
 import ResourceAuditLogs from "@/components/ResourceAuditLogs";
 import MultiFileUpload from "@/components/MultiFileUpload";
@@ -1916,6 +1917,19 @@ const AssetsPage = () => {
                   }}
                 />
               </div>
+
+              {/* Compliance Section */}
+              {selectedAsset.slug && (
+                <div className="pt-6 border-t">
+                  <ComplianceSection
+                    entityType="asset"
+                    entitySlug={selectedAsset.slug}
+                    assetTypeSlug={selectedAsset.assetTypeSlug || selectedAsset.asset_type_slug || null}
+                    isAdmin={false}
+                    canUpload={true}
+                  />
+                </div>
+              )}
 
               {/* Activity History */}
               <div className="pt-6 border-t">

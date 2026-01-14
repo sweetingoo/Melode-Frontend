@@ -11,6 +11,8 @@ export default function QueryProvider({ children }) {
         defaultOptions: {
           queries: {
             staleTime: 60 * 1000, // 1 minute
+            refetchOnMount: false, // Prevent double API calls on mount (e.g., from React StrictMode)
+            refetchOnWindowFocus: false, // Prevent refetching when window regains focus
             retry: (failureCount, error) => {
               // Don't retry on 4xx errors
               if (

@@ -17,6 +17,7 @@ export const customFieldsKeys = {
 export const customFieldsUtils = {
   transformField: (field) => ({
     id: field.id,
+    slug: field.slug, // Slug is auto-generated, always use it
     fieldName: field.field_name,
     fieldLabel: field.field_label,
     fieldDescription: field.field_description,
@@ -63,6 +64,11 @@ export const customFieldsUtils = {
     organization_id: field.organization_id !== undefined ? field.organization_id : (field.organisation_id !== undefined ? field.organisation_id : (field.organizationId !== undefined ? field.organizationId : (field.organisationId !== undefined ? field.organisationId : 0))),
     section_id: field.section_id !== undefined ? field.section_id : (field.sectionId || 0),
     is_active: field.is_active !== undefined ? field.is_active : (field.isActive !== undefined ? field.isActive : true),
+    // Compliance fields
+    is_compliance: field.is_compliance !== undefined ? field.is_compliance : (field.isCompliance || false),
+    requires_approval: field.requires_approval !== undefined ? field.requires_approval : (field.requiresApproval || false),
+    expiry_reminder_days: field.expiry_reminder_days !== undefined ? field.expiry_reminder_days : (field.expiryReminderDays !== undefined ? field.expiryReminderDays : null),
+    compliance_config: field.compliance_config !== undefined ? field.compliance_config : (field.complianceConfig !== undefined ? field.complianceConfig : null),
   }),
 };
 
@@ -127,12 +133,16 @@ export const useCustomField = (slug) => {
   return useQuery({
     queryKey: customFieldsKeys.detail(slug),
     queryFn: async () => {
-      const response = await customFieldsFieldsService.getCustomField(slug);
-      // Handle both direct object response and wrapped response
-      return response.data || response;
+      console.log("useCustomField - Making API call for slug:", slug);
+      // Service already extracts response.data, so we get the field object directly
+      const fieldData = await customFieldsFieldsService.getCustomField(slug);
+      console.log("useCustomField - Field data received:", { fieldData, slug });
+      return fieldData;
     },
     enabled: !!slug,
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 0, // Always refetch when slug changes to ensure fresh data
+    refetchOnMount: true, // Refetch when component mounts
+    refetchOnWindowFocus: false, // Don't refetch on window focus
   });
 };
 

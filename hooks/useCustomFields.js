@@ -300,7 +300,7 @@ export const useCustomFieldsHierarchy = (entityType, entitySlug) => {
       );
       return response.data || response;
     },
-    enabled: !!entityType && !!entitySlug,
+    enabled: !!entityType && !!entitySlug && entitySlug !== null && entitySlug !== undefined,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 };

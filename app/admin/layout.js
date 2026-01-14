@@ -95,7 +95,15 @@ import {
 } from "@/hooks/useDepartmentContext";
 import { useRoles } from "@/hooks/useRoles";
 import { useUnreadMessagesCount } from "@/hooks/useMessages";
+import { useEntityCompliance } from "@/hooks/useCompliance";
 import { cn } from "@/lib/utils";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { AlertCircle } from "lucide-react";
 
 // Main navigation items (always visible, no grouping)
 const mainMenuItems = [
@@ -164,6 +172,12 @@ const mainMenuItems = [
     icon: Settings,
     url: "/admin/preferences",
     permission: null, // Preferences are visible to all users
+  },
+  {
+    title: "Compliance",
+    icon: Shield,
+    url: "/admin/compliance",
+    permission: "custom_field:read", // Permission to read compliance fields
   },
 ];
 
@@ -416,7 +430,10 @@ function SidebarNavigationContent({
   handleRoleSwitch,
   returnToOriginalUserMutation,
   logout,
-  isLoggingOut
+  isLoggingOut,
+  hasMissingRequiredCompliance,
+  missingCount,
+  complianceLoading
 }) {
   const { setOpenMobile, isMobile } = useSidebar();
 
@@ -693,18 +710,44 @@ function SidebarNavigationContent({
                 className="w-full justify-start px-2 py-2 h-auto group-data-[collapsible=icon]:w-auto group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:justify-center"
               >
                 <div className="flex items-center gap-2 w-full group-data-[collapsible=icon]:justify-center">
-                  <AvatarWithUrl
-                    avatarValue={currentUserData?.avatar_url}
-                    alt={currentUserData?.full_name || "User"}
-                    fallback={
-                      currentUserData?.full_name
-                        ?.split(" ")
-                        .map((n) => n[0])
-                        .join("")
-                        .toUpperCase() || "U"
-                    }
-                    className="h-6 w-6"
-                  />
+                  <div className="relative">
+                    <AvatarWithUrl
+                      avatarValue={currentUserData?.avatar_url}
+                      alt={currentUserData?.full_name || "User"}
+                      fallback={
+                        currentUserData?.full_name
+                          ?.split(" ")
+                          .map((n) => n[0])
+                          .join("")
+                          .toUpperCase() || "U"
+                      }
+                      className="h-6 w-6"
+                    />
+                    {/* Badge for missing required compliance fields */}
+                    {!complianceLoading && hasMissingRequiredCompliance && missingCount > 0 && (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-red-500 border-2 border-background flex items-center justify-center cursor-help shadow-lg animate-pulse hover:bg-red-600 transition-colors z-10">
+                              <AlertCircle className="h-3 w-3 text-white" />
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent 
+                            side="right" 
+                            align="start"
+                            className="bg-popover text-popover-foreground border border-border shadow-md max-w-xs"
+                          >
+                            <p className="font-medium text-foreground">
+                              {missingCount} required compliance field{missingCount !== 1 ? 's' : ''} missing
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Complete your compliance requirements in the Additional Information tab
+                            </p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    )}
+                  </div>
                   <div className="flex flex-col items-start flex-1 min-w-0 group-data-[collapsible=icon]:hidden">
                     <span className="text-sm font-medium truncate w-full">
                       {currentUserData?.full_name || "User"}
@@ -789,6 +832,38 @@ export default function AdminLayout({ children }) {
     error: currentUserError,
   } = useCurrentUser();
   const returnToOriginalUserMutation = useReturnToOriginalUser();
+
+  // Get compliance data to check for missing required fields
+  // Use the primary role from roles array if role object is not available
+  const userRoleSlug = currentUserData?.role?.slug || 
+                       (currentUserData?.roles && currentUserData.roles.length > 0 
+                         ? currentUserData.roles[0]?.slug 
+                         : null);
+  
+  const { data: complianceData, isLoading: complianceLoading } = useEntityCompliance(
+    "user",
+    currentUserData?.slug || null,
+    userRoleSlug,
+    null
+  );
+
+  // Check if there are missing required compliance fields
+  const hasMissingRequiredCompliance = complianceData?.required_missing_count > 0;
+  const missingCount = complianceData?.required_missing_count || 0;
+
+  // Debug logging
+  React.useEffect(() => {
+    if (currentUserData) {
+      console.log("AdminLayout - Compliance badge check:", {
+        userSlug: currentUserData?.slug,
+        roleSlug: userRoleSlug,
+        complianceData,
+        hasMissingRequiredCompliance,
+        missingCount,
+        complianceLoading,
+      });
+    }
+  }, [currentUserData, complianceData, hasMissingRequiredCompliance, missingCount, userRoleSlug, complianceLoading]);
 
   // Initialize token manager
   const { sessionModal } = useTokenManager();
@@ -1468,6 +1543,9 @@ export default function AdminLayout({ children }) {
               returnToOriginalUserMutation={returnToOriginalUserMutation}
               logout={logout}
               isLoggingOut={isLoggingOut}
+              hasMissingRequiredCompliance={hasMissingRequiredCompliance}
+              missingCount={missingCount}
+              complianceLoading={complianceLoading}
             />
             <SidebarRail />
           </Sidebar>

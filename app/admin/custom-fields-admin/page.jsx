@@ -51,6 +51,7 @@ import {
   Check,
   MoreHorizontal,
   AlertCircle,
+  Shield,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -70,8 +71,160 @@ import {
   customFieldsUtils,
 } from "@/hooks/useCustomFieldsFields";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
+import { useRoles } from "@/hooks/useRoles";
+import { useActiveAssetTypes } from "@/hooks/useAssetTypes";
+import { useLinkComplianceToRole, useLinkComplianceToAssetType } from "@/hooks/useCompliance";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { complianceService } from "@/services/compliance";
 
 // Predefined file type categories for easy selection
+// Pre-defined UK Healthcare Compliance Types
+const PREDEFINED_COMPLIANCE_TYPES = {
+  passport: {
+    label: "Passport",
+    description: "UK or International Passport",
+    sub_fields: [
+      { field_name: "first_name", field_label: "First Name", field_type: "text", is_required: true },
+      { field_name: "last_name", field_label: "Last Name", field_type: "text", is_required: true },
+      { field_name: "passport_number", field_label: "Passport Number", field_type: "text", is_required: true },
+      { field_name: "date_of_issue", field_label: "Date of Issue", field_type: "date", is_required: true },
+      { field_name: "date_of_expiry", field_label: "Date of Expiry", field_type: "date", is_required: true },
+      { field_name: "nationality", field_label: "Nationality", field_type: "text", is_required: true },
+      { field_name: "place_of_birth", field_label: "Place of Birth", field_type: "text", is_required: false },
+    ],
+  },
+  visa: {
+    label: "Visa / Right to Work",
+    description: "UK Visa or Right to Work documentation",
+    sub_fields: [
+      { field_name: "visa_type", field_label: "Visa Type", field_type: "text", is_required: true },
+      { field_name: "visa_number", field_label: "Visa Number", field_type: "text", is_required: true },
+      { field_name: "date_of_issue", field_label: "Date of Issue", field_type: "date", is_required: true },
+      { field_name: "date_of_expiry", field_label: "Date of Expiry", field_type: "date", is_required: true },
+      { field_name: "work_restrictions", field_label: "Work Restrictions", field_type: "textarea", is_required: false },
+    ],
+  },
+  dbs_check: {
+    label: "DBS Check (Disclosure and Barring Service)",
+    description: "DBS Certificate - Enhanced, Standard, or Basic",
+    sub_fields: [
+      { field_name: "dbs_number", field_label: "DBS Certificate Number", field_type: "text", is_required: true },
+      { field_name: "dbs_level", field_label: "DBS Level", field_type: "select", is_required: true, field_options: { options: [
+        { value: "basic", label: "Basic" },
+        { value: "standard", label: "Standard" },
+        { value: "enhanced", label: "Enhanced" },
+        { value: "enhanced_with_barred", label: "Enhanced with Barred Lists" },
+      ]}},
+      { field_name: "date_of_issue", field_label: "Date of Issue", field_type: "date", is_required: true },
+      { field_name: "date_of_expiry", field_label: "Date of Expiry", field_type: "date", is_required: true },
+      { field_name: "update_service_status", field_label: "Update Service Status", field_type: "select", is_required: false, field_options: { options: [
+        { value: "subscribed", label: "Subscribed" },
+        { value: "not_subscribed", label: "Not Subscribed" },
+      ]}},
+    ],
+  },
+  professional_registration: {
+    label: "Professional Registration",
+    description: "NMC, GMC, HCPC, or other professional body registration",
+    sub_fields: [
+      { field_name: "registration_body", field_label: "Registration Body", field_type: "select", is_required: true, field_options: { options: [
+        { value: "nmc", label: "NMC (Nursing and Midwifery Council)" },
+        { value: "gmc", label: "GMC (General Medical Council)" },
+        { value: "hcpc", label: "HCPC (Health and Care Professions Council)" },
+        { value: "gphc", label: "GPhC (General Pharmaceutical Council)" },
+        { value: "other", label: "Other" },
+      ]}},
+      { field_name: "registration_number", field_label: "Registration Number", field_type: "text", is_required: true },
+      { field_name: "date_of_registration", field_label: "Date of Registration", field_type: "date", is_required: true },
+      { field_name: "date_of_expiry", field_label: "Date of Expiry / Renewal", field_type: "date", is_required: true },
+      { field_name: "registration_status", field_label: "Registration Status", field_type: "select", is_required: true, field_options: { options: [
+        { value: "active", label: "Active" },
+        { value: "lapsed", label: "Lapsed" },
+        { value: "suspended", label: "Suspended" },
+      ]}},
+    ],
+  },
+  immunisation: {
+    label: "Immunisation Record",
+    description: "Vaccination and immunisation records (Hepatitis B, TB, etc.)",
+    sub_fields: [
+      { field_name: "vaccine_type", field_label: "Vaccine Type", field_type: "select", is_required: true, field_options: { options: [
+        { value: "hepatitis_b", label: "Hepatitis B" },
+        { value: "tuberculosis", label: "Tuberculosis (TB)" },
+        { value: "covid_19", label: "COVID-19" },
+        { value: "flu", label: "Seasonal Flu" },
+        { value: "mmr", label: "MMR (Measles, Mumps, Rubella)" },
+        { value: "other", label: "Other" },
+      ]}},
+      { field_name: "date_of_vaccination", field_label: "Date of Vaccination", field_type: "date", is_required: true },
+      { field_name: "next_due_date", field_label: "Next Due Date / Booster", field_type: "date", is_required: false },
+      { field_name: "batch_number", field_label: "Batch Number", field_type: "text", is_required: false },
+      { field_name: "administered_by", field_label: "Administered By", field_type: "text", is_required: false },
+    ],
+  },
+  occupational_health: {
+    label: "Occupational Health Clearance",
+    description: "Occupational health assessment and clearance",
+    sub_fields: [
+      { field_name: "assessment_type", field_label: "Assessment Type", field_type: "select", is_required: true, field_options: { options: [
+        { value: "pre_employment", label: "Pre-Employment" },
+        { value: "annual", label: "Annual Review" },
+        { value: "return_to_work", label: "Return to Work" },
+        { value: "fitness_for_work", label: "Fitness for Work" },
+      ]}},
+      { field_name: "date_of_assessment", field_label: "Date of Assessment", field_type: "date", is_required: true },
+      { field_name: "clearance_status", field_label: "Clearance Status", field_type: "select", is_required: true, field_options: { options: [
+        { value: "cleared", label: "Cleared" },
+        { value: "cleared_with_restrictions", label: "Cleared with Restrictions" },
+        { value: "not_cleared", label: "Not Cleared" },
+      ]}},
+      { field_name: "next_review_date", field_label: "Next Review Date", field_type: "date", is_required: false },
+      { field_name: "restrictions", field_label: "Work Restrictions", field_type: "textarea", is_required: false },
+    ],
+  },
+  driving_license: {
+    label: "Driving Licence",
+    description: "UK Driving Licence (if required for role)",
+    sub_fields: [
+      { field_name: "license_number", field_label: "Driving Licence Number", field_type: "text", is_required: true },
+      { field_name: "license_type", field_label: "License Type", field_type: "select", is_required: true, field_options: { options: [
+        { value: "provisional", label: "Provisional" },
+        { value: "full", label: "Full" },
+      ]}},
+      { field_name: "date_of_issue", field_label: "Date of Issue", field_type: "date", is_required: true },
+      { field_name: "date_of_expiry", field_label: "Date of Expiry", field_type: "date", is_required: true },
+      { field_name: "categories", field_label: "Vehicle Categories", field_type: "text", is_required: false, placeholder: "e.g., B, C1, D1" },
+    ],
+  },
+  qualifications: {
+    label: "Professional Qualifications",
+    description: "Relevant professional qualifications and certificates",
+    sub_fields: [
+      { field_name: "qualification_name", field_label: "Qualification Name", field_type: "text", is_required: true },
+      { field_name: "awarding_body", field_label: "Awarding Body", field_type: "text", is_required: true },
+      { field_name: "qualification_level", field_label: "Level", field_type: "text", is_required: false, placeholder: "e.g., Level 3, Degree, Diploma" },
+      { field_name: "date_awarded", field_label: "Date Awarded", field_type: "date", is_required: true },
+      { field_name: "certificate_number", field_label: "Certificate Number", field_type: "text", is_required: false },
+    ],
+  },
+  training_certificate: {
+    label: "Training Certificate",
+    description: "Mandatory training certificates (e.g., Manual Handling, Fire Safety)",
+    sub_fields: [
+      { field_name: "training_name", field_label: "Training Name", field_type: "text", is_required: true },
+      { field_name: "training_provider", field_label: "Training Provider", field_type: "text", is_required: true },
+      { field_name: "date_completed", field_label: "Date Completed", field_type: "date", is_required: true },
+      { field_name: "expiry_date", field_label: "Expiry Date", field_type: "date", is_required: false },
+      { field_name: "certificate_number", field_label: "Certificate Number", field_type: "text", is_required: false },
+    ],
+  },
+  custom: {
+    label: "Custom Compliance Type",
+    description: "Create your own compliance type with custom fields",
+    sub_fields: [],
+  },
+};
+
 const FILE_TYPE_CATEGORIES = {
   images: {
     label: "Images",
@@ -131,7 +284,7 @@ const CustomFieldsAdminPage = () => {
     useState(false);
   const [isCreateFieldModalOpen, setIsCreateFieldModalOpen] = useState(false);
   const [editingSectionId, setEditingSectionId] = useState(null);
-  const [editingFieldId, setEditingFieldId] = useState(null);
+  const [editingFieldSlug, setEditingFieldSlug] = useState(null);
   const [previewData, setPreviewData] = useState(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState(null);
@@ -161,7 +314,18 @@ const CustomFieldsAdminPage = () => {
     organisation_id: 0,
     section_id: 0,
     is_active: true,
+    // Compliance fields
+    is_compliance: false,
+    requires_approval: false,
+    expiry_reminder_days: null,
+    compliance_config: null,
   });
+  const [selectedComplianceType, setSelectedComplianceType] = useState(""); // Pre-defined type or "custom"
+  const [customSubFields, setCustomSubFields] = useState([]); // For custom compliance types
+  const [selectedRoles, setSelectedRoles] = useState([]); // Selected role slugs for linking
+  const [selectedAssetTypes, setSelectedAssetTypes] = useState([]); // Selected asset type slugs for linking
+  const [roleRequiredFlags, setRoleRequiredFlags] = useState({}); // Track which roles are required
+  const [assetTypeRequiredFlags, setAssetTypeRequiredFlags] = useState({}); // Track which asset types are required
 
   const fieldTypes = [
     { value: "text", label: "Text" },
@@ -210,12 +374,85 @@ const CustomFieldsAdminPage = () => {
   const updateFieldMutation = useUpdateCustomField();
   const deleteFieldMutation = useHardDeleteCustomField();
 
+  // Get roles and asset types for linking
+  const { data: rolesData } = useRoles({ is_active: true });
+  const { data: assetTypesData } = useActiveAssetTypes();
+  const roles = rolesData?.roles || rolesData || [];
+  const assetTypes = assetTypesData?.asset_types || assetTypesData || [];
+
+  // Compliance linking mutations
+  const queryClient = useQueryClient();
+  const linkToRoleMutation = useLinkComplianceToRole();
+  const linkToAssetTypeMutation = useLinkComplianceToAssetType();
+
   // Get individual field for editing
-  const { data: editingField, isLoading: editingFieldLoading } = useCustomField(editingFieldId);
+  const { data: editingField, isLoading: editingFieldLoading, refetch: refetchEditingField } = useCustomField(editingFieldSlug);
+  
+  // Debug: Log when editingFieldSlug changes
+  React.useEffect(() => {
+    console.log("editingFieldSlug changed:", editingFieldSlug);
+    console.log("useCustomField will be enabled:", !!editingFieldSlug);
+    // Force refetch when slug changes to ensure we get fresh data
+    if (editingFieldSlug) {
+      console.log("Refetching field data for slug:", editingFieldSlug);
+      refetchEditingField();
+    }
+  }, [editingFieldSlug, refetchEditingField]);
+  
+  // Debug: Log when editingField data changes
+  React.useEffect(() => {
+    console.log("editingField data changed:", editingField);
+    console.log("editingFieldLoading:", editingFieldLoading);
+    if (editingField) {
+      console.log("Field loaded - ID:", editingField.id, "slug:", editingField.slug, "field_name:", editingField.field_name);
+    }
+  }, [editingField, editingFieldLoading]);
+  
+  // Get compliance links when editing a compliance field
+  const fieldSlug = editingField?.slug || editingFieldSlug; // Use field slug or fallback to editingFieldSlug
+  const { data: complianceLinksData, isLoading: complianceLinksLoading } = useQuery({
+    queryKey: ["compliance-links", fieldSlug],
+    queryFn: async () => {
+      if (!fieldSlug) {
+        console.log("No fieldSlug provided, returning empty array");
+        return [];
+      }
+      console.log("Loading compliance links for field:", fieldSlug);
+      try {
+        const response = await complianceService.getComplianceLinksForField(fieldSlug);
+        console.log("Compliance links response:", response);
+        return response || [];
+      } catch (error) {
+        console.error("Failed to load compliance links:", error);
+        // If it's a 404, the field might not be a compliance field, return empty array
+        if (error.response?.status === 404) {
+          console.log("Field is not a compliance field or not found, returning empty array");
+          return [];
+        }
+        return [];
+      }
+    },
+    enabled: !!fieldSlug && !!editingFieldSlug, // Enable whenever we're editing a field (we'll filter in the effect if it's not compliance)
+    staleTime: 5 * 60 * 1000,
+  });
+  
+  // Debug: Log query state
+  React.useEffect(() => {
+    console.log("Compliance links query state:", {
+      fieldSlug,
+      editingFieldSlug,
+      editingFieldIsCompliance: editingField?.is_compliance,
+      enabled: !!fieldSlug && !!editingFieldSlug,
+      complianceLinksLoading,
+      complianceLinksDataLength: complianceLinksData?.length,
+    });
+  }, [fieldSlug, editingFieldSlug, editingField?.is_compliance, complianceLinksLoading, complianceLinksData]);
 
   // Populate form data when editing field is loaded
   React.useEffect(() => {
-    if (editingField && editingFieldId) {
+    console.log("Edit Field Effect - editingField:", editingField, "editingFieldSlug:", editingFieldSlug, "loading:", editingFieldLoading);
+    if (editingField && editingFieldSlug) {
+      console.log("Populating form with field data:", editingField);
       const fieldOptions = editingField.field_options || {};
       setFieldFormData({
         field_name: editingField.field_name || "",
@@ -235,14 +472,172 @@ const CustomFieldsAdminPage = () => {
         organization_id: editingField.organization_id || 0,
         section_id: editingField.section_id || 0,
         is_active: editingField.is_active !== undefined ? editingField.is_active : true,
+        // Compliance fields
+        is_compliance: editingField.is_compliance || false,
+        requires_approval: editingField.requires_approval || false,
+        expiry_reminder_days: editingField.expiry_reminder_days || null,
+        compliance_config: editingField.compliance_config 
+          ? {
+              // Ensure all ComplianceFieldConfig fields are present with defaults if missing
+              auto_expire: editingField.compliance_config.auto_expire !== undefined ? editingField.compliance_config.auto_expire : true,
+              notification_recipients: editingField.compliance_config.notification_recipients || null,
+              reminder_frequency: editingField.compliance_config.reminder_frequency || "daily",
+              allow_user_upload: editingField.compliance_config.allow_user_upload !== undefined ? editingField.compliance_config.allow_user_upload : true,
+              require_renewal_before_expiry: editingField.compliance_config.require_renewal_before_expiry || false,
+              renewal_grace_period_days: editingField.compliance_config.renewal_grace_period_days || 30,
+              has_sub_fields: editingField.compliance_config.has_sub_fields || false,
+              sub_fields: editingField.compliance_config.sub_fields || null,
+              // Map allow_user_upload to requires_file_upload for frontend UI
+              requires_file_upload: editingField.compliance_config.allow_user_upload !== false,
+            }
+          : null,
       });
+      
+      // Set compliance type if it's a pre-defined type
+      if (editingField.is_compliance && editingField.compliance_config?.sub_fields) {
+        // Try to match with pre-defined types
+        const subFields = editingField.compliance_config.sub_fields;
+        let matchedType = "";
+        
+        // Check each pre-defined type
+        for (const [key, predefined] of Object.entries(PREDEFINED_COMPLIANCE_TYPES)) {
+          if (key === "custom") continue;
+          
+          // Simple matching: check if sub-fields match
+          if (predefined.sub_fields.length === subFields.length) {
+            const fieldNamesMatch = predefined.sub_fields.every((pf, idx) => 
+              pf.field_name === subFields[idx]?.field_name
+            );
+            if (fieldNamesMatch) {
+              matchedType = key;
+              break;
+            }
+          }
+        }
+        
+        if (matchedType) {
+          setSelectedComplianceType(matchedType);
+        } else {
+          setSelectedComplianceType("custom");
+          setCustomSubFields(subFields);
+        }
+      } else {
+        setSelectedComplianceType("");
+        setCustomSubFields([]);
+      }
+
+      // Load existing role/asset type links (only if not loading and data is available)
+      if (editingField.is_compliance) {
+        if (!complianceLinksLoading && complianceLinksData) {
+          const roleLinks = complianceLinksData.filter(link => link.link_type === "role");
+          const assetTypeLinks = complianceLinksData.filter(link => link.link_type === "asset_type");
+          
+          setSelectedRoles(roleLinks.map(link => link.link_slug).filter(Boolean));
+          setSelectedAssetTypes(assetTypeLinks.map(link => link.link_slug).filter(Boolean));
+          
+          const roleFlags = {};
+          roleLinks.forEach(link => {
+            if (link.link_slug) {
+              roleFlags[link.link_slug] = link.is_required || false;
+            }
+          });
+          setRoleRequiredFlags(roleFlags);
+          
+          const assetTypeFlags = {};
+          assetTypeLinks.forEach(link => {
+            if (link.link_slug) {
+              assetTypeFlags[link.link_slug] = link.is_required || false;
+            }
+          });
+          setAssetTypeRequiredFlags(assetTypeFlags);
+        } else if (!complianceLinksLoading && !complianceLinksData) {
+          // No links found or query not enabled
+          setSelectedRoles([]);
+          setSelectedAssetTypes([]);
+          setRoleRequiredFlags({});
+          setAssetTypeRequiredFlags({});
+        }
+        // If loading, don't reset - wait for data
+      } else {
+        // Not a compliance field, reset links
+        setSelectedRoles([]);
+        setSelectedAssetTypes([]);
+        setRoleRequiredFlags({});
+        setAssetTypeRequiredFlags({});
+      }
       // Set allowAllFileTypes based on accept field
       if (editingField.field_type === 'file') {
         const accept = fieldOptions.accept || '';
         setAllowAllFileTypes(!accept || accept === '' || accept === '*/*');
       }
     }
-  }, [editingField, editingFieldId, selectedEntityType]);
+  }, [editingField, editingFieldSlug, selectedEntityType, complianceLinksData, complianceLinksLoading]);
+
+  // Track if we're currently loading initial data to prevent auto-save during initial load
+  const isInitialLoadRef = React.useRef(true);
+  
+  // Reset initial load flag when editing field changes
+  React.useEffect(() => {
+    if (editingFieldSlug) {
+      isInitialLoadRef.current = true;
+      // Set to false after a short delay to allow initial data to load
+      const timer = setTimeout(() => {
+        isInitialLoadRef.current = false;
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [editingFieldSlug]);
+
+  // Auto-save required flags when they change (only when editing an existing field)
+  React.useEffect(() => {
+    // Only auto-save if we're editing an existing field and have a field slug
+    if (!editingFieldSlug || !editingField?.is_compliance) {
+      return;
+    }
+
+    // Don't auto-save during initial load
+    if (isInitialLoadRef.current) {
+      return;
+    }
+
+    const fieldSlug = editingField?.slug || editingFieldSlug;
+    if (!fieldSlug) {
+      return;
+    }
+
+    // Debounce the save to avoid too many API calls
+    const timeoutId = setTimeout(async () => {
+      // Only save if we have selected roles or asset types
+      if ((selectedRoles && selectedRoles.length > 0) || (selectedAssetTypes && selectedAssetTypes.length > 0)) {
+        console.log("Auto-saving compliance field links due to required flag change:", {
+          fieldSlug,
+          selectedRoles,
+          selectedAssetTypes,
+          roleRequiredFlags,
+          assetTypeRequiredFlags,
+        });
+        
+        try {
+          await complianceService.updateComplianceFieldLinks(
+            fieldSlug,
+            selectedRoles || [],
+            selectedAssetTypes || [],
+            roleRequiredFlags || {},
+            assetTypeRequiredFlags || {}
+          );
+          
+          // Invalidate query to refresh
+          queryClient.invalidateQueries({ queryKey: ["compliance-links", fieldSlug] });
+          console.log("Auto-saved compliance field links successfully");
+        } catch (error) {
+          console.error("Failed to auto-save compliance field links:", error);
+          // Don't show toast for auto-save errors to avoid annoying the user
+        }
+      }
+    }, 500); // 500ms debounce
+
+    return () => clearTimeout(timeoutId);
+  }, [roleRequiredFlags, assetTypeRequiredFlags, editingFieldSlug, editingField?.is_compliance, editingField?.slug, selectedRoles, selectedAssetTypes, queryClient]);
 
   // Transform API data with proper error handling
   const sections = React.useMemo(() => {
@@ -401,7 +796,7 @@ const CustomFieldsAdminPage = () => {
   };
 
   const handleCreateField = () => {
-    setEditingFieldId(null); // Reset editing state
+    setEditingFieldSlug(null); // Reset editing state
     setIsCreateFieldModalOpen(true);
     setAllowAllFileTypes(false); // Reset file type settings
 
@@ -417,6 +812,10 @@ const CustomFieldsAdminPage = () => {
       is_required: false,
       is_unique: false,
       max_length: null,
+      is_compliance: false,
+      requires_approval: false,
+      expiry_reminder_days: null,
+      compliance_config: null,
       min_value: null,
       max_value: null,
       field_options: {},
@@ -428,16 +827,57 @@ const CustomFieldsAdminPage = () => {
       section_id: defaultSectionId,
       is_active: true,
     });
+    setSelectedComplianceType("");
+    setCustomSubFields([]);
+    setSelectedRoles([]);
+    setSelectedAssetTypes([]);
+    setRoleRequiredFlags({});
+    setAssetTypeRequiredFlags({});
   };
 
-  const handleEditField = (fieldId) => {
-    setEditingFieldId(fieldId);
+  const handleEditField = (fieldSlug) => {
+    console.log("handleEditField called with slug:", fieldSlug);
+    if (!fieldSlug) {
+      console.error("handleEditField: fieldSlug is null/undefined!");
+      toast.error("Cannot edit field: slug is missing");
+      return;
+    }
+    
+    // Reset form first to clear any previous data
+    setFieldFormData({
+      field_name: "",
+      field_label: "",
+      field_description: "",
+      field_type: "",
+      is_required: false,
+      is_unique: false,
+      max_length: null,
+      min_value: null,
+      max_value: null,
+      field_options: {},
+      validation_rules: {},
+      relationship_config: null,
+      entity_type: selectedEntityType,
+      sort_order: 0,
+      organisation_id: 0,
+      section_id: 0,
+      is_active: true,
+      is_compliance: false,
+      requires_approval: false,
+      expiry_reminder_days: null,
+      compliance_config: null,
+    });
+    
+    // Set the slug to trigger the API call
+    setEditingFieldSlug(fieldSlug);
+    // Open the modal
     setIsCreateFieldModalOpen(true);
+    console.log("Edit field state set - editingFieldSlug:", fieldSlug, "modal open:", true);
   };
 
-  const handleDeleteField = async (fieldId) => {
+  const handleDeleteField = async (fieldSlug) => {
     try {
-      await deleteFieldMutation.mutateAsync(fieldId);
+      await deleteFieldMutation.mutateAsync(fieldSlug);
       toast.success("Field permanently deleted successfully!");
     } catch (error) {
       console.error("Failed to delete field:", error);
@@ -473,8 +913,232 @@ const CustomFieldsAdminPage = () => {
         };
       }
 
+      // Handle compliance field toggle
+      if (field === 'is_compliance') {
+        if (!value) {
+          // If unchecking compliance, clear compliance-related fields
+          newData.requires_approval = false;
+          newData.expiry_reminder_days = null;
+          newData.compliance_config = null;
+          setSelectedComplianceType("");
+          setCustomSubFields([]);
+        } else {
+          // If checking compliance, ensure field type is file and configure file options
+          if (newData.field_type !== "file") {
+            newData.field_type = "file";
+          }
+          
+          // Auto-configure file options if not already set
+          if (!newData.field_options || !newData.field_options.accept) {
+            const documentTypes = FILE_TYPE_CATEGORIES.documents.types.map(t => t.value);
+            const imageTypes = FILE_TYPE_CATEGORIES.images.types.map(t => t.value);
+            const allowedFileTypes = [...documentTypes, ...imageTypes].join(", ");
+            
+            newData.field_options = {
+              ...newData.field_options,
+              accept: allowedFileTypes,
+              allowMultiple: false,
+            };
+            setAllowAllFileTypes(false);
+          }
+        }
+      }
+
       return newData;
     });
+  };
+
+  const handleComplianceTypeChange = (complianceType) => {
+    setSelectedComplianceType(complianceType);
+    
+    if (complianceType && complianceType !== "" && PREDEFINED_COMPLIANCE_TYPES[complianceType]) {
+      const predefined = PREDEFINED_COMPLIANCE_TYPES[complianceType];
+      
+      // Get common file types for compliance documents (PDFs and images)
+      const documentTypes = FILE_TYPE_CATEGORIES.documents.types.map(t => t.value);
+      const imageTypes = FILE_TYPE_CATEGORIES.images.types.map(t => t.value);
+      const allowedFileTypes = [...documentTypes, ...imageTypes].join(", ");
+      
+      // Auto-generate field_name from label
+      const autoGeneratedName = predefined.label
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, '') // Remove special characters
+        .replace(/\s+/g, '_') // Replace spaces with underscores
+        .replace(/_+/g, '_') // Replace multiple underscores with single
+        .replace(/^_|_$/g, ''); // Remove leading/trailing underscores
+      
+      // Auto-populate field label, description, and file configuration
+      // By default, compliance fields require file upload (requires_file_upload: true)
+      setFieldFormData((prev) => ({
+        ...prev,
+        field_name: autoGeneratedName,
+        field_label: predefined.label,
+        field_description: predefined.description,
+        field_type: "file", // Default to file for compliance fields
+        is_compliance: true,
+        compliance_config: {
+          auto_expire: true,
+          notification_recipients: null,
+          reminder_frequency: "daily",
+          allow_user_upload: true,
+          require_renewal_before_expiry: false,
+          renewal_grace_period_days: 30,
+          has_sub_fields: predefined.sub_fields.length > 0,
+          sub_fields: predefined.sub_fields,
+          requires_file_upload: true, // Frontend-only flag, mapped to allow_user_upload
+        },
+        // Auto-configure file options for compliance fields
+        field_options: {
+          ...prev.field_options,
+          accept: allowedFileTypes, // Allow PDFs and images by default
+          allowMultiple: false, // Single file upload by default for compliance
+        },
+      }));
+      
+      // Set allowAllFileTypes to false since we're setting specific types
+      setAllowAllFileTypes(false);
+      
+      if (complianceType === "custom") {
+        setCustomSubFields([]);
+        // For custom, don't auto-populate label/description - let user set it
+        setFieldFormData((prev) => ({
+          ...prev,
+          field_label: prev.field_label || "",
+          field_description: prev.field_description || "",
+          field_type: "file", // Default to file
+          is_compliance: true,
+          compliance_config: {
+            auto_expire: true,
+            notification_recipients: null,
+            reminder_frequency: "daily",
+            allow_user_upload: true,
+            require_renewal_before_expiry: false,
+            renewal_grace_period_days: 30,
+            has_sub_fields: true,
+            sub_fields: [],
+            requires_file_upload: true, // Frontend-only flag, mapped to allow_user_upload
+          },
+          // Auto-configure file options for compliance fields
+          field_options: {
+            ...prev.field_options,
+            accept: allowedFileTypes,
+            allowMultiple: false,
+          },
+        }));
+        setAllowAllFileTypes(false);
+      }
+    } else if (complianceType === "") {
+      // Clear compliance config
+      setFieldFormData((prev) => ({
+        ...prev,
+        compliance_config: null,
+      }));
+      setCustomSubFields([]);
+    }
+  };
+
+  const handleCustomSubFieldChange = (index, field, value) => {
+    const newSubFields = [...customSubFields];
+    if (!newSubFields[index]) {
+      newSubFields[index] = {
+        field_name: "",
+        field_label: "",
+        field_type: "text",
+        is_required: false,
+      };
+    }
+    newSubFields[index][field] = value;
+    
+    // Auto-generate field_name from field_label
+    if (field === "field_label" && value) {
+      const autoGeneratedName = value
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, '')
+        .replace(/\s+/g, '_')
+        .replace(/_+/g, '_')
+        .replace(/^_|_$/g, '');
+      newSubFields[index].field_name = autoGeneratedName;
+    }
+    
+    setCustomSubFields(newSubFields);
+    
+    // If a pre-defined type is selected, merge with its fields
+    let allSubFields = newSubFields;
+    if (selectedComplianceType && selectedComplianceType !== "" && selectedComplianceType !== "custom") {
+      const predefinedFields = PREDEFINED_COMPLIANCE_TYPES[selectedComplianceType].sub_fields;
+      allSubFields = [...predefinedFields, ...newSubFields];
+    }
+    
+    // Update compliance_config
+    setFieldFormData((prev) => ({
+      ...prev,
+      compliance_config: {
+        ...(prev.compliance_config || {}),
+        auto_expire: prev.compliance_config?.auto_expire !== undefined ? prev.compliance_config.auto_expire : true,
+        notification_recipients: prev.compliance_config?.notification_recipients || null,
+        reminder_frequency: prev.compliance_config?.reminder_frequency || "daily",
+        allow_user_upload: prev.compliance_config?.allow_user_upload !== undefined ? prev.compliance_config.allow_user_upload : true,
+        require_renewal_before_expiry: prev.compliance_config?.require_renewal_before_expiry || false,
+        renewal_grace_period_days: prev.compliance_config?.renewal_grace_period_days || 30,
+        has_sub_fields: true,
+        sub_fields: allSubFields,
+      },
+    }));
+  };
+
+  const handleAddCustomSubField = () => {
+    const newSubFields = [
+      ...customSubFields,
+      {
+        field_name: "",
+        field_label: "",
+        field_type: "text",
+        is_required: false,
+      },
+    ];
+    setCustomSubFields(newSubFields);
+    
+    // If a pre-defined type is selected, merge with its fields
+    let allSubFields = newSubFields;
+    if (selectedComplianceType && selectedComplianceType !== "" && selectedComplianceType !== "custom") {
+      const predefinedFields = PREDEFINED_COMPLIANCE_TYPES[selectedComplianceType].sub_fields;
+      allSubFields = [...predefinedFields, ...newSubFields];
+    }
+    
+    setFieldFormData((prev) => ({
+      ...prev,
+      compliance_config: {
+        ...(prev.compliance_config || {}),
+        auto_expire: prev.compliance_config?.auto_expire !== undefined ? prev.compliance_config.auto_expire : true,
+        notification_recipients: prev.compliance_config?.notification_recipients || null,
+        reminder_frequency: prev.compliance_config?.reminder_frequency || "daily",
+        allow_user_upload: prev.compliance_config?.allow_user_upload !== undefined ? prev.compliance_config.allow_user_upload : true,
+        require_renewal_before_expiry: prev.compliance_config?.require_renewal_before_expiry || false,
+        renewal_grace_period_days: prev.compliance_config?.renewal_grace_period_days || 30,
+        has_sub_fields: true,
+        sub_fields: allSubFields,
+      },
+    }));
+  };
+
+  const handleRemoveCustomSubField = (index) => {
+    const newSubFields = customSubFields.filter((_, i) => i !== index);
+    setCustomSubFields(newSubFields);
+    
+    // If a pre-defined type is selected, merge with its fields
+    let allSubFields = newSubFields;
+    if (selectedComplianceType && selectedComplianceType !== "" && selectedComplianceType !== "custom") {
+      const predefinedFields = PREDEFINED_COMPLIANCE_TYPES[selectedComplianceType].sub_fields;
+      allSubFields = [...predefinedFields, ...newSubFields];
+    }
+    
+    setFieldFormData((prev) => ({
+      ...prev,
+      compliance_config: {
+        has_sub_fields: allSubFields.length > 0,
+        sub_fields: allSubFields,
+      },
+    }));
   };
 
   const handleSubmitField = async () => {
@@ -483,41 +1147,205 @@ const CustomFieldsAdminPage = () => {
       return;
     }
 
+    console.log("handleSubmitField - Form data:", {
+      is_compliance: fieldFormData.is_compliance,
+      selectedRoles,
+      selectedAssetTypes,
+      roleRequiredFlags,
+      assetTypeRequiredFlags,
+    });
+
     try {
-      if (editingFieldId) {
+      let createdFieldSlug = null;
+      let createdField = null;
+
+      if (editingFieldSlug) {
         // Update existing field
-        await updateFieldMutation.mutateAsync({
-          id: editingFieldId,
-          fieldData: fieldFormData,
+        // Ensure compliance_config includes all required fields with defaults
+        const fieldDataToSubmit = { ...fieldFormData };
+        
+        // Clean up relationship_config - if all values are null/empty, set to null
+        if (fieldDataToSubmit.relationship_config) {
+          const hasValidValue = Object.values(fieldDataToSubmit.relationship_config).some(
+            value => value !== null && value !== undefined && value !== ''
+          );
+          if (!hasValidValue) {
+            fieldDataToSubmit.relationship_config = null;
+          }
+        }
+        
+        if (fieldDataToSubmit.is_compliance && fieldDataToSubmit.compliance_config) {
+          // Ensure compliance_config has all required fields from ComplianceFieldConfig schema
+          fieldDataToSubmit.compliance_config = {
+            auto_expire: fieldDataToSubmit.compliance_config.auto_expire !== undefined 
+              ? fieldDataToSubmit.compliance_config.auto_expire 
+              : true,
+            notification_recipients: fieldDataToSubmit.compliance_config.notification_recipients || null,
+            reminder_frequency: fieldDataToSubmit.compliance_config.reminder_frequency || "daily",
+            allow_user_upload: fieldDataToSubmit.compliance_config.requires_file_upload !== false 
+              ? (fieldDataToSubmit.compliance_config.allow_user_upload !== undefined 
+                  ? fieldDataToSubmit.compliance_config.allow_user_upload 
+                  : true)
+              : false, // Map requires_file_upload to allow_user_upload
+            require_renewal_before_expiry: fieldDataToSubmit.compliance_config.require_renewal_before_expiry || false,
+            renewal_grace_period_days: fieldDataToSubmit.compliance_config.renewal_grace_period_days || 30,
+            has_sub_fields: fieldDataToSubmit.compliance_config.has_sub_fields || false,
+            sub_fields: fieldDataToSubmit.compliance_config.sub_fields || null,
+          };
+        }
+        createdField = await updateFieldMutation.mutateAsync({
+          slug: editingFieldSlug,
+          fieldData: fieldDataToSubmit,
         });
+        createdFieldSlug = createdField?.slug || editingFieldSlug;
+        console.log("Field updated - createdFieldSlug:", createdFieldSlug, "createdField:", createdField);
+        toast.success("Field updated successfully!");
       } else {
         // Create new field
-        await createFieldMutation.mutateAsync(fieldFormData);
+        // Ensure compliance_config includes all required fields with defaults
+        const fieldDataToSubmit = { ...fieldFormData };
+        
+        // Clean up relationship_config - if all values are null/empty, set to null
+        if (fieldDataToSubmit.relationship_config) {
+          const hasValidValue = Object.values(fieldDataToSubmit.relationship_config).some(
+            value => value !== null && value !== undefined && value !== ''
+          );
+          if (!hasValidValue) {
+            fieldDataToSubmit.relationship_config = null;
+          }
+        }
+        
+        if (fieldDataToSubmit.is_compliance && fieldDataToSubmit.compliance_config) {
+          // Ensure compliance_config has all required fields from ComplianceFieldConfig schema
+          fieldDataToSubmit.compliance_config = {
+            auto_expire: fieldDataToSubmit.compliance_config.auto_expire !== undefined 
+              ? fieldDataToSubmit.compliance_config.auto_expire 
+              : true,
+            notification_recipients: fieldDataToSubmit.compliance_config.notification_recipients || null,
+            reminder_frequency: fieldDataToSubmit.compliance_config.reminder_frequency || "daily",
+            allow_user_upload: fieldDataToSubmit.compliance_config.requires_file_upload !== false 
+              ? (fieldDataToSubmit.compliance_config.allow_user_upload !== undefined 
+                  ? fieldDataToSubmit.compliance_config.allow_user_upload 
+                  : true)
+              : false, // Map requires_file_upload to allow_user_upload
+            require_renewal_before_expiry: fieldDataToSubmit.compliance_config.require_renewal_before_expiry || false,
+            renewal_grace_period_days: fieldDataToSubmit.compliance_config.renewal_grace_period_days || 30,
+            has_sub_fields: fieldDataToSubmit.compliance_config.has_sub_fields || false,
+            sub_fields: fieldDataToSubmit.compliance_config.sub_fields || null,
+          };
+        }
+        createdField = await createFieldMutation.mutateAsync(fieldDataToSubmit);
+        createdFieldSlug = createdField?.slug;
+        console.log("Field created - createdFieldSlug:", createdFieldSlug, "createdField:", createdField);
+        if (!createdFieldSlug) {
+          console.error("Field created but slug is missing! createdField:", createdField);
+          toast.error("Field created but slug is missing. Links may not be created.");
+        }
+        toast.success("Field created successfully!");
+      }
+
+      // If it's a compliance field, update links to selected roles and asset types
+      console.log("Checking if links should be created:", {
+        is_compliance: fieldFormData.is_compliance,
+        createdFieldSlug,
+        selectedRoles,
+        selectedAssetTypes,
+        selectedRolesLength: selectedRoles.length,
+        selectedAssetTypesLength: selectedAssetTypes.length,
+      });
+      
+      if (fieldFormData.is_compliance && createdFieldSlug) {
+        console.log("Creating compliance field links:", {
+          fieldSlug: createdFieldSlug,
+          selectedRoles,
+          selectedAssetTypes,
+          roleRequiredFlags,
+          assetTypeRequiredFlags,
+        });
+        
+        const linkPromises = [];
+        const existingLinks = complianceLinksData || [];
+        
+        // Get existing role and asset type slugs
+        const existingRoleSlugs = existingLinks
+          .filter(link => link.link_type === "role" && link.link_slug)
+          .map(link => link.link_slug);
+        const existingAssetTypeSlugs = existingLinks
+          .filter(link => link.link_type === "asset_type" && link.link_slug)
+          .map(link => link.link_slug);
+
+        console.log("Existing links:", { existingRoleSlugs, existingAssetTypeSlugs });
+        console.log("Selected roles:", selectedRoles);
+        console.log("Selected asset types:", selectedAssetTypes);
+
+        // Use bulk update endpoint to handle all links at once
+        // This will create new links, update existing ones, and deactivate removed ones
+        try {
+          await complianceService.updateComplianceFieldLinks(
+            createdFieldSlug,
+            selectedRoles || [],
+            selectedAssetTypes || [],
+            roleRequiredFlags || {},
+            assetTypeRequiredFlags || {}
+          );
+          
+          console.log("Successfully updated compliance field links");
+          toast.success("Compliance field links updated successfully");
+          
+          // Invalidate compliance links query to refresh the UI
+          if (createdFieldSlug) {
+            queryClient.invalidateQueries({ queryKey: ["compliance-links", createdFieldSlug] });
+            console.log("Invalidated compliance links query for field:", createdFieldSlug);
+          }
+        } catch (error) {
+          console.error("Error updating compliance field links:", error);
+          toast.error("Failed to update compliance field links", {
+            description: error.response?.data?.detail || error.message || "An error occurred while updating links",
+          });
+        }
+      } else {
+        console.log("Not creating links - conditions not met:", {
+          is_compliance: fieldFormData.is_compliance,
+          createdFieldSlug,
+          reason: !fieldFormData.is_compliance ? "Not a compliance field" : "Field slug missing",
+        });
       }
 
       // Reset form and close modal
       setFieldFormData({
-        fieldName: "",
-        fieldLabel: "",
-        fieldDescription: "",
-        fieldType: "",
-        isRequired: false,
-        isUnique: false,
-        maxLength: null,
-        minValue: null,
-        maxValue: null,
-        fieldOptions: {},
-        validationRules: {},
-        relationshipConfig: {},
-        entityType: selectedEntityType,
-        sortOrder: 0,
-        organisationId: 0,
-        sectionId: 0,
+        field_name: "",
+        field_label: "",
+        field_description: "",
+        field_type: "",
+        is_required: false,
+        is_unique: false,
+        max_length: null,
+        min_value: null,
+        max_value: null,
+        field_options: {},
+        validation_rules: {},
+        relationship_config: null,
+        entity_type: selectedEntityType,
+        sort_order: fields.length + 1,
+        organisation_id: 0,
+        section_id: fieldFormData.section_id || 0,
+        is_active: true,
+        is_compliance: false,
+        requires_approval: false,
+        expiry_reminder_days: null,
+        compliance_config: null,
       });
-      setEditingFieldId(null);
+      setEditingFieldSlug(null);
       setIsCreateFieldModalOpen(false);
+      setSelectedComplianceType("");
+      setCustomSubFields([]);
+      setSelectedRoles([]);
+      setSelectedAssetTypes([]);
+      setRoleRequiredFlags({});
+      setAssetTypeRequiredFlags({});
     } catch (error) {
       console.error("Failed to save field:", error);
+      toast.error("Failed to save field. Please try again.");
     }
   };
 
@@ -531,6 +1359,10 @@ const CustomFieldsAdminPage = () => {
       is_required: false,
       is_unique: false,
       max_length: null,
+      is_compliance: false,
+      requires_approval: false,
+      expiry_reminder_days: null,
+      compliance_config: null,
       min_value: null,
       max_value: null,
       field_options: {},
@@ -613,13 +1445,14 @@ const CustomFieldsAdminPage = () => {
     toast.success("State reset successfully");
   };
 
-  // Preview API hook
+  // Preview API hook - Disabled for admin page since we don't have a specific entity
+  // The admin page shows field definitions, not entity-specific values
   const {
     data: hierarchyData,
     isLoading: hierarchyLoading,
     error: hierarchyError,
     refetch: refetchHierarchy,
-  } = useCustomFieldsHierarchy(selectedEntityType, 1);
+  } = useCustomFieldsHierarchy(selectedEntityType, null); // Pass null to disable the query
 
   // Preview functions
   const handleGeneratePreview = async () => {
@@ -1203,7 +2036,17 @@ const CustomFieldsAdminPage = () => {
                             variant="ghost"
                             size="sm"
                             className="h-8 w-8 p-0"
-                            onClick={() => handleEditField(field.id)}
+                            onClick={() => {
+                              console.log("Edit button clicked - field object:", field);
+                              console.log("Edit button clicked - field.slug:", field.slug);
+                              console.log("Edit button clicked - field.id:", field.id);
+                              if (!field.slug) {
+                                console.error("Field slug is missing! Field:", field);
+                                toast.error("Cannot edit field: slug is missing");
+                                return;
+                              }
+                              handleEditField(field.slug);
+                            }}
                           >
                             <Edit className="h-4 w-4" />
                           </Button>
@@ -1232,7 +2075,7 @@ const CustomFieldsAdminPage = () => {
                               <AlertDialogFooter>
                                 <AlertDialogCancel>Cancel</AlertDialogCancel>
                                 <AlertDialogAction
-                                  onClick={() => handleDeleteField(field.id)}
+                                  onClick={() => handleDeleteField(field.slug)}
                                   className="bg-red-600 hover:bg-red-700"
                                 >
                                   Delete
@@ -1519,16 +2362,16 @@ const CustomFieldsAdminPage = () => {
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
-              {editingFieldId ? "Edit Field" : "Create New Field"}
+              {editingFieldSlug ? "Edit Field" : "Create New Field"}
             </DialogTitle>
             <DialogDescription>
-              {editingFieldId
+              {editingFieldSlug
                 ? `Update the custom field for ${selectedEntityType.toLowerCase()}.`
                 : `Add a new custom field for ${selectedEntityType.toLowerCase()}.`}
             </DialogDescription>
           </DialogHeader>
 
-          {editingFieldId && editingFieldLoading ? (
+          {editingFieldSlug && editingFieldLoading ? (
             <div className="flex items-center justify-center py-8">
               <div className="flex items-center space-x-2">
                 <RefreshCw className="h-4 w-4 animate-spin" />
@@ -1537,6 +2380,581 @@ const CustomFieldsAdminPage = () => {
             </div>
           ) : (
             <div className="space-y-4 py-4">
+              {/* Compliance Settings - At the Top */}
+              <div className="pt-4 border-t border-b pb-4 space-y-4 bg-muted/20 rounded-lg p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Shield className="h-5 w-5 text-primary" />
+                  <h3 className="text-lg font-semibold">Compliance Settings</h3>
+                </div>
+                
+                <div className="space-y-4 pl-7">
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="isCompliance">Compliance Field</Label>
+                    <Switch
+                      id="isCompliance"
+                      checked={fieldFormData.is_compliance || false}
+                      onCheckedChange={(checked) =>
+                        handleFieldInputChange("is_compliance", checked)
+                      }
+                    />
+                    <p className="text-xs text-muted-foreground ml-2">
+                      Mark this field as a compliance requirement
+                    </p>
+                  </div>
+
+                  {fieldFormData.is_compliance && (
+                    <>
+                      {/* Compliance Type Selector */}
+                      <div className="space-y-2">
+                        <Label htmlFor="complianceType">Compliance Type *</Label>
+                        <Select
+                          value={selectedComplianceType}
+                          onValueChange={handleComplianceTypeChange}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select a compliance type" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Object.entries(PREDEFINED_COMPLIANCE_TYPES).map(([key, value]) => (
+                              <SelectItem key={key} value={key}>
+                                {value.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">
+                          Choose a pre-defined UK healthcare compliance type or create custom
+                        </p>
+                      </div>
+
+                      {/* Show pre-defined type info and fields */}
+                      {selectedComplianceType && selectedComplianceType !== "" && selectedComplianceType !== "custom" && (
+                        <div className="space-y-3">
+                          <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
+                            <p className="text-sm font-medium text-blue-900">
+                              {PREDEFINED_COMPLIANCE_TYPES[selectedComplianceType].label}
+                            </p>
+                            <p className="text-xs text-blue-700 mt-1">
+                              {PREDEFINED_COMPLIANCE_TYPES[selectedComplianceType].description}
+                            </p>
+                          </div>
+                          
+                          {/* Display sub-fields that will be created */}
+                          <div className="border rounded-lg p-4 bg-background">
+                            <div className="flex items-center justify-between mb-3">
+                              <h4 className="text-sm font-semibold">Fields Included ({PREDEFINED_COMPLIANCE_TYPES[selectedComplianceType].sub_fields.length})</h4>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={handleAddCustomSubField}
+                              >
+                                <Plus className="h-4 w-4 mr-2" />
+                                Add More Fields
+                              </Button>
+                            </div>
+                            
+                            <div className="space-y-2 max-h-64 overflow-y-auto">
+                              {PREDEFINED_COMPLIANCE_TYPES[selectedComplianceType].sub_fields.map((subField, index) => (
+                                <div key={index} className="flex items-start gap-3 p-2 border rounded bg-muted/30">
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-sm font-medium">{subField.field_label}</span>
+                                      {subField.is_required && (
+                                        <Badge variant="outline" className="text-xs">Required</Badge>
+                                      )}
+                                      <Badge variant="secondary" className="text-xs capitalize">{subField.field_type}</Badge>
+                                    </div>
+                                    {subField.help_text && (
+                                      <p className="text-xs text-muted-foreground mt-1">{subField.help_text}</p>
+                                    )}
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                      Field: <code className="bg-muted px-1 rounded">{subField.field_name}</code>
+                                    </p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                            
+                            {customSubFields.length > 0 && (
+                              <div className="mt-4 pt-4 border-t">
+                                <h5 className="text-sm font-medium mb-2">Additional Custom Fields ({customSubFields.length})</h5>
+                                <div className="space-y-2">
+                                  {customSubFields.map((subField, index) => (
+                                    <div key={`custom-${index}`} className="flex items-start gap-3 p-2 border rounded bg-yellow-50">
+                                      <div className="flex-1">
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-sm font-medium">{subField.field_label || "Unnamed Field"}</span>
+                                          {subField.is_required && (
+                                            <Badge variant="outline" className="text-xs">Required</Badge>
+                                          )}
+                                          <Badge variant="secondary" className="text-xs capitalize">{subField.field_type || "text"}</Badge>
+                                        </div>
+                                        <p className="text-xs text-muted-foreground mt-1">
+                                          Field: <code className="bg-muted px-1 rounded">{subField.field_name || "(auto-generated)"}</code>
+                                        </p>
+                                      </div>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => {
+                                          const newCustomFields = customSubFields.filter((_, i) => i !== index);
+                                          setCustomSubFields(newCustomFields);
+                                          // Update compliance_config
+                                          const predefinedFields = PREDEFINED_COMPLIANCE_TYPES[selectedComplianceType].sub_fields;
+                                          setFieldFormData((prev) => ({
+                                            ...prev,
+                                            compliance_config: {
+                                              has_sub_fields: true,
+                                              sub_fields: [...predefinedFields, ...newCustomFields],
+                                            },
+                                          }));
+                                        }}
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Custom Sub-Fields Editor */}
+                      {(selectedComplianceType === "custom" || (selectedComplianceType && selectedComplianceType !== "" && customSubFields.length > 0)) && (
+                        <div className="space-y-3 border rounded-lg p-4 bg-background">
+                          <div className="flex items-center justify-between">
+                            <h4 className="text-sm font-medium">
+                              {selectedComplianceType === "custom" 
+                                ? "Custom Compliance Fields" 
+                                : "Additional Custom Fields"}
+                            </h4>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={handleAddCustomSubField}
+                            >
+                              <Plus className="h-4 w-4 mr-2" />
+                              Add Field
+                            </Button>
+                          </div>
+                          <div className="space-y-3">
+                            {customSubFields.map((subField, index) => (
+                              <div key={index} className="border rounded p-3 space-y-2">
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div>
+                                    <Label className="text-xs">Field Label *</Label>
+                                    <Input
+                                      value={subField.field_label || ""}
+                                      onChange={(e) => handleCustomSubFieldChange(index, "field_label", e.target.value)}
+                                      placeholder="e.g., First Name"
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label className="text-xs">Field Type *</Label>
+                                    <Select
+                                      value={subField.field_type || "text"}
+                                      onValueChange={(value) => handleCustomSubFieldChange(index, "field_type", value)}
+                                    >
+                                      <SelectTrigger>
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="text">Text</SelectItem>
+                                        <SelectItem value="number">Number</SelectItem>
+                                        <SelectItem value="date">Date</SelectItem>
+                                        <SelectItem value="select">Select</SelectItem>
+                                        <SelectItem value="textarea">Textarea</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <div className="flex items-center gap-2">
+                                    <input
+                                      type="checkbox"
+                                      checked={subField.is_required || false}
+                                      onChange={(e) => handleCustomSubFieldChange(index, "is_required", e.target.checked)}
+                                      className="rounded"
+                                    />
+                                    <Label className="text-xs">Required</Label>
+                                  </div>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleRemoveCustomSubField(index)}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                  Field Name: {subField.field_name || "(auto-generated)"}
+                                </p>
+                              </div>
+                            ))}
+                            {customSubFields.length === 0 && selectedComplianceType === "custom" && (
+                              <p className="text-sm text-muted-foreground text-center py-4">
+                                No custom fields added yet. Click "Add Field" to create one.
+                              </p>
+                            )}
+                            {customSubFields.length === 0 && selectedComplianceType !== "custom" && (
+                              <p className="text-sm text-muted-foreground text-center py-4">
+                                Click "Add More Fields" above or "Add Field" here to add additional custom fields.
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Show "Add More Fields" button when pre-defined type is selected but no custom fields yet */}
+                      {selectedComplianceType && selectedComplianceType !== "" && selectedComplianceType !== "custom" && customSubFields.length === 0 && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={handleAddCustomSubField}
+                          className="w-full"
+                        >
+                          <Plus className="h-4 w-4 mr-2" />
+                          Add Additional Custom Fields
+                        </Button>
+                      )}
+
+                      <div className="flex items-center gap-2">
+                        <Label htmlFor="requiresFileUpload">Require File Upload</Label>
+                        <Switch
+                          id="requiresFileUpload"
+                          checked={fieldFormData.compliance_config?.requires_file_upload !== false}
+                          onCheckedChange={(checked) => {
+                            const currentConfig = fieldFormData.compliance_config || {};
+                            handleFieldInputChange("compliance_config", {
+                              ...currentConfig,
+                              requires_file_upload: checked,
+                            });
+                            
+                            // If file upload is disabled, allow other field types
+                            if (!checked) {
+                              // Don't force field_type to "file" - let user choose
+                            } else {
+                              // If enabling file upload, set field type to file
+                              handleFieldInputChange("field_type", "file");
+                            }
+                          }}
+                        />
+                        <p className="text-xs text-muted-foreground ml-2">
+                          {fieldFormData.compliance_config?.requires_file_upload !== false
+                            ? "This compliance field requires a document/file upload"
+                            : "This compliance field does not require file upload (data entry only)"}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <Label htmlFor="requiresApproval">Requires Approval</Label>
+                        <Switch
+                          id="requiresApproval"
+                          checked={fieldFormData.requires_approval || false}
+                          onCheckedChange={(checked) =>
+                            handleFieldInputChange("requires_approval", checked)
+                          }
+                          disabled={fieldFormData.compliance_config?.requires_file_upload === false}
+                        />
+                        <p className="text-xs text-muted-foreground ml-2">
+                          {fieldFormData.compliance_config?.requires_file_upload === false
+                            ? "Approval only applies to file uploads"
+                            : "User uploads need admin approval"}
+                        </p>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="expiryReminderDays">Expiry Reminder Days</Label>
+                        <Input
+                          id="expiryReminderDays"
+                          type="number"
+                          min="0"
+                          max="365"
+                          placeholder="e.g., 30"
+                          value={fieldFormData.expiry_reminder_days || ''}
+                          onChange={(e) =>
+                            handleFieldInputChange("expiry_reminder_days", e.target.value ? parseInt(e.target.value) : null)
+                          }
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Days before expiry to send reminder notifications (e.g., 30 for 30 days before)
+                        </p>
+                      </div>
+
+                      {/* Additional Compliance Configuration */}
+                      <div className="space-y-4 border-t pt-4 mt-4">
+                        <h4 className="text-sm font-semibold">Advanced Compliance Settings</h4>
+                        
+                        {/* Reminder Frequency */}
+                        <div className="space-y-2">
+                          <Label htmlFor="reminderFrequency">Reminder Frequency</Label>
+                          <Select
+                            id="reminderFrequency"
+                            value={fieldFormData.compliance_config?.reminder_frequency || "daily"}
+                            onValueChange={(value) => {
+                              const currentConfig = fieldFormData.compliance_config || {};
+                              handleFieldInputChange("compliance_config", {
+                                ...currentConfig,
+                                reminder_frequency: value,
+                              });
+                            }}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="daily">Daily</SelectItem>
+                              <SelectItem value="weekly">Weekly</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <p className="text-xs text-muted-foreground">
+                            How often to send reminder notifications for expiring compliance items
+                          </p>
+                        </div>
+
+                        {/* Notification Recipients */}
+                        <div className="space-y-2">
+                          <Label htmlFor="notificationRecipients">Notification Recipients (Email)</Label>
+                          <Textarea
+                            id="notificationRecipients"
+                            placeholder="email1@example.com, email2@example.com"
+                            value={fieldFormData.compliance_config?.notification_recipients?.join(", ") || ""}
+                            onChange={(e) => {
+                              const currentConfig = fieldFormData.compliance_config || {};
+                              const emails = e.target.value
+                                .split(",")
+                                .map(email => email.trim())
+                                .filter(email => email.length > 0);
+                              handleFieldInputChange("compliance_config", {
+                                ...currentConfig,
+                                notification_recipients: emails.length > 0 ? emails : null,
+                              });
+                            }}
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Comma-separated email addresses to notify about compliance expiry (leave empty for default recipients)
+                          </p>
+                        </div>
+
+                        {/* Auto Expire */}
+                        <div className="flex items-center gap-2">
+                          <Label htmlFor="autoExpire">Auto Expire</Label>
+                          <Switch
+                            id="autoExpire"
+                            checked={fieldFormData.compliance_config?.auto_expire !== false}
+                            onCheckedChange={(checked) => {
+                              const currentConfig = fieldFormData.compliance_config || {};
+                              handleFieldInputChange("compliance_config", {
+                                ...currentConfig,
+                                auto_expire: checked,
+                              });
+                            }}
+                          />
+                          <p className="text-xs text-muted-foreground ml-2">
+                            Automatically mark compliance items as expired when expiry_date passes
+                          </p>
+                        </div>
+
+                        {/* Require Renewal Before Expiry */}
+                        <div className="flex items-center gap-2">
+                          <Label htmlFor="requireRenewalBeforeExpiry">Require Renewal Before Expiry</Label>
+                          <Switch
+                            id="requireRenewalBeforeExpiry"
+                            checked={fieldFormData.compliance_config?.require_renewal_before_expiry || false}
+                            onCheckedChange={(checked) => {
+                              const currentConfig = fieldFormData.compliance_config || {};
+                              handleFieldInputChange("compliance_config", {
+                                ...currentConfig,
+                                require_renewal_before_expiry: checked,
+                              });
+                            }}
+                          />
+                          <p className="text-xs text-muted-foreground ml-2">
+                            Force renewal before the expiry date (prevents last-minute renewals)
+                          </p>
+                        </div>
+
+                        {/* Renewal Grace Period */}
+                        <div className="space-y-2">
+                          <Label htmlFor="renewalGracePeriodDays">Renewal Grace Period (Days)</Label>
+                          <Input
+                            id="renewalGracePeriodDays"
+                            type="number"
+                            min="0"
+                            max="365"
+                            placeholder="e.g., 30"
+                            value={fieldFormData.compliance_config?.renewal_grace_period_days || 30}
+                            onChange={(e) => {
+                              const currentConfig = fieldFormData.compliance_config || {};
+                              handleFieldInputChange("compliance_config", {
+                                ...currentConfig,
+                                renewal_grace_period_days: e.target.value ? parseInt(e.target.value) : 30,
+                              });
+                            }}
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Days after expiry to allow renewal (default: 30 days)
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Role Linking - Only for user entity type */}
+                      {fieldFormData.entity_type === "user" && (
+                        <div className="space-y-3 border-t pt-4 mt-4">
+                          <div className="flex items-center gap-2">
+                            <Shield className="h-4 w-4 text-primary" />
+                            <Label className="text-sm font-semibold">Link to Job Roles / Shift Roles</Label>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            Select which roles this compliance field applies to. Leave empty to apply to all roles.
+                          </p>
+                          <div className="space-y-2 max-h-48 overflow-y-auto border rounded-md p-3">
+                            {roles.length === 0 ? (
+                              <p className="text-sm text-muted-foreground text-center py-2">No roles available</p>
+                            ) : (
+                              roles.map((role) => {
+                                const roleSlug = role.slug || role.id?.toString();
+                                if (!roleSlug) {
+                                  console.warn("Role missing slug:", role);
+                                  return null;
+                                }
+                                const isSelected = selectedRoles.includes(roleSlug);
+                                return (
+                                  <div key={role.id || roleSlug} className="flex items-center gap-2">
+                                    <input
+                                      type="checkbox"
+                                      id={`role-${roleSlug}`}
+                                      checked={isSelected}
+                                      onChange={(e) => {
+                                        console.log("Role checkbox changed:", { roleSlug, checked: e.target.checked, role });
+                                        if (e.target.checked) {
+                                          if (!roleSlug) {
+                                            console.error("Cannot add role - slug is missing:", role);
+                                            toast.error("Cannot select role: slug is missing");
+                                            return;
+                                          }
+                                          const newSelected = [...selectedRoles, roleSlug];
+                                          console.log("Adding role to selectedRoles:", { roleSlug, newSelected });
+                                          setSelectedRoles(newSelected);
+                                        } else {
+                                          const newSelected = selectedRoles.filter(s => s !== roleSlug);
+                                          console.log("Removing role from selectedRoles:", { roleSlug, newSelected });
+                                          setSelectedRoles(newSelected);
+                                          // Remove required flag
+                                          const newFlags = { ...roleRequiredFlags };
+                                          delete newFlags[roleSlug];
+                                          setRoleRequiredFlags(newFlags);
+                                        }
+                                      }}
+                                      className="rounded"
+                                    />
+                                    <Label htmlFor={`role-${roleSlug}`} className="flex-1 cursor-pointer text-sm">
+                                      {role.display_name || role.name || role.role_name || roleSlug}
+                                    </Label>
+                                    {isSelected && (
+                                      <div className="flex items-center gap-2">
+                                        <input
+                                          type="checkbox"
+                                          id={`role-required-${roleSlug}`}
+                                          checked={roleRequiredFlags[roleSlug] || false}
+                                          onChange={(e) => {
+                                            setRoleRequiredFlags({
+                                              ...roleRequiredFlags,
+                                              [roleSlug]: e.target.checked,
+                                            });
+                                          }}
+                                          className="rounded"
+                                        />
+                                        <Label htmlFor={`role-required-${roleSlug}`} className="text-xs text-muted-foreground cursor-pointer">
+                                          Required
+                                        </Label>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Asset Type Linking - Only for asset entity type */}
+                      {fieldFormData.entity_type === "asset" && (
+                        <div className="space-y-3 border-t pt-4 mt-4">
+                          <div className="flex items-center gap-2">
+                            <Shield className="h-4 w-4 text-primary" />
+                            <Label className="text-sm font-semibold">Link to Asset Types</Label>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            Select which asset types this compliance field applies to. Leave empty to apply to all asset types.
+                          </p>
+                          <div className="space-y-2 max-h-48 overflow-y-auto border rounded-md p-3">
+                            {assetTypes.length === 0 ? (
+                              <p className="text-sm text-muted-foreground text-center py-2">No asset types available</p>
+                            ) : (
+                              assetTypes.map((assetType) => {
+                                const assetTypeSlug = assetType.slug;
+                                const isSelected = selectedAssetTypes.includes(assetTypeSlug);
+                                return (
+                                  <div key={assetType.id || assetTypeSlug} className="flex items-center gap-2">
+                                    <input
+                                      type="checkbox"
+                                      id={`asset-type-${assetTypeSlug}`}
+                                      checked={isSelected}
+                                      onChange={(e) => {
+                                        if (e.target.checked) {
+                                          setSelectedAssetTypes([...selectedAssetTypes, assetTypeSlug]);
+                                        } else {
+                                          setSelectedAssetTypes(selectedAssetTypes.filter(s => s !== assetTypeSlug));
+                                          // Remove required flag
+                                          const newFlags = { ...assetTypeRequiredFlags };
+                                          delete newFlags[assetTypeSlug];
+                                          setAssetTypeRequiredFlags(newFlags);
+                                        }
+                                      }}
+                                      className="rounded"
+                                    />
+                                    <Label htmlFor={`asset-type-${assetTypeSlug}`} className="flex-1 cursor-pointer text-sm">
+                                      {assetType.name || assetType.asset_type_name || assetTypeSlug}
+                                    </Label>
+                                    {isSelected && (
+                                      <div className="flex items-center gap-2">
+                                        <input
+                                          type="checkbox"
+                                          id={`asset-type-required-${assetTypeSlug}`}
+                                          checked={assetTypeRequiredFlags[assetTypeSlug] || false}
+                                          onChange={(e) => {
+                                            setAssetTypeRequiredFlags({
+                                              ...assetTypeRequiredFlags,
+                                              [assetTypeSlug]: e.target.checked,
+                                            });
+                                          }}
+                                          className="rounded"
+                                        />
+                                        <Label htmlFor={`asset-type-required-${assetTypeSlug}`} className="text-xs text-muted-foreground cursor-pointer">
+                                          Required
+                                        </Label>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+
               <div className="space-y-2">
                 <Label htmlFor="fieldLabel">Field Label *</Label>
                 <Input
@@ -1578,6 +2996,7 @@ const CustomFieldsAdminPage = () => {
                   onValueChange={(value) =>
                     handleFieldInputChange("field_type", value)
                   }
+                  disabled={fieldFormData.is_compliance && fieldFormData.compliance_config?.requires_file_upload !== false}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select field type" />
@@ -1591,7 +3010,11 @@ const CustomFieldsAdminPage = () => {
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
-                  Choose the input type for this field
+                  {fieldFormData.is_compliance && fieldFormData.compliance_config?.requires_file_upload !== false
+                    ? "Compliance fields with file upload are automatically set to 'File Upload' type"
+                    : fieldFormData.is_compliance && fieldFormData.compliance_config?.requires_file_upload === false
+                    ? "Compliance field without file upload - choose any field type"
+                    : "Choose the input type for this field"}
                 </p>
               </div>
 
@@ -1733,9 +3156,16 @@ const CustomFieldsAdminPage = () => {
               {/* File Upload Options */}
               {fieldFormData.field_type === 'file' && (
                 <div className="space-y-4 pt-2 border-t">
-                  <Label className="text-sm font-medium">
-                    File Configuration
-                  </Label>
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm font-medium">
+                      File Configuration
+                    </Label>
+                    {fieldFormData.is_compliance && (
+                      <Badge variant="secondary" className="text-xs">
+                        Auto-configured for Compliance
+                      </Badge>
+                    )}
+                  </div>
 
                   {/* Allow Multiple Files Option */}
                   <div className="flex items-center space-x-2">
@@ -2022,7 +3452,7 @@ const CustomFieldsAdminPage = () => {
                     id="isRequired"
                     checked={fieldFormData.is_required}
                     onCheckedChange={(checked) =>
-                      handleFieldInputChange("isRequired", checked)
+                      handleFieldInputChange("is_required", checked)
                     }
                   />
                 </div>
@@ -2032,11 +3462,12 @@ const CustomFieldsAdminPage = () => {
                     id="isUnique"
                     checked={fieldFormData.is_unique}
                     onCheckedChange={(checked) =>
-                      handleFieldInputChange("isUnique", checked)
+                      handleFieldInputChange("is_unique", checked)
                     }
                   />
                 </div>
               </div>
+
             </div>
           )}
 
@@ -2048,7 +3479,7 @@ const CustomFieldsAdminPage = () => {
               onClick={handleSubmitField}
               className="bg-primary hover:bg-primary/90"
             >
-              {editingFieldId ? "Update Field" : "Create Field"}
+              {editingFieldSlug ? "Update Field" : "Create Field"}
             </Button>
           </DialogFooter>
         </DialogContent>

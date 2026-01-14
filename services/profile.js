@@ -234,7 +234,7 @@ export const profileService = {
         throw new Error("User slug is required for custom fields operations");
       }
 
-      const response = await api.get(`/data/user/${userSlug}/custom-fields/hierarchy`);
+      const response = await api.get(`/settings/entities/user/${userSlug}/custom-fields`);
       return response.data || response;
     } catch (error) {
       console.error("Get user custom fields failed:", error);
@@ -248,7 +248,7 @@ export const profileService = {
         throw new Error("User slug is required for custom fields operations");
       }
 
-      const response = await api.get(`/data/user/${userSlug}/custom-fields/hierarchy`);
+      const response = await api.get(`/settings/entities/user/${userSlug}/custom-fields/hierarchy`);
       return response.data || response;
     } catch (error) {
       console.error("Get user custom fields hierarchy failed:", error);
