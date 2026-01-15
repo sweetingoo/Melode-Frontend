@@ -389,4 +389,34 @@ export const profileService = {
       throw error;
     }
   },
+
+  // Get user custom field values list with filters (for admin view)
+  getUserCustomFieldValuesList: async (userSlug, filters = {}) => {
+    try {
+      const params = new URLSearchParams();
+      if (filters.complianceOnly !== undefined && filters.complianceOnly !== null) {
+        params.append("compliance_only", filters.complianceOnly.toString());
+      }
+      if (filters.fieldType) {
+        params.append("field_type", filters.fieldType);
+      }
+      if (filters.approvalStatus) {
+        params.append("approval_status", filters.approvalStatus);
+      }
+      if (filters.searchTerm) {
+        params.append("search_term", filters.searchTerm);
+      }
+      if (filters.organizationId) {
+        params.append("organization_id", filters.organizationId.toString());
+      }
+
+      const queryString = params.toString();
+      const url = `/settings/users/${userSlug}/custom-fields/list${queryString ? `?${queryString}` : ""}`;
+      const response = await api.get(url);
+      return response.data || response;
+    } catch (error) {
+      console.error("Get user custom field values list failed:", error);
+      throw error;
+    }
+  },
 };

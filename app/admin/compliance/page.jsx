@@ -1,14 +1,23 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ComplianceSection } from "@/components/ComplianceSection";
 import { useExpiringCompliance, usePendingApprovals, useApproveCompliance } from "@/hooks/useCompliance";
-import { Loader2, AlertTriangle, CheckCircle, XCircle, Clock, ChevronDown, ChevronUp, FileText, Download, User, Calendar } from "lucide-react";
+import { useRoles } from "@/hooks/useRoles";
+import { Loader2, AlertTriangle, CheckCircle, XCircle, Clock, ChevronDown, ChevronUp, FileText, Download, User, Calendar, Search, Filter, X } from "lucide-react";
 import { format } from "date-fns";
 import { filesService } from "@/services/files";
 import {
@@ -20,7 +29,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
 
 export default function ComplianceAdminPage() {
   const [approvalModalOpen, setApprovalModalOpen] = useState(false);
@@ -28,10 +36,76 @@ export default function ComplianceAdminPage() {
   const [approvalNotes, setApprovalNotes] = useState("");
   const [isApproving, setIsApproving] = useState(false);
   const [expandedItems, setExpandedItems] = useState(new Set());
+  const [activeTab, setActiveTab] = useState("expiring");
+  
+  // Filter state
+  const [filters, setFilters] = useState({
+    searchTerm: "",
+    fieldType: "all",
+    approvalStatus: "all",
+    entityType: "all",
+    roleSlug: "all", // "all" = all roles, otherwise specific role slug
+    isCompliance: null, // null = all, true = compliance only, false = non-compliance only
+  });
 
-  const { data: expiringData, isLoading: expiringLoading } = useExpiringCompliance(30, 1, 50);
-  const { data: pendingData, isLoading: pendingLoading } = usePendingApprovals(1, 50);
+  // Get roles for filter dropdown
+  const { data: rolesData } = useRoles();
+  const roles = Array.isArray(rolesData) 
+    ? rolesData 
+    : rolesData?.roles || rolesData?.items || [];
+
+  // Build query filters (only include non-default values)
+  const queryFilters = useMemo(() => {
+    const result = {};
+    if (filters.searchTerm) {
+      result.searchTerm = filters.searchTerm;
+    }
+    if (filters.fieldType && filters.fieldType !== "all") {
+      result.fieldType = filters.fieldType;
+    }
+    if (filters.approvalStatus && filters.approvalStatus !== "all") {
+      result.approvalStatus = filters.approvalStatus;
+    }
+    if (filters.entityType && filters.entityType !== "all") {
+      result.entityType = filters.entityType;
+    }
+    if (filters.roleSlug && filters.roleSlug !== "all") {
+      result.roleSlug = filters.roleSlug;
+    }
+    if (filters.isCompliance !== null) {
+      result.isCompliance = filters.isCompliance;
+    }
+    return result;
+  }, [filters]);
+
+  const { data: expiringData, isLoading: expiringLoading } = useExpiringCompliance(30, 1, 50, queryFilters);
+  const { data: pendingData, isLoading: pendingLoading } = usePendingApprovals(1, 50, queryFilters);
   const approveMutation = useApproveCompliance();
+
+  const handleFilterChange = (key, value) => {
+    setFilters((prev) => ({
+      ...prev,
+      [key]: value,
+    }));
+  };
+
+  const clearFilters = () => {
+    setFilters({
+      searchTerm: "",
+      fieldType: "all",
+      approvalStatus: "all",
+      entityType: "all",
+      roleSlug: "all",
+      isCompliance: null,
+    });
+  };
+
+  const hasActiveFilters = filters.searchTerm || 
+    filters.fieldType !== "all" || 
+    filters.approvalStatus !== "all" || 
+    filters.entityType !== "all" ||
+    filters.roleSlug !== "all" ||
+    filters.isCompliance !== null;
 
   const handleApprove = (item) => {
     setSelectedItem(item);
@@ -112,7 +186,7 @@ export default function ComplianceAdminPage() {
         </p>
       </div>
 
-      <Tabs defaultValue="expiring" className="w-full">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList>
           <TabsTrigger value="expiring">Expiring Items</TabsTrigger>
           <TabsTrigger value="pending">Pending Approvals</TabsTrigger>
@@ -127,13 +201,148 @@ export default function ComplianceAdminPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
+              {/* Filters */}
+              <div className="mb-6 space-y-4">
+                <div className="flex items-center gap-2 mb-4">
+                  <Filter className="h-4 w-4 text-muted-foreground" />
+                  <h3 className="text-sm font-semibold">Filters</h3>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="search-expiring">Search</Label>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="search-expiring"
+                        placeholder="Search fields, entities..."
+                        value={filters.searchTerm}
+                        onChange={(e) => handleFilterChange("searchTerm", e.target.value)}
+                        className="pl-9"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="field-type-filter-expiring">Field Type</Label>
+                    <Select
+                      value={filters.fieldType}
+                      onValueChange={(value) => handleFilterChange("fieldType", value)}
+                    >
+                      <SelectTrigger id="field-type-filter-expiring">
+                        <SelectValue placeholder="All Types" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Types</SelectItem>
+                        <SelectItem value="text">Text</SelectItem>
+                        <SelectItem value="number">Number</SelectItem>
+                        <SelectItem value="date">Date</SelectItem>
+                        <SelectItem value="file">File</SelectItem>
+                        <SelectItem value="select">Select</SelectItem>
+                        <SelectItem value="boolean">Boolean</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="approval-status-filter-expiring">Approval Status</Label>
+                    <Select
+                      value={filters.approvalStatus}
+                      onValueChange={(value) => handleFilterChange("approvalStatus", value)}
+                    >
+                      <SelectTrigger id="approval-status-filter-expiring">
+                        <SelectValue placeholder="All Statuses" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Statuses</SelectItem>
+                        <SelectItem value="pending">Pending</SelectItem>
+                        <SelectItem value="approved">Approved</SelectItem>
+                        <SelectItem value="declined">Declined</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="entity-type-filter-expiring">Entity Type</Label>
+                    <Select
+                      value={filters.entityType}
+                      onValueChange={(value) => handleFilterChange("entityType", value)}
+                    >
+                      <SelectTrigger id="entity-type-filter-expiring">
+                        <SelectValue placeholder="All Entities" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Entities</SelectItem>
+                        <SelectItem value="user">User</SelectItem>
+                        <SelectItem value="asset">Asset</SelectItem>
+                        <SelectItem value="task">Task</SelectItem>
+                        <SelectItem value="project">Project</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="role-filter-expiring">Job Role</Label>
+                    <Select
+                      value={filters.roleSlug}
+                      onValueChange={(value) => handleFilterChange("roleSlug", value)}
+                    >
+                      <SelectTrigger id="role-filter-expiring">
+                        <SelectValue placeholder="All Roles" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Roles</SelectItem>
+                        {roles.map((role) => (
+                          <SelectItem key={role.slug || role.id} value={role.slug}>
+                            {role.name || role.role_name || role.slug}
+                            {role.shift_name && ` - ${role.shift_name}`}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="compliance-filter-expiring">Is Compliance</Label>
+                    <Select
+                      value={filters.isCompliance === null ? "all" : filters.isCompliance.toString()}
+                      onValueChange={(value) => {
+                        if (value === "all") {
+                          handleFilterChange("isCompliance", null);
+                        } else {
+                          handleFilterChange("isCompliance", value === "true");
+                        }
+                      }}
+                    >
+                      <SelectTrigger id="compliance-filter-expiring">
+                        <SelectValue placeholder="All Fields" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Fields</SelectItem>
+                        <SelectItem value="true">Compliance Only</SelectItem>
+                        <SelectItem value="false">Non-Compliance Only</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                {hasActiveFilters && (
+                  <div className="flex justify-end">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={clearFilters}
+                    >
+                      <X className="h-4 w-4 mr-2" />
+                      Clear Filters
+                    </Button>
+                  </div>
+                )}
+              </div>
               {expiringLoading ? (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                   <span className="ml-2 text-muted-foreground">Loading...</span>
                 </div>
-              ) : expiringData?.items && expiringData.items.length > 0 ? (
-                <div className="space-y-4">
+              ) : (expiringData?.items && expiringData.items.length > 0) ? (
+                <>
+                  <div className="mb-4 text-sm text-muted-foreground">
+                    Showing {expiringData.items.length} item{expiringData.items.length !== 1 ? "s" : ""}
+                  </div>
+                  <div className="space-y-4">
                   {expiringData.items.map((item) => {
                     const isExpanded = expandedItems.has(item.value_id);
                     return (
@@ -329,7 +538,8 @@ export default function ComplianceAdminPage() {
                       </Card>
                     );
                   })}
-                </div>
+                  </div>
+                </>
               ) : (
                 <div className="text-center py-8 text-muted-foreground">
                   No expiring items found
@@ -348,13 +558,131 @@ export default function ComplianceAdminPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
+              {/* Filters */}
+              <div className="mb-6 space-y-4">
+                <div className="flex items-center gap-2 mb-4">
+                  <Filter className="h-4 w-4 text-muted-foreground" />
+                  <h3 className="text-sm font-semibold">Filters</h3>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="search-pending">Search</Label>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="search-pending"
+                        placeholder="Search fields, entities..."
+                        value={filters.searchTerm}
+                        onChange={(e) => handleFilterChange("searchTerm", e.target.value)}
+                        className="pl-9"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="field-type-filter-pending">Field Type</Label>
+                    <Select
+                      value={filters.fieldType}
+                      onValueChange={(value) => handleFilterChange("fieldType", value)}
+                    >
+                      <SelectTrigger id="field-type-filter-pending">
+                        <SelectValue placeholder="All Types" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Types</SelectItem>
+                        <SelectItem value="text">Text</SelectItem>
+                        <SelectItem value="number">Number</SelectItem>
+                        <SelectItem value="date">Date</SelectItem>
+                        <SelectItem value="file">File</SelectItem>
+                        <SelectItem value="select">Select</SelectItem>
+                        <SelectItem value="boolean">Boolean</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="entity-type-filter-pending">Entity Type</Label>
+                    <Select
+                      value={filters.entityType}
+                      onValueChange={(value) => handleFilterChange("entityType", value)}
+                    >
+                      <SelectTrigger id="entity-type-filter-pending">
+                        <SelectValue placeholder="All Entities" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Entities</SelectItem>
+                        <SelectItem value="user">User</SelectItem>
+                        <SelectItem value="asset">Asset</SelectItem>
+                        <SelectItem value="task">Task</SelectItem>
+                        <SelectItem value="project">Project</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="role-filter-pending">Job Role</Label>
+                    <Select
+                      value={filters.roleSlug}
+                      onValueChange={(value) => handleFilterChange("roleSlug", value)}
+                    >
+                      <SelectTrigger id="role-filter-pending">
+                        <SelectValue placeholder="All Roles" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Roles</SelectItem>
+                        {roles.map((role) => (
+                          <SelectItem key={role.slug || role.id} value={role.slug}>
+                            {role.name || role.role_name || role.slug}
+                            {role.shift_name && ` - ${role.shift_name}`}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="compliance-filter-pending">Is Compliance</Label>
+                    <Select
+                      value={filters.isCompliance === null ? "all" : filters.isCompliance.toString()}
+                      onValueChange={(value) => {
+                        if (value === "all") {
+                          handleFilterChange("isCompliance", null);
+                        } else {
+                          handleFilterChange("isCompliance", value === "true");
+                        }
+                      }}
+                    >
+                      <SelectTrigger id="compliance-filter-pending">
+                        <SelectValue placeholder="All Fields" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Fields</SelectItem>
+                        <SelectItem value="true">Compliance Only</SelectItem>
+                        <SelectItem value="false">Non-Compliance Only</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                {hasActiveFilters && (
+                  <div className="flex justify-end">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={clearFilters}
+                    >
+                      <X className="h-4 w-4 mr-2" />
+                      Clear Filters
+                    </Button>
+                  </div>
+                )}
+              </div>
               {pendingLoading ? (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                   <span className="ml-2 text-muted-foreground">Loading...</span>
                 </div>
               ) : pendingData?.items && pendingData.items.length > 0 ? (
-                <div className="space-y-4">
+                <>
+                  <div className="mb-4 text-sm text-muted-foreground">
+                    Showing {pendingData.items.length} item{pendingData.items.length !== 1 ? "s" : ""}
+                  </div>
+                  <div className="space-y-4">
                   {pendingData.items.map((item) => {
                       const isExpanded = expandedItems.has(item.value_id);
                       return (
@@ -511,7 +839,8 @@ export default function ComplianceAdminPage() {
                         </Card>
                       );
                     })}
-                </div>
+                  </div>
+                </>
               ) : (
                 <div className="text-center py-8 text-muted-foreground">
                   No pending approvals

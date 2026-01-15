@@ -119,13 +119,34 @@ export const complianceService = {
   },
 
   // Get expiring compliance items (admin only)
-  getExpiringCompliance: async (daysAhead = 30, page = 1, perPage = 50) => {
+  getExpiringCompliance: async (daysAhead = 30, page = 1, perPage = 50, filters = {}) => {
     try {
       const params = new URLSearchParams({
         days_ahead: daysAhead.toString(),
         page: page.toString(),
         per_page: perPage.toString(),
       });
+      
+      // Add filter parameters
+      if (filters.searchTerm) {
+        params.append("search_term", filters.searchTerm);
+      }
+      if (filters.fieldType && filters.fieldType !== "all") {
+        params.append("field_type", filters.fieldType);
+      }
+      if (filters.approvalStatus && filters.approvalStatus !== "all") {
+        params.append("approval_status", filters.approvalStatus);
+      }
+      if (filters.entityType && filters.entityType !== "all") {
+        params.append("entity_type", filters.entityType);
+      }
+      if (filters.roleSlug && filters.roleSlug !== "all") {
+        params.append("role_slug", filters.roleSlug);
+      }
+      if (filters.isCompliance !== null && filters.isCompliance !== undefined) {
+        params.append("is_compliance", filters.isCompliance.toString());
+      }
+      
       const response = await api.get(`/compliance/expiring?${params.toString()}`);
       return response.data || response;
     } catch (error) {
@@ -135,12 +156,30 @@ export const complianceService = {
   },
 
   // Get pending compliance approvals (admin only)
-  getPendingApprovals: async (page = 1, perPage = 50) => {
+  getPendingApprovals: async (page = 1, perPage = 50, filters = {}) => {
     try {
       const params = new URLSearchParams({
         page: page.toString(),
         per_page: perPage.toString(),
       });
+      
+      // Add filter parameters
+      if (filters.searchTerm) {
+        params.append("search_term", filters.searchTerm);
+      }
+      if (filters.fieldType && filters.fieldType !== "all") {
+        params.append("field_type", filters.fieldType);
+      }
+      if (filters.entityType && filters.entityType !== "all") {
+        params.append("entity_type", filters.entityType);
+      }
+      if (filters.roleSlug && filters.roleSlug !== "all") {
+        params.append("role_slug", filters.roleSlug);
+      }
+      if (filters.isCompliance !== null && filters.isCompliance !== undefined) {
+        params.append("is_compliance", filters.isCompliance.toString());
+      }
+      
       const response = await api.get(`/compliance/pending?${params.toString()}`);
       return response.data || response;
     } catch (error) {

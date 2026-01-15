@@ -14,6 +14,7 @@ export const profileKeys = {
   userStats: (userId) => [...profileKeys.all, "userStats", userId],
   mfaStatus: () => [...profileKeys.all, "mfaStatus"],
   userCustomFields: () => [...profileKeys.all, "userCustomFields"],
+  userCustomFieldValuesList: (userSlug, filters) => [...profileKeys.all, "userCustomFieldValuesList", userSlug, filters],
   preferences: () => [...profileKeys.all, "preferences"],
 };
 
@@ -937,5 +938,21 @@ export const useUpdatePreferences = () => {
         });
       }
     },
+  });
+};
+
+// Get user custom field values list with filters (for admin view)
+export const useUserCustomFieldValuesList = (userSlug, filters = {}) => {
+  return useQuery({
+    queryKey: profileKeys.userCustomFieldValuesList(userSlug, filters),
+    queryFn: async () => {
+      if (!userSlug) {
+        throw new Error("User slug is required");
+      }
+      const response = await profileService.getUserCustomFieldValuesList(userSlug, filters);
+      return response;
+    },
+    enabled: !!userSlug,
+    staleTime: 2 * 60 * 1000, // 2 minutes
   });
 };

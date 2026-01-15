@@ -205,11 +205,11 @@ export const useComplianceHistory = (fieldSlug, entityType, entitySlug, page = 1
 };
 
 // Get expiring compliance items (admin only)
-export const useExpiringCompliance = (daysAhead = 30, page = 1, perPage = 50) => {
+export const useExpiringCompliance = (daysAhead = 30, page = 1, perPage = 50, filters = {}) => {
   return useQuery({
-    queryKey: [...complianceKeys.expiring(daysAhead), page, perPage],
+    queryKey: [...complianceKeys.expiring(daysAhead), page, perPage, filters],
     queryFn: async () => {
-      const response = await complianceService.getExpiringCompliance(daysAhead, page, perPage);
+      const response = await complianceService.getExpiringCompliance(daysAhead, page, perPage, filters);
       return response;
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
@@ -218,11 +218,11 @@ export const useExpiringCompliance = (daysAhead = 30, page = 1, perPage = 50) =>
 };
 
 // Get pending compliance approvals (admin only)
-export const usePendingApprovals = (page = 1, perPage = 50) => {
+export const usePendingApprovals = (page = 1, perPage = 50, filters = {}) => {
   return useQuery({
-    queryKey: [...complianceKeys.all, "pending", page, perPage],
+    queryKey: [...complianceKeys.all, "pending", page, perPage, filters],
     queryFn: async () => {
-      const response = await complianceService.getPendingApprovals(page, perPage);
+      const response = await complianceService.getPendingApprovals(page, perPage, filters);
       return response;
     },
     staleTime: 5 * 60 * 1000, // 5 minutes

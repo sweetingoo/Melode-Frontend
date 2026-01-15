@@ -63,6 +63,7 @@ import {
   AlertCircle,
   Building2,
   Network,
+  FileCheck,
 } from "lucide-react";
 import {
   useUser,
@@ -92,6 +93,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { userKeys } from "@/hooks/useUsers";
 import { useHierarchyImage } from "@/hooks/useEmployees";
 import UserAuditLogs from "@/components/UserAuditLogs";
+import { UserComplianceData } from "@/components/UserComplianceData";
 
 const UserEditPage = () => {
   const params = useParams();
@@ -1013,7 +1015,7 @@ const UserEditPage = () => {
       {/* Tabs Section */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <div className="overflow-x-auto scrollbar-hide">
-          <TabsList className="inline-flex w-auto flex-nowrap gap-1 sm:gap-0 lg:grid lg:w-full lg:grid-cols-5">
+          <TabsList className="inline-flex w-auto flex-nowrap gap-1 sm:gap-0 lg:grid lg:w-full lg:grid-cols-6">
             <TabsTrigger value="basic" className="flex items-center gap-2 whitespace-nowrap">
               <User className="h-4 w-4" />
               <span className="hidden sm:inline">Basic Information</span>
@@ -1023,6 +1025,11 @@ const UserEditPage = () => {
               <Shield className="h-4 w-4" />
               <span className="hidden sm:inline">Roles & Permissions</span>
               <span className="sm:hidden">Roles</span>
+            </TabsTrigger>
+            <TabsTrigger value="compliance" className="flex items-center gap-2 whitespace-nowrap">
+              <FileCheck className="h-4 w-4" />
+              <span className="hidden sm:inline">Compliance</span>
+              <span className="sm:hidden">Compliance</span>
             </TabsTrigger>
             <TabsTrigger value="hierarchy" className="flex items-center gap-2 whitespace-nowrap">
               <Network className="h-4 w-4" />
@@ -2006,6 +2013,11 @@ const UserEditPage = () => {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* Compliance Tab */}
+        <TabsContent value="compliance" className="space-y-6">
+          <UserComplianceData userSlug={actualUserSlug} />
         </TabsContent>
 
         {/* Activity History Tab */}
