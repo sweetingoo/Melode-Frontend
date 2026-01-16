@@ -1099,26 +1099,9 @@ export default function ProfilePage() {
               <span className="hidden sm:inline">Multi-Factor Auth</span>
               <span className="sm:hidden">MFA</span>
             </TabsTrigger>
-            <TabsTrigger value="additional" className="whitespace-nowrap relative">
-              <span className="hidden sm:inline">Additional Info</span>
-              <span className="sm:hidden">Additional</span>
-              {hasMissingRequired && (
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Badge 
-                        variant="destructive" 
-                        className="ml-2 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs"
-                      >
-                        {totalMissingRequired}
-                      </Badge>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>{totalMissingRequired} required {totalMissingRequired === 1 ? 'field' : 'fields'} missing</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              )}
+            <TabsTrigger value="additional" className="whitespace-nowrap">
+              <span className="hidden sm:inline">Settings</span>
+              <span className="sm:hidden">Settings</span>
             </TabsTrigger>
             <TabsTrigger value="files" className="whitespace-nowrap">Files</TabsTrigger>
           </TabsList>
@@ -1788,158 +1771,8 @@ export default function ProfilePage() {
           </Card>
         </TabsContent>
 
-        {/* Additional Information Tab */}
+        {/* Settings Tab */}
         <TabsContent value="additional" className="space-y-6">
-          {/* Custom Fields Section - First Row */}
-          {customFieldsHierarchy && customFieldsHierarchy.sections &&
-            customFieldsHierarchy.sections.filter(section => section.is_active !== false).length > 0 && (
-            <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <User className="h-5 w-5" />
-                    Additional Information
-                  </CardTitle>
-                  <CardDescription>
-                    Complete your profile with additional details required by your organisation
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  {customFieldsHierarchyLoading ? (
-                    <div className="flex items-center justify-center py-8">
-                      <Loader2 className="h-6 w-6 animate-spin mr-2" />
-                      <span>Loading custom fields...</span>
-                    </div>
-                  ) : (
-                    <>
-                      {/* Debug logging */}
-                      {(() => {
-                        console.log("Profile - Compliance fields debug:", {
-                          complianceFieldsCount: complianceData?.compliance_fields?.length || 0,
-                          complianceFields: complianceData?.compliance_fields,
-                          sectionsCount: customFieldsHierarchy?.sections?.length || 0,
-                          sections: customFieldsHierarchy?.sections,
-                        });
-                        return null;
-                      })()}
-                      
-                      {(customFieldsHierarchy?.sections || [])
-                        .filter(section => section.is_active !== false) // Only show active sections
-                        .map((section) => {
-                          // Get all fields in this section (both compliance and non-compliance) from hierarchy
-                          const allFields = section.fields?.filter(field => field.is_active !== false) || [];
-
-                          // Create a map of compliance fields by field ID for quick lookup
-                          const complianceFieldsMap = new Map();
-                          if (complianceData?.compliance_fields) {
-                            complianceData.compliance_fields.forEach((cf) => {
-                              complianceFieldsMap.set(cf.custom_field_id, cf);
-                            });
-                          }
-
-                          // Don't render section if it has no fields at all
-                          if (allFields.length === 0) {
-                            return null;
-                          }
-
-                          // Filter out compliance fields - they're now on the dedicated Compliance page
-                          const regularFieldsInSection = allFields.filter((field) => {
-                            // Exclude compliance fields (they have compliance_field_id in the map)
-                            return !complianceFieldsMap.has(field.id);
-                          });
-
-                          return (
-                            <div key={section.id} className="space-y-4">
-                              <div className="border-b pb-2">
-                                <h3 className="text-lg font-semibold">{section.section_name}</h3>
-                                {section.section_description && (
-                                  <p className="text-sm text-muted-foreground mt-1">
-                                    {section.section_description}
-                                  </p>
-                                )}
-                                {section.subsections && section.subsections.length > 0 && (
-                                  <p className="text-xs text-muted-foreground mt-1">
-                                    Subsections: {section.subsections.join(', ')}
-                                  </p>
-                                )}
-                              </div>
-
-                              <div className="space-y-6">
-                                {/* Regular Custom Fields in Grid Layout */}
-                                {regularFieldsInSection.length > 0 && (
-                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    {regularFieldsInSection.map((field) => (
-                                      <CustomFieldRenderer
-                                        key={field.id}
-                                        field={field}
-                                        value={customFieldsData[field.id] || ''}
-                                        onChange={handleCustomFieldChange}
-                                        error={customFieldsErrors[field.id]}
-                                      />
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
-
-
-                      <div className="flex justify-between items-center pt-4 border-t">
-                        <div className="text-sm text-muted-foreground">
-                          {hasCustomFieldsChanges && (
-                            <span className="text-amber-600 font-medium">
-                              You have unsaved changes
-                            </span>
-                          )}
-                        </div>
-                        <Button
-                          onClick={handleCustomFieldsBulkUpdate}
-                          disabled={isUpdatingCustomFields || !hasCustomFieldsChanges}
-                          variant={hasCustomFieldsChanges ? "default" : "outline"}
-                        >
-                          {isUpdatingCustomFields ? (
-                            <>
-                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                              Saving...
-                            </>
-                          ) : (
-                            <>
-                              <Save className="h-4 w-4 mr-2" />
-                              {hasCustomFieldsChanges ? "Save Changes" : "Save Custom Fields"}
-                            </>
-                          )}
-                        </Button>
-                      </div>
-                    </>
-                  )}
-                </CardContent>
-              </Card>
-            )}
-
-          {/* Custom Fields Empty State */}
-          {!customFieldsHierarchyLoading && (!customFieldsHierarchy || !customFieldsHierarchy.sections || customFieldsHierarchy.sections.length === 0) && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <User className="h-5 w-5" />
-                  Additional Information
-                </CardTitle>
-                <CardDescription>
-                  Complete your profile with additional details required by your organisation
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="text-center py-8">
-                  <User className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">No Additional Information Required</h3>
-                  <p className="text-muted-foreground mb-4">
-                    Your organisation hasn't configured any additional profile fields yet. Contact your administrator if you need to add more information to your profile.
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
           {/* Account Settings and Notifications */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Account Settings */}
