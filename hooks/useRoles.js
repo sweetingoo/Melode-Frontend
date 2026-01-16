@@ -311,7 +311,7 @@ export const roleUtils = {
     return {
       id: apiRole.id,
       name: apiRole.display_name || apiRole.name,
-      slug: apiRole.name,
+      slug: apiRole.slug || apiRole.name,
       description: apiRole.description || "No description available",
       priority: apiRole.priority || 0,
       userCount: apiRole.user_count || 0,

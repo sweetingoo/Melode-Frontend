@@ -131,9 +131,6 @@ export const complianceService = {
       if (filters.searchTerm) {
         params.append("search_term", filters.searchTerm);
       }
-      if (filters.fieldType && filters.fieldType !== "all") {
-        params.append("field_type", filters.fieldType);
-      }
       if (filters.approvalStatus && filters.approvalStatus !== "all") {
         params.append("approval_status", filters.approvalStatus);
       }
@@ -166,9 +163,6 @@ export const complianceService = {
       // Add filter parameters
       if (filters.searchTerm) {
         params.append("search_term", filters.searchTerm);
-      }
-      if (filters.fieldType && filters.fieldType !== "all") {
-        params.append("field_type", filters.fieldType);
       }
       if (filters.entityType && filters.entityType !== "all") {
         params.append("entity_type", filters.entityType);

@@ -815,24 +815,28 @@ const Dashboard = () => {
       {!shouldFetchDashboard && currentUserData && (
         <>
           {/* Personal Stats Grid */}
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <div className={`grid gap-4 ${(myStats?.total_tasks || 0) > 0 ? 'md:grid-cols-2 lg:grid-cols-4' : 'md:grid-cols-3'}`}>
             {/* My Tasks Card */}
             <Card className="hover:shadow-lg transition-all duration-200 border-l-4 border-l-blue-500">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">My Tasks</CardTitle>
-                <div className="h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center">
-                  <CheckSquare className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-medium text-muted-foreground mb-1">
+                      My Tasks
+                    </p>
+                    <div className="text-2xl font-bold">
+                      {myStats?.total_tasks || myTasksData?.total || 0}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {myTasksData?.items?.filter(t => t.status === "pending").length || 0} pending
+                    </p>
+                  </div>
+                  <div className="h-10 w-10 rounded-full bg-blue-500/10 flex items-center justify-center shrink-0">
+                    <CheckSquare className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                  </div>
                 </div>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {myStats?.total_tasks || myTasksData?.total || 0}
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {myTasksData?.items?.filter(t => t.status === "pending").length || 0} pending
-                </p>
                 <Link href="/admin/my-tasks">
-                  <Button variant="ghost" size="sm" className="mt-2 w-full">
+                  <Button variant="ghost" size="sm" className="mt-3 w-full">
                     View Tasks <ArrowRight className="ml-2 h-3 w-3" />
                   </Button>
                 </Link>
@@ -841,55 +845,59 @@ const Dashboard = () => {
 
             {/* Clock Status Card */}
             <Card className="hover:shadow-lg transition-all duration-200 border-l-4 border-l-green-500">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Clock Status</CardTitle>
-                <div className="h-8 w-8 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center">
-                  <Clock className="h-4 w-4 text-green-600 dark:text-green-400" />
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {(() => {
-                    // Check for clocked in status - API can return status, current_state, or is_clocked_in
-                    const isClockedIn =
-                      clockStatus?.is_clocked_in === true ||
-                      clockStatus?.status === "active" ||
-                      clockStatus?.status === "on_break" ||
-                      clockStatus?.current_state === "active" ||
-                      clockStatus?.current_state === "on_break";
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-medium text-muted-foreground mb-1">
+                      Clock Status
+                    </p>
+                    <div className="text-2xl font-bold">
+                      {(() => {
+                        // Check for clocked in status - API can return status, current_state, or is_clocked_in
+                        const isClockedIn =
+                          clockStatus?.is_clocked_in === true ||
+                          clockStatus?.status === "active" ||
+                          clockStatus?.status === "on_break" ||
+                          clockStatus?.current_state === "active" ||
+                          clockStatus?.current_state === "on_break";
 
-                    return isClockedIn ? (
-                      <span className="text-green-600">Checked In</span>
-                    ) : (
-                      <span className="text-muted-foreground">Checked Out</span>
-                    );
-                  })()}
-                </div>
-                {(() => {
-                  // Check if active (not on break)
-                  const isClockedIn =
-                    clockStatus?.is_clocked_in === true ||
-                    clockStatus?.status === "active" ||
-                    clockStatus?.status === "on_break" ||
-                    clockStatus?.current_state === "active" ||
-                    clockStatus?.current_state === "on_break";
-                  const isOnBreak =
-                    clockStatus?.is_on_break === true ||
-                    clockStatus?.status === "on_break" ||
-                    clockStatus?.current_state === "on_break";
-                  const isActive = isClockedIn && !isOnBreak;
+                        return isClockedIn ? (
+                          <span className="text-green-600">Checked In</span>
+                        ) : (
+                          <span className="text-muted-foreground">Checked Out</span>
+                        );
+                      })()}
+                    </div>
+                    {(() => {
+                      // Check if active (not on break)
+                      const isClockedIn =
+                        clockStatus?.is_clocked_in === true ||
+                        clockStatus?.status === "active" ||
+                        clockStatus?.status === "on_break" ||
+                        clockStatus?.current_state === "active" ||
+                        clockStatus?.current_state === "on_break";
+                      const isOnBreak =
+                        clockStatus?.is_on_break === true ||
+                        clockStatus?.status === "on_break" ||
+                        clockStatus?.current_state === "on_break";
+                      const isActive = isClockedIn && !isOnBreak;
 
-                  if (isActive && clockStatus?.clock_in_time) {
-                    return (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Since {new Date(clockStatus.clock_in_time).toLocaleTimeString()}
-                      </p>
-                    );
-                  }
-                  return null;
-                })()}
+                      if (isActive && clockStatus?.clock_in_time) {
+                        return (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Since {new Date(clockStatus.clock_in_time).toLocaleTimeString()}
+                          </p>
+                        );
+                      }
+                      return null;
+                    })()}
+                  </div>
+                  <div className="h-10 w-10 rounded-full bg-green-500/10 flex items-center justify-center shrink-0">
+                    <Clock className="h-5 w-5 text-green-600 dark:text-green-400" />
+                  </div>
+                </div>
                 <Link href="/clock">
-                  <Button variant="ghost" size="sm" className="mt-2 w-full">
+                  <Button variant="ghost" size="sm" className="mt-3 w-full">
                     {(() => {
                       const isClockedIn =
                         clockStatus?.is_clocked_in === true ||
@@ -906,56 +914,62 @@ const Dashboard = () => {
 
             {/* Session History Card */}
             <Card className="hover:shadow-lg transition-all duration-200 border-l-4 border-l-purple-500">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">This Week</CardTitle>
-                <div className="h-8 w-8 rounded-full bg-purple-100 dark:bg-purple-900 flex items-center justify-center">
-                  <Calendar className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-medium text-muted-foreground mb-1">
+                      This Week
+                    </p>
+                    <div className="text-2xl font-bold">
+                      {myStats?.total_clock_records_this_week || recentClockRecords?.total || 0}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Session records this week
+                    </p>
+                  </div>
+                  <div className="h-10 w-10 rounded-full bg-purple-500/10 flex items-center justify-center shrink-0">
+                    <Calendar className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+                  </div>
                 </div>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {myStats?.total_clock_records_this_week || recentClockRecords?.total || 0}
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Session records this week
-                </p>
                 <Link href="/clock/history">
-                  <Button variant="ghost" size="sm" className="mt-2 w-full">
+                  <Button variant="ghost" size="sm" className="mt-3 w-full">
                     View History <ArrowRight className="ml-2 h-3 w-3" />
                   </Button>
                 </Link>
               </CardContent>
             </Card>
 
-            {/* Completion Rate Card */}
-            <Card className="hover:shadow-lg transition-all duration-200 border-l-4 border-l-orange-500">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Completion</CardTitle>
-                <div className="h-8 w-8 rounded-full bg-orange-100 dark:bg-orange-900 flex items-center justify-center">
-                  <Target className="h-4 w-4 text-orange-600 dark:text-orange-400" />
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {myStats?.total_tasks > 0
-                    ? Math.round((myStats?.completed_tasks || 0) / myStats.total_tasks * 100)
-                    : 0}%
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {myStats?.completed_tasks || 0} of {myStats?.total_tasks || 0} completed
-                </p>
-                <div className="mt-2 w-full bg-muted rounded-full h-2">
-                  <div
-                    className="bg-orange-500 h-2 rounded-full transition-all"
-                    style={{
-                      width: `${myStats?.total_tasks > 0
-                        ? Math.round((myStats?.completed_tasks || 0) / myStats.total_tasks * 100)
-                        : 0}%`
-                    }}
-                  />
-                </div>
-              </CardContent>
-            </Card>
+            {/* Completion Rate Card - Only show when there are tasks */}
+            {(myStats?.total_tasks || 0) > 0 && (
+              <Card className="hover:shadow-lg transition-all duration-200 border-l-4 border-l-orange-500">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-medium text-muted-foreground mb-1">
+                        Completion
+                      </p>
+                      <div className="text-2xl font-bold">
+                        {Math.round((myStats?.completed_tasks || 0) / myStats.total_tasks * 100)}%
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {myStats?.completed_tasks || 0} of {myStats.total_tasks} completed
+                      </p>
+                      <div className="mt-2 w-full bg-muted rounded-full h-2">
+                        <div
+                          className="bg-orange-500 h-2 rounded-full transition-all"
+                          style={{
+                            width: `${Math.round((myStats?.completed_tasks || 0) / myStats.total_tasks * 100)}%`
+                          }}
+                        />
+                      </div>
+                    </div>
+                    <div className="h-10 w-10 rounded-full bg-orange-500/10 flex items-center justify-center shrink-0">
+                      <Target className="h-5 w-5 text-orange-600 dark:text-orange-400" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
 
           {/* Quick Actions and Recent Activity */}
@@ -1123,98 +1137,6 @@ const Dashboard = () => {
             </Card>
           )}
 
-          {/* Permissions Section */}
-          <div className="mt-8">
-            <div className="mb-6">
-              <h2 className="text-2xl font-bold tracking-tight">
-                Your Permissions
-              </h2>
-              <p className="text-muted-foreground">
-                Here are all the permissions assigned to your account
-              </p>
-            </div>
-
-            {/* Wildcard Permissions Display */}
-            {hasWildcardPermissions.rolePermissions ||
-              hasWildcardPermissions.directPermissions ? (
-              <Card className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-amber-800 dark:text-amber-200">
-                    <Shield className="h-5 w-5" />
-                    Superuser Access
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-amber-700 dark:text-amber-300">
-                    You have superuser privileges with access to all system
-                    permissions and features.
-                  </p>
-                </CardContent>
-              </Card>
-            ) : (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-lg">
-                    <Key className="h-5 w-5" />
-                    Your Permissions
-                  </CardTitle>
-                  <p className="text-sm text-muted-foreground">
-                    All permissions assigned to your account
-                  </p>
-                </CardHeader>
-                <CardContent>
-                  {currentUserDirectPermissions.length > 0 ? (
-                    <div className="space-y-2">
-                      {currentUserDirectPermissions.map((permission, index) => (
-                        <div
-                          key={index}
-                          className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted/70 transition-colors"
-                        >
-                          <div className="flex-1">
-                            <p className="font-medium text-sm">
-                              {typeof permission === "object"
-                                ? permission.display_name ||
-                                permission.name ||
-                                permission.slug ||
-                                permission.permission
-                                : permission
-                                  .replace(":", ": ")
-                                  .replace(/([a-z])([A-Z])/g, "$1 $2")
-                                  .replace(/\b\w/g, (l) => l.toUpperCase())}
-                            </p>
-                            {typeof permission === "object" &&
-                              permission.description && (
-                                <p className="text-xs text-muted-foreground mt-1">
-                                  {permission.description}
-                                </p>
-                              )}
-                            {typeof permission === "object" &&
-                              permission.resource &&
-                              permission.action && (
-                                <p className="text-xs text-muted-foreground mt-1">
-                                  {permission.resource}:{permission.action}
-                                </p>
-                              )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center justify-center py-8">
-                      <Key className="h-12 w-12 text-muted-foreground mb-4" />
-                      <h3 className="text-lg font-semibold mb-2">
-                        No Permissions Assigned
-                      </h3>
-                      <p className="text-muted-foreground text-center">
-                        You don't have any specific permissions assigned. Contact
-                        your administrator for access.
-                      </p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            )}
-          </div>
         </>
       )}
     </div>

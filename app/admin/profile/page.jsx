@@ -1841,17 +1841,10 @@ export default function ProfilePage() {
                             return null;
                           }
 
-                          // Separate compliance and regular fields
-                          const complianceFieldsInSection = [];
-                          const regularFieldsInSection = [];
-                          
-                          allFields.forEach((field) => {
-                            const complianceFieldValue = complianceFieldsMap.get(field.id);
-                            if (complianceFieldValue) {
-                              complianceFieldsInSection.push({ field, complianceFieldValue });
-                            } else {
-                              regularFieldsInSection.push(field);
-                            }
+                          // Filter out compliance fields - they're now on the dedicated Compliance page
+                          const regularFieldsInSection = allFields.filter((field) => {
+                            // Exclude compliance fields (they have compliance_field_id in the map)
+                            return !complianceFieldsMap.has(field.id);
                           });
 
                           return (
@@ -1883,38 +1876,6 @@ export default function ProfilePage() {
                                         error={customFieldsErrors[field.id]}
                                       />
                                     ))}
-                                  </div>
-                                )}
-
-                                {/* Compliance Fields as Full-Width Cards */}
-                                {complianceFieldsInSection.length > 0 && (
-                                  <div className="space-y-4">
-                                    {complianceFieldsInSection.map(({ field, complianceFieldValue }) => {
-                                      const complianceField = {
-                                        id: complianceFieldValue.custom_field_id,
-                                        slug: complianceFieldValue.field_slug || complianceFieldValue.slug,
-                                        field_name: complianceFieldValue.field_name || field.field_name || "Unknown Field",
-                                        field_label: complianceFieldValue.field_label || field.field_label || complianceFieldValue.field_name || "Unknown Field",
-                                        field_description: complianceFieldValue.field_description || field.field_description,
-                                        requires_approval: complianceFieldValue.requires_approval,
-                                        compliance_config: complianceFieldValue.compliance_config || null,
-                                        sub_field_definitions: complianceFieldValue.sub_field_definitions || null,
-                                      };
-
-                                      return (
-                                        <ComplianceFieldCard
-                                          key={complianceFieldValue.id || complianceFieldValue.custom_field_id || field.id}
-                                          field={complianceField}
-                                          value={complianceFieldValue}
-                                          onUpload={handleComplianceUpload}
-                                          onRenew={handleComplianceRenew}
-                                          onViewHistory={handleComplianceViewHistory}
-                                          onDownload={handleComplianceDownload}
-                                          isAdmin={false}
-                                          canUpload={true}
-                                        />
-                                      );
-                                    })}
                                   </div>
                                 )}
                               </div>
@@ -1955,9 +1916,8 @@ export default function ProfilePage() {
               </Card>
             )}
 
-          {/* Custom Fields Empty State - Show compliance fields even if no custom fields */}
-          {!customFieldsHierarchyLoading && (!customFieldsHierarchy || !customFieldsHierarchy.sections || customFieldsHierarchy.sections.length === 0) && 
-           (!complianceData?.compliance_fields || complianceData.compliance_fields.length === 0) && (
+          {/* Custom Fields Empty State */}
+          {!customFieldsHierarchyLoading && (!customFieldsHierarchy || !customFieldsHierarchy.sections || customFieldsHierarchy.sections.length === 0) && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">

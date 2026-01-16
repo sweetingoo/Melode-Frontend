@@ -177,7 +177,13 @@ const mainMenuItems = [
     title: "Compliance",
     icon: Shield,
     url: "/admin/compliance",
-    permission: "custom_field:read", // Permission to read compliance fields
+    permission: null, // Available to all users for uploading compliance documents
+  },
+  {
+    title: "Compliance Monitoring",
+    icon: Shield,
+    url: "/admin/compliance-monitoring",
+    permission: "compliance_monitoring:read", // Permission to monitor compliance across all users
   },
 ];
 

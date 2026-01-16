@@ -191,16 +191,16 @@ export const ComplianceSection = ({
                     Select Job Role / Shift Role
                   </Label>
                   <Select
-                    value={selectedRoleSlug || ""}
+                    value={selectedRoleSlug || "all"}
                     onValueChange={(value) => {
-                      setSelectedRoleSlug(value || null);
+                      setSelectedRoleSlug(value === "all" ? null : value);
                     }}
                   >
                     <SelectTrigger id="role-selector" className="w-full max-w-md">
                       <SelectValue placeholder="Select a role to view compliance requirements" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">All Roles (General Compliance)</SelectItem>
+                      <SelectItem value="all">All Roles (General Compliance)</SelectItem>
                       {availableRoles.map((role) => (
                         <SelectItem key={role.id || role.slug} value={role.slug}>
                           {role.name || role.role_name || role.slug}

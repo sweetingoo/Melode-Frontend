@@ -90,11 +90,21 @@ const RoleManagementPage = () => {
   const [editingRole, setEditingRole] = useState(null);
   const [managingRole, setManagingRole] = useState(null);
   const [searchPermissionTerm, setSearchPermissionTerm] = useState("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [selectedPermissions, setSelectedPermissions] = useState(new Set());
   const [loadedPermissionsPages, setLoadedPermissionsPages] = useState([1]);
   const [isLoadingMorePermissions, setIsLoadingMorePermissions] = useState(false);
   const [accumulatedPermissions, setAccumulatedPermissions] = useState([]);
   const queryClient = useQueryClient();
+
+  // Debounce search term
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchPermissionTerm);
+    }, 300); // 300ms debounce
+
+    return () => clearTimeout(timer);
+  }, [searchPermissionTerm]);
   const [quickCreateDepartmentData, setQuickCreateDepartmentData] = useState({
     name: "",
     code: "",
@@ -125,8 +135,24 @@ const RoleManagementPage = () => {
     isLoading: rolesLoading,
     error: rolesError,
   } = useRoles();
+  // Build query params for permissions API - include search when modal is open
+  const permissionsQueryParams = React.useMemo(() => {
+    if (!isPermissionsModalOpen) {
+      return { page: 1, per_page: 50 };
+    }
+    
+    const params = { page: 1, per_page: 50 };
+    
+    // Add search parameter if search term exists
+    if (debouncedSearchTerm && debouncedSearchTerm.trim()) {
+      params.search = debouncedSearchTerm.trim();
+    }
+    
+    return params;
+  }, [isPermissionsModalOpen, debouncedSearchTerm]);
+
   const { data: permissionsData, isLoading: permissionsLoading } =
-    usePermissionsList();
+    usePermissionsList(permissionsQueryParams);
   const { data: departmentsData } = useDepartments();
   const createRoleMutation = useCreateRole();
   const updateRoleMutation = useUpdateRole();
@@ -151,9 +177,23 @@ const RoleManagementPage = () => {
   }, [permissionsData]);
 
   // Handle new paginated response structure: { permissions: [], total: 96, ... }
-  // Use accumulated permissions if available, otherwise use first page
+  // When searching, use API results directly; otherwise use accumulated permissions for pagination
   const allPermissions = React.useMemo(() => {
-    // If we have accumulated permissions, use those
+    // If searching, use API results directly (don't accumulate)
+    if (debouncedSearchTerm && debouncedSearchTerm.trim()) {
+      if (!permissionsData) return [];
+
+      let permissionsArray = [];
+      if (permissionsData.permissions && Array.isArray(permissionsData.permissions)) {
+        permissionsArray = permissionsData.permissions;
+      } else if (Array.isArray(permissionsData)) {
+        permissionsArray = permissionsData;
+      }
+
+      return permissionsArray.map(permissionUtils.transformPermission);
+    }
+
+    // When not searching, use accumulated permissions for pagination
     if (accumulatedPermissions.length > 0) {
       return accumulatedPermissions;
     }
@@ -161,32 +201,18 @@ const RoleManagementPage = () => {
     if (!permissionsData) return [];
 
     let permissionsArray = [];
-
-    // Check if it's the new paginated structure
     if (permissionsData.permissions && Array.isArray(permissionsData.permissions)) {
       permissionsArray = permissionsData.permissions;
-    }
-    // Check if it's a legacy array response
-    else if (Array.isArray(permissionsData)) {
+    } else if (Array.isArray(permissionsData)) {
       permissionsArray = permissionsData;
-    }
-    // Fallback to empty array
-    else {
-      permissionsArray = [];
-    }
-
-    // Ensure we have an array before mapping
-    if (!Array.isArray(permissionsArray)) {
-      console.warn('permissionsArray is not an array:', permissionsArray);
-      return [];
     }
 
     return permissionsArray.map(permissionUtils.transformPermission);
-  }, [permissionsData, accumulatedPermissions]);
+  }, [permissionsData, accumulatedPermissions, debouncedSearchTerm]);
 
-  // Initialize accumulated permissions when permissionsData changes and modal is open
+  // Initialize accumulated permissions when permissionsData changes and modal is open (only when not searching)
   React.useEffect(() => {
-    if (isPermissionsModalOpen && permissionsData && accumulatedPermissions.length === 0) {
+    if (isPermissionsModalOpen && permissionsData && accumulatedPermissions.length === 0 && !debouncedSearchTerm) {
       let permissionsArray = [];
       if (permissionsData.permissions && Array.isArray(permissionsData.permissions)) {
         permissionsArray = permissionsData.permissions;
@@ -199,7 +225,7 @@ const RoleManagementPage = () => {
         setAccumulatedPermissions(transformed);
       }
     }
-  }, [isPermissionsModalOpen, permissionsData, accumulatedPermissions.length]);
+  }, [isPermissionsModalOpen, permissionsData, accumulatedPermissions.length, debouncedSearchTerm]);
   const departments = departmentsData?.departments || departmentsData?.data || departmentsData || [];
 
   // Group roles by department and job role (hierarchical structure)
@@ -376,9 +402,11 @@ const RoleManagementPage = () => {
       }
 
       setManagingRole(role);
-      // Reset accumulated permissions and loaded pages when opening modal
+      // Reset accumulated permissions, loaded pages, and search when opening modal
       setAccumulatedPermissions([]);
       setLoadedPermissionsPages([1]);
+      setSearchPermissionTerm("");
+      setDebouncedSearchTerm("");
       
       // Debug: Log the role permissions data structure
       console.log('Role permissions:', role.permissions);
@@ -406,8 +434,11 @@ const RoleManagementPage = () => {
     }
   };
 
-  // Load more permissions when scrolling
+  // Load more permissions when scrolling (only when not searching)
   const loadMorePermissions = React.useCallback(async () => {
+    // Don't load more if searching - API handles pagination for search results
+    if (debouncedSearchTerm && debouncedSearchTerm.trim()) return;
+    
     if (isLoadingMorePermissions || !permissionsData) return;
 
     const perPage = permissionsData.per_page || 50;
@@ -443,7 +474,7 @@ const RoleManagementPage = () => {
     } finally {
       setIsLoadingMorePermissions(false);
     }
-  }, [isLoadingMorePermissions, permissionsData, totalPermissionsCount, loadedPermissionsPages]);
+  }, [isLoadingMorePermissions, permissionsData, totalPermissionsCount, loadedPermissionsPages, debouncedSearchTerm]);
 
   // Handle scroll to load more
   const handlePermissionsScroll = React.useCallback(
@@ -688,19 +719,10 @@ const RoleManagementPage = () => {
     setSelectedPermissions(new Set());
   };
 
+  // When searching, permissions are already filtered by API, so return allPermissions directly
+  // When not searching, also return allPermissions (which may be accumulated)
   const getFilteredPermissions = () => {
-    return allPermissions.filter(
-      (permission) =>
-        permission.name
-          .toLowerCase()
-          .includes(searchPermissionTerm.toLowerCase()) ||
-        permission.resource
-          .toLowerCase()
-          .includes(searchPermissionTerm.toLowerCase()) ||
-        permission.action
-          .toLowerCase()
-          .includes(searchPermissionTerm.toLowerCase())
-    );
+    return allPermissions;
   };
 
   const handleSavePermissions = async () => {
@@ -717,7 +739,7 @@ const RoleManagementPage = () => {
         const permissionIds = Array.from(selectedPermissions);
 
         await assignPermissionsMutation.mutateAsync({
-          roleId: managingRole.id,
+          roleSlug: managingRole.slug || managingRole.id,
           permissionIds,
         });
 
@@ -740,6 +762,7 @@ const RoleManagementPage = () => {
     setManagingRole(null);
     setSelectedPermissions(new Set());
     setSearchPermissionTerm("");
+    setDebouncedSearchTerm("");
     // Reset accumulated permissions and loaded pages
     setAccumulatedPermissions([]);
     setLoadedPermissionsPages([1]);
