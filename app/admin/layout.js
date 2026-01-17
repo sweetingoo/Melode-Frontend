@@ -527,15 +527,6 @@ function SidebarNavigationContent({
                 />
               )}
 
-              {/* Documentation - Collapsible */}
-              {visibleDocsItems.length > 0 && (
-                <CollapsibleMenuItem
-                  title="Documentation"
-                  icon={BookOpen}
-                  items={visibleDocsItems}
-                  pathname={pathname}
-                />
-              )}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

@@ -32,7 +32,6 @@ import {
   ArrowRight,
   FileText,
   MapPin,
-  BookOpen,
 } from "lucide-react";
 import React, { useState, useEffect } from "react";
 import { useDashboardStats } from "@/hooks/useDashboard";
@@ -410,17 +409,6 @@ const Dashboard = () => {
         </div>
 
         <div className="flex items-center gap-3">
-          <Link href="/docs">
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-2"
-            >
-              <BookOpen className="h-4 w-4" />
-              <span className="hidden sm:inline">Documentation</span>
-              <span className="sm:hidden">Docs</span>
-            </Button>
-          </Link>
           {shouldFetchDashboard && (
             <Select value={period} onValueChange={setPeriod}>
               <SelectTrigger className="w-32">
@@ -683,15 +671,6 @@ const Dashboard = () => {
               </CardHeader>
               <CardContent>
                 <div className="my-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-2">
-                  <Link href="/docs">
-                    <Button
-                      className="w-full justify-start cursor-pointer"
-                      variant="outline"
-                    >
-                      <BookOpen className="mr-2 h-4 w-4" />
-                      Documentation
-                    </Button>
-                  </Link>
                   {canManageUsers && (
                     <Link href="/admin/people-management">
                       <Button
@@ -984,15 +963,6 @@ const Dashboard = () => {
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-2 gap-3">
-                  <Link href="/docs">
-                    <Button className="w-full justify-start h-auto py-3" variant="outline">
-                      <BookOpen className="mr-2 h-4 w-4" />
-                      <div className="text-left">
-                        <div className="font-medium">Documentation</div>
-                        <div className="text-xs text-muted-foreground">Help & guides</div>
-                      </div>
-                    </Button>
-                  </Link>
                   <Link href="/clock">
                     <Button className="w-full justify-start h-auto py-3" variant="outline">
                       <Clock className="mr-2 h-4 w-4" />
