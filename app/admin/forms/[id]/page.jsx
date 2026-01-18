@@ -17,6 +17,7 @@ import { Shield, Users, User } from "lucide-react";
 import { generateSlug } from "@/utils/slug";
 import { toast } from "sonner";
 import { generateFormPDFFromData } from "@/utils/pdf-generator";
+import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
 
 const FormDetailPage = () => {
   const params = useParams();
@@ -31,6 +32,11 @@ const FormDetailPage = () => {
   const { data: activeFormTypes = [] } = useActiveFormTypes();
   const roles = rolesData || [];
   const users = usersResponse?.users || usersResponse || [];
+
+  // Permission checks
+  const { hasPermission } = usePermissionsCheck();
+  const canUpdateForm = hasPermission("form:update");
+  const canDeleteForm = hasPermission("form:delete");
 
   // Generate share link using slug
   const getShareLink = () => {
@@ -212,12 +218,14 @@ const FormDetailPage = () => {
               <span className="sm:hidden">Submit</span>
             </Button>
           </Link>
-          <Link href={`/admin/forms/${formSlug}/edit`} className="w-full sm:w-auto">
-            <Button variant="outline" size="sm" className="w-full sm:w-auto">
-              <Edit className="mr-2 h-4 w-4" />
-              Edit
-            </Button>
-          </Link>
+          {canUpdateForm && (
+            <Link href={`/admin/forms/${formSlug}/edit`} className="w-full sm:w-auto">
+              <Button variant="outline" size="sm" className="w-full sm:w-auto">
+                <Edit className="mr-2 h-4 w-4" />
+                Edit
+              </Button>
+            </Link>
+          )}
         </div>
       </div>
 
@@ -467,12 +475,14 @@ const FormDetailPage = () => {
                   View Submissions
                 </Button>
               </Link>
-              <Link href={`/admin/forms/${formSlug}/edit`} className="block">
-                <Button variant="outline" className="w-full justify-start">
-                  <Edit className="mr-2 h-4 w-4" />
-                  Edit Form
-                </Button>
-              </Link>
+              {canUpdateForm && (
+                <Link href={`/admin/forms/${formSlug}/edit`} className="block">
+                  <Button variant="outline" className="w-full justify-start">
+                    <Edit className="mr-2 h-4 w-4" />
+                    Edit Form
+                  </Button>
+                </Link>
+              )}
             </CardContent>
           </Card>
 

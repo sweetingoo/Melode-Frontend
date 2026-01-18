@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  useDocumentCategory,
   useDocumentCategoryPermissions,
   useUpdateDocumentCategoryPermissions,
 } from "@/hooks/useDocumentCategories";
@@ -23,13 +24,129 @@ import { useUsers } from "@/hooks/useUsers";
 import { useRoles } from "@/hooks/useRoles";
 import { Loader2, User, Users, Search, Shield, X, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 const CategoryPermissionsDialog = ({ open, onOpenChange, category }) => {
   const { data: permissionsData, isLoading: permissionsLoading } = usePermissions();
-  const { data: categoryPermissions, isLoading: categoryLoading } =
-    useDocumentCategoryPermissions(category?.id, { enabled: !!category?.id && open });
+  
+  // Get category identifier - try slug first, then id, then category_id
+  // Ensure we get a valid value (not undefined or null)
+  const categoryIdentifier = useMemo(() => {
+    if (!category) {
+      console.warn("CategoryPermissionsDialog: category is null/undefined");
+      return null;
+    }
+    
+    const slug = category.slug;
+    const id = category.id;
+    const categoryId = category.category_id;
+    
+    // Debug: log what we're checking
+    if (process.env.NODE_ENV === 'development') {
+      console.log("CategoryPermissionsDialog - Checking category:", {
+        category,
+        slug,
+        id,
+        categoryId,
+        slugType: typeof slug,
+        idType: typeof id,
+      });
+    }
+    
+    // Return the first valid (non-undefined, non-null, non-empty) value
+    if (slug !== undefined && slug !== null && slug !== '') return String(slug);
+    if (id !== undefined && id !== null && id !== '') return String(id);
+    if (categoryId !== undefined && categoryId !== null && categoryId !== '') return String(categoryId);
+    
+    console.warn("CategoryPermissionsDialog: No valid identifier found in category:", category);
+    return null;
+  }, [category]);
+  
+  // If category doesn't have slug but has id, try to fetch full category details by id (backend supports both)
+  const categoryIdForFetch = category?.id || category?.category_id;
+  const shouldFetchCategory = open && category && !categoryIdentifier && categoryIdForFetch;
+  const { data: fullCategory } = useDocumentCategory(
+    categoryIdForFetch ? String(categoryIdForFetch) : null, // Backend supports both slug and ID
+    { enabled: !!shouldFetchCategory }
+  );
+  
+  // Use full category if available, otherwise use passed category
+  const effectiveCategory = fullCategory || category;
+  
+  // Recompute identifier with effective category (use this as the final identifier)
+  const finalCategoryIdentifier = useMemo(() => {
+    const cat = effectiveCategory || category;
+    if (!cat) return null;
+    const slug = cat.slug;
+    const id = cat.id;
+    const categoryId = cat.category_id;
+    if (slug !== undefined && slug !== null && slug !== '') return String(slug);
+    if (id !== undefined && id !== null && id !== '') return String(id);
+    if (categoryId !== undefined && categoryId !== null && categoryId !== '') return String(categoryId);
+    return null;
+  }, [effectiveCategory, category]);
+  
+  // Use final identifier (from fetched category if needed) or fallback to original
+  const activeCategoryIdentifier = finalCategoryIdentifier || categoryIdentifier;
+  
+  // Debug: Log category when it changes
+  useEffect(() => {
+    if (open) {
+      console.log("CategoryPermissionsDialog - Category data:", {
+        category,
+        hasCategory: !!category,
+        categoryType: typeof category,
+        categoryKeys: category ? Object.keys(category) : [],
+        slug: category?.slug,
+        id: category?.id,
+        category_id: category?.category_id,
+        identifier: categoryIdentifier,
+        activeIdentifier: activeCategoryIdentifier,
+        identifierType: typeof categoryIdentifier,
+      });
+    }
+  }, [open, category, categoryIdentifier, activeCategoryIdentifier]);
+  
+  // Close dialog if category is invalid (check after fetching if needed)
+  useEffect(() => {
+    if (open && !activeCategoryIdentifier && !shouldFetchCategory) {
+      console.error("CategoryPermissionsDialog - Invalid category:", {
+        category,
+        effectiveCategory,
+        hasCategory: !!category,
+        categoryKeys: category ? Object.keys(category) : [],
+        categoryValues: category ? {
+          slug: category.slug,
+          id: category.id,
+          category_id: category.category_id,
+        } : {},
+        identifier: categoryIdentifier,
+        activeIdentifier: activeCategoryIdentifier,
+      });
+      toast.error("Invalid category. Please select a category and try again.");
+      onOpenChange(false);
+    }
+  }, [open, activeCategoryIdentifier, categoryIdentifier, category, effectiveCategory, shouldFetchCategory, onOpenChange]);
+  
+  // Store category identifier in ref to prevent it from changing during submission
+  const categoryIdentifierRef = useRef(activeCategoryIdentifier);
+  useEffect(() => {
+    if (activeCategoryIdentifier) {
+      categoryIdentifierRef.current = activeCategoryIdentifier;
+    }
+  }, [activeCategoryIdentifier]);
+  
+  const { data: categoryPermissions, isLoading: categoryLoading, refetch: refetchPermissions } =
+    useDocumentCategoryPermissions(activeCategoryIdentifier, { enabled: !!activeCategoryIdentifier && open });
+  
+  // Refetch permissions when dialog opens to ensure we have the latest data
+  useEffect(() => {
+    if (open && activeCategoryIdentifier) {
+      refetchPermissions();
+    }
+  }, [open, activeCategoryIdentifier, refetchPermissions]);
   const updatePermissions = useUpdateDocumentCategoryPermissions();
-  const { data: rolesData } = useRoles();
+  const { data: rolesData, isLoading: rolesLoading, error: rolesError } = useRoles({}, { enabled: open });
 
   // New format: { read: { roles: [], users: [], permissions: [] }, write: {...}, delete: {...} }
   const [permissions, setPermissions] = useState({
@@ -63,10 +180,44 @@ const CategoryPermissionsDialog = ({ open, onOpenChange, category }) => {
   );
 
   const allPermissions = permissionsData?.permissions || [];
-  const users = usersData?.users || [];
-  const roles = rolesData?.roles || [];
+  const users = usersData?.users || usersData || [];
+  
+  // Handle different response formats for roles - API returns List[RoleResponse] directly
+  const roles = useMemo(() => {
+    if (!rolesData) return [];
+    
+    // If it's already an array, use it
+    if (Array.isArray(rolesData)) {
+      return rolesData;
+    }
+    
+    // If it's an object, check common keys
+    if (typeof rolesData === 'object') {
+      if (Array.isArray(rolesData.roles)) return rolesData.roles;
+      if (Array.isArray(rolesData.items)) return rolesData.items;
+      if (Array.isArray(rolesData.data)) return rolesData.data;
+    }
+    
+    console.warn("Unexpected roles data format:", rolesData);
+    return [];
+  }, [rolesData]);
+  
+  // Debug roles loading
+  useEffect(() => {
+    if (open) {
+      console.log("CategoryPermissionsDialog - Roles data:", {
+        rolesData,
+        roles,
+        rolesCount: roles.length,
+        rolesLoading,
+        rolesError,
+      });
+    }
+  }, [open, rolesData, roles, rolesLoading, rolesError]);
 
-  // Convert old format to new format and initialize state
+  // Convert API response to component state format
+  // API returns: { read: { roles: [], users: [], permissions: [] }, write: {...}, delete: {...} }
+  // Reset permissions when dialog opens or when categoryPermissions changes
   useEffect(() => {
     if (categoryPermissions) {
       const newPermissions = {
@@ -82,9 +233,9 @@ const CategoryPermissionsDialog = ({ open, onOpenChange, category }) => {
           // Check if it's new format (object with roles, users, permissions)
           if (typeof actionPerms === 'object' && !Array.isArray(actionPerms)) {
             newPermissions[action] = {
-              roles: actionPerms.roles || [],
-              users: actionPerms.users || [],
-              permissions: actionPerms.permissions || [],
+              roles: Array.isArray(actionPerms.roles) ? actionPerms.roles : [],
+              users: Array.isArray(actionPerms.users) ? actionPerms.users : [],
+              permissions: Array.isArray(actionPerms.permissions) ? actionPerms.permissions : [],
             };
           } else if (Array.isArray(actionPerms)) {
             // Old format: array of permission slugs
@@ -98,8 +249,25 @@ const CategoryPermissionsDialog = ({ open, onOpenChange, category }) => {
       });
 
       setPermissions(newPermissions);
+    } else if (open) {
+      // Reset to empty state when dialog opens but no permissions loaded yet
+      setPermissions({
+        read: { roles: [], users: [], permissions: [] },
+        write: { roles: [], users: [], permissions: [] },
+        delete: { roles: [], users: [], permissions: [] },
+      });
     }
-  }, [categoryPermissions]);
+  }, [categoryPermissions, open]);
+  
+  // Debug: Log permissions when they change
+  useEffect(() => {
+    if (open && categoryPermissions) {
+      console.log("CategoryPermissionsDialog - Permissions loaded:", {
+        categoryPermissions,
+        permissionsState: permissions,
+      });
+    }
+  }, [open, categoryPermissions, permissions]);
 
   // Filter users, roles, and permissions based on search
   const filteredUsers = useMemo(() => {
@@ -187,14 +355,63 @@ const CategoryPermissionsDialog = ({ open, onOpenChange, category }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Get the current valid identifier - prioritize ref, then active, then computed
+    let validIdentifier = categoryIdentifierRef.current;
+    
+    // If ref is not set or invalid, try active identifier
+    if (!validIdentifier || validIdentifier === 'undefined' || validIdentifier === 'null') {
+      validIdentifier = activeCategoryIdentifier;
+    }
+    
+    // If still not valid, try to get from category objects
+    if (!validIdentifier || validIdentifier === 'undefined' || validIdentifier === 'null') {
+      const cat = effectiveCategory || category;
+      if (cat) {
+        validIdentifier = cat.slug || cat.id || cat.category_id;
+      }
+    }
+    
+    // Final validation - check for undefined, null, or string "undefined"
+    if (!validIdentifier || 
+        validIdentifier === 'undefined' || 
+        validIdentifier === 'null' ||
+        String(validIdentifier).trim() === '' ||
+        String(validIdentifier).toLowerCase() === 'undefined' ||
+        String(validIdentifier).toLowerCase() === 'null') {
+      console.error("Category identifier missing or invalid:", {
+        categoryIdentifier,
+        activeCategoryIdentifier,
+        categoryIdentifierRef: categoryIdentifierRef.current,
+        category,
+        effectiveCategory,
+        validIdentifier,
+        validIdentifierType: typeof validIdentifier,
+      });
+      toast.error("Category identifier is missing or invalid. Please refresh and try again.");
+      return;
+    }
+    
+    const slugToUse = String(validIdentifier).trim();
+    if (!slugToUse || slugToUse === 'undefined' || slugToUse === 'null' || slugToUse === '') {
+      console.error("Category slug is invalid after conversion:", slugToUse);
+      toast.error("Invalid category identifier. Please refresh and try again.");
+      return;
+    }
+    
+    // Update ref with valid identifier
+    categoryIdentifierRef.current = slugToUse;
+    
     try {
+      console.log("Submitting permissions with slug:", slugToUse, "for category:", category);
       await updatePermissions.mutateAsync({
-        id: category.id,
+        slug: slugToUse,
         permissions,
       });
       onOpenChange(false);
     } catch (error) {
       // Error handled by mutation
+      console.error("Failed to update permissions:", error);
     }
   };
 
@@ -236,9 +453,18 @@ const CategoryPermissionsDialog = ({ open, onOpenChange, category }) => {
             />
           </div>
           <div className="border rounded-md max-h-48 overflow-y-auto">
-            {filteredRoles.length === 0 ? (
+            {rolesLoading ? (
+              <div className="p-4 text-center text-sm text-muted-foreground flex items-center justify-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading roles...
+              </div>
+            ) : rolesError ? (
+              <div className="p-4 text-center text-sm text-destructive">
+                Failed to load roles: {rolesError?.message || "Unknown error"}
+              </div>
+            ) : filteredRoles.length === 0 ? (
               <div className="p-4 text-center text-sm text-muted-foreground">
-                No roles found
+                {roleSearchQuery ? "No roles match your search" : "No roles found"}
               </div>
             ) : (
               filteredRoles.map((role) => {
@@ -442,11 +668,30 @@ const CategoryPermissionsDialog = ({ open, onOpenChange, category }) => {
     );
   };
 
+  // Don't render if category is invalid - but allow time for fetching if needed
+  if (!activeCategoryIdentifier && !shouldFetchCategory) {
+    if (open) {
+      console.error("CategoryPermissionsDialog: Cannot render - invalid category:", {
+        category,
+        effectiveCategory,
+        hasCategory: !!category,
+        categoryKeys: category ? Object.keys(category) : [],
+        categoryValues: category ? {
+          slug: category.slug,
+          id: category.id,
+          category_id: category.category_id,
+        } : {},
+        shouldFetch: shouldFetchCategory,
+      });
+    }
+    return null;
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[800px] max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Manage Permissions: {category?.name}</DialogTitle>
+          <DialogTitle>Manage Permissions: {category?.name || "Category"}</DialogTitle>
           <DialogDescription>
             Set which roles, users, and permissions can read, write, and delete documents in this category.
             {category?.inherit_permissions && (
@@ -484,7 +729,11 @@ const CategoryPermissionsDialog = ({ open, onOpenChange, category }) => {
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={updatePermissions.isPending}>
+              <Button 
+                type="submit" 
+                disabled={updatePermissions.isPending || !activeCategoryIdentifier}
+                title={!activeCategoryIdentifier ? "Category identifier is missing" : ""}
+              >
                 {updatePermissions.isPending ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />

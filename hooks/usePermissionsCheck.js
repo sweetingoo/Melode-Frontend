@@ -80,19 +80,27 @@ export const usePermissionsCheck = () => {
       }
 
       // Resource match (e.g., task:create matches tasks:create)
-      const permResource = perm.split(":")[0];
-      const checkResource = permission.split(":")[0];
-
-      if (
-        permResource === checkResource ||
-        permResource === checkResource + "s" ||
-        permResource + "s" === checkResource
-      ) {
-        return true;
+      // Only match if both have the same action part
+      // Reuse permParts and checkParts from above
+      if (permParts.length === 2 && checkParts.length === 2) {
+        const permResource = permParts[0];
+        const permAction = permParts[1];
+        const checkResource = checkParts[0];
+        const checkAction = checkParts[1];
+        
+        // Match resource with pluralization (task/tasks)
+        const resourceMatches = 
+          permResource === checkResource ||
+          permResource === checkResource + "s" ||
+          permResource + "s" === checkResource;
+        
+        // Only return true if resource matches AND action matches
+        if (resourceMatches && permAction === checkAction) {
+          return true;
+        }
       }
 
-      // Check if permission contains the resource
-      return perm.includes(checkResource);
+      return false;
     });
   }, [userPermissionNames, hasWildcardPermissions]);
 

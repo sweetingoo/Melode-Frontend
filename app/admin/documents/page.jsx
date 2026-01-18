@@ -5,7 +5,13 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, FolderTree, FileText, Loader2 } from "lucide-react";
+import { Plus, FolderTree, FileText, Loader2, MoreVertical } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
 import DocumentList from "@/components/documents/DocumentList";
 import CategoryTree from "@/components/documents/CategoryTree";
@@ -85,37 +91,67 @@ const DocumentsPageContent = () => {
   }, [searchParams, isEditDocumentOpen, isCreateDocumentOpen, isClosingEditor]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 w-full max-w-full overflow-x-hidden">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
-        <div className="min-w-0 flex-1 pr-2 sm:pr-4">
+      <div className="flex items-center justify-between gap-4 w-full">
+        <div className="min-w-0 flex-1">
           <p className="text-muted-foreground text-sm sm:text-base">
             Manage policies, handbooks, and other documents
           </p>
         </div>
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0">
-          {canManageCategories && (
-            <Button
-              variant="outline"
-              onClick={() => {
-                setViewMode(viewMode === "categories" ? "list" : "categories");
-              }}
-              className="w-full sm:w-auto whitespace-nowrap"
-              size="sm"
-            >
-              <FolderTree className="mr-2 h-4 w-4" />
-              {viewMode === "categories" ? "Documents" : "Categories"}
-            </Button>
-          )}
-          {canCreateDocument && (
-            <Button
-              onClick={handleCreateDocument}
-              className="w-full sm:w-auto whitespace-nowrap"
-              size="sm"
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Create Document
-            </Button>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {/* Desktop: Show buttons */}
+          <div className="hidden md:flex items-center gap-2">
+            {canManageCategories && (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setViewMode(viewMode === "categories" ? "list" : "categories");
+                }}
+                size="sm"
+              >
+                <FolderTree className="mr-2 h-4 w-4" />
+                {viewMode === "categories" ? "Documents" : "Categories"}
+              </Button>
+            )}
+            {canCreateDocument && (
+              <Button
+                onClick={handleCreateDocument}
+                size="sm"
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Create Document
+              </Button>
+            )}
+          </div>
+          
+          {/* Mobile/Tablet: Show dropdown menu */}
+          {(canManageCategories || canCreateDocument) && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="md:hidden">
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {canManageCategories && (
+                  <DropdownMenuItem
+                    onClick={() => {
+                      setViewMode(viewMode === "categories" ? "list" : "categories");
+                    }}
+                  >
+                    <FolderTree className="mr-2 h-4 w-4" />
+                    {viewMode === "categories" ? "Documents" : "Categories"}
+                  </DropdownMenuItem>
+                )}
+                {canCreateDocument && (
+                  <DropdownMenuItem onClick={handleCreateDocument}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Create Document
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
         </div>
       </div>
@@ -124,7 +160,7 @@ const DocumentsPageContent = () => {
       {viewMode === "categories" ? (
         <Card>
           <CardContent className="p-6">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
               <h2 className="text-xl font-semibold">Categories</h2>
               {canManageCategories && (
                 <Button
@@ -133,6 +169,8 @@ const DocumentsPageContent = () => {
                     setParentCategory(null);
                     setIsCategoryDialogOpen(true);
                   }}
+                  className="w-full sm:w-auto flex-shrink-0"
+                  size="sm"
                 >
                   <Plus className="mr-2 h-4 w-4" />
                   Create Category

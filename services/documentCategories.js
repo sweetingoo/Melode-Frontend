@@ -65,6 +65,10 @@ export const documentCategoriesService = {
   // Update category permissions
   updateCategoryPermissions: async (slug, permissions) => {
     try {
+      // Validate slug before making request
+      if (!slug || slug === 'undefined' || slug === 'null') {
+        throw new Error(`Invalid category identifier: ${slug}. Please select a valid category.`);
+      }
       return await api.put(`/documents/categories/${slug}/permissions`, permissions);
     } catch (error) {
       console.error(`Update category ${slug} permissions failed:`, error);

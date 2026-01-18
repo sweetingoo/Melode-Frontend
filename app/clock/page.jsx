@@ -197,14 +197,35 @@ export default function ClockPage() {
     }
   }, [availableShiftRoles, shiftRoleId, jobRoleId, clockDefaults?.default_shift_role_id]);
 
+  // Load default location from preferences when data is available
   useEffect(() => {
-    if (clockDefaults?.default_location_id && locations.length > 0 && locationId === "none") {
+    // Only set default location if:
+    // 1. Preferences are loaded (not loading)
+    // 2. Default location ID exists in preferences
+    // 3. Locations are loaded (not loading and array has items)
+    // 4. Current location is still "none" (hasn't been manually changed)
+    if (
+      !preferencesLoading &&
+      !locationsLoading &&
+      clockDefaults?.default_location_id &&
+      Array.isArray(locations) &&
+      locations.length > 0 &&
+      locationId === "none"
+    ) {
       const defaultLocationId = clockDefaults.default_location_id.toString();
-      if (locations.some(loc => loc.id.toString() === defaultLocationId)) {
+      const locationExists = locations.some(loc => loc.id.toString() === defaultLocationId);
+      
+      if (locationExists) {
         setLocationId(defaultLocationId);
       }
     }
-  }, [clockDefaults?.default_location_id, locations, locationId]);
+  }, [
+    preferencesLoading,
+    locationsLoading,
+    clockDefaults?.default_location_id,
+    locations,
+    locationId
+  ]);
 
   // Check if already checked in - redirect immediately
   useEffect(() => {

@@ -21,6 +21,7 @@ export const complianceKeys = {
     entityType,
     entitySlug,
   ],
+  item: (valueSlug) => [...complianceKeys.all, "item", valueSlug],
   expiring: (daysAhead) => [...complianceKeys.all, "expiring", daysAhead],
   roleFields: (roleSlug) => [...complianceKeys.all, "role", roleSlug],
   assetTypeFields: (assetTypeSlug) => [...complianceKeys.all, "asset-type", assetTypeSlug],
@@ -188,6 +189,22 @@ export const useRenewCompliance = () => {
   });
 };
 
+// Get single compliance item by value slug
+export const useComplianceItem = (valueSlug) => {
+  return useQuery({
+    queryKey: complianceKeys.item(valueSlug),
+    queryFn: async () => {
+      if (!valueSlug) {
+        throw new Error("Value slug is required");
+      }
+      const response = await complianceService.getComplianceItem(valueSlug);
+      return response;
+    },
+    enabled: !!valueSlug && valueSlug !== "",
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+};
+
 // Get compliance history
 export const useComplianceHistory = (fieldSlug, entityType, entitySlug, page = 1, perPage = 20) => {
   return useQuery({
@@ -223,6 +240,19 @@ export const usePendingApprovals = (page = 1, perPage = 50, filters = {}) => {
     queryKey: [...complianceKeys.all, "pending", page, perPage, filters],
     queryFn: async () => {
       const response = await complianceService.getPendingApprovals(page, perPage, filters);
+      return response;
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    refetchOnMount: false, // Prevent double API calls on mount (e.g., from React StrictMode)
+  });
+};
+
+// Get non-submitted compliance items (admin only)
+export const useNonSubmittedCompliance = (page = 1, perPage = 50, filters = {}) => {
+  return useQuery({
+    queryKey: [...complianceKeys.all, "non-submitted", page, perPage, filters],
+    queryFn: async () => {
+      const response = await complianceService.getNonSubmittedCompliance(page, perPage, filters);
       return response;
     },
     staleTime: 5 * 60 * 1000, // 5 minutes

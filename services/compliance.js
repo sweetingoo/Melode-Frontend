@@ -100,6 +100,17 @@ export const complianceService = {
     }
   },
 
+  // Get single compliance item by value slug
+  getComplianceItem: async (valueSlug) => {
+    try {
+      const response = await api.get(`/compliance/${valueSlug}`);
+      return response.data || response;
+    } catch (error) {
+      console.error("Get compliance item failed:", error);
+      throw error;
+    }
+  },
+
   // Get compliance history
   getComplianceHistory: async (fieldSlug, entityType, entitySlug, page = 1, perPage = 20) => {
     try {
@@ -178,6 +189,39 @@ export const complianceService = {
       return response.data || response;
     } catch (error) {
       console.error("Get pending approvals failed:", error);
+      throw error;
+    }
+  },
+
+  // Get non-submitted compliance items (admin only)
+  getNonSubmittedCompliance: async (page = 1, perPage = 50, filters = {}) => {
+    try {
+      const params = new URLSearchParams({
+        page: page.toString(),
+        per_page: perPage.toString(),
+      });
+      
+      // Add filter parameters
+      if (filters.searchTerm) {
+        params.append("search_term", filters.searchTerm);
+      }
+      if (filters.fieldType) {
+        params.append("field_type", filters.fieldType);
+      }
+      if (filters.entityType && filters.entityType !== "all") {
+        params.append("entity_type", filters.entityType);
+      }
+      if (filters.roleSlug && filters.roleSlug !== "all") {
+        params.append("role_slug", filters.roleSlug);
+      }
+      if (filters.isCompliance !== null && filters.isCompliance !== undefined) {
+        params.append("is_compliance", filters.isCompliance.toString());
+      }
+      
+      const response = await api.get(`/compliance/non-submitted?${params.toString()}`);
+      return response.data || response;
+    } catch (error) {
+      console.error("Get non-submitted compliance failed:", error);
       throw error;
     }
   },

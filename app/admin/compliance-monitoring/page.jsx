@@ -1,7 +1,9 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,11 +16,27 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ComplianceSection } from "@/components/ComplianceSection";
-import { useExpiringCompliance, usePendingApprovals, useApproveCompliance } from "@/hooks/useCompliance";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
+import { useExpiringCompliance, usePendingApprovals, useNonSubmittedCompliance, useApproveCompliance } from "@/hooks/useCompliance";
 import { useRoles } from "@/hooks/useRoles";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
-import { Loader2, AlertTriangle, CheckCircle, XCircle, Clock, ChevronDown, ChevronUp, FileText, Download, User, Calendar, Search, Filter, X } from "lucide-react";
+import { Loader2, AlertTriangle, CheckCircle, XCircle, Clock, FileText, Download, User, Calendar, Search, Filter, X, Eye, Package } from "lucide-react";
 import { format } from "date-fns";
 import { filesService } from "@/services/files";
 import {
@@ -32,12 +50,18 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 
 export default function ComplianceMonitoringPage() {
+  const router = useRouter();
   const [approvalModalOpen, setApprovalModalOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
   const [approvalNotes, setApprovalNotes] = useState("");
   const [isApproving, setIsApproving] = useState(false);
-  const [expandedItems, setExpandedItems] = useState(new Set());
   const [activeTab, setActiveTab] = useState("expiring");
+  
+  // Pagination state - separate for each tab
+  const [expiringPage, setExpiringPage] = useState(1);
+  const [pendingPage, setPendingPage] = useState(1);
+  const [nonSubmittedPage, setNonSubmittedPage] = useState(1);
+  const pageSize = 50;
   
   // Filter state
   const [filters, setFilters] = useState({
@@ -79,9 +103,54 @@ export default function ComplianceMonitoringPage() {
     return result;
   }, [filters]);
 
-  const { data: expiringData, isLoading: expiringLoading } = useExpiringCompliance(30, 1, 50, queryFilters);
-  const { data: pendingData, isLoading: pendingLoading } = usePendingApprovals(1, 50, queryFilters);
+  // Reset to page 1 when filters change
+  React.useEffect(() => {
+    setExpiringPage(1);
+    setPendingPage(1);
+    setNonSubmittedPage(1);
+  }, [filters]);
+
+  const { data: expiringData, isLoading: expiringLoading } = useExpiringCompliance(30, expiringPage, pageSize, queryFilters);
+  const { data: pendingData, isLoading: pendingLoading } = usePendingApprovals(pendingPage, pageSize, queryFilters);
+  const { data: nonSubmittedData, isLoading: nonSubmittedLoading } = useNonSubmittedCompliance(nonSubmittedPage, pageSize, queryFilters);
   const approveMutation = useApproveCompliance();
+
+  // Extract pagination info - handle different response structures
+  const expiringPagination = {
+    page: expiringData?.page ?? expiringData?.pagination?.page ?? expiringPage,
+    per_page: expiringData?.per_page ?? expiringData?.pagination?.per_page ?? pageSize,
+    total: typeof expiringData?.total === 'number' ? expiringData.total :
+      (typeof expiringData?.pagination?.total === 'number' ? expiringData.pagination.total :
+      (expiringData?.items?.length || 0)),
+    total_pages: typeof expiringData?.total_pages === 'number' ? expiringData.total_pages :
+      (typeof expiringData?.pagination?.total_pages === 'number' ? expiringData.pagination.total_pages :
+      (typeof expiringData?.total === 'number' ? Math.ceil(expiringData.total / pageSize) :
+      (typeof expiringData?.pagination?.total === 'number' ? Math.ceil(expiringData.pagination.total / pageSize) : 1))),
+  };
+  
+  const pendingPagination = {
+    page: pendingData?.page ?? pendingData?.pagination?.page ?? pendingPage,
+    per_page: pendingData?.per_page ?? pendingData?.pagination?.per_page ?? pageSize,
+    total: typeof pendingData?.total === 'number' ? pendingData.total :
+      (typeof pendingData?.pagination?.total === 'number' ? pendingData.pagination.total :
+      (pendingData?.items?.length || 0)),
+    total_pages: typeof pendingData?.total_pages === 'number' ? pendingData.total_pages :
+      (typeof pendingData?.pagination?.total_pages === 'number' ? pendingData.pagination.total_pages :
+      (typeof pendingData?.total === 'number' ? Math.ceil(pendingData.total / pageSize) :
+      (typeof pendingData?.pagination?.total === 'number' ? Math.ceil(pendingData.pagination.total / pageSize) : 1))),
+  };
+  
+  const nonSubmittedPagination = {
+    page: nonSubmittedData?.page ?? nonSubmittedData?.pagination?.page ?? nonSubmittedPage,
+    per_page: nonSubmittedData?.per_page ?? nonSubmittedData?.pagination?.per_page ?? pageSize,
+    total: typeof nonSubmittedData?.total === 'number' ? nonSubmittedData.total :
+      (typeof nonSubmittedData?.pagination?.total === 'number' ? nonSubmittedData.pagination.total :
+      (nonSubmittedData?.items?.length || 0)),
+    total_pages: typeof nonSubmittedData?.total_pages === 'number' ? nonSubmittedData.total_pages :
+      (typeof nonSubmittedData?.pagination?.total_pages === 'number' ? nonSubmittedData.pagination.total_pages :
+      (typeof nonSubmittedData?.total === 'number' ? Math.ceil(nonSubmittedData.total / pageSize) :
+      (typeof nonSubmittedData?.pagination?.total === 'number' ? Math.ceil(nonSubmittedData.pagination.total / pageSize) : 1))),
+  };
 
   const handleFilterChange = (key, value) => {
     setFilters((prev) => ({
@@ -145,16 +214,29 @@ export default function ComplianceMonitoringPage() {
     }
   };
 
-  const toggleExpand = (itemId) => {
-    setExpandedItems(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(itemId)) {
-        newSet.delete(itemId);
-      } else {
-        newSet.add(itemId);
-      }
-      return newSet;
-    });
+  const getStatusBadge = (item) => {
+    if (item.is_expired) {
+      return <Badge variant="destructive">Expired</Badge>;
+    }
+    if (!item.is_expired && item.days_until_expiry !== null && item.days_until_expiry <= 30 && item.days_until_expiry > 0) {
+      return <Badge variant="secondary" className="bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 border-yellow-300 dark:border-yellow-700">Expiring Soon</Badge>;
+    }
+    if (item.approval_status === "pending") {
+      return <Badge variant="secondary" className="bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 border-yellow-300 dark:border-yellow-700">Pending</Badge>;
+    }
+    if (item.approval_status === "approved") {
+      return <Badge variant="default" className="bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 border-green-300 dark:border-green-700">Approved</Badge>;
+    }
+    if (item.approval_status === "declined") {
+      return <Badge variant="destructive">Declined</Badge>;
+    }
+    return <Badge variant="outline">Unknown</Badge>;
+  };
+
+  const handleViewDetails = (item) => {
+    if (item.value_slug) {
+      router.push(`/admin/compliance-monitoring/${item.value_slug}`);
+    }
   };
 
   const handleDownload = async (file) => {
@@ -189,14 +271,18 @@ export default function ComplianceMonitoringPage() {
         <TabsList>
           <TabsTrigger value="expiring">Expiring Items</TabsTrigger>
           <TabsTrigger value="pending">Pending Approvals</TabsTrigger>
+          <TabsTrigger value="non-submitted">Non-Submitted Items</TabsTrigger>
         </TabsList>
 
         <TabsContent value="expiring" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Expiring Compliance Items</CardTitle>
+              <CardTitle>Compliance Items</CardTitle>
               <CardDescription>
-                Items expiring within the next 30 days
+                {filters.approvalStatus === "approved" 
+                  ? "All approved/compliant items, sorted by expiry date (soonest first)"
+                  : "Items expiring within the next 30 days, sorted by expiry date (soonest first)"
+                }
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -319,205 +405,148 @@ export default function ComplianceMonitoringPage() {
               ) : (expiringData?.items && expiringData.items.length > 0) ? (
                 <>
                   <div className="mb-4 text-sm text-muted-foreground">
-                    Showing {expiringData.items.length} item{expiringData.items.length !== 1 ? "s" : ""}
+                    Showing {((expiringPagination.page - 1) * expiringPagination.per_page) + 1} - {Math.min(expiringPagination.page * expiringPagination.per_page, expiringPagination.total)} of {expiringPagination.total} item{expiringPagination.total !== 1 ? "s" : ""}
                   </div>
-                  <div className="space-y-4">
-                  {expiringData.items.map((item) => {
-                    const isExpanded = expandedItems.has(item.value_id);
-                    return (
-                      <Card key={item.value_id} className={item.is_expired ? "border-red-500" : ""}>
-                        <CardContent className="pt-6">
-                          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {expiringData.items.map((item) => (
+                      <Card 
+                        key={item.value_id} 
+                        className={cn(
+                          "relative",
+                          item.is_expired && "border-red-500 border-2",
+                          !item.is_expired && item.days_until_expiry !== null && item.days_until_expiry <= 30 && item.days_until_expiry > 0 && "border-yellow-500 border-2"
+                        )}
+                      >
+                        {/* Status Badge - Top Right */}
+                        <div className="absolute top-4 right-4 z-10">
+                          {getStatusBadge(item)}
+                        </div>
+                        
+                        <CardHeader className="pb-3 pr-24">
+                          <div className="flex items-start gap-2">
+                            {getStatusIcon(item.approval_status)}
                             <div className="flex-1 min-w-0">
-                              <div className="flex flex-wrap items-center gap-2 mb-2">
-                                {getStatusIcon(item.approval_status)}
-                                <h3 className="font-semibold break-words">{item.field_label || item.field_name}</h3>
-                                {item.is_expired && <Badge variant="destructive">Expired</Badge>}
-                                {!item.is_expired && item.days_until_expiry <= 30 && (
-                                  <Badge variant="warning">Expiring Soon</Badge>
-                                )}
-                              </div>
+                              <CardTitle className="text-base font-semibold">
+                                {item.field_label || item.field_name}
+                              </CardTitle>
                               {item.field_description && (
-                                <p className="text-sm text-muted-foreground mb-3">{item.field_description}</p>
-                              )}
-                              <div className="text-sm text-muted-foreground space-y-1">
-                                <p>
-                                  <span className="font-medium">Entity:</span> {item.entity_name || `${item.entity_type} #${item.entity_id}`}
-                                </p>
-                                {item.expiry_date && (
-                                  <p>
-                                    <span className="font-medium">Expiry Date:</span>{" "}
-                                    {format(new Date(item.expiry_date), "dd MMM yyyy")}
-                                    {item.days_until_expiry !== null && (
-                                      <span className="ml-2">
-                                        ({item.days_until_expiry > 0
-                                          ? `${item.days_until_expiry} days`
-                                          : `${Math.abs(item.days_until_expiry)} days ago`})
-                                      </span>
-                                    )}
-                                  </p>
-                                )}
-                                {item.renewal_date && (
-                                  <p>
-                                    <span className="font-medium">Renewal Date:</span>{" "}
-                                    {format(new Date(item.renewal_date), "dd MMM yyyy")}
-                                  </p>
-                                )}
-                                {item.approval_status && (
-                                  <p>
-                                    <span className="font-medium">Status:</span>{" "}
-                                    <span className="capitalize">{item.approval_status}</span>
-                                  </p>
-                                )}
-                              </div>
-                              
-                              {/* Expanded Details */}
-                              {isExpanded && (
-                                <div className="mt-4 pt-4 border-t space-y-4">
-                                  {/* Sub-field values */}
-                                  {item.value_data && item.sub_field_definitions && item.sub_field_definitions.length > 0 && (
-                                    <div className="space-y-2">
-                                      <h4 className="font-semibold text-sm">Document Details</h4>
-                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                                        {item.sub_field_definitions.map((subField) => {
-                                          const subValue = item.value_data?.[subField.field_name];
-                                          if (subValue === undefined || subValue === null || subValue === "") return null;
-                                          
-                                          let displayValue = subValue;
-                                          if (subField.field_type === "date" && subValue) {
-                                            try {
-                                              displayValue = format(new Date(subValue), "dd MMM yyyy");
-                                            } catch (e) {
-                                              displayValue = subValue;
-                                            }
-                                          }
-                                          
-                                          return (
-                                            <div key={subField.field_name} className="space-y-1">
-                                              <span className="text-muted-foreground text-xs font-medium uppercase tracking-wide">{subField.field_label}</span>
-                                              <div className="font-medium text-foreground">{displayValue}</div>
-                                            </div>
-                                          );
-                                        })}
-                                      </div>
-                                    </div>
-                                  )}
-
-                                  {/* File Information */}
-                                  {item.file && (
-                                    <div className="space-y-2">
-                                      <h4 className="font-semibold text-sm">Document File</h4>
-                                      <div className="flex items-center gap-3 text-sm p-3 bg-muted/20 rounded-md border">
-                                        <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                                        <div className="flex-1 min-w-0">
-                                          <p className="font-medium truncate">{item.file.file_name}</p>
-                                          <p className="text-xs text-muted-foreground">
-                                            {item.file.content_type} • {(item.file.file_size_bytes / 1024).toFixed(1)} KB
-                                          </p>
-                                        </div>
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          onClick={() => handleDownload(item.file)}
-                                          className="flex-shrink-0"
-                                        >
-                                          <Download className="h-3 w-3 mr-1" />
-                                          Download
-                                        </Button>
-                                      </div>
-                                    </div>
-                                  )}
-
-                                  {/* Notes */}
-                                  {item.notes && (
-                                    <div className="space-y-2">
-                                      <h4 className="font-semibold text-sm">Notes</h4>
-                                      <p className="text-sm p-3 bg-muted/20 rounded-md border">{item.notes}</p>
-                                    </div>
-                                  )}
-
-                                  {/* Upload Information */}
-                                  {(item.uploaded_by_name || item.uploaded_at) && (
-                                    <div className="space-y-2">
-                                      <h4 className="font-semibold text-sm">Upload Information</h4>
-                                      <div className="text-sm space-y-1">
-                                        {item.uploaded_by_name && (
-                                          <p>
-                                            <User className="h-3 w-3 inline mr-1" />
-                                            <span className="font-medium">Uploaded by:</span> {item.uploaded_by_name}
-                                          </p>
-                                        )}
-                                        {item.uploaded_at && (
-                                          <p>
-                                            <Calendar className="h-3 w-3 inline mr-1" />
-                                            <span className="font-medium">Uploaded on:</span> {format(new Date(item.uploaded_at), "dd MMM yyyy 'at' HH:mm")}
-                                          </p>
-                                        )}
-                                      </div>
-                                    </div>
-                                  )}
-
-                                  {/* Approval Information */}
-                                  {(item.approved_by_name || item.approved_at) && (
-                                    <div className="space-y-2">
-                                      <h4 className="font-semibold text-sm">Approval Information</h4>
-                                      <div className="text-sm space-y-1">
-                                        {item.approved_by_name && (
-                                          <p>
-                                            <User className="h-3 w-3 inline mr-1" />
-                                            <span className="font-medium">Approved by:</span> {item.approved_by_name}
-                                          </p>
-                                        )}
-                                        {item.approved_at && (
-                                          <p>
-                                            <Calendar className="h-3 w-3 inline mr-1" />
-                                            <span className="font-medium">Approved on:</span> {format(new Date(item.approved_at), "dd MMM yyyy 'at' HH:mm")}
-                                          </p>
-                                        )}
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                            <div className="flex flex-col sm:flex-row gap-2 sm:items-start items-stretch sm:flex-shrink-0 w-full sm:w-auto">
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => toggleExpand(item.value_id)}
-                                className="flex-shrink-0"
-                              >
-                                {isExpanded ? (
-                                  <>
-                                    <ChevronUp className="h-4 w-4 mr-1" />
-                                    <span className="hidden sm:inline">Hide Details</span>
-                                    <span className="sm:hidden">Hide</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <ChevronDown className="h-4 w-4 mr-1" />
-                                    <span className="hidden sm:inline">View Details</span>
-                                    <span className="sm:hidden">Details</span>
-                                  </>
-                                )}
-                              </Button>
-                              {item.approval_status === "pending" && canManageCompliance && (
-                                <Button
-                                  size="sm"
-                                  variant="default"
-                                  onClick={() => handleApprove(item)}
-                                  className="flex-shrink-0"
-                                >
-                                  Review
-                                </Button>
+                                <CardDescription className="text-xs mt-1 line-clamp-2">
+                                  {item.field_description}
+                                </CardDescription>
                               )}
                             </div>
                           </div>
+                        </CardHeader>
+                        
+                        <CardContent className="space-y-3">
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-muted-foreground">Entity:</span>
+                              <span className="font-medium">{item.entity_name || `${item.entity_type} #${item.entity_id}`}</span>
+                            </div>
+                            
+                            {item.expiry_date && (
+                              <div className="flex items-center justify-between text-sm">
+                                <span className="text-muted-foreground">Expiry Date:</span>
+                                <span className="font-medium">{format(new Date(item.expiry_date), "dd MMM yyyy")}</span>
+                              </div>
+                            )}
+                            
+                            {item.days_until_expiry !== null && (
+                              <div className="flex items-center justify-between text-sm">
+                                <span className="text-muted-foreground">Days Until Expiry:</span>
+                                <span className={cn(
+                                  "font-medium",
+                                  item.days_until_expiry < 0 && "text-red-600 dark:text-red-400",
+                                  item.days_until_expiry > 0 && item.days_until_expiry <= 30 && "text-yellow-600 dark:text-yellow-400",
+                                  item.days_until_expiry > 30 && "text-green-600 dark:text-green-400"
+                                )}>
+                                  {item.days_until_expiry > 0
+                                    ? `${item.days_until_expiry} days`
+                                    : `${Math.abs(item.days_until_expiry)} days ago`}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                          
+                          <div className="flex gap-2 pt-2 border-t">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleViewDetails(item)}
+                              className="flex-1"
+                            >
+                              <Eye className="h-3.5 w-3.5 mr-1" />
+                              View
+                            </Button>
+                            {item.approval_status === "pending" && canManageCompliance && (
+                              <Button
+                                size="sm"
+                                variant="default"
+                                onClick={() => handleApprove(item)}
+                                className="flex-1"
+                              >
+                                Review
+                              </Button>
+                            )}
+                          </div>
                         </CardContent>
                       </Card>
-                    );
-                  })}
+                    ))}
                   </div>
+                  
+                  {/* Pagination */}
+                  {expiringPagination.total_pages > 1 && (
+                    <div className="mt-6 flex justify-center">
+                      <Pagination>
+                        <PaginationContent>
+                          <PaginationItem>
+                            <PaginationPrevious
+                              onClick={() => setExpiringPage((p) => Math.max(1, p - 1))}
+                              className={
+                                expiringPagination.page <= 1 ? "pointer-events-none opacity-50" : "cursor-pointer"
+                              }
+                            />
+                          </PaginationItem>
+                          {Array.from({ length: expiringPagination.total_pages }, (_, i) => i + 1)
+                            .filter(
+                              (page) =>
+                                page === 1 ||
+                                page === expiringPagination.total_pages ||
+                                Math.abs(page - expiringPagination.page) <= 1
+                            )
+                            .map((page, index, array) => (
+                              <React.Fragment key={page}>
+                                {index > 0 && array[index - 1] !== page - 1 && (
+                                  <PaginationItem>
+                                    <PaginationEllipsis />
+                                  </PaginationItem>
+                                )}
+                                <PaginationItem>
+                                  <PaginationLink
+                                    onClick={() => setExpiringPage(page)}
+                                    isActive={expiringPagination.page === page}
+                                    className="cursor-pointer"
+                                  >
+                                    {page}
+                                  </PaginationLink>
+                                </PaginationItem>
+                              </React.Fragment>
+                            ))}
+                          <PaginationItem>
+                            <PaginationNext
+                              onClick={() => setExpiringPage((p) => Math.min(expiringPagination.total_pages, p + 1))}
+                              className={
+                                expiringPagination.page >= expiringPagination.total_pages
+                                  ? "pointer-events-none opacity-50"
+                                  : "cursor-pointer"
+                              }
+                            />
+                          </PaginationItem>
+                        </PaginationContent>
+                      </Pagination>
+                    </div>
+                  )}
                 </>
               ) : (
                 <div className="text-center py-8 text-muted-foreground">
@@ -639,172 +668,501 @@ export default function ComplianceMonitoringPage() {
               ) : pendingData?.items && pendingData.items.length > 0 ? (
                 <>
                   <div className="mb-4 text-sm text-muted-foreground">
-                    Showing {pendingData.items.length} item{pendingData.items.length !== 1 ? "s" : ""}
+                    Showing {((pendingPagination.page - 1) * pendingPagination.per_page) + 1} - {Math.min(pendingPagination.page * pendingPagination.per_page, pendingPagination.total)} of {pendingPagination.total} item{pendingPagination.total !== 1 ? "s" : ""}
                   </div>
-                  <div className="space-y-4">
-                  {pendingData.items.map((item) => {
-                      const isExpanded = expandedItems.has(item.value_id);
-                      return (
-                        <Card key={item.value_id}>
-                          <CardContent className="pt-6">
-                            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-                              <div className="flex-1 min-w-0">
-                                <div className="flex flex-wrap items-center gap-2 mb-2">
+                  <div className="rounded-md border overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Field</TableHead>
+                          <TableHead>Entity</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Expiry Date</TableHead>
+                          <TableHead>Uploaded</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {pendingData.items.map((item) => (
+                          <TableRow key={item.value_id}>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
                                   <Clock className="h-4 w-4 text-yellow-600" />
-                                  <h3 className="font-semibold break-words">{item.field_label || item.field_name}</h3>
-                                  <Badge variant="warning">Pending</Badge>
-                                </div>
+                                <div>
+                                  <div className="font-medium">{item.field_label || item.field_name}</div>
                                 {item.field_description && (
-                                  <p className="text-sm text-muted-foreground mb-3">{item.field_description}</p>
-                                )}
-                                <div className="text-sm text-muted-foreground space-y-1">
-                                  <p>
-                                    <span className="font-medium">Entity:</span> {item.entity_name || `${item.entity_type} #${item.entity_id}`}
-                                  </p>
-                                  {item.expiry_date && (
-                                    <p>
-                                      <span className="font-medium">Expiry Date:</span>{" "}
-                                      {format(new Date(item.expiry_date), "dd MMM yyyy")}
-                                    </p>
-                                  )}
-                                  {item.renewal_date && (
-                                    <p>
-                                      <span className="font-medium">Renewal Date:</span>{" "}
-                                      {format(new Date(item.renewal_date), "dd MMM yyyy")}
-                                    </p>
+                                    <div className="text-xs text-muted-foreground mt-1">{item.field_description}</div>
                                   )}
                                 </div>
-                                
-                                {/* Expanded Details */}
-                                {isExpanded && (
-                                  <div className="mt-4 pt-4 border-t space-y-4">
-                                    {/* Sub-field values */}
-                                    {item.value_data && item.sub_field_definitions && item.sub_field_definitions.length > 0 && (
-                                      <div className="space-y-2">
-                                        <h4 className="font-semibold text-sm">Document Details</h4>
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                                          {item.sub_field_definitions.map((subField) => {
-                                            const subValue = item.value_data?.[subField.field_name];
-                                            if (subValue === undefined || subValue === null || subValue === "") return null;
-                                            
-                                            let displayValue = subValue;
-                                            if (subField.field_type === "date" && subValue) {
-                                              try {
-                                                displayValue = format(new Date(subValue), "dd MMM yyyy");
-                                              } catch (e) {
-                                                displayValue = subValue;
-                                              }
-                                            }
-                                            
-                                            return (
-                                              <div key={subField.field_name} className="space-y-1">
-                                                <span className="text-muted-foreground text-xs font-medium uppercase tracking-wide">{subField.field_label}</span>
-                                                <div className="font-medium text-foreground">{displayValue}</div>
                                               </div>
-                                            );
-                                          })}
+                            </TableCell>
+                            <TableCell>
+                              <div className="text-sm">
+                                {item.entity_name || `${item.entity_type} #${item.entity_id}`}
                                         </div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="secondary" className="bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 border-yellow-300 dark:border-yellow-700">Pending</Badge>
+                            </TableCell>
+                            <TableCell>
+                              {item.expiry_date ? (
+                                <div className="text-sm">
+                                  {format(new Date(item.expiry_date), "dd MMM yyyy")}
                                       </div>
-                                    )}
-
-                                    {/* File Information */}
-                                    {item.file && (
-                                      <div className="space-y-2">
-                                        <h4 className="font-semibold text-sm">Document File</h4>
-                                        <div className="flex items-center gap-3 text-sm p-3 bg-muted/20 rounded-md border">
-                                          <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                                          <div className="flex-1 min-w-0">
-                                            <p className="font-medium truncate">{item.file.file_name}</p>
-                                            <p className="text-xs text-muted-foreground">
-                                              {item.file.content_type} • {(item.file.file_size_bytes / 1024).toFixed(1)} KB
-                                            </p>
+                              ) : (
+                                <span className="text-muted-foreground text-sm">—</span>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {item.uploaded_at ? (
+                                <div className="text-sm">
+                                  {format(new Date(item.uploaded_at), "dd MMM yyyy")}
                                           </div>
-                                          <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => handleDownload(item.file)}
-                                            className="flex-shrink-0"
-                                          >
-                                            <Download className="h-3 w-3 mr-1" />
-                                            Download
-                                          </Button>
-                                        </div>
-                                      </div>
-                                    )}
-
-                                    {/* Notes */}
-                                    {item.notes && (
-                                      <div className="space-y-2">
-                                        <h4 className="font-semibold text-sm">Notes</h4>
-                                        <p className="text-sm p-3 bg-muted/20 rounded-md border">{item.notes}</p>
-                                      </div>
-                                    )}
-
-                                    {/* Upload Information */}
-                                    {(item.uploaded_by_name || item.uploaded_at) && (
-                                      <div className="space-y-2">
-                                        <h4 className="font-semibold text-sm">Upload Information</h4>
-                                        <div className="text-sm space-y-1">
-                                          {item.uploaded_by_name && (
-                                            <p>
-                                              <User className="h-3 w-3 inline mr-1" />
-                                              <span className="font-medium">Uploaded by:</span> {item.uploaded_by_name}
-                                            </p>
-                                          )}
-                                          {item.uploaded_at && (
-                                            <p>
-                                              <Calendar className="h-3 w-3 inline mr-1" />
-                                              <span className="font-medium">Uploaded on:</span> {format(new Date(item.uploaded_at), "dd MMM yyyy 'at' HH:mm")}
-                                            </p>
-                                          )}
-                                        </div>
-                                      </div>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                              <div className="flex flex-col sm:flex-row gap-2 sm:items-start items-stretch sm:flex-shrink-0 w-full sm:w-auto">
+                              ) : (
+                                <span className="text-muted-foreground text-sm">—</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex items-center justify-end gap-2">
                                 <Button
                                   size="sm"
                                   variant="ghost"
-                                  onClick={() => toggleExpand(item.value_id)}
-                                  className="flex-shrink-0"
+                                  onClick={() => handleViewDetails(item)}
                                 >
-                                  {isExpanded ? (
-                                    <>
-                                      <ChevronUp className="h-4 w-4 mr-1" />
-                                      <span className="hidden sm:inline">Hide Details</span>
-                                      <span className="sm:hidden">Hide</span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <ChevronDown className="h-4 w-4 mr-1" />
-                                      <span className="hidden sm:inline">View Details</span>
-                                      <span className="sm:hidden">Details</span>
-                                    </>
-                                  )}
+                                  <Eye className="h-4 w-4 mr-1" />
+                                  View
                                 </Button>
                                 {canManageCompliance && (
                                   <Button
                                     size="sm"
                                     variant="default"
                                     onClick={() => handleApprove(item)}
-                                    className="flex-shrink-0"
                                   >
                                     Review
                                   </Button>
                                 )}
                               </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      );
-                    })}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
                   </div>
+                  
+                  {/* Pagination */}
+                  {pendingPagination.total_pages > 1 && (
+                    <div className="mt-6 flex justify-center">
+                      <Pagination>
+                        <PaginationContent>
+                          <PaginationItem>
+                            <PaginationPrevious
+                              onClick={() => setPendingPage((p) => Math.max(1, p - 1))}
+                              className={
+                                pendingPagination.page <= 1 ? "pointer-events-none opacity-50" : "cursor-pointer"
+                              }
+                            />
+                          </PaginationItem>
+                          {Array.from({ length: pendingPagination.total_pages }, (_, i) => i + 1)
+                            .filter(
+                              (page) =>
+                                page === 1 ||
+                                page === pendingPagination.total_pages ||
+                                Math.abs(page - pendingPagination.page) <= 1
+                            )
+                            .map((page, index, array) => (
+                              <React.Fragment key={page}>
+                                {index > 0 && array[index - 1] !== page - 1 && (
+                                  <PaginationItem>
+                                    <PaginationEllipsis />
+                                  </PaginationItem>
+                                )}
+                                <PaginationItem>
+                                  <PaginationLink
+                                    onClick={() => setPendingPage(page)}
+                                    isActive={pendingPagination.page === page}
+                                    className="cursor-pointer"
+                                  >
+                                    {page}
+                                  </PaginationLink>
+                                </PaginationItem>
+                              </React.Fragment>
+                            ))}
+                          <PaginationItem>
+                            <PaginationNext
+                              onClick={() => setPendingPage((p) => Math.min(pendingPagination.total_pages, p + 1))}
+                              className={
+                                pendingPagination.page >= pendingPagination.total_pages
+                                  ? "pointer-events-none opacity-50"
+                                  : "cursor-pointer"
+                              }
+                            />
+                          </PaginationItem>
+                        </PaginationContent>
+                      </Pagination>
+                    </div>
+                  )}
                 </>
               ) : (
                 <div className="text-center py-8 text-muted-foreground">
                   No pending approvals
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="non-submitted" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Non-Submitted Compliance Items</CardTitle>
+              <CardDescription>
+                Required compliance items that have not been submitted yet. These items are mandatory for the associated roles or asset types but have not been uploaded by the entities.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {/* Filters */}
+              <div className="mb-6 space-y-4">
+                <div className="flex items-center gap-2 mb-4">
+                  <Filter className="h-4 w-4 text-muted-foreground" />
+                  <h3 className="text-sm font-semibold">Filters</h3>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="search-non-submitted">Search</Label>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="search-non-submitted"
+                        placeholder="Search fields, entities..."
+                        value={filters.searchTerm}
+                        onChange={(e) => handleFilterChange("searchTerm", e.target.value)}
+                        className="pl-9"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="entity-type-filter-non-submitted">Entity Type</Label>
+                    <Select
+                      value={filters.entityType}
+                      onValueChange={(value) => handleFilterChange("entityType", value)}
+                    >
+                      <SelectTrigger id="entity-type-filter-non-submitted">
+                        <SelectValue placeholder="All Entities" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Entities</SelectItem>
+                        <SelectItem value="user">User</SelectItem>
+                        <SelectItem value="asset">Asset</SelectItem>
+                        <SelectItem value="task">Task</SelectItem>
+                        <SelectItem value="project">Project</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="role-filter-non-submitted">Job Role</Label>
+                    <Select
+                      value={filters.roleSlug}
+                      onValueChange={(value) => handleFilterChange("roleSlug", value)}
+                    >
+                      <SelectTrigger id="role-filter-non-submitted">
+                        <SelectValue placeholder="All Roles" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Roles</SelectItem>
+                        {roles.map((role) => (
+                          <SelectItem key={role.slug || role.id} value={role.slug}>
+                            {role.name || role.role_name || role.slug}
+                            {role.shift_name && ` - ${role.shift_name}`}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="compliance-filter-non-submitted">Is Compliance</Label>
+                    <Select
+                      value={filters.isCompliance === null ? "all" : filters.isCompliance.toString()}
+                      onValueChange={(value) => {
+                        if (value === "all") {
+                          handleFilterChange("isCompliance", null);
+                        } else {
+                          handleFilterChange("isCompliance", value === "true");
+                        }
+                      }}
+                    >
+                      <SelectTrigger id="compliance-filter-non-submitted">
+                        <SelectValue placeholder="All Fields" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Fields</SelectItem>
+                        <SelectItem value="true">Compliance Only</SelectItem>
+                        <SelectItem value="false">Non-Compliance Only</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                {hasActiveFilters && (
+                  <div className="flex justify-end">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={clearFilters}
+                    >
+                      <X className="h-4 w-4 mr-2" />
+                      Clear Filters
+                    </Button>
+                  </div>
+                )}
+              </div>
+              {nonSubmittedLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  <span className="ml-2 text-muted-foreground">Loading...</span>
+                </div>
+              ) : nonSubmittedData?.items && nonSubmittedData.items.length > 0 ? (
+                <>
+                  <div className="mb-4 flex items-center justify-between">
+                    <div className="text-sm text-muted-foreground">
+                      {(() => {
+                        const entityCount = new Set(nonSubmittedData.items.map(item => `${item.entity_type}-${item.entity_id}`)).size;
+                        return (
+                          <>
+                            {entityCount} {entityCount === 1 ? 'entity' : 'entities'} with {nonSubmittedPagination.total} missing compliance {nonSubmittedPagination.total === 1 ? 'item' : 'items'}
+                          </>
+                        );
+                      })()}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      Page {nonSubmittedPagination.page} of {nonSubmittedPagination.total_pages}
+                    </div>
+                  </div>
+                  
+                  {/* Group by entity */}
+                  {(() => {
+                    // Group items by entity - use a more robust key
+                    const groupedByEntity = nonSubmittedData.items.reduce((acc, item) => {
+                      // Create a unique key combining entity_type, entity_id, and entity_slug if available
+                      const entityKey = item.entity_slug 
+                        ? `${item.entity_type}-${item.entity_slug}-${item.entity_id}`
+                        : `${item.entity_type}-${item.entity_id}`;
+                      
+                      if (!acc[entityKey]) {
+                        acc[entityKey] = {
+                          entity_type: item.entity_type,
+                          entity_id: item.entity_id,
+                          entity_name: item.entity_name || `${item.entity_type} #${item.entity_id}`,
+                          entity_slug: item.entity_slug,
+                          items: []
+                        };
+                      }
+                      acc[entityKey].items.push(item);
+                      return acc;
+                    }, {});
+
+                    // Sort entity groups: users first, then assets, then others
+                    // Within each type, sort by name
+                    const entityGroups = Object.values(groupedByEntity).sort((a, b) => {
+                      // First sort by entity type
+                      const typeOrder = { user: 0, asset: 1 };
+                      const aTypeOrder = typeOrder[a.entity_type] ?? 2;
+                      const bTypeOrder = typeOrder[b.entity_type] ?? 2;
+                      if (aTypeOrder !== bTypeOrder) {
+                        return aTypeOrder - bTypeOrder;
+                      }
+                      // Then sort by name
+                      const aName = (a.entity_name || '').toLowerCase();
+                      const bName = (b.entity_name || '').toLowerCase();
+                      return aName.localeCompare(bName);
+                    });
+
+                    return (
+                      <div className="space-y-4">
+                        {entityGroups.map((group, groupIndex) => {
+                          // Create a truly unique key for each group
+                          const groupKey = group.entity_slug 
+                            ? `${group.entity_type}-${group.entity_slug}-${group.entity_id}-${groupIndex}`
+                            : `${group.entity_type}-${group.entity_id}-${groupIndex}`;
+                          
+                          return (
+                            <Card 
+                              key={groupKey} 
+                              className={
+                                group.entity_type === "user"
+                                  ? "border-blue-200 dark:border-blue-800 shadow-sm bg-blue-50/30 dark:bg-blue-950/20"
+                                  : group.entity_type === "asset"
+                                  ? "border-purple-200 dark:border-purple-800 shadow-sm bg-purple-50/30 dark:bg-purple-950/20"
+                                  : "border-orange-200 dark:border-orange-800 shadow-sm"
+                              }
+                            >
+                              <CardHeader className={
+                                group.entity_type === "user"
+                                  ? "pb-3 border-b border-blue-200 dark:border-blue-800 bg-blue-100/50 dark:bg-blue-900/30"
+                                  : group.entity_type === "asset"
+                                  ? "pb-3 border-b border-purple-200 dark:border-purple-800 bg-purple-100/50 dark:bg-purple-900/30"
+                                  : "pb-3 border-b border-orange-100 dark:border-orange-900"
+                              }>
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                                    {group.entity_type === "user" ? (
+                                      <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/50 shrink-0">
+                                        <User className="h-5 w-5 text-blue-700 dark:text-blue-300" />
+                                      </div>
+                                    ) : group.entity_type === "asset" ? (
+                                      <div className="p-2 rounded-lg bg-purple-100 dark:bg-purple-900/50 shrink-0">
+                                        <Package className="h-5 w-5 text-purple-700 dark:text-purple-300" />
+                                      </div>
+                                    ) : (
+                                      <AlertTriangle className="h-5 w-5 text-muted-foreground shrink-0" />
+                                    )}
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                        <Badge 
+                                          variant="secondary" 
+                                          className={
+                                            group.entity_type === "user" 
+                                              ? "bg-blue-600 dark:bg-blue-500 text-white border-0 font-semibold text-xs px-2.5 py-1 shrink-0"
+                                              : group.entity_type === "asset"
+                                              ? "bg-purple-600 dark:bg-purple-500 text-white border-0 font-semibold text-xs px-2.5 py-1 shrink-0"
+                                              : "text-xs shrink-0"
+                                          }
+                                        >
+                                          {group.entity_type === "user" ? "👤 USER" : group.entity_type === "asset" ? "📦 ASSET" : group.entity_type.toUpperCase()}
+                                        </Badge>
+                                        <CardTitle className="text-base font-semibold">
+                                          <span className={
+                                            group.entity_type === "user"
+                                              ? "text-blue-900 dark:text-blue-100"
+                                              : group.entity_type === "asset"
+                                              ? "text-purple-900 dark:text-purple-100"
+                                              : ""
+                                          }>
+                                            {group.entity_name}
+                                          </span>
+                                        </CardTitle>
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-2 shrink-0 ml-4">
+                                    <Badge variant="destructive" className="bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300 border-orange-300 dark:border-orange-700">
+                                      {group.items.length} {group.items.length === 1 ? 'Missing' : 'Missing'}
+                                    </Badge>
+                                    {group.entity_type === "user" && group.entity_slug ? (
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => {
+                                          router.push(`/admin/people-management/${group.entity_slug}`);
+                                        }}
+                                        className="gap-1.5"
+                                      >
+                                        <Eye className="h-3.5 w-3.5" />
+                                        View
+                                      </Button>
+                                    ) : group.entity_type === "asset" ? (
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => {
+                                          router.push(`/admin/assets`);
+                                        }}
+                                        className="gap-1.5"
+                                        title="Navigate to Assets page to find this asset"
+                                      >
+                                        <Eye className="h-3.5 w-3.5" />
+                                        View Assets
+                                      </Button>
+                                    ) : null}
+                                  </div>
+                                </div>
+                              </CardHeader>
+                              <CardContent className="pt-4">
+                                <div className="space-y-2">
+                                  {group.items.map((item, itemIndex) => {
+                                    // Create unique key for each item
+                                    const itemKey = `${item.field_id}-${item.entity_type}-${item.entity_id}-${itemIndex}`;
+                                    return (
+                                      <div
+                                        key={itemKey}
+                                        className="flex items-start gap-3 p-3 rounded-md bg-orange-50/50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-800 hover:bg-orange-100/50 dark:hover:bg-orange-950/30 transition-colors"
+                                      >
+                                        <AlertTriangle className="h-4 w-4 text-orange-600 dark:text-orange-400 mt-0.5 shrink-0" />
+                                        <div className="flex-1 min-w-0">
+                                          <div className="font-medium text-sm">{item.field_label || item.field_name}</div>
+                                          {item.field_description && (
+                                            <div className="text-xs text-muted-foreground mt-1">{item.field_description}</div>
+                                          )}
+                                        </div>
+                                        <Badge variant="outline" className="text-xs shrink-0">
+                                          Required
+                                        </Badge>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </CardContent>
+                            </Card>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
+                  
+                  {/* Pagination */}
+                  {nonSubmittedPagination.total_pages > 1 && (
+                    <div className="mt-6 flex justify-center">
+                      <Pagination>
+                        <PaginationContent>
+                          <PaginationItem>
+                            <PaginationPrevious
+                              onClick={() => setNonSubmittedPage((p) => Math.max(1, p - 1))}
+                              className={
+                                nonSubmittedPagination.page <= 1 ? "pointer-events-none opacity-50" : "cursor-pointer"
+                              }
+                            />
+                          </PaginationItem>
+                          {Array.from({ length: nonSubmittedPagination.total_pages }, (_, i) => i + 1)
+                            .filter(
+                              (page) =>
+                                page === 1 ||
+                                page === nonSubmittedPagination.total_pages ||
+                                Math.abs(page - nonSubmittedPagination.page) <= 1
+                            )
+                            .map((page, index, array) => (
+                              <React.Fragment key={page}>
+                                {index > 0 && array[index - 1] !== page - 1 && (
+                                  <PaginationItem>
+                                    <PaginationEllipsis />
+                                  </PaginationItem>
+                                )}
+                                <PaginationItem>
+                                  <PaginationLink
+                                    onClick={() => setNonSubmittedPage(page)}
+                                    isActive={nonSubmittedPagination.page === page}
+                                    className="cursor-pointer"
+                                  >
+                                    {page}
+                                  </PaginationLink>
+                                </PaginationItem>
+                              </React.Fragment>
+                            ))}
+                          <PaginationItem>
+                            <PaginationNext
+                              onClick={() => setNonSubmittedPage((p) => Math.min(nonSubmittedPagination.total_pages, p + 1))}
+                              className={
+                                nonSubmittedPagination.page >= nonSubmittedPagination.total_pages
+                                  ? "pointer-events-none opacity-50"
+                                  : "cursor-pointer"
+                              }
+                            />
+                          </PaginationItem>
+                        </PaginationContent>
+                      </Pagination>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  No non-submitted items found
                 </div>
               )}
             </CardContent>

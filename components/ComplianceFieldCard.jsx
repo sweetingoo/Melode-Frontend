@@ -98,7 +98,7 @@ export const ComplianceFieldCard = ({
             <div className="flex items-center flex-shrink-0 sm:self-center self-start">
               <Button onClick={() => onUpload(field)} size="default" variant="default" className="whitespace-nowrap w-full sm:w-auto">
                 <Upload className="h-4 w-4 mr-2" />
-                Upload Document
+                Submit Details
               </Button>
             </div>
           ) : null}

@@ -42,6 +42,7 @@ import { useResourceAuditLogs } from "@/hooks/useAuditLogs";
 import { format, formatDistanceToNow } from "date-fns";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { parseUTCDate } from "@/utils/time";
+import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
 import {
   Select,
   SelectContent,
@@ -59,14 +60,31 @@ const ResourceAuditLogs = ({ resource, resourceId, resourceSlug, title = "Activi
   const [pageSize, setPageSize] = useState(initialPageSize);
   const isMobile = useIsMobile();
 
+  // Check permission to view audit logs
+  const { hasPermission, isSuperuser, hasWildcardPermissions } = usePermissionsCheck();
+  const canViewAuditLogs = !!isSuperuser || !!hasWildcardPermissions || hasPermission("system:monitor");
+
   const { data: auditLogsData, isLoading, error } = useResourceAuditLogs(
     resource,
     resourceSlug || resourceId, // Use slug if provided, fallback to id for backward compatibility
     { 
       limit: pageSize,
       offset: (currentPage - 1) * pageSize
+    },
+    {
+      enabled: canViewAuditLogs && !!resource && !!(resourceSlug || resourceId), // Only fetch if user has permission and resource is available
     }
   );
+
+  // Hide component if user doesn't have permission or if error is 403
+  if (!canViewAuditLogs) {
+    return null;
+  }
+
+  // Hide component if error is 403 (permission denied)
+  if (error && error?.response?.status === 403) {
+    return null;
+  }
 
   // Extract audit logs from response
   const auditLogs = React.useMemo(() => {

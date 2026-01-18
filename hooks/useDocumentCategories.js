@@ -52,10 +52,30 @@ export const useDocumentCategoryPermissions = (slug, options = {}) => {
     queryKey: documentCategoryKeys.permissions(slug),
     queryFn: async () => {
       const response = await documentCategoriesService.getCategoryPermissions(slug);
-      return response.data;
+      const responseData = response.data;
+      
+      // API returns: { category_id, inherit_permissions, permissions: {...}, effective_permissions: {...} }
+      // Extract the permissions object from the response
+      if (responseData?.permissions) {
+        return responseData.permissions;
+      }
+      
+      // Fallback: if permissions is at root level (legacy format)
+      if (responseData?.read || responseData?.write || responseData?.delete) {
+        return responseData;
+      }
+      
+      // Return empty permissions structure if nothing found
+      return {
+        read: { roles: [], users: [], permissions: [] },
+        write: { roles: [], users: [], permissions: [] },
+        delete: { roles: [], users: [], permissions: [] },
+      };
     },
     enabled: !!slug,
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 0, // Always refetch to get latest permissions
+    refetchOnMount: true, // Refetch when component mounts
+    refetchOnWindowFocus: false, // Don't refetch on window focus
     ...options,
   });
 };

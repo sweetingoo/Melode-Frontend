@@ -208,7 +208,7 @@ export const ComplianceUploadModal = ({
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>
-            {isRenewal ? "Renew Compliance Document" : "Upload Compliance Document"}
+            {isRenewal ? "Renew Compliance Document" : "Submit Compliance Details"}
           </DialogTitle>
           <DialogDescription>
             {field.field_label || field.field_name}

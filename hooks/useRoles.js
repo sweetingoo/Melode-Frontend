@@ -21,7 +21,7 @@ export const roleKeys = {
 };
 
 // Get all roles query
-export const useRoles = (params = {}) => {
+export const useRoles = (params = {}, options = {}) => {
   return useQuery({
     queryKey: roleKeys.list(params),
     queryFn: async () => {
@@ -29,6 +29,7 @@ export const useRoles = (params = {}) => {
       return response.data;
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
+    ...options,
   });
 };
 
