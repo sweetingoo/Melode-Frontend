@@ -19,7 +19,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useComplianceItem, useComplianceHistory, useApproveCompliance } from "@/hooks/useCompliance";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
-import { ResourceAuditLogs } from "@/components/ResourceAuditLogs";
+import ResourceAuditLogs from "@/components/ResourceAuditLogs";
 import { ComplianceHistory } from "@/components/ComplianceHistory";
 import { filesService } from "@/services/files";
 import {
