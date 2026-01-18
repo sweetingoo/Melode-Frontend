@@ -110,9 +110,9 @@ export default function ComplianceMonitoringPage() {
     setNonSubmittedPage(1);
   }, [filters]);
 
-  const { data: expiringData, isLoading: expiringLoading } = useExpiringCompliance(30, expiringPage, pageSize, queryFilters);
-  const { data: pendingData, isLoading: pendingLoading } = usePendingApprovals(pendingPage, pageSize, queryFilters);
-  const { data: nonSubmittedData, isLoading: nonSubmittedLoading } = useNonSubmittedCompliance(nonSubmittedPage, pageSize, queryFilters);
+  const { data: expiringData, isLoading: expiringLoading, error: expiringError } = useExpiringCompliance(30, expiringPage, pageSize, queryFilters);
+  const { data: pendingData, isLoading: pendingLoading, error: pendingError } = usePendingApprovals(pendingPage, pageSize, queryFilters);
+  const { data: nonSubmittedData, isLoading: nonSubmittedLoading, error: nonSubmittedError } = useNonSubmittedCompliance(nonSubmittedPage, pageSize, queryFilters);
   const approveMutation = useApproveCompliance();
 
   // Extract pagination info - handle different response structures
@@ -397,7 +397,17 @@ export default function ComplianceMonitoringPage() {
                   </div>
                 )}
               </div>
-              {expiringLoading ? (
+              {expiringError ? (
+                <div className="flex flex-col items-center justify-center py-8">
+                  <AlertTriangle className="h-8 w-8 text-destructive mb-2" />
+                  <p className="text-destructive font-medium mb-1">Failed to load expiring items</p>
+                  <p className="text-sm text-muted-foreground text-center">
+                    {expiringError?.response?.data?.detail || 
+                     expiringError?.message || 
+                     "An error occurred while loading expiring compliance items"}
+                  </p>
+                </div>
+              ) : expiringLoading ? (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                   <span className="ml-2 text-muted-foreground">Loading...</span>
@@ -660,7 +670,17 @@ export default function ComplianceMonitoringPage() {
                   </div>
                 )}
               </div>
-              {pendingLoading ? (
+              {pendingError ? (
+                <div className="flex flex-col items-center justify-center py-8">
+                  <AlertTriangle className="h-8 w-8 text-destructive mb-2" />
+                  <p className="text-destructive font-medium mb-1">Failed to load pending approvals</p>
+                  <p className="text-sm text-muted-foreground text-center">
+                    {pendingError?.response?.data?.detail || 
+                     pendingError?.message || 
+                     "An error occurred while loading pending compliance approvals"}
+                  </p>
+                </div>
+              ) : pendingLoading ? (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                   <span className="ml-2 text-muted-foreground">Loading...</span>
@@ -914,7 +934,17 @@ export default function ComplianceMonitoringPage() {
                   </div>
                 )}
               </div>
-              {nonSubmittedLoading ? (
+              {nonSubmittedError ? (
+                <div className="flex flex-col items-center justify-center py-8">
+                  <AlertTriangle className="h-8 w-8 text-destructive mb-2" />
+                  <p className="text-destructive font-medium mb-1">Failed to load non-submitted items</p>
+                  <p className="text-sm text-muted-foreground text-center">
+                    {nonSubmittedError?.response?.data?.detail || 
+                     nonSubmittedError?.message || 
+                     "An error occurred while loading non-submitted compliance items"}
+                  </p>
+                </div>
+              ) : nonSubmittedLoading ? (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                   <span className="ml-2 text-muted-foreground">Loading...</span>
