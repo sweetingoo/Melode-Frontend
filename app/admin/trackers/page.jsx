@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
+} from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
@@ -64,14 +70,13 @@ import { toast } from "sonner";
 
 const TrackersPage = () => {
   const router = useRouter();
-  const [selectedTracker, setSelectedTracker] = useState("all");
+  const [selectedTracker, setSelectedTracker] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [sortBy, setSortBy] = useState("created_at");
   const [sortOrder, setSortOrder] = useState("desc");
   const [isCreateEntryDialogOpen, setIsCreateEntryDialogOpen] = useState(false);
-  const [selectedTrackerForEntry, setSelectedTrackerForEntry] = useState("");
   const [entryFormData, setEntryFormData] = useState({});
   const [entryFieldErrors, setEntryFieldErrors] = useState({});
 
@@ -87,19 +92,57 @@ const TrackersPage = () => {
   const trackers = useMemo(() => {
     if (!trackersResponse) return [];
     if (Array.isArray(trackersResponse)) return trackersResponse;
-    return trackersResponse.trackers || [];
+    return trackersResponse.trackers || trackersResponse.forms || [];
   }, [trackersResponse]);
+
+  // Auto-select first tracker when trackers load
+  useEffect(() => {
+    if (trackers.length > 0 && !selectedTracker) {
+      setSelectedTracker(trackers[0].id.toString());
+    }
+  }, [trackers, selectedTracker]);
+
+  // Debug: Log configuration after page loads and after 10 seconds
+  useEffect(() => {
+    const logConfiguration = () => {
+      trackers.forEach((tracker) => {
+        const listViewFields = tracker?.tracker_config?.list_view_fields;
+        const trackerFields = tracker?.tracker_fields?.fields || [];
+        const allFields = trackerFields.filter((field) => {
+          const fieldType = field.type || field.field_type;
+          return !['text_block', 'image_block', 'line_break', 'page_break', 'youtube_video_embed'].includes(fieldType);
+        });
+        
+        console.log(`[${tracker.name}] Configuration Check:`, {
+          list_view_fields: listViewFields,
+          availableFields: allFields.map(f => ({ id: f.id, name: f.name, label: f.label })),
+          tracker_config: tracker.tracker_config,
+        });
+      });
+    };
+
+    // Log immediately after component mounts
+    const timeout1 = setTimeout(logConfiguration, 1000);
+    
+    // Log again after 10 seconds
+    const timeout2 = setTimeout(logConfiguration, 10000);
+
+    return () => {
+      clearTimeout(timeout1);
+      clearTimeout(timeout2);
+    };
+  }, [trackers]);
   
   const createEntryMutation = useCreateTrackerEntry();
   
-  // Get selected tracker details for form fields
+  // Get selected tracker details for form fields (using selectedTracker tab)
   const selectedTrackerObj = useMemo(() => {
-    if (!selectedTrackerForEntry) return null;
-    return trackers.find((t) => t.slug === selectedTrackerForEntry);
-  }, [selectedTrackerForEntry, trackers]);
+    if (!selectedTracker) return null;
+    return trackers.find((t) => t.id === parseInt(selectedTracker));
+  }, [selectedTracker, trackers]);
   
-  const { data: trackerDetails } = useTracker(selectedTrackerForEntry, {
-    enabled: !!selectedTrackerForEntry && isCreateEntryDialogOpen,
+  const { data: trackerDetails } = useTracker(selectedTrackerObj?.slug || "", {
+    enabled: !!selectedTrackerObj?.slug && isCreateEntryDialogOpen,
   });
 
   // Build search params for entries
@@ -111,8 +154,10 @@ const TrackersPage = () => {
       sort_order: sortOrder,
     };
 
-    if (selectedTracker !== "all") {
-      params.tracker_id = parseInt(selectedTracker);
+    // Send form_id instead of tracker_id - backend expects form_id
+    // Each tracker is separate, so we always filter by the selected tracker
+    if (selectedTracker) {
+      params.form_id = parseInt(selectedTracker);
     }
 
     if (statusFilter !== "all") {
@@ -155,11 +200,81 @@ const TrackersPage = () => {
 
   // Get available statuses from selected tracker
   const availableStatuses = useMemo(() => {
-    if (selectedTracker === "all") return [];
+    if (!selectedTracker) return [];
     const tracker = trackers.find((t) => t.id === parseInt(selectedTracker));
     if (!tracker?.tracker_config?.statuses) return [];
     return tracker.tracker_config.statuses;
   }, [selectedTracker, trackers]);
+
+  // Get displayable fields for the selected tracker (for table columns)
+  // Uses list_view_fields from tracker_config if specified, otherwise shows first 4 fields
+  // This ensures we only show configured fields, not all fields
+  const displayableFields = useMemo(() => {
+    if (!selectedTracker) return [];
+    const tracker = trackers.find((t) => t.id === parseInt(selectedTracker));
+    if (!tracker?.tracker_fields?.fields) return [];
+    
+    // Get all non-display fields (exclude display-only field types)
+    const allFields = tracker.tracker_fields.fields.filter((field) => {
+      const fieldType = field.type || field.field_type;
+      return !['text_block', 'image_block', 'line_break', 'page_break', 'youtube_video_embed'].includes(fieldType);
+    });
+    
+    // Check if tracker_config has list_view_fields specified
+    const listViewFields = tracker?.tracker_config?.list_view_fields;
+    
+    if (listViewFields && Array.isArray(listViewFields) && listViewFields.length > 0) {
+      // Use ONLY the configured fields - restrict to what's in list_view_fields
+      const configuredFields = listViewFields
+        .map((fieldId) => allFields.find((f) => {
+          const fId = f.id || f.field_id || f.name;
+          return fId === fieldId || String(fId) === String(fieldId);
+        }))
+        .filter((f) => f !== undefined && f !== null);
+      
+      // Return only configured fields, or empty if none found (to avoid showing all)
+      return configuredFields.length > 0 ? configuredFields : [];
+    }
+    
+    // Default: show first 4 fields if no configuration
+    return allFields.slice(0, 4);
+  }, [selectedTracker, trackers]);
+
+  // Helper function to format field value for display
+  const formatFieldValue = (field, value) => {
+    if (value === null || value === undefined || value === "") {
+      return "—";
+    }
+    
+    const fieldType = field.type || field.field_type;
+    
+    // Handle different field types
+    if (fieldType === "date" && value) {
+      try {
+        return format(parseUTCDate(value), "MMM d, yyyy");
+      } catch (e) {
+        return String(value);
+      }
+    }
+    
+    if (fieldType === "datetime" && value) {
+      try {
+        return format(parseUTCDate(value), "MMM d, yyyy HH:mm");
+      } catch (e) {
+        return String(value);
+      }
+    }
+    
+    if (Array.isArray(value)) {
+      return value.join(", ");
+    }
+    
+    if (typeof value === "object") {
+      return JSON.stringify(value);
+    }
+    
+    return String(value);
+  };
 
   const handleDelete = async (entryId) => {
     if (confirm("Are you sure you want to delete this entry?")) {
@@ -175,6 +290,42 @@ const TrackersPage = () => {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+
+  // Show message if no trackers exist
+  if (trackers.length === 0) {
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold">Trackers</h1>
+            <p className="text-sm sm:text-base text-muted-foreground mt-1">
+              Track cases, events, and actions with full audit history
+            </p>
+          </div>
+          <Link href="/admin/trackers/manage">
+            <Button variant="outline">
+              <Filter className="mr-2 h-4 w-4" />
+              Manage Trackers
+            </Button>
+          </Link>
+        </div>
+        <Card>
+          <CardContent className="py-12">
+            <div className="text-center">
+              <FileText className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+              <h3 className="text-lg font-semibold mb-2">No trackers found</h3>
+              <p className="text-muted-foreground mb-4">
+                Create your first tracker to start tracking entries
+              </p>
+              <Link href="/admin/trackers/manage">
+                <Button>Manage Trackers</Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -196,14 +347,13 @@ const TrackersPage = () => {
               Manage Trackers
             </Button>
           </Link>
-          {trackers.length > 0 && (
+          {selectedTrackerObj && (
             <Dialog 
               open={isCreateEntryDialogOpen} 
               onOpenChange={(open) => {
                 setIsCreateEntryDialogOpen(open);
                 if (!open) {
                   // Reset form when dialog closes
-                  setSelectedTrackerForEntry("");
                   setEntryFormData({});
                   setEntryFieldErrors({});
                 }
@@ -219,39 +369,12 @@ const TrackersPage = () => {
                 <DialogHeader>
                   <DialogTitle>Create New Entry</DialogTitle>
                   <DialogDescription>
-                    {selectedTrackerForEntry 
-                      ? `Fill in the details for ${selectedTrackerObj?.name || "this tracker"}`
-                      : "Select a tracker to create a new entry"}
+                    Fill in the details for {selectedTrackerObj?.name || "this tracker"}
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
-                  <div>
-                    <Label>Tracker *</Label>
-                    <Select
-                      value={selectedTrackerForEntry}
-                      onValueChange={(value) => {
-                        setSelectedTrackerForEntry(value);
-                        setEntryFormData({});
-                        setEntryFieldErrors({});
-                      }}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a tracker" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {trackers
-                          .filter((t) => t.is_active)
-                          .map((tracker) => (
-                            <SelectItem key={tracker.id} value={tracker.slug}>
-                              {tracker.name}
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  
                   {trackerDetails && trackerDetails.tracker_fields?.fields && (
-                    <div className="space-y-4 border-t pt-4">
+                    <div className="space-y-4">
                       <Label className="text-base font-semibold">Entry Details</Label>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {trackerDetails.tracker_fields.fields
@@ -307,7 +430,7 @@ const TrackersPage = () => {
                   </Button>
                   <Button
                     onClick={async () => {
-                      if (!selectedTrackerForEntry || !trackerDetails) {
+                      if (!selectedTrackerObj || !trackerDetails) {
                         toast.error("Please select a tracker");
                         return;
                       }
@@ -335,14 +458,13 @@ const TrackersPage = () => {
                           status: trackerDetails.tracker_config?.default_status || "open",
                         });
                         setIsCreateEntryDialogOpen(false);
-                        setSelectedTrackerForEntry("");
                         setEntryFormData({});
                         setEntryFieldErrors({});
                       } catch (error) {
                         // Error handled by mutation
                       }
                     }}
-                    disabled={!selectedTrackerForEntry || !trackerDetails || createEntryMutation.isPending}
+                    disabled={!selectedTrackerObj || !trackerDetails || createEntryMutation.isPending}
                   >
                     {createEntryMutation.isPending ? (
                       <>
@@ -360,271 +482,325 @@ const TrackersPage = () => {
         </div>
       </div>
 
-      {/* Filters */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex flex-col md:flex-row gap-4">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search entries..."
-                  value={searchTerm}
-                  onChange={(e) => {
-                    setSearchTerm(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                  className="pl-8"
-                />
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <Select
-                value={selectedTracker}
-                onValueChange={(value) => {
-                  setSelectedTracker(value);
-                  setCurrentPage(1);
-                }}
-              >
-                <SelectTrigger className="w-[200px]">
-                  <SelectValue placeholder="All Trackers" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Trackers</SelectItem>
-                  {trackers.map((tracker) => (
-                    <SelectItem key={tracker.id} value={tracker.id.toString()}>
-                      {tracker.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select
-                value={statusFilter}
-                onValueChange={(value) => {
-                  setStatusFilter(value);
-                  setCurrentPage(1);
-                }}
-              >
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="All Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  {availableStatuses.length > 0 ? (
-                    availableStatuses.map((status) => (
-                      <SelectItem key={status} value={status}>
-                        {status}
-                      </SelectItem>
-                    ))
-                  ) : (
-                    <>
-                      <SelectItem value="open">Open</SelectItem>
-                      <SelectItem value="in_progress">In Progress</SelectItem>
-                      <SelectItem value="pending">Pending</SelectItem>
-                      <SelectItem value="resolved">Resolved</SelectItem>
-                      <SelectItem value="closed">Closed</SelectItem>
+      {/* Tracker Tabs */}
+      <Tabs 
+        value={selectedTracker || undefined} 
+        onValueChange={(value) => {
+          setSelectedTracker(value);
+          setCurrentPage(1); // Reset to first page when switching trackers
+        }}
+        className="w-full"
+      >
+        <TabsList className="w-full justify-start overflow-x-auto">
+          {trackers
+            .filter((t) => t.is_active)
+            .map((tracker) => (
+              <TabsTrigger key={tracker.id} value={tracker.id.toString()}>
+                {tracker.name}
+              </TabsTrigger>
+            ))}
+        </TabsList>
+
+        {/* Content for each tracker tab */}
+        {trackers
+          .filter((t) => t.is_active)
+          .map((tracker) => {
+            // Get displayable fields for this specific tracker
+            // Uses list_view_fields from tracker_config if specified
+            const trackerFields = tracker?.tracker_fields?.fields || [];
+            const allFields = trackerFields.filter((field) => {
+              const fieldType = field.type || field.field_type;
+              return !['text_block', 'image_block', 'line_break', 'page_break', 'youtube_video_embed'].includes(fieldType);
+            });
+            
+            // Check if tracker_config has list_view_fields specified
+            // Frontend restricts display to ONLY configured fields - this is the key filtering logic
+            const listViewFields = tracker?.tracker_config?.list_view_fields;
+            
+            const trackerDisplayableFields = (() => {
+              // If list_view_fields is configured, use ONLY those fields - no exceptions!
+              if (listViewFields && Array.isArray(listViewFields) && listViewFields.length > 0) {
+                // Find and return ONLY the configured fields - strict filtering
+                const foundFields = listViewFields
+                  .map((fieldId) => {
+                    // Match by id, field_id, or name (with type coercion for safety)
+                    return allFields.find((f) => {
+                      const fId = f.id || f.field_id || f.name;
+                      return fId === fieldId || String(fId) === String(fieldId);
+                    });
+                  })
+                  .filter((f) => f !== undefined && f !== null);
+                
+                // Delayed logging to check configuration after render
+                setTimeout(() => {
+                  console.log(`[${tracker.name}] After page load - list_view_fields:`, listViewFields);
+                  console.log(`[${tracker.name}] After page load - Will display:`, foundFields.map(f => ({ id: f.id, name: f.name, label: f.label })));
+                }, 2000);
+                
+                setTimeout(() => {
+                  console.log(`[${tracker.name}] After 10 seconds - list_view_fields:`, listViewFields);
+                  console.log(`[${tracker.name}] After 10 seconds - Will display:`, foundFields.map(f => ({ id: f.id, name: f.name, label: f.label })));
+                }, 10000);
+                
+                // CRITICAL: Return ONLY configured fields, even if empty
+                // This ensures we don't fall back to showing all fields
+                return foundFields;
+              }
+              
+              // Default: show first 4 fields if no configuration
+              return allFields.slice(0, 4);
+            })();
+            
+            // Get available statuses for this tracker
+            const trackerStatuses = tracker?.tracker_config?.statuses || [];
+
+            return (
+              <TabsContent key={tracker.id} value={tracker.id.toString()} className="space-y-4">
+                {/* Filters */}
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="flex flex-col md:flex-row gap-4">
+                      <div className="flex-1">
+                        <div className="relative">
+                          <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                          <Input
+                            placeholder="Search entries..."
+                            value={searchTerm}
+                            onChange={(e) => {
+                              setSearchTerm(e.target.value);
+                              setCurrentPage(1);
+                            }}
+                            className="pl-8"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <Select
+                          value={statusFilter}
+                          onValueChange={(value) => {
+                            setStatusFilter(value);
+                            setCurrentPage(1);
+                          }}
+                        >
+                          <SelectTrigger className="w-[180px]">
+                            <SelectValue placeholder="All Status" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All Status</SelectItem>
+                            {trackerStatuses.length > 0 ? (
+                              trackerStatuses.map((status) => (
+                                <SelectItem key={status} value={status}>
+                                  {status}
+                                </SelectItem>
+                              ))
+                            ) : (
+                              <>
+                                <SelectItem value="open">Open</SelectItem>
+                                <SelectItem value="in_progress">In Progress</SelectItem>
+                                <SelectItem value="pending">Pending</SelectItem>
+                                <SelectItem value="resolved">Resolved</SelectItem>
+                                <SelectItem value="closed">Closed</SelectItem>
+                              </>
+                            )}
+                          </SelectContent>
+                        </Select>
+                        <Select
+                          value={`${sortBy}:${sortOrder}`}
+                          onValueChange={(value) => {
+                            const [field, order] = value.split(":");
+                            setSortBy(field);
+                            setSortOrder(order);
+                            setCurrentPage(1);
+                          }}
+                        >
+                          <SelectTrigger className="w-[180px]">
+                            <SelectValue placeholder="Sort By" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="created_at:desc">Newest First</SelectItem>
+                            <SelectItem value="created_at:asc">Oldest First</SelectItem>
+                            <SelectItem value="updated_at:desc">Recently Updated</SelectItem>
+                            <SelectItem value="status:asc">Status A-Z</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Entries Table */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>
+                      Entries ({pagination.total})
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {entriesLoading ? (
+                      <div className="flex items-center justify-center py-12">
+                        <Loader2 className="h-8 w-8 animate-spin" />
+                      </div>
+                    ) : entries.length === 0 ? (
+                      <div className="text-center py-12">
+                        <FileText className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+                        <h3 className="text-lg font-semibold mb-2">No entries found</h3>
+                        <p className="text-muted-foreground mb-4">
+                          {searchTerm || statusFilter !== "all"
+                            ? "Try adjusting your filters"
+                            : `No entries yet for ${tracker.name}`}
+                        </p>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="rounded-md border overflow-x-auto">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>ID</TableHead>
+                                <TableHead>Status</TableHead>
+                                {/* Dynamic field columns */}
+                                {trackerDisplayableFields.map((field) => (
+                                  <TableHead key={field.id || field.field_id}>
+                                    {field.label || field.field_label || field.name}
+                                  </TableHead>
+                                ))}
+                                <TableHead>Actions</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                            {entries.map((entry) => {
+                              const submissionData = entry.submission_data || entry.formatted_data || {};
+                              
+                              // Only extract values for configured display fields to optimize performance
+                              const displayValues = {};
+                              trackerDisplayableFields.forEach((field) => {
+                                const fieldId = field.id || field.field_id || field.name;
+                                displayValues[fieldId] = submissionData[fieldId];
+                              });
+                              
+                              return (
+                                <TableRow key={entry.id}>
+                                  <TableCell className="font-medium">
+                                    <Link
+                                      href={`/admin/trackers/entries/${entry.id}`}
+                                      className="hover:underline"
+                                    >
+                                      #{entry.id}
+                                    </Link>
+                                  </TableCell>
+                                  <TableCell>
+                                    <Badge variant="outline">{entry.status || "open"}</Badge>
+                                  </TableCell>
+                                  {/* Dynamic field values - only show configured fields */}
+                                  {trackerDisplayableFields.map((field) => {
+                                    const fieldId = field.id || field.field_id || field.name;
+                                    const value = displayValues[fieldId];
+                                    return (
+                                      <TableCell key={fieldId} className="text-sm">
+                                        <div className="max-w-[200px] truncate" title={formatFieldValue(field, value)}>
+                                          {formatFieldValue(field, value)}
+                                        </div>
+                                      </TableCell>
+                                    );
+                                  })}
+                                    <TableCell>
+                                      <div className="flex items-center gap-2">
+                                        <Link href={`/admin/trackers/entries/${entry.id}`}>
+                                          <Button variant="ghost" size="sm">
+                                            <Eye className="h-4 w-4" />
+                                          </Button>
+                                        </Link>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() => handleDelete(entry.id)}
+                                          disabled={deleteEntryMutation.isPending}
+                                        >
+                                          <Trash2 className="h-4 w-4 text-destructive" />
+                                        </Button>
+                                      </div>
+                                    </TableCell>
+                                  </TableRow>
+                                );
+                              })}
+                            </TableBody>
+                          </Table>
+                        </div>
+
+                      {/* Pagination */}
+                      {pagination.total_pages > 1 && (
+                        <div className="mt-4">
+                          <Pagination>
+                            <PaginationContent>
+                              <PaginationItem>
+                                <PaginationPrevious
+                                  href="#"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    if (currentPage > 1) setCurrentPage(currentPage - 1);
+                                  }}
+                                  className={
+                                    currentPage === 1 ? "pointer-events-none opacity-50" : ""
+                                  }
+                                />
+                              </PaginationItem>
+                              {Array.from({ length: pagination.total_pages }, (_, i) => i + 1)
+                                .filter(
+                                  (page) =>
+                                    page === 1 ||
+                                    page === pagination.total_pages ||
+                                    (page >= currentPage - 2 && page <= currentPage + 2)
+                                )
+                                .map((page, idx, arr) => (
+                                  <React.Fragment key={page}>
+                                    {idx > 0 && arr[idx - 1] !== page - 1 && (
+                                      <PaginationItem>
+                                        <PaginationLink href="#" disabled>
+                                          ...
+                                        </PaginationLink>
+                                      </PaginationItem>
+                                    )}
+                                    <PaginationItem>
+                                      <PaginationLink
+                                        href="#"
+                                        onClick={(e) => {
+                                          e.preventDefault();
+                                          setCurrentPage(page);
+                                        }}
+                                        isActive={currentPage === page}
+                                      >
+                                        {page}
+                                      </PaginationLink>
+                                    </PaginationItem>
+                                  </React.Fragment>
+                                ))}
+                              <PaginationItem>
+                                <PaginationNext
+                                  href="#"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    if (currentPage < pagination.total_pages)
+                                      setCurrentPage(currentPage + 1);
+                                  }}
+                                  className={
+                                    currentPage === pagination.total_pages
+                                      ? "pointer-events-none opacity-50"
+                                      : ""
+                                  }
+                                />
+                              </PaginationItem>
+                            </PaginationContent>
+                          </Pagination>
+                        </div>
+                      )}
                     </>
                   )}
-                </SelectContent>
-              </Select>
-              <Select
-                value={`${sortBy}:${sortOrder}`}
-                onValueChange={(value) => {
-                  const [field, order] = value.split(":");
-                  setSortBy(field);
-                  setSortOrder(order);
-                  setCurrentPage(1);
-                }}
-              >
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="Sort By" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="created_at:desc">Newest First</SelectItem>
-                  <SelectItem value="created_at:asc">Oldest First</SelectItem>
-                  <SelectItem value="updated_at:desc">Recently Updated</SelectItem>
-                  <SelectItem value="status:asc">Status A-Z</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Entries Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>
-            Entries ({pagination.total})
-            {selectedTracker !== "all" && (
-              <span className="text-sm font-normal text-muted-foreground ml-2">
-                in {trackers.find((t) => t.id === parseInt(selectedTracker))?.name}
-              </span>
-            )}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {entriesLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin" />
-            </div>
-          ) : entries.length === 0 ? (
-            <div className="text-center py-12">
-              <FileText className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No entries found</h3>
-              <p className="text-muted-foreground mb-4">
-                {searchTerm || selectedTracker !== "all" || statusFilter !== "all"
-                  ? "Try adjusting your filters"
-                  : "No tracker entries yet"}
-              </p>
-            </div>
-          ) : (
-            <>
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>ID</TableHead>
-                      <TableHead>Tracker</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Created</TableHead>
-                      <TableHead>Updated</TableHead>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {entries.map((entry) => {
-                      // Form submissions use form_id, not tracker_id
-                      const tracker = trackers.find((t) => t.id === entry.form_id || t.id === entry.tracker_id);
-                      return (
-                        <TableRow key={entry.id}>
-                          <TableCell className="font-medium">
-                            <Link
-                              href={`/admin/trackers/entries/${entry.id}`}
-                              className="hover:underline"
-                            >
-                              #{entry.id}
-                            </Link>
-                          </TableCell>
-                          <TableCell>
-                            {tracker ? (
-                              <Link
-                                href={`/admin/trackers/entries/${entry.id}`}
-                                className="hover:underline"
-                              >
-                                {tracker.name}
-                              </Link>
-                            ) : (
-                              <span className="text-muted-foreground">—</span>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline">{entry.status || "open"}</Badge>
-                          </TableCell>
-                          <TableCell className="text-sm text-muted-foreground">
-                            {entry.created_at
-                              ? format(parseUTCDate(entry.created_at), "MMM d, yyyy HH:mm")
-                              : "—"}
-                          </TableCell>
-                          <TableCell className="text-sm text-muted-foreground">
-                            {entry.updated_at
-                              ? format(parseUTCDate(entry.updated_at), "MMM d, yyyy HH:mm")
-                              : "—"}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <Link href={`/admin/trackers/entries/${entry.id}`}>
-                                <Button variant="ghost" size="sm">
-                                  <Eye className="h-4 w-4" />
-                                </Button>
-                              </Link>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleDelete(entry.id)}
-                                disabled={deleteEntryMutation.isPending}
-                              >
-                                <Trash2 className="h-4 w-4 text-destructive" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-
-              {/* Pagination */}
-              {pagination.total_pages > 1 && (
-                <div className="mt-4">
-                  <Pagination>
-                    <PaginationContent>
-                      <PaginationItem>
-                        <PaginationPrevious
-                          href="#"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            if (currentPage > 1) setCurrentPage(currentPage - 1);
-                          }}
-                          className={
-                            currentPage === 1 ? "pointer-events-none opacity-50" : ""
-                          }
-                        />
-                      </PaginationItem>
-                      {Array.from({ length: pagination.total_pages }, (_, i) => i + 1)
-                        .filter(
-                          (page) =>
-                            page === 1 ||
-                            page === pagination.total_pages ||
-                            (page >= currentPage - 2 && page <= currentPage + 2)
-                        )
-                        .map((page, idx, arr) => (
-                          <React.Fragment key={page}>
-                            {idx > 0 && arr[idx - 1] !== page - 1 && (
-                              <PaginationItem>
-                                <PaginationLink href="#" disabled>
-                                  ...
-                                </PaginationLink>
-                              </PaginationItem>
-                            )}
-                            <PaginationItem>
-                              <PaginationLink
-                                href="#"
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  setCurrentPage(page);
-                                }}
-                                isActive={currentPage === page}
-                              >
-                                {page}
-                              </PaginationLink>
-                            </PaginationItem>
-                          </React.Fragment>
-                        ))}
-                      <PaginationItem>
-                        <PaginationNext
-                          href="#"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            if (currentPage < pagination.total_pages)
-                              setCurrentPage(currentPage + 1);
-                          }}
-                          className={
-                            currentPage === pagination.total_pages
-                              ? "pointer-events-none opacity-50"
-                              : ""
-                          }
-                        />
-                      </PaginationItem>
-                    </PaginationContent>
-                  </Pagination>
-                </div>
-              )}
-            </>
-          )}
-        </CardContent>
-      </Card>
+                </CardContent>
+              </Card>
+              </TabsContent>
+            );
+          })}
+      </Tabs>
     </div>
   );
 };

@@ -470,19 +470,54 @@ const ConversationView = ({
     if (!currentUser) return;
 
     // Get conversation to determine target
-    const conversationData = conversation || await queryClient.fetchQuery({
-      queryKey: messageKeys.conversationDetail(conversationIdentifier),
-      queryFn: async () => {
-        const response = await messagesService.getConversation(conversationIdentifier);
-        return response.data;
-      },
-    });
+    let conversationData = conversation;
+    if (!conversationData) {
+      try {
+        conversationData = await queryClient.fetchQuery({
+          queryKey: messageKeys.conversationDetail(conversationIdentifier),
+          queryFn: async () => {
+            const response = await messagesService.getConversation(conversationIdentifier);
+            return response.data;
+          },
+        });
+      } catch (error) {
+        console.error("Failed to fetch conversation:", error);
+        toast.error("Error", {
+          description: "Could not load thread details.",
+        });
+        return;
+      }
+    }
 
     if (!conversationData) {
       toast.error("Error", {
         description: "Could not load thread details.",
       });
       return;
+    }
+
+    // Debug: Log conversation data structure
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[ConversationView] conversationData:', conversationData);
+      console.log('[ConversationView] conversationData.id:', conversationData.id);
+      console.log('[ConversationView] conversationIdentifier:', conversationIdentifier);
+    }
+
+    // Extract conversation_id - try multiple possible field names
+    let conversationId = conversationData.id;
+    
+    // If id is missing, try to parse from conversationIdentifier (might be numeric ID)
+    if ((conversationId === undefined || conversationId === null) && conversationId !== 0) {
+      if (typeof conversationIdentifier === 'string' && /^\d+$/.test(conversationIdentifier)) {
+        conversationId = parseInt(conversationIdentifier, 10);
+        console.log('[ConversationView] Parsed conversationId from identifier:', conversationId);
+      } else {
+        console.error('[ConversationView] conversationData.id is missing and cannot parse from identifier');
+        toast.error("Error", {
+          description: "Could not determine conversation ID. Please refresh and try again.",
+        });
+        return;
+      }
     }
 
     // Determine target based on conversation participants
@@ -507,7 +542,7 @@ const ConversationView = ({
       content: messageContent,
       target_type: "user",
       target_user_ids: targetUserIds,
-      conversation_id: conversationData.id, // Include conversation_id to add to existing conversation (ID in body, not slug)
+      conversation_id: conversationId, // Always include conversation_id when in conversation context
       content_delivery_mode: "full",
       send_email: deliveryChannels.send_email,
       send_sms: deliveryChannels.send_sms,
@@ -516,7 +551,24 @@ const ConversationView = ({
       priority: "normal",
       message_type: "general",
       created_by_user_id: currentUser.id,
+      // Add flag to ensure this goes to messages endpoint, not broadcasts
+      _isConversationMessage: true,
     };
+
+    // Debug: Log submit data
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[ConversationView] Submitting message with conversation_id:', submitData.conversation_id);
+      console.log('[ConversationView] Full submitData:', submitData);
+    }
+
+    // Final validation - conversation_id must be set (not null/undefined) when in conversation context
+    if (submitData.conversation_id === null || submitData.conversation_id === undefined) {
+      console.error('[ConversationView] conversation_id is still null/undefined after all attempts');
+      toast.error("Error", {
+        description: "Could not determine conversation ID. Please refresh and try again.",
+      });
+      return;
+    }
 
     // Clear input immediately for better UX
     setReplyMessage("");

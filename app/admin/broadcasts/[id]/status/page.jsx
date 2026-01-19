@@ -50,6 +50,95 @@ const BroadcastStatusPage = () => {
   const canSendBroadcasts = hasPermission("broadcast:create") || hasPermission("BROADCAST_CREATE") || hasPermission("broadcast:send") || hasPermission("BROADCAST_SEND");
   const canReadBroadcast = hasPermission("broadcast:read") || hasPermission("BROADCAST_READ");
 
+  // Extract data with defaults to avoid errors
+  const recipients = broadcast?.recipients || [];
+  const receipts = broadcast?.receipts || [];
+
+  // Combine recipients with receipt data - must be called before early returns
+  const recipientData = useMemo(() => {
+    if (!broadcast) return [];
+    return recipients.map((recipient) => {
+      const receipt = receipts.find((r) => r.user_id === recipient.id);
+      return {
+        ...recipient,
+        receipt,
+        is_read: receipt?.is_read || false,
+        read_at: receipt?.read_at,
+        acknowledgement_status: receipt?.acknowledgement_status || null,
+        acknowledged_at: receipt?.acknowledged_at,
+        acknowledgement_note: receipt?.acknowledgement_note,
+      };
+    });
+  }, [recipients, receipts, broadcast]);
+
+  // Filter recipients - must be called before early returns
+  const filteredRecipients = useMemo(() => {
+    if (!broadcast) return [];
+    let filtered = recipientData;
+
+    // Search filter
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(
+        (r) =>
+          r.first_name?.toLowerCase().includes(term) ||
+          r.last_name?.toLowerCase().includes(term) ||
+          r.user_name?.toLowerCase().includes(term) ||
+          r.email?.toLowerCase().includes(term) ||
+          r.user_email?.toLowerCase().includes(term)
+      );
+    }
+
+    // Status filter
+    if (statusFilter === "read") {
+      filtered = filtered.filter((r) => r.is_read);
+    } else if (statusFilter === "unread") {
+      filtered = filtered.filter((r) => !r.is_read);
+    } else if (statusFilter === "acknowledged") {
+      filtered = filtered.filter((r) => r.acknowledgement_status);
+    } else if (statusFilter === "not_acknowledged") {
+      filtered = filtered.filter(
+        (r) => broadcast.requires_acknowledgement && !r.acknowledgement_status
+      );
+    }
+
+    return filtered;
+  }, [recipientData, searchTerm, statusFilter, broadcast]);
+
+  const stats = useMemo(() => {
+    if (!broadcast) {
+      return {
+        total: 0,
+        read: 0,
+        unread: 0,
+        acknowledged: 0,
+        notAcknowledged: 0,
+        agreed: 0,
+        disagreed: 0,
+      };
+    }
+    const total = recipientData.length;
+    const read = recipientData.filter((r) => r.is_read).length;
+    const unread = total - read;
+    const acknowledged = recipientData.filter((r) => r.acknowledgement_status).length;
+    const notAcknowledged = broadcast.requires_acknowledgement
+      ? recipientData.filter((r) => !r.acknowledgement_status).length
+      : 0;
+    const agreed = recipientData.filter((r) => r.acknowledgement_status === "agreed").length;
+    const disagreed = recipientData.filter((r) => r.acknowledgement_status === "disagreed").length;
+
+    return {
+      total,
+      read,
+      unread,
+      acknowledged,
+      notAcknowledged,
+      agreed,
+      disagreed,
+    };
+  }, [recipientData, broadcast]);
+
+  // Now we can do early returns after all hooks
   if (isLoading) {
     return (
       <div className="p-4">
@@ -91,80 +180,6 @@ const BroadcastStatusPage = () => {
       </div>
     );
   }
-
-  const recipients = broadcast.recipients || [];
-  const receipts = broadcast.receipts || [];
-
-  // Combine recipients with receipt data
-  const recipientData = useMemo(() => {
-    return recipients.map((recipient) => {
-      const receipt = receipts.find((r) => r.user_id === recipient.id);
-      return {
-        ...recipient,
-        receipt,
-        is_read: receipt?.is_read || false,
-        read_at: receipt?.read_at,
-        acknowledgement_status: receipt?.acknowledgement_status || null,
-        acknowledged_at: receipt?.acknowledged_at,
-        acknowledgement_note: receipt?.acknowledgement_note,
-      };
-    });
-  }, [recipients, receipts]);
-
-  // Filter recipients
-  const filteredRecipients = useMemo(() => {
-    let filtered = recipientData;
-
-    // Search filter
-    if (searchTerm) {
-      const term = searchTerm.toLowerCase();
-      filtered = filtered.filter(
-        (r) =>
-          r.first_name?.toLowerCase().includes(term) ||
-          r.last_name?.toLowerCase().includes(term) ||
-          r.user_name?.toLowerCase().includes(term) ||
-          r.email?.toLowerCase().includes(term) ||
-          r.user_email?.toLowerCase().includes(term)
-      );
-    }
-
-    // Status filter
-    if (statusFilter === "read") {
-      filtered = filtered.filter((r) => r.is_read);
-    } else if (statusFilter === "unread") {
-      filtered = filtered.filter((r) => !r.is_read);
-    } else if (statusFilter === "acknowledged") {
-      filtered = filtered.filter((r) => r.acknowledgement_status);
-    } else if (statusFilter === "not_acknowledged") {
-      filtered = filtered.filter(
-        (r) => broadcast.requires_acknowledgement && !r.acknowledgement_status
-      );
-    }
-
-    return filtered;
-  }, [recipientData, searchTerm, statusFilter, broadcast.requires_acknowledgement]);
-
-  const stats = useMemo(() => {
-    const total = recipientData.length;
-    const read = recipientData.filter((r) => r.is_read).length;
-    const unread = total - read;
-    const acknowledged = recipientData.filter((r) => r.acknowledgement_status).length;
-    const notAcknowledged = broadcast.requires_acknowledgement
-      ? recipientData.filter((r) => !r.acknowledgement_status).length
-      : 0;
-    const agreed = recipientData.filter((r) => r.acknowledgement_status === "agreed").length;
-    const disagreed = recipientData.filter((r) => r.acknowledgement_status === "disagreed").length;
-
-    return {
-      total,
-      read,
-      unread,
-      acknowledged,
-      notAcknowledged,
-      agreed,
-      disagreed,
-    };
-  }, [recipientData, broadcast.requires_acknowledgement]);
 
   const getAcknowledgementBadge = (status) => {
     if (!status) {

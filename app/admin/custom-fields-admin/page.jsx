@@ -759,8 +759,14 @@ const CustomFieldsAdminPage = () => {
     try {
       if (editingSectionId) {
         // Update existing section
+        const sectionToUpdate = sections.find((s) => s.id === editingSectionId);
+        if (!sectionToUpdate || !sectionToUpdate.slug) {
+          console.error("Section missing slug:", sectionToUpdate);
+          toast.error("Failed to update section: missing identifier");
+          return;
+        }
         await updateSectionMutation.mutateAsync({
-          id: editingSectionId,
+          slug: sectionToUpdate.slug,
           sectionData: sectionFormData,
         });
       } else {
@@ -1389,6 +1395,12 @@ const CustomFieldsAdminPage = () => {
     const section = sections.find((s) => s.id === sectionId);
     if (!section) return;
 
+    if (!section.slug) {
+      console.error("Section missing slug:", section);
+      toast.error("Failed to update section: missing identifier");
+      return;
+    }
+
     try {
       // Prepare the data for API update
       const updateData = {
@@ -1401,7 +1413,7 @@ const CustomFieldsAdminPage = () => {
       };
 
       await updateSectionMutation.mutateAsync({
-        id: sectionId,
+        slug: section.slug,
         sectionData: updateData,
       });
 

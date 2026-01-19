@@ -17,6 +17,7 @@ export const customFieldSectionKeys = {
 export const customFieldSectionUtils = {
   transformSection: (section) => ({
     id: section.id,
+    slug: section.slug,
     sectionName: section.section_name,
     sectionDescription: section.section_description,
     entityType: section.entity_type,

@@ -16,7 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { Loader2, ArrowLeft, Edit, Save, X, Clock, MessageSquare, FileText } from "lucide-react";
+import { Loader2, ArrowLeft, Edit, Save, X, Clock, MessageSquare, FileText, Paperclip } from "lucide-react";
 import {
   useTrackerEntry,
   useTrackerEntryTimeline,
@@ -26,6 +26,8 @@ import {
 } from "@/hooks/useTrackers";
 import { useComments } from "@/hooks/useComments";
 import CommentThread from "@/components/CommentThread";
+import FileAttachmentList from "@/components/FileAttachmentList";
+import MultiFileUpload from "@/components/MultiFileUpload";
 import { format } from "date-fns";
 import { parseUTCDate } from "@/utils/time";
 import CustomFieldRenderer from "@/components/CustomFieldRenderer";
@@ -40,6 +42,7 @@ const TrackerEntryDetailPage = () => {
   const [entryData, setEntryData] = useState({});
   const [entryStatus, setEntryStatus] = useState("open");
   const [fieldErrors, setFieldErrors] = useState({});
+  const [attachmentRefreshKey, setAttachmentRefreshKey] = useState(0);
 
   const { data: entry, isLoading: entryLoading } = useTrackerEntry(entryId);
   const { data: timelineData, isLoading: timelineLoading } = useTrackerEntryTimeline(entryId);
@@ -253,6 +256,10 @@ const TrackerEntryDetailPage = () => {
             <MessageSquare className="mr-2 h-4 w-4" />
             Notes ({comments.length})
           </TabsTrigger>
+          <TabsTrigger value="files">
+            <Paperclip className="mr-2 h-4 w-4" />
+            Files
+          </TabsTrigger>
           <TabsTrigger value="timeline">
             <Clock className="mr-2 h-4 w-4" />
             Timeline
@@ -419,6 +426,36 @@ const TrackerEntryDetailPage = () => {
               />
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* Files Tab */}
+        <TabsContent value="files" className="space-y-4">
+          <div className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Upload Files</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <MultiFileUpload
+                  entityType="tracker_entry"
+                  entitySlug={entryId.toString()}
+                  onUploadComplete={() => {
+                    setAttachmentRefreshKey((prev) => prev + 1);
+                    toast.success("Files uploaded successfully");
+                  }}
+                  maxFiles={10}
+                  maxSizeMB={50}
+                />
+              </CardContent>
+            </Card>
+
+            <FileAttachmentList
+              key={attachmentRefreshKey}
+              entityType="tracker_entry"
+              entitySlug={entryId.toString()}
+              showTitle={true}
+            />
+          </div>
         </TabsContent>
 
         {/* Timeline Tab */}

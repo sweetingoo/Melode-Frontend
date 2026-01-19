@@ -1607,7 +1607,8 @@ export default function AdminLayout({ children }) {
 
             <main className={cn(
               "flex-1 overflow-x-hidden",
-              pathname === "/admin/messages" ? "p-0" : "p-4"
+              pathname === "/admin/messages" ? "p-0" : 
+              pathname === "/admin/tasks" ? "p-2" : "p-4"
             )}>{children}</main>
           </SidebarInset>
         </div>

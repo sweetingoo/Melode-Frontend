@@ -67,15 +67,49 @@ export const useCreateMessage = () => {
 
   return useMutation({
     mutationFn: async (messageData) => {
-      // If conversation_id is explicitly null or undefined, it's a broadcast - use broadcast endpoint
-      if (messageData.conversation_id === null || messageData.conversation_id === undefined) {
+      // Debug logging
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[useCreateMessage] messageData:', messageData);
+        console.log('[useCreateMessage] conversation_id:', messageData.conversation_id);
+        console.log('[useCreateMessage] conversation_id type:', typeof messageData.conversation_id);
+        console.log('[useCreateMessage] conversation_id === null:', messageData.conversation_id === null);
+        console.log('[useCreateMessage] conversation_id === undefined:', messageData.conversation_id === undefined);
+        console.log('[useCreateMessage] _isConversationMessage:', messageData._isConversationMessage);
+      }
+
+      // If explicitly marked as conversation message, always use messages endpoint
+      if (messageData._isConversationMessage) {
+        // Remove the flag before sending
+        const { _isConversationMessage, ...cleanMessageData } = messageData;
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[useCreateMessage] Routing to MESSAGES endpoint (conversation message flag)');
+        }
+        const response = await messagesService.createMessage(cleanMessageData);
+        return response.data || response;
+      }
+
+      // Route to broadcasts ONLY if conversation_id is explicitly null (not undefined)
+      // If conversation_id is undefined, it might be a data issue - use messages endpoint
+      // The backend will handle creating/finding the conversation if conversation_id is missing
+      // Explicit null means the caller intentionally wants a broadcast (one-way message)
+      const isExplicitBroadcast = messageData.conversation_id === null;
+      
+      if (isExplicitBroadcast) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[useCreateMessage] Routing to BROADCAST endpoint');
+        }
         // Remove conversation_id from broadcast data (not needed for broadcast endpoint)
         const { conversation_id, ...broadcastData } = messageData;
         const response = await messagesService.createBroadcast(broadcastData);
         // Handle both direct data and wrapped response.data
         return response.data || response;
       }
-      // Otherwise, it's a regular message
+      
+      // Otherwise, it's a regular message - use messages endpoint
+      // The backend will handle conversation creation/finding if conversation_id is missing or undefined
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[useCreateMessage] Routing to MESSAGES endpoint');
+      }
       const response = await messagesService.createMessage(messageData);
       return response.data || response;
     },
@@ -185,16 +219,23 @@ export const useCreateMessage = () => {
       queryClient.invalidateQueries({ queryKey: messageKeys.lists() });
       queryClient.invalidateQueries({ queryKey: messageKeys.conversationList() });
       
-      // If it's a broadcast (no conversation_id), invalidate broadcast queries
-      if (!variables.conversation_id) {
+      // Check if it's a broadcast based on the response data (more reliable than variables)
+      const isBroadcast = data?.is_broadcast === true;
+      
+      // If it's a broadcast, invalidate broadcast queries
+      if (isBroadcast) {
         queryClient.invalidateQueries({ queryKey: messageKeys.broadcasts() });
         queryClient.invalidateQueries({ queryKey: messageKeys.broadcastInbox() });
       }
       
-      // Show success toast for broadcasts
-      if (!variables.conversation_id) {
+      // Show success toast - check actual response data to determine if it's a broadcast or message
+      if (isBroadcast) {
         toast.success("Broadcast sent successfully", {
           description: "The broadcast has been sent to all recipients.",
+        });
+      } else {
+        toast.success("Message sent successfully", {
+          description: "Your message has been sent.",
         });
       }
     },

@@ -20,6 +20,9 @@ const transformTrackerToForm = (trackerData) => {
   // Get the name/title - prefer name, then form_title, then form_name
   const name = trackerData.name || trackerData.form_title || trackerData.form_name || "";
   
+  // Ensure tracker_config (including list_view_fields) is preserved when transforming to form_config
+  const trackerConfig = trackerData.tracker_config || trackerData.form_config || {};
+  
   // Transform tracker data to form data format
   const formData = {
     // form_name must be slugified (alphanumeric, hyphens, underscores only)
@@ -30,7 +33,8 @@ const transformTrackerToForm = (trackerData) => {
     form_title: name || trackerData.form_title || trackerData.form_name || "",
     form_description: trackerData.description || trackerData.form_description,
     form_type: trackerData.form_type || "general", // Use "general" as default form type
-    form_config: trackerData.tracker_config || trackerData.form_config || {},
+    // Preserve entire tracker_config including list_view_fields
+    form_config: trackerConfig,
     form_fields: trackerData.tracker_fields || trackerData.form_fields || { fields: [] },
     access_config: trackerData.access_config || {},
     is_active: trackerData.is_active !== undefined ? trackerData.is_active : true,
@@ -54,13 +58,16 @@ const transformTrackerToForm = (trackerData) => {
 
 const transformFormToTracker = (formData) => {
   // Transform form data back to tracker format for frontend
+  // Ensure form_config is properly mapped to tracker_config, preserving all properties including list_view_fields
+  const trackerConfig = formData.form_config || formData.tracker_config || {};
+  
   return {
     id: formData.id,
     name: formData.form_title || formData.form_name,
     slug: formData.slug || formData.form_name,
     description: formData.form_description,
     form_type: formData.form_type,
-    tracker_config: formData.form_config || {},
+    tracker_config: trackerConfig, // Preserve all config including list_view_fields
     tracker_fields: formData.form_fields || { fields: [] },
     access_config: formData.access_config || {},
     is_active: formData.is_active,
@@ -83,7 +90,7 @@ export const trackersService = {
       // Transform response data
       // Backend returns: { forms: [...], total, page, per_page, total_pages }
       if (response.data && response.data.forms) {
-        // Transform forms array
+        // Transform forms array - ensure list_view_fields is preserved in tracker_config
         response.data.forms = response.data.forms.map(transformFormToTracker);
         // Also add trackers alias for frontend compatibility
         response.data.trackers = response.data.forms;
@@ -101,12 +108,9 @@ export const trackersService = {
   getTracker: async (slug) => {
     try {
       const response = await api.get(`/trackers/${slug}`);
-      console.log("Raw tracker response:", response.data);
       // Transform response data
       if (response.data) {
-        const transformed = transformFormToTracker(response.data);
-        console.log("Transformed tracker data:", transformed);
-        response.data = transformed;
+        response.data = transformFormToTracker(response.data);
       }
       return response;
     } catch (error) {

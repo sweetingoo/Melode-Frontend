@@ -50,6 +50,7 @@ import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
 import { Plus } from "lucide-react";
 import { parseUTCDate } from "@/utils/time";
+import { toast } from "sonner";
 
 const BroadcastsPage = () => {
   const router = useRouter();
@@ -617,9 +618,18 @@ const BroadcastsPage = () => {
                                   variant="ghost"
                                   size="sm"
                                   className="h-6 text-xs"
+                                  disabled={!broadcast.slug && !broadcast.id}
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    router.push(`/admin/broadcasts/${broadcast.slug || broadcast.id}/status`);
+                                    const broadcastIdentifier = broadcast.slug || broadcast.id;
+                                    if (broadcastIdentifier) {
+                                      router.push(`/admin/broadcasts/${broadcastIdentifier}/status`);
+                                    } else {
+                                      console.error("Cannot navigate to status: broadcast has no slug or id", broadcast);
+                                      toast.error("Error", {
+                                        description: "Cannot view status: broadcast identifier is missing.",
+                                      });
+                                    }
                                   }}
                                 >
                                   View Status
@@ -863,9 +873,18 @@ const BroadcastsPage = () => {
                                 <Button
                                   variant="ghost"
                                   size="icon"
+                                  disabled={!broadcast.slug && !broadcast.id}
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    router.push(`/admin/broadcasts/${broadcast.slug || broadcast.id}/status`);
+                                    const broadcastIdentifier = broadcast.slug || broadcast.id;
+                                    if (broadcastIdentifier) {
+                                      router.push(`/admin/broadcasts/${broadcastIdentifier}/status`);
+                                    } else {
+                                      console.error("Cannot navigate to status: broadcast has no slug or id", broadcast);
+                                      toast.error("Error", {
+                                        description: "Cannot view status: broadcast identifier is missing.",
+                                      });
+                                    }
                                   }}
                                 >
                                   <BarChart3 className="h-4 w-4" />

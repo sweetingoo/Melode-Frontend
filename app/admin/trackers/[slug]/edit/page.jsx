@@ -106,6 +106,7 @@ const TrackerEditPage = () => {
       statuses: ["open", "in_progress", "pending", "resolved", "closed"],
       allow_inline_status_edit: true,
       sections: [],
+      list_view_fields: [],
     },
     tracker_fields: {
       fields: [],
@@ -148,11 +149,14 @@ const TrackerEditPage = () => {
         description: tracker.description || "",
         slug: tracker.slug || "",
         is_active: tracker.is_active !== undefined ? tracker.is_active : true,
-        tracker_config: tracker.tracker_config || {
-          default_status: "open",
-          statuses: ["open", "in_progress", "pending", "resolved", "closed"],
-          allow_inline_status_edit: true,
-          sections: [],
+        tracker_config: {
+          ...(tracker.tracker_config || {
+            default_status: "open",
+            statuses: ["open", "in_progress", "pending", "resolved", "closed"],
+            allow_inline_status_edit: true,
+            sections: [],
+          }),
+          list_view_fields: tracker.tracker_config?.list_view_fields || [],
         },
         tracker_fields: tracker.tracker_fields || {
           fields: [],
@@ -170,6 +174,9 @@ const TrackerEditPage = () => {
 
   const handleSave = async () => {
     try {
+      // Log what we're saving to verify list_view_fields is included
+      console.log("Saving tracker with list_view_fields:", formData.tracker_config?.list_view_fields);
+      
       await updateMutation.mutateAsync({
         slug: slug,
         trackerData: formData,
@@ -537,6 +544,75 @@ const TrackerEditPage = () => {
                 <Label htmlFor="allow_inline_status_edit" className="cursor-pointer">
                   Allow inline status editing in list view
                 </Label>
+              </div>
+              
+              {/* List View Fields Configuration */}
+              <div className="border-t pt-4 mt-4">
+                <Label className="text-base font-semibold mb-2 block">
+                  List View Fields
+                </Label>
+                <p className="text-sm text-muted-foreground mb-3">
+                  Select which fields should be displayed in the entries table. If none selected, the first 4 fields will be shown by default.
+                </p>
+                {fields.length === 0 ? (
+                  <p className="text-sm text-muted-foreground italic">
+                    Add fields first to configure list view columns
+                  </p>
+                ) : (
+                  <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                    {fields
+                      .filter((field) => {
+                        const fieldType = field.type || field.field_type;
+                        return !['text_block', 'image_block', 'line_break', 'page_break', 'youtube_video_embed'].includes(fieldType);
+                      })
+                      .map((field) => {
+                        const fieldId = field.id || field.field_id || field.name;
+                        const listViewFields = formData.tracker_config?.list_view_fields || [];
+                        const isSelected = listViewFields.includes(fieldId);
+                        
+                        return (
+                          <div
+                            key={fieldId}
+                            className="flex items-center gap-2 p-2 border rounded-md hover:bg-muted/50"
+                          >
+                            <input
+                              type="checkbox"
+                              id={`list_view_${fieldId}`}
+                              checked={isSelected}
+                              onChange={(e) => {
+                                const currentFields = formData.tracker_config?.list_view_fields || [];
+                                let newFields;
+                                
+                                if (e.target.checked) {
+                                  newFields = [...currentFields, fieldId];
+                                } else {
+                                  newFields = currentFields.filter((id) => id !== fieldId);
+                                }
+                                
+                                setFormData((prev) => ({
+                                  ...prev,
+                                  tracker_config: {
+                                    ...prev.tracker_config,
+                                    list_view_fields: newFields,
+                                  },
+                                }));
+                              }}
+                              className="rounded"
+                            />
+                            <Label
+                              htmlFor={`list_view_${fieldId}`}
+                              className="cursor-pointer flex-1 flex items-center gap-2"
+                            >
+                              <span className="font-medium">{field.label || field.name}</span>
+                              <Badge variant="outline" className="text-xs">
+                                {field.type}
+                              </Badge>
+                            </Label>
+                          </div>
+                        );
+                      })}
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>

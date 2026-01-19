@@ -1162,7 +1162,7 @@ const TasksPage = () => {
   };
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2 max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="min-w-0 flex-1">

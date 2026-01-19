@@ -85,7 +85,8 @@ export const useUpdateTracker = () => {
     },
     onSuccess: (data, variables) => {
       queryClient.setQueryData(trackerKeys.detail(variables.slug), data);
-      queryClient.invalidateQueries({ queryKey: trackerKeys.lists() });
+      // Invalidate all tracker queries to ensure list view updates
+      queryClient.invalidateQueries({ queryKey: trackerKeys.all });
       toast.success("Tracker updated successfully", {
         description: `Tracker "${data.name}" has been updated.`,
       });
