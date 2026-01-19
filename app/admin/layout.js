@@ -144,6 +144,12 @@ const mainMenuItems = [
     permission: "forms:read", // Permission to read forms
   },
   {
+    title: "Trackers",
+    icon: FileSpreadsheet,
+    url: "/admin/trackers",
+    permission: "tracker:read", // Permission to read trackers
+  },
+  {
     title: "Documents",
     icon: BookOpen,
     url: "/admin/documents",
