@@ -1516,7 +1516,10 @@ const TrackerEditPage = () => {
 // People Field Role Selector Component
 const PeopleFieldRoleSelector = ({ selectedRoleIds, onChange }) => {
   const { data: rolesData, isLoading } = useRoles({ per_page: 100 });
-  const roles = rolesData?.roles || [];
+  // Handle both array and object response formats
+  const roles = Array.isArray(rolesData)
+    ? rolesData
+    : rolesData?.roles || rolesData?.items || [];
 
   const handleRoleToggle = (roleId) => {
     const roleIdNum = typeof roleId === 'string' ? parseInt(roleId) : roleId;
