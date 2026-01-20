@@ -69,6 +69,32 @@ const TrackerEntryDetailPage = () => {
     }
   }, [entry]);
 
+  // Debug: Log field structure when entry and tracker are loaded
+  useEffect(() => {
+    if (entry && tracker) {
+      const trackerFields = tracker?.tracker_fields?.fields || [];
+      const displayData = entry.formatted_data || entry.submission_data || {};
+      console.log("Tracker Entry Debug:", {
+        entry_data_keys: Object.keys(displayData),
+        tracker_fields_structure: trackerFields.map(f => ({
+          id: f.id,
+          field_id: f.field_id,
+          name: f.name,
+          label: f.label,
+          type: f.type || f.field_type,
+        })),
+        sample_field_matching: trackerFields.slice(0, 2).map(f => {
+          const fieldId = f.field_id || f.id || f.name;
+          return {
+            field: { id: f.id, field_id: f.field_id, name: f.name },
+            fieldId_used: fieldId,
+            value_found: fieldId ? displayData[fieldId] : null,
+          };
+        }),
+      });
+    }
+  }, [entry, tracker]);
+
   if (entryLoading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -95,6 +121,55 @@ const TrackerEntryDetailPage = () => {
   const trackerConfig = tracker?.tracker_config || {};
   const sections = trackerConfig.sections || [];
 
+  // Format field value for read-only display
+  const formatFieldValue = (field, value) => {
+    if (value === null || value === undefined || value === "") {
+      return "—";
+    }
+    
+    const fieldType = field.type || field.field_type;
+    
+    // Handle different field types
+    if (fieldType === "date" && value) {
+      try {
+        return format(parseUTCDate(value), "MMM d, yyyy");
+      } catch (e) {
+        return String(value);
+      }
+    }
+    
+    if (fieldType === "datetime" && value) {
+      try {
+        return format(parseUTCDate(value), "MMM d, yyyy HH:mm");
+      } catch (e) {
+        return String(value);
+      }
+    }
+    
+    // Handle select fields - show label if available
+    if ((fieldType === "select" || fieldType === "multiselect") && field.options) {
+      if (Array.isArray(value)) {
+        return value.map(v => {
+          const option = field.options.find(opt => String(opt.value) === String(v) || String(opt.label) === String(v));
+          return option?.label || v;
+        }).join(", ");
+      } else {
+        const option = field.options.find(opt => String(opt.value) === String(value) || String(opt.label) === String(value));
+        return option?.label || value;
+      }
+    }
+    
+    if (Array.isArray(value)) {
+      return value.join(", ");
+    }
+    
+    if (typeof value === "object") {
+      return JSON.stringify(value);
+    }
+    
+    return String(value);
+  };
+
   // Group fields by section
   const fieldsBySection = sections.reduce((acc, section) => {
     acc[section.id] = {
@@ -104,8 +179,8 @@ const TrackerEntryDetailPage = () => {
     return acc;
   }, {});
 
-  // Fields without section - include them in the main section instead
-  // const fieldsWithoutSection = trackerFields.filter((field) => !field.section);
+  // Fields without section (section: null or undefined)
+  const fieldsWithoutSection = trackerFields.filter((field) => !field.section || field.section === null);
 
   const comments = commentsData?.comments || commentsData || [];
 
@@ -274,8 +349,38 @@ const TrackerEntryDetailPage = () => {
         <TabsContent value="details" className="space-y-4">
           {isEditing ? (
             <div className="space-y-4">
+              {/* Render fields without sections first */}
+              {fieldsWithoutSection.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Entry Data</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {fieldsWithoutSection.map((field) => {
+                      const fieldId = field.id || field.name || field.field_id;
+                      const value = entryData[fieldId];
+                      return (
+                        <CustomFieldRenderer
+                          key={fieldId}
+                          field={{
+                            ...field,
+                            type: field.type || field.field_type,
+                            field_label: field.label || field.field_label || field.name, // Map label to field_label for CustomFieldRenderer
+                            field_name: field.name || field.id, // Map name to field_name
+                          }}
+                          value={value}
+                          onChange={handleFieldChange}
+                          error={fieldErrors[fieldId]}
+                          readOnly={false}
+                        />
+                      );
+                    })}
+                  </CardContent>
+                </Card>
+              )}
+
               {/* Render fields by section for editing */}
-              {sections.length > 0 ? (
+              {sections.length > 0 && (
                 sections.map((section) => {
                   const sectionFields = fieldsBySection[section.id]?.fields || [];
                   if (sectionFields.length === 0) return null;
@@ -287,12 +392,17 @@ const TrackerEntryDetailPage = () => {
                       </CardHeader>
                       <CardContent className="space-y-4">
                         {sectionFields.map((field) => {
-                          const fieldId = field.id || field.name;
+                          const fieldId = field.id || field.name || field.field_id;
                           const value = entryData[fieldId];
                           return (
                             <CustomFieldRenderer
                               key={fieldId}
-                              field={field}
+                              field={{
+                                ...field,
+                                type: field.type || field.field_type,
+                                field_label: field.label || field.field_label || field.name, // Map label to field_label for CustomFieldRenderer
+                                field_name: field.name || field.id, // Map name to field_name
+                              }}
                               value={value}
                               onChange={handleFieldChange}
                               error={fieldErrors[fieldId]}
@@ -304,8 +414,10 @@ const TrackerEntryDetailPage = () => {
                     </Card>
                   );
                 })
-              ) : (
-                // If no sections, render all fields in a single card
+              )}
+
+              {/* Fallback: If no sections and no fields without sections, show all fields */}
+              {sections.length === 0 && fieldsWithoutSection.length === 0 && (
                 <Card>
                   <CardHeader>
                     <CardTitle>Entry Data</CardTitle>
@@ -313,12 +425,17 @@ const TrackerEntryDetailPage = () => {
                   <CardContent className="space-y-4">
                     {trackerFields.length > 0 ? (
                       trackerFields.map((field) => {
-                        const fieldId = field.id || field.name;
+                        const fieldId = field.id || field.name || field.field_id;
                         const value = entryData[fieldId];
                         return (
                           <CustomFieldRenderer
                             key={fieldId}
-                            field={field}
+                            field={{
+                              ...field,
+                              type: field.type || field.field_type,
+                              field_label: field.label || field.field_label || field.name, // Map label to field_label for CustomFieldRenderer
+                              field_name: field.name || field.id, // Map name to field_name
+                            }}
                             value={value}
                             onChange={handleFieldChange}
                             error={fieldErrors[fieldId]}
@@ -338,6 +455,39 @@ const TrackerEntryDetailPage = () => {
             </div>
           ) : (
             <div className="space-y-4">
+              {/* Render fields without sections first */}
+              {fieldsWithoutSection.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Entry Data</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {fieldsWithoutSection.map((field) => {
+                      // Prefer formatted_data for display, fallback to submission_data
+                      const displayData = entry.formatted_data || entry.submission_data || entry.entry_data || {};
+                      
+                      // Fields use 'id' or 'name' to match submission_data keys (not 'field_id')
+                      // Priority: id -> name -> field_id (for backward compatibility)
+                      const fieldId = field.id || field.name || field.field_id;
+                      
+                      // Get value from displayData using the field identifier
+                      const value = fieldId ? displayData[fieldId] : null;
+                      
+                      return (
+                        <div key={field.id || field.name || field.field_id}>
+                          <label className="text-sm font-medium text-muted-foreground">
+                            {field.label || "Untitled Field"}
+                          </label>
+                          <div className="mt-1">
+                            <p className="text-sm">{formatFieldValue(field, value)}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </CardContent>
+                </Card>
+              )}
+
               {/* Render fields by section */}
               {sections.length > 0 ? (
                 sections.map((section) => {
@@ -351,20 +501,23 @@ const TrackerEntryDetailPage = () => {
                       </CardHeader>
                       <CardContent className="space-y-4">
                         {sectionFields.map((field) => {
-                          // Use submission_data or formatted_data (API returns submission_data)
-                          const submissionData = entry.submission_data || entry.formatted_data || entry.entry_data || {};
-                          const value = submissionData[field.id] || submissionData[field.name] || submissionData[field.field_id];
+                          // Prefer formatted_data for display, fallback to submission_data
+                          const displayData = entry.formatted_data || entry.submission_data || entry.entry_data || {};
+                          
+                          // Fields use 'id' or 'name' to match submission_data keys (not 'field_id')
+                          // Priority: id -> name -> field_id (for backward compatibility)
+                          const fieldId = field.id || field.name || field.field_id;
+                          
+                          // Get value from displayData using the field identifier
+                          const value = fieldId ? displayData[fieldId] : null;
+                          
                           return (
-                            <div key={field.id || field.name}>
+                            <div key={field.id || field.name || field.field_id}>
                               <label className="text-sm font-medium text-muted-foreground">
-                                {field.label || field.name}
+                                {field.label || "Untitled Field"}
                               </label>
                               <div className="mt-1">
-                                {value ? (
-                                  <p className="text-sm">{String(value)}</p>
-                                ) : (
-                                  <p className="text-sm text-muted-foreground italic">—</p>
-                                )}
+                                <p className="text-sm">{formatFieldValue(field, value)}</p>
                               </div>
                             </div>
                           );
@@ -373,7 +526,10 @@ const TrackerEntryDetailPage = () => {
                     </Card>
                   );
                 })
-              ) : (
+              ) : null}
+              
+              {/* Fallback: If no sections and no fields without sections, show all fields */}
+              {sections.length === 0 && fieldsWithoutSection.length === 0 ? (
                 // If no sections, render all fields in a single card
                 <Card>
                   <CardHeader>
@@ -382,20 +538,23 @@ const TrackerEntryDetailPage = () => {
                   <CardContent className="space-y-4">
                     {trackerFields.length > 0 ? (
                       trackerFields.map((field) => {
-                        // Use submission_data or formatted_data (API returns submission_data)
-                        const submissionData = entry.submission_data || entry.formatted_data || entry.entry_data || {};
-                        const value = submissionData[field.id] || submissionData[field.name] || submissionData[field.field_id];
+                        // Prefer formatted_data for display, fallback to submission_data
+                        const displayData = entry.formatted_data || entry.submission_data || entry.entry_data || {};
+                        
+                        // Fields use 'id' or 'name' to match submission_data keys (not 'field_id')
+                        // Priority: id -> name -> field_id (for backward compatibility)
+                        const fieldId = field.id || field.name || field.field_id;
+                        
+                        // Get value from displayData using the field identifier
+                        const value = fieldId ? displayData[fieldId] : null;
+                        
                         return (
-                          <div key={field.id || field.name}>
+                          <div key={field.id || field.name || field.field_id}>
                             <label className="text-sm font-medium text-muted-foreground">
-                              {field.label || field.name}
+                              {field.label || "Untitled Field"}
                             </label>
                             <div className="mt-1">
-                              {value ? (
-                                <p className="text-sm">{String(value)}</p>
-                              ) : (
-                                <p className="text-sm text-muted-foreground italic">—</p>
-                              )}
+                              <p className="text-sm">{formatFieldValue(field, value)}</p>
                             </div>
                           </div>
                         );
@@ -407,7 +566,7 @@ const TrackerEntryDetailPage = () => {
                     )}
                   </CardContent>
                 </Card>
-              )}
+              ) : null}
 
             </div>
           )}

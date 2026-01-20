@@ -54,6 +54,9 @@ import {
   Edit,
   Trash2,
   Filter,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import {
   useTrackers,
@@ -78,6 +81,10 @@ const TrackersPage = () => {
   const [sortOrder, setSortOrder] = useState("desc");
   const [isCreateEntryDialogOpen, setIsCreateEntryDialogOpen] = useState(false);
   const [entryFormData, setEntryFormData] = useState({});
+  // Column-specific filters: field_id -> filter value
+  const [columnFilters, setColumnFilters] = useState({});
+  // Column-specific sorting: field_id -> sort order (null, 'asc', 'desc')
+  const [columnSorting, setColumnSorting] = useState({});
   const [entryFieldErrors, setEntryFieldErrors] = useState({});
 
   const itemsPerPage = 20;
@@ -168,8 +175,14 @@ const TrackersPage = () => {
       params.query = searchTerm;
     }
 
+    // Add column filters - these will be sent as field-specific filters
+    // Format: { field_id: value }
+    if (Object.keys(columnFilters).length > 0) {
+      params.field_filters = columnFilters;
+    }
+
     return params;
-  }, [currentPage, selectedTracker, statusFilter, searchTerm, sortBy, sortOrder]);
+  }, [currentPage, selectedTracker, statusFilter, searchTerm, sortBy, sortOrder, columnFilters]);
 
   // Get tracker entries
   const { data: entriesResponse, isLoading: entriesLoading } = useTrackerEntries(
@@ -241,6 +254,82 @@ const TrackersPage = () => {
   }, [selectedTracker, trackers]);
 
   // Helper function to format field value for display
+  // Helper to check if a field is sortable (number, date, datetime)
+  const isFieldSortable = (field) => {
+    const fieldType = field.type || field.field_type;
+    return ['number', 'date', 'datetime'].includes(fieldType);
+  };
+
+  // Helper to check if a field is filterable (select, multiselect)
+  const isFieldFilterable = (field) => {
+    const fieldType = field.type || field.field_type;
+    return ['select', 'multiselect'].includes(fieldType);
+  };
+
+  // Get unique values for a select field from entries
+  const getFieldUniqueValues = (field, entries) => {
+    const fieldId = field.id || field.field_id || field.name;
+    const values = new Set();
+    entries.forEach((entry) => {
+      const submissionData = entry.submission_data || entry.formatted_data || {};
+      const value = submissionData[fieldId];
+      if (value !== null && value !== undefined && value !== "") {
+        if (Array.isArray(value)) {
+          value.forEach((v) => values.add(String(v)));
+        } else {
+          values.add(String(value));
+        }
+      }
+    });
+    return Array.from(values).sort();
+  };
+
+  // Handle column header click for sorting
+  const handleColumnSort = (field) => {
+    const fieldId = field.id || field.field_id || field.name;
+    const currentSort = columnSorting[fieldId];
+    
+    // Cycle: null -> 'asc' -> 'desc' -> null
+    let newSort = null;
+    if (currentSort === null || currentSort === undefined) {
+      newSort = 'asc';
+    } else if (currentSort === 'asc') {
+      newSort = 'desc';
+    } else {
+      newSort = null;
+    }
+    
+    if (newSort === null) {
+      // Remove from sorting, revert to default
+      const newColumnSorting = { ...columnSorting };
+      delete newColumnSorting[fieldId];
+      setColumnSorting(newColumnSorting);
+      setSortBy("created_at");
+      setSortOrder("desc");
+    } else {
+      // Set column-specific sorting
+      setColumnSorting({ ...columnSorting, [fieldId]: newSort });
+      // For now, we'll use the field value in submission_data for sorting
+      // This requires backend support - for now, just set the sort state
+      setSortBy(`field_${fieldId}`);
+      setSortOrder(newSort);
+    }
+    setCurrentPage(1);
+  };
+
+  // Handle column filter change
+  const handleColumnFilter = (field, value) => {
+    const fieldId = field.id || field.field_id || field.name;
+    if (value === "all" || value === "") {
+      const newFilters = { ...columnFilters };
+      delete newFilters[fieldId];
+      setColumnFilters(newFilters);
+    } else {
+      setColumnFilters({ ...columnFilters, [fieldId]: value });
+    }
+    setCurrentPage(1);
+  };
+
   const formatFieldValue = (field, value) => {
     if (value === null || value === undefined || value === "") {
       return "—";
@@ -488,6 +577,11 @@ const TrackersPage = () => {
         onValueChange={(value) => {
           setSelectedTracker(value);
           setCurrentPage(1); // Reset to first page when switching trackers
+          setSearchTerm(""); // Reset search term
+          setStatusFilter("all"); // Reset status filter
+          setColumnFilters({}); // Reset column filters
+          setColumnSorting({}); // Reset column sorting
+          // Keep sort_by and sort_order as they're usually consistent across trackers
         }}
         className="w-full"
       >
@@ -659,11 +753,68 @@ const TrackersPage = () => {
                                 <TableHead>ID</TableHead>
                                 <TableHead>Status</TableHead>
                                 {/* Dynamic field columns */}
-                                {trackerDisplayableFields.map((field) => (
-                                  <TableHead key={field.id || field.field_id}>
-                                    {field.label || field.field_label || field.name}
-                                  </TableHead>
-                                ))}
+                                {trackerDisplayableFields.map((field) => {
+                                  const fieldId = field.id || field.field_id || field.name;
+                                  const fieldType = field.type || field.field_type;
+                                  const isSortable = isFieldSortable(field);
+                                  const isFilterable = isFieldFilterable(field);
+                                  const currentSort = columnSorting[fieldId];
+                                  const currentFilter = columnFilters[fieldId] || "all";
+                                  const uniqueValues = isFilterable ? getFieldUniqueValues(field, entries) : [];
+
+                                  return (
+                                    <TableHead key={fieldId} className="relative">
+                                      <div className="flex flex-col gap-1">
+                                        {/* Header with sort button */}
+                                        <div className="flex items-center gap-2">
+                                          {isSortable ? (
+                                            <button
+                                              onClick={() => handleColumnSort(field)}
+                                              className="flex items-center gap-1 hover:text-foreground transition-colors"
+                                            >
+                                              <span>{field.label || field.field_label || field.name}</span>
+                                              {currentSort === 'asc' ? (
+                                                <ArrowUp className="h-3 w-3" />
+                                              ) : currentSort === 'desc' ? (
+                                                <ArrowDown className="h-3 w-3" />
+                                              ) : (
+                                                <ArrowUpDown className="h-3 w-3 opacity-50" />
+                                              )}
+                                            </button>
+                                          ) : (
+                                            <span>{field.label || field.field_label || field.name}</span>
+                                          )}
+                                        </div>
+                                        {/* Filter dropdown for select fields */}
+                                        {isFilterable && uniqueValues.length > 0 && (
+                                          <Select
+                                            value={currentFilter}
+                                            onValueChange={(value) => handleColumnFilter(field, value)}
+                                          >
+                                            <SelectTrigger className="h-7 text-xs">
+                                              <SelectValue placeholder="All" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                              <SelectItem value="all">All</SelectItem>
+                                              {uniqueValues.map((value) => {
+                                                // Try to find the label from field options
+                                                const option = field.options?.find(
+                                                  (opt) => String(opt.value) === String(value) || String(opt.label) === String(value)
+                                                );
+                                                const displayValue = option?.label || value;
+                                                return (
+                                                  <SelectItem key={value} value={value}>
+                                                    {displayValue}
+                                                  </SelectItem>
+                                                );
+                                              })}
+                                            </SelectContent>
+                                          </Select>
+                                        )}
+                                      </div>
+                                    </TableHead>
+                                  );
+                                })}
                                 <TableHead>Actions</TableHead>
                               </TableRow>
                             </TableHeader>
