@@ -243,6 +243,29 @@ const TrackerEntryDetailPage = () => {
       }
     }
     
+    // Handle people/user fields
+    if ((fieldType === "people" || fieldType === "user") && typeof value === "object" && value !== null) {
+      // Extract display name from the user object
+      if (value.display_name) {
+        return value.display_name;
+      }
+      // Build name from first_name and last_name
+      const nameParts = [];
+      if (value.first_name) nameParts.push(value.first_name);
+      if (value.last_name) nameParts.push(value.last_name);
+      if (nameParts.length > 0) {
+        return nameParts.join(" ");
+      }
+      // Fallback to email
+      if (value.email) {
+        return value.email;
+      }
+      // Last resort: user ID
+      if (value.id) {
+        return `User #${value.id}`;
+      }
+    }
+    
     if (Array.isArray(value)) {
       return value.join(", ");
     }
