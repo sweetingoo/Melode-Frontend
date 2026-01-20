@@ -45,11 +45,16 @@ function Button({
 }) {
   const Comp = asChild ? Slot : "button"
 
+  // Add suppressHydrationWarning to prevent warnings from Radix UI ID mismatches
+  // When asChild is true, props are passed to the child element which Radix UI modifies
+  // When asChild is false, we add it directly to the button element
+  const buttonProps = { ...props, suppressHydrationWarning: true }
+
   return (
     <Comp
       data-slot="button"
       className={cn(buttonVariants({ variant, size, className }))}
-      {...props} />
+      {...buttonProps} />
   );
 }
 

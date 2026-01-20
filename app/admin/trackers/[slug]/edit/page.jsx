@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
@@ -34,14 +35,26 @@ import {
   ChevronDown,
 } from "lucide-react";
 import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+  PaginationEllipsis,
+} from "@/components/ui/pagination";
+import {
   useTracker,
   useUpdateTracker,
+  useTrackerAuditLogs,
 } from "@/hooks/useTrackers";
 import { useRoles } from "@/hooks/useRoles";
 import { useUsers } from "@/hooks/useUsers";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
 import { generateSlug } from "@/utils/slug";
 import { toast } from "sonner";
+import { format } from "date-fns";
+import { parseUTCDate } from "@/utils/time";
 
 const fieldTypes = [
   { value: "text", label: "Text" },
@@ -54,6 +67,7 @@ const fieldTypes = [
   { value: "boolean", label: "Boolean/Checkbox" },
   { value: "select", label: "Select (Dropdown)" },
   { value: "multiselect", label: "Multi-Select" },
+  { value: "people", label: "People (User Selection)" },
 ];
 
 // Helper function to generate field ID from label
@@ -92,6 +106,38 @@ const TrackerEditPage = () => {
   const { data: rolesData } = useRoles();
   const { data: usersResponse } = useUsers();
   const { hasPermission } = usePermissionsCheck();
+  const [auditLogsPage, setAuditLogsPage] = useState(1);
+  const [auditLogsActionFilter, setAuditLogsActionFilter] = useState("all");
+  const auditLogsPerPage = 20;
+  const { data: auditLogsResponse, isLoading: auditLogsLoading } = useTrackerAuditLogs(
+    slug,
+    { 
+      page: auditLogsPage, 
+      per_page: auditLogsPerPage,
+      action: auditLogsActionFilter !== "all" ? auditLogsActionFilter : undefined
+    }
+  );
+  
+  // Reset page when filter changes
+  useEffect(() => {
+    setAuditLogsPage(1);
+  }, [auditLogsActionFilter]);
+  
+  // Extract logs and pagination info from response
+  const auditLogs = useMemo(() => {
+    if (!auditLogsResponse) return [];
+    return auditLogsResponse.logs || [];
+  }, [auditLogsResponse]);
+  
+  const auditLogsPagination = useMemo(() => {
+    if (!auditLogsResponse) return { page: 1, per_page: auditLogsPerPage, total: 0, total_pages: 0 };
+    return {
+      page: auditLogsResponse.page || 1,
+      per_page: auditLogsResponse.per_page || auditLogsPerPage,
+      total: auditLogsResponse.total || 0,
+      total_pages: auditLogsResponse.total_pages || 0,
+    };
+  }, [auditLogsResponse]);
 
   const roles = rolesData || [];
   const users = usersResponse?.users || usersResponse || [];
@@ -157,6 +203,7 @@ const TrackerEditPage = () => {
             sections: [],
           }),
           list_view_fields: tracker.tracker_config?.list_view_fields || [],
+          create_view_fields: tracker.tracker_config?.create_view_fields || [],
         },
         tracker_fields: tracker.tracker_fields || {
           fields: [],
@@ -433,6 +480,7 @@ const TrackerEditPage = () => {
           <TabsTrigger value="sections">Sections ({sections.length})</TabsTrigger>
           <TabsTrigger value="statuses">Statuses ({statuses.length})</TabsTrigger>
           <TabsTrigger value="permissions">Permissions</TabsTrigger>
+          <TabsTrigger value="audit">Audit Logs</TabsTrigger>
         </TabsList>
 
         {/* Basic Info Tab */}
@@ -616,6 +664,87 @@ const TrackerEditPage = () => {
               </div>
             </CardContent>
           </Card>
+          
+          {/* Create View Fields Configuration */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Create View Fields</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div>
+                <Label className="text-base font-semibold mb-2 block">
+                  Creation Modal Fields
+                </Label>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Select which fields should be displayed in the creation modal/popup. If none selected, all fields will be shown. Fields not selected here can still be added later when editing the entry.
+                </p>
+                {fields.length === 0 ? (
+                  <p className="text-sm text-muted-foreground italic">
+                    Add fields first to configure creation view
+                  </p>
+                ) : (
+                  <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                    {fields
+                      .filter((field) => {
+                        const fieldType = field.type || field.field_type;
+                        return !['text_block', 'image_block', 'line_break', 'page_break', 'youtube_video_embed'].includes(fieldType);
+                      })
+                      .map((field) => {
+                        const fieldId = field.id || field.field_id || field.name;
+                        const createViewFields = formData.tracker_config?.create_view_fields || [];
+                        const isSelected = createViewFields.includes(fieldId);
+                        
+                        return (
+                          <div
+                            key={fieldId}
+                            className="flex items-center gap-2 p-2 border rounded-md hover:bg-muted/50"
+                          >
+                            <input
+                              type="checkbox"
+                              id={`create_view_${fieldId}`}
+                              checked={isSelected}
+                              onChange={(e) => {
+                                const currentFields = formData.tracker_config?.create_view_fields || [];
+                                let newFields;
+                                
+                                if (e.target.checked) {
+                                  newFields = [...currentFields, fieldId];
+                                } else {
+                                  newFields = currentFields.filter((id) => id !== fieldId);
+                                }
+                                
+                                setFormData((prev) => ({
+                                  ...prev,
+                                  tracker_config: {
+                                    ...prev.tracker_config,
+                                    create_view_fields: newFields,
+                                  },
+                                }));
+                              }}
+                              className="rounded"
+                            />
+                            <Label
+                              htmlFor={`create_view_${fieldId}`}
+                              className="cursor-pointer flex-1 flex items-center gap-2"
+                            >
+                              <span className="font-medium">{field.label || field.name}</span>
+                              <Badge variant="outline" className="text-xs">
+                                {field.type}
+                              </Badge>
+                              {(field.required || field.is_required) && (
+                                <Badge variant="destructive" className="text-xs">
+                                  Required
+                                </Badge>
+                              )}
+                            </Label>
+                          </div>
+                        );
+                      })}
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* Fields Tab */}
@@ -773,6 +902,47 @@ const TrackerEditPage = () => {
                         Required
                       </Label>
                     </div>
+
+                    {/* Configuration for People field */}
+                    {newField.type === "people" && (
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <Label>Filter by Roles (Optional)</Label>
+                          <p className="text-xs text-muted-foreground">
+                            Select which roles to filter users by. Leave empty to show all users.
+                          </p>
+                          <PeopleFieldRoleSelector
+                            selectedRoleIds={newField.filter_by_roles || []}
+                            onChange={(roleIds) => {
+                              setNewField((prev) => ({
+                                ...prev,
+                                filter_by_roles: roleIds,
+                              }));
+                            }}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <div className="flex items-center space-x-2">
+                            <Checkbox
+                              id="filter-by-org"
+                              checked={newField.filter_by_organization || false}
+                              onCheckedChange={(checked) => {
+                                setNewField((prev) => ({
+                                  ...prev,
+                                  filter_by_organization: checked,
+                                }));
+                              }}
+                            />
+                            <Label htmlFor="filter-by-org" className="cursor-pointer text-sm">
+                              Filter by full organization
+                            </Label>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            When enabled, only shows users from the current organization
+                          </p>
+                        </div>
+                      </div>
+                    )}
 
                     {/* Options for Select/Multi-select */}
                     {(newField.type === "select" || newField.type === "multiselect") && (
@@ -1076,7 +1246,322 @@ const TrackerEditPage = () => {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* Audit Logs Tab */}
+        <TabsContent value="audit" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle>Audit History</CardTitle>
+                <Select
+                  value={auditLogsActionFilter}
+                  onValueChange={setAuditLogsActionFilter}
+                >
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Filter by action" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Actions</SelectItem>
+                    <SelectItem value="create">Create</SelectItem>
+                    <SelectItem value="update">Update</SelectItem>
+                    <SelectItem value="delete">Delete</SelectItem>
+                    <SelectItem value="read">Read</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {auditLogsLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin" />
+                </div>
+              ) : auditLogs && auditLogs.length > 0 ? (
+                <div className="space-y-4">
+                  {auditLogs.map((log, index) => {
+                    // Helper to format field names to be readable
+                    const formatFieldName = (fieldName) => {
+                      return fieldName
+                        .split("_")
+                        .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+                        .join(" ");
+                    };
+                    
+                    // Format audit log changes from old_values/new_values
+                    const formatAuditChanges = () => {
+                      const changes = [];
+                      
+                      if (!log.old_values && !log.new_values) {
+                        return changes;
+                      }
+                      
+                      const oldVals = log.old_values || {};
+                      const newVals = log.new_values || {};
+                      const allKeys = new Set([...Object.keys(oldVals), ...Object.keys(newVals)]);
+                      
+                      allKeys.forEach((key) => {
+                        const oldVal = oldVals[key];
+                        const newVal = newVals[key];
+                        
+                        // Skip if values are the same
+                        if (oldVal === newVal) return;
+                        
+                        // Skip internal/technical fields
+                        if (key === "updated_at" || key === "created_at" || key === "id" || key === "slug") {
+                          return;
+                        }
+                        
+                        // Format the field name
+                        const fieldLabel = formatFieldName(key);
+                        
+                        // Format values for display
+                        const formatValue = (val) => {
+                          if (val === null || val === undefined) return "—";
+                          if (typeof val === "boolean") return val ? "Yes" : "No";
+                          if (typeof val === "object") {
+                            // For complex objects, show a summary
+                            if (Array.isArray(val)) {
+                              return val.length > 0 ? `${val.length} item(s)` : "Empty";
+                            }
+                            return "Updated";
+                          }
+                          if (typeof val === "string" && val.length > 50) {
+                            return val.substring(0, 50) + "...";
+                          }
+                          return String(val);
+                        };
+                        
+                        changes.push({
+                          field: fieldLabel,
+                          old: formatValue(oldVal),
+                          new: formatValue(newVal),
+                        });
+                      });
+                      
+                      return changes;
+                    };
+                    
+                    // Format details JSON nicely
+                    const formatDetails = (hasChanges) => {
+                      if (!log.details) return null;
+                      
+                      let detailsObj = log.details;
+                      
+                      // If details is a string, try to parse it
+                      if (typeof log.details === "string") {
+                        try {
+                          detailsObj = JSON.parse(log.details);
+                        } catch (e) {
+                          return null;
+                        }
+                      }
+                      
+                      // If details is not an object, return null
+                      if (typeof detailsObj !== "object" || detailsObj === null) {
+                        return null;
+                      }
+                      
+                      // If we have changes, only show meaningful processing results
+                      if (hasChanges) {
+                        return null;
+                      }
+                      
+                      const parts = [];
+                      
+                      // Handle create action
+                      if (log.action === "create") {
+                        if (detailsObj.organization_name) {
+                          parts.push(`Organization: ${detailsObj.organization_name}`);
+                        }
+                        if (detailsObj.form_name) {
+                          parts.push(`Tracker: ${detailsObj.form_name}`);
+                        }
+                        if (parts.length > 0) {
+                          return parts.join(" • ");
+                        }
+                        return "Tracker created";
+                      }
+                      
+                      // Handle read action - don't show details for reads
+                      if (log.action === "read") {
+                        return null;
+                      }
+                      
+                      // Handle update action - if no changes detected, show message
+                      if (log.action === "update") {
+                        return "Update called but no changes detected";
+                      }
+                      
+                      return null;
+                    };
+                    
+                    const changes = formatAuditChanges();
+                    const formattedDetails = formatDetails(changes.length > 0);
+                    
+                    return (
+                      <div key={log.id || index} className="border-b pb-4 last:border-0">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline">{log.action}</Badge>
+                            <span className="text-sm text-muted-foreground">
+                              {log.user?.display_name || log.user?.email || log.user?.first_name || "System"}
+                            </span>
+                          </div>
+                          <span className="text-xs text-muted-foreground">
+                            {format(parseUTCDate(log.created_at), "PPp")}
+                          </span>
+                        </div>
+                        
+                        {changes.length > 0 ? (
+                          <div className="mt-3 space-y-2">
+                            {changes.map((change, changeIndex) => (
+                              <div key={changeIndex} className="text-sm">
+                                <span className="font-medium text-foreground">{change.field}:</span>{" "}
+                                <span className="text-muted-foreground line-through">{change.old}</span>{" "}
+                                <span className="text-muted-foreground">→</span>{" "}
+                                <span className="text-foreground font-medium">{change.new}</span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : formattedDetails ? (
+                          <p className="text-sm text-muted-foreground mt-1">
+                            {formattedDetails}
+                          </p>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground text-center py-8">
+                  No audit logs available
+                </p>
+              )}
+              
+              {/* Pagination */}
+              {auditLogsPagination.total_pages > 1 && (
+                <div className="mt-4 flex justify-center">
+                  <Pagination>
+                    <PaginationContent>
+                      <PaginationItem>
+                        <PaginationPrevious
+                          href="#"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            if (auditLogsPage > 1) {
+                              setAuditLogsPage(auditLogsPage - 1);
+                            }
+                          }}
+                          className={auditLogsPage <= 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                        />
+                      </PaginationItem>
+                      {Array.from({ length: auditLogsPagination.total_pages }, (_, i) => i + 1).map((pageNum) => {
+                        // Show first page, last page, current page, and pages around current
+                        if (
+                          pageNum === 1 ||
+                          pageNum === auditLogsPagination.total_pages ||
+                          (pageNum >= auditLogsPage - 1 && pageNum <= auditLogsPage + 1)
+                        ) {
+                          return (
+                            <PaginationItem key={pageNum}>
+                              <PaginationLink
+                                href="#"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  setAuditLogsPage(pageNum);
+                                }}
+                                isActive={pageNum === auditLogsPage}
+                                className="cursor-pointer"
+                              >
+                                {pageNum}
+                              </PaginationLink>
+                            </PaginationItem>
+                          );
+                        } else if (pageNum === auditLogsPage - 2 || pageNum === auditLogsPage + 2) {
+                          return (
+                            <PaginationItem key={pageNum}>
+                              <PaginationEllipsis />
+                            </PaginationItem>
+                          );
+                        }
+                        return null;
+                      })}
+                      <PaginationItem>
+                        <PaginationNext
+                          href="#"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            if (auditLogsPage < auditLogsPagination.total_pages) {
+                              setAuditLogsPage(auditLogsPage + 1);
+                            }
+                          }}
+                          className={
+                            auditLogsPage >= auditLogsPagination.total_pages
+                              ? "pointer-events-none opacity-50"
+                              : "cursor-pointer"
+                          }
+                        />
+                      </PaginationItem>
+                    </PaginationContent>
+                  </Pagination>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
+    </div>
+  );
+};
+
+// People Field Role Selector Component
+const PeopleFieldRoleSelector = ({ selectedRoleIds, onChange }) => {
+  const { data: rolesData, isLoading } = useRoles({ per_page: 100 });
+  const roles = rolesData?.roles || [];
+
+  const handleRoleToggle = (roleId) => {
+    const roleIdNum = typeof roleId === 'string' ? parseInt(roleId) : roleId;
+    const currentIds = Array.isArray(selectedRoleIds) ? selectedRoleIds.map(r => typeof r === 'object' ? r.id : r) : [];
+    
+    if (currentIds.includes(roleIdNum)) {
+      onChange(currentIds.filter(id => id !== roleIdNum));
+    } else {
+      onChange([...currentIds, roleIdNum]);
+    }
+  };
+
+  if (isLoading) {
+    return <div className="text-sm text-muted-foreground">Loading roles...</div>;
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="max-h-48 overflow-auto border rounded-md p-2 space-y-1">
+        {roles.length === 0 ? (
+          <div className="text-sm text-muted-foreground py-2">No roles available</div>
+        ) : (
+          roles.map((role) => {
+            const roleId = role.id;
+            const isSelected = Array.isArray(selectedRoleIds) && selectedRoleIds.some(r => (typeof r === 'object' ? r.id : r) === roleId);
+            return (
+              <div key={roleId} className="flex items-center space-x-2">
+                <Checkbox
+                  id={`role-${roleId}`}
+                  checked={isSelected}
+                  onCheckedChange={() => handleRoleToggle(roleId)}
+                />
+                <Label htmlFor={`role-${roleId}`} className="cursor-pointer text-sm flex-1">
+                  {role.display_name || role.name || `Role ${roleId}`}
+                </Label>
+              </div>
+            );
+          })
+        )}
+      </div>
+      {selectedRoleIds && selectedRoleIds.length > 0 && (
+        <p className="text-xs text-muted-foreground">
+          {selectedRoleIds.length} role(s) selected
+        </p>
+      )}
     </div>
   );
 };

@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -10,11 +10,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
-import { CalendarIcon, Download, FileText, X } from "lucide-react";
+import { CalendarIcon, Download, FileText, X, Search, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useDownloadFile } from "@/hooks/useProfile";
 import { useFileReferences } from "@/hooks/useFileReferences";
+import { usersService } from "@/services/users";
 
 const CustomFieldRenderer = ({ 
   field, 
@@ -303,6 +304,17 @@ const CustomFieldRenderer = ({
             )}
           </div>
         );
+
+      case 'people':
+      case 'user':
+        return <PeopleFieldRenderer
+          field={field}
+          value={value}
+          onChange={handleChange}
+          error={error}
+          fieldId={fieldId}
+          readOnly={readOnly}
+        />;
 
       case 'file':
         return <FileFieldRenderer 
@@ -1238,6 +1250,201 @@ const SignatureFieldRenderer = ({ field, value, onChange, error, fieldId }) => {
         <p className="text-sm text-red-500">{error}</p>
       )}
     </div>
+  );
+};
+
+// People Field Renderer Component
+const PeopleFieldRenderer = ({ field, value, onChange, error, fieldId, readOnly }) => {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [users, setUsers] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState(null);
+
+  // Field configuration
+  const filterByOrganization = field.filter_by_organization || field.filterByOrganization;
+  const filterByRoles = field.filter_by_roles || field.filterByRoles || [];
+  const roleIds = Array.isArray(filterByRoles) ? filterByRoles.map(r => typeof r === 'object' ? r.id : r).filter(Boolean).join(',') : '';
+
+  // Load selected user when value changes
+  useEffect(() => {
+    if (value && typeof value === 'object' && value.id) {
+      setSelectedUser(value);
+    } else if (value && typeof value === 'number') {
+      // If value is just an ID, we'll need to fetch the user
+      // For now, just set it as the value
+      setSelectedUser({ id: value });
+    } else {
+      setSelectedUser(null);
+    }
+  }, [value]);
+
+  // Search users when search term changes
+  useEffect(() => {
+    if (!isOpen) return;
+    
+    const searchUsers = async () => {
+      if (searchTerm.length < 2 && !searchTerm) {
+        setUsers([]);
+        return;
+      }
+
+      setIsLoading(true);
+      try {
+        const response = await usersService.suggestUsers({
+          search: searchTerm,
+          role_ids: roleIds || undefined,
+          is_active: true,
+          per_page: 20,
+        });
+        setUsers(response.data?.users || []);
+      } catch (error) {
+        console.error("Failed to search users:", error);
+        setUsers([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    const debounceTimer = setTimeout(searchUsers, 300);
+    return () => clearTimeout(debounceTimer);
+  }, [searchTerm, isOpen, roleIds]);
+
+  // Load initial users when dropdown opens
+  useEffect(() => {
+    if (isOpen && !searchTerm) {
+      setIsLoading(true);
+      usersService.suggestUsers({
+        role_ids: roleIds || undefined,
+        is_active: true,
+        per_page: 20,
+      })
+        .then((response) => {
+          setUsers(response.data?.users || []);
+        })
+        .catch((error) => {
+          console.error("Failed to load users:", error);
+          setUsers([]);
+        })
+        .finally(() => {
+          setIsLoading(false);
+        });
+    }
+  }, [isOpen, roleIds]);
+
+  const handleUserSelect = (user) => {
+    // Store user ID and display name for programmatic linking
+    const userValue = {
+      id: user.id,
+      email: user.email,
+      display_name: user.display_name || `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.email,
+      first_name: user.first_name,
+      last_name: user.last_name,
+    };
+    setSelectedUser(userValue);
+    onChange(userValue);
+    setIsOpen(false);
+    setSearchTerm("");
+  };
+
+  const handleClear = () => {
+    setSelectedUser(null);
+    onChange(null);
+    setSearchTerm("");
+  };
+
+  const displayValue = selectedUser 
+    ? (selectedUser.display_name || `${selectedUser.first_name || ''} ${selectedUser.last_name || ''}`.trim() || selectedUser.email || `User #${selectedUser.id}`)
+    : "";
+
+  if (readOnly) {
+    return (
+      <div className={cn("px-3 py-2 border rounded-md bg-muted", error && "border-red-500")}>
+        {displayValue || <span className="text-muted-foreground">No user selected</span>}
+      </div>
+    );
+  }
+
+  return (
+    <Popover open={isOpen} onOpenChange={setIsOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          className={cn(
+            "w-full justify-between",
+            !selectedUser && "text-muted-foreground",
+            error && "border-red-500"
+          )}
+        >
+          <span className="truncate">
+            {displayValue || `Select ${field.field_label || field.name || "user"}`}
+          </span>
+          <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[400px] p-0" align="start">
+        <div className="flex flex-col">
+          <div className="flex items-center border-b px-3">
+            <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+            <Input
+              placeholder="Search users..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="border-0 focus-visible:ring-0"
+            />
+            {selectedUser && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleClear}
+                className="h-8 w-8 p-0"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
+          <div className="max-h-[300px] overflow-auto">
+            {isLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin" />
+              </div>
+            ) : users.length === 0 ? (
+              <div className="py-8 text-center text-sm text-muted-foreground">
+                {searchTerm ? "No users found" : "Start typing to search users"}
+              </div>
+            ) : (
+              <div className="p-1">
+                {users.map((user) => {
+                  const userDisplayName = user.display_name || `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.email;
+                  const isSelected = selectedUser?.id === user.id;
+                  return (
+                    <div
+                      key={user.id}
+                      className={cn(
+                        "relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground",
+                        isSelected && "bg-accent"
+                      )}
+                      onClick={() => handleUserSelect(user)}
+                    >
+                      <div className="flex flex-col flex-1">
+                        <span className="font-medium">{userDisplayName}</span>
+                        {user.email && user.email !== userDisplayName && (
+                          <span className="text-xs text-muted-foreground">{user.email}</span>
+                        )}
+                      </div>
+                      {isSelected && (
+                        <span className="ml-2 text-primary">✓</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 };
 

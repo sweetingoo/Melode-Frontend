@@ -70,9 +70,15 @@ import { Label } from "@/components/ui/label";
 import { format } from "date-fns";
 import { parseUTCDate } from "@/utils/time";
 import { toast } from "sonner";
+import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
 
 const TrackersPage = () => {
   const router = useRouter();
+  const { hasPermission } = usePermissionsCheck();
+  const canCreateEntry = hasPermission("tracker_entry:create");
+  const canReadEntries = hasPermission("tracker_entry:read") || hasPermission("tracker_entry:list");
+  const canDeleteEntry = hasPermission("tracker_entry:delete");
+  const canReadTrackers = hasPermission("tracker:read") || hasPermission("tracker:list");
   const [selectedTracker, setSelectedTracker] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -436,7 +442,7 @@ const TrackersPage = () => {
               Manage Trackers
             </Button>
           </Link>
-          {selectedTrackerObj && (
+          {selectedTrackerObj && canCreateEntry && (
             <Dialog 
               open={isCreateEntryDialogOpen} 
               onOpenChange={(open) => {
@@ -462,17 +468,33 @@ const TrackersPage = () => {
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
-                  {trackerDetails && trackerDetails.tracker_fields?.fields && (
-                    <div className="space-y-4">
-                      <Label className="text-base font-semibold">Entry Details</Label>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {trackerDetails.tracker_fields.fields
-                          .filter((field) => {
-                            // Filter out display-only fields
-                            const fieldType = field.type || field.field_type;
-                            return !['text_block', 'image_block', 'line_break', 'page_break', 'youtube_video_embed'].includes(fieldType);
-                          })
-                          .map((field) => {
+                  {trackerDetails && trackerDetails.tracker_fields?.fields && (() => {
+                    // Get fields to show in creation modal
+                    const allFields = trackerDetails.tracker_fields.fields.filter((field) => {
+                      // Filter out display-only fields
+                      const fieldType = field.type || field.field_type;
+                      return !['text_block', 'image_block', 'line_break', 'page_break', 'youtube_video_embed'].includes(fieldType);
+                    });
+                    
+                    // Check if create_view_fields is configured
+                    const createViewFields = trackerDetails.tracker_config?.create_view_fields;
+                    const fieldsToShow = createViewFields && Array.isArray(createViewFields) && createViewFields.length > 0
+                      ? allFields.filter((field) => {
+                          const fieldId = field.id || field.field_id || field.name;
+                          return createViewFields.includes(fieldId);
+                        })
+                      : allFields; // Show all fields if not configured (backward compatibility)
+                    
+                    return (
+                      <div className="space-y-4">
+                        <Label className="text-base font-semibold">Entry Details</Label>
+                        {fieldsToShow.length === 0 ? (
+                          <p className="text-sm text-muted-foreground">
+                            No fields configured for creation. Please configure "Create View Fields" in tracker settings.
+                          </p>
+                        ) : (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {fieldsToShow.map((field) => {
                             const fieldId = field.id || field.field_id;
                             const fieldValue = entryFormData[fieldId] || "";
                             
@@ -505,9 +527,11 @@ const TrackersPage = () => {
                               />
                             );
                           })}
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  )}
+                    );
+                  })()}
                 </div>
                 <DialogFooter>
                   <Button
@@ -524,10 +548,23 @@ const TrackersPage = () => {
                         return;
                       }
                       
-                      // Basic validation
+                      // Basic validation - only validate fields that are shown in creation modal
                       const errors = {};
-                      trackerDetails.tracker_fields?.fields?.forEach((field) => {
-                        const fieldId = field.id || field.field_id;
+                      const allFields = trackerDetails.tracker_fields?.fields?.filter((field) => {
+                        const fieldType = field.type || field.field_type;
+                        return !['text_block', 'image_block', 'line_break', 'page_break', 'youtube_video_embed'].includes(fieldType);
+                      }) || [];
+                      
+                      const createViewFields = trackerDetails.tracker_config?.create_view_fields;
+                      const fieldsToValidate = createViewFields && Array.isArray(createViewFields) && createViewFields.length > 0
+                        ? allFields.filter((field) => {
+                            const fieldId = field.id || field.field_id || field.name;
+                            return createViewFields.includes(fieldId);
+                          })
+                        : allFields; // Validate all if not configured
+                      
+                      fieldsToValidate.forEach((field) => {
+                        const fieldId = field.id || field.field_id || field.name;
                         const isRequired = field.required || field.is_required;
                         if (isRequired && !entryFormData[fieldId]) {
                           errors[fieldId] = `${field.label || field.field_label || "This field"} is required`;
@@ -819,8 +856,12 @@ const TrackersPage = () => {
                               </TableRow>
                             </TableHeader>
                             <TableBody>
-                            {entries.map((entry) => {
+                            {entries.map((entry, index) => {
                               const submissionData = entry.submission_data || entry.formatted_data || {};
+                              
+                              // Use persistent tracker entry number from backend
+                              // This is calculated based on creation order within the tracker
+                              const entryNumber = entry.tracker_entry_number || entry.id;
                               
                               // Only extract values for configured display fields to optimize performance
                               const displayValues = {};
@@ -836,7 +877,7 @@ const TrackersPage = () => {
                                       href={`/admin/trackers/entries/${entry.id}`}
                                       className="hover:underline"
                                     >
-                                      #{entry.id}
+                                      #{entryNumber}
                                     </Link>
                                   </TableCell>
                                   <TableCell>
@@ -856,19 +897,23 @@ const TrackersPage = () => {
                                   })}
                                     <TableCell>
                                       <div className="flex items-center gap-2">
-                                        <Link href={`/admin/trackers/entries/${entry.id}`}>
-                                          <Button variant="ghost" size="sm">
-                                            <Eye className="h-4 w-4" />
+                                        {canReadEntries && (
+                                          <Link href={`/admin/trackers/entries/${entry.id}`}>
+                                            <Button variant="ghost" size="sm">
+                                              <Eye className="h-4 w-4" />
+                                            </Button>
+                                          </Link>
+                                        )}
+                                        {canDeleteEntry && (
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => handleDelete(entry.id)}
+                                            disabled={deleteEntryMutation.isPending}
+                                          >
+                                            <Trash2 className="h-4 w-4 text-destructive" />
                                           </Button>
-                                        </Link>
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          onClick={() => handleDelete(entry.id)}
-                                          disabled={deleteEntryMutation.isPending}
-                                        >
-                                          <Trash2 className="h-4 w-4 text-destructive" />
-                                        </Button>
+                                        )}
                                       </div>
                                     </TableCell>
                                   </TableRow>

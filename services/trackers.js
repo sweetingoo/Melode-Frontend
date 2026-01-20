@@ -240,9 +240,11 @@ export const trackersService = {
   },
 
   // Get tracker entry timeline
-  getTrackerEntryTimeline: async (entryId) => {
+  getTrackerEntryTimeline: async (entryId, page = 1, per_page = 50) => {
     try {
-      return await api.get(`/trackers/entries/${entryId}/timeline`);
+      return await api.get(`/trackers/entries/${entryId}/timeline`, {
+        params: { page, per_page },
+      });
     } catch (error) {
       console.error(`Get tracker entry timeline ${entryId} failed:`, error);
       throw error;
@@ -250,13 +252,49 @@ export const trackersService = {
   },
 
   // Get tracker entry audit logs
-  getTrackerEntryAuditLogs: async (entryId, limit = 100) => {
+  getTrackerEntryAuditLogs: async (entryId, params = {}) => {
     try {
+      const { page = 1, per_page = 20, limit, offset, action } = params;
+      const queryParams = {};
+      if (limit !== undefined) {
+        queryParams.limit = limit;
+        if (offset !== undefined) queryParams.offset = offset;
+      } else {
+        queryParams.page = page;
+        queryParams.per_page = per_page;
+      }
+      if (action) {
+        queryParams.action = action;
+      }
       return await api.get(`/trackers/entries/${entryId}/audit-logs`, {
-        params: { limit },
+        params: queryParams,
       });
     } catch (error) {
       console.error(`Get tracker entry audit logs ${entryId} failed:`, error);
+      throw error;
+    }
+  },
+
+  // Get tracker audit logs
+  getTrackerAuditLogs: async (slug, params = {}) => {
+    try {
+      const { page = 1, per_page = 20, limit, offset, action } = params;
+      const queryParams = {};
+      if (limit !== undefined) {
+        queryParams.limit = limit;
+        if (offset !== undefined) queryParams.offset = offset;
+      } else {
+        queryParams.page = page;
+        queryParams.per_page = per_page;
+      }
+      if (action) {
+        queryParams.action = action;
+      }
+      return await api.get(`/trackers/${slug}/audit-logs`, {
+        params: queryParams,
+      });
+    } catch (error) {
+      console.error(`Get tracker audit logs ${slug} failed:`, error);
       throw error;
     }
   },

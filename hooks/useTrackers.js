@@ -10,10 +10,11 @@ export const trackerKeys = {
   details: () => [...trackerKeys.all, "detail"],
   detail: (slug) => [...trackerKeys.details(), slug],
   search: (params) => [...trackerKeys.all, "search", params],
+  auditLogs: (slug) => [...trackerKeys.details(), slug, "audit-logs"],
   entries: () => [...trackerKeys.all, "entries"],
   entryList: (params) => [...trackerKeys.entries(), "list", params],
   entryDetail: (id) => [...trackerKeys.entries(), "detail", id],
-  entryTimeline: (id) => [...trackerKeys.entries(), "timeline", id],
+  entryTimeline: (id, page, per_page) => [...trackerKeys.entries(), "timeline", id, page, per_page],
   entryAuditLogs: (id) => [...trackerKeys.entries(), "audit-logs", id],
 };
 
@@ -275,11 +276,11 @@ export const useDeleteTrackerEntry = () => {
 };
 
 // Get tracker entry timeline query
-export const useTrackerEntryTimeline = (entryId, options = {}) => {
+export const useTrackerEntryTimeline = (entryId, page = 1, per_page = 50, options = {}) => {
   return useQuery({
-    queryKey: trackerKeys.entryTimeline(entryId),
+    queryKey: trackerKeys.entryTimeline(entryId, page, per_page),
     queryFn: async () => {
-      const response = await trackersService.getTrackerEntryTimeline(entryId);
+      const response = await trackersService.getTrackerEntryTimeline(entryId, page, per_page);
       return response.data;
     },
     enabled: !!entryId,
@@ -289,14 +290,30 @@ export const useTrackerEntryTimeline = (entryId, options = {}) => {
 };
 
 // Get tracker entry audit logs query
-export const useTrackerEntryAuditLogs = (entryId, limit = 100, options = {}) => {
+export const useTrackerEntryAuditLogs = (entryId, pagination = { page: 1, per_page: 20 }, options = {}) => {
   return useQuery({
-    queryKey: trackerKeys.entryAuditLogs(entryId),
+    queryKey: [...trackerKeys.entryAuditLogs(entryId), pagination],
     queryFn: async () => {
-      const response = await trackersService.getTrackerEntryAuditLogs(entryId, limit);
-      return response.data;
+      const response = await trackersService.getTrackerEntryAuditLogs(entryId, pagination);
+      // Backend returns {logs: [...], total: ..., page: ..., per_page: ..., total_pages: ...}
+      return response.data || { logs: [], total: 0, page: 1, per_page: 20, total_pages: 0 };
     },
     enabled: !!entryId,
+    staleTime: 1 * 60 * 1000, // 1 minute
+    ...options,
+  });
+};
+
+// Get tracker audit logs query
+export const useTrackerAuditLogs = (slug, pagination = { page: 1, per_page: 20 }, options = {}) => {
+  return useQuery({
+    queryKey: [...trackerKeys.auditLogs(slug), pagination],
+    queryFn: async () => {
+      const response = await trackersService.getTrackerAuditLogs(slug, pagination);
+      // Backend returns {logs: [...], total: ..., page: ..., per_page: ..., total_pages: ...}
+      return response.data || { logs: [], total: 0, page: 1, per_page: 20, total_pages: 0 };
+    },
+    enabled: !!slug,
     staleTime: 1 * 60 * 1000, // 1 minute
     ...options,
   });

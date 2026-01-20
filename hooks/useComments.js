@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { commentsService } from "@/services/comments";
 import { toast } from "sonner";
+import { trackerKeys } from "./useTrackers";
 
 // Comment query keys
 export const commentKeys = {
@@ -115,6 +116,15 @@ export const useAddComment = () => {
             entitySlug,
             parentSlug
           ),
+        });
+      }
+
+      // If this is a tracker entry, also invalidate the timeline
+      if (entityType === "tracker_entry") {
+        // entitySlug is the entry ID for tracker entries
+        const entryId = entitySlug;
+        queryClient.invalidateQueries({
+          queryKey: trackerKeys.entryTimeline(entryId),
         });
       }
 

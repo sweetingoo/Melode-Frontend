@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { filesService } from "@/services/files";
 import { toast } from "sonner";
+import { trackerKeys } from "./useTrackers";
 
 // Query keys for file attachments
 export const fileKeys = {
@@ -105,6 +106,14 @@ export const useAttachFiles = () => {
       queryClient.invalidateQueries({
         queryKey: fileKeys.entity(variables.entityType, identifier),
       });
+      
+      // If this is a tracker entry, also invalidate the timeline
+      if (variables.entityType === "tracker_entry") {
+        const entryId = identifier;
+        queryClient.invalidateQueries({
+          queryKey: trackerKeys.entryTimeline(entryId),
+        });
+      }
     },
     onError: (error) => {
       console.error("Attach files error:", error);
@@ -143,6 +152,14 @@ export const useAttachExistingFiles = () => {
       queryClient.invalidateQueries({
         queryKey: fileKeys.entity(variables.entityType, identifier),
       });
+      
+      // If this is a tracker entry, also invalidate the timeline
+      if (variables.entityType === "tracker_entry") {
+        const entryId = identifier;
+        queryClient.invalidateQueries({
+          queryKey: trackerKeys.entryTimeline(entryId),
+        });
+      }
     },
     onError: (error) => {
       console.error("Attach existing files error:", error);

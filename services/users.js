@@ -32,6 +32,16 @@ export const usersService = {
     }
   },
 
+  // Suggest users for field selection (autocomplete)
+  suggestUsers: async (params = {}) => {
+    try {
+      return await api.get("/users/suggest", { params });
+    } catch (error) {
+      console.error("Suggest users failed:", error);
+      throw error;
+    }
+  },
+
   // Get user by slug
   getUser: async (slug) => {
     try {

@@ -154,6 +154,7 @@ const fieldTypes = [
   { value: "boolean", label: "Boolean/Checkbox" },
   { value: "select", label: "Select (Single)" },
   { value: "multiselect", label: "Multi-Select" },
+  { value: "people", label: "People (User Selection)" },
   { value: "file", label: "File Upload" },
   { value: "json", label: "JSON" },
   { value: "signature", label: "Signature" },
@@ -292,6 +293,9 @@ const EditFormPage = () => {
     conditional_visibility: null, // { depends_on_field, show_when, value }
     // File expiry date support
     file_expiry_date: false, // Enable expiry date for file fields
+    // People field specific
+    filter_by_roles: [], // Array of role IDs to filter users by
+    filter_by_organization: false, // Filter by full organization
   });
   const [newOption, setNewOption] = useState({ value: "", label: "" });
   const [allowAllFileTypes, setAllowAllFileTypes] = useState(false);
@@ -547,6 +551,16 @@ const EditFormPage = () => {
       newField.options.length > 0
     ) {
       field.options = newField.options;
+    }
+
+    // Add configuration for people field
+    if (newField.field_type === "people") {
+      if (newField.filter_by_roles && newField.filter_by_roles.length > 0) {
+        field.filter_by_roles = newField.filter_by_roles;
+      }
+      if (newField.filter_by_organization) {
+        field.filter_by_organization = newField.filter_by_organization;
+      }
     }
 
     // Add file field specific configuration
@@ -1327,6 +1341,52 @@ const EditFormPage = () => {
                           ? "This field will render as a horizontal line separator."
                           : "This field will render as a page break for multi-page forms."}
                       </p>
+                    </div>
+                  )}
+
+                  {/* Configuration for People field */}
+                  {newField.field_type === "people" && (
+                    <div className="space-y-4 pt-2 border-t">
+                      <div className="p-3 bg-muted rounded-md mb-3">
+                        <p className="text-xs text-muted-foreground">
+                          <strong>People Field:</strong> Allows users to select a person from the organization. You can filter by roles to limit which users appear in the selection.
+                        </p>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Filter by Roles (Optional)</Label>
+                        <p className="text-xs text-muted-foreground">
+                          Select which roles to filter users by. Leave empty to show all users.
+                        </p>
+                        <PeopleFieldRoleSelector
+                          selectedRoleIds={newField.filter_by_roles || []}
+                          onChange={(roleIds) => {
+                            setNewField((prev) => ({
+                              ...prev,
+                              filter_by_roles: roleIds,
+                            }));
+                          }}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex items-center space-x-2">
+                          <Checkbox
+                            id="filter-by-org"
+                            checked={newField.filter_by_organization || false}
+                            onCheckedChange={(checked) => {
+                              setNewField((prev) => ({
+                                ...prev,
+                                filter_by_organization: checked,
+                              }));
+                            }}
+                          />
+                          <Label htmlFor="filter-by-org" className="cursor-pointer text-sm">
+                            Filter by full organization
+                          </Label>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          When enabled, only shows users from the current organization
+                        </p>
+                      </div>
                     </div>
                   )}
 
@@ -3110,6 +3170,62 @@ const EditFormPage = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+};
+
+// People Field Role Selector Component
+const PeopleFieldRoleSelector = ({ selectedRoleIds, onChange }) => {
+  const { data: rolesData, isLoading } = useRoles({ per_page: 100 });
+  // Handle both array and object response formats
+  const roles = Array.isArray(rolesData)
+    ? rolesData
+    : rolesData?.roles || rolesData?.items || [];
+
+  const handleRoleToggle = (roleId) => {
+    const roleIdNum = typeof roleId === 'string' ? parseInt(roleId) : roleId;
+    const currentIds = Array.isArray(selectedRoleIds) ? selectedRoleIds.map(r => typeof r === 'object' ? r.id : r) : [];
+    
+    if (currentIds.includes(roleIdNum)) {
+      onChange(currentIds.filter(id => id !== roleIdNum));
+    } else {
+      onChange([...currentIds, roleIdNum]);
+    }
+  };
+
+  if (isLoading) {
+    return <div className="text-sm text-muted-foreground">Loading roles...</div>;
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="max-h-48 overflow-auto border rounded-md p-2 space-y-1">
+        {roles.length === 0 ? (
+          <div className="text-sm text-muted-foreground py-2">No roles available</div>
+        ) : (
+          roles.map((role) => {
+            const roleId = role.id;
+            const isSelected = Array.isArray(selectedRoleIds) && selectedRoleIds.some(r => (typeof r === 'object' ? r.id : r) === roleId);
+            return (
+              <div key={roleId} className="flex items-center space-x-2">
+                <Checkbox
+                  id={`role-${roleId}`}
+                  checked={isSelected}
+                  onCheckedChange={() => handleRoleToggle(roleId)}
+                />
+                <Label htmlFor={`role-${roleId}`} className="cursor-pointer text-sm flex-1">
+                  {role.display_name || role.name || `Role ${roleId}`}
+                </Label>
+              </div>
+            );
+          })
+        )}
+      </div>
+      {selectedRoleIds && selectedRoleIds.length > 0 && (
+        <p className="text-xs text-muted-foreground">
+          {selectedRoleIds.length} role(s) selected
+        </p>
+      )}
     </div>
   );
 };
