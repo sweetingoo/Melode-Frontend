@@ -24,7 +24,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Loader2, ArrowLeft, FileText, CheckCircle, Download, Check, X, Mail, Phone, Link as LinkIcon, Calendar, Clock, Eye, File, AlertCircle, CheckCircle2, XCircle, Link2, Tag, Edit, Save, FileDown } from "lucide-react";
+import { Loader2, ArrowLeft, FileText, CheckCircle, Download, Check, X, Mail, Phone, Link as LinkIcon, Calendar, Clock, Eye, File, AlertCircle, CheckCircle2, XCircle, Link2, Tag, Edit, Save, FileDown, User } from "lucide-react";
 import { useFormSubmission, useForm, useUpdateFormSubmission } from "@/hooks/useForms";
 import { useUsers } from "@/hooks/useUsers";
 import { useDownloadFile } from "@/hooks/useProfile";
@@ -349,6 +349,39 @@ const FormSubmissionDetailPage = () => {
       return value ? 'Yes' : 'No';
     }
 
+    // Handle people/user fields
+    if (fieldType === 'people' || fieldType === 'user') {
+      // If it's already a string (formatted by backend), return as-is
+      if (typeof value === 'string') {
+        return value;
+      }
+      // If it's an object, extract display name
+      if (typeof value === 'object' && value !== null) {
+        if (value.display_name) {
+          return value.display_name;
+        }
+        // Build name from first_name and last_name
+        const nameParts = [];
+        if (value.first_name) nameParts.push(value.first_name);
+        if (value.last_name) nameParts.push(value.last_name);
+        if (nameParts.length > 0) {
+          return nameParts.join(' ');
+        }
+        // Fallback to email
+        if (value.email) {
+          return value.email;
+        }
+        // Last resort: user ID
+        if (value.id) {
+          return `User #${value.id}`;
+        }
+      }
+      // If it's a number (just user ID), return as-is (backend should format it)
+      if (typeof value === 'number') {
+        return value;
+      }
+    }
+
     // For other types, return as-is (already formatted by backend)
     return value;
   };
@@ -661,6 +694,46 @@ const FormSubmissionDetailPage = () => {
       }
     }
 
+    // Handle people/user fields
+    if (fieldType === 'people' || fieldType === 'user') {
+      // If it's already a string (formatted by backend), display it
+      if (typeof formatted === 'string') {
+          return (
+            <div className="flex items-center gap-2">
+              <User className="h-4 w-4 text-muted-foreground" />
+              <span>{formatted}</span>
+            </div>
+          );
+      }
+      // If it's an object, extract display name
+      if (typeof formatted === 'object' && formatted !== null) {
+        let displayName = null;
+        if (formatted.display_name) {
+          displayName = formatted.display_name;
+        } else {
+          // Build name from first_name and last_name
+          const nameParts = [];
+          if (formatted.first_name) nameParts.push(formatted.first_name);
+          if (formatted.last_name) nameParts.push(formatted.last_name);
+          if (nameParts.length > 0) {
+            displayName = nameParts.join(' ');
+          } else if (formatted.email) {
+            displayName = formatted.email;
+          } else if (formatted.id) {
+            displayName = `User #${formatted.id}`;
+          }
+        }
+        if (displayName) {
+          return (
+            <div className="flex items-center gap-2">
+              <User className="h-4 w-4 text-muted-foreground" />
+              <span>{displayName}</span>
+            </div>
+          );
+        }
+      }
+    }
+
     // Handle textarea (multiline text)
     if (fieldType === 'textarea') {
       return (
@@ -668,6 +741,24 @@ const FormSubmissionDetailPage = () => {
           <p className="whitespace-pre-wrap text-sm">{String(formatted)}</p>
         </div>
       );
+    }
+
+    // Fallback: Handle objects that weren't caught by specific handlers
+    // This prevents "[object Object]" from being displayed
+    if (typeof formatted === 'object' && formatted !== null && !Array.isArray(formatted)) {
+      // Try to extract a meaningful string representation
+      if (formatted.display_name || formatted.name || formatted.label) {
+        return <p className="text-base">{formatted.display_name || formatted.name || formatted.label}</p>;
+      }
+      if (formatted.first_name || formatted.last_name || formatted.email) {
+        const nameParts = [];
+        if (formatted.first_name) nameParts.push(formatted.first_name);
+        if (formatted.last_name) nameParts.push(formatted.last_name);
+        const displayName = nameParts.length > 0 ? nameParts.join(' ') : formatted.email;
+        return <p className="text-base">{displayName}</p>;
+      }
+      // Last resort: show JSON representation for debugging
+      return <p className="text-base font-mono text-xs">{JSON.stringify(formatted, null, 2)}</p>;
     }
 
     // Regular text values

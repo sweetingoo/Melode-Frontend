@@ -260,6 +260,39 @@ const FormSubmissionDetailPage = () => {
       return value ? 'Yes' : 'No';
     }
 
+    // Handle people/user fields
+    if (fieldType === 'people' || fieldType === 'user') {
+      // If it's already a string (formatted by backend), return as-is
+      if (typeof value === 'string') {
+        return value;
+      }
+      // If it's an object, extract display name
+      if (typeof value === 'object' && value !== null) {
+        if (value.display_name) {
+          return value.display_name;
+        }
+        // Build name from first_name and last_name
+        const nameParts = [];
+        if (value.first_name) nameParts.push(value.first_name);
+        if (value.last_name) nameParts.push(value.last_name);
+        if (nameParts.length > 0) {
+          return nameParts.join(' ');
+        }
+        // Fallback to email
+        if (value.email) {
+          return value.email;
+        }
+        // Last resort: user ID
+        if (value.id) {
+          return `User #${value.id}`;
+        }
+      }
+      // If it's a number (just user ID), return as-is (backend should format it)
+      if (typeof value === 'number') {
+        return value;
+      }
+    }
+
     // For other types, return as-is (already formatted by backend)
     return value;
   };
@@ -529,6 +562,44 @@ const FormSubmissionDetailPage = () => {
             {numValue.toLocaleString()}
           </div>
         );
+      }
+    }
+
+    // Handle people/user fields
+    if (fieldType === 'people' || fieldType === 'user') {
+      // If it's already a string (formatted by backend), display it
+      if (typeof formatted === 'string') {
+        return (
+          <div className="flex items-center gap-2">
+            <span>{formatted}</span>
+          </div>
+        );
+      }
+      // If it's an object, extract display name
+      if (typeof formatted === 'object' && formatted !== null) {
+        let displayName = null;
+        if (formatted.display_name) {
+          displayName = formatted.display_name;
+        } else {
+          // Build name from first_name and last_name
+          const nameParts = [];
+          if (formatted.first_name) nameParts.push(formatted.first_name);
+          if (formatted.last_name) nameParts.push(formatted.last_name);
+          if (nameParts.length > 0) {
+            displayName = nameParts.join(' ');
+          } else if (formatted.email) {
+            displayName = formatted.email;
+          } else if (formatted.id) {
+            displayName = `User #${formatted.id}`;
+          }
+        }
+        if (displayName) {
+          return (
+            <div className="flex items-center gap-2">
+              <span>{displayName}</span>
+            </div>
+          );
+        }
       }
     }
 

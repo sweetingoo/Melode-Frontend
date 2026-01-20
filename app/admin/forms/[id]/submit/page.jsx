@@ -163,6 +163,21 @@ const FormSubmitPage = () => {
         // Signature is stored as base64 data URL
         return typeof value === "string" ? value : null;
 
+      case "people":
+      case "user":
+        // People field: store the full user object for programmatic linking
+        // The backend will handle formatting for display
+        if (typeof value === 'object' && value !== null) {
+          // Return the full object with id, email, display_name, etc.
+          return value;
+        }
+        // If it's just a number (user ID), return as-is
+        if (typeof value === 'number') {
+          return value;
+        }
+        // If it's a string (shouldn't happen, but handle it)
+        return value;
+
       default:
         return String(value);
     }
