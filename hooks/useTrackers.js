@@ -13,9 +13,9 @@ export const trackerKeys = {
   auditLogs: (slug) => [...trackerKeys.details(), slug, "audit-logs"],
   entries: () => [...trackerKeys.all, "entries"],
   entryList: (params) => [...trackerKeys.entries(), "list", params],
-  entryDetail: (id) => [...trackerKeys.entries(), "detail", id],
-  entryTimeline: (id, page, per_page) => [...trackerKeys.entries(), "timeline", id, page, per_page],
-  entryAuditLogs: (id) => [...trackerKeys.entries(), "audit-logs", id],
+  entryDetail: (identifier) => [...trackerKeys.entries(), "detail", identifier],
+  entryTimeline: (identifier, page, per_page) => [...trackerKeys.entries(), "timeline", identifier, page, per_page],
+  entryAuditLogs: (identifier) => [...trackerKeys.entries(), "audit-logs", identifier],
 };
 
 // Get all trackers query
@@ -164,16 +164,33 @@ export const useTrackerEntries = (searchParams = {}, options = {}) => {
   });
 };
 
-// Get single tracker entry query
-export const useTrackerEntry = (entryId, options = {}) => {
+// Get single tracker entry query (accepts slug or ID)
+export const useTrackerEntry = (entryIdentifier, options = {}) => {
   return useQuery({
-    queryKey: trackerKeys.entryDetail(entryId),
+    queryKey: trackerKeys.entryDetail(entryIdentifier),
     queryFn: async () => {
-      const response = await trackersService.getTrackerEntry(entryId);
-      return response.data;
+      try {
+        const response = await trackersService.getTrackerEntry(entryIdentifier);
+        return response.data;
+      } catch (error) {
+        // Handle 404 errors specifically
+        if (error?.response?.status === 404) {
+          // Return null to show "not found" message instead of throwing
+          return null;
+        }
+        // Re-throw other errors (permission, network, etc.)
+        throw error;
+      }
     },
-    enabled: !!entryId,
+    enabled: !!entryIdentifier,
     staleTime: 2 * 60 * 1000, // 2 minutes
+    retry: (failureCount, error) => {
+      // Don't retry on 404 errors
+      if (error?.response?.status === 404) {
+        return false;
+      }
+      return failureCount < 3;
+    },
     ...options,
   });
 };
@@ -193,7 +210,11 @@ export const useCreateTrackerEntry = () => {
         queryKey: trackerKeys.entries(),
         exact: false 
       });
-      queryClient.invalidateQueries({ queryKey: trackerKeys.entryTimeline(data.id) });
+      // Use slug if available, fallback to id
+      const identifier = data.slug || data.id;
+      if (identifier) {
+        queryClient.invalidateQueries({ queryKey: trackerKeys.entryTimeline(identifier) });
+      }
       toast.success("Entry created successfully");
     },
     onError: (error) => {
@@ -216,15 +237,15 @@ export const useUpdateTrackerEntry = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ entryId, entryData }) => {
-      const response = await trackersService.updateTrackerEntry(entryId, entryData);
+    mutationFn: async ({ entryIdentifier, entryData }) => {
+      const response = await trackersService.updateTrackerEntry(entryIdentifier, entryData);
       return response.data;
     },
     onSuccess: (data, variables) => {
-      queryClient.setQueryData(trackerKeys.entryDetail(variables.entryId), data);
+      queryClient.setQueryData(trackerKeys.entryDetail(variables.entryIdentifier), data);
       queryClient.invalidateQueries({ queryKey: trackerKeys.entryList() });
-      queryClient.invalidateQueries({ queryKey: trackerKeys.entryTimeline(variables.entryId) });
-      queryClient.invalidateQueries({ queryKey: trackerKeys.entryAuditLogs(variables.entryId) });
+      queryClient.invalidateQueries({ queryKey: trackerKeys.entryTimeline(variables.entryIdentifier) });
+      queryClient.invalidateQueries({ queryKey: trackerKeys.entryAuditLogs(variables.entryIdentifier) });
       toast.success("Entry updated successfully");
     },
     onError: (error) => {
@@ -247,17 +268,17 @@ export const useDeleteTrackerEntry = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (entryId) => {
-      await trackersService.deleteTrackerEntry(entryId);
-      return entryId;
+    mutationFn: async (entryIdentifier) => {
+      await trackersService.deleteTrackerEntry(entryIdentifier);
+      return entryIdentifier;
     },
-    onSuccess: (entryId) => {
+    onSuccess: (entryIdentifier) => {
       // Invalidate all entry list queries (with any params) to refresh the table
       queryClient.invalidateQueries({ 
         queryKey: trackerKeys.entries(),
         exact: false 
       });
-      queryClient.removeQueries({ queryKey: trackerKeys.entryDetail(entryId) });
+      queryClient.removeQueries({ queryKey: trackerKeys.entryDetail(entryIdentifier) });
       toast.success("Entry deleted successfully");
     },
     onError: (error) => {
@@ -275,30 +296,30 @@ export const useDeleteTrackerEntry = () => {
   });
 };
 
-// Get tracker entry timeline query
-export const useTrackerEntryTimeline = (entryId, page = 1, per_page = 50, options = {}) => {
+// Get tracker entry timeline query (accepts slug or ID)
+export const useTrackerEntryTimeline = (entryIdentifier, page = 1, per_page = 50, options = {}) => {
   return useQuery({
-    queryKey: trackerKeys.entryTimeline(entryId, page, per_page),
+    queryKey: trackerKeys.entryTimeline(entryIdentifier, page, per_page),
     queryFn: async () => {
-      const response = await trackersService.getTrackerEntryTimeline(entryId, page, per_page);
+      const response = await trackersService.getTrackerEntryTimeline(entryIdentifier, page, per_page);
       return response.data;
     },
-    enabled: !!entryId,
+    enabled: !!entryIdentifier,
     staleTime: 1 * 60 * 1000, // 1 minute
     ...options,
   });
 };
 
-// Get tracker entry audit logs query
-export const useTrackerEntryAuditLogs = (entryId, pagination = { page: 1, per_page: 20 }, options = {}) => {
+// Get tracker entry audit logs query (accepts slug or ID)
+export const useTrackerEntryAuditLogs = (entryIdentifier, pagination = { page: 1, per_page: 20 }, options = {}) => {
   return useQuery({
-    queryKey: [...trackerKeys.entryAuditLogs(entryId), pagination],
+    queryKey: [...trackerKeys.entryAuditLogs(entryIdentifier), pagination],
     queryFn: async () => {
-      const response = await trackersService.getTrackerEntryAuditLogs(entryId, pagination);
+      const response = await trackersService.getTrackerEntryAuditLogs(entryIdentifier, pagination);
       // Backend returns {logs: [...], total: ..., page: ..., per_page: ..., total_pages: ...}
       return response.data || { logs: [], total: 0, page: 1, per_page: 20, total_pages: 0 };
     },
-    enabled: !!entryId,
+    enabled: !!entryIdentifier,
     staleTime: 1 * 60 * 1000, // 1 minute
     ...options,
   });

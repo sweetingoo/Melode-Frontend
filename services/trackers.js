@@ -189,12 +189,12 @@ export const trackersService = {
     }
   },
 
-  // Get tracker entry by ID
-  getTrackerEntry: async (entryId) => {
+  // Get tracker entry by slug or ID
+  getTrackerEntry: async (entryIdentifier) => {
     try {
-      return await api.get(`/trackers/entries/${entryId}`);
+      return await api.get(`/trackers/entries/${entryIdentifier}`);
     } catch (error) {
-      console.error(`Get tracker entry ${entryId} failed:`, error);
+      console.error(`Get tracker entry ${entryIdentifier} failed:`, error);
       throw error;
     }
   },
@@ -209,22 +209,22 @@ export const trackersService = {
     }
   },
 
-  // Update tracker entry
-  updateTrackerEntry: async (entryId, entryData) => {
+  // Update tracker entry by slug or ID
+  updateTrackerEntry: async (entryIdentifier, entryData) => {
     try {
-      return await api.put(`/trackers/entries/${entryId}`, entryData);
+      return await api.put(`/trackers/entries/${entryIdentifier}`, entryData);
     } catch (error) {
-      console.error(`Update tracker entry ${entryId} failed:`, error);
+      console.error(`Update tracker entry ${entryIdentifier} failed:`, error);
       throw error;
     }
   },
 
-  // Delete tracker entry
-  deleteTrackerEntry: async (entryId) => {
+  // Delete tracker entry by slug or ID
+  deleteTrackerEntry: async (entryIdentifier) => {
     try {
-      return await api.delete(`/trackers/entries/${entryId}`);
+      return await api.delete(`/trackers/entries/${entryIdentifier}`);
     } catch (error) {
-      console.error(`Delete tracker entry ${entryId} failed:`, error);
+      console.error(`Delete tracker entry ${entryIdentifier} failed:`, error);
       throw error;
     }
   },
@@ -239,20 +239,20 @@ export const trackersService = {
     }
   },
 
-  // Get tracker entry timeline
-  getTrackerEntryTimeline: async (entryId, page = 1, per_page = 50) => {
+  // Get tracker entry timeline by slug or ID
+  getTrackerEntryTimeline: async (entryIdentifier, page = 1, per_page = 50) => {
     try {
-      return await api.get(`/trackers/entries/${entryId}/timeline`, {
+      return await api.get(`/trackers/entries/${entryIdentifier}/timeline`, {
         params: { page, per_page },
       });
     } catch (error) {
-      console.error(`Get tracker entry timeline ${entryId} failed:`, error);
+      console.error(`Get tracker entry timeline ${entryIdentifier} failed:`, error);
       throw error;
     }
   },
 
-  // Get tracker entry audit logs
-  getTrackerEntryAuditLogs: async (entryId, params = {}) => {
+  // Get tracker entry audit logs by slug or ID
+  getTrackerEntryAuditLogs: async (entryIdentifier, params = {}) => {
     try {
       const { page = 1, per_page = 20, limit, offset, action } = params;
       const queryParams = {};
@@ -266,11 +266,11 @@ export const trackersService = {
       if (action) {
         queryParams.action = action;
       }
-      return await api.get(`/trackers/entries/${entryId}/audit-logs`, {
+      return await api.get(`/trackers/entries/${entryIdentifier}/audit-logs`, {
         params: queryParams,
       });
     } catch (error) {
-      console.error(`Get tracker entry audit logs ${entryId} failed:`, error);
+      console.error(`Get tracker entry audit logs ${entryIdentifier} failed:`, error);
       throw error;
     }
   },

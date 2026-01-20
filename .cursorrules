@@ -48,6 +48,11 @@ This is a Next.js frontend application for the Melode project. The codebase uses
 - Use `entitySlug`, `userSlug`, `taskSlug`, `projectSlug`, etc. for path parameters
 - Request bodies and query parameters may still use IDs where appropriate (as per migration guide)
 - When working with entities, always pass `slug` values to API endpoints, not `id` values
+- **For backward compatibility with existing entries that may not have slugs:**
+  - Use `entity.slug || entity.id` pattern when constructing URLs or API calls
+  - This ensures existing entries without slugs still work (fallback to ID)
+  - Example: `href={`/admin/trackers/entries/${entry.slug || entry.id}`}`
+- **Tracker entries specifically:** Always use `entry.slug || entry.id` when linking to or referencing tracker entries
 
 ## File Handling
 - **NEVER store or use direct S3 signed URLs directly** - they expire and become invalid

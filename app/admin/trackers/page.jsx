@@ -57,6 +57,9 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
+  EyeOff,
+  Calendar,
+  User as UserIcon,
 } from "lucide-react";
 import {
   useTrackers,
@@ -71,6 +74,7 @@ import { format } from "date-fns";
 import { parseUTCDate } from "@/utils/time";
 import { toast } from "sonner";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
+import { useUsers } from "@/hooks/useUsers";
 
 const TrackersPage = () => {
   const router = useRouter();
@@ -92,8 +96,26 @@ const TrackersPage = () => {
   // Column-specific sorting: field_id -> sort order (null, 'asc', 'desc')
   const [columnSorting, setColumnSorting] = useState({});
   const [entryFieldErrors, setEntryFieldErrors] = useState({});
+  const [showMetadataColumns, setShowMetadataColumns] = useState(false);
 
   const itemsPerPage = 20;
+
+  // Get users for "Updated By" display
+  const { data: usersResponse } = useUsers();
+  const users = usersResponse?.users || usersResponse || [];
+
+  // Helper to get user name
+  const getUserName = (userId) => {
+    if (!userId) return null;
+    const user = users.find((u) => u.id === userId);
+    if (!user) return null;
+    return (
+      user.display_name ||
+      `${user.first_name || ""} ${user.last_name || ""}`.trim() ||
+      user.email ||
+      `User #${userId}`
+    );
+  };
 
   // Get trackers list
   const { data: trackersResponse, isLoading: trackersLoading } = useTrackers({
@@ -471,9 +493,9 @@ const TrackersPage = () => {
                   {trackerDetails && trackerDetails.tracker_fields?.fields && (() => {
                     // Get fields to show in creation modal
                     const allFields = trackerDetails.tracker_fields.fields.filter((field) => {
-                      // Filter out display-only fields
-                      const fieldType = field.type || field.field_type;
-                      return !['text_block', 'image_block', 'line_break', 'page_break', 'youtube_video_embed'].includes(fieldType);
+                            // Filter out display-only fields
+                            const fieldType = field.type || field.field_type;
+                            return !['text_block', 'image_block', 'line_break', 'page_break', 'youtube_video_embed'].includes(fieldType);
                     });
                     
                     // Check if create_view_fields is configured
@@ -527,8 +549,8 @@ const TrackersPage = () => {
                               />
                             );
                           })}
-                          </div>
-                        )}
+                    </div>
+                  )}
                       </div>
                     );
                   })()}
@@ -687,108 +709,126 @@ const TrackersPage = () => {
 
             return (
               <TabsContent key={tracker.id} value={tracker.id.toString()} className="space-y-4">
-                {/* Filters */}
-                <Card>
-                  <CardContent className="pt-6">
-                    <div className="flex flex-col md:flex-row gap-4">
-                      <div className="flex-1">
-                        <div className="relative">
-                          <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                          <Input
-                            placeholder="Search entries..."
-                            value={searchTerm}
-                            onChange={(e) => {
-                              setSearchTerm(e.target.value);
-                              setCurrentPage(1);
-                            }}
-                            className="pl-8"
-                          />
-                        </div>
-                      </div>
-                      <div className="flex gap-2">
-                        <Select
-                          value={statusFilter}
-                          onValueChange={(value) => {
-                            setStatusFilter(value);
-                            setCurrentPage(1);
-                          }}
-                        >
-                          <SelectTrigger className="w-[180px]">
-                            <SelectValue placeholder="All Status" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="all">All Status</SelectItem>
+      {/* Filters */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex flex-col md:flex-row gap-4">
+            <div className="flex-1">
+              <div className="relative">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search entries..."
+                  value={searchTerm}
+                  onChange={(e) => {
+                    setSearchTerm(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="pl-8"
+                />
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Select
+                value={statusFilter}
+                onValueChange={(value) => {
+                  setStatusFilter(value);
+                  setCurrentPage(1);
+                }}
+              >
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="All Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
                             {trackerStatuses.length > 0 ? (
                               trackerStatuses.map((status) => (
-                                <SelectItem key={status} value={status}>
-                                  {status}
-                                </SelectItem>
-                              ))
-                            ) : (
-                              <>
-                                <SelectItem value="open">Open</SelectItem>
-                                <SelectItem value="in_progress">In Progress</SelectItem>
-                                <SelectItem value="pending">Pending</SelectItem>
-                                <SelectItem value="resolved">Resolved</SelectItem>
-                                <SelectItem value="closed">Closed</SelectItem>
-                              </>
-                            )}
-                          </SelectContent>
-                        </Select>
-                        <Select
-                          value={`${sortBy}:${sortOrder}`}
-                          onValueChange={(value) => {
-                            const [field, order] = value.split(":");
-                            setSortBy(field);
-                            setSortOrder(order);
-                            setCurrentPage(1);
-                          }}
+                      <SelectItem key={status} value={status}>
+                        {status}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <>
+                      <SelectItem value="open">Open</SelectItem>
+                      <SelectItem value="in_progress">In Progress</SelectItem>
+                      <SelectItem value="pending">Pending</SelectItem>
+                      <SelectItem value="resolved">Resolved</SelectItem>
+                      <SelectItem value="closed">Closed</SelectItem>
+                    </>
+                  )}
+                </SelectContent>
+              </Select>
+              <Select
+                value={`${sortBy}:${sortOrder}`}
+                onValueChange={(value) => {
+                  const [field, order] = value.split(":");
+                  setSortBy(field);
+                  setSortOrder(order);
+                  setCurrentPage(1);
+                }}
+              >
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Sort By" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="created_at:desc">Newest First</SelectItem>
+                  <SelectItem value="created_at:asc">Oldest First</SelectItem>
+                  <SelectItem value="updated_at:desc">Recently Updated</SelectItem>
+                  <SelectItem value="status:asc">Status A-Z</SelectItem>
+                </SelectContent>
+              </Select>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setShowMetadataColumns(!showMetadataColumns)}
+                          className="flex items-center gap-2"
                         >
-                          <SelectTrigger className="w-[180px]">
-                            <SelectValue placeholder="Sort By" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="created_at:desc">Newest First</SelectItem>
-                            <SelectItem value="created_at:asc">Oldest First</SelectItem>
-                            <SelectItem value="updated_at:desc">Recently Updated</SelectItem>
-                            <SelectItem value="status:asc">Status A-Z</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                          {showMetadataColumns ? (
+                            <>
+                              <EyeOff className="h-4 w-4" />
+                              Hide Metadata
+                            </>
+                          ) : (
+                            <>
+                              <Eye className="h-4 w-4" />
+                              Show Metadata
+                            </>
+                          )}
+                        </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
-                {/* Entries Table */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle>
-                      Entries ({pagination.total})
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {entriesLoading ? (
-                      <div className="flex items-center justify-center py-12">
-                        <Loader2 className="h-8 w-8 animate-spin" />
-                      </div>
-                    ) : entries.length === 0 ? (
-                      <div className="text-center py-12">
-                        <FileText className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-                        <h3 className="text-lg font-semibold mb-2">No entries found</h3>
-                        <p className="text-muted-foreground mb-4">
+      {/* Entries Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle>
+            Entries ({pagination.total})
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {entriesLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin" />
+            </div>
+          ) : entries.length === 0 ? (
+            <div className="text-center py-12">
+              <FileText className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+              <h3 className="text-lg font-semibold mb-2">No entries found</h3>
+              <p className="text-muted-foreground mb-4">
                           {searchTerm || statusFilter !== "all"
-                            ? "Try adjusting your filters"
+                  ? "Try adjusting your filters"
                             : `No entries yet for ${tracker.name}`}
-                        </p>
-                      </div>
-                    ) : (
-                      <>
+              </p>
+            </div>
+          ) : (
+            <>
                         <div className="rounded-md border overflow-x-auto">
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead>ID</TableHead>
-                                <TableHead>Status</TableHead>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>ID</TableHead>
+                      <TableHead>Status</TableHead>
                                 {/* Dynamic field columns */}
                                 {trackerDisplayableFields.map((field) => {
                                   const fieldId = field.id || field.field_id || field.name;
@@ -852,10 +892,26 @@ const TrackersPage = () => {
                                     </TableHead>
                                   );
                                 })}
-                                <TableHead>Actions</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
+                                {showMetadataColumns && (
+                                  <>
+                                    <TableHead>
+                                      <div className="flex items-center gap-2">
+                                        <Calendar className="h-4 w-4 text-muted-foreground" />
+                                        Last Updated
+                                      </div>
+                                    </TableHead>
+                                    <TableHead>
+                                      <div className="flex items-center gap-2">
+                                        <UserIcon className="h-4 w-4 text-muted-foreground" />
+                                        Updated By
+                                      </div>
+                                    </TableHead>
+                                  </>
+                                )}
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                             {entries.map((entry, index) => {
                               const submissionData = entry.submission_data || entry.formatted_data || {};
                               
@@ -870,19 +926,19 @@ const TrackersPage = () => {
                                 displayValues[fieldId] = submissionData[fieldId];
                               });
                               
-                              return (
-                                <TableRow key={entry.id}>
-                                  <TableCell className="font-medium">
-                                    <Link
-                                      href={`/admin/trackers/entries/${entry.id}`}
-                                      className="hover:underline"
-                                    >
+                      return (
+                        <TableRow key={entry.id}>
+                          <TableCell className="font-medium">
+                            <Link
+                              href={`/admin/trackers/entries/${entry.slug || entry.id}`}
+                              className="hover:underline"
+                            >
                                       #{entryNumber}
-                                    </Link>
-                                  </TableCell>
-                                  <TableCell>
-                                    <Badge variant="outline">{entry.status || "open"}</Badge>
-                                  </TableCell>
+                            </Link>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline">{entry.status || "open"}</Badge>
+                          </TableCell>
                                   {/* Dynamic field values - only show configured fields */}
                                   {trackerDisplayableFields.map((field) => {
                                     const fieldId = field.id || field.field_id || field.name;
@@ -892,107 +948,121 @@ const TrackersPage = () => {
                                         <div className="max-w-[200px] truncate" title={formatFieldValue(field, value)}>
                                           {formatFieldValue(field, value)}
                                         </div>
-                                      </TableCell>
+                          </TableCell>
                                     );
                                   })}
-                                    <TableCell>
-                                      <div className="flex items-center gap-2">
+                                  {showMetadataColumns && (
+                                    <>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {entry.updated_at
+                              ? format(parseUTCDate(entry.updated_at), "MMM d, yyyy HH:mm")
+                                          : entry.created_at
+                                          ? format(parseUTCDate(entry.created_at), "MMM d, yyyy HH:mm")
+                              : "—"}
+                          </TableCell>
+                                      <TableCell className="text-sm text-muted-foreground">
+                                        {getUserName(entry.updated_by_user_id || entry.submitted_by_user_id) || "—"}
+                                      </TableCell>
+                                    </>
+                                  )}
+                          <TableCell>
+                            <div className="flex items-center gap-2">
                                         {canReadEntries && (
-                                          <Link href={`/admin/trackers/entries/${entry.id}`}>
-                                            <Button variant="ghost" size="sm">
-                                              <Eye className="h-4 w-4" />
-                                            </Button>
-                                          </Link>
+                              <Link href={`/admin/trackers/entries/${entry.slug || entry.id}`}>
+                                <Button variant="ghost" size="sm">
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                              </Link>
                                         )}
                                         {canDeleteEntry && (
-                                          <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => handleDelete(entry.id)}
-                                            disabled={deleteEntryMutation.isPending}
-                                          >
-                                            <Trash2 className="h-4 w-4 text-destructive" />
-                                          </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDelete(entry.slug || entry.id)}
+                                disabled={deleteEntryMutation.isPending}
+                              >
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
                                         )}
-                                      </div>
-                                    </TableCell>
-                                  </TableRow>
-                                );
-                              })}
-                            </TableBody>
-                          </Table>
-                        </div>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
 
-                      {/* Pagination */}
-                      {pagination.total_pages > 1 && (
-                        <div className="mt-4">
-                          <Pagination>
-                            <PaginationContent>
+              {/* Pagination */}
+              {pagination.total_pages > 1 && (
+                <div className="mt-4">
+                  <Pagination>
+                    <PaginationContent>
+                      <PaginationItem>
+                        <PaginationPrevious
+                          href="#"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            if (currentPage > 1) setCurrentPage(currentPage - 1);
+                          }}
+                          className={
+                            currentPage === 1 ? "pointer-events-none opacity-50" : ""
+                          }
+                        />
+                      </PaginationItem>
+                      {Array.from({ length: pagination.total_pages }, (_, i) => i + 1)
+                        .filter(
+                          (page) =>
+                            page === 1 ||
+                            page === pagination.total_pages ||
+                            (page >= currentPage - 2 && page <= currentPage + 2)
+                        )
+                        .map((page, idx, arr) => (
+                          <React.Fragment key={page}>
+                            {idx > 0 && arr[idx - 1] !== page - 1 && (
                               <PaginationItem>
-                                <PaginationPrevious
-                                  href="#"
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    if (currentPage > 1) setCurrentPage(currentPage - 1);
-                                  }}
-                                  className={
-                                    currentPage === 1 ? "pointer-events-none opacity-50" : ""
-                                  }
-                                />
+                                <PaginationLink href="#" disabled>
+                                  ...
+                                </PaginationLink>
                               </PaginationItem>
-                              {Array.from({ length: pagination.total_pages }, (_, i) => i + 1)
-                                .filter(
-                                  (page) =>
-                                    page === 1 ||
-                                    page === pagination.total_pages ||
-                                    (page >= currentPage - 2 && page <= currentPage + 2)
-                                )
-                                .map((page, idx, arr) => (
-                                  <React.Fragment key={page}>
-                                    {idx > 0 && arr[idx - 1] !== page - 1 && (
-                                      <PaginationItem>
-                                        <PaginationLink href="#" disabled>
-                                          ...
-                                        </PaginationLink>
-                                      </PaginationItem>
-                                    )}
-                                    <PaginationItem>
-                                      <PaginationLink
-                                        href="#"
-                                        onClick={(e) => {
-                                          e.preventDefault();
-                                          setCurrentPage(page);
-                                        }}
-                                        isActive={currentPage === page}
-                                      >
-                                        {page}
-                                      </PaginationLink>
-                                    </PaginationItem>
-                                  </React.Fragment>
-                                ))}
-                              <PaginationItem>
-                                <PaginationNext
-                                  href="#"
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    if (currentPage < pagination.total_pages)
-                                      setCurrentPage(currentPage + 1);
-                                  }}
-                                  className={
-                                    currentPage === pagination.total_pages
-                                      ? "pointer-events-none opacity-50"
-                                      : ""
-                                  }
-                                />
-                              </PaginationItem>
-                            </PaginationContent>
-                          </Pagination>
-                        </div>
-                      )}
-                    </>
-                  )}
-                </CardContent>
-              </Card>
+                            )}
+                            <PaginationItem>
+                              <PaginationLink
+                                href="#"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  setCurrentPage(page);
+                                }}
+                                isActive={currentPage === page}
+                              >
+                                {page}
+                              </PaginationLink>
+                            </PaginationItem>
+                          </React.Fragment>
+                        ))}
+                      <PaginationItem>
+                        <PaginationNext
+                          href="#"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            if (currentPage < pagination.total_pages)
+                              setCurrentPage(currentPage + 1);
+                          }}
+                          className={
+                            currentPage === pagination.total_pages
+                              ? "pointer-events-none opacity-50"
+                              : ""
+                          }
+                        />
+                      </PaginationItem>
+                    </PaginationContent>
+                  </Pagination>
+                </div>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
               </TabsContent>
             );
           })}
