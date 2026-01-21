@@ -33,6 +33,7 @@ const transformTrackerToForm = (trackerData) => {
     form_title: name || trackerData.form_title || trackerData.form_name || "",
     form_description: trackerData.description || trackerData.form_description,
     form_type: trackerData.form_type || "general", // Use "general" as default form type
+    category: trackerData.category, // Category for organizing trackers
     // Preserve entire tracker_config including list_view_fields
     form_config: trackerConfig,
     form_fields: trackerData.tracker_fields || trackerData.form_fields || { fields: [] },
@@ -67,6 +68,7 @@ const transformFormToTracker = (formData) => {
     slug: formData.slug || formData.form_name,
     description: formData.form_description,
     form_type: formData.form_type,
+    category: formData.category, // Category for organizing trackers
     tracker_config: trackerConfig, // Preserve all config including list_view_fields
     tracker_fields: formData.form_fields || { fields: [] },
     access_config: formData.access_config || {},

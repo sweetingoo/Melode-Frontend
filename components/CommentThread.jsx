@@ -8,6 +8,14 @@ import { useCommentAttachments, useAttachFilesToComment } from "@/hooks/useFiles
 import { filesService } from "@/services/files";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { AvatarWithUrl } from "@/components/AvatarWithUrl";
 import {
@@ -500,9 +508,11 @@ export const CommentThread = ({
   showHeader = true,
   initialPage = 1,
   perPage = 50,
+  noteCategories = [], // Note categories for tracker entries
 }) => {
   const [page, setPage] = useState(initialPage);
   const [newCommentText, setNewCommentText] = useState("");
+  const [newCommentNoteCategory, setNewCommentNoteCategory] = useState("");
   const [newCommentFiles, setNewCommentFiles] = useState([]);
   const [editingCommentId, setEditingCommentId] = useState(null);
   const newCommentFileInputRef = useRef(null);
@@ -539,6 +549,7 @@ export const CommentThread = ({
       commentData: {
         comment_text: newCommentText.trim() || "",
         parent_comment_id: null,
+        note_category: newCommentNoteCategory || null,
       },
     });
 
@@ -555,6 +566,7 @@ export const CommentThread = ({
     }
 
     setNewCommentText("");
+    setNewCommentNoteCategory("");
     setNewCommentFiles([]);
   };
 
@@ -652,6 +664,27 @@ export const CommentThread = ({
 
       {/* Add Comment Form */}
       <div className="space-y-2">
+        {entityType === "tracker_entry" && noteCategories && noteCategories.length > 0 && (
+          <div className="space-y-2">
+            <Label htmlFor="note-category" className="text-sm">Note Category (Optional)</Label>
+            <Select
+              value={newCommentNoteCategory}
+              onValueChange={setNewCommentNoteCategory}
+            >
+              <SelectTrigger id="note-category">
+                <SelectValue placeholder="Select category (optional)" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">None</SelectItem>
+                {noteCategories.map((category) => (
+                  <SelectItem key={category} value={category}>
+                    {category}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
         <Textarea
           value={newCommentText}
           onChange={(e) => setNewCommentText(e.target.value)}

@@ -383,7 +383,14 @@ const TrackersManagePage = () => {
                     <TableRow key={tracker.id}>
                       <TableCell className="font-medium">
                         <div>
-                          <div>{tracker.name}</div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span>{tracker.name}</span>
+                            {tracker.category && (
+                              <Badge variant="outline" className="text-xs">
+                                {tracker.category}
+                              </Badge>
+                            )}
+                          </div>
                           {tracker.description && (
                             <p className="text-sm text-muted-foreground mt-1">
                               {tracker.description.length > 60

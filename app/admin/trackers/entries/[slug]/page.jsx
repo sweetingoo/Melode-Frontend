@@ -199,7 +199,12 @@ const TrackerEntryDetailPage = () => {
     const trackers = Array.isArray(trackersResponse) 
       ? trackersResponse 
       : trackersResponse.trackers || trackersResponse.forms || [];
-    return trackers.find((t) => t.id === entry.form_id);
+    const foundTracker = trackers.find((t) => t.id === entry.form_id);
+    // Debug: Log tracker category
+    if (foundTracker) {
+      console.log("Tracker found:", { id: foundTracker.id, name: foundTracker.name, category: foundTracker.category });
+    }
+    return foundTracker;
   }, [entry?.form_id, trackersResponse]);
 
   // Use persistent tracker entry number from backend
@@ -568,10 +573,19 @@ const TrackerEntryDetailPage = () => {
               {headingValue}
             </h1>
             <div className="space-y-1">
-              {tracker && headingValue !== tracker.name && (
-                <p className="text-sm font-medium text-muted-foreground">
-                  {tracker.name}
-                </p>
+              {tracker && (
+                <div className="flex items-center gap-2 flex-wrap">
+                  {headingValue !== tracker.name && (
+                    <p className="text-sm font-medium text-muted-foreground">
+                      {tracker.name}
+                    </p>
+                  )}
+                  {tracker.category && (
+                    <Badge variant="secondary" className="text-xs">
+                      {tracker.category}
+                    </Badge>
+                  )}
+                </div>
               )}
               <p className="text-sm text-muted-foreground">
                 Created {entry.created_at ? format(parseUTCDate(entry.created_at), "PPp") : "—"}
@@ -885,6 +899,7 @@ const TrackerEntryDetailPage = () => {
               <CommentThread
                 entityType="tracker_entry"
                 entitySlug={entry?.id?.toString() || entrySlug}
+                noteCategories={tracker?.tracker_config?.note_categories || []}
               />
             </CardContent>
           </Card>
@@ -922,13 +937,20 @@ const TrackerEntryDetailPage = () => {
                             <div className="bg-card border rounded-lg p-4 shadow-sm">
                               <div className="flex flex-col">
                                 <div className="flex-1 min-w-0">
-                                  <h4 className="font-medium">{event.title}</h4>
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <h4 className="font-medium">{event.title}</h4>
+                                    {event.note_category && (
+                                      <Badge variant="secondary" className="text-xs">
+                                        {event.note_category}
+                                      </Badge>
+                                    )}
+                                  </div>
                                   {event.description && (
                                     <p className="text-sm text-muted-foreground mt-2 break-words">
                                       {formatTimelineDescription(event.description, event)}
                                     </p>
-                        )}
-                      </div>
+                                  )}
+                                </div>
                                 <div className={`flex flex-col ${isLeft ? "items-end" : "items-start"} mt-3 pt-3 border-t`}>
                                   <span className="text-xs text-muted-foreground whitespace-nowrap">
                             {format(parseUTCDate(event.timestamp), "PPp")}

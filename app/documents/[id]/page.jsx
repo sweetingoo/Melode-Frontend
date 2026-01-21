@@ -13,6 +13,7 @@ import ResourceAuditLogs from "@/components/ResourceAuditLogs";
 import { formatDistanceToNow } from "date-fns";
 import { parseUTCDate } from "@/utils/time";
 import { useFileReferences } from "@/hooks/useFileReferences";
+import { getYouTubeEmbedUrl } from "@/utils/youtube";
 
 const DocumentViewPage = () => {
   const params = useParams();
@@ -153,6 +154,50 @@ const DocumentViewPage = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* YouTube Videos */}
+      {document.youtube_videos && document.youtube_videos.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Videos</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {document.youtube_videos
+              .sort((a, b) => (a.order || 0) - (b.order || 0))
+              .map((video, index) => {
+                const embedUrl = getYouTubeEmbedUrl(video.video_url);
+                return (
+                  <div key={index} className="space-y-2">
+                    {video.title && (
+                      <h3 className="text-lg font-semibold">{video.title}</h3>
+                    )}
+                    {embedUrl ? (
+                      <div
+                        className="relative w-full rounded-lg overflow-hidden"
+                        style={{ paddingBottom: "56.25%", height: 0 }}
+                      >
+                        <iframe
+                          src={embedUrl}
+                          title={video.title || `Video ${index + 1}`}
+                          className="absolute top-0 left-0 w-full h-full border-0 rounded-lg"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          allowFullScreen
+                        />
+                      </div>
+                    ) : (
+                      <div className="p-4 border border-dashed rounded-md text-center text-sm text-muted-foreground">
+                        <p>Invalid YouTube URL format</p>
+                        <p className="text-xs mt-2">
+                          Please provide a valid YouTube URL
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Attachments */}
       <FileAttachmentList

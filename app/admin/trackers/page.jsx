@@ -616,7 +616,14 @@ const TrackersPage = () => {
                 .filter((t) => t.is_active)
                 .map((tracker) => (
                   <TabsTrigger key={tracker.id} value={tracker.id.toString()}>
-                    {tracker.name}
+                    <div className="flex items-center gap-2">
+                      <span>{tracker.name}</span>
+                      {tracker.category && (
+                        <Badge variant="outline" className="text-xs">
+                          {tracker.category}
+                        </Badge>
+                      )}
+                    </div>
                   </TabsTrigger>
                 ))}
             </TabsList>

@@ -146,6 +146,7 @@ const TrackerEditPage = () => {
     name: "",
     description: "",
     slug: "",
+    category: "",
     is_active: true,
     tracker_config: {
       default_status: "open",
@@ -153,6 +154,7 @@ const TrackerEditPage = () => {
       allow_inline_status_edit: true,
       sections: [],
       list_view_fields: [],
+      note_categories: [],
     },
     tracker_fields: {
       fields: [],
@@ -184,6 +186,7 @@ const TrackerEditPage = () => {
   const [fieldIdManuallyEdited, setFieldIdManuallyEdited] = useState(false);
 
   const [newStatus, setNewStatus] = useState("");
+  const [newNoteCategory, setNewNoteCategory] = useState("");
   const [newOption, setNewOption] = useState({ value: "", label: "" });
 
   // Load tracker data
@@ -194,6 +197,7 @@ const TrackerEditPage = () => {
         name: tracker.name || "",
         description: tracker.description || "",
         slug: tracker.slug || "",
+        category: tracker.category || "",
         is_active: tracker.is_active !== undefined ? tracker.is_active : true,
         tracker_config: {
           ...(tracker.tracker_config || {
@@ -204,6 +208,7 @@ const TrackerEditPage = () => {
           }),
           list_view_fields: tracker.tracker_config?.list_view_fields || [],
           create_view_fields: tracker.tracker_config?.create_view_fields || [],
+          note_categories: tracker.tracker_config?.note_categories || [],
         },
         tracker_fields: tracker.tracker_fields || {
           fields: [],
@@ -390,6 +395,46 @@ const TrackerEditPage = () => {
     toast.success("Status removed");
   };
 
+  // Note Category Management
+  const handleAddNoteCategory = () => {
+    if (!newNoteCategory.trim()) {
+      toast.error("Note category name is required");
+      return;
+    }
+
+    const noteCategories = formData.tracker_config?.note_categories || [];
+    if (noteCategories.includes(newNoteCategory.trim())) {
+      toast.error("Note category already exists");
+      return;
+    }
+
+    setFormData((prev) => ({
+      ...prev,
+      tracker_config: {
+        ...prev.tracker_config,
+        note_categories: [...noteCategories, newNoteCategory.trim()],
+      },
+    }));
+
+    setNewNoteCategory("");
+    toast.success("Note category added");
+  };
+
+  const handleRemoveNoteCategory = (categoryToRemove) => {
+    const noteCategories = (formData.tracker_config?.note_categories || []).filter(
+      (c) => c !== categoryToRemove
+    );
+
+    setFormData((prev) => ({
+      ...prev,
+      tracker_config: {
+        ...prev.tracker_config,
+        note_categories: noteCategories,
+      },
+    }));
+    toast.success("Note category removed");
+  };
+
   // Option Management for Select Fields
   const handleAddOption = () => {
     if (!newOption.label) {
@@ -531,6 +576,20 @@ const TrackerEditPage = () => {
                   placeholder="Description of what this tracker is used for"
                   rows={3}
                 />
+              </div>
+              <div>
+                <Label htmlFor="category">Category</Label>
+                <Input
+                  id="category"
+                  value={formData.category || ""}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, category: e.target.value }))
+                  }
+                  placeholder="e.g., Patient Care, IT Support, Maintenance"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Category for organizing trackers
+                </p>
               </div>
               <div className="flex items-center gap-2">
                 <input
@@ -1157,6 +1216,70 @@ const TrackerEditPage = () => {
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
                     Use lowercase with underscores (e.g., "in_progress")
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Note Categories Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Note Categories</CardTitle>
+              <p className="text-sm text-muted-foreground mt-1">
+                Manage categories for notes/comments in timeline (e.g., "Phoned Patient", "Patient Phoned", "Text Sent", "Patient Cancelled")
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Existing Note Categories */}
+              {formData.tracker_config?.note_categories?.length > 0 && (
+                <div className="space-y-2">
+                  <Label>Existing Note Categories</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {formData.tracker_config.note_categories.map((category) => (
+                      <Badge
+                        key={category}
+                        variant="outline"
+                        className="flex items-center gap-2"
+                      >
+                        {category}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-4 w-4 p-0"
+                          onClick={() => handleRemoveNoteCategory(category)}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Add New Note Category */}
+              <div className="p-4 border rounded-md space-y-4">
+                <div>
+                  <Label htmlFor="new-note-category">Note Category Name</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="new-note-category"
+                      value={newNoteCategory}
+                      onChange={(e) => setNewNoteCategory(e.target.value)}
+                      placeholder="e.g., Phoned Patient, Patient Phoned"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleAddNoteCategory();
+                        }
+                      }}
+                    />
+                    <Button onClick={handleAddNoteCategory} disabled={!newNoteCategory.trim()}>
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Categories will appear when adding notes to tracker entries
                   </p>
                 </div>
               </div>
