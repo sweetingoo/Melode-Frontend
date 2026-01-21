@@ -4,6 +4,7 @@ import React, { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { AvatarWithUrl } from "@/components/AvatarWithUrl";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -139,11 +140,13 @@ const ParticipantManager = ({
                 key={`participant-${user.id}-${index}`}
                 className="flex items-center gap-3 p-2 rounded-md hover:bg-accent/50 transition-colors"
               >
-                <Avatar className="h-8 w-8">
-                  <AvatarFallback className="text-xs">
-                    {initials}
-                  </AvatarFallback>
-                </Avatar>
+                <AvatarWithUrl
+                  avatarValue={user.avatar_url}
+                  alt={displayName}
+                  fallback={initials}
+                  className="h-8 w-8"
+                  fallbackProps={{ className: "text-xs" }}
+                />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium truncate">

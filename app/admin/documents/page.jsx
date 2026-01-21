@@ -111,7 +111,7 @@ const DocumentsPageContent = () => {
                 size="sm"
               >
                 <FolderTree className="mr-2 h-4 w-4" />
-                {viewMode === "categories" ? "Documents" : "Categories"}
+                {viewMode === "categories" ? "Library" : "Categories"}
               </Button>
             )}
             {canCreateDocument && (
@@ -141,7 +141,7 @@ const DocumentsPageContent = () => {
                     }}
                   >
                     <FolderTree className="mr-2 h-4 w-4" />
-                    {viewMode === "categories" ? "Documents" : "Categories"}
+                    {viewMode === "categories" ? "Library" : "Categories"}
                   </DropdownMenuItem>
                 )}
                 {canCreateDocument && (

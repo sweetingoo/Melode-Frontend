@@ -9,6 +9,7 @@ import { filesService } from "@/services/files";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { AvatarWithUrl } from "@/components/AvatarWithUrl";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -300,11 +301,13 @@ const CommentItem = ({
   return (
     <div className={cn("space-y-2", depth > 0 && "ml-8 mt-2")}>
       <div className="flex gap-3">
-        <Avatar className="h-8 w-8">
-          <AvatarFallback className="text-xs">
-            {getInitials(comment.created_by_name)}
-          </AvatarFallback>
-        </Avatar>
+        <AvatarWithUrl
+          avatarValue={comment.created_by_avatar_url}
+          alt={comment.created_by_name || "User"}
+          fallback={getInitials(comment.created_by_name)}
+          className="h-8 w-8"
+          fallbackProps={{ className: "text-xs" }}
+        />
         <div className="flex-1 space-y-1">
           <div className="flex items-center gap-2">
             <span className="font-medium text-sm">

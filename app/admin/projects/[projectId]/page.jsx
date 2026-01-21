@@ -99,6 +99,7 @@ import { useLocations } from "@/hooks/useLocations";
 import { useAssets } from "@/hooks/useAssets";
 import { useRoles, useRoleUsers } from "@/hooks/useRoles";
 import { useForms } from "@/hooks/useForms";
+import { getStatusColor } from "@/utils/statusBadges";
 
 const ProjectDetailPage = () => {
   const params = useParams();
@@ -905,15 +906,7 @@ const ProjectDetailPage = () => {
                 Status
               </Label>
               <div className="mt-1">
-                <Badge
-                  variant={
-                    project.status === "active"
-                      ? "default"
-                      : project.status === "archived"
-                      ? "secondary"
-                      : "outline"
-                  }
-                >
+                <Badge className={getStatusColor(project.status || "active")}>
                   {project.status === "active"
                     ? "Active"
                     : project.status === "inactive"

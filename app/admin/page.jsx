@@ -199,7 +199,7 @@ const Dashboard = () => {
         title: record.clock_in_time ? "Checked In" : "Checked Out",
         description: record.location?.name || record.job_role?.display_name || "Session record",
         timestamp: record.clock_in_time || record.clock_out_time || record.created_at,
-        link: "/clock/history",
+        link: "/admin/clock/history",
         icon: Clock,
         color: "orange",
       });
@@ -869,7 +869,7 @@ const Dashboard = () => {
               </CardContent>
             </Card>
 
-            {/* Session History Card */}
+            {/* My Time Card */}
             <Card className="hover:shadow-lg transition-all duration-200 border-l-4 border-l-purple-500">
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
@@ -888,7 +888,7 @@ const Dashboard = () => {
                     <Calendar className="h-5 w-5 text-purple-600 dark:text-purple-400" />
                   </div>
                 </div>
-                <Link href="/clock/history">
+                <Link href="/admin/clock/history">
                   <Button variant="ghost" size="sm" className="mt-3 w-full">
                     View History <ArrowRight className="ml-2 h-3 w-3" />
                   </Button>
@@ -959,11 +959,11 @@ const Dashboard = () => {
                       </div>
                     </Button>
                   </Link>
-                  <Link href="/clock/history">
+                  <Link href="/admin/clock/history">
                     <Button className="w-full justify-start h-auto py-3" variant="outline">
                       <Calendar className="mr-2 h-4 w-4" />
                       <div className="text-left">
-                        <div className="font-medium">Session History</div>
+                        <div className="font-medium">My Time</div>
                         <div className="text-xs text-muted-foreground">Past records</div>
                       </div>
                     </Button>
@@ -1024,7 +1024,7 @@ const Dashboard = () => {
                           </Link>
                         );
                       })}
-                      <Link href={shouldFetchDashboard ? "/admin" : "/clock/history"}>
+                      <Link href={shouldFetchDashboard ? "/admin" : "/admin/clock/history"}>
                         <Button variant="ghost" size="sm" className="w-full mt-2">
                           View All Activities <ArrowRight className="ml-2 h-3 w-3" />
                         </Button>

@@ -88,7 +88,7 @@ export default function ClockHistoryPage() {
 
     // Debug: Log what we're sending
     if (process.env.NODE_ENV === "development") {
-      console.log("Session History Filter Params:", paramsObj);
+      console.log("My Time Filter Params:", paramsObj);
       console.log("Selected dates - Start:", startDate?.toLocaleString(), "End:", endDate?.toLocaleString());
       console.log("Selected times - Start:", startTime, "End:", endTime);
     }
@@ -766,12 +766,3 @@ export default function ClockHistoryPage() {
     </div>
   );
 }
-
-
-
-
-
-
-
-
-

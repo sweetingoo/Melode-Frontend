@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { parseUTCDate } from "@/utils/time";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { AvatarWithUrl } from "@/components/AvatarWithUrl";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, MessageSquare, Users, Circle } from "lucide-react";
 import { useCurrentUser } from "@/hooks/useAuth";
@@ -90,6 +91,7 @@ const ConversationList = ({
         id,
         name: user ? `${user.first_name || ""} ${user.last_name || ""}`.trim() || user.email || user.username || "Unknown" : "Unknown",
         initials: user ? `${user.first_name?.[0] || ""}${user.last_name?.[0] || ""}`.toUpperCase() || user.email?.[0]?.toUpperCase() || "?" : "?",
+        avatar_url: user?.avatar_url || null,
         isOnline: isUserOnline(id),
       };
     });
@@ -264,30 +266,41 @@ const ConversationList = ({
                   </Avatar>
                 ) : avatars.length === 1 ? (
                   <div className="relative">
-                    <Avatar className={cn(
-                      "h-10 w-10",
-                      avatars[0].isOnline && "ring-2 ring-green-500 ring-offset-2 ring-offset-background"
-                    )}>
-                      <AvatarFallback>{avatars[0].initials}</AvatarFallback>
-                    </Avatar>
+                    <AvatarWithUrl
+                      avatarValue={avatars[0].avatar_url}
+                      alt={avatars[0].name}
+                      fallback={avatars[0].initials}
+                      className={cn(
+                        "h-10 w-10",
+                        avatars[0].isOnline && "ring-2 ring-green-500 ring-offset-2 ring-offset-background"
+                      )}
+                    />
                     {avatars[0].isOnline && (
                       <div className="absolute bottom-0 right-0 h-3 w-3 bg-green-500 border-2 border-background rounded-full" />
                     )}
                   </div>
                 ) : (
                   <div className="relative h-10 w-10">
-                    <Avatar className={cn(
-                      "h-8 w-8 absolute top-0 left-0 border-2 border-background",
-                      avatars[0].isOnline && "ring-2 ring-green-500"
-                    )}>
-                      <AvatarFallback className="text-xs">{avatars[0].initials}</AvatarFallback>
-                    </Avatar>
-                    <Avatar className={cn(
-                      "h-8 w-8 absolute bottom-0 right-0 border-2 border-background",
-                      avatars[1].isOnline && "ring-2 ring-green-500"
-                    )}>
-                      <AvatarFallback className="text-xs">{avatars[1].initials}</AvatarFallback>
-                    </Avatar>
+                    <AvatarWithUrl
+                      avatarValue={avatars[0].avatar_url}
+                      alt={avatars[0].name}
+                      fallback={avatars[0].initials}
+                      className={cn(
+                        "h-8 w-8 absolute top-0 left-0 border-2 border-background",
+                        avatars[0].isOnline && "ring-2 ring-green-500"
+                      )}
+                      fallbackProps={{ className: "text-xs" }}
+                    />
+                    <AvatarWithUrl
+                      avatarValue={avatars[1].avatar_url}
+                      alt={avatars[1].name}
+                      fallback={avatars[1].initials}
+                      className={cn(
+                        "h-8 w-8 absolute bottom-0 right-0 border-2 border-background",
+                        avatars[1].isOnline && "ring-2 ring-green-500"
+                      )}
+                      fallbackProps={{ className: "text-xs" }}
+                    />
                     {(avatars[0].isOnline || avatars[1].isOnline) && (
                       <div className="absolute bottom-0 right-0 h-2.5 w-2.5 bg-green-500 border-2 border-background rounded-full" />
                     )}

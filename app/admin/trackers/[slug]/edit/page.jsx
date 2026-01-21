@@ -474,14 +474,16 @@ const TrackerEditPage = () => {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList>
-          <TabsTrigger value="basic">Basic Info</TabsTrigger>
-          <TabsTrigger value="fields">Fields ({fields.length})</TabsTrigger>
-          <TabsTrigger value="sections">Sections ({sections.length})</TabsTrigger>
-          <TabsTrigger value="statuses">Statuses ({statuses.length})</TabsTrigger>
-          <TabsTrigger value="permissions">Permissions</TabsTrigger>
-          <TabsTrigger value="audit">Audit Logs</TabsTrigger>
-        </TabsList>
+        <div className="overflow-x-auto -mx-1 px-1 sm:overflow-x-visible sm:mx-0 sm:px-0">
+          <TabsList className="inline-flex w-auto min-w-max sm:w-auto">
+            <TabsTrigger value="basic">Basic Info</TabsTrigger>
+            <TabsTrigger value="fields">Fields ({fields.length})</TabsTrigger>
+            <TabsTrigger value="sections">Sections ({sections.length})</TabsTrigger>
+            <TabsTrigger value="statuses">Statuses ({statuses.length})</TabsTrigger>
+            <TabsTrigger value="permissions">Permissions</TabsTrigger>
+            <TabsTrigger value="audit">Audit Logs</TabsTrigger>
+          </TabsList>
+        </div>
 
         {/* Basic Info Tab */}
         <TabsContent value="basic" className="space-y-4">

@@ -85,6 +85,7 @@ import { format } from "date-fns";
 import { parseUTCDate } from "@/utils/time";
 import { cn } from "@/lib/utils";
 import { PageSearchBar } from "@/components/admin/PageSearchBar";
+import { getStatusColor } from "@/utils/statusBadges";
 
 const ProjectsPage = () => {
   const router = useRouter();
@@ -335,22 +336,7 @@ const ProjectsPage = () => {
                           </span>
                         </TableCell>
                         <TableCell>
-                          <Badge
-                            variant={
-                              project.status === "active"
-                                ? "default"
-                                : project.status === "archived"
-                                ? "secondary"
-                                : "outline"
-                            }
-                            className={
-                              project.status === "active"
-                                ? "bg-green-600 hover:bg-green-700"
-                                : project.status === "archived"
-                                ? "bg-gray-600 hover:bg-gray-700"
-                                : ""
-                            }
-                          >
+                          <Badge className={getStatusColor(project.status || "active")}>
                             {project.status === "active"
                               ? "Active"
                               : project.status === "inactive"

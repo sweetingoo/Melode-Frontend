@@ -262,11 +262,13 @@ export default function ComplianceMonitoringPage() {
     <div className="container mx-auto py-6 space-y-6">
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList>
-          <TabsTrigger value="expiring">Expiring Items</TabsTrigger>
-          <TabsTrigger value="pending">Pending Approvals</TabsTrigger>
-          <TabsTrigger value="non-submitted">Non-Submitted Items</TabsTrigger>
-        </TabsList>
+        <div className="overflow-x-auto -mx-1 px-1 sm:overflow-x-visible sm:mx-0 sm:px-0">
+          <TabsList className="inline-flex w-auto min-w-max sm:w-auto">
+            <TabsTrigger value="expiring">Expiring Items</TabsTrigger>
+            <TabsTrigger value="pending">Pending Approvals</TabsTrigger>
+            <TabsTrigger value="non-submitted">Non-Submitted Items</TabsTrigger>
+          </TabsList>
+        </div>
 
         <TabsContent value="expiring" className="space-y-4">
           <Card>

@@ -54,6 +54,7 @@ import {
   Filter,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { AvatarWithUrl } from "@/components/AvatarWithUrl";
 import { formatDistanceToNow, format } from "date-fns";
 import Link from "next/link";
 import { calculateElapsedHours, formatElapsedTime } from "@/utils/time";
@@ -396,11 +397,13 @@ export default function ManagerClockPage() {
                       <TableRow key={uniqueKey} className="hover:bg-muted/50 transition-colors">
                         <TableCell>
                           <div className="flex items-center gap-3">
-                            <Avatar className="h-10 w-10">
-                              <AvatarFallback className="bg-primary/10 text-primary font-semibold">
-                                {userInitials}
-                              </AvatarFallback>
-                            </Avatar>
+                            <AvatarWithUrl
+                              avatarValue={record.user?.avatar_url}
+                              alt={record.user_name || "User"}
+                              fallback={userInitials}
+                              className="h-10 w-10"
+                              fallbackProps={{ className: "bg-primary/10 text-primary font-semibold" }}
+                            />
                             <div>
                               <div className="font-medium">
                                 {record.user_name || "N/A"}

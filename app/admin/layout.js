@@ -122,10 +122,10 @@ const mainMenuItems = [
     permission: null, // My Tasks is visible to all users
   },
   {
-    title: "Session History",
+    title: "My Time",
     description: "View your clock in/out history",
     icon: History,
-    url: "/clock/history",
+    url: "/admin/clock/history",
     permission: "clock:view", // Permission to view clock records
   },
   {
@@ -157,8 +157,8 @@ const mainMenuItems = [
     permission: "tracker:read", // Permission to read trackers
   },
   {
-    title: "Documents",
-    description: "Manage and organise documents",
+    title: "Library",
+    description: "Manage your library of documents, training videos, and more",
     icon: BookOpen,
     url: "/admin/documents",
     permission: "document:read", // Permission to read documents

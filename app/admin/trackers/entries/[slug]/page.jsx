@@ -534,24 +534,26 @@ const TrackerEntryDetailPage = () => {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList>
-          <TabsTrigger value="details">
-            <FileText className="mr-2 h-4 w-4" />
-            Details
-          </TabsTrigger>
-          <TabsTrigger value="notes">
-            <MessageSquare className="mr-2 h-4 w-4" />
-            Notes & Files ({comments.length})
-          </TabsTrigger>
-          <TabsTrigger value="timeline">
-            <Clock className="mr-2 h-4 w-4" />
-            Timeline
-          </TabsTrigger>
-          <TabsTrigger value="audit">
-            <FileText className="mr-2 h-4 w-4" />
-            Audit Logs
-          </TabsTrigger>
-        </TabsList>
+        <div className="overflow-x-auto -mx-1 px-1 sm:overflow-x-visible sm:mx-0 sm:px-0">
+          <TabsList className="inline-flex w-auto min-w-max sm:w-auto">
+            <TabsTrigger value="details">
+              <FileText className="mr-2 h-4 w-4" />
+              Details
+            </TabsTrigger>
+            <TabsTrigger value="notes">
+              <MessageSquare className="mr-2 h-4 w-4" />
+              Notes & Files ({comments.length})
+            </TabsTrigger>
+            <TabsTrigger value="timeline">
+              <Clock className="mr-2 h-4 w-4" />
+              Timeline
+            </TabsTrigger>
+            <TabsTrigger value="audit">
+              <FileText className="mr-2 h-4 w-4" />
+              Audit Logs
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
         {/* Details Tab */}
         <TabsContent value="details" className="space-y-4">

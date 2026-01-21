@@ -75,6 +75,7 @@ import { format } from "date-fns";
 import { parseUTCDate } from "@/utils/time";
 import { Shield, Users, User } from "lucide-react";
 import { PageSearchBar } from "@/components/admin/PageSearchBar";
+import { getStatusColor } from "@/utils/statusBadges";
 
 const FormsPage = () => {
   const router = useRouter();
@@ -349,17 +350,19 @@ const FormsPage = () => {
                         )}
                       </TableCell>
                       <TableCell>
-                        {form.is_active ? (
-                          <Badge className="bg-green-500/10 text-green-600 border-green-500/20">
-                            <CheckCircle className="mr-1 h-3 w-3" />
-                            Active
-                          </Badge>
-                        ) : (
-                          <Badge className="bg-gray-500/10 text-gray-600 border-gray-500/20">
-                            <XCircle className="mr-1 h-3 w-3" />
-                            Inactive
-                          </Badge>
-                        )}
+                        <Badge className={getStatusColor(form.is_active ? "active" : "inactive")}>
+                          {form.is_active ? (
+                            <>
+                              <CheckCircle className="mr-1 h-3 w-3" />
+                              Active
+                            </>
+                          ) : (
+                            <>
+                              <XCircle className="mr-1 h-3 w-3" />
+                              Inactive
+                            </>
+                          )}
+                        </Badge>
                       </TableCell>
                       <TableCell>
                         {form.assigned_to_role_id ? (

@@ -14,6 +14,7 @@ export const PageSearchBar = ({
   searchValue,
   onSearchChange,
   searchPlaceholder = "Search...",
+  showSearch = true,
   showFilters = false,
   isFiltersOpen = false,
   onToggleFilters,
@@ -27,15 +28,17 @@ export const PageSearchBar = ({
       <CardContent className="pt-6 pb-4">
         <div className="flex flex-col gap-3">
           <div className="flex flex-col sm:flex-row gap-3">
-            <div className="relative flex-1 min-w-0">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder={searchPlaceholder}
-                value={searchValue}
-                onChange={(e) => onSearchChange(e.target.value)}
-                className="pl-10 w-full h-10"
-              />
-            </div>
+            {showSearch && (
+              <div className="relative flex-1 min-w-0">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder={searchPlaceholder}
+                  value={searchValue}
+                  onChange={(e) => onSearchChange(e.target.value)}
+                  className="pl-10 w-full h-10"
+                />
+              </div>
+            )}
             <div className="flex gap-3">
               {showFilters && (
                 <Button

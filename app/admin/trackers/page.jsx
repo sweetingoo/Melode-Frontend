@@ -634,15 +634,17 @@ const TrackersPage = () => {
         }}
         className="w-full"
       >
-        <TabsList className="w-full justify-start overflow-x-auto">
-          {trackers
-            .filter((t) => t.is_active)
-            .map((tracker) => (
-              <TabsTrigger key={tracker.id} value={tracker.id.toString()}>
-                {tracker.name}
-              </TabsTrigger>
-            ))}
-        </TabsList>
+        <div className="overflow-x-auto -mx-1 px-1 sm:overflow-x-visible sm:mx-0 sm:px-0">
+          <TabsList className="inline-flex w-auto min-w-max sm:w-auto justify-start">
+            {trackers
+              .filter((t) => t.is_active)
+              .map((tracker) => (
+                <TabsTrigger key={tracker.id} value={tracker.id.toString()}>
+                  {tracker.name}
+                </TabsTrigger>
+              ))}
+          </TabsList>
+        </div>
 
         {/* Content for each tracker tab */}
         {trackers
