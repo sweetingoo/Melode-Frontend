@@ -2,7 +2,6 @@
 
 import React, { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -30,7 +29,6 @@ import {
   PaginationEllipsis,
 } from "@/components/ui/pagination";
 import {
-  Search,
   FileText,
   Edit,
   Trash2,
@@ -46,8 +44,52 @@ import { formatDistanceToNow } from "date-fns";
 import { parseUTCDate } from "@/utils/time";
 import { useRouter } from "next/navigation";
 
+// Helper function to get author display name with priority: name > username > slug (NOT email)
+const getAuthorDisplayName = (author) => {
+  if (!author) return "Unknown";
+  
+  // Priority 1: Check if we have actual name fields (first_name or last_name)
+  // This handles full User objects with all fields
+  if (author.first_name || author.last_name) {
+    const fullName = `${author.first_name || ""} ${author.last_name || ""}`.trim();
+    if (fullName) {
+      // Use display_name if available (includes title), otherwise use first_name + last_name
+      if (author.display_name && author.display_name.trim() && 
+          author.display_name.trim() !== author.username) {
+        return author.display_name.trim();
+      } else {
+        return fullName;
+      }
+    }
+  }
+  
+  // Priority 2: username (if no name available)
+  if (author.username && author.username.trim()) {
+    return author.username.trim();
+  }
+  
+  // Priority 3: slug (if no username available)
+  if (author.slug && author.slug.trim()) {
+    return author.slug.trim();
+  }
+  
+  // Fallback: if author.name exists (from AuthorInfo schema), use it
+  // But only if it's not an email address
+  if (author.name && author.name.trim()) {
+    const nameValue = author.name.trim();
+    // Check if it looks like an email (contains @)
+    if (!nameValue.includes("@")) {
+      return nameValue;
+    }
+  }
+  
+  return "Unknown";
+};
+
 const DocumentList = ({
   categoryId,
+  searchTerm: externalSearchTerm,
+  statusFilter: externalStatusFilter,
   onViewDocument,
   onEditDocument,
   onDeleteDocument,
@@ -56,8 +98,11 @@ const DocumentList = ({
   canDelete = false,
 }) => {
   const router = useRouter();
-  const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  // Use external searchTerm and statusFilter if provided, otherwise use internal state
+  const [internalSearchTerm, setInternalSearchTerm] = useState("");
+  const [internalStatusFilter, setInternalStatusFilter] = useState("all");
+  const searchTerm = externalSearchTerm !== undefined ? externalSearchTerm : internalSearchTerm;
+  const statusFilter = externalStatusFilter !== undefined ? externalStatusFilter : internalStatusFilter;
   const [currentPage, setCurrentPage] = useState(1);
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
 
@@ -185,29 +230,6 @@ const DocumentList = ({
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
-          {/* Filters */}
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1">
-              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search documents..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-8"
-              />
-            </div>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Filter by status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="published">Published</SelectItem>
-                <SelectItem value="draft">Draft</SelectItem>
-                <SelectItem value="archived">Archived</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
 
           {/* Documents Table */}
           {documents.length === 0 ? (
@@ -251,7 +273,7 @@ const DocumentList = ({
                           })()}
                         </TableCell>
                         <TableCell>
-                          {document.author?.name || document.author?.email || "Unknown"}
+                          {getAuthorDisplayName(document.author)}
                         </TableCell>
                         <TableCell>{getStatusBadge(document.status)}</TableCell>
                         <TableCell>

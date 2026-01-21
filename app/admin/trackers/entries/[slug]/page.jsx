@@ -206,6 +206,94 @@ const TrackerEntryDetailPage = () => {
   // This is calculated based on creation order within the tracker
   const entryNumber = entry?.tracker_entry_number || entry?.id || null;
 
+  // Helper to format field value for header (simplified version)
+  const formatValueForHeader = React.useCallback((field, value) => {
+    if (value === null || value === undefined || value === "") {
+      return null;
+    }
+    
+    const fieldType = field?.type || field?.field_type;
+    
+    // Handle different field types
+    if (fieldType === "date" && value) {
+      try {
+        return format(parseUTCDate(value), "MMM d, yyyy");
+      } catch (e) {
+        return String(value);
+      }
+    }
+    
+    if (fieldType === "datetime" && value) {
+      try {
+        return format(parseUTCDate(value), "MMM d, yyyy HH:mm");
+      } catch (e) {
+        return String(value);
+      }
+    }
+    
+    // Handle select fields - show label if available
+    if ((fieldType === "select" || fieldType === "multiselect") && field?.options) {
+      if (Array.isArray(value)) {
+        return value.map(v => {
+          const option = field.options.find(opt => String(opt.value) === String(v) || String(opt.label) === String(v));
+          return option?.label || v;
+        }).join(", ");
+      } else {
+        const option = field.options.find(opt => String(opt.value) === String(value) || String(opt.label) === String(value));
+        return option?.label || value;
+      }
+    }
+    
+    // Handle people/user fields
+    if ((fieldType === "people" || fieldType === "user") && typeof value === "object" && value !== null) {
+      if (value.display_name) return value.display_name;
+      const nameParts = [];
+      if (value.first_name) nameParts.push(value.first_name);
+      if (value.last_name) nameParts.push(value.last_name);
+      if (nameParts.length > 0) return nameParts.join(" ");
+      if (value.email) return value.email;
+      if (value.id) return `User #${value.id}`;
+    }
+    
+    // Default: return string value
+    return String(value);
+  }, []);
+
+  // Find heading value to display in header (description, title, name, or tracker name)
+  const headingValue = React.useMemo(() => {
+    if (!entry || !tracker) return tracker?.name || "Tracker Entry";
+    
+    const trackerFields = tracker?.tracker_fields?.fields || [];
+    const displayData = entry.formatted_data || entry.submission_data || entry.entry_data || {};
+    
+    // Priority order: description -> title -> name
+    const priorityKeywords = ["description", "title", "name"];
+    
+    // Try to find field by priority keywords
+    for (const keyword of priorityKeywords) {
+      const field = trackerFields.find(f => {
+        const fieldName = (f.name || "").toLowerCase();
+        const fieldLabel = (f.label || "").toLowerCase();
+        return fieldName.includes(keyword) || fieldLabel.includes(keyword);
+      });
+      
+      if (field) {
+        const fieldId = field.id || field.name || field.field_id;
+        const value = fieldId ? displayData[fieldId] : null;
+        if (value !== null && value !== undefined && value !== "" && String(value).trim()) {
+          const formatted = formatValueForHeader(field, value);
+          if (formatted) {
+            // Limit length for header display
+            return formatted.length > 100 ? formatted.substring(0, 100) + "..." : formatted;
+          }
+        }
+      }
+    }
+    
+    // If no description/title/name found, use tracker name
+    return tracker.name || "Tracker Entry";
+  }, [entry, tracker, formatValueForHeader]);
+
   // Initialize form data when entry loads
   useEffect(() => {
     if (entry) {
@@ -477,16 +565,18 @@ const TrackerEntryDetailPage = () => {
           </Link>
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold">
-              Entry #{entryNumber !== null ? entryNumber : entry.id}
-              {tracker && (
-                <span className="text-lg font-normal text-muted-foreground ml-2">
-                  - {tracker.name}
-                </span>
-              )}
+              {headingValue}
             </h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Created {entry.created_at ? format(parseUTCDate(entry.created_at), "PPp") : "—"}
-            </p>
+            <div className="space-y-1">
+              {tracker && headingValue !== tracker.name && (
+                <p className="text-sm font-medium text-muted-foreground">
+                  {tracker.name}
+                </p>
+              )}
+              <p className="text-sm text-muted-foreground">
+                Created {entry.created_at ? format(parseUTCDate(entry.created_at), "PPp") : "—"}
+              </p>
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-2">

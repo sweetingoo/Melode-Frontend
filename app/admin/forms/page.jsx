@@ -316,11 +316,16 @@ const FormsPage = () => {
                 </TableHeader>
                 <TableBody>
                   {filteredForms.map((form) => (
-                    <TableRow key={form.id}>
+                    <TableRow 
+                      key={form.id}
+                      className="cursor-pointer hover:bg-muted/50 transition-colors"
+                      onClick={() => router.push(`/admin/forms/${form.slug || form.id}`)}
+                    >
                       <TableCell className="font-medium">
                         <Link
                           href={`/admin/forms/${form.slug || form.id}`}
                           className="hover:underline"
+                          onClick={(e) => e.stopPropagation()}
                         >
                           {form.form_title || form.form_name}
                         </Link>
@@ -400,7 +405,7 @@ const FormsPage = () => {
                           ? format(parseUTCDate(form.created_at), "MMM dd, yyyy")
                           : "N/A"}
                       </TableCell>
-                      <TableCell>
+                      <TableCell onClick={(e) => e.stopPropagation()}>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="icon">

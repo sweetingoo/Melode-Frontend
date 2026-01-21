@@ -321,11 +321,16 @@ const ProjectsPage = () => {
                   </TableHeader>
                   <TableBody>
                     {projects.map((project) => (
-                      <TableRow key={project.id}>
+                      <TableRow 
+                        key={project.id}
+                        className="cursor-pointer hover:bg-muted/50 transition-colors"
+                        onClick={() => router.push(`/admin/projects/${project.slug || project.id}`)}
+                      >
                         <TableCell>
                           <Link
                             href={`/admin/projects/${project.slug || project.id}`}
                             className="font-medium hover:underline"
+                            onClick={(e) => e.stopPropagation()}
                           >
                             {project.name}
                           </Link>
@@ -368,7 +373,7 @@ const ProjectsPage = () => {
                             <span className="text-sm text-muted-foreground">N/A</span>
                           )}
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button variant="ghost" size="icon">

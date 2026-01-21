@@ -269,6 +269,13 @@ const organisationItems = [
     url: "/admin/asset-types",
     permission: "asset_type:read", // Permission to read asset types
   },
+  {
+    title: "Manage Trackers",
+    description: "Create and manage trackers for your organisation",
+    icon: FileSpreadsheet,
+    url: "/admin/trackers/manage",
+    permission: "tracker:read", // Permission to read/manage trackers
+  },
 ];
 
 // Monitoring & Reports group
@@ -1597,14 +1604,29 @@ export default function AdminLayout({ children }) {
                     ...settingsItems,
                   ];
 
-                  // Find matching menu item by exact URL match
+                  // Special case: Dashboard (root /admin path) - check first to avoid matching other /admin/* paths
+                  if (pathname === "/admin") {
+                    return (
+                      <div>
+                        <h1 className="text-lg font-semibold">Dashboard</h1>
+                        <p className="text-sm text-muted-foreground">Overview of your workspace</p>
+                      </div>
+                    );
+                  }
+
+                  // Find matching menu item by exact URL match first
                   let matchedItem = allMenuItems.find(item => item.url === pathname);
 
                   // Handle dynamic routes by checking if pathname starts with a menu item URL
+                  // Sort by URL length (longest first) to prioritize more specific paths
+                  // This ensures /admin/forms matches before /admin
                   if (!matchedItem) {
-                    matchedItem = allMenuItems.find(item => {
-                      // For routes like /admin/broadcasts/123, match /admin/broadcasts
-                      return pathname?.startsWith(item.url + "/");
+                    const sortedItems = [...allMenuItems].sort((a, b) => b.url.length - a.url.length);
+                    matchedItem = sortedItems.find(item => {
+                      // For routes like /admin/forms/[id], match /admin/forms
+                      // But exclude /admin itself (already handled above)
+                      if (item.url === "/admin") return false;
+                      return pathname?.startsWith(item.url + "/") || pathname === item.url;
                     });
                   }
 
@@ -1616,16 +1638,6 @@ export default function AdminLayout({ children }) {
                         {matchedItem.description && (
                           <p className="text-sm text-muted-foreground truncate">{matchedItem.description}</p>
                         )}
-                      </div>
-                    );
-                  }
-
-                  // Special case: Dashboard (root /admin path)
-                  if (pathname === "/admin") {
-                    return (
-                      <div>
-                        <h1 className="text-lg font-semibold">Dashboard</h1>
-                        <p className="text-sm text-muted-foreground">Overview of your workspace</p>
                       </div>
                     );
                   }

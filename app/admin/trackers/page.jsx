@@ -4,7 +4,7 @@ import React, { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -76,6 +76,7 @@ import { parseUTCDate } from "@/utils/time";
 import { toast } from "sonner";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
 import { useUsers } from "@/hooks/useUsers";
+import { PageSearchBar } from "@/components/admin/PageSearchBar";
 
 const TrackersPage = () => {
   const router = useRouter();
@@ -84,6 +85,7 @@ const TrackersPage = () => {
   const canReadEntries = hasPermission("tracker_entry:read") || hasPermission("tracker_entry:list");
   const canDeleteEntry = hasPermission("tracker_entry:delete");
   const canReadTrackers = hasPermission("tracker:read") || hasPermission("tracker:list");
+  const canCreateTracker = hasPermission("tracker:create");
   const [selectedTracker, setSelectedTracker] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -98,6 +100,7 @@ const TrackersPage = () => {
   const [columnSorting, setColumnSorting] = useState({});
   const [entryFieldErrors, setEntryFieldErrors] = useState({});
   const [showMetadataColumns, setShowMetadataColumns] = useState(false);
+  const [isFiltersOpen, setIsFiltersOpen] = useState(false);
 
   const itemsPerPage = 20;
 
@@ -416,14 +419,6 @@ const TrackersPage = () => {
   if (trackers.length === 0) {
     return (
       <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-4">
-          <Link href="/admin/trackers/manage">
-            <Button variant="outline">
-              <Filter className="mr-2 h-4 w-4" />
-              Manage Trackers
-            </Button>
-          </Link>
-        </div>
         <Card>
           <CardContent className="py-12">
             <div className="text-center">
@@ -432,9 +427,6 @@ const TrackersPage = () => {
               <p className="text-muted-foreground mb-4">
                 Create your first tracker to start tracking entries
               </p>
-              <Link href="/admin/trackers/manage">
-                <Button>Manage Trackers</Button>
-              </Link>
             </div>
           </CardContent>
         </Card>
@@ -444,17 +436,8 @@ const TrackersPage = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div></div>
-        <div className="flex gap-2">
-          <Link href="/admin/trackers/manage">
-            <Button variant="outline">
-              <Filter className="mr-2 h-4 w-4" />
-              Manage Trackers
-            </Button>
-          </Link>
-          {selectedTrackerObj && canCreateEntry && (
+      {/* Create Entry Dialog */}
+      {selectedTrackerObj && canCreateEntry && (
             <Dialog 
               open={isCreateEntryDialogOpen} 
               onOpenChange={(open) => {
@@ -466,12 +449,6 @@ const TrackersPage = () => {
                 }
               }}
             >
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Create Entry
-                </Button>
-              </DialogTrigger>
               <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>Create New Entry</DialogTitle>
@@ -616,9 +593,7 @@ const TrackersPage = () => {
                 </DialogFooter>
               </DialogContent>
             </Dialog>
-          )}
-        </div>
-      </div>
+      )}
 
       {/* Tracker Tabs */}
       <Tabs 
@@ -634,16 +609,29 @@ const TrackersPage = () => {
         }}
         className="w-full"
       >
-        <div className="overflow-x-auto -mx-1 px-1 sm:overflow-x-visible sm:mx-0 sm:px-0">
-          <TabsList className="inline-flex w-auto min-w-max sm:w-auto justify-start">
-            {trackers
-              .filter((t) => t.is_active)
-              .map((tracker) => (
-                <TabsTrigger key={tracker.id} value={tracker.id.toString()}>
-                  {tracker.name}
-                </TabsTrigger>
-              ))}
-          </TabsList>
+        <div className="flex items-center gap-2 overflow-x-auto -mx-1 px-1 sm:overflow-x-visible sm:mx-0 sm:px-0">
+          <div className="flex-shrink-0">
+            <TabsList className="inline-flex w-auto min-w-max sm:w-auto justify-start">
+              {trackers
+                .filter((t) => t.is_active)
+                .map((tracker) => (
+                  <TabsTrigger key={tracker.id} value={tracker.id.toString()}>
+                    {tracker.name}
+                  </TabsTrigger>
+                ))}
+            </TabsList>
+          </div>
+          {canCreateTracker && (
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => router.push("/admin/trackers/manage?create=true")}
+              className="flex-shrink-0"
+              title="Create New Tracker"
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
+          )}
         </div>
 
         {/* Content for each tracker tab */}
@@ -701,87 +689,100 @@ const TrackersPage = () => {
 
             return (
               <TabsContent key={tracker.id} value={tracker.id.toString()} className="space-y-4">
-      {/* Filters */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex flex-col md:flex-row gap-4">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search entries..."
-                  value={searchTerm}
-                  onChange={(e) => {
-                    setSearchTerm(e.target.value);
+      {/* Search and Create */}
+      <PageSearchBar
+        searchValue={searchTerm}
+        onSearchChange={(value) => {
+          setSearchTerm(value);
+          setCurrentPage(1);
+        }}
+        searchPlaceholder="Search entries..."
+        showSearch={true}
+        showFilters={true}
+        isFiltersOpen={isFiltersOpen}
+        onToggleFilters={() => setIsFiltersOpen(!isFiltersOpen)}
+        showCreateButton={canCreateEntry}
+        onCreateClick={() => setIsCreateEntryDialogOpen(true)}
+        createButtonText="Create Entry"
+        createButtonIcon={Plus}
+      />
+
+      {/* Advanced Filters */}
+      {isFiltersOpen && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Advanced Filters</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-col md:flex-row gap-4">
+              <div className="flex-1">
+                <Label>Status</Label>
+                <Select
+                  value={statusFilter}
+                  onValueChange={(value) => {
+                    setStatusFilter(value);
                     setCurrentPage(1);
                   }}
-                  className="pl-8"
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="All Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Status</SelectItem>
+                    {trackerStatuses.length > 0 ? (
+                      trackerStatuses.map((status) => (
+                        <SelectItem key={status} value={status}>
+                          {status}
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <>
+                        <SelectItem value="open">Open</SelectItem>
+                        <SelectItem value="in_progress">In Progress</SelectItem>
+                        <SelectItem value="pending">Pending</SelectItem>
+                        <SelectItem value="resolved">Resolved</SelectItem>
+                        <SelectItem value="closed">Closed</SelectItem>
+                      </>
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex-1">
+                <Label>Sort By</Label>
+                <Select
+                  value={`${sortBy}:${sortOrder}`}
+                  onValueChange={(value) => {
+                    const [field, order] = value.split(":");
+                    setSortBy(field);
+                    setSortOrder(order);
+                    setCurrentPage(1);
+                  }}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Sort By" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="created_at:desc">Newest First</SelectItem>
+                    <SelectItem value="created_at:asc">Oldest First</SelectItem>
+                    <SelectItem value="updated_at:desc">Recently Updated</SelectItem>
+                    <SelectItem value="status:asc">Status A-Z</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-2 pt-8">
+                <Label htmlFor="show-last-updated" className="text-sm font-normal cursor-pointer">
+                  Show Last Updated
+                </Label>
+                <Switch
+                  id="show-last-updated"
+                  checked={showMetadataColumns}
+                  onCheckedChange={setShowMetadataColumns}
                 />
               </div>
             </div>
-            <div className="flex gap-2">
-              <Select
-                value={statusFilter}
-                onValueChange={(value) => {
-                  setStatusFilter(value);
-                  setCurrentPage(1);
-                }}
-              >
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="All Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                            {trackerStatuses.length > 0 ? (
-                              trackerStatuses.map((status) => (
-                      <SelectItem key={status} value={status}>
-                        {status}
-                      </SelectItem>
-                    ))
-                  ) : (
-                    <>
-                      <SelectItem value="open">Open</SelectItem>
-                      <SelectItem value="in_progress">In Progress</SelectItem>
-                      <SelectItem value="pending">Pending</SelectItem>
-                      <SelectItem value="resolved">Resolved</SelectItem>
-                      <SelectItem value="closed">Closed</SelectItem>
-                    </>
-                  )}
-                </SelectContent>
-              </Select>
-              <Select
-                value={`${sortBy}:${sortOrder}`}
-                onValueChange={(value) => {
-                  const [field, order] = value.split(":");
-                  setSortBy(field);
-                  setSortOrder(order);
-                  setCurrentPage(1);
-                }}
-              >
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="Sort By" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="created_at:desc">Newest First</SelectItem>
-                  <SelectItem value="created_at:asc">Oldest First</SelectItem>
-                  <SelectItem value="updated_at:desc">Recently Updated</SelectItem>
-                  <SelectItem value="status:asc">Status A-Z</SelectItem>
-                </SelectContent>
-              </Select>
-                        <div className="flex items-center gap-2">
-                          <Label htmlFor="show-last-updated" className="text-sm font-normal cursor-pointer">
-                            Last Updated
-                          </Label>
-                          <Switch
-                            id="show-last-updated"
-                            checked={showMetadataColumns}
-                            onCheckedChange={setShowMetadataColumns}
-                          />
-                        </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Entries Table */}
       <Card>
@@ -911,11 +912,16 @@ const TrackersPage = () => {
                               });
                               
                       return (
-                        <TableRow key={entry.id}>
+                        <TableRow 
+                          key={entry.id}
+                          className="cursor-pointer hover:bg-muted/50 transition-colors"
+                          onClick={() => router.push(`/admin/trackers/entries/${entry.slug || entry.id}`)}
+                        >
                           <TableCell className="font-medium">
                             <Link
                               href={`/admin/trackers/entries/${entry.slug || entry.id}`}
                               className="hover:underline"
+                              onClick={(e) => e.stopPropagation()}
                             >
                                       #{entryNumber}
                             </Link>
@@ -949,7 +955,7 @@ const TrackersPage = () => {
                                       </TableCell>
                                     </>
                                   )}
-                          <TableCell>
+                          <TableCell onClick={(e) => e.stopPropagation()}>
                             <div className="flex items-center gap-2">
                                         {canReadEntries && (
                               <Link href={`/admin/trackers/entries/${entry.slug || entry.id}`}>

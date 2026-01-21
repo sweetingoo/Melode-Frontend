@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, Suspense, useRef } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -37,7 +37,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
-  Search,
   Plus,
   Edit,
   Edit2,
@@ -58,11 +57,26 @@ import { useCurrentUser } from "@/hooks/useAuth";
 import { format } from "date-fns";
 import { parseUTCDate } from "@/utils/time";
 import { toast } from "sonner";
+import { PageSearchBar } from "@/components/admin/PageSearchBar";
 
 const TrackersManagePage = () => {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const hasOpenedDialogRef = useRef(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [isFiltersOpen, setIsFiltersOpen] = useState(false);
+
+  // Check if we should open the create dialog from URL parameter
+  useEffect(() => {
+    const shouldCreate = searchParams.get("create");
+    if (shouldCreate === "true" && !hasOpenedDialogRef.current) {
+      hasOpenedDialogRef.current = true;
+      setIsCreateDialogOpen(true);
+      // Clean up URL parameter
+      router.replace("/admin/trackers/manage", { scroll: false });
+    }
+  }, [searchParams, router]);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [editingTracker, setEditingTracker] = useState(null);
@@ -235,30 +249,32 @@ const TrackersManagePage = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <Link href="/admin/trackers">
-            <Button variant="ghost" size="sm">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back
-            </Button>
-          </Link>
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold">Manage Trackers</h1>
-            <p className="text-sm sm:text-base text-muted-foreground mt-1">
-              Create and manage tracker templates
-            </p>
-          </div>
-        </div>
-        {canCreate && (
-          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Create Tracker
-              </Button>
-            </DialogTrigger>
+      {/* Back Button */}
+      <div className="flex items-center gap-4">
+        <Link href="/admin/trackers">
+          <Button variant="ghost" size="sm">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back
+          </Button>
+        </Link>
+      </div>
+
+      {/* Search and Create */}
+      <PageSearchBar
+        searchValue={searchTerm}
+        onSearchChange={setSearchTerm}
+        searchPlaceholder="Search trackers..."
+        showSearch={true}
+        showFilters={false}
+        showCreateButton={canCreate}
+        onCreateClick={() => setIsCreateDialogOpen(true)}
+        createButtonText="Create Tracker"
+        createButtonIcon={Plus}
+      />
+
+      {/* Create Tracker Dialog */}
+      {canCreate && (
+        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
             <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Create Tracker</DialogTitle>
@@ -328,23 +344,7 @@ const TrackersManagePage = () => {
               </DialogFooter>
             </DialogContent>
           </Dialog>
-        )}
-      </div>
-
-      {/* Search */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="relative">
-            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search trackers..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-8"
-            />
-          </div>
-        </CardContent>
-      </Card>
+      )}
 
       {/* Trackers Table */}
       <Card>
@@ -576,4 +576,12 @@ const TrackersManagePage = () => {
   );
 };
 
-export default TrackersManagePage;
+const TrackersManagePageWrapper = () => {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <TrackersManagePage />
+    </Suspense>
+  );
+};
+
+export default TrackersManagePageWrapper;

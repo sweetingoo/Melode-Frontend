@@ -624,12 +624,35 @@ export const useSendInvitationToUser = () => {
 export const userUtils = {
   // Transform API user data to display format
   transformUser: (apiUser) => {
+    // Determine display name with priority: name (display_name/first_name+last_name) > username > slug (NOT email)
+    let displayName = "Unknown User";
+    
+    // Priority 1: Check if we have actual name fields (first_name or last_name)
+    const fullName = `${apiUser.first_name || ""} ${apiUser.last_name || ""}`.trim();
+    if (fullName) {
+      // Use display_name if available (includes title), otherwise use first_name + last_name
+      if (apiUser.display_name && apiUser.display_name.trim() && 
+          apiUser.display_name.trim() !== apiUser.username) {
+        displayName = apiUser.display_name.trim();
+      } else {
+        displayName = fullName;
+      }
+    } else {
+      // Priority 2: username (if no name available)
+      if (apiUser.username && apiUser.username.trim()) {
+        displayName = apiUser.username.trim();
+      } else {
+        // Priority 3: slug (if no username available)
+        if (apiUser.slug && apiUser.slug.trim()) {
+          displayName = apiUser.slug.trim();
+        }
+      }
+    }
+    
     return {
       id: apiUser.id,
       slug: apiUser.slug, // Include slug for API path parameters
-      name:
-        `${apiUser.first_name || ""} ${apiUser.last_name || ""}`.trim() ||
-        "Unknown User",
+      name: displayName,
       email: apiUser.email,
       username: apiUser.username,
       firstName: apiUser.first_name,
