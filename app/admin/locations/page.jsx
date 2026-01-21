@@ -95,6 +95,7 @@ import { Loader2 } from "lucide-react";
 import MultiFileUpload from "@/components/MultiFileUpload";
 import FileAttachmentList from "@/components/FileAttachmentList";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
+import { PageSearchBar } from "@/components/admin/PageSearchBar";
 
 const LocationsPage = () => {
   const router = useRouter();
@@ -107,6 +108,7 @@ const LocationsPage = () => {
   const [isQuickCreateLocationTypeOpen, setIsQuickCreateLocationTypeOpen] = useState(false);
   const [selectedLocation, setSelectedLocation] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   const [selectedType, setSelectedType] = useState("all");
   const [viewMode, setViewMode] = useState("list");
   const [expandedNodes, setExpandedNodes] = useState(new Set());
@@ -675,22 +677,6 @@ const LocationsPage = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">
-            Locations Management
-          </h1>
-          <p className="text-muted-foreground">
-            Manage organisational locations and their hierarchy efficiently.
-          </p>
-        </div>
-        <Button onClick={handleCreateLocation}>
-          <Plus className="mr-2 h-4 w-4" />
-          Create Location
-        </Button>
-      </div>
-
       {/* Statistics Cards */}
       <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-4">
         <Card className="border-l-4 border-l-blue-500">
@@ -792,63 +778,65 @@ const LocationsPage = () => {
         </Card>
       </div>
 
-      {/* Filters and Search */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Filter className="h-5 w-5" />
-            Filters & Search
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search by name, code, or city..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9"
-                />
-              </div>
-            </div>
-            <Select value={selectedType} onValueChange={setSelectedType}>
-              <SelectTrigger className="w-[200px]">
-                <Building2 className="h-4 w-4 mr-2" />
-                <SelectValue placeholder="All Types" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Types</SelectItem>
-                {locationTypesLoading ? (
-                  <SelectItem value="loading" disabled>
-                    Loading types...
-                  </SelectItem>
-                ) : (
-                  locationTypes.map((type) => (
-                    <SelectItem key={type.id} value={type.id.toString()}>
-                      {type.display_name || type.name}
+      {/* Search and Create */}
+      <PageSearchBar
+        searchValue={searchQuery}
+        onSearchChange={setSearchQuery}
+        searchPlaceholder="Search by name, code, or city..."
+        showFilters={true}
+        isFiltersOpen={isFiltersOpen}
+        onToggleFilters={() => setIsFiltersOpen(!isFiltersOpen)}
+        showCreateButton={canCreateLocation}
+        onCreateClick={handleCreateLocation}
+        createButtonText="Create Location"
+        createButtonIcon={Plus}
+      />
+
+      {/* Advanced Filters */}
+      {isFiltersOpen && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Advanced Filters</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <Select value={selectedType} onValueChange={setSelectedType}>
+                <SelectTrigger className="w-full">
+                  <Building2 className="h-4 w-4 mr-2" />
+                  <SelectValue placeholder="All Types" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Types</SelectItem>
+                  {locationTypesLoading ? (
+                    <SelectItem value="loading" disabled>
+                      Loading types...
                     </SelectItem>
-                  ))
-                )}
-              </SelectContent>
-            </Select>
-            {(searchQuery || selectedType !== "all") && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setSearchQuery("");
-                  setSelectedType("all");
-                }}
-              >
-                <X className="h-4 w-4 mr-2" />
-                Clear
-              </Button>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+                  ) : (
+                    locationTypes.map((type) => (
+                      <SelectItem key={type.id} value={type.id.toString()}>
+                        {type.display_name || type.name}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+              {(searchQuery || selectedType !== "all") && (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setSearchQuery("");
+                    setSelectedType("all");
+                  }}
+                  className="w-full"
+                >
+                  <X className="h-4 w-4 mr-2" />
+                  Clear Filters
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Locations View - Tabs */}
       <Card>

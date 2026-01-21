@@ -65,8 +65,10 @@ import {
 } from "@/hooks/useLocationTypes";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
 import { toast } from "sonner";
+import { PageSearchBar } from "@/components/admin/PageSearchBar";
 
 const LocationTypesPage = () => {
+  const [searchTerm, setSearchTerm] = useState("");
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedLocationType, setSelectedLocationType] = useState(null);
@@ -111,6 +113,18 @@ const LocationTypesPage = () => {
     }
     return (a.display_name || a.name).localeCompare(b.display_name || b.name);
   });
+
+  // Filter location types based on search term (client-side only)
+  const filteredLocationTypes = React.useMemo(() => {
+    if (!searchTerm) return sortedLocationTypes;
+    const searchLower = searchTerm.toLowerCase();
+    return sortedLocationTypes.filter(
+      (type) =>
+        (type.display_name || type.name || "").toLowerCase().includes(searchLower) ||
+        (type.description || "").toLowerCase().includes(searchLower) ||
+        (type.name || "").toLowerCase().includes(searchLower)
+    );
+  }, [sortedLocationTypes, searchTerm]);
 
   const handleCreateLocationType = async () => {
     if (!locationTypeFormData.display_name) {
@@ -192,35 +206,17 @@ const LocationTypesPage = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <h1 className="text-xl sm:text-2xl font-bold">Location Types</h1>
-          <p className="text-sm sm:text-base text-muted-foreground">
-            Manage location types for your organisation
-          </p>
-        </div>
-        {canCreateLocationType ? (
-          <Button onClick={() => setIsCreateModalOpen(true)} size="sm" className="shrink-0">
-            <Plus className="mr-2 h-4 w-4" />
-            Create Location Type
-          </Button>
-        ) : (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span>
-                <Button disabled size="sm" className="shrink-0">
-                  <Plus className="mr-2 h-4 w-4" />
-                  Create Location Type
-                </Button>
-              </span>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>You do not have permission to create location types</p>
-            </TooltipContent>
-          </Tooltip>
-        )}
-      </div>
+      {/* Search and Create */}
+      <PageSearchBar
+        searchValue={searchTerm}
+        onSearchChange={setSearchTerm}
+        searchPlaceholder="Search location types..."
+        showFilters={false}
+        showCreateButton={canCreateLocationType}
+        onCreateClick={() => setIsCreateModalOpen(true)}
+        createButtonText="Create Location Type"
+        createButtonIcon={Plus}
+      />
 
       {/* Location Types Table */}
       <Card>
@@ -240,9 +236,11 @@ const LocationTypesPage = () => {
                 {locationTypesError?.response?.data?.detail || "You do not have permission to view location types."}
               </p>
             </div>
-          ) : sortedLocationTypes.length === 0 ? (
+          ) : filteredLocationTypes.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
-              No location types found. Create your first location type to get started.
+              {searchTerm
+                ? "No location types found matching your search."
+                : "No location types found. Create your first location type to get started."}
             </div>
           ) : (
             <div className="rounded-md border">
@@ -260,7 +258,7 @@ const LocationTypesPage = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {sortedLocationTypes.map((locationType) => (
+                  {filteredLocationTypes.map((locationType) => (
                     <TableRow key={locationType.id}>
                       <TableCell>
                         {locationType.icon ? (

@@ -68,9 +68,12 @@ import {
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
 import { format } from "date-fns";
 import { toast } from "sonner";
+import { PageSearchBar } from "@/components/admin/PageSearchBar";
 
 const FormTypesPage = () => {
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
+  const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all"); // system vs custom
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -88,8 +91,17 @@ const FormTypesPage = () => {
   const canDelete = !!isSuperuser || !!hasWildcardPermissions || hasPermission("form_type:delete") || hasPermission("form_type:*");
   const canList = !!isSuperuser || !!hasWildcardPermissions || hasPermission("form_type:list") || hasPermission("form_type:read") || hasPermission("form_type:*");
 
+  // Debounce search term to avoid API calls on every keystroke
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 300); // 300ms debounce delay
+
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
   const { data: formTypesResponse, isLoading } = useFormTypes({
-    search: searchTerm || undefined,
+    search: debouncedSearchTerm || undefined,
     is_active: statusFilter === "all" ? undefined : statusFilter === "active",
     is_system: typeFilter === "all" ? undefined : typeFilter === "system",
   });
@@ -184,15 +196,17 @@ const FormTypesPage = () => {
     }
   };
 
-  const filteredFormTypes = formTypes.filter((formType) => {
-    const matchesSearch =
-      !searchTerm ||
-      formType.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      formType.display_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      formType.description?.toLowerCase().includes(searchTerm.toLowerCase());
-
-    return matchesSearch;
-  });
+  // Filter form types based on search term (client-side for immediate feedback)
+  const filteredFormTypes = React.useMemo(() => {
+    if (!searchTerm) return formTypes;
+    const searchLower = searchTerm.toLowerCase();
+    return formTypes.filter(
+      (formType) =>
+        formType.name?.toLowerCase().includes(searchLower) ||
+        formType.display_name?.toLowerCase().includes(searchLower) ||
+        formType.description?.toLowerCase().includes(searchLower)
+    );
+  }, [formTypes, searchTerm]);
 
   if (!canList) {
     return (
@@ -212,39 +226,8 @@ const FormTypesPage = () => {
 
   return (
     <div className="container mx-auto py-8 space-y-6">
-      {/* Header */}
+      {/* Create Dialog */}
       <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-3xl font-bold">Form Types</h1>
-              {canCreate && (
-                <DialogTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={resetForm}
-                    className="h-8 w-8"
-                    title="Create Form Type"
-                  >
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </DialogTrigger>
-              )}
-            </div>
-            <p className="text-muted-foreground mt-1">
-              Manage form types for your organisation
-            </p>
-          </div>
-          {canCreate && (
-            <DialogTrigger asChild>
-              <Button onClick={resetForm}>
-                <Plus className="mr-2 h-4 w-4" />
-                Create Form Type
-              </Button>
-            </DialogTrigger>
-          )}
-        </div>
         {canCreate && (
           <DialogContent className="max-w-2xl">
             <DialogHeader>
@@ -361,44 +344,52 @@ const FormTypesPage = () => {
         )}
       </Dialog>
 
-      {/* Filters */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex gap-4">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search form types..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
+      {/* Search and Create */}
+      <PageSearchBar
+        searchValue={searchTerm}
+        onSearchChange={setSearchTerm}
+        searchPlaceholder="Search form types..."
+        showFilters={true}
+        isFiltersOpen={isFiltersOpen}
+        onToggleFilters={() => setIsFiltersOpen(!isFiltersOpen)}
+        showCreateButton={canCreate}
+        onCreateClick={() => { resetForm(); setIsCreateDialogOpen(true); }}
+        createButtonText="Create Form Type"
+        createButtonIcon={Plus}
+      />
+
+      {/* Advanced Filters */}
+      {isFiltersOpen && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Advanced Filters</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="inactive">Inactive</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={typeFilter} onValueChange={setTypeFilter}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Types</SelectItem>
+                  <SelectItem value="system">System</SelectItem>
+                  <SelectItem value="custom">Custom</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="inactive">Inactive</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={typeFilter} onValueChange={setTypeFilter}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Types</SelectItem>
-                <SelectItem value="system">System</SelectItem>
-                <SelectItem value="custom">Custom</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Form Types Table */}
       <Card>

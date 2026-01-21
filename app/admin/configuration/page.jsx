@@ -794,12 +794,7 @@ function ConfigurationPageContent() {
     <div className="container mx-auto p-6 space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Configuration Management</h1>
-          <p className="text-sm sm:text-base text-muted-foreground mt-1">
-            Manage system settings and organisation configuration
-          </p>
-        </div>
+        <div className="min-w-0 flex-1"></div>
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0">
           <Button
             variant="outline"

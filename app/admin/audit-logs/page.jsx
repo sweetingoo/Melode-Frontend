@@ -329,14 +329,6 @@ const AuditLogsPage = () => {
   if (!hasSystemMonitorPermission) {
     return (
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold">Audit Logs</h1>
-            <p className="text-muted-foreground">
-              View system activity and audit trail
-            </p>
-          </div>
-        </div>
         <Card>
           <CardContent className="py-12 text-center">
             <AlertCircle className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
@@ -352,34 +344,26 @@ const AuditLogsPage = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold">Audit Logs</h1>
-          <p className="text-sm sm:text-base text-muted-foreground">
-            View system activity and audit trail
-          </p>
-        </div>
-        <Button onClick={handleExport} variant="outline">
-          <Download className="mr-2 h-4 w-4" />
-          Export
-        </Button>
-      </div>
-
       {/* Filters */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle>Filters</CardTitle>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={clearFilters}
-              className="text-xs"
-            >
-              <X className="mr-1 h-3 w-3" />
-              Clear
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={clearFilters}
+                className="text-xs"
+              >
+                <X className="mr-1 h-3 w-3" />
+                Clear
+              </Button>
+              <Button onClick={handleExport} variant="outline" size="sm">
+                <Download className="mr-2 h-4 w-4" />
+                Export
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>

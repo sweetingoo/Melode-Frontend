@@ -195,15 +195,6 @@ const NotificationsPage = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-muted-foreground">
-            View your notifications and alerts
-          </p>
-        </div>
-      </div>
-
       {/* Filters and Search */}
       <Card>
         <CardHeader>

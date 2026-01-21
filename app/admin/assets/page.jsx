@@ -104,6 +104,7 @@ import ResourceAuditLogs from "@/components/ResourceAuditLogs";
 import MultiFileUpload from "@/components/MultiFileUpload";
 import FileAttachmentList from "@/components/FileAttachmentList";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
+import { PageSearchBar } from "@/components/admin/PageSearchBar";
 
 const AssetsPage = () => {
   // State management
@@ -116,6 +117,7 @@ const AssetsPage = () => {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedAsset, setSelectedAsset] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   const [selectedLocation, setSelectedLocation] = useState("all");
   const [showMaintenanceNeeded, setShowMaintenanceNeeded] = useState(false);
   const [assignData, setAssignData] = useState({
@@ -835,36 +837,6 @@ const AssetsPage = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <h1 className="text-xl sm:text-2xl font-bold tracking-tight">
-              Assets Management
-            </h1>
-            <p className="text-sm sm:text-base text-muted-foreground mt-1">
-              Manage and track all assets in your organisation
-            </p>
-          </div>
-          {canCreateAsset && (
-            <Button onClick={handleCreateAsset} size="sm" className="shrink-0">
-              <Plus className="mr-2 h-4 w-4" />
-              Create Asset
-            </Button>
-          )}
-        </div>
-        {/* Search Input */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search by asset number, name, or category..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
-          />
-        </div>
-      </div>
-
       {/* Statistics Cards */}
       <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-4">
         <Card className="border-l-4 border-l-blue-500">
@@ -966,67 +938,80 @@ const AssetsPage = () => {
         </Card>
       </div>
 
-      {/* Filters */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Filter className="h-5 w-5" />
-            Filters
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col sm:flex-row gap-4">
-            <Select
-              value={selectedLocation}
-              onValueChange={setSelectedLocation}
-            >
-              <SelectTrigger className="w-[200px]">
-                <MapPin className="h-4 w-4 mr-2" />
-                <SelectValue placeholder="All Locations" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Locations</SelectItem>
-                {locations.map((location) => (
-                  <SelectItem key={location.id} value={location.id.toString()}>
-                    {location.name || location.locationName}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <div className="flex items-center gap-2">
-              <Label
-                htmlFor="maintenance-filter"
-                className="flex items-center gap-2 cursor-pointer"
+      {/* Search and Create */}
+      <PageSearchBar
+        searchValue={searchQuery}
+        onSearchChange={setSearchQuery}
+        searchPlaceholder="Search by asset number, name, or category..."
+        showFilters={true}
+        isFiltersOpen={isFiltersOpen}
+        onToggleFilters={() => setIsFiltersOpen(!isFiltersOpen)}
+        showCreateButton={canCreateAsset}
+        onCreateClick={handleCreateAsset}
+        createButtonText="Create Asset"
+        createButtonIcon={Plus}
+      />
+
+      {/* Advanced Filters */}
+      {isFiltersOpen && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Advanced Filters</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <Select
+                value={selectedLocation}
+                onValueChange={setSelectedLocation}
               >
-                <input
-                  id="maintenance-filter"
-                  type="checkbox"
-                  checked={showMaintenanceNeeded}
-                  onChange={(e) => setShowMaintenanceNeeded(e.target.checked)}
-                  className="h-4 w-4 rounded"
-                />
-                <span className="text-sm">Maintenance Needed</span>
-              </Label>
-            </div>
-            {(searchQuery ||
-              selectedLocation !== "all" ||
-              showMaintenanceNeeded) && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setSearchQuery("");
-                    setSelectedLocation("all");
-                    setShowMaintenanceNeeded(false);
-                  }}
+                <SelectTrigger className="w-full">
+                  <MapPin className="h-4 w-4 mr-2" />
+                  <SelectValue placeholder="All Locations" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Locations</SelectItem>
+                  {locations.map((location) => (
+                    <SelectItem key={location.id} value={location.id.toString()}>
+                      {location.name || location.locationName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <div className="flex items-center gap-2">
+                <Label
+                  htmlFor="maintenance-filter"
+                  className="flex items-center gap-2 cursor-pointer"
                 >
-                  <X className="h-4 w-4 mr-2" />
-                  Clear
-                </Button>
-              )}
-          </div>
-        </CardContent>
-      </Card>
+                  <input
+                    id="maintenance-filter"
+                    type="checkbox"
+                    checked={showMaintenanceNeeded}
+                    onChange={(e) => setShowMaintenanceNeeded(e.target.checked)}
+                    className="h-4 w-4 rounded"
+                  />
+                  <span className="text-sm">Maintenance Needed</span>
+                </Label>
+              </div>
+              {(searchQuery ||
+                selectedLocation !== "all" ||
+                showMaintenanceNeeded) && (
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setSearchQuery("");
+                      setSelectedLocation("all");
+                      setShowMaintenanceNeeded(false);
+                    }}
+                    className="w-full"
+                  >
+                    <X className="h-4 w-4 mr-2" />
+                    Clear Filters
+                  </Button>
+                )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Assets Table */}
       <Card>

@@ -339,12 +339,6 @@ const Dashboard = () => {
   if (!isClient || currentUserLoading) {
     return (
       <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-muted-foreground">
-            Overview of your system statistics and performance metrics.
-          </p>
-        </div>
 
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           {[...Array(4)].map((_, index) => (
@@ -366,14 +360,6 @@ const Dashboard = () => {
   if (dashboardError) {
     return (
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-            <p className="text-muted-foreground">
-              Overview of your system statistics and performance metrics.
-            </p>
-          </div>
-        </div>
 
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
@@ -398,15 +384,7 @@ const Dashboard = () => {
     <div className="space-y-6">
       {/* Header with Controls */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-muted-foreground">
-            {hasWildcardPermissions.rolePermissions ||
-              hasWildcardPermissions.directPermissions
-              ? "Complete system overview and management controls."
-              : `Welcome! Here's what you can access with your current permissions.`}
-          </p>
-        </div>
+        <div></div>
 
         <div className="flex items-center gap-3">
           {shouldFetchDashboard && (

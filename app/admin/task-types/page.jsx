@@ -64,8 +64,10 @@ import {
   useDeleteTaskType,
 } from "@/hooks/useTaskTypes";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
+import { PageSearchBar } from "@/components/admin/PageSearchBar";
 
 const TaskTypesPage = () => {
+  const [searchTerm, setSearchTerm] = useState("");
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedTaskType, setSelectedTaskType] = useState(null);
@@ -110,6 +112,18 @@ const TaskTypesPage = () => {
     }
     return (a.display_name || a.name).localeCompare(b.display_name || b.name);
   });
+
+  // Filter task types based on search term (client-side only)
+  const filteredTaskTypes = React.useMemo(() => {
+    if (!searchTerm) return sortedTaskTypes;
+    const searchLower = searchTerm.toLowerCase();
+    return sortedTaskTypes.filter(
+      (type) =>
+        (type.display_name || type.name || "").toLowerCase().includes(searchLower) ||
+        (type.description || "").toLowerCase().includes(searchLower) ||
+        (type.name || "").toLowerCase().includes(searchLower)
+    );
+  }, [sortedTaskTypes, searchTerm]);
 
   const handleCreateTaskType = async () => {
     try {
@@ -169,35 +183,17 @@ const TaskTypesPage = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <h1 className="text-xl sm:text-2xl font-bold">Task Types</h1>
-          <p className="text-sm sm:text-base text-muted-foreground">
-            Manage task types for your organisation
-          </p>
-        </div>
-        {canCreateTaskType ? (
-          <Button onClick={() => setIsCreateModalOpen(true)} size="sm" className="shrink-0">
-            <Plus className="mr-2 h-4 w-4" />
-            Create Task Type
-          </Button>
-        ) : (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span>
-                <Button disabled size="sm" className="shrink-0">
-                  <Plus className="mr-2 h-4 w-4" />
-                  Create Task Type
-                </Button>
-              </span>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>You do not have permission to create task types</p>
-            </TooltipContent>
-          </Tooltip>
-        )}
-      </div>
+      {/* Search and Create */}
+      <PageSearchBar
+        searchValue={searchTerm}
+        onSearchChange={setSearchTerm}
+        searchPlaceholder="Search task types..."
+        showFilters={false}
+        showCreateButton={canCreateTaskType}
+        onCreateClick={() => setIsCreateModalOpen(true)}
+        createButtonText="Create Task Type"
+        createButtonIcon={Plus}
+      />
 
       {/* Task Types Table */}
       <Card>
@@ -217,9 +213,11 @@ const TaskTypesPage = () => {
                 {taskTypesError?.response?.data?.detail || "You do not have permission to view task types."}
               </p>
             </div>
-          ) : sortedTaskTypes.length === 0 ? (
+          ) : filteredTaskTypes.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
-              No task types found. Create your first task type to get started.
+              {searchTerm
+                ? "No task types found matching your search."
+                : "No task types found. Create your first task type to get started."}
             </div>
           ) : (
             <div className="rounded-md border">
@@ -237,7 +235,7 @@ const TaskTypesPage = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {sortedTaskTypes.map((taskType) => (
+                  {filteredTaskTypes.map((taskType) => (
                     <TableRow key={taskType.id}>
                       <TableCell>
                         {taskType.icon ? (

@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import {
   CheckCircle2,
   Circle,
@@ -16,6 +17,7 @@ import {
   Bell,
   Calendar,
   MessageSquare,
+  Search,
 } from "lucide-react";
 import {
   useMessages,
@@ -108,6 +110,7 @@ const MessagesPageContent = () => {
     is_active: true,
     limit: 50,
     offset: 0,
+    ...(searchTerm && { search: searchTerm }),
   });
   const { data: usersData } = useUsers({ page: 1, per_page: 100 });
   const { data: rolesData } = useRoles();
@@ -335,7 +338,7 @@ const MessagesPageContent = () => {
     );
   }
 
-  // Sort conversations: first conversation stays at top, rest sorted by last_message_at descending
+  // Sort conversations - backend handles search filtering
   const sortedConversations = useMemo(() => {
     if (conversations.length === 0) return [];
 
@@ -379,6 +382,19 @@ const MessagesPageContent = () => {
                 New Chat
               </Button>
             )}
+          </div>
+
+          {/* Search Bar */}
+          <div className="flex-shrink-0 p-3 border-b">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search conversations..."
+                value={searchTerm}
+                onChange={(e) => handleSearchChange(e.target.value)}
+                className="pl-10 h-9"
+              />
+            </div>
           </div>
 
           {/* Conversation List */}

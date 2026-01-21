@@ -52,6 +52,7 @@ import {
   RefreshCw,
   X,
   Loader2,
+  Filter,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -228,12 +229,27 @@ const RoleManagementPage = () => {
   }, [isPermissionsModalOpen, permissionsData, accumulatedPermissions.length, debouncedSearchTerm]);
   const departments = departmentsData?.departments || departmentsData?.data || departmentsData || [];
 
+  // Filter roles based on selected filters
+  const roles = React.useMemo(() => {
+    let filtered = allRoles;
+
+    // Filter by department
+    if (selectedDepartmentFilter) {
+      filtered = filtered.filter((role) => role.departmentId === selectedDepartmentFilter);
+    }
+
+    // Note: Role type filtering is applied after grouping in the UI
+    // to preserve the hierarchical structure of job roles and shift roles
+
+    return filtered;
+  }, [allRoles, selectedDepartmentFilter]);
+
   // Group roles by department and job role (hierarchical structure)
   const rolesByDepartment = React.useMemo(() => {
     const grouped = {};
     const systemRoles = {}; // For roles without departments (e.g., Superuser)
 
-    allRoles.forEach((role) => {
+    roles.forEach((role) => {
       // Check if role is a system role (no department, or is_system flag, or superuser)
       const isSystemRole = 
         !role.departmentId && 
@@ -297,24 +313,7 @@ const RoleManagementPage = () => {
     });
 
     return { grouped, systemRoles };
-  }, [allRoles]);
-
-  // Filter roles based on selected filters
-  const roles = React.useMemo(() => {
-    let filtered = allRoles;
-
-    // Filter by department
-    if (selectedDepartmentFilter) {
-      filtered = filtered.filter((role) => role.departmentId === selectedDepartmentFilter);
-    }
-
-    // Filter by role type
-    if (selectedRoleTypeFilter) {
-      filtered = filtered.filter((role) => role.roleType === selectedRoleTypeFilter);
-    }
-
-    return filtered;
-  }, [allRoles, selectedDepartmentFilter, selectedRoleTypeFilter]);
+  }, [roles, allRoles]);
 
   // Get filtered departments based on filters
   const filteredDepartments = React.useMemo(() => {
@@ -771,83 +770,72 @@ const RoleManagementPage = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header Section */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Role Management</h1>
-          <p className="text-muted-foreground mt-1 text-sm sm:text-base">
-            Manage roles and their permissions
-          </p>
-        </div>
-        {canCreateRole && (
-          <Button onClick={handleCreateRole} size="sm" className="shrink-0">
-            <Plus className="h-4 w-4 mr-2" />
-            Create Role
-          </Button>
-        )}
-      </div>
+      {/* Filters and Create */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center justify-end">
+              {canCreateRole && (
+                <Button onClick={handleCreateRole} size="sm" className="w-full sm:w-auto">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create Role
+                </Button>
+              )}
+            </div>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <Select
+                value={selectedDepartmentFilter?.toString() || "all"}
+                onValueChange={(value) =>
+                  setSelectedDepartmentFilter(value === "all" ? null : parseInt(value))
+                }
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="All departments" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All departments</SelectItem>
+                  {departments.map((dept) => (
+                    <SelectItem key={dept.id} value={dept.id.toString()}>
+                      {dept.name} {dept.code && `(${dept.code})`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
 
-      {/* Filters Section */}
-      <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-3 sm:gap-4">
-        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-          <Label htmlFor="departmentFilter" className="text-sm font-medium">
-            Filter by Department:
-          </Label>
-          <Select
-            value={selectedDepartmentFilter?.toString() || "all"}
-            onValueChange={(value) =>
-              setSelectedDepartmentFilter(value === "all" ? null : parseInt(value))
-            }
-          >
-            <SelectTrigger className="w-full sm:w-[200px]">
-              <SelectValue placeholder="All departments" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All departments</SelectItem>
-              {departments.map((dept) => (
-                <SelectItem key={dept.id} value={dept.id.toString()}>
-                  {dept.name} {dept.code && `(${dept.code})`}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+              <Select
+                value={selectedRoleTypeFilter || "all"}
+                onValueChange={(value) =>
+                  setSelectedRoleTypeFilter(value === "all" ? null : value)
+                }
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="All types" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All types</SelectItem>
+                  <SelectItem value="job_role">Job Roles</SelectItem>
+                  <SelectItem value="shift_role">Shift Roles</SelectItem>
+                </SelectContent>
+              </Select>
 
-        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-          <Label htmlFor="roleTypeFilter" className="text-sm font-medium">
-            Filter by Type:
-          </Label>
-          <Select
-            value={selectedRoleTypeFilter || "all"}
-            onValueChange={(value) =>
-              setSelectedRoleTypeFilter(value === "all" ? null : value)
-            }
-          >
-            <SelectTrigger className="w-full sm:w-[180px]">
-              <SelectValue placeholder="All types" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All types</SelectItem>
-              <SelectItem value="job_role">Job Roles</SelectItem>
-              <SelectItem value="shift_role">Shift Roles</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        {(selectedDepartmentFilter || selectedRoleTypeFilter) && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              setSelectedDepartmentFilter(null);
-              setSelectedRoleTypeFilter(null);
-            }}
-            className="w-full sm:w-auto"
-          >
-            Clear Filters
-          </Button>
-        )}
-      </div>
+              {(selectedDepartmentFilter || selectedRoleTypeFilter) && (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setSelectedDepartmentFilter(null);
+                    setSelectedRoleTypeFilter(null);
+                  }}
+                  className="w-full"
+                >
+                  <X className="mr-2 h-4 w-4" />
+                  Clear Filters
+                </Button>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Loading State */}
       {rolesLoading && (

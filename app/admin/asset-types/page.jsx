@@ -64,8 +64,10 @@ import {
 } from "@/hooks/useAssetTypes";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
 import { toast } from "sonner";
+import { PageSearchBar } from "@/components/admin/PageSearchBar";
 
 const AssetTypesPage = () => {
+  const [searchTerm, setSearchTerm] = useState("");
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedAssetType, setSelectedAssetType] = useState(null);
@@ -110,6 +112,18 @@ const AssetTypesPage = () => {
     }
     return (a.display_name || a.name).localeCompare(b.display_name || b.name);
   });
+
+  // Filter asset types based on search term (client-side only)
+  const filteredAssetTypes = React.useMemo(() => {
+    if (!searchTerm) return sortedAssetTypes;
+    const searchLower = searchTerm.toLowerCase();
+    return sortedAssetTypes.filter(
+      (type) =>
+        (type.display_name || type.name || "").toLowerCase().includes(searchLower) ||
+        (type.description || "").toLowerCase().includes(searchLower) ||
+        (type.name || "").toLowerCase().includes(searchLower)
+    );
+  }, [sortedAssetTypes, searchTerm]);
 
   const handleCreateAssetType = async () => {
     if (!assetTypeFormData.display_name) {
@@ -191,35 +205,17 @@ const AssetTypesPage = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <h1 className="text-xl sm:text-2xl font-bold">Asset Types</h1>
-          <p className="text-sm sm:text-base text-muted-foreground">
-            Manage asset types for your organisation
-          </p>
-        </div>
-        {canCreateAssetType ? (
-          <Button onClick={() => setIsCreateModalOpen(true)} size="sm" className="shrink-0">
-            <Plus className="mr-2 h-4 w-4" />
-            Create Asset Type
-          </Button>
-        ) : (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span>
-                <Button disabled size="sm" className="shrink-0">
-                  <Plus className="mr-2 h-4 w-4" />
-                  Create Asset Type
-                </Button>
-              </span>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>You do not have permission to create asset types</p>
-            </TooltipContent>
-          </Tooltip>
-        )}
-      </div>
+      {/* Search and Create */}
+      <PageSearchBar
+        searchValue={searchTerm}
+        onSearchChange={setSearchTerm}
+        searchPlaceholder="Search asset types..."
+        showFilters={false}
+        showCreateButton={canCreateAssetType}
+        onCreateClick={() => setIsCreateModalOpen(true)}
+        createButtonText="Create Asset Type"
+        createButtonIcon={Plus}
+      />
 
       {/* Asset Types Table */}
       <Card>
@@ -239,9 +235,11 @@ const AssetTypesPage = () => {
                 {assetTypesError?.response?.data?.detail || "You do not have permission to view asset types."}
               </p>
             </div>
-          ) : sortedAssetTypes.length === 0 ? (
+          ) : filteredAssetTypes.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
-              No asset types found. Create your first asset type to get started.
+              {searchTerm
+                ? "No asset types found matching your search."
+                : "No asset types found. Create your first asset type to get started."}
             </div>
           ) : (
             <div className="rounded-md border">
@@ -259,7 +257,7 @@ const AssetTypesPage = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {sortedAssetTypes.map((assetType) => (
+                  {filteredAssetTypes.map((assetType) => (
                     <TableRow key={assetType.id}>
                       <TableCell>
                         {assetType.icon ? (

@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -73,13 +74,16 @@ import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
 import { format } from "date-fns";
 import { parseUTCDate } from "@/utils/time";
 import { Shield, Users, User } from "lucide-react";
+import { PageSearchBar } from "@/components/admin/PageSearchBar";
 
 const FormsPage = () => {
+  const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [formTypeFilter, setFormTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("active"); // Default to active forms
   const [assignmentFilter, setAssignmentFilter] = useState("all"); // "all", "role", "users", "none"
+  const [isFiltersOpen, setIsFiltersOpen] = useState(false);
 
   const { data: rolesData } = useRoles();
   const { data: usersResponse } = useUsers();
@@ -209,41 +213,29 @@ const FormsPage = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <p className="text-sm sm:text-base text-muted-foreground mt-1">
-            Manage custom forms and templates
-          </p>
-        </div>
-        {canCreateForm && (
-          <Link href="/admin/forms/new">
-            <Button className="w-full sm:w-auto">
-              <Plus className="mr-2 h-4 w-4" />
-              Create Form
-            </Button>
-          </Link>
-        )}
-      </div>
+      {/* Search and Create */}
+      <PageSearchBar
+        searchValue={searchTerm}
+        onSearchChange={setSearchTerm}
+        searchPlaceholder="Search forms..."
+        showFilters={true}
+        isFiltersOpen={isFiltersOpen}
+        onToggleFilters={() => setIsFiltersOpen(!isFiltersOpen)}
+        showCreateButton={canCreateForm}
+        onCreateClick={() => router.push("/admin/forms/new")}
+        createButtonText="Create Form"
+      />
 
-      {/* Filters */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex flex-col md:flex-row gap-4">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search forms..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-8"
-                />
-              </div>
-            </div>
-            <div className="flex gap-2">
+      {/* Advanced Filters */}
+      {isFiltersOpen && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Advanced Filters</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               <Select value={formTypeFilter} onValueChange={setFormTypeFilter}>
-                <SelectTrigger className="w-[180px]">
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="All Types" />
                 </SelectTrigger>
                 <SelectContent>
@@ -258,7 +250,7 @@ const FormsPage = () => {
                 </SelectContent>
               </Select>
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-[180px]">
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="All Status" />
                 </SelectTrigger>
                 <SelectContent>
@@ -268,7 +260,7 @@ const FormsPage = () => {
                 </SelectContent>
               </Select>
               <Select value={assignmentFilter} onValueChange={setAssignmentFilter}>
-                <SelectTrigger className="w-[180px]">
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="All Assignments" />
                 </SelectTrigger>
                 <SelectContent>
@@ -279,9 +271,9 @@ const FormsPage = () => {
                 </SelectContent>
               </Select>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Forms Table */}
       <Card>

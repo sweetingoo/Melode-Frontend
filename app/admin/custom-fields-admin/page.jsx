@@ -1636,13 +1636,6 @@ const CustomFieldsAdminPage = () => {
       {/* Header Section */}
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-6">
         <div className="min-w-0 flex-1">
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
-            Custom Fields Management
-          </h1>
-          <p className="text-sm sm:text-base text-muted-foreground mt-1">
-            Configure custom fields for different entity types in your
-            organisation
-          </p>
 
           {/* State Indicators */}
           <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-2">

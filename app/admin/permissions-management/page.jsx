@@ -73,12 +73,14 @@ import {
   permissionUtils,
 } from "@/hooks/usePermissions";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
+import { PageSearchBar } from "@/components/admin/PageSearchBar";
 
 const PermissionsManagementPage = () => {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [viewingPermission, setViewingPermission] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   const [resourceFilter, setResourceFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
@@ -357,27 +359,6 @@ const PermissionsManagementPage = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header Section */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight">
-            Permissions Management
-          </h1>
-          <p className="text-sm sm:text-base text-muted-foreground mt-1">
-            Manage system permissions and access controls
-          </p>
-        </div>
-        <Button
-          onClick={() => setIsCreateModalOpen(true)}
-          size="sm"
-          className="shrink-0"
-          disabled={!canCreatePermission}
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Create Permission
-        </Button>
-      </div>
-
       {/* Loading State */}
       {permissionsLoading && (
         <div className="space-y-6">
@@ -516,70 +497,70 @@ const PermissionsManagementPage = () => {
             </Card>
           </div>
 
-          {/* Filters Section */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Filter className="h-5 w-5" />
-                Filters
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-col sm:flex-row gap-4">
-                <div className="flex-1">
-                  <Label htmlFor="search">Search Permissions</Label>
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="search"
-                      placeholder="Search by name, resource, action, or type..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="pl-10"
-                    />
+          {/* Search and Create */}
+          <PageSearchBar
+            searchValue={searchTerm}
+            onSearchChange={setSearchTerm}
+            searchPlaceholder="Search by name, resource, action, or type..."
+            showFilters={true}
+            isFiltersOpen={isFiltersOpen}
+            onToggleFilters={() => setIsFiltersOpen(!isFiltersOpen)}
+            showCreateButton={canCreatePermission}
+            onCreateClick={() => setIsCreateModalOpen(true)}
+            createButtonText="Create Permission"
+            createButtonIcon={Plus}
+          />
+
+          {/* Advanced Filters */}
+          {isFiltersOpen && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Advanced Filters</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  <div>
+                    <Label htmlFor="resource-filter">Filter by Resource</Label>
+                    <Select
+                      value={resourceFilter}
+                      onValueChange={setResourceFilter}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="All Resources" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Resources</SelectItem>
+                        {resources.map((resource) => (
+                          <SelectItem
+                            key={resource.id || resource.name}
+                            value={resource.name}
+                          >
+                            {resource.displayName || resource.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="type-filter">Filter by Type</Label>
+                    <Select value={typeFilter} onValueChange={setTypeFilter}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="All Types" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Types</SelectItem>
+                        {types.map((type) => (
+                          <SelectItem key={type} value={type}>
+                            {type}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
-                <div className="sm:w-48">
-                  <Label htmlFor="resource-filter">Filter by Resource</Label>
-                  <Select
-                    value={resourceFilter}
-                    onValueChange={setResourceFilter}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="All Resources" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Resources</SelectItem>
-                      {resources.map((resource) => (
-                        <SelectItem
-                          key={resource.id || resource.name}
-                          value={resource.name}
-                        >
-                          {resource.displayName || resource.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="sm:w-48">
-                  <Label htmlFor="type-filter">Filter by Type</Label>
-                  <Select value={typeFilter} onValueChange={setTypeFilter}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="All Types" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Types</SelectItem>
-                      {types.map((type) => (
-                        <SelectItem key={type} value={type}>
-                          {type}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Permissions Table */}
           <Card>

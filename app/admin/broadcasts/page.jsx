@@ -338,40 +338,38 @@ const BroadcastsPage = () => {
 
   return (
     <div className="p-4 space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Broadcasts</h1>
-        {canCreateBroadcast && (
-          <Button onClick={() => setShowCreateDialog(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            Create Broadcast
-          </Button>
-        )}
-      </div>
-
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="inbox" className="flex items-center gap-2">
-            <Mail className="h-4 w-4" />
-            Inbox
-            {inboxData && (
-              <Badge variant="secondary" className="ml-1">
-                {inboxData?.total || inboxData?.messages?.length || 0}
-              </Badge>
-            )}
-          </TabsTrigger>
-          {canCreateBroadcast && (
-            <TabsTrigger value="outbox" className="flex items-center gap-2">
-              <Send className="h-4 w-4" />
-              Outbox
-              {allBroadcastsData && (
+        <div className="flex items-center justify-between gap-4">
+          <TabsList>
+            <TabsTrigger value="inbox" className="flex items-center gap-2">
+              <Mail className="h-4 w-4" />
+              Inbox
+              {inboxData && (
                 <Badge variant="secondary" className="ml-1">
-                  {allBroadcastsData?.total || allBroadcastsData?.broadcasts?.length || allBroadcastsData?.messages?.length || 0}
+                  {inboxData?.total || inboxData?.messages?.length || 0}
                 </Badge>
               )}
             </TabsTrigger>
+            {canCreateBroadcast && (
+              <TabsTrigger value="outbox" className="flex items-center gap-2">
+                <Send className="h-4 w-4" />
+                Outbox
+                {allBroadcastsData && (
+                  <Badge variant="secondary" className="ml-1">
+                    {allBroadcastsData?.total || allBroadcastsData?.broadcasts?.length || allBroadcastsData?.messages?.length || 0}
+                  </Badge>
+                )}
+              </TabsTrigger>
+            )}
+          </TabsList>
+          {canCreateBroadcast && (
+            <Button onClick={() => setShowCreateDialog(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Create Broadcast
+            </Button>
           )}
-        </TabsList>
+        </div>
 
         {/* Inbox Tab */}
         <TabsContent value="inbox" className="space-y-4">

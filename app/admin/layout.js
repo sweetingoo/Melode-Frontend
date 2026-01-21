@@ -109,84 +109,98 @@ import { AlertCircle } from "lucide-react";
 const mainMenuItems = [
   {
     title: "Dashboard",
+    description: "Overview of your workspace",
     icon: LayoutDashboard,
     url: "/admin",
     permission: null, // Dashboard is always visible
   },
   {
     title: "My Tasks",
+    description: "View and manage your assigned tasks",
     icon: ClipboardList,
     url: "/admin/my-tasks",
     permission: null, // My Tasks is visible to all users
   },
   {
     title: "Session History",
+    description: "View your clock in/out history",
     icon: History,
     url: "/clock/history",
     permission: "clock:view", // Permission to view clock records
   },
   {
     title: "Tasks",
+    description: "Manage and track all tasks across your organisation",
     icon: CheckSquare,
     url: "/admin/tasks",
     permission: "tasks:read", // Permission to read tasks
   },
   {
     title: "Projects",
+    description: "Manage and organise your projects",
     icon: FolderKanban,
     url: "/admin/projects",
     permission: "project:read", // Permission to read projects
   },
   {
     title: "Forms",
+    description: "Create and manage forms",
     icon: FileText,
     url: "/admin/forms",
     permission: "forms:read", // Permission to read forms
   },
   {
     title: "Trackers",
+    description: "Track cases, events, and actions with full audit history",
     icon: FileSpreadsheet,
     url: "/admin/trackers",
     permission: "tracker:read", // Permission to read trackers
   },
   {
     title: "Documents",
+    description: "Manage and organise documents",
     icon: BookOpen,
     url: "/admin/documents",
     permission: "document:read", // Permission to read documents
   },
   {
     title: "Messages",
+    description: "Send and receive messages",
     icon: Mail,
     url: "/admin/messages",
     permission: "message:read", // Permission to read messages
   },
   {
     title: "Broadcasts",
+    description: "Send announcements to multiple users",
     icon: Megaphone,
     url: "/admin/broadcasts",
     permission: "message:read", // Permission to read messages (same as messages)
   },
   {
     title: "Notifications",
+    description: "Manage your notifications and system alerts",
     icon: Bell,
     url: "/admin/notifications",
     permission: null, // Notifications are visible to all users
   },
   {
     title: "Preferences",
+    description: "Manage your preferences",
     icon: Settings,
     url: "/admin/preferences",
     permission: null, // Preferences are visible to all users
   },
   {
     title: "Compliance",
+    description: "Manage your compliance documents and complete your profile information",
     icon: Shield,
     url: "/admin/compliance",
     permission: null, // Available to all users for uploading compliance documents
   },
   {
     title: "Compliance Monitoring",
+    description: "Manage compliance documents, approvals, and track expiring items",
     icon: Shield,
     url: "/admin/compliance-monitoring",
     permission: "compliance_monitoring:read", // Permission to monitor compliance across all users
@@ -196,19 +210,22 @@ const mainMenuItems = [
 // People & Access Management group
 const peopleAndAccessItems = [
   {
-    title: "Manage people",
+    title: "People Management",
+    description: "Manage people, roles, and permissions for your organisation",
     icon: Users,
     url: "/admin/people-management",
     permission: "users:read", // Permission to read users
   },
   {
-    title: "Manage Roles",
+    title: "Role Management",
+    description: "Manage roles and their permissions",
     icon: Shield,
     url: "/admin/role-management",
     permission: "roles:read", // Permission to read roles
   },
   {
-    title: "Manage Permissions",
+    title: "Permissions Management",
+    description: "Manage system permissions and access controls",
     icon: Key,
     url: "/admin/permissions-management",
     permission: "permissions:read", // Permission to read permissions
@@ -219,30 +236,35 @@ const peopleAndAccessItems = [
 const organisationItems = [
   {
     title: "Locations",
+    description: "Manage organisational locations and their hierarchy efficiently",
     icon: MapPin,
     url: "/admin/locations",
     permission: "locations:read", // Permission to read locations
   },
   {
     title: "Assets",
+    description: "Manage and track all assets in your organisation",
     icon: Images,
     url: "/admin/assets",
     permission: "assets:read", // Permission to read assets
   },
   {
     title: "Departments",
+    description: "Manage departments and organisational structure",
     icon: Building2,
     url: "/admin/departments",
     permission: "departments:read", // Permission to read departments
   },
   {
     title: "Location Types",
+    description: "Manage location types for your organisation",
     icon: MapPin,
     url: "/admin/location-types",
     permission: "location_type:read", // Permission to read location types
   },
   {
     title: "Asset Types",
+    description: "Manage asset types for your organisation",
     icon: Package,
     url: "/admin/asset-types",
     permission: "asset_type:read", // Permission to read asset types
@@ -253,18 +275,21 @@ const organisationItems = [
 const monitoringAndReportsItems = [
   {
     title: "Active People",
+    description: "Monitor and manage active clock sessions in real-time",
     icon: Activity,
     url: "/admin/clock",
     permission: "clock:view_all", // Permission to view all active people
   },
   {
     title: "Reports",
+    description: "View and export check in/out session reports",
     icon: FileSpreadsheet,
     url: "/admin/reports",
     permission: "SUPERUSER_OR_REPORTS", // Superuser or reports:read permission
   },
   {
     title: "Audit Logs",
+    description: "View system activity and audit trail",
     icon: FileText,
     url: "/admin/audit-logs",
     permission: "SYSTEM_MONITOR", // Permission to view audit logs
@@ -275,30 +300,35 @@ const monitoringAndReportsItems = [
 const settingsItems = [
   {
     title: "Configuration",
+    description: "Manage system settings and organisation configuration",
     icon: Settings,
     url: "/admin/configuration",
     permission: "SUPERUSER_ROLE_ONLY", // Only visible when assigned to Superuser role - Overall application configurations
   },
   {
     title: "Task Types",
+    description: "Manage task types for your organisation",
     icon: Type,
     url: "/admin/task-types",
     permission: "task_types:read", // Permission to read task types
   },
   {
     title: "Category Types",
+    description: "Manage category types for assets, forms, messages, and templates",
     icon: Tag,
     url: "/admin/category-types",
     permission: "category_type:list", // Permission to list category types
   },
   {
     title: "Form Types",
+    description: "Manage form types for your organisation",
     icon: FileText,
     url: "/admin/form-types",
     permission: "form_type:list", // Permission to list form types
   },
   {
     title: "Custom Fields",
+    description: "Configure custom fields for different entity types in your organisation",
     icon: Database,
     url: "/admin/custom-fields-admin",
     permission: "custom_field:read", // Permission to read custom fields
@@ -1554,49 +1584,67 @@ export default function AdminLayout({ children }) {
           </Sidebar>
 
           <SidebarInset>
-            <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
+            <header className="flex h-20 shrink-0 items-center gap-2 border-b px-4">
               <SidebarTrigger className="-ml-1" />
-              <div className="flex-1">
-                <h1 className="text-lg font-semibold">
-                  {(() => {
-                    // Show page-specific titles
-                    if (pathname === "/admin/messages") {
-                      return "Messages";
-                    }
-                    if (pathname === "/admin/broadcasts" || pathname?.startsWith("/admin/broadcasts/")) {
-                      return "Broadcasts";
-                    }
-                    if (pathname === "/admin/notifications") {
-                      return "Notifications";
-                    }
-                    if (pathname === "/admin/tasks") {
-                      return "Tasks";
-                    }
-                    if (pathname === "/admin/projects") {
-                      return "Projects";
-                    }
-                    if (pathname === "/admin/forms") {
-                      return "Forms";
-                    }
-                    if (pathname === "/admin/documents" || pathname?.startsWith("/admin/documents")) {
-                      return "Documents";
-                    }
-                    if (pathname === "/admin/my-tasks") {
-                      return "My Tasks";
-                    }
-                    if (pathname === "/admin/preferences") {
-                      return "Preferences";
-                    }
-                    // Default dashboard title
-                    if (!isClient || currentUserLoading) {
-                      return "User Dashboard";
-                    }
-                    return hasWildcardPermissions.rolePermissions ||
+              <div className="flex-1 min-w-0">
+                {(() => {
+                  // Create a comprehensive mapping from all menu items
+                  const allMenuItems = [
+                    ...mainMenuItems,
+                    ...peopleAndAccessItems,
+                    ...organisationItems,
+                    ...monitoringAndReportsItems,
+                    ...settingsItems,
+                  ];
+
+                  // Find matching menu item by exact URL match
+                  let matchedItem = allMenuItems.find(item => item.url === pathname);
+
+                  // Handle dynamic routes by checking if pathname starts with a menu item URL
+                  if (!matchedItem) {
+                    matchedItem = allMenuItems.find(item => {
+                      // For routes like /admin/broadcasts/123, match /admin/broadcasts
+                      return pathname?.startsWith(item.url + "/");
+                    });
+                  }
+
+                  // If we found a match, display title and description
+                  if (matchedItem) {
+                    return (
+                      <div>
+                        <h1 className="text-lg font-semibold truncate">{matchedItem.title}</h1>
+                        {matchedItem.description && (
+                          <p className="text-sm text-muted-foreground truncate">{matchedItem.description}</p>
+                        )}
+                      </div>
+                    );
+                  }
+
+                  // Special case: Dashboard (root /admin path)
+                  if (pathname === "/admin") {
+                    return (
+                      <div>
+                        <h1 className="text-lg font-semibold">Dashboard</h1>
+                        <p className="text-sm text-muted-foreground">Overview of your workspace</p>
+                      </div>
+                    );
+                  }
+
+                  // Default fallback
+                  const title = !isClient || currentUserLoading
+                    ? "User Dashboard"
+                    : hasWildcardPermissions.rolePermissions ||
                       hasWildcardPermissions.directPermissions
                       ? "Admin Dashboard"
                       : "User Dashboard";
-                  })()}
-                </h1>
+                  
+                  return (
+                    <div>
+                      <h1 className="text-lg font-semibold">{title}</h1>
+                      <p className="text-sm text-muted-foreground">Overview of your workspace</p>
+                    </div>
+                  );
+                })()}
               </div>
               <div className="flex items-center gap-2">
                 <NotificationsDropdown />

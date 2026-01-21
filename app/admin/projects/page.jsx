@@ -71,6 +71,7 @@ import {
   CheckSquare,
   Loader2,
   Calendar,
+  Filter,
 } from "lucide-react";
 import {
   useProjects,
@@ -83,12 +84,14 @@ import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
 import { format } from "date-fns";
 import { parseUTCDate } from "@/utils/time";
 import { cn } from "@/lib/utils";
+import { PageSearchBar } from "@/components/admin/PageSearchBar";
 
 const ProjectsPage = () => {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
+  const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState(null);
@@ -227,37 +230,31 @@ const ProjectsPage = () => {
   }
 
   return (
-    <div className="space-y-4 md:space-y-6 p-4 md:p-0">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <p className="text-muted-foreground">Manage and organise your projects</p>
-        </div>
-        {canCreateProject && (
-          <Button onClick={openCreateModal} size="sm" className="shrink-0">
-            <Plus className="mr-2 h-4 w-4" />
-            Create Project
-          </Button>
-        )}
-      </div>
+    <div className="space-y-4 md:space-y-6 p-4 md:p-0 max-w-full overflow-hidden">
+      {/* Search and Create */}
+      <PageSearchBar
+        searchValue={searchTerm}
+        onSearchChange={(value) => {
+          setSearchTerm(value);
+          setCurrentPage(1);
+        }}
+        searchPlaceholder="Search projects..."
+        showFilters={true}
+        isFiltersOpen={isFiltersOpen}
+        onToggleFilters={() => setIsFiltersOpen(!isFiltersOpen)}
+        showCreateButton={canCreateProject}
+        onCreateClick={openCreateModal}
+        createButtonText="Create Project"
+      />
 
-      {/* Search and Filters */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search projects..."
-                value={searchTerm}
-                onChange={(e) => {
-                  setSearchTerm(e.target.value);
-                  setCurrentPage(1);
-                }}
-                className="pl-9"
-              />
-            </div>
-            <div className="w-full sm:w-[180px]">
+      {/* Advanced Filters */}
+      {isFiltersOpen && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Advanced Filters</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               <Select
                 value={statusFilter}
                 onValueChange={(value) => {
@@ -265,7 +262,7 @@ const ProjectsPage = () => {
                   setCurrentPage(1);
                 }}
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="Filter by status" />
                 </SelectTrigger>
                 <SelectContent>
@@ -276,9 +273,9 @@ const ProjectsPage = () => {
                 </SelectContent>
               </Select>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Projects List */}
       <Card>

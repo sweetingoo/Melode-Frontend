@@ -78,9 +78,11 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
+import { PageSearchBar } from "@/components/admin/PageSearchBar";
 
 const DepartmentsPage = () => {
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -95,11 +97,21 @@ const DepartmentsPage = () => {
   const [expandedDepartments, setExpandedDepartments] = useState(new Set());
   const itemsPerPage = 10;
 
-  // API hooks
+  // Debounce search term to avoid API calls on every keystroke
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+      setCurrentPage(1); // Reset to first page on search
+    }, 300); // 300ms debounce delay
+
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  // API hooks - use debounced search term
   const { data: departmentsResponse, isLoading, error, refetch } = useDepartments({
     page: currentPage,
     per_page: itemsPerPage,
-    search: searchTerm || undefined,
+    search: debouncedSearchTerm || undefined,
   });
   const deleteDepartmentMutation = useDeleteDepartment();
   const createDepartmentMutation = useCreateDepartment();
@@ -176,7 +188,7 @@ const DepartmentsPage = () => {
 
   const totalPages = pagination.total_pages;
 
-  // Filter departments based on search term (client-side fallback)
+  // Filter departments based on search term (client-side for immediate feedback)
   const filteredDepartments = React.useMemo(() => {
     if (!searchTerm) return departments;
     const searchLower = searchTerm.toLowerCase();
@@ -194,7 +206,7 @@ const DepartmentsPage = () => {
 
   const handleSearch = (value) => {
     setSearchTerm(value);
-    setCurrentPage(1); // Reset to first page on search
+    // Debounced search term will trigger API call and reset page
   };
 
   const handleDeleteDepartment = async (departmentId) => {
@@ -344,11 +356,6 @@ const DepartmentsPage = () => {
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Departments</h1>
-          </div>
-        </div>
         <Card>
           <CardContent className="p-6">
             <div className="animate-pulse space-y-3">
@@ -366,11 +373,6 @@ const DepartmentsPage = () => {
   if (error) {
     return (
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Departments</h1>
-          </div>
-        </div>
         <Card>
           <CardContent className="p-6">
             <div className="text-center">
@@ -472,33 +474,17 @@ const DepartmentsPage = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header Section */}
-      <div className="space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Departments</h1>
-            <p className="text-sm sm:text-base text-muted-foreground mt-1">
-              Manage departments and organisational structure
-            </p>
-          </div>
-          {canCreateDepartment && (
-            <Button onClick={handleCreateDepartment} size="sm" className="shrink-0">
-              <Plus className="mr-2 h-4 w-4" />
-              Add Department
-            </Button>
-          )}
-        </div>
-        {/* Search Input */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-          <Input
-            placeholder="Search departments by name, code, or description..."
-            value={searchTerm}
-            onChange={(e) => handleSearch(e.target.value)}
-            className="pl-10"
-          />
-        </div>
-      </div>
+      {/* Search and Create */}
+      <PageSearchBar
+        searchValue={searchTerm}
+        onSearchChange={handleSearch}
+        searchPlaceholder="Search departments by name, code, or description..."
+        showFilters={false}
+        showCreateButton={canCreateDepartment}
+        onCreateClick={handleCreateDepartment}
+        createButtonText="Add Department"
+        createButtonIcon={Plus}
+      />
 
       {/* Departments Table */}
       <Card>

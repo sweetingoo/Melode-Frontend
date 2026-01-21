@@ -120,6 +120,7 @@ import { format } from "date-fns";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import UserMentionSelector from "@/components/UserMentionSelector";
+import { PageSearchBar } from "@/components/admin/PageSearchBar";
 import {
   Collapsible,
   CollapsibleContent,
@@ -1162,26 +1163,10 @@ const TasksPage = () => {
   };
 
   return (
-    <div className="space-y-2 max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <h1 className="text-xl sm:text-2xl font-bold">Tasks</h1>
-          <p className="text-sm sm:text-base text-muted-foreground">
-            Manage and track all tasks across your organisation
-          </p>
-        </div>
-        {canCreateTask && (
-          <Button onClick={() => setIsCreateModalOpen(true)} size="sm" className="shrink-0">
-            <Plus className="mr-2 h-4 w-4" />
-            Create Task
-          </Button>
-        )}
-      </div>
-
+    <div className="space-y-4 max-w-7xl mx-auto overflow-hidden">
       {/* Statistics Cards */}
       {!statsLoading && !statsError && statsData && (
-        <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
           <Card className="border-l-4 border-l-blue-500">
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
@@ -1249,7 +1234,7 @@ const TasksPage = () => {
         </div>
       )}
       {statsLoading && (
-        <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
           {[1, 2, 3, 4].map((i) => (
             <Card key={i}>
               <CardContent className="p-4">
@@ -1267,84 +1252,84 @@ const TasksPage = () => {
       )}
 
       {/* View Mode Tabs */}
-      <div className="flex gap-1 border-b overflow-x-auto pb-0">
-        <div className="flex gap-1 min-w-max pb-1">
-          <Button
-            variant={viewMode === "all" ? "default" : "ghost"}
-            onClick={() => setViewMode("all")}
-            className="whitespace-nowrap h-8 text-xs"
-            size="sm"
-          >
-            All Tasks
-          </Button>
-          <Button
-            variant={viewMode === "my-tasks" ? "default" : "ghost"}
-            onClick={() => setViewMode("my-tasks")}
-            className="whitespace-nowrap h-8 text-xs"
-            size="sm"
-          >
-            My Tasks
-          </Button>
-          <Button
-            variant={viewMode === "overdue" ? "default" : "ghost"}
-            onClick={() => setViewMode("overdue")}
-            className="whitespace-nowrap h-8 text-xs"
-            size="sm"
-          >
-            Overdue
-          </Button>
-          <Button
-            variant={viewMode === "due-soon" ? "default" : "ghost"}
-            onClick={() => setViewMode("due-soon")}
-            className="whitespace-nowrap h-8 text-xs"
-            size="sm"
-          >
-            Due Soon
-          </Button>
-          <Button
-            variant={viewMode === "compliance" ? "default" : "ghost"}
-            onClick={() => setViewMode("compliance")}
-            className="whitespace-nowrap h-8 text-xs"
-            size="sm"
-          >
-            Compliance
-          </Button>
-          <Button
-            variant={viewMode === "automated" ? "default" : "ghost"}
-            onClick={() => setViewMode("automated")}
-            className="whitespace-nowrap h-8 text-xs"
-            size="sm"
-          >
-            Automated
-          </Button>
-        </div>
-      </div>
+      <Card className="overflow-hidden">
+        <CardContent className="pt-6 pb-4">
+          <div className="flex gap-1 overflow-x-auto">
+            <div className="flex gap-1 min-w-max">
+              <Button
+                variant={viewMode === "all" ? "default" : "ghost"}
+                onClick={() => setViewMode("all")}
+                className="whitespace-nowrap"
+                size="sm"
+              >
+                All Tasks
+              </Button>
+              <Button
+                variant={viewMode === "my-tasks" ? "default" : "ghost"}
+                onClick={() => setViewMode("my-tasks")}
+                className="whitespace-nowrap"
+                size="sm"
+              >
+                My Tasks
+              </Button>
+              <Button
+                variant={viewMode === "overdue" ? "default" : "ghost"}
+                onClick={() => setViewMode("overdue")}
+                className="whitespace-nowrap"
+                size="sm"
+              >
+                Overdue
+              </Button>
+              <Button
+                variant={viewMode === "due-soon" ? "default" : "ghost"}
+                onClick={() => setViewMode("due-soon")}
+                className="whitespace-nowrap"
+                size="sm"
+              >
+                Due Soon
+              </Button>
+              <Button
+                variant={viewMode === "compliance" ? "default" : "ghost"}
+                onClick={() => setViewMode("compliance")}
+                className="whitespace-nowrap"
+                size="sm"
+              >
+                Compliance
+              </Button>
+              <Button
+                variant={viewMode === "automated" ? "default" : "ghost"}
+                onClick={() => setViewMode("automated")}
+                className="whitespace-nowrap"
+                size="sm"
+              >
+                Automated
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
-      {/* Filters and Search */}
+      {/* Search and Create */}
+      <PageSearchBar
+        searchValue={searchTerm}
+        onSearchChange={setSearchTerm}
+        searchPlaceholder="Search tasks..."
+        showFilters={true}
+        isFiltersOpen={isFiltersOpen}
+        onToggleFilters={() => setIsFiltersOpen(!isFiltersOpen)}
+        showCreateButton={canCreateTask}
+        onCreateClick={() => setIsCreateModalOpen(true)}
+        createButtonText="Create Task"
+      />
+
+      {/* Advanced Filters */}
+      {isFiltersOpen && (
       <Card>
-        <Collapsible open={isFiltersOpen} onOpenChange={setIsFiltersOpen}>
-          <CardHeader className="pb-2">
-            <CollapsibleTrigger asChild>
-              <div className="flex items-center justify-between cursor-pointer">
-                <CardTitle className="text-base">Filters</CardTitle>
-                <ChevronDown className={cn("h-4 w-4 transition-transform", isFiltersOpen && "rotate-180")} />
-              </div>
-            </CollapsibleTrigger>
-          </CardHeader>
-          <CollapsibleContent>
-            <CardContent className="pt-0">
-              <div className="flex flex-col gap-3">
-                <div className="relative flex-1">
-                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search tasks..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-8"
-                    size="sm"
-                  />
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Advanced Filters</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
               <Select
                 value={filters.status || "all"}
                 onValueChange={(value) =>
@@ -1456,12 +1441,10 @@ const TasksPage = () => {
                   Clear
                 </Button>
               )}
-            </div>
           </div>
-            </CardContent>
-          </CollapsibleContent>
-        </Collapsible>
+        </CardContent>
       </Card>
+      )}
 
       {/* Tasks Table */}
       <Card>

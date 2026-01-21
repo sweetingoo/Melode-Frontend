@@ -64,8 +64,10 @@ import {
 } from "@/hooks/useCategoryTypes";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
 import { toast } from "sonner";
+import { PageSearchBar } from "@/components/admin/PageSearchBar";
 
 const CategoryTypesPage = () => {
+  const [searchTerm, setSearchTerm] = useState("");
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedCategoryType, setSelectedCategoryType] = useState(null);
@@ -112,6 +114,18 @@ const CategoryTypesPage = () => {
     }
     return (a.display_name || a.name).localeCompare(b.display_name || b.name);
   });
+
+  // Filter category types based on search term (client-side only)
+  const filteredCategoryTypes = React.useMemo(() => {
+    if (!searchTerm) return sortedCategoryTypes;
+    const searchLower = searchTerm.toLowerCase();
+    return sortedCategoryTypes.filter(
+      (type) =>
+        (type.display_name || type.name || "").toLowerCase().includes(searchLower) ||
+        (type.description || "").toLowerCase().includes(searchLower) ||
+        (type.name || "").toLowerCase().includes(searchLower)
+    );
+  }, [sortedCategoryTypes, searchTerm]);
 
   const handleCreateCategoryType = async () => {
     if (!categoryTypeFormData.display_name) {
@@ -193,35 +207,17 @@ const CategoryTypesPage = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <h1 className="text-xl sm:text-2xl font-bold">Category Types</h1>
-          <p className="text-sm sm:text-base text-muted-foreground">
-            Manage category types for assets, forms, messages, and templates
-          </p>
-        </div>
-        {canCreateCategoryType ? (
-          <Button onClick={() => setIsCreateModalOpen(true)} size="sm" className="shrink-0">
-            <Plus className="mr-2 h-4 w-4" />
-            Create Category Type
-          </Button>
-        ) : (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span>
-                <Button disabled size="sm" className="shrink-0">
-                  <Plus className="mr-2 h-4 w-4" />
-                  Create Category Type
-                </Button>
-              </span>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>You do not have permission to create category types</p>
-            </TooltipContent>
-          </Tooltip>
-        )}
-      </div>
+      {/* Search and Create */}
+      <PageSearchBar
+        searchValue={searchTerm}
+        onSearchChange={setSearchTerm}
+        searchPlaceholder="Search category types..."
+        showFilters={false}
+        showCreateButton={canCreateCategoryType}
+        onCreateClick={() => setIsCreateModalOpen(true)}
+        createButtonText="Create Category Type"
+        createButtonIcon={Plus}
+      />
 
       {/* Category Types Table */}
       <Card>
@@ -241,9 +237,11 @@ const CategoryTypesPage = () => {
                 {categoryTypesError?.response?.data?.detail || "You do not have permission to view category types."}
               </p>
             </div>
-          ) : sortedCategoryTypes.length === 0 ? (
+          ) : filteredCategoryTypes.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
-              No category types found. Create your first category type to get started.
+              {searchTerm
+                ? "No category types found matching your search."
+                : "No category types found. Create your first category type to get started."}
             </div>
           ) : (
             <div className="rounded-md border">
@@ -261,7 +259,7 @@ const CategoryTypesPage = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {sortedCategoryTypes.map((categoryType) => (
+                  {filteredCategoryTypes.map((categoryType) => (
                     <TableRow key={categoryType.id}>
                       <TableCell>
                         {categoryType.icon ? (

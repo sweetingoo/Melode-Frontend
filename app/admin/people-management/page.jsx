@@ -94,6 +94,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { PageSearchBar } from "@/components/admin/PageSearchBar";
 
 const UserManagementPage = () => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -467,16 +468,6 @@ const UserManagementPage = () => {
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
-              People Management
-            </h1>
-            <p className="text-sm sm:text-base text-muted-foreground mt-1">
-              Manage people, roles, and permissions for your organisation
-            </p>
-          </div>
-        </div>
         <div className="grid gap-4 md:grid-cols-4">
           {[...Array(4)].map((_, i) => (
             <Card key={i}>
@@ -622,34 +613,6 @@ const UserManagementPage = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header Section */}
-      <div className="space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <h1 className="text-xl sm:text-2xl font-bold tracking-tight">People Management</h1>
-            <p className="text-sm sm:text-base text-muted-foreground mt-1">
-              Manage people, roles, and permissions for your organisation
-            </p>
-          </div>
-          {canCreateUser && (
-            <Button onClick={() => setIsCreateModalOpen(true)} size="sm" className="shrink-0">
-              <UserPlus className="mr-2 h-4 w-4" />
-              Create Person
-            </Button>
-          )}
-        </div>
-        {/* Search Input */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Search people..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
-          />
-        </div>
-      </div>
-
       {/* Stats Cards */}
       <div className="grid gap-2 md:grid-cols-4">
         <Card className="border-l-4 border-l-blue-500">
@@ -714,6 +677,18 @@ const UserManagementPage = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* Search and Create */}
+      <PageSearchBar
+        searchValue={searchTerm}
+        onSearchChange={setSearchTerm}
+        searchPlaceholder="Search people..."
+        showFilters={false}
+        showCreateButton={canCreateUser}
+        onCreateClick={() => setIsCreateModalOpen(true)}
+        createButtonText="Create Person"
+        createButtonIcon={UserPlus}
+      />
 
       {/* Main Content Area */}
       <Card>

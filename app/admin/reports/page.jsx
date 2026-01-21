@@ -365,14 +365,6 @@ export default function ReportsPage() {
   if (!canViewReports) {
     return (
       <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Reports</h1>
-            <p className="text-sm sm:text-base text-muted-foreground mt-1">
-              View and export check in/out session reports
-            </p>
-          </div>
-        </div>
         <Card>
           <CardContent className="py-12 text-center">
             <AlertCircle className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
@@ -388,33 +380,6 @@ export default function ReportsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Reports</h1>
-          <p className="text-sm sm:text-base text-muted-foreground mt-1">
-            View and export check in/out session reports
-          </p>
-        </div>
-        <Button
-          onClick={handleExport}
-          disabled={isExporting || records.length === 0}
-          className="w-full sm:w-auto sm:max-w-fit whitespace-nowrap"
-        >
-          {isExporting ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Exporting...
-            </>
-          ) : (
-            <>
-              <FileSpreadsheet className="mr-2 h-4 w-4" />
-              Export to Excel
-            </>
-          )}
-        </Button>
-      </div>
-
       {/* Filters */}
       <Card>
         <CardHeader>
@@ -423,11 +388,31 @@ export default function ReportsPage() {
               <Filter className="h-5 w-5 text-primary" />
               <CardTitle>Filters</CardTitle>
             </div>
-            {hasActiveFilters && (
-              <Button variant="ghost" size="sm" onClick={clearFilters}>
-                Clear Filters
+            <div className="flex items-center gap-2">
+              {hasActiveFilters && (
+                <Button variant="ghost" size="sm" onClick={clearFilters}>
+                  Clear Filters
+                </Button>
+              )}
+              <Button
+                onClick={handleExport}
+                disabled={isExporting || records.length === 0}
+                size="sm"
+                className="whitespace-nowrap"
+              >
+                {isExporting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Exporting...
+                  </>
+                ) : (
+                  <>
+                    <FileSpreadsheet className="mr-2 h-4 w-4" />
+                    Export to Excel
+                  </>
+                )}
               </Button>
-            )}
+            </div>
           </div>
           <CardDescription>Filter session records by date range, user, department, or location</CardDescription>
         </CardHeader>
