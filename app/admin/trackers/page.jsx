@@ -70,6 +70,7 @@ import {
 import { useTracker } from "@/hooks/useTrackers";
 import CustomFieldRenderer from "@/components/CustomFieldRenderer";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { format } from "date-fns";
 import { parseUTCDate } from "@/utils/time";
 import { toast } from "sonner";
@@ -776,24 +777,16 @@ const TrackersPage = () => {
                   <SelectItem value="status:asc">Status A-Z</SelectItem>
                 </SelectContent>
               </Select>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setShowMetadataColumns(!showMetadataColumns)}
-                          className="flex items-center gap-2"
-                        >
-                          {showMetadataColumns ? (
-                            <>
-                              <EyeOff className="h-4 w-4" />
-                              Hide Metadata
-                            </>
-                          ) : (
-                            <>
-                              <Eye className="h-4 w-4" />
-                              Show Metadata
-                            </>
-                          )}
-                        </Button>
+                        <div className="flex items-center gap-2">
+                          <Label htmlFor="show-last-updated" className="text-sm font-normal cursor-pointer">
+                            Last Updated
+                          </Label>
+                          <Switch
+                            id="show-last-updated"
+                            checked={showMetadataColumns}
+                            onCheckedChange={setShowMetadataColumns}
+                          />
+                        </div>
             </div>
           </div>
         </CardContent>
