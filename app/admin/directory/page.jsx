@@ -30,8 +30,17 @@ import { useDirectory } from "@/hooks/useDirectory";
 import { useRoles } from "@/hooks/useRoles";
 import { useDepartments } from "@/hooks/useDepartments";
 import { DirectoryList } from "@/components/directory/DirectoryList";
-import { DirectoryGraph } from "@/components/directory/DirectoryGraph";
 import { useSidebar } from "@/components/ui/sidebar";
+import dynamicImport from "next/dynamic";
+
+// Force dynamic rendering to prevent SSR issues with document access
+export const dynamic = 'force-dynamic';
+
+// Lazy load DirectoryGraph to avoid SSR issues
+const DirectoryGraph = dynamicImport(
+  () => import("@/components/directory/DirectoryGraph").then((mod) => ({ default: mod.DirectoryGraph })),
+  { ssr: false }
+);
 
 // Context for full screen mode
 const FullScreenContext = createContext({
@@ -46,16 +55,13 @@ const DirectoryPage = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedDepartment, setSelectedDepartment] = useState(null);
   const [excludedRoleIds, setExcludedRoleIds] = useState([]);
-  const [isFullScreen, setIsFullScreen] = useState(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("directory-fullscreen") === "true";
-    }
-    return false;
-  });
+  const [isFullScreen, setIsFullScreen] = useState(false);
   const { setOpen: setSidebarOpen } = useSidebar();
 
   // Handle full screen mode - hide sidebar and header
   React.useEffect(() => {
+    if (typeof window === "undefined") return;
+
     const sidebar = document.getElementById("admin-sidebar");
     const header = document.getElementById("admin-header");
     const wrapper = document.getElementById("admin-layout-wrapper");
@@ -83,6 +89,7 @@ const DirectoryPage = () => {
 
     return () => {
       // Cleanup on unmount
+      if (typeof window === "undefined") return;
       if (sidebar) sidebar.style.display = "";
       if (header) header.style.display = "";
       if (wrapper) {
