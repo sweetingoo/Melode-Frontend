@@ -164,6 +164,13 @@ const mainMenuItems = [
     permission: "document:read", // Permission to read documents
   },
   {
+    title: "Directory",
+    description: "Browse people by department and role",
+    icon: Users,
+    url: "/admin/directory",
+    permission: null, // Directory is visible to all users (view-only)
+  },
+  {
     title: "Messages",
     description: "Send and receive messages",
     icon: Mail,
@@ -1522,8 +1529,8 @@ export default function AdminLayout({ children }) {
   return (
     <AuthGuard>
       <SidebarProvider>
-        <div className="flex min-h-screen w-full">
-          <Sidebar collapsible="icon">
+        <div className="flex min-h-screen w-full" id="admin-layout-wrapper">
+          <Sidebar collapsible="icon" id="admin-sidebar">
             <SidebarHeader>
               <div className="flex items-center gap-2 px-2 py-2 group-data-[collapsible=icon]:justify-center">
                 <div className="flex aspect-square size-8 items-center justify-center rounded-lg">
@@ -1591,7 +1598,7 @@ export default function AdminLayout({ children }) {
           </Sidebar>
 
           <SidebarInset>
-            <header className="flex h-20 shrink-0 items-center gap-2 border-b px-4">
+            <header className="flex h-20 shrink-0 items-center gap-2 border-b px-4" id="admin-header">
               <SidebarTrigger className="-ml-1" />
               <div className="flex-1 min-w-0">
                 {(() => {
@@ -1668,7 +1675,8 @@ export default function AdminLayout({ children }) {
             <main className={cn(
               "flex-1 overflow-x-hidden",
               pathname === "/admin/messages" ? "p-0" : 
-              pathname === "/admin/tasks" ? "p-2" : "p-4"
+              pathname === "/admin/tasks" ? "p-2" : 
+              pathname === "/admin/directory" ? "p-0" : "p-4"
             )}>{children}</main>
           </SidebarInset>
         </div>
