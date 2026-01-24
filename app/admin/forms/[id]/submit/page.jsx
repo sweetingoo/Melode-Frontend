@@ -10,6 +10,7 @@ import { Loader2, ArrowLeft, CheckCircle, ChevronLeft, ChevronRight, Save } from
 import { useForm, useCreateFormSubmission, useUpdateFormSubmission } from "@/hooks/useForms";
 import { useUploadFile } from "@/hooks/useProfile";
 import CustomFieldRenderer from "@/components/CustomFieldRenderer";
+import { shouldShowTimeForDateField } from "@/utils/dateFieldUtils";
 import { toast } from "sonner";
 
 const FormSubmitPage = () => {
@@ -133,13 +134,47 @@ const FormSubmitPage = () => {
         return Boolean(value);
 
       case "date":
-        return value instanceof Date
-          ? value.toISOString().split("T")[0]
-          : String(value);
+        // Date fields now use calendar with time, so format as datetime
+        if (value instanceof Date) {
+          return value.toISOString();
+        }
+        // If value is a string (from DatePickerWithTime), handle it
+        const stringValue = String(value);
+        // If it's a datetime string (includes T), return as is
+        if (stringValue.includes('T')) {
+          return stringValue;
+        }
+        // If it's just a date (YYYY-MM-DD), add default time
+        if (stringValue.match(/^\d{4}-\d{2}-\d{2}$/)) {
+          return new Date(stringValue + 'T00:00:00').toISOString();
+        }
+        return stringValue;
 
       case "datetime":
       case "date_time":
         return value instanceof Date ? value.toISOString() : String(value);
+
+      case "time":
+        // Time-only field: return as HH:mm format string
+        if (value instanceof Date) {
+          const hours = value.getHours().toString().padStart(2, '0');
+          const minutes = value.getMinutes().toString().padStart(2, '0');
+          return `${hours}:${minutes}`;
+        }
+        // If it's already a string in HH:mm format, return as is
+        if (typeof value === 'string' && value.match(/^\d{2}:\d{2}$/)) {
+          return value;
+        }
+        // If it's a datetime string, extract time part
+        if (typeof value === 'string' && value.includes('T')) {
+          const date = new Date(value);
+          if (!isNaN(date.getTime())) {
+            const hours = date.getHours().toString().padStart(2, '0');
+            const minutes = date.getMinutes().toString().padStart(2, '0');
+            return `${hours}:${minutes}`;
+          }
+        }
+        return String(value);
 
       case "select":
       case "radio":

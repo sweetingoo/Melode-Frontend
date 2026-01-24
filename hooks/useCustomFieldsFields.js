@@ -121,8 +121,9 @@ export const useCustomFieldsPaginated = (params = {}) => {
     queryFn: async () => {
       const response = await customFieldsFieldsService.getCustomFields(params);
 
-      // Return the full paginated response
-      return response;
+      // The service returns the full axios response { data: {...}, status: 200, ... }
+      // Return response.data which contains the actual API response { fields: [...], total: ..., ... }
+      return response.data || response;
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
   });

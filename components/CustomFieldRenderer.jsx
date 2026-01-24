@@ -136,7 +136,7 @@ const CustomFieldRenderer = ({
         const options = field.field_options?.options || field.options || [];
         return (
           <Select
-            value={value || ''}
+            value={value || undefined}
             onValueChange={handleChange}
             disabled={readOnly}
           >
@@ -145,12 +145,22 @@ const CustomFieldRenderer = ({
             </SelectTrigger>
             <SelectContent>
               {options.map((option, index) => {
-                // Ensure value is never an empty string
-                const optionValue = option.value || option || `option-${index}`;
-                const safeValue = optionValue === "" ? `option-${index}` : String(optionValue);
+                // Handle both object and primitive options
+                let optionValue;
+                if (typeof option === 'object' && option !== null) {
+                  optionValue = option.value;
+                } else {
+                  optionValue = option;
+                }
+                
+                // Ensure value is never an empty string - use a safe fallback
+                const safeValue = (optionValue === "" || optionValue === null || optionValue === undefined)
+                  ? `option-${index}`
+                  : String(optionValue);
+                
                 return (
                   <SelectItem key={index} value={safeValue}>
-                    {option.label || option}
+                    {typeof option === 'object' && option !== null ? (option.label || option.value || safeValue) : (option || safeValue)}
                   </SelectItem>
                 );
               })}
@@ -180,61 +190,60 @@ const CustomFieldRenderer = ({
         );
 
       case 'date':
+        // Date field: Calendar only (no time selection)
         return (
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                className={cn(
-                  "w-full justify-start text-left font-normal",
-                  !value && "text-muted-foreground",
-                  error && "border-red-500"
-                )}
-                disabled={readOnly}
-              >
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                {value ? format(new Date(value), "PPP") : <span>Pick a date</span>}
-              </Button>
-            </PopoverTrigger>
-            {!readOnly && (
-              <PopoverContent className="w-auto p-0">
-                <Calendar
-                  mode="single"
-                  selected={value ? new Date(value) : undefined}
-                  onSelect={(date) => handleChange(date ? date.toISOString().split('T')[0] : '')}
-                  initialFocus
-                />
-              </PopoverContent>
-            )}
-          </Popover>
+          <DatePickerWithTime
+            fieldId={fieldId}
+            value={value}
+            onChange={handleChange}
+            error={error}
+            readOnly={readOnly}
+            shouldShowTime={false}
+          />
         );
 
       case 'datetime':
       case 'date_time':
+        // Date & Time field: Calendar with time input
         return (
-          <div className="space-y-2">
-            <Input
-              id={fieldId}
-              type="datetime-local"
-              value={value || ''}
-              onChange={(e) => handleChange(e.target.value)}
-              className={error ? 'border-red-500' : ''}
-              disabled={readOnly}
-              readOnly={readOnly}
-            />
-          </div>
+          <DatePickerWithTime
+            fieldId={fieldId}
+            value={value}
+            onChange={handleChange}
+            error={error}
+            readOnly={readOnly}
+            shouldShowTime={true}
+          />
         );
 
       case 'time':
+        // Time-only field: Just time input (no date/calendar)
+        // Handle time value format (HH:mm or HH:mm:ss)
+        const formatTimeValue = (timeValue) => {
+          if (!timeValue) return '';
+          // If it's already in HH:mm format, return as is
+          if (typeof timeValue === 'string' && timeValue.match(/^\d{2}:\d{2}/)) {
+            return timeValue.substring(0, 5); // Return HH:mm only
+          }
+          // If it's a Date object, extract time
+          if (timeValue instanceof Date) {
+            const hours = timeValue.getHours().toString().padStart(2, '0');
+            const minutes = timeValue.getMinutes().toString().padStart(2, '0');
+            return `${hours}:${minutes}`;
+          }
+          return '';
+        };
+        
         return (
           <Input
             id={fieldId}
             type="time"
-            value={value || ''}
+            value={formatTimeValue(value)}
             onChange={(e) => handleChange(e.target.value)}
             className={error ? 'border-red-500' : ''}
             disabled={readOnly}
             readOnly={readOnly}
+            placeholder="HH:mm"
           />
         );
 
@@ -678,6 +687,146 @@ const CustomFieldRenderer = ({
 };
 
 // File Field Renderer Component
+// Date picker component with optional time selection
+const DatePickerWithTime = ({ fieldId, value, onChange, error, readOnly, shouldShowTime }) => {
+  const [selectedDate, setSelectedDate] = useState(() => {
+    if (value) {
+      try {
+        const date = new Date(value);
+        return isNaN(date.getTime()) ? undefined : date;
+      } catch {
+        return undefined;
+      }
+    }
+    return undefined;
+  });
+  
+  const [selectedTime, setSelectedTime] = useState(() => {
+    if (value && shouldShowTime) {
+      try {
+        const date = new Date(value);
+        if (!isNaN(date.getTime())) {
+          const hours = date.getHours().toString().padStart(2, '0');
+          const minutes = date.getMinutes().toString().padStart(2, '0');
+          return `${hours}:${minutes}`;
+        }
+      } catch {
+        // Fall through
+      }
+    }
+    return '00:00';
+  });
+
+  // Update selectedDate when value changes externally
+  useEffect(() => {
+    if (value) {
+      try {
+        const date = new Date(value);
+        if (!isNaN(date.getTime())) {
+          setSelectedDate(date);
+          if (shouldShowTime) {
+            const hours = date.getHours().toString().padStart(2, '0');
+            const minutes = date.getMinutes().toString().padStart(2, '0');
+            setSelectedTime(`${hours}:${minutes}`);
+          }
+        } else {
+          setSelectedDate(undefined);
+        }
+      } catch {
+        setSelectedDate(undefined);
+      }
+    } else {
+      setSelectedDate(undefined);
+      setSelectedTime('00:00');
+    }
+  }, [value, shouldShowTime]);
+
+  const handleDateSelect = (date) => {
+    if (!date) {
+      setSelectedDate(undefined);
+      onChange('');
+      return;
+    }
+    
+    setSelectedDate(date);
+    
+    // Combine date with time
+    if (shouldShowTime && selectedTime) {
+      const [hours, minutes] = selectedTime.split(':');
+      const newDate = new Date(date);
+      newDate.setHours(parseInt(hours) || 0, parseInt(minutes) || 0, 0, 0);
+      onChange(newDate.toISOString());
+    } else {
+      // Date only
+      onChange(date.toISOString().split('T')[0]);
+    }
+  };
+
+  const handleTimeChange = (time) => {
+    setSelectedTime(time);
+    if (selectedDate) {
+      const [hours, minutes] = time.split(':');
+      const newDate = new Date(selectedDate);
+      newDate.setHours(parseInt(hours) || 0, parseInt(minutes) || 0, 0, 0);
+      onChange(newDate.toISOString());
+    } else {
+      // If no date selected yet, create a date with today's date and the selected time
+      const today = new Date();
+      const [hours, minutes] = time.split(':');
+      today.setHours(parseInt(hours) || 0, parseInt(minutes) || 0, 0, 0);
+      setSelectedDate(today);
+      onChange(today.toISOString());
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className={cn("grid gap-2", shouldShowTime ? "grid-cols-[1fr_auto]" : "grid-cols-1")}>
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              className={cn(
+                "w-full justify-start text-left font-normal",
+                !selectedDate && "text-muted-foreground",
+                error && "border-red-500"
+              )}
+              disabled={readOnly}
+            >
+              <CalendarIcon className="mr-2 h-4 w-4" />
+              {selectedDate 
+                ? format(selectedDate, shouldShowTime ? "PPP 'at' HH:mm" : "PPP")
+                : <span>Pick a date</span>
+              }
+            </Button>
+          </PopoverTrigger>
+          {!readOnly && (
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="single"
+                selected={selectedDate}
+                onSelect={handleDateSelect}
+                initialFocus
+              />
+            </PopoverContent>
+          )}
+        </Popover>
+        
+        {shouldShowTime && (
+          <Input
+            type="time"
+            value={selectedTime}
+            onChange={(e) => handleTimeChange(e.target.value)}
+            className={cn("w-[140px] font-mono", error && "border-red-500")}
+            disabled={readOnly}
+            placeholder="Time"
+          />
+        )}
+      </div>
+    </div>
+  );
+};
+
 const FileFieldRenderer = ({ field, value, onChange, error, fieldId }) => {
   const downloadFileMutation = useDownloadFile();
   const [isDragOver, setIsDragOver] = React.useState(false);

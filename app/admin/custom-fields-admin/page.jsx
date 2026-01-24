@@ -52,6 +52,8 @@ import {
   MoreHorizontal,
   AlertCircle,
   Shield,
+  Loader2,
+  GripVertical,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -64,10 +66,12 @@ import {
 } from "@/hooks/useCustomFields";
 import {
   useCustomFields,
+  useCustomFieldsPaginated,
   useCustomField,
   useCreateCustomField,
   useUpdateCustomField,
   useHardDeleteCustomField,
+  useSearchCustomFields,
   customFieldsUtils,
 } from "@/hooks/useCustomFieldsFields";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
@@ -75,7 +79,12 @@ import { useRoles } from "@/hooks/useRoles";
 import { useActiveAssetTypes } from "@/hooks/useAssetTypes";
 import { useLinkComplianceToRole, useLinkComplianceToAssetType } from "@/hooks/useCompliance";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { customFieldsFieldsService } from "@/services/customFieldsFields";
+import { customFieldsKeys } from "@/hooks/useCustomFieldsFields";
 import { complianceService } from "@/services/compliance";
+import { useForms } from "@/hooks/useForms";
+import { useTrackers } from "@/hooks/useTrackers";
+import { FileText, ExternalLink } from "lucide-react";
 
 // Predefined file type categories for easy selection
 // Pre-defined UK Healthcare Compliance Types
@@ -326,6 +335,17 @@ const CustomFieldsAdminPage = () => {
   const [selectedAssetTypes, setSelectedAssetTypes] = useState([]); // Selected asset type slugs for linking
   const [roleRequiredFlags, setRoleRequiredFlags] = useState({}); // Track which roles are required
   const [assetTypeRequiredFlags, setAssetTypeRequiredFlags] = useState({}); // Track which asset types are required
+  const [accumulatedFields, setAccumulatedFields] = useState([]); // Accumulated fields from all loaded pages
+  const [currentPage, setCurrentPage] = useState(1); // Current page number
+  const [isLoadingMore, setIsLoadingMore] = useState(false); // Loading state for load more
+  const [paginationMeta, setPaginationMeta] = useState(null); // Pagination metadata
+  const [draggedFieldIndex, setDraggedFieldIndex] = useState(null); // Index of field being dragged
+  const [draggedSectionId, setDraggedSectionId] = useState(null); // ID of section containing dragged field
+  const [dragOverFieldIndex, setDragOverFieldIndex] = useState(null); // Index of field being dragged over
+  const [isSavingOrder, setIsSavingOrder] = useState(false); // Loading state for saving order
+  const [usageDialogOpen, setUsageDialogOpen] = useState(false); // Usage dialog open state
+  const [selectedFieldForUsage, setSelectedFieldForUsage] = useState(null); // Field to show usage for
+  const [fieldUsages, setFieldUsages] = useState([]); // Cached field usages
 
   const fieldTypes = [
     { value: "text", label: "Text" },
@@ -363,12 +383,17 @@ const CustomFieldsAdminPage = () => {
   const canUpdateCustomField = hasPermission("custom_field:update");
   const canDeleteCustomField = hasPermission("custom_field:delete");
 
-  // Custom Fields API hooks
+  // Custom Fields API hooks - use paginated version to get metadata
   const {
-    data: fieldsData,
+    data: fieldsPaginatedData,
     isLoading: fieldsLoading,
     error: fieldsError,
-  } = useCustomFields({ entity_type: selectedEntityType });
+  } = useCustomFieldsPaginated({ 
+    entity_type: selectedEntityType,
+    per_page: 100, // Increase limit to show more fields (max 100)
+    page: currentPage,
+    is_active: showInactive ? undefined : true // Filter by active status based on showInactive toggle
+  });
 
   const createFieldMutation = useCreateCustomField();
   const updateFieldMutation = useUpdateCustomField();
@@ -380,6 +405,12 @@ const CustomFieldsAdminPage = () => {
   const roles = rolesData?.roles || rolesData || [];
   const assetTypes = assetTypesData?.asset_types || assetTypesData || [];
 
+  // Fetch forms and trackers for usage tracking
+  const { data: formsData, isLoading: formsLoading } = useForms({ per_page: 1000, is_active: true }, { enabled: usageDialogOpen });
+  const { data: trackersData, isLoading: trackersLoading } = useTrackers({ per_page: 1000, is_active: true }, { enabled: usageDialogOpen });
+  const forms = formsData?.forms || [];
+  const trackers = trackersData?.forms || trackersData?.trackers || [];
+
   // Compliance linking mutations
   const queryClient = useQueryClient();
   const linkToRoleMutation = useLinkComplianceToRole();
@@ -387,6 +418,7 @@ const CustomFieldsAdminPage = () => {
 
   // Get individual field for editing
   const { data: editingField, isLoading: editingFieldLoading, refetch: refetchEditingField } = useCustomField(editingFieldSlug);
+  
   
   // Debug: Log when editingFieldSlug changes
   React.useEffect(() => {
@@ -466,7 +498,26 @@ const CustomFieldsAdminPage = () => {
         max_value: editingField.max_value || null,
         field_options: fieldOptions,
         validation_rules: editingField.validation_rules || {},
-        relationship_config: editingField.relationship_config || null,
+        relationship_config: editingField.relationship_config ? (() => {
+          const config = editingField.relationship_config;
+          // Transform from API format to frontend format
+          if (config.target_field_id && config.relationship_type) {
+            // Map API relationship types back to frontend relationship types
+            const reverseRelationshipTypeMap = {
+              'one_to_many': 'parent',
+              'many_to_one': 'child',
+              'one_to_one': 'sibling',
+              'many_to_many': 'sibling' // Default many_to_many to sibling
+            };
+            
+            return {
+              relatedFieldId: config.target_field_id,
+              relationshipType: reverseRelationshipTypeMap[config.relationship_type] || 'sibling',
+              conditionValue: config.condition_value || null
+            };
+          }
+          return null;
+        })() : null,
         entity_type: editingField.entity_type || selectedEntityType,
         sort_order: editingField.sort_order || 0,
         organization_id: editingField.organization_id || 0,
@@ -675,36 +726,145 @@ const CustomFieldsAdminPage = () => {
       : sections.filter((section) => section.isActive);
   }, [sections, showInactive]);
 
-  // Transform fields API data
-  const fields = React.useMemo(() => {
-    if (!fieldsData) return [];
+  // Handle paginated fields data and accumulate fields
+  React.useEffect(() => {
+    console.log("Fields loading effect:", {
+      hasData: !!fieldsPaginatedData,
+      isLoading: fieldsLoading,
+      dataType: typeof fieldsPaginatedData,
+      dataKeys: fieldsPaginatedData ? Object.keys(fieldsPaginatedData) : null,
+      dataStructure: fieldsPaginatedData
+    });
 
-    // Handle different response formats
-    let dataToTransform = fieldsData;
+    if (!fieldsPaginatedData) {
+      // If no data and not loading, clear accumulated fields
+      if (!fieldsLoading) {
+        setAccumulatedFields([]);
+        setPaginationMeta(null);
+      }
+      return;
+    }
 
-    // If it's wrapped in a fields property
-    if (fieldsData.fields && Array.isArray(fieldsData.fields)) {
-      dataToTransform = fieldsData.fields;
-    }
-    // If it's wrapped in a data property
-    else if (fieldsData.data && Array.isArray(fieldsData.data)) {
-      dataToTransform = fieldsData.data;
-    }
-    // If it's wrapped in a results property (common for paginated responses)
-    else if (fieldsData.results && Array.isArray(fieldsData.results)) {
-      dataToTransform = fieldsData.results;
-    }
-    // If it's already an array
-    else if (Array.isArray(fieldsData)) {
-      dataToTransform = fieldsData;
-    }
-    // If it's not an array, return empty array
+    // Extract fields and pagination metadata from response
+    // The hook returns response.data, so fieldsPaginatedData should be: { fields: [...], total: ..., page: ..., per_page: ..., total_pages: ... }
+    let fieldsArray = [];
+    let meta = null;
+
+    console.log("Processing fields response:", {
+      fieldsPaginatedDataType: typeof fieldsPaginatedData,
+      fieldsPaginatedDataKeys: fieldsPaginatedData ? Object.keys(fieldsPaginatedData) : null,
+      hasFields: !!fieldsPaginatedData?.fields,
+      fieldsIsArray: Array.isArray(fieldsPaginatedData?.fields),
+      fieldsLength: fieldsPaginatedData?.fields?.length,
+      hasData: !!fieldsPaginatedData?.data,
+      dataHasFields: !!fieldsPaginatedData?.data?.fields
+    });
+
+    // Try direct access first (most common case after hook fix)
+    if (fieldsPaginatedData?.fields && Array.isArray(fieldsPaginatedData.fields)) {
+      fieldsArray = fieldsPaginatedData.fields;
+      meta = {
+        total: fieldsPaginatedData.total ?? 0,
+        page: fieldsPaginatedData.page ?? 1,
+        per_page: fieldsPaginatedData.per_page ?? 100,
+        total_pages: fieldsPaginatedData.total_pages ?? 1,
+      };
+      console.log("✓ Extracted fields from fieldsPaginatedData.fields:", fieldsArray.length);
+    } 
+    // Fallback: if still wrapped in axios response
+    else if (fieldsPaginatedData?.data?.fields && Array.isArray(fieldsPaginatedData.data.fields)) {
+      fieldsArray = fieldsPaginatedData.data.fields;
+      meta = {
+        total: fieldsPaginatedData.data.total ?? 0,
+        page: fieldsPaginatedData.data.page ?? 1,
+        per_page: fieldsPaginatedData.data.per_page ?? 100,
+        total_pages: fieldsPaginatedData.data.total_pages ?? 1,
+      };
+      console.log("✓ Extracted fields from fieldsPaginatedData.data.fields:", fieldsArray.length);
+    } 
+    // Fallback: if response is directly an array
+    else if (Array.isArray(fieldsPaginatedData)) {
+      fieldsArray = fieldsPaginatedData;
+      console.log("✓ Extracted fields from array response:", fieldsArray.length);
+    } 
     else {
-      return [];
+      console.error("✗ Could not extract fields from response:", {
+        fieldsPaginatedData,
+        structure: JSON.stringify(fieldsPaginatedData, null, 2).substring(0, 1000)
+      });
     }
 
-    return dataToTransform.map(customFieldsUtils.transformField);
-  }, [fieldsData]);
+    // Transform fields
+    if (fieldsArray.length === 0) {
+      console.warn("No fields extracted from response!", {
+        fieldsPaginatedData,
+        apiResponse,
+        fieldsArray
+      });
+      setIsLoadingMore(false);
+      return;
+    }
+
+    console.log("About to transform fields:", {
+      fieldsArrayLength: fieldsArray.length,
+      firstField: fieldsArray[0],
+      transformFunction: typeof customFieldsUtils.transformField
+    });
+
+    const transformedFields = fieldsArray.map((field, index) => {
+      try {
+        const transformed = customFieldsUtils.transformField(field);
+        if (index === 0) {
+          console.log("First field transformation:", { original: field, transformed });
+        }
+        return transformed;
+      } catch (error) {
+        console.error(`Error transforming field at index ${index}:`, error, field);
+        return null;
+      }
+    }).filter(Boolean); // Remove any null values from failed transformations
+
+    console.log("Transformed fields:", {
+      count: transformedFields.length,
+      sample: transformedFields.slice(0, 3)
+    });
+
+    // If it's the first page, replace accumulated fields
+    // Otherwise, append new fields (avoid duplicates)
+    if (currentPage === 1) {
+      setAccumulatedFields(transformedFields);
+      console.log("Set accumulated fields (page 1):", transformedFields.length);
+    } else {
+      setAccumulatedFields((prev) => {
+        // Avoid duplicates by checking field IDs
+        const existingIds = new Set(prev.map((f) => f.id));
+        const newFields = transformedFields.filter((f) => !existingIds.has(f.id));
+        const updated = [...prev, ...newFields];
+        console.log("Appended fields (page " + currentPage + "):", {
+          prevCount: prev.length,
+          newCount: newFields.length,
+          totalCount: updated.length
+        });
+        return updated;
+      });
+    }
+
+    if (meta) {
+      setPaginationMeta(meta);
+      console.log("Set pagination meta:", meta);
+    }
+    setIsLoadingMore(false);
+  }, [fieldsPaginatedData, currentPage, fieldsLoading]);
+
+  // Reset accumulated fields and page when filters change
+  React.useEffect(() => {
+    setAccumulatedFields([]);
+    setCurrentPage(1);
+    setIsLoadingMore(false);
+  }, [selectedEntityType, showInactive]);
+
+  // Use accumulated fields
+  const fields = accumulatedFields;
 
   // Auto-generate preview when sections and fields are available
   React.useEffect(() => {
@@ -1170,14 +1330,56 @@ const CustomFieldsAdminPage = () => {
         // Ensure compliance_config includes all required fields with defaults
         const fieldDataToSubmit = { ...fieldFormData };
         
-        // Clean up relationship_config - if all values are null/empty, set to null
+        // Transform and clean up relationship_config
         if (fieldDataToSubmit.relationship_config) {
-          const hasValidValue = Object.values(fieldDataToSubmit.relationship_config).some(
-            value => value !== null && value !== undefined && value !== ''
-          );
-          if (!hasValidValue) {
+          const config = fieldDataToSubmit.relationship_config;
+          
+          // Check if we have a valid relatedFieldId (not null, not 'none', not 0, not empty string)
+          const relatedFieldId = config.relatedFieldId;
+          const hasRelatedField = relatedFieldId !== null && 
+                                  relatedFieldId !== undefined && 
+                                  relatedFieldId !== 'none' && 
+                                  relatedFieldId !== '' && 
+                                  relatedFieldId !== 0;
+          
+          console.log("Relationship config transformation (update):", {
+            originalConfig: config,
+            relatedFieldId,
+            hasRelatedField,
+            relationshipType: config.relationshipType,
+            fieldType: fieldDataToSubmit.field_type
+          });
+          
+          if (hasRelatedField && config.relationshipType) {
+            // Map frontend relationship types to API relationship types
+            const relationshipTypeMap = {
+              'parent': 'one_to_many',      // Parent can have many children
+              'child': 'many_to_one',       // Child belongs to one parent
+              'sibling': 'one_to_one',      // Sibling is one-to-one
+              'dependent': 'many_to_one',    // Dependent belongs to one
+              'conditional': 'one_to_one'    // Conditional is one-to-one
+            };
+            
+            // Ensure relatedFieldId is a number
+            const targetFieldId = typeof relatedFieldId === 'string' ? parseInt(relatedFieldId, 10) : relatedFieldId;
+            
+            // Transform to API format
+            fieldDataToSubmit.relationship_config = {
+              target_field_id: targetFieldId,
+              target_entity_type: fieldDataToSubmit.entity_type || selectedEntityType,
+              relationship_type: relationshipTypeMap[config.relationshipType] || 'one_to_one',
+              ...(config.conditionValue && { condition_value: config.conditionValue })
+            };
+            
+            console.log("Transformed relationship_config (update):", fieldDataToSubmit.relationship_config);
+          } else {
+            // If no valid relationship config, set to null
+            console.log("Setting relationship_config to null (update) - hasRelatedField:", hasRelatedField, "relationshipType:", config.relationshipType);
             fieldDataToSubmit.relationship_config = null;
           }
+        } else {
+          // If relationship_config is not set at all, ensure it's null
+          fieldDataToSubmit.relationship_config = null;
         }
         
         if (fieldDataToSubmit.is_compliance && fieldDataToSubmit.compliance_config) {
@@ -1211,14 +1413,56 @@ const CustomFieldsAdminPage = () => {
         // Ensure compliance_config includes all required fields with defaults
         const fieldDataToSubmit = { ...fieldFormData };
         
-        // Clean up relationship_config - if all values are null/empty, set to null
+        // Transform and clean up relationship_config
         if (fieldDataToSubmit.relationship_config) {
-          const hasValidValue = Object.values(fieldDataToSubmit.relationship_config).some(
-            value => value !== null && value !== undefined && value !== ''
-          );
-          if (!hasValidValue) {
+          const config = fieldDataToSubmit.relationship_config;
+          
+          // Check if we have a valid relatedFieldId (not null, not 'none', not 0, not empty string)
+          const relatedFieldId = config.relatedFieldId;
+          const hasRelatedField = relatedFieldId !== null && 
+                                  relatedFieldId !== undefined && 
+                                  relatedFieldId !== 'none' && 
+                                  relatedFieldId !== '' && 
+                                  relatedFieldId !== 0;
+          
+          console.log("Relationship config transformation (create):", {
+            originalConfig: config,
+            relatedFieldId,
+            hasRelatedField,
+            relationshipType: config.relationshipType,
+            fieldType: fieldDataToSubmit.field_type
+          });
+          
+          if (hasRelatedField && config.relationshipType) {
+            // Map frontend relationship types to API relationship types
+            const relationshipTypeMap = {
+              'parent': 'one_to_many',      // Parent can have many children
+              'child': 'many_to_one',       // Child belongs to one parent
+              'sibling': 'one_to_one',      // Sibling is one-to-one
+              'dependent': 'many_to_one',    // Dependent belongs to one
+              'conditional': 'one_to_one'    // Conditional is one-to-one
+            };
+            
+            // Ensure relatedFieldId is a number
+            const targetFieldId = typeof relatedFieldId === 'string' ? parseInt(relatedFieldId, 10) : relatedFieldId;
+            
+            // Transform to API format
+            fieldDataToSubmit.relationship_config = {
+              target_field_id: targetFieldId,
+              target_entity_type: fieldDataToSubmit.entity_type || selectedEntityType,
+              relationship_type: relationshipTypeMap[config.relationshipType] || 'one_to_one',
+              ...(config.conditionValue && { condition_value: config.conditionValue })
+            };
+            
+            console.log("Transformed relationship_config (create):", fieldDataToSubmit.relationship_config);
+          } else {
+            // If no valid relationship config, set to null
+            console.log("Setting relationship_config to null (create) - hasRelatedField:", hasRelatedField, "relationshipType:", config.relationshipType);
             fieldDataToSubmit.relationship_config = null;
           }
+        } else {
+          // If relationship_config is not set at all, ensure it's null
+          fieldDataToSubmit.relationship_config = null;
         }
         
         if (fieldDataToSubmit.is_compliance && fieldDataToSubmit.compliance_config) {
@@ -1355,8 +1599,89 @@ const CustomFieldsAdminPage = () => {
     }
   };
 
+  // Function to find field usages in forms and trackers
+  const findFieldUsages = React.useCallback((field) => {
+    if (!field) return [];
+    
+    const usages = [];
+    const fieldIdentifiers = [
+      field.slug,
+      field.field_name || field.name,
+      field.id?.toString(),
+    ].filter(Boolean);
+
+    // Search in forms
+    forms.forEach((form) => {
+      if (!form.form_fields?.fields) return;
+      
+      const matchingFields = form.form_fields.fields.filter((formField) => {
+        const formFieldId = formField.field_id || formField.field_name;
+        return fieldIdentifiers.some((identifier) => 
+          formFieldId === identifier || 
+          formFieldId === field.slug ||
+          formFieldId === field.field_name ||
+          formFieldId === field.name
+        );
+      });
+
+      if (matchingFields.length > 0) {
+        usages.push({
+          type: "form",
+          id: form.id,
+          slug: form.slug,
+          title: form.form_title || form.form_name,
+          is_tracker: form.is_tracker || false,
+          url: `/admin/forms/${form.slug || form.id}`,
+        });
+      }
+    });
+
+    // Search in trackers (they're also forms but with is_tracker=true)
+    trackers.forEach((tracker) => {
+      if (!tracker.form_fields?.fields) return;
+      
+      const matchingFields = tracker.form_fields.fields.filter((trackerField) => {
+        const trackerFieldId = trackerField.field_id || trackerField.field_name;
+        return fieldIdentifiers.some((identifier) => 
+          trackerFieldId === identifier || 
+          trackerFieldId === field.slug ||
+          trackerFieldId === field.field_name ||
+          trackerFieldId === field.name
+        );
+      });
+
+      if (matchingFields.length > 0) {
+        usages.push({
+          type: "tracker",
+          id: tracker.id,
+          slug: tracker.slug,
+          title: tracker.form_title || tracker.form_name,
+          is_tracker: true,
+          url: `/admin/trackers/${tracker.slug || tracker.id}`,
+        });
+      }
+    });
+
+    return usages;
+  }, [forms, trackers]);
+
+  // Function to open usage dialog
+  const handleShowUsage = React.useCallback((field) => {
+    setSelectedFieldForUsage(field);
+    setUsageDialogOpen(true);
+  }, []);
+
+  // Recalculate usages when dialog opens or data changes
+  React.useEffect(() => {
+    if (usageDialogOpen && selectedFieldForUsage && !formsLoading && !trackersLoading) {
+      const usages = findFieldUsages(selectedFieldForUsage);
+      setFieldUsages(usages);
+    }
+  }, [usageDialogOpen, selectedFieldForUsage, forms, trackers, formsLoading, trackersLoading, findFieldUsages]);
+
   const handleCancelField = () => {
-    setEditingFieldId(null); // Reset editing state
+    setEditingFieldSlug(null); // Reset editing state
+    setAllowAllFileTypes(false); // Reset file type settings
     setFieldFormData({
       field_name: "",
       field_label: "",
@@ -1365,10 +1690,6 @@ const CustomFieldsAdminPage = () => {
       is_required: false,
       is_unique: false,
       max_length: null,
-      is_compliance: false,
-      requires_approval: false,
-      expiry_reminder_days: null,
-      compliance_config: null,
       min_value: null,
       max_value: null,
       field_options: {},
@@ -1379,7 +1700,17 @@ const CustomFieldsAdminPage = () => {
       organisation_id: 0,
       section_id: 0,
       is_active: true,
+      is_compliance: false,
+      requires_approval: false,
+      expiry_reminder_days: null,
+      compliance_config: null,
     });
+    setSelectedComplianceType("");
+    setCustomSubFields([]);
+    setSelectedRoles([]);
+    setSelectedAssetTypes([]);
+    setRoleRequiredFlags({});
+    setAssetTypeRequiredFlags({});
     setIsCreateFieldModalOpen(false);
   };
 
@@ -1444,8 +1775,20 @@ const CustomFieldsAdminPage = () => {
   };
 
   const handleDeleteSection = async (sectionId) => {
+    const section = sections.find((s) => s.id === sectionId);
+    if (!section) {
+      toast.error("Section not found");
+      return;
+    }
+
+    if (!section.slug) {
+      console.error("Section missing slug:", section);
+      toast.error("Failed to delete section: missing identifier");
+      return;
+    }
+
     try {
-      await deleteSectionMutation.mutateAsync(sectionId);
+      await deleteSectionMutation.mutateAsync(section.slug);
       toast.success("Section permanently deleted successfully!");
     } catch (error) {
       console.error("Failed to delete section:", error);
@@ -1455,6 +1798,115 @@ const CustomFieldsAdminPage = () => {
 
   const handleResetState = () => {
     toast.success("State reset successfully");
+  };
+
+  // Load more fields function
+  const handleLoadMoreFields = async () => {
+    if (isLoadingMore || fieldsLoading || !paginationMeta) return;
+
+    const nextPage = currentPage + 1;
+    if (nextPage > paginationMeta.total_pages) return;
+
+    setIsLoadingMore(true);
+    setCurrentPage(nextPage);
+  };
+
+  // Drag and drop handlers for reordering fields within sections
+  const handleFieldDragStart = (sectionId, fieldIndex) => {
+    setDraggedSectionId(sectionId);
+    setDraggedFieldIndex(fieldIndex);
+  };
+
+  const handleFieldDragOver = (e, fieldIndex) => {
+    e.preventDefault();
+    if (draggedFieldIndex !== null && draggedFieldIndex !== fieldIndex) {
+      setDragOverFieldIndex(fieldIndex);
+    }
+  };
+
+  const handleFieldDragLeave = () => {
+    setDragOverFieldIndex(null);
+  };
+
+  const handleFieldDrop = async (e, sectionId, dropIndex) => {
+    e.preventDefault();
+    setDragOverFieldIndex(null);
+
+    if (
+      draggedFieldIndex === null ||
+      draggedSectionId !== sectionId ||
+      draggedFieldIndex === dropIndex
+    ) {
+      setDraggedFieldIndex(null);
+      setDraggedSectionId(null);
+      return;
+    }
+
+    // Store original preview data for potential revert
+    const originalPreviewData = JSON.parse(JSON.stringify(previewData));
+
+    // Update preview data locally
+    const updatedPreviewData = [...previewData];
+    const sectionIndex = updatedPreviewData.findIndex(
+      (s) => s.id === sectionId
+    );
+    if (sectionIndex === -1) {
+      setDraggedFieldIndex(null);
+      setDraggedSectionId(null);
+      return;
+    }
+
+    const section = updatedPreviewData[sectionIndex];
+    const newFields = [...section.fields];
+    const [draggedField] = newFields.splice(draggedFieldIndex, 1);
+    newFields.splice(dropIndex, 0, draggedField);
+
+    // Update sort_order for all fields in the section
+    newFields.forEach((field, index) => {
+      field.sort_order = index + 1;
+    });
+
+    updatedPreviewData[sectionIndex] = {
+      ...section,
+      fields: newFields,
+    };
+
+    setPreviewData(updatedPreviewData);
+
+    // Save the new order to the backend
+    setIsSavingOrder(true);
+    try {
+      // Update fields one by one to avoid race conditions
+      // We'll suppress individual success toasts and show one at the end
+      for (let i = 0; i < newFields.length; i++) {
+        const field = newFields[i];
+        await customFieldsFieldsService.updateCustomField(field.slug, {
+          sort_order: i + 1,
+        });
+      }
+
+      // Invalidate queries to refresh data
+      queryClient.invalidateQueries({
+        queryKey: customFieldsKeys.lists(),
+      });
+
+      toast.success("Field order updated successfully!");
+    } catch (error) {
+      console.error("Failed to update field order:", error);
+      toast.error("Failed to save field order. Please try again.");
+      // Revert to original order on error
+      setPreviewData(originalPreviewData);
+    } finally {
+      setIsSavingOrder(false);
+      setDraggedFieldIndex(null);
+      setDraggedSectionId(null);
+    }
+  };
+
+  const handleFieldDragEnd = () => {
+    setDraggedFieldIndex(null);
+    setDraggedSectionId(null);
+    setDragOverFieldIndex(null);
   };
 
   // Preview API hook - Disabled for admin page since we don't have a specific entity
@@ -1493,15 +1945,8 @@ const CustomFieldsAdminPage = () => {
       setPreviewData(previewSections);
       toast.success("Preview generated successfully!");
 
-      // Try to fetch from API in background for future use
-      try {
-        await refetchHierarchy();
-        if (hierarchyData) {
-          console.log("API data fetched:", hierarchyData);
-        }
-      } catch (apiError) {
-        console.log("API fetch failed, using local data:", apiError);
-      }
+      // Note: We use local data for preview since the admin page doesn't have a specific entity
+      // The hierarchy API endpoint requires an entity slug, which we don't have in this context
     } catch (error) {
       console.error("Failed to generate preview:", error);
       setPreviewError(error);
@@ -2041,6 +2486,15 @@ const CustomFieldsAdminPage = () => {
                             variant="ghost"
                             size="sm"
                             className="h-8 w-8 p-0"
+                            onClick={() => handleShowUsage(field)}
+                            title="View Usage"
+                          >
+                            <Info className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0"
                             onClick={() => {
                               console.log("Edit button clicked - field object:", field);
                               console.log("Edit button clicked - field.slug:", field.slug);
@@ -2094,6 +2548,31 @@ const CustomFieldsAdminPage = () => {
                   </Card>
                 ))
               )}
+
+              {/* Load More Button */}
+              {paginationMeta && 
+               paginationMeta.total_pages > currentPage && 
+               fields.length > 0 && (
+                <div className="flex justify-center pt-4">
+                  <Button
+                    variant="outline"
+                    onClick={handleLoadMoreFields}
+                    disabled={isLoadingMore || fieldsLoading}
+                    className="min-w-[120px]"
+                  >
+                    {isLoadingMore || fieldsLoading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Loading...
+                      </>
+                    ) : (
+                      <>
+                        Load More ({paginationMeta.total - fields.length} remaining)
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </TabsContent>
@@ -2105,6 +2584,12 @@ const CustomFieldsAdminPage = () => {
               <h2 className="text-xl font-semibold">Field Preview</h2>
               <p className="text-muted-foreground mt-1">
                 Preview how your custom fields will appear to users
+                {isSavingOrder && (
+                  <span className="ml-2 text-primary flex items-center gap-1">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    Saving order...
+                  </span>
+                )}
               </p>
             </div>
             <div className="flex items-center gap-3">
@@ -2204,15 +2689,46 @@ const CustomFieldsAdminPage = () => {
                       </CardHeader>
                       <CardContent className="space-y-6">
                         {section.fields && section.fields.length > 0 ? (
-                          section.fields.map((field) => (
-                            <div key={field.id} className="space-y-2">
-                              <Label className="text-sm font-medium text-slate-700">
-                                {field.fieldLabel}
-                                {field.isRequired && (
-                                  <span className="text-red-500 ml-1">*</span>
-                                )}
-                              </Label>
-                              {renderFieldPreview(field)}
+                          section.fields.map((field, fieldIndex) => (
+                            <div
+                              key={field.id}
+                              draggable
+                              onDragStart={() =>
+                                handleFieldDragStart(section.id, fieldIndex)
+                              }
+                              onDragOver={(e) =>
+                                handleFieldDragOver(e, fieldIndex)
+                              }
+                              onDragLeave={handleFieldDragLeave}
+                              onDrop={(e) =>
+                                handleFieldDrop(e, section.id, fieldIndex)
+                              }
+                              onDragEnd={handleFieldDragEnd}
+                              className={`group relative flex items-start gap-3 p-3 border rounded-lg bg-card hover:bg-muted/50 transition-colors ${
+                                draggedFieldIndex === fieldIndex &&
+                                draggedSectionId === section.id
+                                  ? "opacity-50 cursor-grabbing"
+                                  : "cursor-grab"
+                              } ${
+                                dragOverFieldIndex === fieldIndex &&
+                                draggedFieldIndex !== fieldIndex &&
+                                draggedSectionId === section.id
+                                  ? "border-primary border-2 bg-primary/5"
+                                  : ""
+                              } ${isSavingOrder ? "opacity-50" : ""}`}
+                            >
+                              <div className="flex items-center gap-2 text-muted-foreground cursor-grab active:cursor-grabbing pt-1">
+                                <GripVertical className="h-4 w-4" />
+                              </div>
+                              <div className="flex-1 space-y-2">
+                                <Label className="text-sm font-medium text-slate-700">
+                                  {field.fieldLabel}
+                                  {field.isRequired && (
+                                    <span className="text-red-500 ml-1">*</span>
+                                  )}
+                                </Label>
+                                {renderFieldPreview(field)}
+                              </div>
                             </div>
                           ))
                         ) : (
@@ -2362,7 +2878,14 @@ const CustomFieldsAdminPage = () => {
       {/* Create Field Modal */}
       <Dialog
         open={isCreateFieldModalOpen}
-        onOpenChange={setIsCreateFieldModalOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            // When closing the modal, reset the form
+            handleCancelField();
+          } else {
+            setIsCreateFieldModalOpen(true);
+          }
+        }}
       >
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -2998,9 +3521,13 @@ const CustomFieldsAdminPage = () => {
                 <Label htmlFor="fieldType">Field Type *</Label>
                 <Select
                   value={fieldFormData.field_type}
-                  onValueChange={(value) =>
-                    handleFieldInputChange("field_type", value)
-                  }
+                  onValueChange={(value) => {
+                    handleFieldInputChange("field_type", value);
+                    // Clear relationship_config if changing away from relationship type
+                    if (value !== "relationship" && fieldFormData.relationship_config) {
+                      handleFieldInputChange("relationship_config", null);
+                    }
+                  }}
                   disabled={fieldFormData.is_compliance && fieldFormData.compliance_config?.requires_file_upload !== false}
                 >
                   <SelectTrigger>
@@ -3394,28 +3921,161 @@ const CustomFieldsAdminPage = () => {
                   <h4 className="text-sm font-medium mb-3">Field Relationships (Optional)</h4>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="relatedFieldId">Related Field ID</Label>
-                      <Input
-                        id="relatedFieldId"
-                        type="number"
-                        placeholder="Field ID"
-                        value={fieldFormData.relationship_config?.relatedFieldId || ''}
-                        onChange={(e) => {
+                      <Label htmlFor="relatedFieldId">Related Field</Label>
+                      <Select
+                        value={fieldFormData.relationship_config?.relatedFieldId?.toString() || 'none'}
+                        onValueChange={(value) => {
                           handleFieldInputChange("relationship_config", {
-                            ...fieldFormData.relationship_config,
-                            relatedFieldId: e.target.value ? parseInt(e.target.value) : null
+                            ...(fieldFormData.relationship_config || {}),
+                            relatedFieldId: value && value !== 'none' ? parseInt(value) : null
                           });
                         }}
-                      />
+                      >
+                        <SelectTrigger id="relatedFieldId">
+                          <SelectValue placeholder="Select a field" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">None</SelectItem>
+                          {fields.length === 0 ? (
+                            <SelectItem value="no-fields" disabled>
+                              No fields available
+                            </SelectItem>
+                          ) : (() => {
+                            // Normalize section IDs - treat null/undefined as 0
+                            const currentSectionId = fieldFormData.section_id ?? 0;
+                            const selectedRelatedFieldId = fieldFormData.relationship_config?.relatedFieldId;
+                            
+                            // First, filter fields by entity type and section
+                            let filteredFields = fields.filter((field) => {
+                              // Exclude the current field if editing
+                              if (editingFieldSlug && field.slug === editingFieldSlug) {
+                                return false;
+                              }
+                              // Only show fields of the same entity type and same section
+                              const fieldSectionId = field.sectionId ?? 0;
+                              const matchesEntityType = field.entityType === selectedEntityType;
+                              const matchesSection = fieldSectionId === currentSectionId;
+                              
+                              return matchesEntityType && matchesSection;
+                            });
+                            
+                            // If there's a selected related field ID, ensure it's included
+                            if (selectedRelatedFieldId) {
+                              const selectedField = fields.find(f => f.id === selectedRelatedFieldId);
+                              if (selectedField) {
+                                // Check if it's already in filteredFields
+                                const alreadyIncluded = filteredFields.some(f => f.id === selectedRelatedFieldId);
+                                if (!alreadyIncluded) {
+                                  // Add it even if it doesn't match the section filter (so user can see what's selected)
+                                  filteredFields = [selectedField, ...filteredFields];
+                                  console.log("Added selected field to dropdown:", {
+                                    fieldId: selectedField.id,
+                                    fieldName: selectedField.name,
+                                    fieldSectionId: selectedField.sectionId,
+                                    currentSectionId,
+                                    reason: "Selected field not in filtered list"
+                                  });
+                                }
+                              } else {
+                                // Field is not in the fields array - this is the main issue!
+                                console.error("CRITICAL: Selected related field (ID: " + selectedRelatedFieldId + ") not found in fields array!", {
+                                  selectedRelatedFieldId,
+                                  availableFieldIds: fields.map(f => f.id),
+                                  totalFields: fields.length,
+                                  currentSectionId,
+                                  fieldFormDataSectionId: fieldFormData.section_id,
+                                  fieldsSample: fields.slice(0, 10).map(f => ({ 
+                                    id: f.id, 
+                                    name: f.name, 
+                                    sectionId: f.sectionId,
+                                    entityType: f.entityType 
+                                  })),
+                                  fieldsInSameSection: fields.filter(f => (f.sectionId ?? 0) === currentSectionId).map(f => ({ id: f.id, name: f.name }))
+                                });
+                              }
+                            }
+                            
+                            // Debug logging
+                            console.log("Related Field Dropdown Debug:", {
+                              totalFields: fields.length,
+                              currentSectionId,
+                              fieldFormDataSectionId: fieldFormData.section_id,
+                              selectedEntityType,
+                              selectedRelatedFieldId,
+                              filteredCount: filteredFields.length,
+                              allFieldsInSection: fields.filter(f => (f.sectionId ?? 0) === currentSectionId).map(f => ({ 
+                                id: f.id, 
+                                name: f.name, 
+                                sectionId: f.sectionId,
+                                entityType: f.entityType 
+                              })),
+                              filteredFields: filteredFields.map(f => ({ 
+                                id: f.id, 
+                                name: f.name, 
+                                sectionId: f.sectionId 
+                              }))
+                            });
+                            
+                            // If we have a selected field ID but it's not in the list, add a placeholder
+                            if (selectedRelatedFieldId && !filteredFields.some(f => f.id === selectedRelatedFieldId)) {
+                              filteredFields.unshift({
+                                id: selectedRelatedFieldId,
+                                name: `Field #${selectedRelatedFieldId} (Not loaded)`,
+                                sectionId: currentSectionId,
+                                entityType: selectedEntityType,
+                                slug: `field-${selectedRelatedFieldId}`,
+                                isPlaceholder: true
+                              });
+                            }
+                            
+                            if (filteredFields.length === 0) {
+                              return (
+                                <SelectItem value="no-fields-section" disabled>
+                                  No fields available in this section (Section ID: {currentSectionId})
+                                </SelectItem>
+                              );
+                            }
+                            
+                            return filteredFields
+                              .sort((a, b) => {
+                                // Sort by section name, then by field name
+                                const sectionA = sections.find(s => s.id === a.sectionId)?.title || '';
+                                const sectionB = sections.find(s => s.id === b.sectionId)?.title || '';
+                                if (sectionA !== sectionB) {
+                                  return sectionA.localeCompare(sectionB);
+                                }
+                                return (a.name || a.fieldLabel || '').localeCompare(b.name || b.fieldLabel || '');
+                              })
+                              .map((field) => {
+                                const section = sections.find(s => s.id === field.sectionId);
+                                const sectionName = section?.title || 'Unassigned';
+                                const fieldLabel = field.name || field.fieldLabel || field.fieldName || `Field ${field.id}`;
+                                const isPlaceholder = field.isPlaceholder;
+                                return (
+                                  <SelectItem 
+                                    key={field.id} 
+                                    value={field.id.toString()}
+                                    className={isPlaceholder ? "text-muted-foreground italic" : ""}
+                                  >
+                                    {fieldLabel} {sectionName ? `(${sectionName})` : ''} {isPlaceholder ? "(Not loaded)" : ""}
+                                  </SelectItem>
+                                );
+                              });
+                          })()}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Select a field to create a relationship with
+                      </p>
                     </div>
 
                     <div className="space-y-2">
                       <Label htmlFor="relationshipType">Relationship Type</Label>
                       <Select
-                        value={fieldFormData.relationship_config?.relationshipType || ''}
+                        value={fieldFormData.relationship_config?.relationshipType || undefined}
                         onValueChange={(value) => {
                           handleFieldInputChange("relationship_config", {
-                            ...fieldFormData.relationship_config,
+                            ...(fieldFormData.relationship_config || {}),
                             relationshipType: value || null
                           });
                         }}
@@ -3485,6 +4145,126 @@ const CustomFieldsAdminPage = () => {
               className="bg-primary hover:bg-primary/90"
             >
               {editingFieldSlug ? "Update Field" : "Create Field"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Field Usage Dialog */}
+      <Dialog open={usageDialogOpen} onOpenChange={setUsageDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Field Usage</DialogTitle>
+            <DialogDescription>
+              {selectedFieldForUsage && (
+                <>
+                  Showing where the field <strong>"{selectedFieldForUsage.name || selectedFieldForUsage.field_label || selectedFieldForUsage.field_name}"</strong> is used
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          
+          {formsLoading || trackersLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              <span className="ml-2 text-sm text-muted-foreground">Loading usages...</span>
+            </div>
+          ) : fieldUsages.length === 0 ? (
+            <div className="text-center py-8">
+              <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <p className="text-sm text-muted-foreground">
+                This field is not currently used in any forms or trackers.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {/* Group by type */}
+              {(() => {
+                const forms = fieldUsages.filter(u => u.type === 'form' && !u.is_tracker);
+                const trackers = fieldUsages.filter(u => u.type === 'tracker' || u.is_tracker);
+                
+                return (
+                  <>
+                    {forms.length > 0 && (
+                      <div>
+                        <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
+                          <FileText className="h-4 w-4" />
+                          Forms ({forms.length})
+                        </h3>
+                        <div className="space-y-2">
+                          {forms.map((usage) => (
+                            <Card key={`form-${usage.id}`} className="hover:bg-muted/50 transition-colors">
+                              <CardContent className="p-4">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex-1">
+                                    <h4 className="text-sm font-medium">{usage.title}</h4>
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                      Form ID: {usage.id}
+                                    </p>
+                                  </div>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                      window.open(usage.url, '_blank');
+                                    }}
+                                    className="ml-2"
+                                  >
+                                    <ExternalLink className="h-4 w-4 mr-1" />
+                                    View
+                                  </Button>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {trackers.length > 0 && (
+                      <div>
+                        <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
+                          <FileText className="h-4 w-4" />
+                          Trackers ({trackers.length})
+                        </h3>
+                        <div className="space-y-2">
+                          {trackers.map((usage) => (
+                            <Card key={`tracker-${usage.id}`} className="hover:bg-muted/50 transition-colors">
+                              <CardContent className="p-4">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex-1">
+                                    <h4 className="text-sm font-medium">{usage.title}</h4>
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                      Tracker ID: {usage.id}
+                                    </p>
+                                  </div>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                      window.open(usage.url, '_blank');
+                                    }}
+                                    className="ml-2"
+                                  >
+                                    <ExternalLink className="h-4 w-4 mr-1" />
+                                    View
+                                  </Button>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+          )}
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setUsageDialogOpen(false)}>
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>

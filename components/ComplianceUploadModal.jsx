@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Upload, Loader2 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { shouldShowTimeForDateField } from "@/utils/dateFieldUtils";
 
 export const ComplianceUploadModal = ({
   open,
@@ -98,13 +99,27 @@ export const ComplianceUploadModal = ({
           />
         );
       case "date":
-        // Convert value to YYYY-MM-DD format for native date input
-        const dateInputValue = value ? (value instanceof Date ? value.toISOString().split('T')[0] : new Date(value).toISOString().split('T')[0]) : '';
+        // Determine if time should be shown based on field label
+        const shouldShowTime = shouldShowTimeForDateField(subField);
+        // Convert value to appropriate format
+        let dateInputValue = '';
+        if (value) {
+          if (value instanceof Date) {
+            dateInputValue = shouldShowTime 
+              ? value.toISOString().slice(0, 16) // YYYY-MM-DDTHH:mm for datetime-local
+              : value.toISOString().split('T')[0]; // YYYY-MM-DD for date
+          } else {
+            const date = new Date(value);
+            dateInputValue = shouldShowTime
+              ? date.toISOString().slice(0, 16)
+              : date.toISOString().split('T')[0];
+          }
+        }
         return (
           <Input
             key={subField.field_name}
             id={subField.field_name}
-            type="date"
+            type={shouldShowTime ? "datetime-local" : "date"}
             value={dateInputValue}
             onChange={(e) => handleSubFieldChange(subField.field_name, e.target.value || null)}
             placeholder={subField.placeholder || subField.field_label}
@@ -115,7 +130,7 @@ export const ComplianceUploadModal = ({
         return (
           <Select
             key={subField.field_name}
-            value={value}
+            value={value || undefined}
             onValueChange={(val) => handleSubFieldChange(subField.field_name, val)}
             required={subField.is_required}
           >
@@ -123,11 +138,26 @@ export const ComplianceUploadModal = ({
               <SelectValue placeholder={subField.placeholder || `Select ${subField.field_label}`} />
             </SelectTrigger>
             <SelectContent>
-              {subField.field_options?.options?.map((option) => (
-                <SelectItem key={typeof option === "object" ? option.value : option} value={typeof option === "object" ? option.value : option}>
-                  {typeof option === "object" ? option.label : option}
-                </SelectItem>
-              ))}
+              {subField.field_options?.options?.map((option, index) => {
+                // Handle both object and primitive options
+                let optionValue;
+                if (typeof option === "object" && option !== null) {
+                  optionValue = option.value;
+                } else {
+                  optionValue = option;
+                }
+                
+                // Ensure value is never an empty string
+                const safeValue = (optionValue === "" || optionValue === null || optionValue === undefined)
+                  ? `option-${index}`
+                  : String(optionValue);
+                
+                return (
+                  <SelectItem key={safeValue} value={safeValue}>
+                    {typeof option === "object" && option !== null ? (option.label || option.value || safeValue) : (option || safeValue)}
+                  </SelectItem>
+                );
+              })}
             </SelectContent>
           </Select>
         );

@@ -10,17 +10,27 @@ function Calendar({
   className,
   classNames,
   showOutsideDays = true,
+  captionLayout = "dropdown",
+  fromYear = 1900,
+  toYear = new Date().getFullYear() + 10,
   ...props
 }) {
   return (
     <DayPicker
       showOutsideDays={showOutsideDays}
+      captionLayout={captionLayout}
+      fromYear={fromYear}
+      toYear={toYear}
       className={cn("p-3", className)}
       classNames={{
         months: "flex flex-col sm:flex-row space-y-4 sm:space-x-4 sm:space-y-0",
         month: "space-y-4",
         caption: "flex justify-center pt-1 relative items-center",
-        caption_label: "text-sm font-medium",
+        caption_label: "text-sm font-medium hidden",
+        caption_dropdowns: "flex justify-center gap-1",
+        dropdown: "h-7 rounded-md border border-input bg-background px-2 text-sm font-medium",
+        dropdown_month: "h-7 rounded-md border border-input bg-background px-2 text-sm font-medium",
+        dropdown_year: "h-7 rounded-md border border-input bg-background px-2 text-sm font-medium",
         nav: "space-x-1 flex items-center",
         nav_button: cn(
           buttonVariants({ variant: "outline" }),
@@ -29,9 +39,11 @@ function Calendar({
         nav_button_previous: "absolute left-1",
         nav_button_next: "absolute right-1",
         table: "w-full border-collapse space-y-1",
-        head_row: "flex",
-        head_cell:
-          "text-muted-foreground rounded-md w-9 font-normal text-[0.8rem]",
+        weekdays: "flex w-full",
+        weekday:
+          "text-muted-foreground rounded-md w-9 font-normal text-[0.8rem] flex items-center justify-center flex-shrink-0",
+        head_row: "flex w-full", // Keep for backward compatibility
+        head_cell: "text-muted-foreground rounded-md w-9 font-normal text-[0.8rem] flex items-center justify-center flex-shrink-0", // Keep for backward compatibility
         row: "flex w-full mt-2",
         cell: "h-9 w-9 text-center text-sm p-0 relative [&:has([aria-selected].day-range-end)]:rounded-r-md [&:has([aria-selected].day-outside)]:bg-accent/50 [&:has([aria-selected])]:bg-accent first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md focus-within:relative focus-within:z-20",
         day: cn(

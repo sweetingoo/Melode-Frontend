@@ -249,6 +249,22 @@ export default function EntityCustomFieldsForm({
       });
     }
     
+    // For related fields, copy value from target field if related field has no value
+    if (hierarchy?.sections) {
+      hierarchy.sections.forEach((section) => {
+        section.fields?.forEach((field) => {
+          const relationshipConfig = field.relationship_config;
+          if (relationshipConfig && relationshipConfig.target_field_id) {
+            const targetFieldId = relationshipConfig.target_field_id;
+            // If this related field has no value but the target field has a value, copy it
+            if (!initialData[field.id] && initialData[targetFieldId]) {
+              initialData[field.id] = initialData[targetFieldId];
+            }
+          }
+        });
+      });
+    }
+    
     setCustomFieldsData(initialData);
     setHasCustomFieldsChanges(false);
   }, [hierarchy, userCustomFieldsValues, entityType]);
@@ -257,10 +273,27 @@ export default function EntityCustomFieldsForm({
   const handleCustomFieldChange = (fieldId, value) => {
     if (readOnly) return;
 
-    setCustomFieldsData((prev) => ({
-      ...prev,
-      [fieldId]: value,
-    }));
+    setCustomFieldsData((prev) => {
+      const updated = {
+        ...prev,
+        [fieldId]: value,
+      };
+      
+      // If this is a target/parent field, update all related fields that point to it
+      if (hierarchy?.sections) {
+        hierarchy.sections.forEach((section) => {
+          section.fields?.forEach((field) => {
+            const relationshipConfig = field.relationship_config;
+            if (relationshipConfig && relationshipConfig.target_field_id === fieldId) {
+              // Update related field with the target field's value
+              updated[field.id] = value;
+            }
+          });
+        });
+      }
+      
+      return updated;
+    });
     setCustomFieldsErrors((prev) => ({
       ...prev,
       [fieldId]: null,
@@ -435,14 +468,28 @@ export default function EntityCustomFieldsForm({
         </CardHeader>
       )}
       <CardContent className="space-y-6">
-        {hierarchy.sections
-          .filter((section) => section.is_active !== false)
-          .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
-          .map((section) => {
-            // Get all fields in this section (both compliance and non-compliance) from hierarchy
-            const allFields = (section.fields || [])
-              .filter((field) => field.is_active !== false)
-              .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+        {(() => {
+          // First, collect all fields from all sections to build a complete field map
+          // This allows us to find parent fields even if they're in different sections
+          const allFieldsMap = new Map();
+          hierarchy.sections
+            .filter((section) => section.is_active !== false)
+            .forEach((section) => {
+              (section.fields || []).forEach((field) => {
+                if (field.is_active !== false) {
+                  allFieldsMap.set(field.id, field);
+                }
+              });
+            });
+          
+          return hierarchy.sections
+            .filter((section) => section.is_active !== false)
+            .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
+            .map((section) => {
+              // Get all fields in this section (both compliance and non-compliance) from hierarchy
+              const allFields = (section.fields || [])
+                .filter((field) => field.is_active !== false)
+                .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
 
             // Create a map of compliance fields by field ID for quick lookup
             const complianceFieldsMap = new Map();
@@ -476,6 +523,7 @@ export default function EntityCustomFieldsForm({
 
                 {/* All Fields - Render based on whether they're compliance or regular */}
                 {/* Separate compliance and regular fields for proper layout */}
+                {/* Group related fields together */}
                 {(() => {
                   const complianceFieldsInSection = [];
                   const regularFieldsInSection = [];
@@ -489,16 +537,71 @@ export default function EntityCustomFieldsForm({
                     }
                   });
                   
+                  // Group related fields by their target_field_id
+                  const relatedFieldsGroups = new Map();
+                  const standaloneFields = [];
+                  
+                  regularFieldsInSection.forEach((field) => {
+                    const relationshipConfig = field.relationship_config;
+                    if (relationshipConfig && relationshipConfig.target_field_id) {
+                      const targetFieldId = relationshipConfig.target_field_id;
+                      // Find the parent field (could be in this section or another section)
+                      const parentField = allFieldsMap.get(targetFieldId);
+                      
+                      if (!relatedFieldsGroups.has(targetFieldId)) {
+                        relatedFieldsGroups.set(targetFieldId, {
+                          parentField: parentField || null,
+                          relatedFields: []
+                        });
+                      }
+                      relatedFieldsGroups.get(targetFieldId).relatedFields.push(field);
+                      // Update parent field if we found it
+                      if (parentField && !relatedFieldsGroups.get(targetFieldId).parentField) {
+                        relatedFieldsGroups.get(targetFieldId).parentField = parentField;
+                      }
+                    } else {
+                      // Check if this field is a parent (has fields pointing to it, in any section)
+                      const isParent = Array.from(allFieldsMap.values()).some(f => 
+                        f.relationship_config?.target_field_id === field.id
+                      );
+                      if (isParent) {
+                        // This is a parent field, initialize its group
+                        if (!relatedFieldsGroups.has(field.id)) {
+                          relatedFieldsGroups.set(field.id, {
+                            parentField: field,
+                            relatedFields: []
+                          });
+                        } else {
+                          relatedFieldsGroups.get(field.id).parentField = field;
+                        }
+                      } else {
+                        standaloneFields.push(field);
+                      }
+                    }
+                  });
+                  
                   return (
                     <>
-                      {/* Regular Fields in Grid Layout */}
-                      {regularFieldsInSection.length > 0 && (
+                      {/* Standalone Fields in Grid Layout */}
+                      {standaloneFields.length > 0 && (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          {regularFieldsInSection.map((field) => {
+                          {standaloneFields.map((field) => {
                             // Get value from customFieldsData (populated from values endpoint) or fallback to field.value
-                            const fieldValue = customFieldsData[field.id] !== undefined 
+                            let fieldValue = customFieldsData[field.id] !== undefined 
                               ? customFieldsData[field.id] 
                               : (field.value !== undefined ? field.value : "");
+                            
+                            // If this is a related field (child) and has no value, use the parent/target field's value
+                            const relationshipConfig = field.relationship_config;
+                            if (relationshipConfig && relationshipConfig.target_field_id && (!fieldValue || fieldValue === '')) {
+                              const targetFieldId = relationshipConfig.target_field_id;
+                              const targetValue = customFieldsData[targetFieldId] !== undefined
+                                ? customFieldsData[targetFieldId]
+                                : (hierarchy?.sections?.flatMap(s => s.fields || []).find(f => f.id === targetFieldId)?.value);
+                              if (targetValue !== undefined && targetValue !== null && targetValue !== '') {
+                                fieldValue = targetValue;
+                              }
+                            }
                             
                             return (
                               <CustomFieldRenderer
@@ -513,6 +616,58 @@ export default function EntityCustomFieldsForm({
                           })}
                         </div>
                       )}
+                      
+                      {/* Related Fields Groups */}
+                      {Array.from(relatedFieldsGroups.entries()).map(([targetFieldId, group]) => {
+                        const { parentField, relatedFields } = group;
+                        const allGroupFields = parentField 
+                          ? [parentField, ...relatedFields]
+                          : relatedFields;
+                        
+                        // Get parent field label for the group title
+                        const groupTitle = parentField 
+                          ? (parentField.field_label || parentField.field_name || "Related Fields")
+                          : (relatedFields[0]?.field_label || relatedFields[0]?.field_name || "Related Fields");
+                        
+                        return (
+                          <div key={`related-group-${targetFieldId}`} className="space-y-4 border rounded-lg p-4 bg-muted/30">
+                            <h4 className="text-sm font-semibold text-foreground mb-3">
+                              {groupTitle}
+                            </h4>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                              {allGroupFields.map((field) => {
+                                // For related fields, use the target field's value if this field has no value
+                                let fieldValue = customFieldsData[field.id] !== undefined 
+                                  ? customFieldsData[field.id] 
+                                  : (field.value !== undefined ? field.value : "");
+                                
+                                // If this is a related field (child) and has no value, use the parent/target field's value
+                                const relationshipConfig = field.relationship_config;
+                                if (relationshipConfig && relationshipConfig.target_field_id && (!fieldValue || fieldValue === '')) {
+                                  const targetFieldId = relationshipConfig.target_field_id;
+                                  const targetValue = customFieldsData[targetFieldId] !== undefined
+                                    ? customFieldsData[targetFieldId]
+                                    : (hierarchy?.sections?.flatMap(s => s.fields || []).find(f => f.id === targetFieldId)?.value);
+                                  if (targetValue !== undefined && targetValue !== null && targetValue !== '') {
+                                    fieldValue = targetValue;
+                                  }
+                                }
+                                
+                                return (
+                                  <CustomFieldRenderer
+                                    key={field.id}
+                                    field={field}
+                                    value={fieldValue}
+                                    onChange={handleCustomFieldChange}
+                                    error={customFieldsErrors[field.id]}
+                                    readOnly={readOnly}
+                                  />
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
                       
                       {/* Compliance Fields as Full-Width Cards */}
                       {showComplianceFields && complianceFieldsInSection.length > 0 && (
@@ -550,7 +705,8 @@ export default function EntityCustomFieldsForm({
                 })()}
               </div>
             );
-          })}
+          });
+        })()}
 
 
         {showSaveButton && !readOnly && (

@@ -30,6 +30,7 @@ import { useUsers } from "@/hooks/useUsers";
 import { useDownloadFile } from "@/hooks/useProfile";
 import { format, formatDistance, formatDistanceToNow, differenceInHours, differenceInDays, differenceInMinutes } from "date-fns";
 import { parseUTCDate } from "@/utils/time";
+import { shouldShowTimeForDateField } from "@/utils/dateFieldUtils";
 import ResourceAuditLogs from "@/components/ResourceAuditLogs";
 import CustomFieldRenderer from "@/components/CustomFieldRenderer";
 import CommentThread from "@/components/CommentThread";
@@ -653,10 +654,16 @@ const FormSubmissionDetailPage = () => {
       try {
         const date = parseUTCDate(formatted);
         if (date && !isNaN(date.getTime())) {
+          // Check if time should be shown based on field label
+          const shouldShowTime = shouldShowTimeForDateField(field);
+          const dateFormat = shouldShowTime ? "MMMM dd, yyyy 'at' HH:mm" : "MMMM dd, yyyy";
+          const icon = shouldShowTime ? Clock : Calendar;
+          const IconComponent = icon;
+          
           return (
             <div className="flex items-center gap-2">
-              <Calendar className="h-4 w-4 text-muted-foreground" />
-              <span>{format(date, "MMMM dd, yyyy")}</span>
+              <IconComponent className="h-4 w-4 text-muted-foreground" />
+              <span>{format(date, dateFormat)}</span>
             </div>
           );
         }
