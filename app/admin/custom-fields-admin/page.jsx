@@ -43,6 +43,7 @@ import {
   Folder,
   List,
   Eye,
+  EyeOff,
   Edit,
   Trash2,
   Database,
@@ -54,6 +55,11 @@ import {
   Shield,
   Loader2,
   GripVertical,
+  FileText,
+  ExternalLink,
+  Users,
+  UserX,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -79,12 +85,669 @@ import { useRoles } from "@/hooks/useRoles";
 import { useActiveAssetTypes } from "@/hooks/useAssetTypes";
 import { useLinkComplianceToRole, useLinkComplianceToAssetType } from "@/hooks/useCompliance";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useFieldLinks,
+  useCreateCustomFieldLink,
+  useDeleteCustomFieldLink,
+} from "@/hooks/useCustomFieldLinks";
+import {
+  useSectionLinks,
+  useCreateCustomFieldSectionLink,
+  useDeleteCustomFieldSectionLink,
+} from "@/hooks/useCustomFieldSectionLinks";
+import { useUsers } from "@/hooks/useUsers";
 import { customFieldsFieldsService } from "@/services/customFieldsFields";
 import { customFieldsKeys } from "@/hooks/useCustomFieldsFields";
 import { complianceService } from "@/services/compliance";
 import { useForms } from "@/hooks/useForms";
 import { useTrackers } from "@/hooks/useTrackers";
-import { FileText, ExternalLink } from "lucide-react";
+
+// Field Visibility Links Component
+const FieldVisibilityLinksSection = ({ field, entityType, roles }) => {
+  const queryClient = useQueryClient();
+  const [isAddingLink, setIsAddingLink] = useState(false);
+  const [newLinkType, setNewLinkType] = useState("role"); // "role", "user", "entity"
+  const [selectedRoleId, setSelectedRoleId] = useState(null);
+  const [selectedUserId, setSelectedUserId] = useState(null);
+  const [selectedEntityId, setSelectedEntityId] = useState("");
+  const [linkMode, setLinkMode] = useState("include");
+  
+  const { data: fieldLinks = [], isLoading: linksLoading, refetch: refetchLinks } = useFieldLinks(
+    field.id,
+    entityType,
+    { enabled: !!field.id && !!entityType }
+  );
+  
+  const { data: usersData } = useUsers({ is_active: true, per_page: 100 });
+  const users = usersData?.users || usersData || [];
+  
+  const createLinkMutation = useCreateCustomFieldLink();
+  const deleteLinkMutation = useDeleteCustomFieldLink();
+  
+  const handleAddLink = async () => {
+    if (!field.id) return;
+    
+    const linkData = {
+      custom_field_id: field.id,
+      entity_type: entityType,
+      link_mode: linkMode,
+    };
+    
+    if (newLinkType === "role" && selectedRoleId) {
+      linkData.role_id = selectedRoleId;
+      linkData.check_viewer_role = checkViewerRole;
+    } else if (newLinkType === "user" && selectedUserId) {
+      linkData.user_id = selectedUserId;
+    } else if (newLinkType === "entity" && selectedEntityId) {
+      linkData.entity_id = parseInt(selectedEntityId);
+    } else {
+      toast.error("Please select a target for the link");
+      return;
+    }
+    
+    try {
+      await createLinkMutation.mutateAsync(linkData);
+      setIsAddingLink(false);
+      setSelectedRoleId(null);
+      setSelectedUserId(null);
+      setSelectedEntityId("");
+      setLinkMode("include");
+      refetchLinks();
+    } catch (error) {
+      // Error handled by mutation
+    }
+  };
+  
+  const handleDeleteLink = async (linkSlug) => {
+    if (!window.confirm("Are you sure you want to delete this visibility link?")) {
+      return;
+    }
+    
+    try {
+      await deleteLinkMutation.mutateAsync(linkSlug);
+      refetchLinks();
+    } catch (error) {
+      // Error handled by mutation
+    }
+  };
+  
+  const getLinkDisplayName = (link) => {
+    if (link.role_id) {
+      const role = roles.find(r => r.id === link.role_id);
+      const viewerNote = link.check_viewer_role ? " (viewer's role)" : "";
+      return `Role: ${role?.display_name || role?.name || `ID ${link.role_id}`}${viewerNote}`;
+    } else if (link.user_id) {
+      const user = users.find(u => u.id === link.user_id);
+      return `User: ${user?.display_name || user?.email || `ID ${link.user_id}`}`;
+    } else if (link.entity_id) {
+      return `Entity ID: ${link.entity_id}`;
+    } else {
+      return "All entities";
+    }
+  };
+  
+  return (
+    <div className="space-y-3 border-t pt-4 mt-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Eye className="h-4 w-4 text-primary" />
+          <Label className="text-sm font-semibold">Field Visibility</Label>
+        </div>
+        {!isAddingLink && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setIsAddingLink(true)}
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Add Link
+          </Button>
+        )}
+      </div>
+      
+      <p className="text-xs text-muted-foreground">
+        Control which entities can see this field. By default, fields are visible to all entities.
+        Use links to show/hide fields for specific roles, users, or entity instances.
+      </p>
+      
+      {linksLoading ? (
+        <div className="flex items-center justify-center py-4">
+          <Loader2 className="h-4 w-4 animate-spin" />
+        </div>
+      ) : fieldLinks.length === 0 && !isAddingLink ? (
+        <div className="text-sm text-muted-foreground text-center py-4 border rounded-md bg-muted/30">
+          No visibility links configured. Field is visible to all {entityType} entities.
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {fieldLinks.map((link) => (
+            <div
+              key={link.id || link.slug}
+              className="flex items-center justify-between p-3 border rounded-md bg-background"
+            >
+              <div className="flex items-center gap-3 flex-1">
+                {link.link_mode === "include" ? (
+                  <Eye className="h-4 w-4 text-green-600" />
+                ) : (
+                  <EyeOff className="h-4 w-4 text-red-600" />
+                )}
+                <div className="flex-1">
+                  <div className="text-sm font-medium">
+                    {getLinkDisplayName(link)}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {link.link_mode === "include" ? "Show field" : "Hide field"}
+                  </div>
+                </div>
+                <Badge variant={link.link_mode === "include" ? "default" : "destructive"}>
+                  {link.link_mode}
+                </Badge>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => handleDeleteLink(link.slug)}
+                className="ml-2"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+      
+      {isAddingLink && (
+        <div className="p-4 border rounded-md bg-muted/30 space-y-3">
+          <div className="flex items-center justify-between">
+            <Label className="text-sm font-semibold">Add Visibility Link</Label>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setIsAddingLink(false);
+                setSelectedRoleId(null);
+                setSelectedUserId(null);
+                setSelectedEntityId("");
+                setLinkMode("include");
+              }}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+          
+          <div className="space-y-2">
+            <Label>Link Type</Label>
+            <Select value={newLinkType} onValueChange={setNewLinkType}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {entityType === "user" && (
+                  <>
+                    <SelectItem value="role">Role (all users with this role)</SelectItem>
+                    <SelectItem value="user">Specific User</SelectItem>
+                  </>
+                )}
+                <SelectItem value="entity">Specific Entity Instance</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          
+          {newLinkType === "role" && entityType === "user" && (
+            <div className="space-y-2">
+              <Label>Select Role</Label>
+              <Select
+                value={selectedRoleId?.toString() || ""}
+                onValueChange={(value) => setSelectedRoleId(parseInt(value))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a role" />
+                </SelectTrigger>
+                <SelectContent>
+                  {roles.map((role) => (
+                    <SelectItem key={role.id} value={role.id.toString()}>
+                      {role.display_name || role.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          
+          {newLinkType === "user" && entityType === "user" && (
+            <div className="space-y-2">
+              <Label>Select User</Label>
+              <Select
+                value={selectedUserId?.toString() || ""}
+                onValueChange={(value) => setSelectedUserId(parseInt(value))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a user" />
+                </SelectTrigger>
+                <SelectContent>
+                  {users.map((user) => (
+                    <SelectItem key={user.id} value={user.id.toString()}>
+                      {user.display_name || user.email}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          
+          {newLinkType === "entity" && (
+            <div className="space-y-2">
+              <Label>Entity ID</Label>
+              <Input
+                type="number"
+                placeholder="Enter entity ID"
+                value={selectedEntityId}
+                onChange={(e) => setSelectedEntityId(e.target.value)}
+              />
+            </div>
+          )}
+          
+          <div className="space-y-2">
+            <Label>Visibility Mode</Label>
+            <Select value={linkMode} onValueChange={setLinkMode}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="include">
+                  <div className="flex items-center gap-2">
+                    <Eye className="h-4 w-4" />
+                    Include (Show field)
+                  </div>
+                </SelectItem>
+                <SelectItem value="exclude">
+                  <div className="flex items-center gap-2">
+                    <EyeOff className="h-4 w-4" />
+                    Exclude (Hide field)
+                  </div>
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setIsAddingLink(false);
+                setSelectedRoleId(null);
+                setSelectedUserId(null);
+                setSelectedEntityId("");
+                setLinkMode("include");
+                setCheckViewerRole(false);
+              }}
+              className="flex-1"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={handleAddLink}
+              disabled={createLinkMutation.isPending}
+              className="flex-1"
+            >
+              {createLinkMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Adding...
+                </>
+              ) : (
+                <>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Link
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Section Visibility Links Component
+const SectionVisibilityLinksSection = ({ section, entityType, roles }) => {
+  const queryClient = useQueryClient();
+  const [isAddingLink, setIsAddingLink] = useState(false);
+  const [newLinkType, setNewLinkType] = useState("role"); // "role", "user", "entity"
+  const [selectedRoleId, setSelectedRoleId] = useState(null);
+  const [selectedUserId, setSelectedUserId] = useState(null);
+  const [selectedEntityId, setSelectedEntityId] = useState("");
+  const [linkMode, setLinkMode] = useState("include");
+  const [checkViewerRole, setCheckViewerRole] = useState(false);
+  
+  const { data: sectionLinks = [], isLoading: linksLoading, refetch: refetchLinks } = useSectionLinks(
+    section.id,
+    entityType,
+    { enabled: !!section.id && !!entityType }
+  );
+  
+  const { data: usersData } = useUsers({ is_active: true, per_page: 100 });
+  const users = usersData?.users || usersData || [];
+  
+  const createLinkMutation = useCreateCustomFieldSectionLink();
+  const deleteLinkMutation = useDeleteCustomFieldSectionLink();
+  
+  const handleAddLink = async () => {
+    if (!section.id) return;
+    
+    const linkData = {
+      section_id: section.id,
+      entity_type: entityType,
+      link_mode: linkMode,
+    };
+    
+    if (newLinkType === "role" && selectedRoleId) {
+      linkData.role_id = selectedRoleId;
+      linkData.check_viewer_role = checkViewerRole;
+    } else if (newLinkType === "user" && selectedUserId) {
+      linkData.user_id = selectedUserId;
+    } else if (newLinkType === "entity" && selectedEntityId) {
+      linkData.entity_id = parseInt(selectedEntityId);
+    } else {
+      toast.error("Please select a target for the link");
+      return;
+    }
+    
+    try {
+      await createLinkMutation.mutateAsync(linkData);
+      setIsAddingLink(false);
+      setSelectedRoleId(null);
+      setSelectedUserId(null);
+      setSelectedEntityId("");
+      setLinkMode("include");
+      setCheckViewerRole(false);
+      refetchLinks();
+    } catch (error) {
+      // Error handled by mutation
+    }
+  };
+  
+  const handleDeleteLink = async (linkSlug) => {
+    if (!window.confirm("Are you sure you want to delete this visibility link?")) {
+      return;
+    }
+    
+    try {
+      await deleteLinkMutation.mutateAsync(linkSlug);
+      refetchLinks();
+    } catch (error) {
+      // Error handled by mutation
+    }
+  };
+  
+  const getLinkDisplayName = (link) => {
+    if (link.role_id) {
+      const role = roles.find(r => r.id === link.role_id);
+      const viewerNote = link.check_viewer_role ? " (viewer's role)" : "";
+      return `Role: ${role?.display_name || role?.name || `ID ${link.role_id}`}${viewerNote}`;
+    } else if (link.user_id) {
+      const user = users.find(u => u.id === link.user_id);
+      return `User: ${user?.display_name || user?.email || `ID ${link.user_id}`}`;
+    } else if (link.entity_id) {
+      return `Entity ID: ${link.entity_id}`;
+    } else {
+      return "All entities";
+    }
+  };
+  
+  return (
+    <div className="space-y-3 border-t pt-4 mt-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Eye className="h-4 w-4 text-primary" />
+          <Label className="text-sm font-semibold">Section Visibility</Label>
+        </div>
+        {!isAddingLink && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setIsAddingLink(true)}
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Add Link
+          </Button>
+        )}
+      </div>
+      
+      <p className="text-xs text-muted-foreground">
+        Control which entities can see this section. By default, sections are visible to all entities.
+        Use links to show/hide sections for specific roles, users, or entity instances.
+      </p>
+      
+      {linksLoading ? (
+        <div className="flex items-center justify-center py-4">
+          <Loader2 className="h-4 w-4 animate-spin" />
+        </div>
+      ) : sectionLinks.length === 0 && !isAddingLink ? (
+        <div className="text-sm text-muted-foreground text-center py-4 border rounded-md bg-muted/30">
+          No visibility links configured. Section is visible to all {entityType} entities.
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {sectionLinks.map((link) => (
+            <div
+              key={link.id || link.slug}
+              className="flex items-center justify-between p-3 border rounded-md bg-background"
+            >
+              <div className="flex items-center gap-3 flex-1">
+                {link.link_mode === "include" ? (
+                  <Eye className="h-4 w-4 text-green-600" />
+                ) : (
+                  <EyeOff className="h-4 w-4 text-red-600" />
+                )}
+                <div className="flex-1">
+                  <div className="text-sm font-medium">
+                    {getLinkDisplayName(link)}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {link.link_mode === "include" ? "Show section" : "Hide section"}
+                  </div>
+                </div>
+                <Badge variant={link.link_mode === "include" ? "default" : "destructive"}>
+                  {link.link_mode}
+                </Badge>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => handleDeleteLink(link.slug)}
+                className="ml-2"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+      
+      {isAddingLink && (
+        <div className="p-4 border rounded-md bg-muted/30 space-y-3">
+          <div className="flex items-center justify-between">
+            <Label className="text-sm font-semibold">Add Visibility Link</Label>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setIsAddingLink(false);
+                setSelectedRoleId(null);
+                setSelectedUserId(null);
+                setSelectedEntityId("");
+                setLinkMode("include");
+              }}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+          
+          <div className="space-y-2">
+            <Label>Link Type</Label>
+            <Select value={newLinkType} onValueChange={setNewLinkType}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {entityType === "user" && (
+                  <>
+                    <SelectItem value="role">Role (all users with this role)</SelectItem>
+                    <SelectItem value="user">Specific User</SelectItem>
+                  </>
+                )}
+                <SelectItem value="entity">Specific Entity Instance</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          
+          {newLinkType === "role" && entityType === "user" && (
+            <div className="space-y-2">
+              <Label>Select Role</Label>
+              <Select
+                value={selectedRoleId?.toString() || ""}
+                onValueChange={(value) => setSelectedRoleId(parseInt(value))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a role" />
+                </SelectTrigger>
+                <SelectContent>
+                  {roles.map((role) => (
+                    <SelectItem key={role.id} value={role.id.toString()}>
+                      {role.display_name || role.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <div className="flex items-center gap-2 pt-2">
+                <input
+                  type="checkbox"
+                  id="checkViewerRoleSection"
+                  checked={checkViewerRole}
+                  onChange={(e) => setCheckViewerRole(e.target.checked)}
+                  className="rounded"
+                />
+                <Label htmlFor="checkViewerRoleSection" className="text-xs cursor-pointer">
+                  Check viewer's role (staff-only section)
+                </Label>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {checkViewerRole
+                  ? "Section will be visible only to users with this role (e.g., HR staff viewing any user)"
+                  : "Section will be visible when the entity being viewed has this role"}
+              </p>
+            </div>
+          )}
+          
+          {newLinkType === "user" && entityType === "user" && (
+            <div className="space-y-2">
+              <Label>Select User</Label>
+              <Select
+                value={selectedUserId?.toString() || ""}
+                onValueChange={(value) => setSelectedUserId(parseInt(value))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a user" />
+                </SelectTrigger>
+                <SelectContent>
+                  {users.map((user) => (
+                    <SelectItem key={user.id} value={user.id.toString()}>
+                      {user.display_name || user.email}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          
+          {newLinkType === "entity" && (
+            <div className="space-y-2">
+              <Label>Entity ID</Label>
+              <Input
+                type="number"
+                placeholder="Enter entity ID"
+                value={selectedEntityId}
+                onChange={(e) => setSelectedEntityId(e.target.value)}
+              />
+            </div>
+          )}
+          
+          <div className="space-y-2">
+            <Label>Visibility Mode</Label>
+            <Select value={linkMode} onValueChange={setLinkMode}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="include">
+                  <div className="flex items-center gap-2">
+                    <Eye className="h-4 w-4" />
+                    Include (Show section)
+                  </div>
+                </SelectItem>
+                <SelectItem value="exclude">
+                  <div className="flex items-center gap-2">
+                    <EyeOff className="h-4 w-4" />
+                    Exclude (Hide section)
+                  </div>
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setIsAddingLink(false);
+                setSelectedRoleId(null);
+                setSelectedUserId(null);
+                setSelectedEntityId("");
+                setLinkMode("include");
+                setCheckViewerRole(false);
+              }}
+              className="flex-1"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={handleAddLink}
+              disabled={createLinkMutation.isPending}
+              className="flex-1"
+            >
+              {createLinkMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Adding...
+                </>
+              ) : (
+                <>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Link
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 // Predefined file type categories for easy selection
 // Pre-defined UK Healthcare Compliance Types
@@ -1318,36 +1981,13 @@ const CustomFieldsAdminPage = () => {
     }
   };
 
-  const handleCustomSubFieldChange = (index, field, value) => {
-    const newSubFields = [...customSubFields];
-    if (!newSubFields[index]) {
-      newSubFields[index] = {
-        field_name: "",
-        field_label: "",
-        field_type: "text",
-        is_required: false,
-      };
-    }
-    newSubFields[index][field] = value;
-    
-    // Auto-generate field_name from field_label
-    if (field === "field_label" && value) {
-      const autoGeneratedName = value
-        .toLowerCase()
-        .replace(/[^a-z0-9\s]/g, '')
-        .replace(/\s+/g, '_')
-        .replace(/_+/g, '_')
-        .replace(/^_|_$/g, '');
-      newSubFields[index].field_name = autoGeneratedName;
-    }
-    
-    setCustomSubFields(newSubFields);
-    
+  // Helper function to update compliance_config with subfields
+  const updateComplianceConfigWithSubFields = (subFields) => {
     // If a pre-defined type is selected, merge with its fields
-    let allSubFields = newSubFields;
+    let allSubFields = subFields;
     if (selectedComplianceType && selectedComplianceType !== "" && selectedComplianceType !== "custom") {
       const predefinedFields = PREDEFINED_COMPLIANCE_TYPES[selectedComplianceType].sub_fields;
-      allSubFields = [...predefinedFields, ...newSubFields];
+      allSubFields = [...predefinedFields, ...subFields];
     }
     
     // Update compliance_config
@@ -1367,6 +2007,41 @@ const CustomFieldsAdminPage = () => {
     }));
   };
 
+  const handleCustomSubFieldChange = (index, field, value) => {
+    const newSubFields = [...customSubFields];
+    if (!newSubFields[index]) {
+      newSubFields[index] = {
+        field_name: "",
+        field_label: "",
+        field_type: "text",
+        is_required: false,
+        field_options: { options: [] },
+      };
+    }
+    newSubFields[index][field] = value;
+    
+    // Auto-generate field_name from field_label
+    if (field === "field_label" && value) {
+      const autoGeneratedName = value
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, '')
+        .replace(/\s+/g, '_')
+        .replace(/_+/g, '_')
+        .replace(/^_|_$/g, '');
+      newSubFields[index].field_name = autoGeneratedName;
+    }
+    
+    // Initialize field_options for select/multiselect/radio types
+    if (field === "field_type" && (value === "select" || value === "multiselect" || value === "radio")) {
+      if (!newSubFields[index].field_options || !newSubFields[index].field_options.options) {
+        newSubFields[index].field_options = { options: [] };
+      }
+    }
+    
+    setCustomSubFields(newSubFields);
+    updateComplianceConfigWithSubFields(newSubFields);
+  };
+
   const handleAddCustomSubField = () => {
     const newSubFields = [
       ...customSubFields,
@@ -1375,51 +2050,17 @@ const CustomFieldsAdminPage = () => {
         field_label: "",
         field_type: "text",
         is_required: false,
+        field_options: { options: [] },
       },
     ];
     setCustomSubFields(newSubFields);
-    
-    // If a pre-defined type is selected, merge with its fields
-    let allSubFields = newSubFields;
-    if (selectedComplianceType && selectedComplianceType !== "" && selectedComplianceType !== "custom") {
-      const predefinedFields = PREDEFINED_COMPLIANCE_TYPES[selectedComplianceType].sub_fields;
-      allSubFields = [...predefinedFields, ...newSubFields];
-    }
-    
-    setFieldFormData((prev) => ({
-      ...prev,
-      compliance_config: {
-        ...(prev.compliance_config || {}),
-        auto_expire: prev.compliance_config?.auto_expire !== undefined ? prev.compliance_config.auto_expire : true,
-        notification_recipients: prev.compliance_config?.notification_recipients || null,
-        reminder_frequency: prev.compliance_config?.reminder_frequency || "daily",
-        allow_user_upload: prev.compliance_config?.allow_user_upload !== undefined ? prev.compliance_config.allow_user_upload : true,
-        require_renewal_before_expiry: prev.compliance_config?.require_renewal_before_expiry || false,
-        renewal_grace_period_days: prev.compliance_config?.renewal_grace_period_days || 30,
-        has_sub_fields: true,
-        sub_fields: allSubFields,
-      },
-    }));
+    updateComplianceConfigWithSubFields(newSubFields);
   };
 
   const handleRemoveCustomSubField = (index) => {
     const newSubFields = customSubFields.filter((_, i) => i !== index);
     setCustomSubFields(newSubFields);
-    
-    // If a pre-defined type is selected, merge with its fields
-    let allSubFields = newSubFields;
-    if (selectedComplianceType && selectedComplianceType !== "" && selectedComplianceType !== "custom") {
-      const predefinedFields = PREDEFINED_COMPLIANCE_TYPES[selectedComplianceType].sub_fields;
-      allSubFields = [...predefinedFields, ...newSubFields];
-    }
-    
-    setFieldFormData((prev) => ({
-      ...prev,
-      compliance_config: {
-        has_sub_fields: allSubFields.length > 0,
-        sub_fields: allSubFields,
-      },
-    }));
+    updateComplianceConfigWithSubFields(newSubFields);
   };
 
   const handleSubmitField = async () => {
@@ -2890,7 +3531,7 @@ const CustomFieldsAdminPage = () => {
         open={isCreateSectionModalOpen}
         onOpenChange={setIsCreateSectionModalOpen}
       >
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {editingSectionId ? "Edit Section" : "Create New Section"}
@@ -2974,6 +3615,18 @@ const CustomFieldsAdminPage = () => {
                 Order in which this section appears (lower numbers first)
               </p>
             </div>
+
+            {/* Section Visibility Links - Only show when editing existing section */}
+            {editingSectionId && (() => {
+              const editingSection = sections.find(s => s.id === editingSectionId);
+              return editingSection ? (
+                <SectionVisibilityLinksSection
+                  section={editingSection}
+                  entityType={selectedEntityType}
+                  roles={roles}
+                />
+              ) : null;
+            })()}
           </div>
 
           <DialogFooter>
@@ -3211,6 +3864,8 @@ const CustomFieldsAdminPage = () => {
                                         <SelectItem value="number">Number</SelectItem>
                                         <SelectItem value="date">Date</SelectItem>
                                         <SelectItem value="select">Select</SelectItem>
+                                        <SelectItem value="multiselect">Multi Select</SelectItem>
+                                        <SelectItem value="radio">Radio</SelectItem>
                                         <SelectItem value="textarea">Textarea</SelectItem>
                                       </SelectContent>
                                     </Select>
@@ -3238,6 +3893,112 @@ const CustomFieldsAdminPage = () => {
                                 <p className="text-xs text-muted-foreground">
                                   Field Name: {subField.field_name || "(auto-generated)"}
                                 </p>
+                                
+                                {/* Options Editor for Select/Multiselect/Radio */}
+                                {(subField.field_type === "select" || subField.field_type === "multiselect" || subField.field_type === "radio") && (
+                                  <div className="space-y-2 pt-2 border-t">
+                                    <Label className="text-xs">Options *</Label>
+                                    {(subField.field_options?.options || []).map((option, optIndex) => {
+                                      const optionObj = typeof option === 'object' ? option : { label: option, value: option };
+                                      return (
+                                        <div key={optIndex} className="flex items-center gap-2">
+                                          <div className="flex-1 grid grid-cols-2 gap-2">
+                                            <Input
+                                              placeholder="Option label"
+                                              value={optionObj.label || ''}
+                                              onChange={(e) => {
+                                                const newSubFields = [...customSubFields];
+                                                if (!newSubFields[index].field_options) {
+                                                  newSubFields[index].field_options = { options: [] };
+                                                }
+                                                const newOptions = [...(newSubFields[index].field_options.options || [])];
+                                                const labelValue = e.target.value;
+                                                // Auto-generate value from label
+                                                const autoGeneratedValue = labelValue
+                                                  .toLowerCase()
+                                                  .replace(/[^a-z0-9\s]/g, '')
+                                                  .replace(/\s+/g, '_')
+                                                  .replace(/_+/g, '_')
+                                                  .replace(/^_|_$/g, '');
+                                                
+                                                newOptions[optIndex] = {
+                                                  label: labelValue,
+                                                  value: autoGeneratedValue || `option_${optIndex}`
+                                                };
+                                                newSubFields[index].field_options = {
+                                                  ...newSubFields[index].field_options,
+                                                  options: newOptions
+                                                };
+                                                setCustomSubFields(newSubFields);
+                                                updateComplianceConfigWithSubFields(newSubFields);
+                                              }}
+                                              className="text-xs"
+                                            />
+                                            <div className="flex items-center gap-1">
+                                              <Input
+                                                placeholder="Value (auto)"
+                                                value={optionObj.value || ''}
+                                                readOnly
+                                                className="text-xs flex-1 bg-muted"
+                                              />
+                                              <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => {
+                                                  const newSubFields = [...customSubFields];
+                                                  if (!newSubFields[index].field_options) {
+                                                    newSubFields[index].field_options = { options: [] };
+                                                  }
+                                                  const newOptions = [...(newSubFields[index].field_options.options || [])];
+                                                  newOptions.splice(optIndex, 1);
+                                                  newSubFields[index].field_options = {
+                                                    ...newSubFields[index].field_options,
+                                                    options: newOptions
+                                                  };
+                                                  setCustomSubFields(newSubFields);
+                                                  updateComplianceConfigWithSubFields(newSubFields);
+                                                }}
+                                              >
+                                                <X className="h-3 w-3" />
+                                              </Button>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => {
+                                        const newSubFields = [...customSubFields];
+                                        if (!newSubFields[index].field_options) {
+                                          newSubFields[index].field_options = { options: [] };
+                                        }
+                                        const newOptions = [
+                                          ...(newSubFields[index].field_options.options || []),
+                                          { label: '', value: '' }
+                                        ];
+                                        newSubFields[index].field_options = {
+                                          ...newSubFields[index].field_options,
+                                          options: newOptions
+                                        };
+                                        setCustomSubFields(newSubFields);
+                                        updateComplianceConfigWithSubFields(newSubFields);
+                                      }}
+                                      className="w-full"
+                                    >
+                                      <Plus className="h-4 w-4 mr-2" />
+                                      Add Option
+                                    </Button>
+                                    {(subField.field_options?.options || []).length === 0 && (
+                                      <p className="text-xs text-muted-foreground">
+                                        No options added. Add at least one option for this select field.
+                                      </p>
+                                    )}
+                                  </div>
+                                )}
                               </div>
                             ))}
                             {customSubFields.length === 0 && selectedComplianceType === "custom" && (
@@ -4247,6 +5008,15 @@ const CustomFieldsAdminPage = () => {
                   />
                 </div>
               </div>
+
+              {/* Field Visibility Links - Only show when editing existing field */}
+              {editingFieldSlug && editingField && (
+                <FieldVisibilityLinksSection
+                  field={editingField}
+                  entityType={selectedEntityType}
+                  roles={roles}
+                />
+              )}
 
             </div>
           )}
