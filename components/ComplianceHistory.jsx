@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Calendar, FileText, Download, User } from "lucide-react";
 import { format } from "date-fns";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
 export const ComplianceHistory = ({
@@ -83,19 +84,41 @@ export const ComplianceHistory = ({
                       )}
                       
                       {/* Sub-field values (e.g., Passport details) */}
-                      {item.value_data && item.sub_field_definitions && item.sub_field_definitions.length > 0 && (
+                      {item.sub_field_definitions && item.sub_field_definitions.length > 0 && (
                         <div className="mt-3 p-3 border rounded-lg bg-muted/30">
                           <h5 className="text-sm font-semibold mb-2">Field Values:</h5>
                           <div className="grid grid-cols-2 gap-2 text-sm">
                             {item.sub_field_definitions.map((subField) => {
                               const subValue = item.value_data?.[subField.field_name];
-                              if (subValue === undefined || subValue === null || subValue === "") return null;
                               
+                              // Handle display value based on field type
                               let displayValue = subValue;
-                              if (subField.field_type === "date" && subValue) {
+                              
+                              if (subValue === undefined || subValue === null || subValue === "") {
+                                displayValue = "Not set";
+                              } else if (subField.field_type === "date" && subValue) {
                                 try {
                                   displayValue = format(new Date(subValue), "dd MMM yyyy");
                                 } catch (e) {
+                                  displayValue = subValue;
+                                }
+                              } else if ((subField.field_type === "select" || subField.field_type === "multiselect" || subField.field_type === "radio") && subField.field_options?.options) {
+                                // For select fields, find the label from options
+                                const options = subField.field_options.options || [];
+                                const option = options.find((opt) => {
+                                  if (typeof opt === "object" && opt !== null) {
+                                    return String(opt.value) === String(subValue);
+                                  }
+                                  return String(opt) === String(subValue);
+                                });
+                                
+                                if (option) {
+                                  if (typeof option === "object" && option !== null) {
+                                    displayValue = option.label || option.value || subValue;
+                                  } else {
+                                    displayValue = option;
+                                  }
+                                } else {
                                   displayValue = subValue;
                                 }
                               }
@@ -103,7 +126,14 @@ export const ComplianceHistory = ({
                               return (
                                 <div key={subField.field_name} className="space-y-1">
                                   <span className="text-muted-foreground text-xs">{subField.field_label}:</span>
-                                  <div className="font-medium">{String(displayValue)}</div>
+                                  <div className={cn(
+                                    "font-medium",
+                                    (subValue === undefined || subValue === null || subValue === "") 
+                                      ? "text-muted-foreground italic" 
+                                      : "text-foreground"
+                                  )}>
+                                    {String(displayValue)}
+                                  </div>
                                 </div>
                               );
                             })}

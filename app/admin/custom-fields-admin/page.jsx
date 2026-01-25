@@ -112,11 +112,15 @@ const FieldVisibilityLinksSection = ({ field, entityType, roles }) => {
   const [selectedEntityId, setSelectedEntityId] = useState("");
   const [linkMode, setLinkMode] = useState("include");
   
+  // Only fetch links if field has an ID (existing field)
   const { data: fieldLinks = [], isLoading: linksLoading, refetch: refetchLinks } = useFieldLinks(
-    field.id,
+    field?.id,
     entityType,
-    { enabled: !!field.id && !!entityType }
+    { enabled: !!field?.id && !!entityType }
   );
+  
+  // Check if this is a new field (no ID yet)
+  const isNewField = !field?.id;
   
   const { data: usersData } = useUsers({ is_active: true, per_page: 100 });
   const users = usersData?.users || usersData || [];
@@ -125,7 +129,10 @@ const FieldVisibilityLinksSection = ({ field, entityType, roles }) => {
   const deleteLinkMutation = useDeleteCustomFieldLink();
   
   const handleAddLink = async () => {
-    if (!field.id) return;
+    if (!field?.id) {
+      toast.error("Please save the field first before adding visibility links.");
+      return;
+    }
     
     const linkData = {
       custom_field_id: field.id,
@@ -193,7 +200,7 @@ const FieldVisibilityLinksSection = ({ field, entityType, roles }) => {
           <Eye className="h-4 w-4 text-primary" />
           <Label className="text-sm font-semibold">Field Visibility</Label>
         </div>
-        {!isAddingLink && (
+        {!isAddingLink && !isNewField && (
           <Button
             type="button"
             variant="outline"
@@ -211,7 +218,12 @@ const FieldVisibilityLinksSection = ({ field, entityType, roles }) => {
         Use links to show/hide fields for specific roles, users, or entity instances.
       </p>
       
-      {linksLoading ? (
+      {isNewField ? (
+        <div className="text-sm text-muted-foreground text-center py-4 border rounded-md bg-blue-50 border-blue-200">
+          <p className="font-medium text-blue-900">Save the field first to configure visibility links.</p>
+          <p className="text-xs text-blue-700 mt-1">You can add visibility rules after creating the field.</p>
+        </div>
+      ) : linksLoading ? (
         <div className="flex items-center justify-center py-4">
           <Loader2 className="h-4 w-4 animate-spin" />
         </div>
@@ -5009,14 +5021,22 @@ const CustomFieldsAdminPage = () => {
                 </div>
               </div>
 
-              {/* Field Visibility Links - Only show when editing existing field */}
-              {editingFieldSlug && editingField && (
-                <FieldVisibilityLinksSection
-                  field={editingField}
-                  entityType={selectedEntityType}
-                  roles={roles}
-                />
-              )}
+              {/* Field Visibility Links - Show for both create and edit */}
+              {(() => {
+                // For edit mode, use the editingField
+                // For create mode, create a temporary field object
+                const fieldForVisibility = editingFieldSlug && editingField 
+                  ? editingField 
+                  : { id: null, field_name: fieldFormData.field_name, field_label: fieldFormData.field_label };
+                
+                return (
+                  <FieldVisibilityLinksSection
+                    field={fieldForVisibility}
+                    entityType={selectedEntityType}
+                    roles={roles}
+                  />
+                );
+              })()}
 
             </div>
           )}

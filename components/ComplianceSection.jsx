@@ -72,16 +72,29 @@ export const ComplianceSection = ({
   const uploadMutation = useUploadCompliance();
   const renewMutation = useRenewCompliance();
 
-  const handleUpload = (field) => {
+  const handleUpload = (field, existingValue = null) => {
+    // The field object should already have sub_field_definitions from the API response
+    // Just ensure we're passing it correctly
+    console.log("=== handleUpload - Field received ===", {
+      field_name: field.field_name,
+      field_label: field.field_label,
+      has_sub_field_definitions: !!field.sub_field_definitions,
+      sub_field_definitions_count: field.sub_field_definitions?.length || 0,
+      sub_field_definitions: field.sub_field_definitions,
+      compliance_config: field.compliance_config,
+      existingValue: existingValue,
+      full_field: field
+    });
+    
     setSelectedField(field);
-    setSelectedValue(null);
-    setIsRenewal(false);
+    setSelectedValue(existingValue || null);
+    setIsRenewal(!!existingValue); // If there's an existing value, treat it as a renewal/update
     setUploadModalOpen(true);
   };
 
-  const handleRenew = (value) => {
+  const handleRenew = (value, field) => {
     setSelectedValue(value);
-    setSelectedField(null);
+    setSelectedField(field);
     setIsRenewal(true);
     setUploadModalOpen(true);
   };
@@ -253,6 +266,16 @@ export const ComplianceSection = ({
         <CardContent>
           <div className="space-y-4">
             {fields.map((fieldValue) => {
+              // Get sub_field_definitions from multiple sources
+              let subFieldDefinitions = fieldValue.sub_field_definitions || null;
+              
+              // Fallback: If sub_field_definitions is not available, try getting from compliance_config
+              if (!subFieldDefinitions && fieldValue.compliance_config) {
+                if (fieldValue.compliance_config.has_sub_fields && fieldValue.compliance_config.sub_fields) {
+                  subFieldDefinitions = fieldValue.compliance_config.sub_fields;
+                }
+              }
+              
               // Field information is included in the response
               const field = {
                 id: fieldValue.custom_field_id,
@@ -263,7 +286,7 @@ export const ComplianceSection = ({
                 requires_approval: fieldValue.requires_approval,
                 // Include compliance_config and sub_field_definitions for proper rendering
                 compliance_config: fieldValue.compliance_config || null,
-                sub_field_definitions: fieldValue.sub_field_definitions || null,
+                sub_field_definitions: subFieldDefinitions,
               };
 
               return (

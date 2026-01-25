@@ -101,25 +101,57 @@ export const ComplianceFieldCard = ({
                 Submit Details
               </Button>
             </div>
+          ) : value && value.id && value.id > 0 && canUpload && (!value.approval_status || value.approval_status === "declined" || value.approval_status === "pending") ? (
+            // Show Edit/Update button if value exists but is not approved, is declined, or is pending
+            <div className="flex items-center flex-shrink-0 sm:self-center self-start">
+              <Button onClick={() => onUpload(field, value)} size="default" variant="default" className="whitespace-nowrap w-full sm:w-auto">
+                <Upload className="h-4 w-4 mr-2" />
+                {value.approval_status === "declined" ? "Resubmit" : value.approval_status === "pending" ? "Update" : "Update Details"}
+              </Button>
+            </div>
           ) : null}
         </div>
       </CardHeader>
       <CardContent className="pt-0">
         <div className="space-y-4">
           {/* Sub-field values (e.g., Passport details) */}
-          {value?.value_data && field?.sub_field_definitions && field.sub_field_definitions.length > 0 && (
+          {field?.sub_field_definitions && field.sub_field_definitions.length > 0 && (
             <div className="border rounded-lg p-4 bg-muted/30 space-y-3">
               <h5 className="text-sm font-semibold text-foreground">Details</h5>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                 {field.sub_field_definitions.map((subField) => {
-                  const subValue = value.value_data?.[subField.field_name];
-                  if (subValue === undefined || subValue === null || subValue === "") return null;
+                  const subValue = value?.value_data?.[subField.field_name];
                   
+                  // Handle display value based on field type
                   let displayValue = subValue;
-                  if (subField.field_type === "date" && subValue) {
+                  
+                  if (subValue === undefined || subValue === null || subValue === "") {
+                    // Show "Not set" for empty values
+                    displayValue = "Not set";
+                  } else if (subField.field_type === "date" && subValue) {
                     try {
                       displayValue = format(new Date(subValue), "dd MMM yyyy");
                     } catch (e) {
+                      displayValue = subValue;
+                    }
+                  } else if ((subField.field_type === "select" || subField.field_type === "multiselect" || subField.field_type === "radio") && subField.field_options?.options) {
+                    // For select fields, find the label from options
+                    const options = subField.field_options.options || [];
+                    const option = options.find((opt) => {
+                      if (typeof opt === "object" && opt !== null) {
+                        return String(opt.value) === String(subValue);
+                      }
+                      return String(opt) === String(subValue);
+                    });
+                    
+                    if (option) {
+                      if (typeof option === "object" && option !== null) {
+                        displayValue = option.label || option.value || subValue;
+                      } else {
+                        displayValue = option;
+                      }
+                    } else {
+                      // Value not found in options, show raw value
                       displayValue = subValue;
                     }
                   }
@@ -127,7 +159,14 @@ export const ComplianceFieldCard = ({
                   return (
                     <div key={subField.field_name} className="space-y-1">
                       <span className="text-muted-foreground text-xs font-medium uppercase tracking-wide">{subField.field_label}</span>
-                      <div className="font-medium text-foreground">{displayValue}</div>
+                      <div className={cn(
+                        "font-medium",
+                        (subValue === undefined || subValue === null || subValue === "") 
+                          ? "text-muted-foreground italic" 
+                          : "text-foreground"
+                      )}>
+                        {String(displayValue)}
+                      </div>
                     </div>
                   );
                 })}
