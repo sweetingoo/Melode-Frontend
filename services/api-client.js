@@ -29,7 +29,7 @@ const normalizeBaseURL = (url) => {
 // Create axios instance with base configuration
 const apiClient = axios.create({
   baseURL: normalizeBaseURL(process.env.NEXT_PUBLIC_API_BASE_URL || "https://melode-api-prod.onrender.com/api/v1"),
-  timeout: 10000, // 10 seconds timeout
+  timeout: 60000, // 60 seconds timeout (increased for local development accessing production DB)
   headers: {
     "Content-Type": "application/json",
     Accept: "application/json",

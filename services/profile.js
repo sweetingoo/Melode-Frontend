@@ -273,15 +273,20 @@ export const profileService = {
     }
   },
 
-  bulkUpdateUserCustomFields: async (updates, userSlug) => {
+  bulkUpdateUserCustomFields: async (updates, userSlug, organizationId = null) => {
     try {
       if (!userSlug) {
         throw new Error("User slug is required for custom fields operations");
       }
 
-      const response = await api.put(`/settings/entities/user/${userSlug}/custom-fields/bulk`, {
-        updates: updates
-      });
+      // Build config with query parameters if organizationId is provided
+      const config = organizationId ? { params: { organization_id: organizationId } } : {};
+
+      const response = await api.put(
+        `/settings/entities/user/${userSlug}/custom-fields/values/bulk-update`,
+        { updates: updates },
+        config
+      );
       return response.data || response;
     } catch (error) {
       console.error("Bulk update user custom fields failed:", error);

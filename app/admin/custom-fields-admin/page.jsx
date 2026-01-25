@@ -781,28 +781,103 @@ const CustomFieldsAdminPage = () => {
         total_pages: fieldsPaginatedData.data.total_pages ?? 1,
       };
       console.log("✓ Extracted fields from fieldsPaginatedData.data.fields:", fieldsArray.length);
-    } 
+    }
+    // Fallback: check for results property (common in paginated APIs)
+    else if (fieldsPaginatedData?.results && Array.isArray(fieldsPaginatedData.results)) {
+      fieldsArray = fieldsPaginatedData.results;
+      meta = {
+        total: fieldsPaginatedData.count ?? fieldsPaginatedData.total ?? fieldsArray.length,
+        page: fieldsPaginatedData.page ?? 1,
+        per_page: fieldsPaginatedData.per_page ?? fieldsPaginatedData.page_size ?? 100,
+        total_pages: fieldsPaginatedData.total_pages ?? Math.ceil((fieldsPaginatedData.count ?? fieldsArray.length) / (fieldsPaginatedData.per_page ?? fieldsPaginatedData.page_size ?? 100)),
+      };
+      console.log("✓ Extracted fields from fieldsPaginatedData.results:", fieldsArray.length);
+    }
+    // Fallback: check for data.results
+    else if (fieldsPaginatedData?.data?.results && Array.isArray(fieldsPaginatedData.data.results)) {
+      fieldsArray = fieldsPaginatedData.data.results;
+      meta = {
+        total: fieldsPaginatedData.data.count ?? fieldsPaginatedData.data.total ?? fieldsArray.length,
+        page: fieldsPaginatedData.data.page ?? 1,
+        per_page: fieldsPaginatedData.data.per_page ?? fieldsPaginatedData.data.page_size ?? 100,
+        total_pages: fieldsPaginatedData.data.total_pages ?? Math.ceil((fieldsPaginatedData.data.count ?? fieldsArray.length) / (fieldsPaginatedData.data.per_page ?? fieldsPaginatedData.data.page_size ?? 100)),
+      };
+      console.log("✓ Extracted fields from fieldsPaginatedData.data.results:", fieldsArray.length);
+    }
+    // Fallback: check for items property
+    else if (fieldsPaginatedData?.items && Array.isArray(fieldsPaginatedData.items)) {
+      fieldsArray = fieldsPaginatedData.items;
+      meta = {
+        total: fieldsPaginatedData.total ?? fieldsArray.length,
+        page: fieldsPaginatedData.page ?? 1,
+        per_page: fieldsPaginatedData.per_page ?? 100,
+        total_pages: fieldsPaginatedData.total_pages ?? Math.ceil((fieldsPaginatedData.total ?? fieldsArray.length) / (fieldsPaginatedData.per_page ?? 100)),
+      };
+      console.log("✓ Extracted fields from fieldsPaginatedData.items:", fieldsArray.length);
+    }
     // Fallback: if response is directly an array
     else if (Array.isArray(fieldsPaginatedData)) {
       fieldsArray = fieldsPaginatedData;
+      meta = {
+        total: fieldsArray.length,
+        page: 1,
+        per_page: fieldsArray.length,
+        total_pages: 1,
+      };
       console.log("✓ Extracted fields from array response:", fieldsArray.length);
-    } 
+    }
+    // Fallback: check if data is directly an array
+    else if (fieldsPaginatedData?.data && Array.isArray(fieldsPaginatedData.data)) {
+      fieldsArray = fieldsPaginatedData.data;
+      meta = {
+        total: fieldsPaginatedData.total ?? fieldsArray.length,
+        page: fieldsPaginatedData.page ?? 1,
+        per_page: fieldsPaginatedData.per_page ?? 100,
+        total_pages: fieldsPaginatedData.total_pages ?? Math.ceil((fieldsPaginatedData.total ?? fieldsArray.length) / (fieldsPaginatedData.per_page ?? 100)),
+      };
+      console.log("✓ Extracted fields from fieldsPaginatedData.data (array):", fieldsArray.length);
+    }
     else {
       console.error("✗ Could not extract fields from response:", {
         fieldsPaginatedData,
-        structure: JSON.stringify(fieldsPaginatedData, null, 2).substring(0, 1000)
+        structure: JSON.stringify(fieldsPaginatedData, null, 2).substring(0, 1000),
+        allKeys: fieldsPaginatedData ? Object.keys(fieldsPaginatedData) : null
       });
     }
 
     // Transform fields
     if (fieldsArray.length === 0) {
-      console.warn("No fields extracted from response!", {
-        fieldsPaginatedData,
-        apiResponse,
-        fieldsArray
-      });
-      setIsLoadingMore(false);
-      return;
+      // Last resort: try to find any array property in the response
+      if (fieldsPaginatedData && typeof fieldsPaginatedData === 'object') {
+        for (const key in fieldsPaginatedData) {
+          if (Array.isArray(fieldsPaginatedData[key]) && fieldsPaginatedData[key].length > 0) {
+            console.warn(`Found array property '${key}' with ${fieldsPaginatedData[key].length} items, attempting to use as fields`);
+            fieldsArray = fieldsPaginatedData[key];
+            meta = {
+              total: fieldsPaginatedData.total ?? fieldsPaginatedData.count ?? fieldsArray.length,
+              page: fieldsPaginatedData.page ?? 1,
+              per_page: fieldsPaginatedData.per_page ?? fieldsPaginatedData.page_size ?? 100,
+              total_pages: fieldsPaginatedData.total_pages ?? Math.ceil((fieldsPaginatedData.total ?? fieldsPaginatedData.count ?? fieldsArray.length) / (fieldsPaginatedData.per_page ?? fieldsPaginatedData.page_size ?? 100)),
+            };
+            break;
+          }
+        }
+      }
+      
+      // If still no fields found, log warning but don't clear existing fields
+      if (fieldsArray.length === 0) {
+        console.warn("No fields extracted from response!", {
+          fieldsPaginatedData,
+          fieldsArray,
+          hasFields: !!fieldsPaginatedData?.fields,
+          hasDataFields: !!fieldsPaginatedData?.data?.fields,
+          isArray: Array.isArray(fieldsPaginatedData),
+          allKeys: fieldsPaginatedData ? Object.keys(fieldsPaginatedData) : null
+        });
+        setIsLoadingMore(false);
+        // Don't clear accumulatedFields here - keep existing fields if any
+        return;
+      }
     }
 
     console.log("About to transform fields:", {
@@ -857,14 +932,54 @@ const CustomFieldsAdminPage = () => {
   }, [fieldsPaginatedData, currentPage, fieldsLoading]);
 
   // Reset accumulated fields and page when filters change
+  // Use refs to track previous values and only reset when they actually change
+  const prevEntityTypeRef = React.useRef(selectedEntityType);
+  const prevShowInactiveRef = React.useRef(showInactive);
+  const isInitialMountRef = React.useRef(true);
+  
   React.useEffect(() => {
-    setAccumulatedFields([]);
-    setCurrentPage(1);
-    setIsLoadingMore(false);
+    // Skip reset on initial mount
+    if (isInitialMountRef.current) {
+      isInitialMountRef.current = false;
+      prevEntityTypeRef.current = selectedEntityType;
+      prevShowInactiveRef.current = showInactive;
+      return;
+    }
+    
+    const entityTypeChanged = prevEntityTypeRef.current !== selectedEntityType;
+    const showInactiveChanged = prevShowInactiveRef.current !== showInactive;
+    
+    if (entityTypeChanged || showInactiveChanged) {
+      console.log("Resetting fields due to filter change:", { 
+        selectedEntityType, 
+        showInactive,
+        previousEntityType: prevEntityTypeRef.current,
+        previousShowInactive: prevShowInactiveRef.current,
+        currentFieldsCount: accumulatedFields.length
+      });
+      
+      // Update refs before resetting
+      prevEntityTypeRef.current = selectedEntityType;
+      prevShowInactiveRef.current = showInactive;
+      
+      // Reset fields when filters actually change
+      setAccumulatedFields([]);
+      setCurrentPage(1);
+      setIsLoadingMore(false);
+    }
   }, [selectedEntityType, showInactive]);
 
   // Use accumulated fields
   const fields = accumulatedFields;
+  
+  // Debug: Log fields count
+  React.useEffect(() => {
+    console.log("Fields state:", {
+      accumulatedFieldsCount: accumulatedFields.length,
+      fieldsCount: fields.length,
+      fieldsSample: fields.slice(0, 3).map(f => ({ id: f.id, name: f.name, type: f.type }))
+    });
+  }, [accumulatedFields, fields]);
 
   // Auto-generate preview when sections and fields are available
   React.useEffect(() => {

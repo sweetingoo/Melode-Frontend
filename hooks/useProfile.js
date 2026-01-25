@@ -683,9 +683,34 @@ export const useBulkUpdateUserCustomFields = () => {
             description: errorData?.message || "Please check your input",
           });
         }
+      } else if (error.response?.status === 400 || error.response?.status === 404) {
+        // Handle structured bulk update errors
+        const errorData = error.response?.data?.detail;
+        if (errorData?.errors && Array.isArray(errorData.errors)) {
+          // Multiple field errors
+          const errorMessages = errorData.errors.map(err => 
+            `Field "${err.field_slug}": ${err.error}`
+          ).join('\n');
+          toast.error(errorData.message || "Some fields failed to update", {
+            description: errorMessages,
+            duration: 8000, // Show longer for multiple errors
+          });
+        } else if (errorData?.field_slug) {
+          // Single field error (legacy format)
+          toast.error(`Field "${errorData.field_slug}" failed`, {
+            description: errorData.error || errorData.message || "Failed to update this field",
+          });
+        } else {
+          // Generic error message
+          const errorMessage = errorData?.message || errorData || "Failed to update custom fields";
+          toast.error("Failed to update custom fields", {
+            description: errorMessage,
+          });
+        }
       } else {
         toast.error("Failed to update custom fields", {
           description:
+            error.response?.data?.detail?.message ||
             error.response?.data?.message ||
             "An error occurred while updating your custom fields.",
         });

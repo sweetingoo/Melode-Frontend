@@ -89,6 +89,7 @@ export default function EntityCustomFieldsForm({
 
   // Form state
   const [customFieldsData, setCustomFieldsData] = useState({});
+  const [initialCustomFieldsData, setInitialCustomFieldsData] = useState({}); // Track initial values to detect changes
   const [customFieldsErrors, setCustomFieldsErrors] = useState({});
   const [hasCustomFieldsChanges, setHasCustomFieldsChanges] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -266,6 +267,7 @@ export default function EntityCustomFieldsForm({
     }
     
     setCustomFieldsData(initialData);
+    setInitialCustomFieldsData(JSON.parse(JSON.stringify(initialData))); // Deep copy for comparison
     setHasCustomFieldsChanges(false);
   }, [hierarchy, userCustomFieldsValues, entityType]);
 
@@ -333,17 +335,88 @@ export default function EntityCustomFieldsForm({
     setIsSubmitting(true);
 
     try {
-      if (entityType === "user" && entityId) {
-        // Use bulk update for user entities
-        const updates = Object.entries(customFieldsData).map(([fieldId, value]) => ({
-          field_id: parseInt(fieldId),
-          value: value,
-        }));
+      if (entityType === "user" && entitySlug) {
+        // Create a map of valid field IDs to slugs from the hierarchy (excluding compliance fields)
+        const fieldIdToSlugMap = new Map();
+        if (hierarchy?.sections) {
+          hierarchy.sections
+            .filter(section => section.is_active !== false)
+            .forEach(section => {
+              section.fields
+                ?.filter(field => field.is_active !== false)
+                .forEach(field => {
+                  // Skip compliance fields
+                  const isComplianceField = complianceData?.compliance_fields?.some(
+                    cf => cf.custom_field_id === field.id
+                  );
+                  if (!isComplianceField && field.slug) {
+                    fieldIdToSlugMap.set(field.id, field.slug);
+                  }
+                });
+            });
+        }
+
+        // Prepare updates array - only include fields that have actually changed
+        // Compare current values with initial values to detect changes
+        const updates = Object.entries(customFieldsData)
+          .filter(([fieldId, currentValue]) => {
+            const fieldIdInt = parseInt(fieldId);
+            // Only include fields that are in the hierarchy and have slugs
+            if (!fieldIdToSlugMap.has(fieldIdInt)) {
+              return false;
+            }
+            
+            // Get initial value for this field
+            const initialValue = initialCustomFieldsData[fieldId];
+            
+            // Normalize values for comparison (handle null, undefined, empty string)
+            const normalizeValue = (val) => {
+              if (val === null || val === undefined || val === '') return null;
+              return val;
+            };
+            
+            const normalizedCurrent = normalizeValue(currentValue);
+            const normalizedInitial = normalizeValue(initialValue);
+            
+            // Only include if value has actually changed
+            return normalizedCurrent !== normalizedInitial;
+          })
+          .map(([fieldId, value]) => {
+            const fieldIdInt = parseInt(fieldId);
+            return {
+              field_slug: fieldIdToSlugMap.get(fieldIdInt),
+              value: value !== undefined && value !== '' ? value : null,
+            };
+          });
+
+        // Debug logging if no updates
+        if (updates.length === 0) {
+          console.warn('No valid fields to update. Debug info:', {
+            fieldIdToSlugMapSize: fieldIdToSlugMap.size,
+            fieldIdToSlugMapEntries: Array.from(fieldIdToSlugMap.entries()),
+            customFieldsDataKeys: Object.keys(customFieldsData),
+            customFieldsDataEntries: Object.entries(customFieldsData),
+            hierarchySections: hierarchy?.sections?.length || 0,
+          });
+        }
+
+        if (updates.length === 0) {
+          toast.warning("No valid fields to update");
+          setIsSubmitting(false);
+          return;
+        }
 
         await bulkUpdateUserCustomFieldsMutation.mutateAsync({
-          userId: entityId,
+          userSlug: entitySlug,
           updates,
         });
+
+        setHasCustomFieldsChanges(false);
+        // Success toast is handled by the mutation hook
+
+        if (onSubmitSuccess) {
+          onSubmitSuccess();
+        }
       } else {
         // For other entity types, use the generic API
         // This would need to be implemented based on your API structure
@@ -356,20 +429,18 @@ export default function EntityCustomFieldsForm({
         // await customFieldsService.updateEntityCustomFields(entityType, entitySlug, updates);
         toast.warning("Custom fields update for this entity type is not yet implemented");
       }
-
-      setHasCustomFieldsChanges(false);
-      toast.success("Custom fields updated successfully!");
-
-      if (onSubmitSuccess) {
-        onSubmitSuccess();
-      }
     } catch (error) {
       console.error("Failed to update custom fields:", error);
-      toast.error("Failed to update custom fields", {
-        description:
-          error.response?.data?.message ||
-          "An error occurred while updating custom fields.",
-      });
+      // Error toast is handled by the mutation hook for user entities
+      // For other entity types, show error here
+      if (entityType !== "user" || !entitySlug) {
+        toast.error("Failed to update custom fields", {
+          description:
+            error.response?.data?.detail ||
+            error.response?.data?.message ||
+            "An error occurred while updating custom fields.",
+        });
+      }
 
       if (onSubmitError) {
         onSubmitError(error);
@@ -540,7 +611,9 @@ export default function EntityCustomFieldsForm({
                   // Group related fields by their target_field_id
                   const relatedFieldsGroups = new Map();
                   const standaloneFields = [];
+                  const fieldsInGroups = new Set(); // Track which fields are already in groups
                   
+                  // First pass: Identify all related fields and group them
                   regularFieldsInSection.forEach((field) => {
                     const relationshipConfig = field.relationship_config;
                     if (relationshipConfig && relationshipConfig.target_field_id) {
@@ -555,28 +628,42 @@ export default function EntityCustomFieldsForm({
                         });
                       }
                       relatedFieldsGroups.get(targetFieldId).relatedFields.push(field);
+                      fieldsInGroups.add(field.id); // Mark this field as in a group
+                      
                       // Update parent field if we found it
-                      if (parentField && !relatedFieldsGroups.get(targetFieldId).parentField) {
-                        relatedFieldsGroups.get(targetFieldId).parentField = parentField;
-                      }
-                    } else {
-                      // Check if this field is a parent (has fields pointing to it, in any section)
-                      const isParent = Array.from(allFieldsMap.values()).some(f => 
-                        f.relationship_config?.target_field_id === field.id
-                      );
-                      if (isParent) {
-                        // This is a parent field, initialize its group
-                        if (!relatedFieldsGroups.has(field.id)) {
-                          relatedFieldsGroups.set(field.id, {
-                            parentField: field,
-                            relatedFields: []
-                          });
-                        } else {
-                          relatedFieldsGroups.get(field.id).parentField = field;
+                      if (parentField) {
+                        if (!relatedFieldsGroups.get(targetFieldId).parentField) {
+                          relatedFieldsGroups.get(targetFieldId).parentField = parentField;
                         }
-                      } else {
-                        standaloneFields.push(field);
+                        fieldsInGroups.add(parentField.id); // Mark parent as in a group
                       }
+                    }
+                  });
+                  
+                  // Second pass: Identify parent fields that are in this section and add them to groups
+                  regularFieldsInSection.forEach((field) => {
+                    // Check if this field is a parent (has fields pointing to it)
+                    const isParent = Array.from(allFieldsMap.values()).some(f => 
+                      f.relationship_config?.target_field_id === field.id
+                    );
+                    if (isParent) {
+                      // This is a parent field, ensure it's in a group
+                      if (!relatedFieldsGroups.has(field.id)) {
+                        relatedFieldsGroups.set(field.id, {
+                          parentField: field,
+                          relatedFields: []
+                        });
+                      } else {
+                        relatedFieldsGroups.get(field.id).parentField = field;
+                      }
+                      fieldsInGroups.add(field.id); // Mark parent as in a group
+                    }
+                  });
+                  
+                  // Third pass: Add standalone fields (fields not in any group)
+                  regularFieldsInSection.forEach((field) => {
+                    if (!fieldsInGroups.has(field.id)) {
+                      standaloneFields.push(field);
                     }
                   });
                   
@@ -617,9 +704,15 @@ export default function EntityCustomFieldsForm({
                         </div>
                       )}
                       
-                      {/* Related Fields Groups */}
+                      {/* Related Fields Groups - Each group in its own distinct section */}
                       {Array.from(relatedFieldsGroups.entries()).map(([targetFieldId, group]) => {
                         const { parentField, relatedFields } = group;
+                        
+                        // Only render groups that have fields (skip empty groups)
+                        if (!parentField && relatedFields.length === 0) {
+                          return null;
+                        }
+                        
                         const allGroupFields = parentField 
                           ? [parentField, ...relatedFields]
                           : relatedFields;
@@ -630,11 +723,22 @@ export default function EntityCustomFieldsForm({
                           : (relatedFields[0]?.field_label || relatedFields[0]?.field_name || "Related Fields");
                         
                         return (
-                          <div key={`related-group-${targetFieldId}`} className="space-y-4 border rounded-lg p-4 bg-muted/30">
-                            <h4 className="text-sm font-semibold text-foreground mb-3">
-                              {groupTitle}
-                            </h4>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div 
+                            key={`related-group-${targetFieldId}`} 
+                            className="mt-6 space-y-4 border-2 border-primary/20 rounded-lg p-6 bg-gradient-to-br from-muted/50 to-muted/30 shadow-sm"
+                          >
+                            <div className="border-b border-primary/10 pb-3 mb-4">
+                              <h4 className="text-base font-semibold text-foreground flex items-center gap-2">
+                                <span className="w-2 h-2 rounded-full bg-primary/60"></span>
+                                {groupTitle}
+                                {relatedFields.length > 0 && (
+                                  <span className="text-xs font-normal text-muted-foreground ml-2">
+                                    ({allGroupFields.length} {allGroupFields.length === 1 ? 'field' : 'fields'})
+                                  </span>
+                                )}
+                              </h4>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                               {allGroupFields.map((field) => {
                                 // For related fields, use the target field's value if this field has no value
                                 let fieldValue = customFieldsData[field.id] !== undefined 
