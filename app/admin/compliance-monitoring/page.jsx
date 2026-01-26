@@ -57,6 +57,9 @@ export default function ComplianceMonitoringPage() {
   const [isApproving, setIsApproving] = useState(false);
   const [activeTab, setActiveTab] = useState("expiring");
   
+  // Days ahead for expiring items
+  const [daysAhead, setDaysAhead] = useState(30);
+  
   // Pagination state - separate for each tab
   const [expiringPage, setExpiringPage] = useState(1);
   const [pendingPage, setPendingPage] = useState(1);
@@ -103,14 +106,14 @@ export default function ComplianceMonitoringPage() {
     return result;
   }, [filters]);
 
-  // Reset to page 1 when filters change
+  // Reset to page 1 when filters or daysAhead change
   React.useEffect(() => {
     setExpiringPage(1);
     setPendingPage(1);
     setNonSubmittedPage(1);
-  }, [filters]);
+  }, [filters, daysAhead]);
 
-  const { data: expiringData, isLoading: expiringLoading, error: expiringError } = useExpiringCompliance(30, expiringPage, pageSize, queryFilters);
+  const { data: expiringData, isLoading: expiringLoading, error: expiringError } = useExpiringCompliance(daysAhead, expiringPage, pageSize, queryFilters);
   const { data: pendingData, isLoading: pendingLoading, error: pendingError } = usePendingApprovals(pendingPage, pageSize, queryFilters);
   const { data: nonSubmittedData, isLoading: nonSubmittedLoading, error: nonSubmittedError } = useNonSubmittedCompliance(nonSubmittedPage, pageSize, queryFilters);
   const approveMutation = useApproveCompliance();
@@ -277,7 +280,7 @@ export default function ComplianceMonitoringPage() {
               <CardDescription>
                 {filters.approvalStatus === "approved" 
                   ? "All approved/compliant items, sorted by expiry date (soonest first)"
-                  : "Items expiring within the next 30 days, sorted by expiry date (soonest first)"
+                  : `Items expiring within the next ${daysAhead} days, sorted by expiry date (soonest first)`
                 }
               </CardDescription>
             </CardHeader>
@@ -289,6 +292,22 @@ export default function ComplianceMonitoringPage() {
                   <h3 className="text-sm font-semibold">Filters</h3>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="days-ahead-filter-expiring">Days Ahead</Label>
+                    <Select
+                      value={daysAhead.toString()}
+                      onValueChange={(value) => setDaysAhead(parseInt(value, 10))}
+                    >
+                      <SelectTrigger id="days-ahead-filter-expiring">
+                        <SelectValue placeholder="30 days" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="30">30 Days</SelectItem>
+                        <SelectItem value="60">60 Days</SelectItem>
+                        <SelectItem value="90">90 Days</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <div className="space-y-2">
                     <Label htmlFor="search-expiring">Search</Label>
                     <div className="relative">

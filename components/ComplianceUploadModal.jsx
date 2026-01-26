@@ -62,6 +62,30 @@ export const ComplianceUploadModal = ({
   
   const hasSubFields = subFieldDefinitions.length > 0;
   
+  // Check if any sub-field is an expiry date field
+  const hasExpiryDateSubField = useMemo(() => {
+    if (!hasSubFields) return false;
+    const expiryFieldNames = ['expiry_date', 'date_of_expiry', 'expiry', 'expirydate', 'expirydate', 'expires'];
+    const expiryFieldLabels = ['expiry date', 'date of expiry', 'date of expires', 'expiry', 'expires', 'expiration date'];
+    
+    return subFieldDefinitions.some(subField => {
+      const fieldName = (subField.field_name || '').toLowerCase().replace(/[_\s-]/g, '');
+      const fieldLabel = (subField.field_label || '').toLowerCase();
+      const fieldType = subField.field_type;
+      
+      // Check if it's a date field with expiry-related name/label
+      // Match both field_name and field_label to catch variations
+      const nameMatches = expiryFieldNames.some(name => 
+        fieldName.includes(name.toLowerCase().replace(/[_\s-]/g, ''))
+      );
+      const labelMatches = expiryFieldLabels.some(label => 
+        fieldLabel.includes(label.toLowerCase())
+      );
+      
+      return fieldType === 'date' && (nameMatches || labelMatches);
+    });
+  }, [hasSubFields, subFieldDefinitions]);
+  
   // Debug: Log field data when modal opens
   useEffect(() => {
     if (open && field) {
@@ -489,16 +513,18 @@ export const ComplianceUploadModal = ({
             </div>
           )}
 
-          {/* Expiry Date */}
-          <div className="space-y-2">
-            <Label htmlFor="expiryDate">Expiry Date</Label>
-            <Input
-              id="expiryDate"
-              type="date"
-              value={expiryDate ? (expiryDate instanceof Date ? expiryDate.toISOString().split('T')[0] : new Date(expiryDate).toISOString().split('T')[0]) : ''}
-              onChange={(e) => setExpiryDate(e.target.value ? new Date(e.target.value) : null)}
-            />
-          </div>
+          {/* Expiry Date - Only show if there's no expiry date sub-field */}
+          {!hasExpiryDateSubField && (
+            <div className="space-y-2">
+              <Label htmlFor="expiryDate">Expiry Date</Label>
+              <Input
+                id="expiryDate"
+                type="date"
+                value={expiryDate ? (expiryDate instanceof Date ? expiryDate.toISOString().split('T')[0] : new Date(expiryDate).toISOString().split('T')[0]) : ''}
+                onChange={(e) => setExpiryDate(e.target.value ? new Date(e.target.value) : null)}
+              />
+            </div>
+          )}
 
           {/* Renewal Date */}
           <div className="space-y-2">

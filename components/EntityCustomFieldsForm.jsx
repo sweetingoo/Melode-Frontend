@@ -160,8 +160,26 @@ export default function EntityCustomFieldsForm({
 
   const handleComplianceUploadSubmit = async (uploadData) => {
     if (isRenewal && selectedComplianceValue) {
+      // Try multiple possible property names for the slug
+      const valueSlug = selectedComplianceValue.value_slug || 
+                       selectedComplianceValue.slug || 
+                       selectedComplianceValue.id?.toString(); // Fallback to ID as string
+      
+      if (!valueSlug) {
+        console.error("No value slug found in compliance value:", {
+          selectedComplianceValue,
+          availableKeys: Object.keys(selectedComplianceValue || {}),
+          value_slug: selectedComplianceValue?.value_slug,
+          slug: selectedComplianceValue?.slug,
+          id: selectedComplianceValue?.id
+        });
+        alert("Error: Unable to renew - missing value identifier. Please refresh the page and try again.");
+        return;
+      }
+      
+      console.log("Renewing compliance with valueSlug:", valueSlug);
       await renewComplianceMutation.mutateAsync({
-        valueSlug: selectedComplianceValue.slug,
+        valueSlug: valueSlug,
         renewalData: uploadData,
       });
     } else {

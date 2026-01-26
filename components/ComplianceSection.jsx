@@ -110,8 +110,26 @@ export const ComplianceSection = ({
 
   const handleUploadSubmit = async (uploadData) => {
     if (isRenewal && selectedValue) {
+      // Try multiple possible property names for the slug
+      const valueSlug = selectedValue.value_slug || 
+                       selectedValue.slug || 
+                       selectedValue.id?.toString(); // Fallback to ID as string
+      
+      if (!valueSlug) {
+        console.error("No value slug found in compliance value:", {
+          selectedValue,
+          availableKeys: Object.keys(selectedValue || {}),
+          value_slug: selectedValue?.value_slug,
+          slug: selectedValue?.slug,
+          id: selectedValue?.id
+        });
+        alert("Error: Unable to renew - missing value identifier. Please refresh the page and try again.");
+        return;
+      }
+      
+      console.log("Renewing compliance with valueSlug:", valueSlug);
       await renewMutation.mutateAsync({
-        valueSlug: selectedValue.slug,
+        valueSlug: valueSlug,
         renewalData: uploadData,
       });
     } else {
