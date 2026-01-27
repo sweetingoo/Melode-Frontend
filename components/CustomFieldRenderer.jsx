@@ -844,6 +844,28 @@ const FileFieldRenderer = ({ field, value, onChange, error, fieldId }) => {
     return [value];
   }, [value]);
 
+  // Track uploaded file info separately from new file selections
+  // When value is a number (file_id), it means a file has already been uploaded
+  const hasUploadedFile = React.useMemo(() => {
+    if (typeof value === 'number') return true;
+    if (Array.isArray(value) && value.length > 0 && typeof value[0] === 'number') return true;
+    return false;
+  }, [value]);
+  
+  // Debug logging
+  React.useEffect(() => {
+    if (field.field_type?.toLowerCase() === 'file') {
+      console.log(`[FileFieldRenderer] Field ${field.id} (${field.field_label || field.field_name}):`, {
+        value,
+        valueType: typeof value,
+        isNumber: typeof value === 'number',
+        isArray: Array.isArray(value),
+        hasUploadedFile,
+        currentFilesLength: currentFiles.length,
+      });
+    }
+  }, [field.id, field.field_label, field.field_name, field.field_type, value, hasUploadedFile, currentFiles.length]);
+
   // Handle file with expiry date structure
   const getFileFromValue = (val) => {
     if (val instanceof File) return { file: val, expiryDate: null };
@@ -1039,10 +1061,10 @@ const FileFieldRenderer = ({ field, value, onChange, error, fieldId }) => {
 
   return (
     <div className="space-y-3">
-      {/* Upload Area */}
+      {/* Upload Area with Border */}
       <div
         className={`
-          relative border-2 border-dashed rounded-lg p-6 text-center transition-colors cursor-pointer
+          relative border-2 border-dashed rounded-lg p-6 transition-colors
           ${isDragOver 
             ? 'border-primary bg-primary/5' 
             : 'border-muted-foreground/25 hover:border-muted-foreground/50'
@@ -1052,7 +1074,6 @@ const FileFieldRenderer = ({ field, value, onChange, error, fieldId }) => {
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        onClick={() => fileInputRef.current?.click()}
       >
         <input
           ref={fileInputRef}
@@ -1069,7 +1090,71 @@ const FileFieldRenderer = ({ field, value, onChange, error, fieldId }) => {
           className="hidden"
         />
         
-        <div className="flex flex-col items-center space-y-2">
+        {/* Already Uploaded File Display - Inside the border */}
+        {hasUploadedFile && (
+          <div className="space-y-2 mb-4">
+            {(() => {
+              // Get the file_id(s) - could be a single number or array of numbers
+              const fileIds = typeof value === 'number' ? [value] : (Array.isArray(value) ? value.filter(v => typeof v === 'number') : []);
+              
+              console.log(`[FileFieldRenderer] Displaying uploaded files for field ${field.id} (${field.field_label || field.field_name}):`, {
+                value,
+                valueType: typeof value,
+                fileIds,
+                hasUploadedFile,
+                fieldType: field.field_type,
+              });
+              
+              if (fileIds.length === 0) {
+                console.warn(`[FileFieldRenderer] hasUploadedFile is true but no fileIds found for field ${field.id}`);
+                return null;
+              }
+              
+              return fileIds.map((fileId, index) => (
+                <div key={`uploaded-${fileId}-${index}`} className="flex items-center justify-between p-4 bg-green-50 dark:bg-green-950/20 rounded-lg border-2 border-green-300 dark:border-green-700">
+                  <div className="flex items-center space-x-3">
+                    <span className="text-2xl">📎</span>
+                    <div>
+                      <p className="text-sm font-medium text-green-900 dark:text-green-100">
+                        ✓ File already uploaded
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Click download to view
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        downloadFileMutation.mutate(fileId);
+                      }}
+                      disabled={downloadFileMutation.isPending}
+                      className="flex items-center space-x-2 border-green-300 hover:bg-green-100 dark:hover:bg-green-900"
+                    >
+                      <Download className="h-4 w-4" />
+                      <span>Download</span>
+                    </Button>
+                    {!allowMultiple && (
+                      <span className="text-xs text-muted-foreground italic ml-2">
+                        Upload a new file to replace this one
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ));
+            })()}
+          </div>
+        )}
+        
+        {/* Upload Area Content */}
+        <div 
+          className="flex flex-col items-center space-y-2 text-center cursor-pointer"
+          onClick={() => fileInputRef.current?.click()}
+        >
           <div className="p-3 rounded-full bg-muted">
             <FileText className="h-6 w-6 text-muted-foreground" />
           </div>
@@ -1078,7 +1163,9 @@ const FileFieldRenderer = ({ field, value, onChange, error, fieldId }) => {
             <p className="text-sm font-medium">
               {isDragOver 
                 ? `Drop ${allowMultiple ? 'files' : 'file'} here` 
-                : `Click to upload or drag and drop ${allowMultiple ? 'files' : 'file'}`
+                : hasUploadedFile 
+                  ? `Click to upload a new ${allowMultiple ? 'file' : 'file'} or drag and drop`
+                  : `Click to upload or drag and drop ${allowMultiple ? 'files' : 'file'}`
               }
             </p>
             <p className="text-xs text-muted-foreground">
@@ -1110,13 +1197,24 @@ const FileFieldRenderer = ({ field, value, onChange, error, fieldId }) => {
           </div>
         </div>
       </div>
-      
-      {/* Selected Files Preview */}
-      {currentFiles.length > 0 && (
+
+      {/* Selected Files Preview (New files being uploaded) */}
+      {(() => {
+        // Filter out file IDs (numbers) - only show File objects
+        const newFiles = currentFiles.filter(file => 
+          file instanceof File || (file && typeof file === 'object' && file.file instanceof File)
+        );
+        return newFiles.length > 0;
+      })() && (
         <div className="space-y-2">
-          {currentFiles.map((file, index) => {
+          <p className="text-xs font-medium text-muted-foreground">
+            {hasUploadedFile ? 'New file to upload (will replace existing):' : 'Selected files:'}
+          </p>
+          {currentFiles
+            .filter(file => file instanceof File || (file && typeof file === 'object' && file.file instanceof File))
+            .map((file, index) => {
             // Handle File objects
-            if (file && typeof file === 'object' && file.name) {
+            if (file instanceof File) {
               return (
                 <div key={index} className="flex items-center justify-between p-4 bg-muted/50 rounded-lg border">
                   <div className="flex items-center space-x-3">
@@ -1140,43 +1238,29 @@ const FileFieldRenderer = ({ field, value, onChange, error, fieldId }) => {
                 </div>
               );
             }
-            // Handle file IDs (numbers)
-            if (typeof file === 'number') {
+            // Handle file objects with expiry date structure
+            if (file && typeof file === 'object' && file.file instanceof File) {
               return (
                 <div key={index} className="flex items-center justify-between p-4 bg-muted/50 rounded-lg border">
                   <div className="flex items-center space-x-3">
-                    <span className="text-2xl">📎</span>
+                    <span className="text-2xl">{getFileIcon(file.file.name)}</span>
                     <div>
-                      <p className="text-sm font-medium">File ID: {file}</p>
+                      <p className="text-sm font-medium">{file.file.name}</p>
                       <p className="text-xs text-muted-foreground">
-                        Click download to view the file
+                        {formatFileSize(file.file.size)}
+                        {file.expiryDate && ` • Expires: ${file.expiryDate}`}
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => downloadFileMutation.mutate(file)}
-                      disabled={downloadFileMutation.isPending}
-                      className="flex items-center space-x-2"
-                    >
-                      <Download className="h-4 w-4" />
-                      <span>Download</span>
-                    </Button>
-                    {allowMultiple && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => removeFile(index)}
-                        className="text-muted-foreground hover:text-destructive"
-                      >
-                        ✕
-                      </Button>
-                    )}
-                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => removeFile(index)}
+                    className="text-muted-foreground hover:text-destructive"
+                  >
+                    ✕
+                  </Button>
                 </div>
               );
             }
@@ -1185,8 +1269,8 @@ const FileFieldRenderer = ({ field, value, onChange, error, fieldId }) => {
         </div>
       )}
       
-      {/* File Info from API Response */}
-      {value && typeof value === 'object' && value.file_name && (
+      {/* File Info from API Response (if value is a file object with metadata) */}
+      {value && typeof value === 'object' && value.file_name && !(value instanceof File) && (
         <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg border">
           <div className="flex items-center space-x-3">
             <span className="text-2xl">{getFileIcon(value.file_name)}</span>
@@ -1202,7 +1286,7 @@ const FileFieldRenderer = ({ field, value, onChange, error, fieldId }) => {
             type="button"
             variant="outline"
             size="sm"
-            onClick={() => downloadFileMutation.mutate(value.id)}
+            onClick={() => downloadFileMutation.mutate(value.id || value.file_id)}
             disabled={downloadFileMutation.isPending}
             className="flex items-center space-x-2"
           >

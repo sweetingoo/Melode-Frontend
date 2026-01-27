@@ -111,6 +111,8 @@ const FieldVisibilityLinksSection = ({ field, entityType, roles }) => {
   const [selectedUserId, setSelectedUserId] = useState(null);
   const [selectedEntityId, setSelectedEntityId] = useState("");
   const [linkMode, setLinkMode] = useState("include");
+  const [checkViewerRole, setCheckViewerRole] = useState(false);
+  const [isEditable, setIsEditable] = useState(true);
   
   // Only fetch links if field has an ID (existing field)
   const { data: fieldLinks = [], isLoading: linksLoading, refetch: refetchLinks } = useFieldLinks(
@@ -138,6 +140,7 @@ const FieldVisibilityLinksSection = ({ field, entityType, roles }) => {
       custom_field_id: field.id,
       entity_type: entityType,
       link_mode: linkMode,
+      is_editable: linkMode === "include" ? isEditable : true, // Only applies to include links
     };
     
     if (newLinkType === "role" && selectedRoleId) {
@@ -159,6 +162,8 @@ const FieldVisibilityLinksSection = ({ field, entityType, roles }) => {
       setSelectedUserId(null);
       setSelectedEntityId("");
       setLinkMode("include");
+      setCheckViewerRole(false);
+      setIsEditable(true);
       refetchLinks();
     } catch (error) {
       // Error handled by mutation
@@ -214,8 +219,8 @@ const FieldVisibilityLinksSection = ({ field, entityType, roles }) => {
       </div>
       
       <p className="text-xs text-muted-foreground">
-        Control which entities can see this field. By default, fields are visible to all entities.
-        Use links to show/hide fields for specific roles, users, or entity instances.
+        Control which entities can see and edit this field. By default, fields are visible and editable to all entities.
+        Use links to show/hide fields for specific roles, users, or entity instances. For visible fields, you can also control editability.
       </p>
       
       {isNewField ? (
@@ -249,12 +254,21 @@ const FieldVisibilityLinksSection = ({ field, entityType, roles }) => {
                     {getLinkDisplayName(link)}
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    {link.link_mode === "include" ? "Show field" : "Hide field"}
+                    {link.link_mode === "include" 
+                      ? (link.is_editable !== false ? "Show field (editable)" : "Show field (read-only)")
+                      : "Hide field"}
                   </div>
                 </div>
-                <Badge variant={link.link_mode === "include" ? "default" : "destructive"}>
-                  {link.link_mode}
-                </Badge>
+                <div className="flex items-center gap-2">
+                  {link.link_mode === "include" && link.is_editable === false && (
+                    <Badge variant="outline" className="text-xs">
+                      Read-only
+                    </Badge>
+                  )}
+                  <Badge variant={link.link_mode === "include" ? "default" : "destructive"}>
+                    {link.link_mode}
+                  </Badge>
+                </div>
               </div>
               <Button
                 type="button"
@@ -309,24 +323,36 @@ const FieldVisibilityLinksSection = ({ field, entityType, roles }) => {
           </div>
           
           {newLinkType === "role" && entityType === "user" && (
-            <div className="space-y-2">
-              <Label>Select Role</Label>
-              <Select
-                value={selectedRoleId?.toString() || ""}
-                onValueChange={(value) => setSelectedRoleId(parseInt(value))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a role" />
-                </SelectTrigger>
-                <SelectContent>
-                  {roles.map((role) => (
-                    <SelectItem key={role.id} value={role.id.toString()}>
-                      {role.display_name || role.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <>
+              <div className="space-y-2">
+                <Label>Select Role</Label>
+                <Select
+                  value={selectedRoleId?.toString() || ""}
+                  onValueChange={(value) => setSelectedRoleId(parseInt(value))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a role" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {roles.map((role) => (
+                      <SelectItem key={role.id} value={role.id.toString()}>
+                        {role.display_name || role.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="checkViewerRole"
+                  checked={checkViewerRole}
+                  onCheckedChange={setCheckViewerRole}
+                />
+                <Label htmlFor="checkViewerRole" className="text-sm font-normal cursor-pointer">
+                  Check viewer's role (instead of entity's role)
+                </Label>
+              </div>
+            </>
           )}
           
           {newLinkType === "user" && entityType === "user" && (
@@ -385,6 +411,19 @@ const FieldVisibilityLinksSection = ({ field, entityType, roles }) => {
             </Select>
           </div>
           
+          {linkMode === "include" && (
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="isEditable"
+                checked={isEditable}
+                onCheckedChange={setIsEditable}
+              />
+              <Label htmlFor="isEditable" className="text-sm font-normal cursor-pointer">
+                Field is editable (uncheck to make read-only)
+              </Label>
+            </div>
+          )}
+          
           <div className="flex gap-2">
             <Button
               type="button"
@@ -397,6 +436,7 @@ const FieldVisibilityLinksSection = ({ field, entityType, roles }) => {
                 setSelectedEntityId("");
                 setLinkMode("include");
                 setCheckViewerRole(false);
+                setIsEditable(true);
               }}
               className="flex-1"
             >
@@ -2104,21 +2144,28 @@ const CustomFieldsAdminPage = () => {
           
           // Check if we have a valid relatedFieldId (not null, not 'none', not 0, not empty string)
           const relatedFieldId = config.relatedFieldId;
+          const relationshipType = config.relationshipType;
           const hasRelatedField = relatedFieldId !== null && 
                                   relatedFieldId !== undefined && 
                                   relatedFieldId !== 'none' && 
                                   relatedFieldId !== '' && 
                                   relatedFieldId !== 0;
+          const hasRelationshipType = relationshipType !== null && 
+                                      relationshipType !== undefined && 
+                                      relationshipType !== 'none' && 
+                                      relationshipType !== '';
           
           console.log("Relationship config transformation (update):", {
             originalConfig: config,
             relatedFieldId,
+            relationshipType,
             hasRelatedField,
-            relationshipType: config.relationshipType,
+            hasRelationshipType,
             fieldType: fieldDataToSubmit.field_type
           });
           
-          if (hasRelatedField && config.relationshipType) {
+          // Only create relationship_config if we have both relatedFieldId and relationshipType
+          if (hasRelatedField && hasRelationshipType) {
             // Map frontend relationship types to API relationship types
             const relationshipTypeMap = {
               'parent': 'one_to_many',      // Parent can have many children
@@ -2141,8 +2188,8 @@ const CustomFieldsAdminPage = () => {
             
             console.log("Transformed relationship_config (update):", fieldDataToSubmit.relationship_config);
           } else {
-            // If no valid relationship config, set to null
-            console.log("Setting relationship_config to null (update) - hasRelatedField:", hasRelatedField, "relationshipType:", config.relationshipType);
+            // If no valid relationship config (missing either relatedFieldId or relationshipType), set to null
+            console.log("Setting relationship_config to null (update) - hasRelatedField:", hasRelatedField, "hasRelationshipType:", hasRelationshipType);
             fieldDataToSubmit.relationship_config = null;
           }
         } else {
@@ -2187,21 +2234,28 @@ const CustomFieldsAdminPage = () => {
           
           // Check if we have a valid relatedFieldId (not null, not 'none', not 0, not empty string)
           const relatedFieldId = config.relatedFieldId;
+          const relationshipType = config.relationshipType;
           const hasRelatedField = relatedFieldId !== null && 
                                   relatedFieldId !== undefined && 
                                   relatedFieldId !== 'none' && 
                                   relatedFieldId !== '' && 
                                   relatedFieldId !== 0;
+          const hasRelationshipType = relationshipType !== null && 
+                                      relationshipType !== undefined && 
+                                      relationshipType !== 'none' && 
+                                      relationshipType !== '';
           
           console.log("Relationship config transformation (create):", {
             originalConfig: config,
             relatedFieldId,
+            relationshipType,
             hasRelatedField,
-            relationshipType: config.relationshipType,
+            hasRelationshipType,
             fieldType: fieldDataToSubmit.field_type
           });
           
-          if (hasRelatedField && config.relationshipType) {
+          // Only create relationship_config if we have both relatedFieldId and relationshipType
+          if (hasRelatedField && hasRelationshipType) {
             // Map frontend relationship types to API relationship types
             const relationshipTypeMap = {
               'parent': 'one_to_many',      // Parent can have many children
@@ -2224,8 +2278,8 @@ const CustomFieldsAdminPage = () => {
             
             console.log("Transformed relationship_config (create):", fieldDataToSubmit.relationship_config);
           } else {
-            // If no valid relationship config, set to null
-            console.log("Setting relationship_config to null (create) - hasRelatedField:", hasRelatedField, "relationshipType:", config.relationshipType);
+            // If no valid relationship config (missing either relatedFieldId or relationshipType), set to null
+            console.log("Setting relationship_config to null (create) - hasRelatedField:", hasRelatedField, "hasRelationshipType:", hasRelationshipType);
             fieldDataToSubmit.relationship_config = null;
           }
         } else {
@@ -4813,10 +4867,16 @@ const CustomFieldsAdminPage = () => {
                       <Select
                         value={fieldFormData.relationship_config?.relatedFieldId?.toString() || 'none'}
                         onValueChange={(value) => {
-                          handleFieldInputChange("relationship_config", {
-                            ...(fieldFormData.relationship_config || {}),
-                            relatedFieldId: value && value !== 'none' ? parseInt(value) : null
-                          });
+                          if (value === 'none' || !value) {
+                            // Clear entire relationship_config when "None" is selected
+                            handleFieldInputChange("relationship_config", null);
+                          } else {
+                            // Set relatedFieldId and preserve other relationship config
+                            handleFieldInputChange("relationship_config", {
+                              ...(fieldFormData.relationship_config || {}),
+                              relatedFieldId: parseInt(value)
+                            });
+                          }
                         }}
                       >
                         <SelectTrigger id="relatedFieldId">
@@ -4960,18 +5020,40 @@ const CustomFieldsAdminPage = () => {
                     <div className="space-y-2">
                       <Label htmlFor="relationshipType">Relationship Type</Label>
                       <Select
-                        value={fieldFormData.relationship_config?.relationshipType || undefined}
+                        value={fieldFormData.relationship_config?.relationshipType || 'none'}
                         onValueChange={(value) => {
-                          handleFieldInputChange("relationship_config", {
-                            ...(fieldFormData.relationship_config || {}),
-                            relationshipType: value || null
-                          });
+                          if (value === 'none' || !value) {
+                            // If clearing relationship type, clear entire relationship_config if no relatedFieldId
+                            if (!fieldFormData.relationship_config?.relatedFieldId) {
+                              handleFieldInputChange("relationship_config", null);
+                            } else {
+                              // Keep relatedFieldId but clear relationshipType
+                              handleFieldInputChange("relationship_config", {
+                                ...fieldFormData.relationship_config,
+                                relationshipType: null
+                              });
+                            }
+                          } else {
+                            // Set relationshipType, create config if it doesn't exist
+                            // But only if we have a relatedFieldId
+                            if (fieldFormData.relationship_config?.relatedFieldId) {
+                              handleFieldInputChange("relationship_config", {
+                                ...fieldFormData.relationship_config,
+                                relationshipType: value
+                              });
+                            } else {
+                              // Can't set relationship type without a related field
+                              toast.warning("Please select a Related Field first");
+                            }
+                          }
                         }}
+                        disabled={!fieldFormData.relationship_config?.relatedFieldId}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="Select type" />
                         </SelectTrigger>
                         <SelectContent>
+                          <SelectItem value="none">None</SelectItem>
                           <SelectItem value="parent">Parent Field</SelectItem>
                           <SelectItem value="child">Child Field</SelectItem>
                           <SelectItem value="sibling">Sibling Field</SelectItem>

@@ -94,22 +94,27 @@ export const ComplianceFieldCard = ({
               <CardDescription className="mt-1 text-sm">{field.field_description}</CardDescription>
             )}
           </div>
-          {(!value || !value.id || value.id === 0) && canUpload ? (
+          {canUpload && (
             <div className="flex items-center flex-shrink-0 sm:self-center self-start">
-              <Button onClick={() => onUpload(field)} size="default" variant="default" className="whitespace-nowrap w-full sm:w-auto">
-                <Upload className="h-4 w-4 mr-2" />
-                Submit Details
-              </Button>
+              {(!value || !value.id || value.id === 0) ? (
+                <Button onClick={() => onUpload(field)} size="default" variant="default" className="whitespace-nowrap w-full sm:w-auto">
+                  <Upload className="h-4 w-4 mr-2" />
+                  Submit Details
+                </Button>
+              ) : (
+                <Button onClick={() => onUpload(field, value)} size="default" variant="default" className="whitespace-nowrap w-full sm:w-auto">
+                  <Upload className="h-4 w-4 mr-2" />
+                  {value.approval_status === "declined" 
+                    ? "Resubmit" 
+                    : value.approval_status === "pending" 
+                    ? "Update" 
+                    : value.approval_status === "approved"
+                    ? "Re-upload"
+                    : "Update Details"}
+                </Button>
+              )}
             </div>
-          ) : value && value.id && value.id > 0 && canUpload && (!value.approval_status || value.approval_status === "declined" || value.approval_status === "pending") ? (
-            // Show Edit/Update button if value exists but is not approved, is declined, or is pending
-            <div className="flex items-center flex-shrink-0 sm:self-center self-start">
-              <Button onClick={() => onUpload(field, value)} size="default" variant="default" className="whitespace-nowrap w-full sm:w-auto">
-                <Upload className="h-4 w-4 mr-2" />
-                {value.approval_status === "declined" ? "Resubmit" : value.approval_status === "pending" ? "Update" : "Update Details"}
-              </Button>
-            </div>
-          ) : null}
+          )}
         </div>
       </CardHeader>
       <CardContent className="pt-0">
@@ -267,7 +272,7 @@ export const ComplianceFieldCard = ({
           )}
 
           {/* Actions */}
-          {value && value.id && value.id > 0 && ((isExpired || isExpiringSoon) && canUpload || onViewHistory) ? (
+          {value && value.id && value.id > 0 && (onViewHistory || ((isExpired || isExpiringSoon) && canUpload)) ? (
             <div className="flex gap-2 pt-2 border-t">
               {value && value.id && value.id > 0 && (isExpired || isExpiringSoon) && canUpload ? (
                 <Button onClick={() => onRenew(value, field)} size="sm" variant="default">

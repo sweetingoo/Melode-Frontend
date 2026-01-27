@@ -237,7 +237,11 @@ export default function ComplianceMonitoringPage() {
   };
 
   const handleViewDetails = (item) => {
-    if (item.value_slug) {
+    // If it's a user entity, navigate to the user detail page (same design as Compliance page)
+    if (item.entity_type === "user" && item.entity_slug) {
+      router.push(`/admin/compliance-monitoring/users/${item.entity_slug}`);
+    } else if (item.value_slug) {
+      // For non-user entities or when entity_slug is not available, show single item detail
       router.push(`/admin/compliance-monitoring/${item.value_slug}`);
     }
   };
@@ -1096,7 +1100,7 @@ export default function ComplianceMonitoringPage() {
                                         size="sm"
                                         variant="outline"
                                         onClick={() => {
-                                          router.push(`/admin/people-management/${group.entity_slug}`);
+                                          router.push(`/admin/compliance-monitoring/users/${group.entity_slug}`);
                                         }}
                                         className="gap-1.5"
                                       >
