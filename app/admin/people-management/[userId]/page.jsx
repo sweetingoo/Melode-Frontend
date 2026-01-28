@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import React, { useState, useEffect } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -64,6 +64,10 @@ import {
   Building2,
   Network,
   FileCheck,
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
+  Clock,
 } from "lucide-react";
 import {
   useUser,
@@ -93,14 +97,97 @@ import { useQueryClient } from "@tanstack/react-query";
 import { userKeys } from "@/hooks/useUsers";
 import { useHierarchyImage } from "@/hooks/useEmployees";
 import UserAuditLogs from "@/components/UserAuditLogs";
-import { UserComplianceData } from "@/components/UserComplianceData";
+import { ComplianceSection } from "@/components/ComplianceSection";
+import { AvatarWithUrl } from "@/components/AvatarWithUrl";
+import EntityCustomFieldsForm from "@/components/EntityCustomFieldsForm";
+import CustomFieldRenderer from "@/components/CustomFieldRenderer";
+import { 
+  useUserCustomFieldsHierarchy, 
+  useUserCustomFields, 
+  useBulkUpdateUserCustomFields,
+  useUploadFile,
+} from "@/hooks/useProfile";
+import { useEntityCompliance, useComplianceHistory } from "@/hooks/useCompliance";
+import { useCustomFieldValueHistory } from "@/hooks/useProfile";
+import { ComplianceHistory } from "@/components/ComplianceHistory";
+import { filesService } from "@/services/files";
 
 const UserEditPage = () => {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const userSlug = params.userId || params.slug;
 
-  const [activeTab, setActiveTab] = useState("basic");
+  // Check if tab parameter is in URL (for redirects from compliance-monitoring)
+  const tabParam = searchParams?.get("tab");
+  
+  // Get stored tab state from localStorage
+  const getStoredTabState = (key, defaultValue) => {
+    if (typeof window === 'undefined') return defaultValue;
+    try {
+      const stored = localStorage.getItem(`people-management-${userSlug}-${key}`);
+      return stored || defaultValue;
+    } catch {
+      return defaultValue;
+    }
+  };
+
+  // Initialize tab states from URL param, localStorage, or default
+  const [activeTab, setActiveTab] = useState(() => {
+    return tabParam || getStoredTabState('activeTab', 'basic');
+  });
+  
+  // Nested tabs state for compliance tab (Compliance / Additional Information)
+  const [complianceSubTab, setComplianceSubTab] = useState(() => {
+    return getStoredTabState('complianceSubTab', 'compliance');
+  });
+  const [activeSectionTab, setActiveSectionTab] = useState(() => {
+    return getStoredTabState('activeSectionTab', null);
+  });
+
+  // Update tab if URL parameter changes
+  useEffect(() => {
+    if (tabParam) {
+      setActiveTab(tabParam);
+    }
+  }, [tabParam]);
+
+  // Persist activeTab to localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined' && activeTab) {
+      try {
+        localStorage.setItem(`people-management-${userSlug}-activeTab`, activeTab);
+      } catch (error) {
+        console.warn('Failed to save activeTab to localStorage:', error);
+      }
+    }
+  }, [activeTab, userSlug]);
+
+  // Persist complianceSubTab to localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined' && complianceSubTab) {
+      try {
+        localStorage.setItem(`people-management-${userSlug}-complianceSubTab`, complianceSubTab);
+      } catch (error) {
+        console.warn('Failed to save complianceSubTab to localStorage:', error);
+      }
+    }
+  }, [complianceSubTab, userSlug]);
+
+  // Persist activeSectionTab to localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        if (activeSectionTab) {
+          localStorage.setItem(`people-management-${userSlug}-activeSectionTab`, activeSectionTab);
+        } else {
+          localStorage.removeItem(`people-management-${userSlug}-activeSectionTab`);
+        }
+      } catch (error) {
+        console.warn('Failed to save activeSectionTab to localStorage:', error);
+      }
+    }
+  }, [activeSectionTab, userSlug]);
   const [isCustomPermissionModalOpen, setIsCustomPermissionModalOpen] =
     useState(false);
   const [searchPermissionTerm, setSearchPermissionTerm] = useState("");
@@ -170,6 +257,407 @@ const UserEditPage = () => {
 
   // Get available roles from API (needed for Superuser role lookup)
   const { data: rolesData, isLoading: rolesLoading } = useRoles();
+
+  // Custom Fields hooks for Additional Information tab
+  const { data: customFieldsHierarchy, isLoading: customFieldsHierarchyLoading } = 
+    useUserCustomFieldsHierarchy(actualUserSlug);
+  const { data: userCustomFields } = useUserCustomFields(actualUserSlug);
+  const bulkUpdateUserCustomFieldsMutation = useBulkUpdateUserCustomFields();
+  const uploadFileMutation = useUploadFile({ silent: true });
+
+  // Fetch compliance data to filter out compliance fields from custom fields
+  const { data: complianceData } = useEntityCompliance(
+    "user",
+    actualUserSlug,
+    null,
+    null
+  );
+
+  // Custom Fields State
+  const [customFieldsData, setCustomFieldsData] = useState({});
+  const [initialCustomFieldsData, setInitialCustomFieldsData] = useState({});
+  const [customFieldsErrors, setCustomFieldsErrors] = useState({});
+  const [hasCustomFieldsChanges, setHasCustomFieldsChanges] = useState(false);
+  const [isUpdatingCustomFields, setIsUpdatingCustomFields] = useState(false);
+
+  // History modal state
+  const [historyModalOpen, setHistoryModalOpen] = useState(false);
+  const [selectedHistoryField, setSelectedHistoryField] = useState(null);
+
+  // Helper function to extract value from API response
+  const extractValueFromAPIResponse = (field, valueData) => {
+    if (!valueData) return "";
+    
+    if (field.field_type === "file" || field.field_type === "image") {
+      return null;
+    }
+    
+    if (field.field_type === "select" || field.field_type === "multi_select") {
+      return valueData.selected_options || valueData.value || "";
+    }
+    
+    if (field.field_type === "date") {
+      return valueData.date || valueData.value || "";
+    }
+    
+    if (field.field_type === "boolean") {
+      return valueData.value !== undefined ? valueData.value : "";
+    }
+    
+    return valueData.value || valueData || "";
+  };
+
+  // Initialize custom fields data from API response
+  useEffect(() => {
+    if (userCustomFields && userCustomFields.sections) {
+      const fieldsMap = {};
+      userCustomFields.sections.forEach(section => {
+        section.fields?.forEach(field => {
+          const fieldType = field.field_type?.toLowerCase();
+          
+          if (fieldType === 'file' || fieldType === 'image') {
+            if (field.file_id) {
+              fieldsMap[field.id] = field.file_id;
+            } else {
+              fieldsMap[field.id] = null;
+            }
+          } else if (field.value_data) {
+            const extractedValue = extractValueFromAPIResponse(field, field.value_data);
+            fieldsMap[field.id] = extractedValue;
+          } else {
+            fieldsMap[field.id] = "";
+          }
+        });
+      });
+      setCustomFieldsData(fieldsMap);
+      const deepCopy = {};
+      Object.entries(fieldsMap).forEach(([key, value]) => {
+        if (value instanceof File || (value && typeof value === 'object' && value.file instanceof File)) {
+          deepCopy[key] = null;
+        } else {
+          try {
+            deepCopy[key] = JSON.parse(JSON.stringify(value));
+          } catch (e) {
+            deepCopy[key] = value;
+          }
+        }
+      });
+      setInitialCustomFieldsData(deepCopy);
+    }
+  }, [userCustomFields]);
+
+  // Set default active section tab (only if not already set from localStorage)
+  useEffect(() => {
+    if (customFieldsHierarchy?.sections && !activeSectionTab) {
+      const activeSections = customFieldsHierarchy.sections
+        .filter(section => section.is_active !== false)
+        .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+      
+      if (activeSections.length > 0) {
+        // Check if stored section tab is still valid
+        if (typeof window !== 'undefined') {
+          try {
+            const storedSectionTab = localStorage.getItem(`people-management-${userSlug}-activeSectionTab`);
+            if (storedSectionTab && activeSections.some(s => s.id.toString() === storedSectionTab)) {
+              setActiveSectionTab(storedSectionTab);
+              return;
+            }
+          } catch (error) {
+            // Ignore localStorage errors
+          }
+        }
+        setActiveSectionTab(activeSections[0].id.toString());
+      }
+    }
+  }, [customFieldsHierarchy, activeSectionTab, userSlug]);
+
+  // Create a map of compliance fields by field ID
+  const complianceFieldsMap = React.useMemo(() => {
+    const map = new Map();
+    if (complianceData?.compliance_fields) {
+      complianceData.compliance_fields.forEach((cf) => {
+        map.set(cf.custom_field_id, cf);
+      });
+    }
+    return map;
+  }, [complianceData]);
+
+  // Create a map of ALL fields across ALL sections
+  const allSectionsFieldsMap = React.useMemo(() => {
+    const map = new Map();
+    if (customFieldsHierarchy?.sections) {
+      customFieldsHierarchy.sections
+        .filter(section => section.is_active !== false)
+        .forEach(section => {
+          (section.fields || [])
+            .filter(field => field.is_active !== false)
+            .filter(field => !complianceFieldsMap.has(field.id))
+            .forEach(field => {
+              map.set(field.id, field);
+            });
+        });
+    }
+    return map;
+  }, [customFieldsHierarchy, complianceFieldsMap]);
+
+  const handleCustomFieldChange = (fieldId, value) => {
+    setCustomFieldsData((prev) => ({
+      ...prev,
+      [fieldId]: value,
+    }));
+    setCustomFieldsErrors((prev) => {
+      const newErrors = { ...prev };
+      delete newErrors[fieldId];
+      return newErrors;
+    });
+  };
+
+  // Handle viewing field history
+  const handleViewHistory = (field) => {
+    setSelectedHistoryField(field);
+    setHistoryModalOpen(true);
+  };
+
+  // Handle downloading files from history
+  const handleDownloadHistoryFile = async (file) => {
+    if (file?.id) {
+      try {
+        const response = await filesService.getFileUrl(file.id);
+        const url = response.url || response;
+        if (url) {
+          window.open(url, "_blank");
+        }
+      } catch (error) {
+        console.error("Failed to get file URL:", error);
+        toast.error("Failed to download file", {
+          description: "Could not retrieve the file. Please try again.",
+        });
+      }
+    }
+  };
+
+  // Get history for selected field - use custom field history for all fields
+  const { data: customFieldHistoryData, isLoading: customFieldHistoryLoading, error: customFieldHistoryError } = useCustomFieldValueHistory(
+    "user",
+    actualUserSlug,
+    selectedHistoryField?.slug || "",
+    1,
+    50
+  );
+
+  // For compliance fields, also try compliance history API (for backward compatibility)
+  const isComplianceField = selectedHistoryField && (selectedHistoryField.is_compliance || selectedHistoryField.compliance_config || complianceFieldsMap.has(selectedHistoryField.id));
+  const { data: complianceHistoryData, isLoading: complianceHistoryLoading } = useComplianceHistory(
+    isComplianceField ? (selectedHistoryField?.slug || "") : "",
+    "user",
+    actualUserSlug,
+    1,
+    50
+  );
+
+  // Use custom field history if available, otherwise fall back to compliance history
+  const historyData = customFieldHistoryData || (isComplianceField ? complianceHistoryData : null);
+  const historyLoading = customFieldHistoryLoading || (isComplianceField ? complianceHistoryLoading : false);
+  const historyError = customFieldHistoryError;
+
+  // Debug logging
+  useEffect(() => {
+    if (selectedHistoryField) {
+      console.log("Viewing history for field:", {
+        field: selectedHistoryField,
+        slug: selectedHistoryField.slug,
+        isCompliance: isComplianceField,
+        customFieldHistoryData,
+        complianceHistoryData,
+        historyData,
+        historyError,
+      });
+    }
+  }, [selectedHistoryField, customFieldHistoryData, complianceHistoryData, historyData, historyError, isComplianceField]);
+
+  // Check for changes in custom fields
+  useEffect(() => {
+    if (!customFieldsHierarchy?.sections) {
+      setHasCustomFieldsChanges(false);
+      return;
+    }
+
+    let hasChanges = false;
+    customFieldsHierarchy.sections
+      .filter(section => section.is_active !== false)
+      .forEach(section => {
+        section.fields
+          ?.filter(field => field.is_active !== false)
+          .forEach(field => {
+            // Skip compliance fields
+            const isComplianceField = complianceData?.compliance_fields?.some(
+              cf => cf.custom_field_id === field.id
+            );
+            if (isComplianceField) return;
+
+            const currentValue = customFieldsData[field.id];
+            const initialValue = initialCustomFieldsData[field.id];
+            
+            // Normalize values for comparison
+            const normalizeValue = (val) => {
+              if (val === null || val === undefined || val === '') return null;
+              // Don't compare File objects - they're handled separately
+              if (val instanceof File || (val && typeof val === 'object' && val.file instanceof File)) {
+                return null; // File objects will be uploaded, so we can't compare them directly
+              }
+              // Filter out empty arrays like [{}] or empty objects
+              if (Array.isArray(val)) {
+                const validEntries = val.filter(v => 
+                  v instanceof File || 
+                  (v && typeof v === 'object' && v.file instanceof File) ||
+                  (v && typeof v === 'object' && Object.keys(v).length > 0)
+                );
+                if (validEntries.length === 0) return null; // Empty or invalid array
+                return val; // Has valid entries
+              }
+              if (val && typeof val === 'object' && Object.keys(val).length === 0) {
+                return null; // Empty object
+              }
+              return val;
+            };
+            
+            const normalizedCurrent = normalizeValue(currentValue);
+            const normalizedInitial = normalizeValue(initialValue);
+            
+            // Only mark as changed if values are actually different
+            if (normalizedCurrent !== normalizedInitial) {
+              hasChanges = true;
+            }
+          });
+      });
+
+    setHasCustomFieldsChanges(hasChanges);
+  }, [customFieldsHierarchy, initialCustomFieldsData, customFieldsData, complianceData]);
+
+  // Handle bulk update of custom fields
+  const handleCustomFieldsBulkUpdate = async () => {
+    if (!actualUserSlug) return;
+
+    setIsUpdatingCustomFields(true);
+    try {
+      // Create a map of valid field IDs to slugs from the hierarchy (excluding compliance fields)
+      const fieldIdToSlugMap = new Map();
+      if (customFieldsHierarchy?.sections) {
+        customFieldsHierarchy.sections
+          .filter(section => section.is_active !== false)
+          .forEach(section => {
+            section.fields
+              ?.filter(field => field.is_active !== false)
+              .forEach(field => {
+                // Skip compliance fields
+                const isComplianceField = complianceData?.compliance_fields?.some(
+                  cf => cf.custom_field_id === field.id
+                );
+                if (!isComplianceField && field.slug) {
+                  fieldIdToSlugMap.set(field.id, field.slug);
+                }
+              });
+          });
+      }
+
+      // Prepare updates array - only include fields that have actually changed
+      const updates = Object.entries(customFieldsData)
+        .filter(([fieldId, currentValue]) => {
+          const fieldIdInt = parseInt(fieldId);
+          // Only include fields that are in the hierarchy and have slugs
+          if (!fieldIdToSlugMap.has(fieldIdInt)) {
+            return false;
+          }
+          
+          // Get initial value for this field
+          const initialValue = initialCustomFieldsData[fieldId];
+          
+          // Normalize values for comparison
+          const normalizeValue = (val) => {
+            if (val === null || val === undefined || val === '') return null;
+            if (val instanceof File || (val && typeof val === 'object' && val.file instanceof File)) {
+              return null; // File objects are handled separately
+            }
+            return val;
+          };
+          
+          const normalizedCurrent = normalizeValue(currentValue);
+          const normalizedInitial = normalizeValue(initialValue);
+          
+          // Only include if value has actually changed
+          return normalizedCurrent !== normalizedInitial;
+        })
+        .map(([fieldId, value]) => {
+          const fieldIdInt = parseInt(fieldId);
+          const fieldSlug = fieldIdToSlugMap.get(fieldIdInt);
+          
+          // Get field definition to check field type
+          const field = customFieldsHierarchy?.sections
+            ?.flatMap(section => section.fields || [])
+            ?.find(f => f.id === fieldIdInt);
+          
+          // Filter out invalid values
+          let finalValue = value;
+          if (Array.isArray(value)) {
+            const validEntries = value.filter(v => 
+              v instanceof File || 
+              (v && typeof v === 'object' && (v.file instanceof File || Object.keys(v).length > 0))
+            );
+            if (validEntries.length === 0) {
+              finalValue = null; // Empty or invalid array
+            }
+          } else if (value && typeof value === 'object' && Object.keys(value).length === 0) {
+            finalValue = null; // Empty object
+          } else if (value === undefined || value === '') {
+            finalValue = null;
+          }
+          
+          // If this is a file field and we don't have a file_id, don't send invalid values
+          if (field && field.field_type?.toLowerCase() === 'file') {
+            const isValidFileValue = 
+              finalValue instanceof File || 
+              (finalValue && typeof finalValue === 'object' && finalValue.file instanceof File) ||
+              typeof finalValue === 'number' || 
+              finalValue === null;
+            
+            if (!isValidFileValue) {
+              console.warn(`Skipping invalid file field value for ${fieldSlug}:`, finalValue);
+              return null; // Filter this out
+            }
+          }
+          
+          return {
+            field_slug: fieldSlug,
+            value: finalValue,
+          };
+        })
+        .filter(update => update !== null); // Remove null entries (filtered out invalid values)
+
+      if (updates.length === 0) {
+        toast.info("No changes to save");
+        setIsUpdatingCustomFields(false);
+        return;
+      }
+
+      await bulkUpdateUserCustomFieldsMutation.mutateAsync({
+        userSlug: actualUserSlug,
+        updates: updates,
+      });
+
+      toast.success("Custom fields updated successfully");
+      
+      // Update initial data to reflect saved state
+      setInitialCustomFieldsData({ ...customFieldsData });
+      setHasCustomFieldsChanges(false);
+    } catch (error) {
+      console.error("Failed to update custom fields:", error);
+      toast.error("Failed to update custom fields", {
+        description: error.response?.data?.detail || error.message || "An error occurred",
+      });
+    } finally {
+      setIsUpdatingCustomFields(false);
+    }
+  };
 
   // Group assignments by department
   const assignmentsByDepartment = React.useMemo(() => {
@@ -995,10 +1483,24 @@ const UserEditPage = () => {
       {/* Header Section */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
+          {transformedUser && (
+            <AvatarWithUrl
+              avatarValue={transformedUser.avatarUrl}
+              alt={transformedUser.name || "User"}
+              fallback={
+                transformedUser.name
+                  ?.split(" ")
+                  .map((n) => n[0])
+                  .join("")
+                  .toUpperCase() || "U"
+              }
+              className="h-12 w-12"
+            />
+          )}
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Edit Person</h1>
             <p className="text-muted-foreground mt-1">
-              {transformedUser.email}
+              {transformedUser?.name || transformedUser?.email || "Loading..."}
             </p>
           </div>
         </div>
@@ -2017,7 +2519,520 @@ const UserEditPage = () => {
 
         {/* Compliance Tab */}
         <TabsContent value="compliance" className="space-y-6">
-          <UserComplianceData userSlug={actualUserSlug} />
+          <Tabs value={complianceSubTab} onValueChange={setComplianceSubTab} className="space-y-6">
+            <TabsList>
+              <TabsTrigger value="compliance">Compliance</TabsTrigger>
+              <TabsTrigger value="additional">Additional Information</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="compliance" className="space-y-6">
+              <ComplianceSection
+                entityType="user"
+                entitySlug={actualUserSlug}
+                roleSlug={null}
+                availableRoles={userRoles}
+                isAdmin={true}
+                canUpload={true}
+              />
+            </TabsContent>
+
+            <TabsContent value="additional" className="space-y-6">
+              {customFieldsHierarchyLoading ? (
+                <Card>
+                  <CardContent className="py-8">
+                    <div className="flex items-center justify-center">
+                      <Loader2 className="h-6 w-6 animate-spin mr-2" />
+                      <span>Loading custom fields...</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : customFieldsHierarchy?.sections && 
+                customFieldsHierarchy.sections.filter(section => section.is_active !== false).length > 0 ? (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <User className="h-5 w-5" />
+                      Additional Information
+                    </CardTitle>
+                    <CardDescription>
+                      View and manage additional information for this user
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {(() => {
+                      const activeSections = (customFieldsHierarchy.sections || [])
+                        .filter(section => section.is_active !== false)
+                        .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+                      
+                      if (activeSections.length === 0) {
+                        return null;
+                      }
+                      
+                      // If only one section, don't show tabs - just render it
+                      if (activeSections.length === 1) {
+                        const section = activeSections[0];
+                        return (
+                          <div className="space-y-6">
+                            {(() => {
+                              const allFields = (section.fields || [])
+                                .filter(field => field.is_active !== false)
+                                .filter(field => !complianceFieldsMap.has(field.id));
+
+                              if (allFields.length === 0) {
+                                return (
+                                  <div className="text-center py-8 text-muted-foreground">
+                                    No fields in this section
+                                  </div>
+                                );
+                              }
+
+                              const allFieldsMap = allSectionsFieldsMap;
+                              const relatedFieldsGroups = new Map();
+                              const standaloneFields = [];
+                              const fieldsInGroups = new Set();
+                              
+                              allFields.forEach((field) => {
+                                const relationshipConfig = field.relationship_config;
+                                if (relationshipConfig && relationshipConfig.target_field_id) {
+                                  const targetFieldId = relationshipConfig.target_field_id;
+                                  const parentField = allFieldsMap.get(targetFieldId);
+                                  
+                                  if (!relatedFieldsGroups.has(targetFieldId)) {
+                                    relatedFieldsGroups.set(targetFieldId, {
+                                      parentField: parentField || null,
+                                      relatedFields: []
+                                    });
+                                  }
+                                  relatedFieldsGroups.get(targetFieldId).relatedFields.push(field);
+                                  fieldsInGroups.add(field.id);
+                                  
+                                  if (parentField) {
+                                    if (!relatedFieldsGroups.get(targetFieldId).parentField) {
+                                      relatedFieldsGroups.get(targetFieldId).parentField = parentField;
+                                    }
+                                    fieldsInGroups.add(parentField.id);
+                                  }
+                                }
+                              });
+                              
+                              allFields.forEach((field) => {
+                                const isParent = Array.from(allFieldsMap.values()).some(f => 
+                                  f.relationship_config?.target_field_id === field.id
+                                );
+                                if (isParent) {
+                                  if (!relatedFieldsGroups.has(field.id)) {
+                                    relatedFieldsGroups.set(field.id, {
+                                      parentField: field,
+                                      relatedFields: []
+                                    });
+                                  } else {
+                                    relatedFieldsGroups.get(field.id).parentField = field;
+                                  }
+                                  fieldsInGroups.add(field.id);
+                                }
+                              });
+                              
+                              allFields.forEach((field) => {
+                                if (!fieldsInGroups.has(field.id)) {
+                                  standaloneFields.push(field);
+                                }
+                              });
+
+                              return (
+                                <div className="space-y-4">
+                                  {section.section_description && (
+                                    <p className="text-sm text-muted-foreground">
+                                      {section.section_description}
+                                    </p>
+                                  )}
+                                  
+                                  {standaloneFields.length > 0 && (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                      {standaloneFields.map((field) => (
+                                        <div key={field.id} className="space-y-2">
+                                          <div className="flex items-center gap-2">
+                                            <Label className="text-sm font-medium">
+                                              {field.field_label || field.field_name || field.name}
+                                              {field.is_required && <span className="text-red-500 ml-1">*</span>}
+                                            </Label>
+                                            {field.slug && (
+                                              <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                className="h-6 w-6 p-0 cursor-pointer"
+                                                onClick={() => handleViewHistory(field)}
+                                                title="View history"
+                                              >
+                                                <Clock className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+                                              </Button>
+                                            )}
+                                          </div>
+                                          <CustomFieldRenderer
+                                            field={field}
+                                            value={customFieldsData[field.id] !== undefined ? customFieldsData[field.id] : (field.field_type?.toLowerCase() === 'file' ? null : '')}
+                                            onChange={handleCustomFieldChange}
+                                            error={customFieldsErrors[field.id]}
+                                            hideLabel={true}
+                                          />
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+
+                                  {Array.from(relatedFieldsGroups.entries()).map(([targetFieldId, group]) => {
+                                    const { parentField, relatedFields } = group;
+                                    
+                                    if (!parentField && relatedFields.length === 0) {
+                                      return null;
+                                    }
+                                    
+                                    const allGroupFields = parentField 
+                                      ? [parentField, ...relatedFields]
+                                      : relatedFields;
+                                    
+                                    const groupTitle = parentField 
+                                      ? (parentField.field_label || parentField.field_name || "Related Fields")
+                                      : "Related Fields";
+                                    
+                                    return (
+                                      <div 
+                                        key={`related-group-${targetFieldId}`} 
+                                        className="mt-6 space-y-4 border-2 border-primary/20 rounded-lg p-6 bg-gradient-to-br from-muted/50 to-muted/30 shadow-sm"
+                                      >
+                                        <div className="border-b border-primary/10 pb-3 mb-4">
+                                          <h4 className="text-base font-semibold text-foreground flex items-center gap-2">
+                                            <span className="w-2 h-2 rounded-full bg-primary/60"></span>
+                                            {groupTitle}
+                                            {relatedFields.length > 0 && (
+                                              <span className="text-xs font-normal text-muted-foreground ml-2">
+                                                ({allGroupFields.length} {allGroupFields.length === 1 ? 'field' : 'fields'})
+                                              </span>
+                                            )}
+                                          </h4>
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                          {allGroupFields.map((field) => (
+                                            <div key={field.id} className="space-y-2">
+                                              <div className="flex items-center gap-2">
+                                                <Label className="text-sm font-medium">
+                                                  {field.field_label || field.field_name || field.name}
+                                                  {field.is_required && <span className="text-red-500 ml-1">*</span>}
+                                                </Label>
+                                                {field.slug && (
+                                                  <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="h-6 w-6 p-0 cursor-pointer"
+                                                    onClick={() => handleViewHistory(field)}
+                                                    title="View history"
+                                                  >
+                                                    <Clock className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+                                                  </Button>
+                                                )}
+                                              </div>
+                                              <CustomFieldRenderer
+                                                field={field}
+                                                value={customFieldsData[field.id] !== undefined ? customFieldsData[field.id] : (field.field_type?.toLowerCase() === 'file' ? null : '')}
+                                                onChange={handleCustomFieldChange}
+                                                error={customFieldsErrors[field.id]}
+                                                hideLabel={true}
+                                              />
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        );
+                      }
+                      
+                      // Multiple sections - show ribbon navigation
+                      const currentSectionIndex = activeSections.findIndex(s => s.id.toString() === activeSectionTab);
+                      const hasPrevious = currentSectionIndex > 0;
+                      const hasNext = currentSectionIndex < activeSections.length - 1;
+                      
+                      const handlePrevious = () => {
+                        if (hasPrevious) {
+                          setActiveSectionTab(activeSections[currentSectionIndex - 1].id.toString());
+                        }
+                      };
+                      
+                      const handleNext = () => {
+                        if (hasNext) {
+                          setActiveSectionTab(activeSections[currentSectionIndex + 1].id.toString());
+                        }
+                      };
+                      
+                      return (
+                        <Tabs value={activeSectionTab || undefined} onValueChange={setActiveSectionTab} className="space-y-6">
+                          <div className="flex items-center gap-2">
+                            {/* Scrollable Tabs Container */}
+                            <div className="flex-1 overflow-x-auto scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent">
+                              <TabsList className="inline-flex min-w-max w-full">
+                                {activeSections.map((section) => (
+                                  <TabsTrigger 
+                                    key={section.id} 
+                                    value={section.id.toString()}
+                                    className="text-sm whitespace-nowrap flex-shrink-0"
+                                  >
+                                    {section.section_name}
+                                  </TabsTrigger>
+                                ))}
+                              </TabsList>
+                            </div>
+                            
+                            {/* Navigation Buttons */}
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={handlePrevious}
+                                disabled={!hasPrevious}
+                                className="flex items-center gap-1"
+                              >
+                                <ChevronLeft className="h-4 w-4" />
+                                <span className="hidden sm:inline">Previous</span>
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={handleNext}
+                                disabled={!hasNext}
+                                className="flex items-center gap-1"
+                              >
+                                <span className="hidden sm:inline">Next</span>
+                                <ChevronRight className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                          
+                          {activeSections.map((section) => (
+                            <TabsContent key={section.id} value={section.id.toString()} className="space-y-6 mt-6">
+                              {section.section_description && (
+                                <p className="text-sm text-muted-foreground">
+                                  {section.section_description}
+                                </p>
+                              )}
+                              
+                              {(() => {
+                                const allFields = (section.fields || [])
+                                  .filter(field => field.is_active !== false)
+                                  .filter(field => !complianceFieldsMap.has(field.id));
+
+                                if (allFields.length === 0) {
+                                  return (
+                                    <div className="text-center py-8 text-muted-foreground">
+                                      No fields in this section
+                                    </div>
+                                  );
+                                }
+
+                                const allFieldsMap = allSectionsFieldsMap;
+                                const relatedFieldsGroups = new Map();
+                                const standaloneFields = [];
+                                const fieldsInGroups = new Set();
+                                
+                                allFields.forEach((field) => {
+                                  const relationshipConfig = field.relationship_config;
+                                  if (relationshipConfig && relationshipConfig.target_field_id) {
+                                    const targetFieldId = relationshipConfig.target_field_id;
+                                    const parentField = allFieldsMap.get(targetFieldId);
+                                    
+                                    if (!relatedFieldsGroups.has(targetFieldId)) {
+                                      relatedFieldsGroups.set(targetFieldId, {
+                                        parentField: parentField || null,
+                                        relatedFields: []
+                                      });
+                                    }
+                                    relatedFieldsGroups.get(targetFieldId).relatedFields.push(field);
+                                    fieldsInGroups.add(field.id);
+                                    
+                                    if (parentField) {
+                                      if (!relatedFieldsGroups.get(targetFieldId).parentField) {
+                                        relatedFieldsGroups.get(targetFieldId).parentField = parentField;
+                                      }
+                                      fieldsInGroups.add(parentField.id);
+                                    }
+                                  }
+                                });
+                                
+                                allFields.forEach((field) => {
+                                  const isParent = Array.from(allFieldsMap.values()).some(f => 
+                                    f.relationship_config?.target_field_id === field.id
+                                  );
+                                  if (isParent) {
+                                    if (!relatedFieldsGroups.has(field.id)) {
+                                      relatedFieldsGroups.set(field.id, {
+                                        parentField: field,
+                                        relatedFields: []
+                                      });
+                                    } else {
+                                      relatedFieldsGroups.get(field.id).parentField = field;
+                                    }
+                                    fieldsInGroups.add(field.id);
+                                  }
+                                });
+                                
+                                allFields.forEach((field) => {
+                                  if (!fieldsInGroups.has(field.id)) {
+                                    standaloneFields.push(field);
+                                  }
+                                });
+
+                                return (
+                                  <div className="space-y-4">
+                                    {standaloneFields.length > 0 && (
+                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        {standaloneFields.map((field) => (
+                                          <div key={field.id} className="space-y-2">
+                                            <div className="flex items-center gap-2">
+                                              <Label className="text-sm font-medium">
+                                                {field.field_label || field.field_name || field.name}
+                                                {field.is_required && <span className="text-red-500 ml-1">*</span>}
+                                              </Label>
+                                              {field.slug && (
+                                                <Button
+                                                  variant="ghost"
+                                                  size="sm"
+                                                  className="h-6 w-6 p-0 cursor-pointer"
+                                                  onClick={() => handleViewHistory(field)}
+                                                  title="View history"
+                                                >
+                                                  <Clock className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+                                                </Button>
+                                              )}
+                                            </div>
+                                            <CustomFieldRenderer
+                                              field={field}
+                                              value={customFieldsData[field.id] !== undefined ? customFieldsData[field.id] : (field.field_type?.toLowerCase() === 'file' ? null : '')}
+                                              onChange={handleCustomFieldChange}
+                                              error={customFieldsErrors[field.id]}
+                                              hideLabel={true}
+                                            />
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+
+                                    {Array.from(relatedFieldsGroups.entries()).map(([targetFieldId, group]) => {
+                                      const { parentField, relatedFields } = group;
+                                      
+                                      if (!parentField && relatedFields.length === 0) {
+                                        return null;
+                                      }
+                                      
+                                      const allGroupFields = parentField 
+                                        ? [parentField, ...relatedFields]
+                                        : relatedFields;
+                                      
+                                      const groupTitle = parentField 
+                                        ? (parentField.field_label || parentField.field_name || "Related Fields")
+                                        : "Related Fields";
+                                      
+                                      return (
+                                        <div 
+                                          key={`related-group-${targetFieldId}`} 
+                                          className="mt-6 space-y-4 border-2 border-primary/20 rounded-lg p-6 bg-gradient-to-br from-muted/50 to-muted/30 shadow-sm"
+                                        >
+                                          <div className="border-b border-primary/10 pb-3 mb-4">
+                                            <h4 className="text-base font-semibold text-foreground flex items-center gap-2">
+                                              <span className="w-2 h-2 rounded-full bg-primary/60"></span>
+                                              {groupTitle}
+                                              {relatedFields.length > 0 && (
+                                                <span className="text-xs font-normal text-muted-foreground ml-2">
+                                                  ({allGroupFields.length} {allGroupFields.length === 1 ? 'field' : 'fields'})
+                                                </span>
+                                              )}
+                                            </h4>
+                                          </div>
+                                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                            {allGroupFields.map((field) => (
+                                              <div key={field.id} className="space-y-2">
+                                                <div className="flex items-center gap-2">
+                                                  <Label className="text-sm font-medium">
+                                                    {field.field_label || field.field_name || field.name}
+                                                    {field.is_required && <span className="text-red-500 ml-1">*</span>}
+                                                  </Label>
+                                                  {field.slug && (
+                                                    <Button
+                                                      variant="ghost"
+                                                      size="sm"
+                                                      className="h-6 w-6 p-0 cursor-pointer"
+                                                      onClick={() => handleViewHistory(field)}
+                                                      title="View history"
+                                                    >
+                                                      <Clock className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+                                                    </Button>
+                                                  )}
+                                                </div>
+                                                <CustomFieldRenderer
+                                                  field={field}
+                                                  value={customFieldsData[field.id] !== undefined ? customFieldsData[field.id] : (field.field_type?.toLowerCase() === 'file' ? null : '')}
+                                                  onChange={handleCustomFieldChange}
+                                                  error={customFieldsErrors[field.id]}
+                                                  hideLabel={true}
+                                                />
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                );
+                              })()}
+                            </TabsContent>
+                          ))}
+                        </Tabs>
+                      );
+                    })()}
+                    
+                    {/* Save Changes Button - Always visible at the bottom */}
+                    <div className="flex justify-between items-center pt-6 mt-6 border-t">
+                      <div className="text-sm text-muted-foreground">
+                        {hasCustomFieldsChanges && (
+                          <span className="text-amber-600 dark:text-amber-400">
+                            You have unsaved changes
+                          </span>
+                        )}
+                      </div>
+                      <Button
+                        onClick={handleCustomFieldsBulkUpdate}
+                        disabled={isUpdatingCustomFields || !hasCustomFieldsChanges}
+                        variant={hasCustomFieldsChanges ? "default" : "outline"}
+                      >
+                        {isUpdatingCustomFields ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Saving...
+                          </>
+                        ) : (
+                          <>
+                            <Save className="h-4 w-4 mr-2" />
+                            {hasCustomFieldsChanges ? "Save Changes" : "Save Custom Fields"}
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : (
+                <Card>
+                  <CardContent className="py-8">
+                    <div className="text-center text-muted-foreground">
+                      No additional information fields configured
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </TabsContent>
+          </Tabs>
         </TabsContent>
 
         {/* Activity History Tab */}
@@ -2025,6 +3040,28 @@ const UserEditPage = () => {
           <UserAuditLogs userSlug={actualUserSlug} userId={userData?.id} title="User Activity History" pageSize={10} />
         </TabsContent>
       </Tabs>
+
+      {/* History Modal */}
+      {selectedHistoryField && (
+        <ComplianceHistory
+          open={historyModalOpen}
+          onOpenChange={setHistoryModalOpen}
+          field={selectedHistoryField}
+          history={historyData?.history || (Array.isArray(historyData) ? historyData : [])}
+          isLoading={historyLoading}
+          onDownload={handleDownloadHistoryFile}
+          isAdmin={true}
+        />
+      )}
+      
+      {/* Show error toast if history fetch fails */}
+      {historyError && historyModalOpen && (
+        <div className="hidden">
+          {toast.error("Failed to load field history", {
+            description: historyError.message || "Could not retrieve history for this field. It may not have any history yet.",
+          })}
+        </div>
+      )}
 
       {/* Custom Permission Modal */}
       <Dialog

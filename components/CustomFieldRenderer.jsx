@@ -22,7 +22,8 @@ const CustomFieldRenderer = ({
   value, 
   onChange, 
   error,
-  readOnly = false
+  readOnly = false,
+  hideLabel = false
 }) => {
   const fieldId = `custom-field-${field.id}`;
   const isRequired = field.is_required || field.required;
@@ -669,10 +670,12 @@ const CustomFieldRenderer = ({
 
   return (
     <div className="space-y-2">
-      <Label htmlFor={fieldId} className="text-sm font-medium">
-        {field.field_label || field.name}
-        {isRequired && <span className="text-red-500 ml-1">*</span>}
-      </Label>
+      {!hideLabel && (
+        <Label htmlFor={fieldId} className="text-sm font-medium">
+          {field.field_label || field.name}
+          {isRequired && <span className="text-red-500 ml-1">*</span>}
+        </Label>
+      )}
       {field.field_description && (
         <p className="text-sm text-muted-foreground">
           {field.field_description}

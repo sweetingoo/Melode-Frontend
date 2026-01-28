@@ -13,6 +13,7 @@ import {
   useUploadFile,
 } from "@/hooks/useProfile";
 import { useEntityCompliance } from "@/hooks/useCompliance";
+import { useCustomFieldLinks } from "@/hooks/useCustomFieldLinks";
 import { Shield, Loader2, User, Save, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -48,6 +49,13 @@ export default function CompliancePage() {
     null,
     null
   );
+
+  // Fetch all field links for user entity type to apply visibility filtering
+  const { data: fieldLinksData } = useCustomFieldLinks({
+    entity_type: "user",
+    is_active: true,
+  });
+  const allFieldLinks = fieldLinksData?.links || [];
 
   // Helper function to extract value from API response
   // Note: For file fields, file_id is a direct property of the field object, not in value_data
@@ -139,6 +147,7 @@ export default function CompliancePage() {
       .forEach(section => {
         section.fields
           ?.filter(field => field.is_active !== false)
+          .filter(field => shouldShowField(field))
           .forEach(field => {
             // Skip compliance fields
             const isComplianceField = complianceData?.compliance_fields?.some(
@@ -265,6 +274,100 @@ export default function CompliancePage() {
     return map;
   }, [customFieldsHierarchy, complianceFieldsMap]);
 
+  // Get current user's role IDs for visibility filtering
+  const currentUserRoleIds = useMemo(() => {
+    const roleIds = new Set();
+    if (currentUserData?.roles) {
+      currentUserData.roles.forEach(role => {
+        if (role.id) {
+          roleIds.add(role.id);
+        }
+      });
+    }
+    return roleIds;
+  }, [currentUserData]);
+
+  // Helper function to check if a field should be visible based on visibility links
+  const shouldShowField = useMemo(() => {
+    return (field) => {
+      // Get all links for this field
+      const fieldLinks = allFieldLinks.filter(link => link.custom_field_id === field.id);
+      
+      // If no links exist, show the field (default behavior)
+      if (fieldLinks.length === 0) {
+        return true;
+      }
+
+      // Track include/exclude decisions
+      let included = false;
+      let excluded = false;
+
+      for (const link of fieldLinks) {
+        // Check if this link applies to the current entity (user viewing their own page)
+        let applies = false;
+
+        if (link.entity_id !== null && link.entity_id !== undefined) {
+          // Specific entity link - check if it matches current user ID
+          if (currentUserData?.id && link.entity_id === currentUserData.id) {
+            applies = true;
+          }
+        } else if (link.role_id !== null && link.role_id !== undefined) {
+          // Role-based link
+          if (link.check_viewer_role) {
+            // Check viewer's role (for staff-only fields)
+            applies = currentUserRoleIds.has(link.role_id);
+          } else {
+            // Check entity's role (default behavior) - since viewing own page, use current user's roles
+            applies = currentUserRoleIds.has(link.role_id);
+          }
+        } else if (link.user_id !== null && link.user_id !== undefined) {
+          // User-specific link
+          if (currentUserData?.id && link.user_id === currentUserData.id) {
+            applies = true;
+          }
+        } else {
+          // All entities of this type (entity_id, role_id, user_id all null)
+          applies = true;
+        }
+
+        if (applies) {
+          if (link.link_mode === "include") {
+            included = true;
+          } else if (link.link_mode === "exclude") {
+            excluded = true;
+          }
+        }
+      }
+
+      // Decision logic:
+      // - If explicitly excluded, hide the field
+      // - If explicitly included, show the field
+      // - If both included and excluded, exclusion takes precedence
+      // - If no links apply, show the field (default)
+      if (excluded) {
+        return false;
+      }
+      if (included) {
+        return true;
+      }
+
+      // If we have links but none apply, check if there are any "all entities" links
+      // If there are specific links but none apply, hide the field (opt-in behavior)
+      const hasSpecificLinks = fieldLinks.some(link => 
+        (link.entity_id !== null && link.entity_id !== undefined) ||
+        (link.role_id !== null && link.role_id !== undefined) ||
+        (link.user_id !== null && link.user_id !== undefined)
+      );
+      if (hasSpecificLinks) {
+        // Specific links exist but none apply - hide the field (opt-in)
+        return false;
+      }
+
+      // Only "all entities" links exist - show the field
+      return true;
+    };
+  }, [allFieldLinks, currentUserData, currentUserRoleIds]);
+
   const handleCustomFieldsBulkUpdate = async () => {
     if (!userSlug) return;
 
@@ -278,6 +381,7 @@ export default function CompliancePage() {
           .forEach(section => {
             section.fields
               ?.filter(field => field.is_active !== false)
+              .filter(field => shouldShowField(field))
               .forEach(field => {
                 // Skip compliance fields
                 const isComplianceField = complianceData?.compliance_fields?.some(
@@ -625,6 +729,7 @@ export default function CompliancePage() {
             .forEach(section => {
               section.fields
                 ?.filter(field => field.is_active !== false)
+                .filter(field => shouldShowField(field))
                 .forEach(field => {
                   if (field.slug) {
                     slugToFieldIdMap.set(field.slug, field.id);
@@ -730,10 +835,11 @@ export default function CompliancePage() {
                     return (
                       <div className="space-y-6">
                         {(() => {
-                          // Get all fields in this section, excluding compliance fields
+                          // Get all fields in this section, excluding compliance fields and applying visibility rules
                           const allFields = (section.fields || [])
                             .filter(field => field.is_active !== false)
-                            .filter(field => !complianceFieldsMap.has(field.id));
+                            .filter(field => !complianceFieldsMap.has(field.id))
+                            .filter(field => shouldShowField(field));
 
                           // Don't render section if it has no fields
                           if (allFields.length === 0) {
@@ -952,7 +1058,8 @@ export default function CompliancePage() {
                             // Get all fields in this section, excluding compliance fields
                             const allFields = (section.fields || [])
                               .filter(field => field.is_active !== false)
-                              .filter(field => !complianceFieldsMap.has(field.id));
+                              .filter(field => !complianceFieldsMap.has(field.id))
+                              .filter(field => shouldShowField(field));
 
                             if (allFields.length === 0) {
                               return (

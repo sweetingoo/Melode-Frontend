@@ -7,12 +7,16 @@ import { Button } from "@/components/ui/button";
 import { AvatarWithUrl } from "@/components/AvatarWithUrl";
 import { Building2, Users, ChevronDown, ChevronRight, AlertTriangle, Move, ZoomIn, ZoomOut, RotateCcw } from "lucide-react";
 import { Tree, TreeNode } from "react-organizational-chart";
+import { useOrganisation } from "@/hooks/useConfiguration";
 
 export const DirectoryGraph = ({ data }) => {
+  // Get organisation name from settings
+  const { data: organisationData } = useOrganisation();
+  const organisationName = organisationData?.organisation_name || organisationData?.organization_name || "Organisation";
+
   // State for expanded/collapsed nodes
   const [expandedDepartments, setExpandedDepartments] = useState(new Set());
   const [expandedJobRoles, setExpandedJobRoles] = useState(new Set());
-  const [expandedShiftRoles, setExpandedShiftRoles] = useState(new Set());
   const [userDisplayLimit, setUserDisplayLimit] = useState(50); // Limit users per role initially
 
   // State for drag/pan functionality
@@ -31,14 +35,6 @@ export const DirectoryGraph = ({ data }) => {
       dept.job_roles?.forEach((jr) => {
         count += 1; // Job role
         count += (jr.job_role?.users?.length || 0); // Users
-        count += (jr.shift_roles?.length || 0); // Shift roles
-        jr.shift_roles?.forEach((sr) => {
-          count += (sr.users?.length || 0); // Shift role users
-        });
-      });
-      count += (dept.orphan_shift_roles?.length || 0); // Orphan shift roles
-      dept.orphan_shift_roles?.forEach((sr) => {
-        count += (sr.users?.length || 0);
       });
     });
     return count;
@@ -62,16 +58,6 @@ export const DirectoryGraph = ({ data }) => {
       newSet.add(roleId);
     }
     setExpandedJobRoles(newSet);
-  };
-
-  const toggleShiftRole = (roleId) => {
-    const newSet = new Set(expandedShiftRoles);
-    if (newSet.has(roleId)) {
-      newSet.delete(roleId);
-    } else {
-      newSet.add(roleId);
-    }
-    setExpandedShiftRoles(newSet);
   };
 
   // Drag handlers
@@ -154,11 +140,9 @@ export const DirectoryGraph = ({ data }) => {
   const calculateDeptUsers = (deptGroup) => {
     const jobRoleUsers = deptGroup.job_roles?.reduce((sum, jr) => {
       const jobUsers = jr.job_role?.users?.length || 0;
-      const shiftUsers = jr.shift_roles?.reduce((s, sr) => s + (sr.users?.length || 0), 0) || 0;
-      return sum + jobUsers + shiftUsers;
+      return sum + jobUsers;
     }, 0) || 0;
-    const orphanUsers = deptGroup.orphan_shift_roles?.reduce((sum, sr) => sum + (sr.users?.length || 0), 0) || 0;
-    return jobRoleUsers + orphanUsers;
+    return jobRoleUsers;
   };
 
   // Organization Node Component
@@ -166,7 +150,7 @@ export const DirectoryGraph = ({ data }) => {
     <div className="bg-gradient-to-r from-primary/20 to-primary/10 border-2 border-primary rounded-xl p-6 shadow-lg min-w-[300px] text-center">
       <div className="flex items-center justify-center gap-3 mb-2">
         <Building2 className="h-8 w-8 text-primary" />
-        <h2 className="text-2xl font-bold">Organization</h2>
+        <h2 className="text-2xl font-bold">{organisationName}</h2>
       </div>
       <p className="text-sm text-muted-foreground">
         {data.total_departments} {data.total_departments === 1 ? "department" : "departments"} • {data.total_users} {data.total_users === 1 ? "person" : "people"}
@@ -184,7 +168,7 @@ export const DirectoryGraph = ({ data }) => {
   const DepartmentNode = ({ deptGroup }) => {
     const totalUsers = calculateDeptUsers(deptGroup);
     const isExpanded = expandedDepartments.has(deptGroup.department.id);
-    const hasChildren = (deptGroup.job_roles?.length > 0) || (deptGroup.orphan_shift_roles?.length > 0);
+    const hasChildren = (deptGroup.job_roles?.length > 0);
     
     return (
       <div className="bg-primary/10 border-2 border-primary rounded-lg p-4 shadow-md min-w-[250px] text-center relative group">
@@ -223,7 +207,7 @@ export const DirectoryGraph = ({ data }) => {
   };
 
   // Job Role Node Component
-  const JobRoleNode = ({ jobRole, hasShiftRoles = false }) => {
+  const JobRoleNode = ({ jobRole }) => {
     const isExpanded = expandedJobRoles.has(jobRole.role.id);
     const userCount = jobRole.users?.length || 0;
     const hasUsers = userCount > 0;
@@ -241,7 +225,7 @@ export const DirectoryGraph = ({ data }) => {
           <span className="text-xs text-muted-foreground whitespace-nowrap">
             ({userCount})
           </span>
-          {(hasUsers || hasShiftRoles) && (
+          {hasUsers && (
             <Button
               variant="ghost"
               size="sm"
@@ -256,47 +240,6 @@ export const DirectoryGraph = ({ data }) => {
                 <ChevronDown className="h-3.5 w-3.5" />
               ) : (
                 <ChevronRight className="h-3.5 w-3.5" />
-              )}
-            </Button>
-          )}
-        </div>
-      </div>
-    );
-  };
-
-  // Shift Role Node Component
-  const ShiftRoleNode = ({ shiftRole }) => {
-    const isExpanded = expandedShiftRoles.has(shiftRole.role.id);
-    const hasUsers = (shiftRole.users?.length || 0) > 0;
-    
-    return (
-      <div className="bg-secondary/30 border border-border rounded-lg p-2 shadow-sm min-w-[180px] text-center relative group">
-        <div className="flex items-center justify-center gap-2 flex-nowrap">
-          <Users className="h-3 w-3 text-muted-foreground flex-shrink-0" />
-          <Badge variant="outline" className="font-normal text-xs whitespace-nowrap">
-            {shiftRole.role.display_name || shiftRole.role.name}
-          </Badge>
-          <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded whitespace-nowrap">
-            Shift
-          </span>
-          <span className="text-xs text-muted-foreground whitespace-nowrap">
-            ({shiftRole.users?.length || 0})
-          </span>
-          {hasUsers && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={(e) => {
-                e.stopPropagation();
-                toggleShiftRole(shiftRole.role.id);
-              }}
-              className="h-5 w-5 p-0 rounded-full bg-background border border-border hover:bg-accent hover:border-secondary/50 shadow-sm flex items-center justify-center flex-shrink-0"
-              title={isExpanded ? "Collapse" : "Expand"}
-            >
-              {isExpanded ? (
-                <ChevronDown className="h-3 w-3" />
-              ) : (
-                <ChevronRight className="h-3 w-3" />
               )}
             </Button>
           )}
@@ -393,7 +336,7 @@ export const DirectoryGraph = ({ data }) => {
           >
         {data.departments.map((deptGroup) => {
           const isDeptExpanded = expandedDepartments.has(deptGroup.department.id);
-          const hasDeptChildren = (deptGroup.job_roles?.length > 0) || (deptGroup.orphan_shift_roles?.length > 0);
+          const hasDeptChildren = (deptGroup.job_roles?.length > 0);
           
           // Only render children if department is expanded or has no children
           if (!hasDeptChildren) {
@@ -414,27 +357,26 @@ export const DirectoryGraph = ({ data }) => {
               {deptGroup.job_roles?.map((jobRoleGroup) => {
                 const jobRole = jobRoleGroup.job_role;
                 const isJobRoleExpanded = expandedJobRoles.has(jobRole.role.id);
-                const hasJobRoleChildren = (jobRole.users?.length > 0) || (jobRoleGroup.shift_roles?.length > 0);
+                const hasJobRoleChildren = (jobRole.users?.length > 0);
                 const displayedUsers = isJobRoleExpanded 
                   ? (jobRole.users?.slice(0, userDisplayLimit) || [])
                   : [];
                 const hasMoreUsers = (jobRole.users?.length || 0) > userDisplayLimit;
-                const hasShiftRoles = (jobRoleGroup.shift_roles?.length || 0) > 0;
 
                 if (!hasJobRoleChildren) {
                   return (
-                    <TreeNode key={jobRole.role.id} label={<JobRoleNode jobRole={jobRole} hasShiftRoles={hasShiftRoles} />} />
+                    <TreeNode key={jobRole.role.id} label={<JobRoleNode jobRole={jobRole} />} />
                   );
                 }
 
                 if (!isJobRoleExpanded) {
                   return (
-                    <TreeNode key={jobRole.role.id} label={<JobRoleNode jobRole={jobRole} hasShiftRoles={hasShiftRoles} />} />
+                    <TreeNode key={jobRole.role.id} label={<JobRoleNode jobRole={jobRole} />} />
                   );
                 }
 
                 return (
-                  <TreeNode key={jobRole.role.id} label={<JobRoleNode jobRole={jobRole} hasShiftRoles={hasShiftRoles} />}>
+                  <TreeNode key={jobRole.role.id} label={<JobRoleNode jobRole={jobRole} />}>
                     {/* Users directly under job role - limited */}
                     {displayedUsers.map((user) => (
                       <TreeNode key={user.id} label={<UserNode user={user} />} />
@@ -453,70 +395,6 @@ export const DirectoryGraph = ({ data }) => {
                             >
                               Show more
                             </Button>
-                          </div>
-                        } 
-                      />
-                    )}
-                    {/* Shift Roles under job role */}
-                    {jobRoleGroup.shift_roles?.map((shiftRoleGroup) => {
-                      const shiftRole = shiftRoleGroup;
-                      const isShiftRoleExpanded = expandedShiftRoles.has(shiftRole.role.id);
-                      const displayedShiftUsers = isShiftRoleExpanded
-                        ? (shiftRole.users?.slice(0, userDisplayLimit) || [])
-                        : [];
-                      const hasMoreShiftUsers = (shiftRole.users?.length || 0) > userDisplayLimit;
-
-                      if (!isShiftRoleExpanded) {
-                        return (
-                          <TreeNode key={shiftRole.role.id} label={<ShiftRoleNode shiftRole={shiftRole} />} />
-                        );
-                      }
-
-                      return (
-                        <TreeNode key={shiftRole.role.id} label={<ShiftRoleNode shiftRole={shiftRole} />}>
-                          {displayedShiftUsers.map((user) => (
-                            <TreeNode key={user.id} label={<UserNode user={user} />} />
-                          ))}
-                          {hasMoreShiftUsers && (
-                            <TreeNode 
-                              label={
-                                <div className="p-2 text-center text-xs text-muted-foreground">
-                                  +{(shiftRole.users?.length || 0) - userDisplayLimit} more users
-                                </div>
-                              } 
-                            />
-                          )}
-                        </TreeNode>
-                      );
-                    })}
-                  </TreeNode>
-                );
-              })}
-              {/* Orphan Shift Roles */}
-              {deptGroup.orphan_shift_roles?.map((shiftRoleGroup) => {
-                const shiftRole = shiftRoleGroup;
-                const isShiftRoleExpanded = expandedShiftRoles.has(shiftRole.role.id);
-                const displayedUsers = isShiftRoleExpanded
-                  ? (shiftRole.users?.slice(0, userDisplayLimit) || [])
-                  : [];
-                const hasMoreUsers = (shiftRole.users?.length || 0) > userDisplayLimit;
-
-                if (!isShiftRoleExpanded) {
-                  return (
-                    <TreeNode key={shiftRole.role.id} label={<ShiftRoleNode shiftRole={shiftRole} />} />
-                  );
-                }
-
-                return (
-                  <TreeNode key={shiftRole.role.id} label={<ShiftRoleNode shiftRole={shiftRole} />}>
-                    {displayedUsers.map((user) => (
-                      <TreeNode key={user.id} label={<UserNode user={user} />} />
-                    ))}
-                    {hasMoreUsers && (
-                      <TreeNode 
-                        label={
-                          <div className="p-2 text-center text-xs text-muted-foreground">
-                            +{(shiftRole.users?.length || 0) - userDisplayLimit} more users
                           </div>
                         } 
                       />

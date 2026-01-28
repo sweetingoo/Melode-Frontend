@@ -294,6 +294,30 @@ export const profileService = {
     }
   },
 
+  getCustomFieldValueHistory: async (entityType, entitySlug, fieldSlug, page = 1, perPage = 20, organizationId = null) => {
+    try {
+      if (!entityType || !entitySlug || !fieldSlug) {
+        throw new Error("Entity type, entity slug, and field slug are required");
+      }
+
+      // Build config with query parameters
+      const params = { page, per_page: perPage };
+      if (organizationId) {
+        params.organization_id = organizationId;
+      }
+      const config = { params };
+
+      const response = await api.get(
+        `/settings/entities/${entityType}/${entitySlug}/custom-fields/${fieldSlug}/history`,
+        config
+      );
+      return response.data || response;
+    } catch (error) {
+      console.error("Get custom field value history failed:", error);
+      throw error;
+    }
+  },
+
   addUserGroupEntry: async (groupKey, entryData, sortOrder = 0, userSlug) => {
     try {
       if (!userSlug) {

@@ -213,7 +213,7 @@ const FieldVisibilityLinksSection = ({ field, entityType, roles }) => {
             onClick={() => setIsAddingLink(true)}
           >
             <Plus className="h-4 w-4 mr-2" />
-            Add Link
+            Update Visibility
           </Button>
         )}
       </div>
@@ -287,7 +287,7 @@ const FieldVisibilityLinksSection = ({ field, entityType, roles }) => {
       {isAddingLink && (
         <div className="p-4 border rounded-md bg-muted/30 space-y-3">
           <div className="flex items-center justify-between">
-            <Label className="text-sm font-semibold">Add Visibility Link</Label>
+            <Label className="text-sm font-semibold">Manage Visibility</Label>
             <Button
               type="button"
               variant="ghost"
@@ -457,7 +457,7 @@ const FieldVisibilityLinksSection = ({ field, entityType, roles }) => {
               ) : (
                 <>
                   <Plus className="h-4 w-4 mr-2" />
-                  Add Link
+                  Update Visibility
                 </>
               )}
             </Button>
@@ -569,7 +569,7 @@ const SectionVisibilityLinksSection = ({ section, entityType, roles }) => {
             onClick={() => setIsAddingLink(true)}
           >
             <Plus className="h-4 w-4 mr-2" />
-            Add Link
+            Update Visibility
           </Button>
         )}
       </div>
@@ -629,7 +629,7 @@ const SectionVisibilityLinksSection = ({ section, entityType, roles }) => {
       {isAddingLink && (
         <div className="p-4 border rounded-md bg-muted/30 space-y-3">
           <div className="flex items-center justify-between">
-            <Label className="text-sm font-semibold">Add Visibility Link</Label>
+            <Label className="text-sm font-semibold">Manage Visibility</Label>
             <Button
               type="button"
               variant="ghost"
@@ -790,7 +790,7 @@ const SectionVisibilityLinksSection = ({ section, entityType, roles }) => {
               ) : (
                 <>
                   <Plus className="h-4 w-4 mr-2" />
-                  Add Link
+                  Update Visibility
                 </>
               )}
             </Button>

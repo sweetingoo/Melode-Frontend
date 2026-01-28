@@ -288,7 +288,7 @@ const NewFormPage = () => {
     file_expiry_date: false, // Enable expiry date for file fields
     // People field specific
     filter_by_roles: [], // Array of role IDs to filter users by
-    filter_by_organization: false, // Filter by full organization
+    filter_by_organization: false, // Filter by full organisation
   });
   const [newOption, setNewOption] = useState({ value: "", label: "" });
   const [allowAllFileTypes, setAllowAllFileTypes] = useState(false);
@@ -1595,7 +1595,7 @@ const NewFormPage = () => {
                         <div className="space-y-4 pt-2 border-t">
                           <div className="p-3 bg-muted rounded-md mb-3">
                             <p className="text-xs text-muted-foreground">
-                              <strong>People Field:</strong> Allows users to select a person from the organization. You can filter by roles to limit which users appear in the selection.
+                              <strong>People Field:</strong> Allows users to select a person from the organisation. You can filter by roles to limit which users appear in the selection.
                             </p>
                           </div>
                           <div className="space-y-2">
@@ -1626,11 +1626,11 @@ const NewFormPage = () => {
                                 }}
                               />
                               <Label htmlFor="filter-by-org" className="cursor-pointer text-sm">
-                                Filter by full organization
+                                Filter by full organisation
                               </Label>
                             </div>
                             <p className="text-xs text-muted-foreground">
-                              When enabled, only shows users from the current organization
+                              When enabled, only shows users from the current organisation
                             </p>
                           </div>
                         </div>

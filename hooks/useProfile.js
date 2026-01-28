@@ -15,6 +15,7 @@ export const profileKeys = {
   mfaStatus: () => [...profileKeys.all, "mfaStatus"],
   userCustomFields: () => [...profileKeys.all, "userCustomFields"],
   userCustomFieldValuesList: (userSlug, filters) => [...profileKeys.all, "userCustomFieldValuesList", userSlug, filters],
+  customFieldValueHistory: (entityType, entitySlug, fieldSlug, page, perPage) => [...profileKeys.all, "customFieldValueHistory", entityType, entitySlug, fieldSlug, page, perPage],
   preferences: () => [...profileKeys.all, "preferences"],
 };
 
@@ -716,6 +717,21 @@ export const useBulkUpdateUserCustomFields = () => {
         });
       }
     },
+  });
+};
+
+export const useCustomFieldValueHistory = (entityType, entitySlug, fieldSlug, page = 1, perPage = 20) => {
+  return useQuery({
+    queryKey: profileKeys.customFieldValueHistory(entityType, entitySlug, fieldSlug, page, perPage),
+    queryFn: async () => {
+      if (!entityType || !entitySlug || !fieldSlug) {
+        throw new Error("Entity type, entity slug, and field slug are required");
+      }
+      const response = await profileService.getCustomFieldValueHistory(entityType, entitySlug, fieldSlug, page, perPage);
+      return response;
+    },
+    enabled: !!entityType && !!entitySlug && !!fieldSlug && fieldSlug !== "",
+    staleTime: 5 * 60 * 1000, // 5 minutes
   });
 };
 

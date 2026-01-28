@@ -386,6 +386,75 @@ const TrackersPage = () => {
       }
     }
     
+    // Handle select/multiselect fields - show label instead of value
+    if ((fieldType === "select" || fieldType === "multiselect")) {
+      // Get options from field.options or field.field_options?.options
+      const options = field.options || field.field_options?.options || [];
+      
+      if (Array.isArray(value)) {
+        // Multiselect - map each value to its label
+        return value.map(v => {
+          const option = options.find(opt => {
+            const optValue = opt.value || opt;
+            return String(optValue) === String(v) || String(opt.label || opt) === String(v);
+          });
+          if (option) {
+            return typeof option === "object" ? (option.label || option.value || String(v)) : String(option);
+          }
+          return String(v);
+        }).join(", ");
+      } else {
+        // Single select - find the option and return its label
+        const option = options.find(opt => {
+          const optValue = opt.value || opt;
+          return String(optValue) === String(value) || String(opt.label || opt) === String(value);
+        });
+        if (option) {
+          return typeof option === "object" ? (option.label || option.value || String(value)) : String(option);
+        }
+        return String(value);
+      }
+    }
+    
+    // Handle people/user fields - show name instead of JSON
+    // Value might be an object or a stringified JSON
+    if (fieldType === "people" || fieldType === "user") {
+      let userObj = value;
+      
+      // If value is a string, try to parse it as JSON
+      if (typeof value === "string") {
+        try {
+          userObj = JSON.parse(value);
+        } catch (e) {
+          // Not valid JSON, return as-is
+          return value;
+        }
+      }
+      
+      // Now handle as object
+      if (typeof userObj === "object" && userObj !== null) {
+        // Extract display name from the user object
+        if (userObj.display_name) {
+          return userObj.display_name;
+        }
+        // Build name from first_name and last_name
+        const nameParts = [];
+        if (userObj.first_name) nameParts.push(userObj.first_name);
+        if (userObj.last_name) nameParts.push(userObj.last_name);
+        if (nameParts.length > 0) {
+          return nameParts.join(" ");
+        }
+        // Fallback to email
+        if (userObj.email) {
+          return userObj.email;
+        }
+        // Last resort: user ID
+        if (userObj.id) {
+          return `User #${userObj.id}`;
+        }
+      }
+    }
+    
     if (Array.isArray(value)) {
       return value.join(", ");
     }

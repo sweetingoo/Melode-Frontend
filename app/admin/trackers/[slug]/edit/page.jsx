@@ -178,6 +178,21 @@ const TrackerEditPage = () => {
     options: [],
   });
 
+  const [editingFieldIndex, setEditingFieldIndex] = useState(null);
+  const [editingField, setEditingField] = useState(null);
+
+  // Drag and drop state for field reordering
+  const [draggedIndex, setDraggedIndex] = useState(null);
+  const [dragOverIndex, setDragOverIndex] = useState(null);
+
+  // Section editing state
+  const [editingSectionIndex, setEditingSectionIndex] = useState(null);
+  const [editingSection, setEditingSection] = useState(null);
+
+  // Drag and drop state for section reordering
+  const [draggedSectionIndex, setDraggedSectionIndex] = useState(null);
+  const [dragOverSectionIndex, setDragOverSectionIndex] = useState(null);
+
   const [newSection, setNewSection] = useState({
     id: "",
     label: "",
@@ -188,6 +203,7 @@ const TrackerEditPage = () => {
   const [newStatus, setNewStatus] = useState("");
   const [newNoteCategory, setNewNoteCategory] = useState("");
   const [newOption, setNewOption] = useState({ value: "", label: "" });
+  const [editingOption, setEditingOption] = useState({ value: "", label: "" });
 
   // Load tracker data
   useEffect(() => {
@@ -224,7 +240,7 @@ const TrackerEditPage = () => {
     }
   }, [tracker]);
 
-  const handleSave = async () => {
+  const handleSave = async (shouldRedirect = true) => {
     try {
       // Log what we're saving to verify list_view_fields is included
       console.log("Saving tracker with list_view_fields:", formData.tracker_config?.list_view_fields);
@@ -234,7 +250,9 @@ const TrackerEditPage = () => {
         trackerData: formData,
       });
       toast.success("Tracker updated successfully");
-      router.push("/admin/trackers/manage");
+      if (shouldRedirect) {
+        router.push("/admin/trackers/manage");
+      }
     } catch (error) {
       // Error handled by mutation
     }
@@ -305,6 +323,142 @@ const TrackerEditPage = () => {
     toast.success("Field removed");
   };
 
+  const handleEditField = (index) => {
+    const field = formData.tracker_fields?.fields[index];
+    if (!field) return;
+    
+    setEditingFieldIndex(index);
+    setEditingField({
+      ...field,
+      options: field.options || [],
+    });
+    setEditingOption({ value: "", label: "" });
+  };
+
+  const handleCancelEditField = () => {
+    setEditingFieldIndex(null);
+    setEditingField(null);
+    setEditingOption({ value: "", label: "" });
+  };
+
+  const handleUpdateField = async () => {
+    if (!editingField || editingFieldIndex === null) return;
+
+    if (!editingField.label) {
+      toast.error("Field label is required");
+      return;
+    }
+
+    // For select/multiselect, require options
+    if ((editingField.type === "select" || editingField.type === "multiselect") && editingField.options.length === 0) {
+      toast.error(`${editingField.type === "select" ? "Select" : "Multi-select"} fields require at least one option`);
+      return;
+    }
+
+    const newFields = [...(formData.tracker_fields?.fields || [])];
+    newFields[editingFieldIndex] = {
+      ...editingField,
+      options: editingField.options || [],
+    };
+
+    const updatedFormData = {
+      ...formData,
+      tracker_fields: {
+        ...formData.tracker_fields,
+        fields: newFields,
+      },
+    };
+
+    setFormData(updatedFormData);
+
+    setEditingFieldIndex(null);
+    setEditingField(null);
+    setEditingOption({ value: "", label: "" });
+
+    // Save directly to backend
+    try {
+      await updateMutation.mutateAsync({
+        slug: slug,
+        trackerData: updatedFormData,
+      });
+      toast.success("Field updated and saved successfully");
+    } catch (error) {
+      // Error handled by mutation, but show a message
+      toast.error("Failed to save field changes");
+    }
+  };
+
+  const handleAddEditingOption = () => {
+    if (!editingOption.label) {
+      toast.error("Option label is required");
+      return;
+    }
+
+    const optionValue = editingOption.value || generateFieldIdFromLabel(editingOption.label);
+    const newOption = {
+      value: optionValue,
+      label: editingOption.label,
+    };
+
+    setEditingField((prev) => ({
+      ...prev,
+      options: [...(prev.options || []), newOption],
+    }));
+
+    setEditingOption({ value: "", label: "" });
+  };
+
+  const handleRemoveEditingOption = (index) => {
+    setEditingField((prev) => ({
+      ...prev,
+      options: prev.options.filter((_, i) => i !== index),
+    }));
+  };
+
+  // Drag and drop handlers for reordering fields
+  const handleDragStart = (index) => {
+    setDraggedIndex(index);
+  };
+
+  const handleDragOver = (e, index) => {
+    e.preventDefault();
+    setDragOverIndex(index);
+  };
+
+  const handleDragLeave = () => {
+    setDragOverIndex(null);
+  };
+
+  const handleDrop = (e, dropIndex) => {
+    e.preventDefault();
+    setDragOverIndex(null);
+
+    if (draggedIndex === null || draggedIndex === dropIndex) {
+      setDraggedIndex(null);
+      return;
+    }
+
+    const newFields = [...(formData.tracker_fields?.fields || [])];
+    const [draggedField] = newFields.splice(draggedIndex, 1);
+    newFields.splice(dropIndex, 0, draggedField);
+
+    setFormData((prev) => ({
+      ...prev,
+      tracker_fields: {
+        ...prev.tracker_fields,
+        fields: newFields,
+      },
+    }));
+
+    setDraggedIndex(null);
+    toast.success("Field order updated");
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+
   // Section Management
   const handleAddSection = () => {
     if (!newSection.label) {
@@ -348,6 +502,104 @@ const TrackerEditPage = () => {
       },
     }));
     toast.success("Section removed");
+  };
+
+  const handleEditSection = (index) => {
+    const section = formData.tracker_config?.sections[index];
+    if (!section) return;
+    
+    setEditingSectionIndex(index);
+    setEditingSection({
+      ...section,
+    });
+  };
+
+  const handleCancelEditSection = () => {
+    setEditingSectionIndex(null);
+    setEditingSection(null);
+  };
+
+  const handleUpdateSection = async () => {
+    if (!editingSection || editingSectionIndex === null) return;
+
+    if (!editingSection.label) {
+      toast.error("Section label is required");
+      return;
+    }
+
+    const newSections = [...(formData.tracker_config?.sections || [])];
+    newSections[editingSectionIndex] = {
+      ...editingSection,
+    };
+
+    const updatedFormData = {
+      ...formData,
+      tracker_config: {
+        ...formData.tracker_config,
+        sections: newSections,
+      },
+    };
+
+    setFormData(updatedFormData);
+
+    setEditingSectionIndex(null);
+    setEditingSection(null);
+
+    // Save directly to backend
+    try {
+      await updateMutation.mutateAsync({
+        slug: slug,
+        trackerData: updatedFormData,
+      });
+      toast.success("Section updated and saved successfully");
+    } catch (error) {
+      // Error handled by mutation, but show a message
+      toast.error("Failed to save section changes");
+    }
+  };
+
+  // Drag and drop handlers for reordering sections
+  const handleSectionDragStart = (index) => {
+    setDraggedSectionIndex(index);
+  };
+
+  const handleSectionDragOver = (e, index) => {
+    e.preventDefault();
+    setDragOverSectionIndex(index);
+  };
+
+  const handleSectionDragLeave = () => {
+    setDragOverSectionIndex(null);
+  };
+
+  const handleSectionDrop = (e, dropIndex) => {
+    e.preventDefault();
+    setDragOverSectionIndex(null);
+
+    if (draggedSectionIndex === null || draggedSectionIndex === dropIndex) {
+      setDraggedSectionIndex(null);
+      return;
+    }
+
+    const newSections = [...(formData.tracker_config?.sections || [])];
+    const [draggedSection] = newSections.splice(draggedSectionIndex, 1);
+    newSections.splice(dropIndex, 0, draggedSection);
+
+    setFormData((prev) => ({
+      ...prev,
+      tracker_config: {
+        ...prev.tracker_config,
+        sections: newSections,
+      },
+    }));
+
+    setDraggedSectionIndex(null);
+    toast.success("Section order updated");
+  };
+
+  const handleSectionDragEnd = () => {
+    setDraggedSectionIndex(null);
+    setDragOverSectionIndex(null);
   };
 
   // Status Management
@@ -820,37 +1072,280 @@ const TrackerEditPage = () => {
                 <div className="space-y-2">
                   <Label>Existing Fields</Label>
                   {fields.map((field, index) => (
-                    <div
-                      key={field.id || index}
-                      className="p-4 border rounded-md flex items-center justify-between"
-                    >
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="font-medium">{field.label}</span>
-                          {field.required && (
-                            <Badge variant="destructive" className="text-xs">
-                              Required
-                            </Badge>
-                          )}
-                          <Badge variant="outline">{field.type}</Badge>
-                          {field.section && (
-                            <Badge variant="secondary" className="text-xs">
-                              Section: {sections.find((s) => s.id === field.section)?.label || field.section}
-                            </Badge>
-                          )}
+                    editingFieldIndex === index ? (
+                      // Edit Field Form
+                      <div key={field.id || index} className="p-4 border rounded-md space-y-4 bg-card">
+                        <div>
+                          <Label htmlFor="edit-field-label">Field Label *</Label>
+                          <Input
+                            id="edit-field-label"
+                            value={editingField.label}
+                            onChange={(e) =>
+                              setEditingField((prev) => ({
+                                ...prev,
+                                label: e.target.value,
+                              }))
+                            }
+                            placeholder="e.g., Patient Name"
+                          />
                         </div>
-                        <p className="text-sm text-muted-foreground">
-                          ID: {field.id || field.name}
-                        </p>
+                        <div>
+                          <Label htmlFor="edit-field-id">Field ID</Label>
+                          <Input
+                            id="edit-field-id"
+                            value={editingField.id || editingField.name}
+                            readOnly
+                            className="bg-muted cursor-not-allowed"
+                            placeholder="Auto-generated"
+                          />
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Field ID cannot be changed
+                          </p>
+                        </div>
+                        <div>
+                          <Label htmlFor="edit-field-type">Field Type *</Label>
+                          <Select
+                            value={editingField.type}
+                            onValueChange={(value) =>
+                              setEditingField((prev) => ({ ...prev, type: value }))
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {fieldTypes.map((type) => (
+                                <SelectItem key={type.value} value={type.value}>
+                                  {type.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label htmlFor="edit-field-section">Section (Optional)</Label>
+                          <Select
+                            value={editingField.section || "none"}
+                            onValueChange={(value) =>
+                              setEditingField((prev) => ({
+                                ...prev,
+                                section: value === "none" ? "" : value,
+                              }))
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="No section" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">No section</SelectItem>
+                              {sections.map((section) => (
+                                <SelectItem key={section.id} value={section.id}>
+                                  {section.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            id="edit-field-required"
+                            checked={editingField.required}
+                            onChange={(e) =>
+                              setEditingField((prev) => ({
+                                ...prev,
+                                required: e.target.checked,
+                              }))
+                            }
+                            className="rounded"
+                          />
+                          <Label htmlFor="edit-field-required" className="cursor-pointer">
+                            Required
+                          </Label>
+                        </div>
+
+                        {/* Configuration for People field */}
+                        {editingField.type === "people" && (
+                          <div className="space-y-4">
+                            <div className="space-y-2">
+                              <Label>Filter by Roles (Optional)</Label>
+                              <p className="text-xs text-muted-foreground">
+                                Select which roles to filter users by. Leave empty to show all users.
+                              </p>
+                              <PeopleFieldRoleSelector
+                                selectedRoleIds={editingField.filter_by_roles || []}
+                                onChange={(roleIds) => {
+                                  setEditingField((prev) => ({
+                                    ...prev,
+                                    filter_by_roles: roleIds,
+                                  }));
+                                }}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <div className="flex items-center space-x-2">
+                                <Checkbox
+                                  id="edit-filter-by-org"
+                                  checked={editingField.filter_by_organization || false}
+                                  onCheckedChange={(checked) => {
+                                    setEditingField((prev) => ({
+                                      ...prev,
+                                      filter_by_organization: checked,
+                                    }));
+                                  }}
+                                />
+                                <Label htmlFor="edit-filter-by-org" className="cursor-pointer text-sm">
+                                  Filter by full organisation
+                                </Label>
+                              </div>
+                              <p className="text-xs text-muted-foreground">
+                                When enabled, only shows users from the current organisation
+                              </p>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Options for Select/Multi-select */}
+                        {(editingField.type === "select" || editingField.type === "multiselect") && (
+                          <div className="space-y-2">
+                            <Label>Options</Label>
+                            <div className="flex gap-2">
+                              <Input
+                                placeholder="Label *"
+                                value={editingOption.label}
+                                onChange={(e) => {
+                                  const newLabel = e.target.value;
+                                  setEditingOption((prev) => ({
+                                    ...prev,
+                                    label: newLabel,
+                                    value: generateFieldIdFromLabel(newLabel),
+                                  }));
+                                }}
+                                className="flex-1"
+                              />
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={handleAddEditingOption}
+                                disabled={!editingOption.label}
+                              >
+                                <Plus className="h-4 w-4" />
+                              </Button>
+                            </div>
+                            {editingField.options && editingField.options.length > 0 && (
+                              <div className="space-y-1">
+                                {editingField.options.map((option, idx) => (
+                                  <div
+                                    key={idx}
+                                    className="flex items-center justify-between p-2 bg-muted rounded"
+                                  >
+                                    <span className="text-sm">
+                                      <strong>{option.value}</strong>: {option.label}
+                                    </span>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => handleRemoveEditingOption(idx)}
+                                    >
+                                      <X className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        <div className="flex gap-2">
+                          <Button 
+                            onClick={handleUpdateField} 
+                            className="flex-1"
+                            disabled={updateMutation.isPending}
+                          >
+                            {updateMutation.isPending ? (
+                              <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Saving...
+                              </>
+                            ) : (
+                              <>
+                                <Save className="mr-2 h-4 w-4" />
+                                Update Field
+                              </>
+                            )}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            onClick={handleCancelEditField}
+                            className="flex-1"
+                            disabled={updateMutation.isPending}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleRemoveField(index)}
+                    ) : (
+                      // Field Display
+                      <div
+                        key={field.id || index}
+                        draggable
+                        onDragStart={() => handleDragStart(index)}
+                        onDragOver={(e) => handleDragOver(e, index)}
+                        onDragLeave={handleDragLeave}
+                        onDrop={(e) => handleDrop(e, index)}
+                        onDragEnd={handleDragEnd}
+                        className={`p-4 border rounded-md flex items-center gap-3 ${
+                          draggedIndex === index
+                            ? "opacity-50 cursor-grabbing"
+                            : "cursor-grab hover:bg-muted/50"
+                        } ${
+                          dragOverIndex === index && draggedIndex !== index
+                            ? "border-primary border-2 bg-primary/5"
+                            : ""
+                        }`}
                       >
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    </div>
+                        <div className="flex items-center gap-2 text-muted-foreground cursor-grab active:cursor-grabbing">
+                          <GripVertical className="h-4 w-4" />
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="font-medium">{field.label}</span>
+                            {field.required && (
+                              <Badge variant="destructive" className="text-xs">
+                                Required
+                              </Badge>
+                            )}
+                            <Badge variant="outline">{field.type}</Badge>
+                            {field.section && (
+                              <Badge variant="secondary" className="text-xs">
+                                Section: {sections.find((s) => s.id === field.section)?.label || field.section}
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="text-sm text-muted-foreground">
+                            ID: {field.id || field.name}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleEditField(index)}
+                            title="Edit Field"
+                          >
+                            <Edit2 className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleRemoveField(index)}
+                            title="Delete Field"
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
+                      </div>
+                    )
                   ))}
                 </div>
               )}
@@ -1083,11 +1578,87 @@ const TrackerEditPage = () => {
                   <Label>Existing Sections</Label>
                   {sections.map((section, index) => {
                     const sectionFields = fields.filter((f) => f.section === section.id);
-                    return (
+                    return editingSectionIndex === index ? (
+                      // Edit Section Form
+                      <div key={section.id || index} className="p-4 border rounded-md space-y-4 bg-card">
+                        <div>
+                          <Label htmlFor="edit-section-label">Section Label *</Label>
+                          <Input
+                            id="edit-section-label"
+                            value={editingSection.label}
+                            onChange={(e) =>
+                              setEditingSection((prev) => ({
+                                ...prev,
+                                label: e.target.value,
+                              }))
+                            }
+                            placeholder="e.g., Basic Information"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="edit-section-id">Section ID</Label>
+                          <Input
+                            id="edit-section-id"
+                            value={editingSection.id}
+                            readOnly
+                            className="bg-muted cursor-not-allowed"
+                            placeholder="Auto-generated"
+                          />
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Section ID cannot be changed
+                          </p>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button 
+                            onClick={handleUpdateSection} 
+                            className="flex-1"
+                            disabled={updateMutation.isPending}
+                          >
+                            {updateMutation.isPending ? (
+                              <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Saving...
+                              </>
+                            ) : (
+                              <>
+                                <Save className="mr-2 h-4 w-4" />
+                                Update Section
+                              </>
+                            )}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            onClick={handleCancelEditSection}
+                            className="flex-1"
+                            disabled={updateMutation.isPending}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      // Section Display
                       <div
                         key={section.id || index}
-                        className="p-4 border rounded-md flex items-center justify-between"
+                        draggable
+                        onDragStart={() => handleSectionDragStart(index)}
+                        onDragOver={(e) => handleSectionDragOver(e, index)}
+                        onDragLeave={handleSectionDragLeave}
+                        onDrop={(e) => handleSectionDrop(e, index)}
+                        onDragEnd={handleSectionDragEnd}
+                        className={`p-4 border rounded-md flex items-center gap-3 ${
+                          draggedSectionIndex === index
+                            ? "opacity-50 cursor-grabbing"
+                            : "cursor-grab hover:bg-muted/50"
+                        } ${
+                          dragOverSectionIndex === index && draggedSectionIndex !== index
+                            ? "border-primary border-2 bg-primary/5"
+                            : ""
+                        }`}
                       >
+                        <div className="flex items-center gap-2 text-muted-foreground cursor-grab active:cursor-grabbing">
+                          <GripVertical className="h-4 w-4" />
+                        </div>
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-1">
                             <span className="font-medium">{section.label}</span>
@@ -1099,13 +1670,24 @@ const TrackerEditPage = () => {
                             ID: {section.id}
                           </p>
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleRemoveSection(index)}
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleEditSection(index)}
+                            title="Edit Section"
+                          >
+                            <Edit2 className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleRemoveSection(index)}
+                            title="Delete Section"
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
                       </div>
                     );
                   })}
@@ -1495,7 +2077,7 @@ const TrackerEditPage = () => {
                       // Handle create action
                       if (log.action === "create") {
                         if (detailsObj.organization_name) {
-                          parts.push(`Organization: ${detailsObj.organization_name}`);
+                          parts.push(`Organisation: ${detailsObj.organization_name}`);
                         }
                         if (detailsObj.form_name) {
                           parts.push(`Tracker: ${detailsObj.form_name}`);
