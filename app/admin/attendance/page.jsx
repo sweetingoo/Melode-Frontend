@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useRouter } from "next/navigation";
@@ -34,7 +34,7 @@ const PERM = {
 
 const TAB_VALUES = ["my-leave", "approvals", "shift-records", "provisional", "mapped-templates", "calendar", "balance"];
 
-export default function AttendancePage() {
+function AttendancePageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user } = useAuth();
@@ -314,5 +314,13 @@ export default function AttendancePage() {
         </TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+export default function AttendancePage() {
+  return (
+    <Suspense fallback={<div className="flex min-h-[200px] items-center justify-center p-8 text-muted-foreground">Loading…</div>}>
+      <AttendancePageContent />
+    </Suspense>
   );
 }
