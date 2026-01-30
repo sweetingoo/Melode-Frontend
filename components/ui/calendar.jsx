@@ -50,6 +50,9 @@ function Calendar({
           buttonVariants({ variant: "ghost" }),
           "h-9 w-9 p-0 font-normal aria-selected:opacity-100"
         ),
+        // v9: inner button must fill the cell so the whole area is clickable
+        day_button:
+          "h-full w-full flex items-center justify-center p-0 font-normal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
         day_range_end: "day-range-end",
         day_range_start: "rounded-l-md",
         day_selected:
