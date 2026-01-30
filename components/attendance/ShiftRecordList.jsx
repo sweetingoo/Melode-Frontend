@@ -18,9 +18,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
-import { CalendarIcon, Plus, Pencil, Trash2, Loader2 } from "lucide-react";
+import { Label } from "@/components/ui/label";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Calendar as CalendarComponent } from "@/components/ui/calendar";
+import { Plus, Pencil, Trash2, Loader2, CalendarIcon, ChevronDown } from "lucide-react";
 import { format } from "date-fns";
+import { formatDateForAPI } from "@/utils/time";
+import { cn } from "@/lib/utils";
+import { keepPreviousData } from "@tanstack/react-query";
 import { useShiftRecords, useDeleteShiftRecord } from "@/hooks/useShiftRecords";
 import { ShiftRecordForm } from "./ShiftRecordForm";
 import { useAuth } from "@/hooks/useAuth";
@@ -53,25 +62,68 @@ export const ShiftRecordList = ({
 }) => {
   const { user } = useAuth();
   const [categoryFilter, setCategoryFilter] = useState(defaultCategory);
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
+  const [dateRange, setDateRange] = useState(undefined);
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [deleteSlug, setDeleteSlug] = useState(null);
+
+  const applyDatePreset = (preset) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const start = new Date(today);
+    const end = new Date(today);
+    switch (preset) {
+      case "today":
+        setDateRange({ from: start, to: end });
+        break;
+      case "yesterday":
+        start.setDate(start.getDate() - 1);
+        end.setDate(end.getDate() - 1);
+        setDateRange({ from: start, to: end });
+        break;
+      case "last7":
+        start.setDate(start.getDate() - 6);
+        setDateRange({ from: start, to: end });
+        break;
+      case "last30":
+        start.setDate(start.getDate() - 29);
+        setDateRange({ from: start, to: end });
+        break;
+      case "thisMonth":
+        start.setDate(1);
+        setDateRange({ from: start, to: end });
+        break;
+      case "lastMonth":
+        start.setMonth(start.getMonth() - 1);
+        start.setDate(1);
+        end.setDate(0);
+        setDateRange({ from: start, to: end });
+        break;
+      case "all":
+        setDateRange(undefined);
+        break;
+      default:
+        break;
+    }
+    setIsCalendarOpen(false);
+  };
 
   const params = useMemo(
     () => ({
       user_id: userId || undefined,
       category: categoryFilter !== "all" ? categoryFilter : undefined,
-      start_date: startDate || undefined,
-      end_date: endDate || undefined,
+      start_date: dateRange?.from ? formatDateForAPI(dateRange.from) : undefined,
+      end_date: dateRange?.to ? formatDateForAPI(dateRange.to) : undefined,
       page: 1,
       per_page: 100,
     }),
-    [userId, categoryFilter, startDate, endDate]
+    [userId, categoryFilter, dateRange]
   );
 
-  const { data, isLoading, error } = useShiftRecords(params);
+  const { data, isLoading, error } = useShiftRecords(params, {
+    placeholderData: keepPreviousData,
+  });
   const deleteShiftRecord = useDeleteShiftRecord();
 
   const records = data?.records || data || [];
@@ -134,40 +186,102 @@ export const ShiftRecordList = ({
     );
   }
 
+  const categoryFilterLabel =
+    CATEGORIES.find((c) => c.value === categoryFilter)?.label || "Category";
+
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        {!compactHeader && <h2 className="text-xl font-semibold">Shift Records</h2>}
-        <div className="flex flex-wrap items-center gap-2 ml-auto">
-          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Category" />
-            </SelectTrigger>
-            <SelectContent>
-              {CATEGORIES.map((c) => (
-                <SelectItem key={c.value} value={c.value}>
-                  {c.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Input
-            type="date"
-            placeholder="Start date"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-            className="w-[140px]"
-          />
-          <Input
-            type="date"
-            placeholder="End date"
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
-            className="w-[140px]"
-          />
+    <div className="space-y-5 min-w-0 overflow-hidden">
+      <div className="flex flex-col gap-3 rounded-xl border bg-muted/30 p-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-4 sm:p-4">
+        {!compactHeader && (
+          <h2 className="text-lg font-semibold tracking-tight text-foreground">Shift Records</h2>
+        )}
+        <div className="flex min-w-0 flex-col gap-2 sm:ml-auto sm:flex-row sm:items-end sm:gap-3">
+          <div className="flex flex-col gap-1">
+            <Label className="text-xs text-muted-foreground">Category</Label>
+            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+              <SelectTrigger className="h-9 w-full min-w-0 sm:w-[160px]">
+                <SelectValue placeholder={categoryFilterLabel}>{categoryFilterLabel}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {CATEGORIES.map((c) => (
+                  <SelectItem key={c.value} value={c.value}>
+                    {c.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <Label className="text-xs text-muted-foreground">Date range</Label>
+            <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={cn(
+                    "h-9 w-full min-w-0 justify-start text-left font-normal sm:w-[240px]",
+                    !dateRange?.from && "text-muted-foreground"
+                  )}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
+                  {dateRange?.from ? (
+                    dateRange.to ? (
+                      <>
+                        {format(dateRange.from, "dd MMM yyyy")} – {format(dateRange.to, "dd MMM yyyy")}
+                      </>
+                    ) : (
+                      format(dateRange.from, "dd MMM yyyy")
+                    )
+                  ) : (
+                    <span>Pick date range</span>
+                  )}
+                  <ChevronDown className="ml-auto h-4 w-4 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto min-w-[580px] p-0" align="start">
+                <div className="p-3 border-b">
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button variant="outline" size="sm" onClick={() => applyDatePreset("today")} className="text-xs">
+                      Today
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => applyDatePreset("yesterday")} className="text-xs">
+                      Yesterday
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => applyDatePreset("last7")} className="text-xs">
+                      Last 7 days
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => applyDatePreset("last30")} className="text-xs">
+                      Last 30 days
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => applyDatePreset("thisMonth")} className="text-xs">
+                      This month
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => applyDatePreset("lastMonth")} className="text-xs">
+                      Last month
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => applyDatePreset("all")} className="text-xs col-span-2">
+                      All time
+                    </Button>
+                  </div>
+                </div>
+                <CalendarComponent
+                  initialFocus
+                  mode="range"
+                  defaultMonth={dateRange?.from}
+                  selected={dateRange}
+                  onSelect={setDateRange}
+                  numberOfMonths={2}
+                  classNames={{
+                    months: "flex flex-row gap-4",
+                    month: "space-y-4",
+                  }}
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
           {showCreateButton && (
-            <Button onClick={handleAdd}>
-              <Plus className="mr-2 h-4 w-4" />
+            <Button onClick={handleAdd} size="sm" className="h-9 gap-2 shadow-sm">
+              <Plus className="h-4 w-4 shrink-0" />
               Add shift record
             </Button>
           )}
@@ -175,11 +289,11 @@ export const ShiftRecordList = ({
       </div>
 
       {records.length === 0 ? (
-        <div className="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
+        <div className="rounded-xl border border-dashed p-8 text-center text-muted-foreground">
           No shift records found. {showCreateButton && "Add one to get started."}
         </div>
       ) : (
-        <div className="rounded-md border">
+        <div className="min-w-0 overflow-x-auto rounded-xl border bg-card shadow-sm">
           <Table>
             <TableHeader>
               <TableRow>

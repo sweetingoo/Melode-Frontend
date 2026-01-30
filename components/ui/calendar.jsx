@@ -51,6 +51,7 @@ function Calendar({
           "h-9 w-9 p-0 font-normal aria-selected:opacity-100"
         ),
         day_range_end: "day-range-end",
+        day_range_start: "rounded-l-md",
         day_selected:
           "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground",
         day_today: "bg-accent text-accent-foreground",
@@ -60,6 +61,15 @@ function Calendar({
         day_range_middle:
           "aria-selected:bg-accent aria-selected:text-accent-foreground",
         day_hidden: "invisible",
+        // react-day-picker v9 SelectionState keys (range highlight on both months)
+        range_start:
+          "bg-primary text-primary-foreground rounded-l-md hover:bg-primary hover:text-primary-foreground",
+        range_end:
+          "bg-primary text-primary-foreground rounded-r-md hover:bg-primary hover:text-primary-foreground",
+        range_middle:
+          "bg-primary/20 text-primary-foreground hover:bg-primary/30 rounded-none",
+        selected:
+          "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground",
         ...classNames,
       }}
       components={{
