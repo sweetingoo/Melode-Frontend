@@ -8,6 +8,7 @@ export { customFieldsService } from "./customFields";
 export { employeesService } from "./employees";
 export { departmentsService } from "./departments";
 export { assignmentsService } from "./assignments";
+export { attendanceService } from "./attendance";
 export { clockService } from "./clock";
 export { configurationService } from "./configuration";
 export { setupService } from "./setup";

@@ -1,0 +1,318 @@
+"use client";
+
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { LeaveRequestList } from "@/components/attendance/LeaveRequestList";
+import { LeaveApprovalList } from "@/components/attendance/LeaveApprovalList";
+import { LeaveCalendar } from "@/components/attendance/LeaveCalendar";
+import { HolidayBalanceCard } from "@/components/attendance/HolidayBalanceCard";
+import { ShiftRecordList } from "@/components/attendance/ShiftRecordList";
+import { ProvisionalShiftList } from "@/components/attendance/ProvisionalShiftList";
+import { MappedShiftTemplateList } from "@/components/attendance/MappedShiftTemplateList";
+import { useAuth } from "@/hooks/useAuth";
+import { useAssignments } from "@/hooks/useAssignments";
+import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
+import { BarChart3, Settings, Calendar, ClipboardList, UserCheck, MapPin, Layers, ChevronLeft, ChevronRight } from "lucide-react";
+
+/**
+ * Permission names used by backend. Page access requires attendance:view (sidebar).
+ * Visibility: Approvals=leave:approve, Reports/Settings buttons=attendance:reports|settings,
+ * Provisional/Mapped tabs=attendance:manage_all, Calendar=attendance:reports.
+ * Shift Records user selector=attendance:manage_all. Actions are enforced by the API.
+ */
+const PERM = {
+  LEAVE_APPROVE: "leave:approve",
+  REPORTS: "attendance:reports",
+  SETTINGS: "attendance:settings",
+  MANAGE_ALL: "attendance:manage_all",
+};
+
+const TAB_VALUES = ["my-leave", "approvals", "shift-records", "provisional", "mapped-templates", "calendar", "balance"];
+
+export default function AttendancePage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { user } = useAuth();
+  const { hasPermission } = usePermissionsCheck();
+  const { data: assignmentsData } = useAssignments({ user_id: user?.id, is_active: true });
+  const assignments = assignmentsData?.assignments || assignmentsData || [];
+
+  const activeAssignment = assignments?.[0];
+  const jobRoleId = activeAssignment?.job_role_id;
+
+  const canApprove = hasPermission(PERM.LEAVE_APPROVE);
+  const canViewReports = hasPermission(PERM.REPORTS);
+  const canManageSettings = hasPermission(PERM.SETTINGS);
+  const canManageAll = hasPermission(PERM.MANAGE_ALL);
+
+  const allowedTabs = useMemo(() => {
+    const allowed = new Set(["my-leave", "shift-records", "balance"]);
+    if (canApprove) allowed.add("approvals");
+    if (canManageAll) {
+      allowed.add("provisional");
+      allowed.add("mapped-templates");
+    }
+    if (canViewReports) allowed.add("calendar");
+    return allowed;
+  }, [canApprove, canManageAll, canViewReports]);
+
+  const [activeTab, setActiveTab] = useState(() => {
+    if (typeof window === "undefined") return "my-leave";
+    const params = new URLSearchParams(window.location.search);
+    const t = params.get("tab");
+    return t && TAB_VALUES.includes(t) ? t : "my-leave";
+  });
+
+  useEffect(() => {
+    const urlTab = searchParams.get("tab");
+    if (urlTab && TAB_VALUES.includes(urlTab)) {
+      setActiveTab(allowedTabs.has(urlTab) ? urlTab : "my-leave");
+    } else {
+      setActiveTab("my-leave");
+    }
+  }, [searchParams, allowedTabs]);
+
+  const handleTabChange = (value) => {
+    setActiveTab(value);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", value);
+    router.replace(`/admin/attendance?${params.toString()}`, { scroll: false });
+  };
+
+  const tabsScrollRef = useRef(null);
+  const [scrollIndicators, setScrollIndicators] = useState({ left: false, right: false });
+
+  const updateScrollIndicators = useCallback(() => {
+    const el = tabsScrollRef.current;
+    if (!el) return;
+    const { scrollLeft, scrollWidth, clientWidth } = el;
+    setScrollIndicators({
+      left: scrollLeft > 2,
+      right: scrollLeft + clientWidth < scrollWidth - 2,
+    });
+  }, []);
+
+  useEffect(() => {
+    const el = tabsScrollRef.current;
+    if (!el) return;
+    updateScrollIndicators();
+    const ro = new ResizeObserver(updateScrollIndicators);
+    ro.observe(el);
+    el.addEventListener("scroll", updateScrollIndicators);
+    return () => {
+      ro.disconnect();
+      el.removeEventListener("scroll", updateScrollIndicators);
+    };
+  }, [updateScrollIndicators, allowedTabs]);
+
+  const scrollTabs = (direction) => {
+    const el = tabsScrollRef.current;
+    if (!el) return;
+    el.scrollBy({ left: direction * 120, behavior: "smooth" });
+  };
+
+  return (
+    <div className="w-full space-y-4 px-2 py-4 sm:space-y-6 sm:px-0 sm:py-6">
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-4 sm:space-y-6">
+        {/* Sticky bar: on mobile tabs first row, Reports/Settings second row; desktop single row */}
+        <div className="sticky top-0 z-0 -mx-2 border-b bg-background px-3 pb-3 pt-2 shadow-[0_1px_0_0_hsl(var(--border))] sm:-mx-4 sm:px-4 sm:pb-2 sm:pt-1">
+          <div className="flex flex-col gap-3 md:flex-row md:flex-nowrap md:items-center md:justify-between md:gap-2">
+            <div className="min-w-0 flex-1">
+              <div
+                ref={tabsScrollRef}
+                className="flex flex-nowrap items-stretch overflow-x-auto scroll-smooth [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              >
+                {scrollIndicators.left && (
+                  <div className="sticky left-0 z-10 flex w-8 shrink-0 items-center justify-center bg-gradient-to-r from-background via-background/80 to-transparent pr-1">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-7 rounded-r-md rounded-l-none bg-background/80 shadow-sm hover:bg-background sm:h-8 sm:w-6"
+                      onClick={() => scrollTabs(-1)}
+                      aria-label="Scroll tabs left"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+                <TabsList className="inline-flex h-auto w-max flex-shrink-0 flex-nowrap gap-1 rounded-lg bg-muted/50 p-1 [&>button]:shrink-0">
+            <TabsTrigger value="my-leave" className="min-h-[2.75rem] touch-manipulation rounded-md px-3 py-2 data-[state=active]:bg-background sm:min-h-0">
+              <Calendar className="mr-2 h-4 w-4 shrink-0" />
+              My Leave
+            </TabsTrigger>
+          {canApprove && (
+            <TabsTrigger value="approvals" className="min-h-[2.75rem] touch-manipulation rounded-md px-3 py-2 data-[state=active]:bg-background sm:min-h-0">
+              <UserCheck className="mr-2 h-4 w-4 shrink-0" />
+              Approvals
+            </TabsTrigger>
+          )}
+          <TabsTrigger value="shift-records" className="min-h-[2.75rem] touch-manipulation rounded-md px-3 py-2 data-[state=active]:bg-background sm:min-h-0">
+            <ClipboardList className="mr-2 h-4 w-4 shrink-0" />
+            Shift Records
+          </TabsTrigger>
+          {canManageAll && (
+            <>
+              <TabsTrigger value="provisional" className="min-h-[2.75rem] touch-manipulation rounded-md px-3 py-2 data-[state=active]:bg-background sm:min-h-0">
+                <MapPin className="mr-2 h-4 w-4 shrink-0" />
+                Provisional
+              </TabsTrigger>
+              <TabsTrigger value="mapped-templates" className="min-h-[2.75rem] touch-manipulation rounded-md px-3 py-2 data-[state=active]:bg-background sm:min-h-0">
+                <Layers className="mr-2 h-4 w-4 shrink-0" />
+                Mapped Templates
+              </TabsTrigger>
+            </>
+          )}
+          {canViewReports && (
+            <TabsTrigger value="calendar" className="min-h-[2.75rem] touch-manipulation rounded-md px-3 py-2 data-[state=active]:bg-background sm:min-h-0">
+              Calendar
+            </TabsTrigger>
+          )}
+          <TabsTrigger value="balance" className="min-h-[2.75rem] touch-manipulation rounded-md px-3 py-2 data-[state=active]:bg-background sm:min-h-0">
+            Balance
+          </TabsTrigger>
+                </TabsList>
+                {scrollIndicators.right && (
+                  <div className="sticky right-0 z-10 flex w-8 shrink-0 items-center justify-center bg-gradient-to-l from-background via-background/80 to-transparent pl-1">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-7 rounded-l-md rounded-r-none bg-background/80 shadow-sm hover:bg-background sm:h-8 sm:w-6"
+                      onClick={() => scrollTabs(1)}
+                      aria-label="Scroll tabs right"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
+            {(canViewReports || canManageSettings) && (
+              <div className="flex w-full shrink-0 flex-wrap items-center gap-2 md:w-auto">
+                {canViewReports && (
+                  <Button variant="outline" size="sm" asChild className="min-h-[2.75rem] flex-1 touch-manipulation sm:min-h-0 sm:flex-none">
+                    <Link href="/admin/attendance/reports">
+                      <BarChart3 className="mr-2 h-4 w-4 shrink-0" />
+                      Reports
+                    </Link>
+                  </Button>
+                )}
+                {canManageSettings && (
+                  <Button variant="outline" size="sm" asChild className="min-h-[2.75rem] flex-1 touch-manipulation sm:min-h-0 sm:flex-none">
+                    <Link href="/admin/attendance/settings">
+                      <Settings className="mr-2 h-4 w-4 shrink-0" />
+                      Settings
+                    </Link>
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <TabsContent value="my-leave" className="mt-0 focus-visible:outline-none">
+          <Card className="overflow-hidden border-0 shadow-md sm:border sm:shadow-sm">
+            <CardHeader className="space-y-1 border-b bg-muted/20 px-4 py-5 sm:px-6 sm:py-6">
+              <CardTitle className="text-lg font-semibold tracking-tight sm:text-xl">My Leave Requests</CardTitle>
+              <CardDescription className="text-sm text-muted-foreground">
+                Submit and track holiday, sick leave, and other time off. Pending requests need manager approval.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-4 sm:p-6">
+              <LeaveRequestList userId={user?.id} showCreateButton={true} compactHeader />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {canApprove && (
+          <TabsContent value="approvals" className="mt-0 focus-visible:outline-none">
+            <Card className="overflow-hidden">
+              <CardHeader className="space-y-1.5 p-4 sm:p-6">
+                <CardTitle className="text-lg sm:text-xl">Pending Approvals</CardTitle>
+                <CardDescription className="text-sm">Review and approve or decline leave requests</CardDescription>
+              </CardHeader>
+              <CardContent className="p-4 sm:p-6">
+                <LeaveApprovalList statusFilter="pending" compactHeader />
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
+
+        <TabsContent value="shift-records" className="mt-0 focus-visible:outline-none">
+          <Card className="overflow-hidden">
+            <CardHeader className="space-y-1.5 p-4 sm:p-6">
+              <CardTitle className="text-lg sm:text-xl">Shift Records</CardTitle>
+              <CardDescription className="text-sm">
+                {canManageAll ? "View and manage attendance and leave shift records for all users" : "View and manage your shift records"}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-4 sm:p-6">
+              <ShiftRecordList
+                userId={user?.id}
+                showCreateButton={true}
+                allowUserSelect={canManageAll}
+                compactHeader
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {canManageAll && (
+          <>
+            <TabsContent value="provisional" className="mt-0 focus-visible:outline-none">
+              <Card className="overflow-hidden">
+                <CardHeader className="space-y-1.5 p-4 sm:p-6">
+                  <CardTitle className="text-lg sm:text-xl">Provisional Shifts</CardTitle>
+                  <CardDescription className="text-sm">Planned shifts not yet confirmed</CardDescription>
+                </CardHeader>
+                <CardContent className="p-4 sm:p-6">
+                  <ProvisionalShiftList userId={user?.id} showCreateButton={true} compactHeader />
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="mapped-templates" className="mt-0 focus-visible:outline-none">
+              <Card className="overflow-hidden">
+                <CardHeader className="space-y-1.5 p-4 sm:p-6">
+                  <CardTitle className="text-lg sm:text-xl">Mapped Shift Templates</CardTitle>
+                  <CardDescription className="text-sm">Templates used for mapped shift instances</CardDescription>
+                </CardHeader>
+                <CardContent className="p-4 sm:p-6">
+                  <MappedShiftTemplateList />
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </>
+        )}
+
+        {canViewReports && (
+          <TabsContent value="calendar" className="mt-0 focus-visible:outline-none">
+            <LeaveCalendar />
+          </TabsContent>
+        )}
+
+        <TabsContent value="balance" className="mt-0 focus-visible:outline-none">
+          {user?.id && jobRoleId ? (
+            <div className="grid gap-4 sm:gap-6 md:grid-cols-2">
+              <HolidayBalanceCard userId={user.id} jobRoleId={jobRoleId} />
+            </div>
+          ) : (
+            <Card className="overflow-hidden">
+              <CardContent className="flex flex-col items-center justify-center p-6 py-12 sm:p-6">
+                <p className="text-sm text-muted-foreground">
+                  No active job role found. Please contact your administrator to assign a role.
+                </p>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}

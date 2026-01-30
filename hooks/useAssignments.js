@@ -18,7 +18,9 @@ export const assignmentKeys = {
 };
 
 // Get all assignments query
-export const useAssignments = (params = {}) => {
+// options.enabled: when false, the query will not run (e.g. when dialog is closed)
+export const useAssignments = (params = {}, options = {}) => {
+  const { enabled = true, ...restOptions } = options;
   return useQuery({
     queryKey: assignmentKeys.list(params),
     queryFn: async () => {
@@ -26,6 +28,8 @@ export const useAssignments = (params = {}) => {
       return response.data;
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
+    enabled,
+    ...restOptions,
   });
 };
 

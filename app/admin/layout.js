@@ -55,6 +55,7 @@ import {
   ClipboardList,
   Clock,
   History,
+  Calendar,
   Crown,
   FileSpreadsheet,
   BarChart3,
@@ -127,6 +128,13 @@ const mainMenuItems = [
     icon: History,
     url: "/admin/clock/history",
     permission: "clock:view", // Permission to view clock records
+  },
+  {
+    title: "Attendance & Leave",
+    description: "Manage leave requests and view holiday balance",
+    icon: Calendar,
+    url: "/admin/attendance",
+    permission: "attendance:view", // Permission to view attendance
   },
   {
     title: "Tasks",
@@ -308,6 +316,13 @@ const monitoringAndReportsItems = [
     url: "/admin/audit-logs",
     permission: "SYSTEM_MONITOR", // Permission to view audit logs
   },
+  {
+    title: "Attendance Reports",
+    description: "View attendance summaries and holiday balance reports",
+    icon: BarChart3,
+    url: "/admin/attendance/reports",
+    permission: "attendance:reports", // Permission to view attendance reports
+  },
 ];
 
 // Settings group
@@ -346,6 +361,13 @@ const settingsItems = [
     icon: Database,
     url: "/admin/custom-fields-admin",
     permission: "custom_field:read", // Permission to read custom fields
+  },
+  {
+    title: "Attendance Settings",
+    description: "Configure shift/leave types, holiday years, and attendance settings",
+    icon: Settings,
+    url: "/admin/attendance/settings",
+    permission: "attendance:settings", // Permission to manage attendance settings
   },
 ];
 
@@ -1453,6 +1475,18 @@ export default function AdminLayout({ children }) {
         // Otherwise check for permission
       }
 
+      // Special case: Attendance & Leave - show if user has any attendance-related permission
+      // (attendance:view, attendance:manage_own, or attendance:reports); backend enforces per-endpoint
+      if (item.permission === "attendance:view") {
+        const hasAnyAttendance = userPermissionNames.some(
+          (perm) =>
+            perm === "attendance:view" ||
+            perm === "attendance:manage_own" ||
+            perm === "attendance:reports"
+        );
+        if (hasAnyAttendance) return true;
+      }
+
       // If user has wildcard permissions, show all
       if (userPermissionNames.includes("*")) return true;
 
@@ -1461,19 +1495,24 @@ export default function AdminLayout({ children }) {
         // Exact match
         if (perm === item.permission) return true;
 
-        // Resource match (e.g., invitation:create matches invitations:create)
-        const itemResource = item.permission.split(":")[0];
-        const permResource = perm.split(":")[0];
-        if (
-          permResource === itemResource ||
-          permResource === itemResource + "s" ||
-          permResource + "s" === itemResource
-        ) {
-          return true;
+        // Resource + action match (e.g. invitation:create matches invitations:create)
+        // Require same action so attendance:view does NOT match attendance:settings
+        const itemParts = item.permission.split(":");
+        const permParts = perm.split(":");
+        if (itemParts.length === 2 && permParts.length === 2) {
+          const itemResource = itemParts[0];
+          const itemAction = itemParts[1];
+          const permResource = permParts[0];
+          const permAction = permParts[1];
+          const resourceMatch =
+            permResource === itemResource ||
+            permResource === itemResource + "s" ||
+            permResource + "s" === itemResource;
+          const actionMatch = permAction === itemAction || permAction === "*";
+          if (resourceMatch && actionMatch) return true;
         }
 
-        // Check if permission contains the resource
-        return perm.includes(itemResource);
+        return false;
       });
     });
   };
