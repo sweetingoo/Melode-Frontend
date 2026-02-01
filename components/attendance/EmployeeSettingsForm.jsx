@@ -36,7 +36,7 @@ export const EmployeeSettingsForm = ({ open, onOpenChange, setting = null, prese
   const createSettings = useCreateEmployeeSettings();
   const updateSettings = useUpdateEmployeeSettings();
 
-  const { data: usersData } = useUsers({ limit: 500 });
+  const { data: usersData } = useUsers({ per_page: 100 });
   const users = usersData?.users ?? usersData?.data ?? [];
   const { data: assignmentsData } = useAssignments({
     user_id: userId ? parseInt(userId, 10) : undefined,

@@ -14,13 +14,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useClockIn, useClockStatus } from "@/hooks/useClock";
+import { useClockIn, useClockStatus, useLinkClockToProvisionalShift } from "@/hooks/useClock";
 import { useCurrentUser } from "@/hooks/useAuth";
 import { useRoles } from "@/hooks/useRoles";
 import { useLocations } from "@/hooks/useLocations";
 import { useUserDepartments } from "@/hooks/useDepartmentContext";
 import { usePreferences } from "@/hooks/useProfile";
-import { Loader2, Clock, MapPin, User, FileText, ArrowLeft } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Loader2, Clock, MapPin, User, FileText, ArrowLeft, Calendar } from "lucide-react";
+import { format } from "date-fns";
 import { toast } from "sonner";
 import Link from "next/link";
 
@@ -32,6 +41,7 @@ export default function ClockPage() {
   const [loginMethod] = useState("web"); // Always "web" for web version
   const [notes, setNotes] = useState("");
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [linkProvisionalModal, setLinkProvisionalModal] = useState(null); // { clockRecord, provisionalShifts }
 
   // Get current user
   const { data: currentUser, isLoading: userLoading } = useCurrentUser();
@@ -63,6 +73,7 @@ export default function ClockPage() {
 
   // Check in mutation
   const clockInMutation = useClockIn();
+  const linkToProvisionalMutation = useLinkClockToProvisionalShift();
 
   // Extract job roles from user's assignments
   const userJobRoles = React.useMemo(() => {
@@ -227,8 +238,9 @@ export default function ClockPage() {
     locationId
   ]);
 
-  // Check if already checked in - redirect immediately
+  // Check if already checked in - redirect immediately (unless we're showing the "link to provisional shift?" modal)
   useEffect(() => {
+    if (linkProvisionalModal) return; // Let user answer modal first
     if (!statusLoading && clockStatus) {
       // Check for clocked in status - API can return status, current_state, or is_clocked_in
       const isClockedIn =
@@ -243,7 +255,7 @@ export default function ClockPage() {
         router.replace("/clock/dashboard");
       }
     }
-  }, [clockStatus, statusLoading, router]);
+  }, [clockStatus, statusLoading, router, linkProvisionalModal]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -277,14 +289,37 @@ export default function ClockPage() {
     }
 
     try {
-      await clockInMutation.mutateAsync(clockInData);
-      // Refetch status to ensure we have the latest data
+      const result = await clockInMutation.mutateAsync(clockInData);
+      const clockRecord = result?.clock_record ?? result;
+      const provisionalShifts = result?.provisional_shifts_nearby ?? [];
       await refetchStatus();
-      // Redirect to dashboard
+      if (provisionalShifts?.length > 0 && clockRecord?.id) {
+        setLinkProvisionalModal({ clockRecord, provisionalShifts });
+        return;
+      }
       router.push("/clock/dashboard");
     } catch (error) {
       // Error is handled by the mutation
     }
+  };
+
+  const handleLinkToProvisionalShift = async (shiftRecordId) => {
+    if (!linkProvisionalModal?.clockRecord?.id) return;
+    try {
+      await linkToProvisionalMutation.mutateAsync({
+        clockRecordId: linkProvisionalModal.clockRecord.id,
+        shiftRecordId,
+      });
+      setLinkProvisionalModal(null);
+      router.push("/clock/dashboard");
+    } catch (error) {
+      // Error is handled by the mutation
+    }
+  };
+
+  const handleDismissLinkProvisionalModal = () => {
+    setLinkProvisionalModal(null);
+    router.push("/clock/dashboard");
   };
 
   // Show loading while checking status
@@ -297,8 +332,9 @@ export default function ClockPage() {
   }
 
   // If already clocked in (active or on break), show loading while redirecting
-  // This prevents the form from flashing before redirect
-  if (clockStatus) {
+  // This prevents the form from flashing before redirect.
+  // Exception: when linkProvisionalModal is set we just clocked in and need to show "Are you logging in to this shift?" — don't redirect yet.
+  if (clockStatus && !linkProvisionalModal) {
     // Check for clocked in status - API can return status, current_state, or is_clocked_in
     const isClockedIn =
       clockStatus?.is_clocked_in === true ||
@@ -506,6 +542,62 @@ export default function ClockPage() {
           </form>
         </CardContent>
       </Card>
+
+      {/* Modal: link clock-in to a provisional shift */}
+      <Dialog open={!!linkProvisionalModal} onOpenChange={(open) => !open && handleDismissLinkProvisionalModal()}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Are you logging in to one of these shifts?</DialogTitle>
+            <DialogDescription>
+              You have provisional shift(s) starting around this time. Linking your clock-in helps managers see that the shift is covered and track lateness.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            {linkProvisionalModal?.provisionalShifts?.map((shift) => (
+              <div
+                key={shift.id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-muted/30 p-3"
+              >
+                <div className="flex items-center gap-2 text-sm">
+                  <Calendar className="h-4 w-4 text-muted-foreground" />
+                  <span>
+                    {shift.shift_date ? format(new Date(shift.shift_date), "EEE d MMM") : "—"}
+                    {shift.start_time != null && (
+                      <span className="text-muted-foreground ml-1">
+                        {typeof shift.start_time === "string"
+                          ? shift.start_time.slice(0, 5)
+                          : shift.start_time}
+                      </span>
+                    )}
+                    {shift.shift_leave_type_name && (
+                      <span className="ml-2 font-medium">{shift.shift_leave_type_name}</span>
+                    )}
+                    {shift.hours != null && (
+                      <span className="text-muted-foreground ml-1">({shift.hours}h)</span>
+                    )}
+                  </span>
+                </div>
+                <Button
+                  size="sm"
+                  onClick={() => handleLinkToProvisionalShift(shift.id)}
+                  disabled={linkToProvisionalMutation.isPending}
+                >
+                  {linkToProvisionalMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    "Yes, this one"
+                  )}
+                </Button>
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={handleDismissLinkProvisionalModal}>
+              No thanks
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -158,7 +158,8 @@ const CreateBroadcastDialog = ({
       send_push: formData.send_push,
       priority: formData.priority,
       requires_acknowledgement: formData.requires_acknowledgement,
-      // Don't include conversation_id - broadcasts are created via /broadcasts endpoint
+      // Explicit null so useCreateMessage routes to /broadcasts, not /messages
+      conversation_id: null,
     };
 
     // Set target based on selection

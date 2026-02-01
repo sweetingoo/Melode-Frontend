@@ -15,6 +15,19 @@ export const HolidayBalanceCard = ({ userId, jobRoleId, holidayYearId = null }) 
     holiday_year_id: holidayYearId,
   });
 
+  if (!userId) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Holiday Balance</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">No person selected.</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
   if (isLoading) {
     return (
       <Card>
@@ -31,13 +44,22 @@ export const HolidayBalanceCard = ({ userId, jobRoleId, holidayYearId = null }) 
   }
 
   if (error || !balance) {
+    const status = error?.response?.status;
+    const detail = error?.response?.data?.detail;
+    const isNoEntitlement = status === 404 || (typeof detail === "string" && detail?.toLowerCase().includes("entitlement not found"));
+    const isNoJobRole = status === 400 || (typeof detail === "string" && detail?.toLowerCase().includes("no active job role"));
+    const emptyMessage = isNoEntitlement
+      ? "No holiday entitlement set up for this person."
+      : isNoJobRole
+        ? "No active job role assigned, or no entitlement set up."
+        : "Unable to load holiday balance";
     return (
       <Card>
         <CardHeader>
           <CardTitle>Holiday Balance</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground">Unable to load holiday balance</p>
+          <p className="text-sm text-muted-foreground">{emptyMessage}</p>
         </CardContent>
       </Card>
     );

@@ -41,6 +41,7 @@ import {
 import { format, isToday, isYesterday } from "date-fns";
 import { cn } from "@/lib/utils";
 import { parseUTCDate } from "@/utils/time";
+import { getUserDisplayName } from "@/utils/user";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
 
 const MessagesList = ({
@@ -161,7 +162,7 @@ const MessagesList = ({
         const targetUsers = users.filter((u) => message.target_user_ids.includes(u.id));
         if (targetUsers.length > 0) {
           if (targetUsers.length === 1) {
-            return `${targetUsers[0].first_name} ${targetUsers[0].last_name}`.trim() || targetUsers[0].email || targetUsers[0].username || "User";
+            return getUserDisplayName(targetUsers[0]) || "User";
           } else {
             return `${targetUsers.length} users`;
           }

@@ -31,7 +31,7 @@ export const HolidayEntitlementForm = ({ open, onOpenChange, entitlement = null,
   const createEntitlement = useCreateHolidayEntitlement();
   const updateEntitlement = useUpdateHolidayEntitlement();
 
-  const { data: usersData } = useUsers({ limit: 500 });
+  const { data: usersData } = useUsers({ per_page: 100 });
   const users = usersData?.users ?? usersData?.data ?? [];
   const { data: yearsData } = useHolidayYears({});
   const years = Array.isArray(yearsData) ? yearsData : (yearsData?.years ?? yearsData ?? []);

@@ -47,6 +47,8 @@ function formatColumnHeader(key) {
     user_name: "Employee",
     department_id: "Department",
     department_name: "Department",
+    job_role_id: "Job Role",
+    job_role_name: "Job Role",
     role_id: "Role",
     role_name: "Role",
     attendance_hours: "Attendance (h)",
@@ -65,9 +67,33 @@ function formatColumnHeader(key) {
     leave_type: "Leave Type",
     status: "Status",
     reason: "Reason",
+    by_type: "By Type",
+    days_absent_count: "Days Absent",
   };
   if (map[key]) return map[key];
   return key.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
+}
+
+/** Prefer _name columns over _id so we don't show raw IDs when we have names */
+function getDisplayKeys(keys) {
+  const hasName = (k) => keys.includes(k.replace(/_id$/, "_name"));
+  return keys.filter((k) => {
+    if (!k.endsWith("_id")) return true;
+    return !hasName(k);
+  });
+}
+
+/** Format a cell value for display; handles objects (e.g. by_type) so they don't show [object Object] */
+function formatCellValue(val) {
+  if (val == null) return "—";
+  if (typeof val === "object" && !Array.isArray(val) && !(val instanceof Date)) {
+    const parts = Object.entries(val).map(([k, v]) => {
+      if (typeof v === "number") return `${k}: ${Number(v).toFixed(1)}h`;
+      return `${k}: ${v}`;
+    });
+    return parts.length ? parts.join(", ") : "—";
+  }
+  return String(val);
 }
 
 const defaultRange = getDefaultDateRange();
@@ -88,7 +114,7 @@ export default function AttendanceReportsPage() {
     ? { start_date: individualStartDate, end_date: individualEndDate }
     : null;
 
-  const { data: usersData } = useUsers({ limit: 500 });
+  const { data: usersData } = useUsers({ per_page: 100 });
   const users = usersData?.users ?? usersData?.data ?? [];
   const { data: individualData, isLoading: individualLoading } = useIndividualReport(
     individualUserId ? parseInt(individualUserId, 10) : null,
@@ -193,29 +219,34 @@ export default function AttendanceReportsPage() {
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
             ) : Array.isArray(summaryRows) && summaryRows.length > 0 ? (
-              <div className="overflow-x-auto rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      {Object.keys(summaryRows[0] || {}).map((key) => (
-                        <TableHead key={key}>{formatColumnHeader(key)}</TableHead>
-                      ))}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {summaryRows.slice(0, 20).map((row, i) => (
-                      <TableRow key={i}>
-                        {Object.values(row).map((val, j) => (
-                          <TableCell key={j}>{val != null ? String(val) : "—"}</TableCell>
+              (() => {
+                const keys = getDisplayKeys(Object.keys(summaryRows[0] || {}));
+                return (
+                  <div className="overflow-x-auto rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          {keys.map((key) => (
+                            <TableHead key={key}>{formatColumnHeader(key)}</TableHead>
+                          ))}
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {summaryRows.slice(0, 20).map((row, i) => (
+                          <TableRow key={i}>
+                            {keys.map((key) => (
+                              <TableCell key={key}>{formatCellValue(row[key])}</TableCell>
+                            ))}
+                          </TableRow>
                         ))}
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-                {summaryRows.length > 20 && (
-                  <p className="p-2 text-sm text-muted-foreground">Showing first 20 of {summaryRows.length} rows</p>
-                )}
-              </div>
+                      </TableBody>
+                    </Table>
+                    {summaryRows.length > 20 && (
+                      <p className="p-2 text-sm text-muted-foreground">Showing first 20 of {summaryRows.length} rows</p>
+                    )}
+                  </div>
+                );
+              })()
             ) : (
               <p className="py-8 text-center text-muted-foreground">No summary data for this range</p>
             )}
@@ -233,29 +264,34 @@ export default function AttendanceReportsPage() {
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
             ) : Array.isArray(holidayRows) && holidayRows.length > 0 ? (
-              <div className="overflow-x-auto rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      {Object.keys(holidayRows[0] || {}).map((key) => (
-                        <TableHead key={key}>{formatColumnHeader(key)}</TableHead>
-                      ))}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {holidayRows.slice(0, 20).map((row, i) => (
-                      <TableRow key={i}>
-                        {Object.values(row).map((val, j) => (
-                          <TableCell key={j}>{val != null ? String(val) : "—"}</TableCell>
+              (() => {
+                const keys = getDisplayKeys(Object.keys(holidayRows[0] || {}));
+                return (
+                  <div className="overflow-x-auto rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          {keys.map((key) => (
+                            <TableHead key={key}>{formatColumnHeader(key)}</TableHead>
+                          ))}
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {holidayRows.slice(0, 20).map((row, i) => (
+                          <TableRow key={i}>
+                            {keys.map((key) => (
+                              <TableCell key={key}>{formatCellValue(row[key])}</TableCell>
+                            ))}
+                          </TableRow>
                         ))}
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-                {holidayRows.length > 20 && (
-                  <p className="p-2 text-sm text-muted-foreground">Showing first 20 of {holidayRows.length} rows</p>
-                )}
-              </div>
+                      </TableBody>
+                    </Table>
+                    {holidayRows.length > 20 && (
+                      <p className="p-2 text-sm text-muted-foreground">Showing first 20 of {holidayRows.length} rows</p>
+                    )}
+                  </div>
+                );
+              })()
             ) : (
               <p className="py-8 text-center text-muted-foreground">No holiday balance data</p>
             )}
@@ -274,29 +310,34 @@ export default function AttendanceReportsPage() {
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
           ) : Array.isArray(absenceRows) && absenceRows.length > 0 ? (
-            <div className="overflow-x-auto rounded-md border">
-              <Table>
-                <TableHeader>
-                    <TableRow>
-                      {Object.keys(absenceRows[0] || {}).map((key) => (
-                        <TableHead key={key}>{formatColumnHeader(key)}</TableHead>
+            (() => {
+              const keys = getDisplayKeys(Object.keys(absenceRows[0] || {}));
+              return (
+                <div className="overflow-x-auto rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        {keys.map((key) => (
+                          <TableHead key={key}>{formatColumnHeader(key)}</TableHead>
+                        ))}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {absenceRows.slice(0, 50).map((row, i) => (
+                        <TableRow key={i}>
+                          {keys.map((key) => (
+                            <TableCell key={key}>{formatCellValue(row[key])}</TableCell>
+                          ))}
+                        </TableRow>
                       ))}
-                    </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {absenceRows.slice(0, 50).map((row, i) => (
-                    <TableRow key={i}>
-                      {Object.values(row).map((val, j) => (
-                        <TableCell key={j}>{val != null ? String(val) : "—"}</TableCell>
-                      ))}
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-              {absenceRows.length > 50 && (
-                <p className="p-2 text-sm text-muted-foreground">Showing first 50 of {absenceRows.length} rows</p>
-              )}
-            </div>
+                    </TableBody>
+                  </Table>
+                  {absenceRows.length > 50 && (
+                    <p className="p-2 text-sm text-muted-foreground">Showing first 50 of {absenceRows.length} rows</p>
+                  )}
+                </div>
+              );
+            })()
           ) : (
             <p className="py-8 text-center text-muted-foreground">No absence data for this range</p>
           )}

@@ -37,7 +37,11 @@ export const useRoles = (params = {}) => {
   });
 };
 
-// Get all users query
+/**
+ * Get all users (GET /users). For non-admin callers the API returns minimal users
+ * (id, slug, display_name, is_active) only. Use getUserDisplayName(user) from
+ * @/utils/user when displaying names so both full and minimal responses work.
+ */
 export const useUsers = (params = {}, options = {}) => {
   return useQuery({
     queryKey: userKeys.list(params),

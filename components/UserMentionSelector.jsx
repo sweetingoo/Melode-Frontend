@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { X, User, Search, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getUserDisplayName } from "@/utils/user";
 
 const UserMentionSelector = ({
   users = [],
@@ -22,13 +23,11 @@ const UserMentionSelector = ({
   const dropdownRef = useRef(null);
   const containerRef = useRef(null);
 
-  // Filter users based on search term
+  // Filter users based on search term (works for full or minimal user list from API)
   const filteredUsers = users.filter((user) => {
     if (!searchTerm) return true;
     const searchLower = searchTerm.toLowerCase();
-    const displayName = user.display_name || 
-      `${user.first_name || ""} ${user.last_name || ""}`.trim() || 
-      user.email || "";
+    const displayName = getUserDisplayName(user);
     return (
       displayName.toLowerCase().includes(searchLower) ||
       user.email?.toLowerCase().includes(searchLower) ||
@@ -68,15 +67,6 @@ const UserMentionSelector = ({
     e.stopPropagation();
     const newSelection = selectedUserIds.filter((id) => id !== userId);
     onSelectionChange(newSelection);
-  };
-
-  const getUserDisplayName = (user) => {
-    return (
-      user.display_name ||
-      `${user.first_name || ""} ${user.last_name || ""}`.trim() ||
-      user.email ||
-      `User #${user.id}`
-    );
   };
 
   // Close dropdown when clicking outside

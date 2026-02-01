@@ -14,22 +14,48 @@ import { HolidayBalanceCard } from "@/components/attendance/HolidayBalanceCard";
 import { ShiftRecordList } from "@/components/attendance/ShiftRecordList";
 import { ProvisionalShiftList } from "@/components/attendance/ProvisionalShiftList";
 import { MappedShiftTemplateList } from "@/components/attendance/MappedShiftTemplateList";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/useAuth";
 import { useAssignments } from "@/hooks/useAssignments";
+import { useUsers } from "@/hooks/useUsers";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
+import { getUserDisplayName } from "@/utils/user";
 import { BarChart3, Settings, Calendar, ClipboardList, UserCheck, MapPin, Layers, ChevronLeft, ChevronRight } from "lucide-react";
 
 /**
- * Permission names used by backend. Page access requires attendance:view (sidebar).
- * Visibility: Approvals=leave:approve, Reports/Settings buttons=attendance:reports|settings,
- * Provisional/Mapped tabs=attendance:manage_all, Calendar=attendance:reports.
- * Shift Records user selector=attendance:manage_all. Actions are enforced by the API.
+ * Attendance & Leave page – permission per tab
+ *
+ * Page access: attendance:view (sidebar). Who can open the page is controlled there.
+ *
+ * Tab visibility (each tab has its own permission where listed):
+ * - My Leave       – no extra permission (everyone with page access)
+ * - Approvals     – leave:approve
+ * - Shift Records – no extra permission (everyone); content scope = own vs all (see below)
+ * - Provisional   – attendance:manage_all
+ * - Mapped        – attendance:manage_all
+ * - Calendar      – attendance:reports
+ * - Balance       – no extra permission (everyone with page access)
+ *
+ * Shift Records content (not tab visibility):
+ * - "Your Shift Records" (own only): default for users with attendance:view
+ * - "Shift Records (All Users)": requires attendance:manage_all OR attendance:manage_all_shift_records
+ *
+ * Header buttons: Reports=attendance:reports, Settings=attendance:settings.
+ * Actions are enforced by the API.
  */
 const PERM = {
   LEAVE_APPROVE: "leave:approve",
   REPORTS: "attendance:reports",
   SETTINGS: "attendance:settings",
   MANAGE_ALL: "attendance:manage_all",
+  MANAGE_ALL_SHIFT_RECORDS: "attendance:manage_all_shift_records",
 };
 
 const TAB_VALUES = ["my-leave", "approvals", "shift-records", "provisional", "mapped-templates", "calendar", "balance"];
@@ -38,17 +64,22 @@ function AttendancePageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user } = useAuth();
-  const { hasPermission } = usePermissionsCheck();
+  const { hasPermission, isSuperuser } = usePermissionsCheck();
   const { data: assignmentsData } = useAssignments({ user_id: user?.id, is_active: true });
   const assignments = assignmentsData?.assignments || assignmentsData || [];
 
   const activeAssignment = assignments?.[0];
-  const jobRoleId = activeAssignment?.job_role_id;
+  // API returns role_id (UserDepartmentRole); support job_role_id for compatibility
+  const jobRoleId = activeAssignment?.role_id ?? activeAssignment?.job_role_id;
 
   const canApprove = hasPermission(PERM.LEAVE_APPROVE);
   const canViewReports = hasPermission(PERM.REPORTS);
   const canManageSettings = hasPermission(PERM.SETTINGS);
   const canManageAll = hasPermission(PERM.MANAGE_ALL);
+  const canManageAllShiftRecords =
+    canManageAll || hasPermission(PERM.MANAGE_ALL_SHIFT_RECORDS);
+  /** Only superusers see the "View balance for" dropdown; everyone else sees only their own balance */
+  const showBalanceUserSelector = !!isSuperuser;
 
   const allowedTabs = useMemo(() => {
     const allowed = new Set(["my-leave", "shift-records", "balance"]);
@@ -67,6 +98,8 @@ function AttendancePageContent() {
     const t = params.get("tab");
     return t && TAB_VALUES.includes(t) ? t : "my-leave";
   });
+  const [balanceUserId, setBalanceUserId] = useState(null);
+  const [balanceJobRoleId, setBalanceJobRoleId] = useState(null);
 
   useEffect(() => {
     const urlTab = searchParams.get("tab");
@@ -76,6 +109,39 @@ function AttendancePageContent() {
       setActiveTab("my-leave");
     }
   }, [searchParams, allowedTabs]);
+
+  const { data: usersData } = useUsers(
+    showBalanceUserSelector ? { per_page: 100 } : { limit: 0 },
+    { enabled: showBalanceUserSelector }
+  );
+  const balanceUsers = usersData?.users || usersData?.data || [];
+  const balanceAssignmentsData = useAssignments(
+    {
+      user_id: balanceUserId ?? user?.id,
+      is_active: true,
+    },
+    { enabled: showBalanceUserSelector && (!!balanceUserId || !!user?.id) }
+  );
+  const balanceAssignmentsRaw = balanceAssignmentsData?.data ?? balanceAssignmentsData;
+  const balanceAssignmentsList = Array.isArray(balanceAssignmentsRaw)
+    ? balanceAssignmentsRaw
+    : balanceAssignmentsRaw?.assignments ?? [];
+
+  useEffect(() => {
+    if (!showBalanceUserSelector) return;
+    if (balanceUserId == null && user?.id) {
+      setBalanceUserId(user.id);
+      setBalanceJobRoleId(jobRoleId ?? null);
+    }
+  }, [showBalanceUserSelector, balanceUserId, user?.id, jobRoleId]);
+
+  useEffect(() => {
+    if (!balanceUserId || balanceAssignmentsList.length === 0) return;
+    const firstRoleId = balanceAssignmentsList[0]?.role_id ?? balanceAssignmentsList[0]?.job_role_id;
+    if (balanceJobRoleId == null && firstRoleId != null) {
+      setBalanceJobRoleId(firstRoleId);
+    }
+  }, [balanceUserId, balanceAssignmentsList, balanceJobRoleId]);
 
   const handleTabChange = (value) => {
     setActiveTab(value);
@@ -247,16 +313,20 @@ function AttendancePageContent() {
         <TabsContent value="shift-records" className="mt-0 focus-visible:outline-none">
           <Card className="overflow-hidden">
             <CardHeader className="space-y-1.5 p-4 sm:p-6">
-              <CardTitle className="text-lg sm:text-xl">Shift Records</CardTitle>
+              <CardTitle className="text-lg sm:text-xl">
+                {canManageAllShiftRecords ? "Shift Records (All Users)" : "Your Shift Records"}
+              </CardTitle>
               <CardDescription className="text-sm">
-                {canManageAll ? "View and manage attendance and leave shift records for all users" : "View and manage your shift records"}
+                {canManageAllShiftRecords
+                  ? "View and manage attendance and leave shift records for everyone. Use filters to narrow by user, date, or category."
+                  : "View and manage your own attendance and leave shift records."}
               </CardDescription>
             </CardHeader>
             <CardContent className="p-4 sm:p-6">
               <ShiftRecordList
-                userId={user?.id}
+                userId={canManageAllShiftRecords ? undefined : user?.id}
                 showCreateButton={true}
-                allowUserSelect={canManageAll}
+                allowUserSelect={canManageAllShiftRecords}
                 compactHeader
               />
             </CardContent>
@@ -268,11 +338,21 @@ function AttendancePageContent() {
             <TabsContent value="provisional" className="mt-0 focus-visible:outline-none">
               <Card className="overflow-hidden">
                 <CardHeader className="space-y-1.5 p-4 sm:p-6">
-                  <CardTitle className="text-lg sm:text-xl">Provisional Shifts</CardTitle>
-                  <CardDescription className="text-sm">Planned shifts not yet confirmed</CardDescription>
+                  <CardTitle className="text-lg sm:text-xl">
+                    {canManageAll ? "Provisional Shifts (All Users)" : "Provisional Shifts"}
+                  </CardTitle>
+                  <CardDescription className="text-sm">
+                    {canManageAll
+                      ? "View and manage planned shifts for everyone. Add shifts and assign to any user."
+                      : "Planned shifts not yet confirmed"}
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="p-4 sm:p-6">
-                  <ProvisionalShiftList userId={user?.id} showCreateButton={true} compactHeader />
+                  <ProvisionalShiftList
+                    userId={canManageAll ? undefined : user?.id}
+                    showCreateButton={true}
+                    compactHeader
+                  />
                 </CardContent>
               </Card>
             </TabsContent>
@@ -298,16 +378,91 @@ function AttendancePageContent() {
         )}
 
         <TabsContent value="balance" className="mt-0 focus-visible:outline-none">
-          {user?.id && jobRoleId ? (
-            <div className="grid gap-4 sm:gap-6 md:grid-cols-2">
-              <HolidayBalanceCard userId={user.id} jobRoleId={jobRoleId} />
-            </div>
-          ) : (
+          {showBalanceUserSelector ? (
             <Card className="overflow-hidden">
-              <CardContent className="flex flex-col items-center justify-center p-6 py-12 sm:p-6">
-                <p className="text-sm text-muted-foreground">
-                  No active job role found. Please contact your administrator to assign a role.
-                </p>
+              <CardHeader className="space-y-1.5 p-4 sm:p-6">
+                <CardTitle className="text-lg sm:text-xl">Holiday Balance</CardTitle>
+                <CardDescription className="text-sm">
+                  View holiday balance for any user. Select a user (and job role if they have multiple).
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4 p-4 sm:p-6">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>View balance for</Label>
+                    <Select
+                      value={balanceUserId != null ? String(balanceUserId) : ""}
+                      onValueChange={(v) => {
+                        setBalanceUserId(v ? parseInt(v, 10) : null);
+                        setBalanceJobRoleId(null);
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select user" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {balanceUsers.map((u) => (
+                          <SelectItem key={u.id} value={String(u.id)}>
+                            {getUserDisplayName(u)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {balanceAssignmentsList.length > 1 && (
+                    <div className="space-y-2">
+                      <Label>Job role</Label>
+                      <Select
+                        value={balanceJobRoleId != null ? String(balanceJobRoleId) : ""}
+                        onValueChange={(v) => setBalanceJobRoleId(v ? parseInt(v, 10) : null)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select role" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {balanceAssignmentsList.map((a) => {
+                            const roleId = a?.role_id ?? a?.job_role_id;
+                            const label = a?.role?.display_name || a?.role?.name || a?.job_role?.display_name || a?.job_role?.name || `Role ${roleId}`;
+                            return (
+                              <SelectItem key={roleId} value={String(roleId)}>
+                                {label}
+                              </SelectItem>
+                            );
+                          })}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                </div>
+                {balanceUserId && balanceJobRoleId ? (
+                  <HolidayBalanceCard userId={balanceUserId} jobRoleId={balanceJobRoleId} />
+                ) : balanceUserId && balanceAssignmentsList.length === 1 ? (
+                  <HolidayBalanceCard
+                    userId={balanceUserId}
+                    jobRoleId={balanceAssignmentsList[0]?.role_id ?? balanceAssignmentsList[0]?.job_role_id}
+                  />
+                ) : balanceUserId ? (
+                  <p className="text-sm text-muted-foreground">No active job role found for this user.</p>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Select a user to view their holiday balance.</p>
+                )}
+              </CardContent>
+            </Card>
+          ) : (
+            /* Normal user: show only their own balance, no dropdown */
+            <Card className="overflow-hidden">
+              <CardHeader className="space-y-1.5 p-4 sm:p-6">
+                <CardTitle className="text-lg sm:text-xl">Holiday Balance</CardTitle>
+                <CardDescription className="text-sm">Your current holiday balance.</CardDescription>
+              </CardHeader>
+              <CardContent className="p-4 sm:p-6 pt-0">
+                {user?.id && jobRoleId ? (
+                  <HolidayBalanceCard userId={user.id} jobRoleId={jobRoleId} />
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    No active job role found. Please contact your administrator to assign a role.
+                  </p>
+                )}
               </CardContent>
             </Card>
           )}

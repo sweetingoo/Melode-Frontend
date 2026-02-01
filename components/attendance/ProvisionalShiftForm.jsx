@@ -40,7 +40,7 @@ export const ProvisionalShiftForm = ({ open, onOpenChange, shiftRecord = null })
   const createProvisionalShift = useCreateProvisionalShift();
   const updateProvisionalShift = useUpdateProvisionalShift();
 
-  const { data: usersData } = useUsers({ limit: 500 });
+  const { data: usersData } = useUsers({ per_page: 100 });
   const users = usersData?.users || usersData?.data || [];
 
   const { data: assignmentsData } = useAssignments({

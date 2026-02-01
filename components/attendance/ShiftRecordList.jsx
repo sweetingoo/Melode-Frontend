@@ -238,44 +238,48 @@ export const ShiftRecordList = ({
                   <ChevronDown className="ml-auto h-4 w-4 opacity-50" />
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-auto min-w-[580px] p-0" align="start">
-                <div className="p-3 border-b">
-                  <div className="grid grid-cols-2 gap-2">
-                    <Button variant="outline" size="sm" onClick={() => applyDatePreset("today")} className="text-xs">
-                      Today
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={() => applyDatePreset("yesterday")} className="text-xs">
-                      Yesterday
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={() => applyDatePreset("last7")} className="text-xs">
-                      Last 7 days
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={() => applyDatePreset("last30")} className="text-xs">
-                      Last 30 days
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={() => applyDatePreset("thisMonth")} className="text-xs">
-                      This month
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={() => applyDatePreset("lastMonth")} className="text-xs">
-                      Last month
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={() => applyDatePreset("all")} className="text-xs col-span-2">
-                      All time
-                    </Button>
+              <PopoverContent className="w-[calc(100vw-2rem)] max-w-[340px] p-0 sm:w-auto sm:min-w-[580px] sm:max-w-none" align="start">
+                <div className="max-h-[85vh] min-h-0 flex flex-col overflow-hidden">
+                  <div className="p-3 border-b shrink-0">
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button variant="outline" size="sm" onClick={() => applyDatePreset("today")} className="text-xs">
+                        Today
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => applyDatePreset("yesterday")} className="text-xs">
+                        Yesterday
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => applyDatePreset("last7")} className="text-xs">
+                        Last 7 days
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => applyDatePreset("last30")} className="text-xs">
+                        Last 30 days
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => applyDatePreset("thisMonth")} className="text-xs">
+                        This month
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => applyDatePreset("lastMonth")} className="text-xs">
+                        Last month
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => applyDatePreset("all")} className="text-xs col-span-2">
+                        All time
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain">
+                    <CalendarComponent
+                      initialFocus
+                      mode="range"
+                      defaultMonth={dateRange?.from}
+                      selected={dateRange}
+                      onSelect={setDateRange}
+                      numberOfMonths={2}
+                      classNames={{
+                        months: "flex flex-col gap-4 sm:flex-row",
+                        month: "space-y-4",
+                      }}
+                    />
                   </div>
                 </div>
-                <CalendarComponent
-                  initialFocus
-                  mode="range"
-                  defaultMonth={dateRange?.from}
-                  selected={dateRange}
-                  onSelect={setDateRange}
-                  numberOfMonths={2}
-                  classNames={{
-                    months: "flex flex-row gap-4",
-                    month: "space-y-4",
-                  }}
-                />
               </PopoverContent>
             </Popover>
           </div>

@@ -5,7 +5,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { format, startOfMonth, endOfMonth } from "date-fns";
+import { format, startOfMonth, endOfMonth, parseISO } from "date-fns";
 import { useLeaveCalendar } from "@/hooks/useAttendanceReports";
 import { Loader2, CalendarIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -26,15 +26,22 @@ export const LeaveCalendar = ({ departmentId = null, roleId = null }) => {
 
   const events = calendarData || [];
 
-  // Group events by date
+  // Group events by date: expand each leave request (start_date..end_date) to every day in range
   const eventsByDate = React.useMemo(() => {
     const grouped = {};
     events.forEach((event) => {
-      const dateKey = event.start_date;
-      if (!grouped[dateKey]) {
-        grouped[dateKey] = [];
+      const start = parseISO(event.start_date);
+      const end = parseISO(event.end_date);
+      let d = new Date(start);
+      d.setHours(0, 0, 0, 0);
+      const endDay = new Date(end);
+      endDay.setHours(0, 0, 0, 0);
+      while (d <= endDay) {
+        const dateKey = format(d, "yyyy-MM-dd");
+        if (!grouped[dateKey]) grouped[dateKey] = [];
+        grouped[dateKey].push(event);
+        d.setDate(d.getDate() + 1);
       }
-      grouped[dateKey].push(event);
     });
     return grouped;
   }, [events]);

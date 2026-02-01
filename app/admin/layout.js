@@ -1637,9 +1637,11 @@ export default function AdminLayout({ children }) {
           </Sidebar>
 
           <SidebarInset>
-            <header className="flex h-20 shrink-0 items-center gap-2 border-b px-4" id="admin-header">
-              <SidebarTrigger className="-ml-1" />
-              <div className="flex-1 min-w-0">
+            <header className="flex flex-col gap-2 border-b px-4 py-3 md:flex-row md:h-20 md:shrink-0 md:items-center md:gap-2 md:py-0" id="admin-header">
+              {/* Row 1 on mobile: title row; on md+ title and actions share one row */}
+              <div className="flex items-center gap-2 min-w-0 flex-1">
+                <SidebarTrigger className="-ml-1 shrink-0" />
+                <div className="flex-1 min-w-0">
                 {(() => {
                   // Create a comprehensive mapping from all menu items
                   const allMenuItems = [
@@ -1653,9 +1655,9 @@ export default function AdminLayout({ children }) {
                   // Special case: Dashboard (root /admin path) - check first to avoid matching other /admin/* paths
                   if (pathname === "/admin") {
                     return (
-                      <div>
-                        <h1 className="text-lg font-semibold">Dashboard</h1>
-                        <p className="text-sm text-muted-foreground">Overview of your workspace</p>
+                      <div className="min-w-0">
+                        <h1 className="text-lg font-semibold break-words md:truncate">Dashboard</h1>
+                        <p className="text-sm text-muted-foreground break-words md:truncate">Overview of your workspace</p>
                       </div>
                     );
                   }
@@ -1679,10 +1681,10 @@ export default function AdminLayout({ children }) {
                   // If we found a match, display title and description
                   if (matchedItem) {
                     return (
-                      <div>
-                        <h1 className="text-lg font-semibold truncate">{matchedItem.title}</h1>
+                      <div className="min-w-0">
+                        <h1 className="text-lg font-semibold break-words md:truncate">{matchedItem.title}</h1>
                         {matchedItem.description && (
-                          <p className="text-sm text-muted-foreground truncate">{matchedItem.description}</p>
+                          <p className="text-sm text-muted-foreground break-words md:truncate">{matchedItem.description}</p>
                         )}
                       </div>
                     );
@@ -1697,16 +1699,28 @@ export default function AdminLayout({ children }) {
                       : "User Dashboard";
                   
                   return (
-                    <div>
-                      <h1 className="text-lg font-semibold">{title}</h1>
-                      <p className="text-sm text-muted-foreground">Overview of your workspace</p>
+                    <div className="min-w-0">
+                      <h1 className="text-lg font-semibold break-words md:truncate">{title}</h1>
+                      <p className="text-sm text-muted-foreground break-words md:truncate">Overview of your workspace</p>
                     </div>
                   );
                 })()}
+                </div>
+                {/* Actions: same row on desktop only */}
+                <div className="hidden md:flex items-center gap-2 min-w-0 flex-shrink-0">
+                  <NotificationsDropdown />
+                  <div className="min-w-0 flex-shrink">
+                    <ClockInOutButton />
+                  </div>
+                  <ThemeToggle />
+                </div>
               </div>
-              <div className="flex items-center gap-2">
+              {/* Row 2 on mobile: actions (notifications, clock, theme) - hidden on desktop */}
+              <div className="flex items-center justify-end gap-2 min-w-0 md:hidden">
                 <NotificationsDropdown />
-                <ClockInOutButton />
+                <div className="min-w-0 flex-shrink">
+                  <ClockInOutButton />
+                </div>
                 <ThemeToggle />
               </div>
             </header>

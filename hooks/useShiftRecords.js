@@ -262,8 +262,8 @@ export const useCreateProvisionalShift = () => {
       return response.data || response;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: attendanceKeys.provisionalShifts() });
-      queryClient.invalidateQueries({ queryKey: attendanceKeys.shiftRecords() });
+      queryClient.invalidateQueries({ queryKey: [...attendanceKeys.all, "provisional-shifts"] });
+      queryClient.invalidateQueries({ queryKey: [...attendanceKeys.all, "shift-records"] });
       toast.success("Provisional shift created successfully");
     },
     onError: (error) => {
@@ -288,8 +288,8 @@ export const useUpdateProvisionalShift = () => {
     },
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: attendanceKeys.provisionalShift(variables.slug) });
-      queryClient.invalidateQueries({ queryKey: attendanceKeys.provisionalShifts() });
-      queryClient.invalidateQueries({ queryKey: attendanceKeys.shiftRecords() });
+      queryClient.invalidateQueries({ queryKey: [...attendanceKeys.all, "provisional-shifts"] });
+      queryClient.invalidateQueries({ queryKey: [...attendanceKeys.all, "shift-records"] });
       toast.success("Provisional shift updated successfully");
     },
     onError: (error) => {
@@ -313,8 +313,8 @@ export const useDeleteProvisionalShift = () => {
       return response.data || response;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: attendanceKeys.provisionalShifts() });
-      queryClient.invalidateQueries({ queryKey: attendanceKeys.shiftRecords() });
+      queryClient.invalidateQueries({ queryKey: [...attendanceKeys.all, "provisional-shifts"] });
+      queryClient.invalidateQueries({ queryKey: [...attendanceKeys.all, "shift-records"] });
       toast.success("Provisional shift deleted successfully");
     },
     onError: (error) => {

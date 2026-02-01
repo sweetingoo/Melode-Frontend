@@ -44,8 +44,10 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
+import Link from "next/link";
 import {
   ArrowLeft,
+  ArrowRight,
   Save,
   User,
   Shield,
@@ -68,6 +70,7 @@ import {
   ChevronRight,
   Loader2,
   Clock,
+  ClipboardList,
 } from "lucide-react";
 import {
   useUser,
@@ -110,6 +113,10 @@ import {
 import { useEntityCompliance, useComplianceHistory } from "@/hooks/useCompliance";
 import { useCustomFieldValueHistory } from "@/hooks/useProfile";
 import { ComplianceHistory } from "@/components/ComplianceHistory";
+import { cn } from "@/lib/utils";
+import { HolidayBalanceCard } from "@/components/attendance/HolidayBalanceCard";
+import { ShiftRecordList } from "@/components/attendance/ShiftRecordList";
+import { LeaveRequestList } from "@/components/attendance/LeaveRequestList";
 import { filesService } from "@/services/files";
 
 const UserEditPage = () => {
@@ -920,6 +927,11 @@ const UserEditPage = () => {
   const canAssignRole = hasPermission("role:assign");
   const canAssignEmployee = hasPermission("employee:assign");
 
+  // Current user permission check (for tab visibility)
+  const { hasPermission: currentUserHasPermission, isSuperuser: currentUserIsSuperuser } = usePermissionsCheck();
+  const canViewAttendance = currentUserHasPermission("attendance:view") || currentUserIsSuperuser;
+  const isViewingSelf = currentUserData?.id === userData?.id;
+
   // Check if current user has wildcard permissions
   const currentUserHasWildcardPermissions = React.useMemo(() => {
     const rolePermissions = currentUserPermissions.some(
@@ -1517,7 +1529,7 @@ const UserEditPage = () => {
       {/* Tabs Section */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <div className="overflow-x-auto scrollbar-hide">
-          <TabsList className="inline-flex w-auto flex-nowrap gap-1 sm:gap-0 lg:grid lg:w-full lg:grid-cols-6">
+          <TabsList className={cn("inline-flex w-auto flex-nowrap gap-1 sm:gap-0 lg:grid lg:w-full", canViewAttendance ? "lg:grid-cols-7" : "lg:grid-cols-6")}>
             <TabsTrigger value="basic" className="flex items-center gap-2 whitespace-nowrap">
               <User className="h-4 w-4" />
               <span className="hidden sm:inline">Basic Information</span>
@@ -1538,6 +1550,13 @@ const UserEditPage = () => {
               <span className="hidden sm:inline">Hierarchy</span>
               <span className="sm:hidden">Hierarchy</span>
             </TabsTrigger>
+            {canViewAttendance && (
+              <TabsTrigger value="attendance" className="flex items-center gap-2 whitespace-nowrap">
+                <ClipboardList className="h-4 w-4" />
+                <span className="hidden sm:inline">Shifts & Attendance</span>
+                <span className="sm:hidden">Attendance</span>
+              </TabsTrigger>
+            )}
             <TabsTrigger value="status" className="flex items-center gap-2 whitespace-nowrap">
               <Eye className="h-4 w-4" />
               <span className="hidden sm:inline">Account Status</span>
@@ -2266,6 +2285,57 @@ const UserEditPage = () => {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* Shifts & Attendance Tab */}
+        {canViewAttendance && (
+          <TabsContent value="attendance" className="space-y-6">
+            <div className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Holiday Balance</CardTitle>
+                  <CardDescription>Holiday entitlement and usage for this person</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <HolidayBalanceCard userId={userData?.id} />
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Leave Requests</CardTitle>
+                  <CardDescription>Approved, pending, and past leave for this person</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <LeaveRequestList
+                    userId={userData?.id}
+                    showCreateButton={isViewingSelf}
+                    compactHeader
+                  />
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Shift Records</CardTitle>
+                  <CardDescription>Forthcoming shifts, attendance, and leave shift records</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ShiftRecordList
+                    userId={userData?.id}
+                    showCreateButton={isViewingSelf}
+                    allowUserSelect={false}
+                    compactHeader
+                  />
+                </CardContent>
+              </Card>
+              <div className="flex justify-end">
+                <Link href="/admin/attendance">
+                  <Button variant="outline" size="sm">
+                    View full Attendance & Leave <ArrowRight className="ml-2 h-3 w-3" />
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          </TabsContent>
+        )}
 
         {/* Account Status Tab */}
         <TabsContent value="status" className="space-y-6">

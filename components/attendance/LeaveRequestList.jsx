@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -33,11 +33,22 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
+const MD_BREAKPOINT = 768;
+
 export const LeaveRequestList = ({ userId = null, showCreateButton = true, compactHeader = false }) => {
   const [statusFilter, setStatusFilter] = useState("all");
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [cancelSlug, setCancelSlug] = useState(null);
+  const [isMdOrUp, setIsMdOrUp] = useState(true);
+
+  useEffect(() => {
+    const mq = window.matchMedia(`(min-width: ${MD_BREAKPOINT}px)`);
+    const update = () => setIsMdOrUp(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
 
   const { data, isLoading, error } = useLeaveRequests({
     user_id: userId,
@@ -188,8 +199,9 @@ export const LeaveRequestList = ({ userId = null, showCreateButton = true, compa
         </div>
       ) : (
         <>
-          {/* Desktop: table */}
-          <div className="min-w-0 overflow-x-auto rounded-xl border bg-card shadow-sm hidden md:block">
+          {/* Desktop: table — render only on md+ so list is never shown twice */}
+          {isMdOrUp ? (
+          <div className="min-w-0 overflow-x-auto rounded-xl border bg-card shadow-sm" role="region" aria-label="Leave requests table">
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
@@ -235,9 +247,8 @@ export const LeaveRequestList = ({ userId = null, showCreateButton = true, compa
               </TableBody>
             </Table>
           </div>
-
-          {/* Mobile: cards */}
-          <div className="space-y-3 md:hidden">
+          ) : (
+          <div className="space-y-3" role="region" aria-label="Leave requests list">
             {leaveRequests.map((request) => (
               <div
                 key={request.id || request.slug}
@@ -274,6 +285,7 @@ export const LeaveRequestList = ({ userId = null, showCreateButton = true, compa
               </div>
             ))}
           </div>
+          )}
         </>
       )}
 

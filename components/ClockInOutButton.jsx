@@ -121,29 +121,29 @@ export const ClockInOutButton = ({ className = "" }) => {
 
   return (
     <>
-      <div className="flex items-center gap-2">
-        {/* Timer Display */}
+      <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 max-w-full shrink-0">
+        {/* Timer Display - compact on mobile */}
         {isClockedIn && elapsedTime && (
           <Badge
             variant={isOnBreak ? "secondary" : "default"}
-            className="h-9 px-3 font-mono text-sm cursor-pointer hover:opacity-80 transition-opacity"
+            className="h-8 sm:h-9 px-2 sm:px-3 font-mono text-xs sm:text-sm cursor-pointer hover:opacity-80 transition-opacity shrink-0"
             onClick={() => router.push("/clock/dashboard")}
           >
-            <Clock className="h-3 w-3 mr-1.5" />
-            {elapsedTime}
+            <Clock className="h-3 w-3 mr-1 sm:mr-1.5 shrink-0" />
+            <span className="truncate max-w-[5.5rem] sm:max-w-none tabular-nums">{elapsedTime}</span>
             {isOnBreak && (
-              <span className="ml-1.5 text-xs opacity-75">(Break)</span>
+              <span className="ml-1 sm:ml-1.5 text-xs opacity-75 shrink-0">(Break)</span>
             )}
           </Badge>
         )}
 
-        {/* Break Controls - Show when active or on break */}
+        {/* Break Controls - desktop only when clocked in (mobile: use clock dashboard) */}
         {isActive && (
           <Button
             variant="outline"
             size="sm"
             onClick={handleStartBreak}
-            className={`h-9 px-3 ${className}`}
+            className={`hidden sm:flex h-9 px-3 ${className}`}
             disabled={startBreakMutation.isPending}
           >
             {startBreakMutation.isPending ? (
@@ -151,7 +151,7 @@ export const ClockInOutButton = ({ className = "" }) => {
             ) : (
               <>
                 <Coffee className="h-4 w-4 mr-2" />
-                <span className="hidden sm:inline">Break</span>
+                Break
               </>
             )}
           </Button>
@@ -162,7 +162,7 @@ export const ClockInOutButton = ({ className = "" }) => {
             variant="outline"
             size="sm"
             onClick={handleEndBreak}
-            className={`h-9 px-3 ${className}`}
+            className={`hidden sm:flex h-9 px-3 ${className}`}
             disabled={endBreakMutation.isPending}
           >
             {endBreakMutation.isPending ? (
@@ -170,30 +170,31 @@ export const ClockInOutButton = ({ className = "" }) => {
             ) : (
               <>
                 <X className="h-4 w-4 mr-2" />
-                <span className="hidden sm:inline">End Break</span>
+                End Break
               </>
             )}
           </Button>
         )}
 
-        {/* Check In/Out Button */}
+        {/* Check In/Out Button - icon only on mobile when clocked in */}
         <Button
           variant={isClockedIn ? "default" : "ghost"}
           size="sm"
           onClick={isClockedIn ? handleClockOutClick : handleClockIn}
-          className={`h-9 px-3 ${className}`}
+          className={`h-8 sm:h-9 px-2 sm:px-3 shrink-0 ${className}`}
           disabled={clockInMutation.isPending || clockOutMutation.isPending}
+          title={isClockedIn ? "Check out" : "Check in"}
         >
           {clockInMutation.isPending || clockOutMutation.isPending ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : isClockedIn ? (
             <>
-              <Square className="h-4 w-4 mr-2" />
+              <Square className="h-4 w-4 sm:mr-2" />
               <span className="hidden sm:inline">Check Out</span>
             </>
           ) : (
             <>
-              <Clock className="h-4 w-4 mr-2" />
+              <Clock className="h-4 w-4 sm:mr-2" />
               <span className="hidden sm:inline">Check In</span>
             </>
           )}

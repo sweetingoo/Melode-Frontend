@@ -30,15 +30,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { CalendarIcon, Check, X, Loader2 } from "lucide-react";
 import { format } from "date-fns";
-import { useLeaveRequests, useApproveLeaveRequest } from "@/hooks/useLeaveRequests";
-import { useLeaveRequest } from "@/hooks/useLeaveRequests";
+import { usePendingLeaveRequests, useApproveLeaveRequest } from "@/hooks/useLeaveRequests";
 
 export const LeaveApprovalList = ({ statusFilter = "pending", compactHeader = false }) => {
   const [selectedSlug, setSelectedSlug] = useState(null);
   const [approvalAction, setApprovalAction] = useState(null); // "approve" or "decline"
   const [notes, setNotes] = useState("");
 
-  const { data, isLoading } = useLeaveRequests({ status: statusFilter });
+  const { data, isLoading } = usePendingLeaveRequests({ page: 1, per_page: 100 });
   const approveLeaveRequest = useApproveLeaveRequest();
 
   const leaveRequests = data?.requests || data || [];

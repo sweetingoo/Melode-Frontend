@@ -11,8 +11,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
-import { Plus, Pencil, Trash2, Loader2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Loader2, Clock } from "lucide-react";
 import { format } from "date-fns";
+import Link from "next/link";
+import { Badge } from "@/components/ui/badge";
 import { useProvisionalShifts, useDeleteProvisionalShift } from "@/hooks/useShiftRecords";
 import { ProvisionalShiftForm } from "./ProvisionalShiftForm";
 import {
@@ -133,6 +135,7 @@ export const ProvisionalShiftList = ({ userId = null, showCreateButton = true, c
                 <TableHead>Type</TableHead>
                 <TableHead>Hours</TableHead>
                 <TableHead>Time</TableHead>
+                <TableHead>Status</TableHead>
                 <TableHead>Notes</TableHead>
                 <TableHead className="w-[100px]">Actions</TableHead>
               </TableRow>
@@ -156,6 +159,27 @@ export const ProvisionalShiftList = ({ userId = null, showCreateButton = true, c
                     {record.start_time && record.end_time
                       ? `${String(record.start_time).slice(0, 5)} – ${String(record.end_time).slice(0, 5)}`
                       : "—"}
+                  </TableCell>
+                  <TableCell>
+                    {record.clock_record_id ? (
+                      <span className="flex flex-wrap items-center gap-1.5">
+                        <Badge className="bg-green-600/15 text-green-700 dark:text-green-400 border-green-600/30">
+                          Covered
+                        </Badge>
+                        <Link
+                          href="/admin/clock/history"
+                          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                          title="View clock record"
+                        >
+                          <Clock className="h-3.5 w-3.5" />
+                          View clock
+                        </Link>
+                      </span>
+                    ) : (
+                      <Badge variant="secondary" className="bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30">
+                        Uncovered
+                      </Badge>
+                    )}
                   </TableCell>
                   <TableCell className="max-w-[200px] truncate">{record.notes || "—"}</TableCell>
                   <TableCell>

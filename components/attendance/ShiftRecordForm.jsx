@@ -58,7 +58,7 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
 
   const getAssignmentRoleId = (a) => a?.role_id ?? a?.job_role_id ?? a?.roleId;
 
-  const { data: usersData } = useUsers(allowUserSelect ? { limit: 500 } : { limit: 0 });
+  const { data: usersData } = useUsers(allowUserSelect ? { per_page: 100 } : { limit: 0 });
   const users = usersData?.users || usersData?.data || [];
 
   const { data: assignmentsData, isLoading: assignmentsLoading } = useAssignments(

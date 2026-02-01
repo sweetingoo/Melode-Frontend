@@ -170,7 +170,8 @@ const DocumentList = ({
       return;
     }
     try {
-      await deleteDocumentMutation.mutateAsync(document.id);
+      // API expects slug in path (DELETE /documents/{document_slug})
+      await deleteDocumentMutation.mutateAsync(document.slug ?? document.id);
       if (onDeleteDocument) {
         onDeleteDocument(document);
       }

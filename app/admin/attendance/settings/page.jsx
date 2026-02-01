@@ -80,6 +80,7 @@ export default function AttendanceSettingsPage() {
   const [systemHolidayYearStart, setSystemHolidayYearStart] = useState("04-01");
   const [systemDefaultHours, setSystemDefaultHours] = useState(7.5);
   const [systemAllowNegative, setSystemAllowNegative] = useState(false);
+  const [provisionalShiftLinkWindowHours, setProvisionalShiftLinkWindowHours] = useState(2);
 
   const { data: typesData, isLoading: typesLoading } = useShiftLeaveTypes({});
   const rolloverYear = useRolloverHolidayYear();
@@ -88,7 +89,7 @@ export default function AttendanceSettingsPage() {
   const updateSettings = useUpdateAttendanceSettings();
   const updateShiftLeaveType = useUpdateShiftLeaveType();
   const deleteType = useDeleteShiftLeaveType();
-  const { data: usersData } = useUsers({ limit: 500 });
+  const { data: usersData } = useUsers({ per_page: 100 });
   const users = usersData?.users ?? usersData?.data ?? [];
   const { data: employeeSettingsData, isLoading: employeeSettingsLoading } = useEmployeeSettings(
     employeeSettingsUserId ? parseInt(employeeSettingsUserId, 10) : null,
@@ -111,11 +112,13 @@ export default function AttendanceSettingsPage() {
       setSystemHolidayYearStart(settings.holiday_year_start_date ?? "04-01");
       setSystemDefaultHours(Number(settings.default_hours_per_day) || 7.5);
       setSystemAllowNegative(!!settings.allow_negative_holiday_balance);
+      setProvisionalShiftLinkWindowHours(Number(settings.provisional_shift_link_window_hours) ?? 2);
     }
   }, [settings]);
 
   const handleSaveSystemSettings = () => {
     const hours = Number(systemDefaultHours);
+    const windowHours = Number(provisionalShiftLinkWindowHours);
     if (!/^\d{2}-\d{2}$/.test(systemHolidayYearStart)) {
       toast.error("Invalid date format", { description: "Holiday year start must be MM-DD (e.g. 04-01)" });
       return;
@@ -124,10 +127,15 @@ export default function AttendanceSettingsPage() {
       toast.error("Invalid hours", { description: "Default hours per day must be between 0.5 and 24" });
       return;
     }
+    if (windowHours < 0.5 || windowHours > 24) {
+      toast.error("Invalid window", { description: "Provisional shift link window must be between 0.5 and 24 hours" });
+      return;
+    }
     updateSettings.mutate({
       holiday_year_start_date: systemHolidayYearStart,
       default_hours_per_day: hours,
       allow_negative_holiday_balance: systemAllowNegative,
+      provisional_shift_link_window_hours: windowHours,
     });
   };
 
@@ -685,6 +693,26 @@ export default function AttendanceSettingsPage() {
                   checked={systemAllowNegative}
                   onCheckedChange={setSystemAllowNegative}
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="provisional-shift-window">Provisional shift link window (hours)</Label>
+                <Input
+                  id="provisional-shift-window"
+                  type="number"
+                  step="0.5"
+                  min="0.5"
+                  max="24"
+                  value={provisionalShiftLinkWindowHours}
+                  onChange={(e) =>
+                    setProvisionalShiftLinkWindowHours(
+                      e.target.value ? parseFloat(e.target.value) : ""
+                    )
+                  }
+                />
+                <p className="text-xs text-muted-foreground">
+                  When a user clocks in, show provisional shifts starting within this many hours before or after. Used to prompt &quot;Are you logging in to this shift?&quot; (default 2)
+                </p>
               </div>
             </div>
           )}

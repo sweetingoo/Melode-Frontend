@@ -841,9 +841,11 @@ const Dashboard = () => {
 
                       if (isActive && clockStatus?.clock_in_time) {
                         return (
-                          <p className="text-xs text-muted-foreground mt-1">
-                            Since {new Date(clockStatus.clock_in_time).toLocaleTimeString()}
-                          </p>
+                          <>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Since {new Date(clockStatus.clock_in_time).toLocaleTimeString()}
+                            </p>
+                          </>
                         );
                       }
                       return null;

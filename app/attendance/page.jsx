@@ -15,7 +15,8 @@ export default function AttendancePage() {
   const assignments = assignmentsData?.assignments || assignmentsData || [];
 
   const activeAssignment = assignments?.[0];
-  const jobRoleId = activeAssignment?.job_role_id;
+  // API returns role_id (UserDepartmentRole); support job_role_id for compatibility
+  const jobRoleId = activeAssignment?.role_id ?? activeAssignment?.job_role_id;
 
   return (
     <div className="container mx-auto max-w-4xl space-y-6 py-6">

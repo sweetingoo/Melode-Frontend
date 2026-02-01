@@ -21,6 +21,7 @@ export const attendanceKeys = {
     params,
   ],
   leaveRequests: (params) => [...attendanceKeys.all, "leave-requests", params],
+  pendingLeaveRequests: (params) => [...attendanceKeys.all, "leave-requests", "pending", params],
   leaveRequest: (slug) => [...attendanceKeys.all, "leave-request", slug],
   shiftRecords: (params) => [...attendanceKeys.all, "shift-records", params],
   shiftRecord: (slug) => [...attendanceKeys.all, "shift-record", slug],
@@ -334,7 +335,8 @@ export const useHolidayBalance = (params = {}, options = {}) => {
       const response = await attendanceService.getHolidayBalance(params);
       return response.data || response;
     },
-    enabled: !!params.user_id && !!params.job_role_id,
+    // API accepts user_id only and resolves first active job role; job_role_id is optional
+    enabled: !!params.user_id,
     staleTime: 2 * 60 * 1000, // 2 minutes - balance changes frequently
     ...options,
   });

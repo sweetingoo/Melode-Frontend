@@ -2,6 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { clockService } from "@/services/clock";
+import { attendanceKeys } from "@/hooks/useAttendance";
 import { toast } from "sonner";
 
 // Clock query keys
@@ -74,7 +75,7 @@ export const useActiveClocks = (params = {}, options = {}) => {
   });
 };
 
-// Check in mutation
+// Check in mutation (returns { clock_record, provisional_shifts_nearby } when API sends ClockInResponse)
 export const useClockIn = () => {
   const queryClient = useQueryClient();
 
@@ -98,6 +99,39 @@ export const useClockIn = () => {
         error?.response?.data?.detail ||
         "Failed to check in";
       toast.error("Failed to check in", {
+        description: Array.isArray(errorMessage)
+          ? errorMessage.map((e) => e.msg || e).join(", ")
+          : errorMessage,
+      });
+    },
+  });
+};
+
+// Link clock record to provisional shift (after user confirms "logging in to this shift")
+export const useLinkClockToProvisionalShift = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ clockRecordId, shiftRecordId }) => {
+      const response = await clockService.linkToProvisionalShift(clockRecordId, shiftRecordId);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: clockKeys.status() });
+      queryClient.invalidateQueries({ queryKey: clockKeys.records() });
+      queryClient.invalidateQueries({ queryKey: clockKeys.active() });
+      queryClient.invalidateQueries({ queryKey: attendanceKeys.shiftRecords() });
+      queryClient.invalidateQueries({ queryKey: attendanceKeys.provisionalShifts() });
+      toast.success("Shift linked", {
+        description: "Your clock-in is now linked to this provisional shift.",
+      });
+    },
+    onError: (error) => {
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.response?.data?.detail ||
+        "Failed to link to shift";
+      toast.error("Failed to link to shift", {
         description: Array.isArray(errorMessage)
           ? errorMessage.map((e) => e.msg || e).join(", ")
           : errorMessage,

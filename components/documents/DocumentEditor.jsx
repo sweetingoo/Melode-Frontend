@@ -243,9 +243,23 @@ const DocumentEditor = ({ documentId, documentSlug, initialCategoryId = null, on
               <Switch
                 id="is_public"
                 checked={formData.is_public}
-                onCheckedChange={(checked) =>
-                  setFormData({ ...formData, is_public: checked })
-                }
+                disabled={!!(documentId || documentSlug) && updateDocument.isPending}
+                onCheckedChange={async (checked) => {
+                  setFormData((prev) => ({ ...prev, is_public: checked }));
+                  // Save immediately when editing existing document so toggle takes effect
+                  if (documentId || documentSlug) {
+                    try {
+                      const slug = document?.slug || documentSlug || documentId;
+                      await updateDocument.mutateAsync({
+                        slug,
+                        documentData: { is_public: checked },
+                      });
+                    } catch {
+                      // Revert on error (mutation shows toast)
+                      setFormData((prev) => ({ ...prev, is_public: !checked }));
+                    }
+                  }
+                }}
               />
             </div>
 

@@ -44,6 +44,7 @@ import {
   Loader2,
   RefreshCw,
   ArrowLeft,
+  ClipboardList,
 } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
@@ -327,6 +328,55 @@ export default function ClockDashboardPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Linked provisional shift (when user selected "Yes, this one" on clock-in) */}
+      {clockStatus?.linked_provisional_shift && (
+        <Card className="border-green-600/30 bg-green-500/5">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <ClipboardList className="h-5 w-5 text-green-600 dark:text-green-400" />
+              Working provisional shift
+            </CardTitle>
+            <CardDescription>
+              You linked this clock-in to the following shift
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap items-center gap-3 text-sm">
+              {clockStatus.linked_provisional_shift.shift_leave_type_name && (
+                <span className="font-medium">
+                  {clockStatus.linked_provisional_shift.shift_leave_type_name}
+                </span>
+              )}
+              {clockStatus.linked_provisional_shift.shift_date && (
+                <span className="text-muted-foreground">
+                  {new Date(clockStatus.linked_provisional_shift.shift_date).toLocaleDateString("en-GB", {
+                    weekday: "short",
+                    day: "numeric",
+                    month: "short",
+                  })}
+                </span>
+              )}
+              {clockStatus.linked_provisional_shift.start_time != null && (
+                <span className="text-muted-foreground">
+                  {typeof clockStatus.linked_provisional_shift.start_time === "string"
+                    ? clockStatus.linked_provisional_shift.start_time.slice(0, 5)
+                    : String(clockStatus.linked_provisional_shift.start_time).slice(0, 5)}
+                  {clockStatus.linked_provisional_shift.end_time != null &&
+                    ` – ${typeof clockStatus.linked_provisional_shift.end_time === "string"
+                      ? clockStatus.linked_provisional_shift.end_time.slice(0, 5)
+                      : String(clockStatus.linked_provisional_shift.end_time).slice(0, 5)}`}
+                </span>
+              )}
+              {clockStatus.linked_provisional_shift.hours != null && (
+                <span className="text-muted-foreground">
+                  {clockStatus.linked_provisional_shift.hours}h
+                </span>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Actions Card */}
       <Card>

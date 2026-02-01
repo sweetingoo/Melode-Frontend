@@ -2,12 +2,25 @@ import { api } from "./api-client";
 
 // Clock API service
 export const clockService = {
-  // Check in
+  // Check in (returns { clock_record, provisional_shifts_nearby } - provisional shifts starting within configured window)
   clockIn: async (clockInData) => {
     try {
       return await api.post("/clock/in", clockInData);
     } catch (error) {
       console.error("Check in failed:", error);
+      throw error;
+    }
+  },
+
+  // Link current clock record to a provisional shift (after user confirms "logging in to this shift")
+  linkToProvisionalShift: async (clockRecordId, shiftRecordId) => {
+    try {
+      return await api.post("/clock/link-to-provisional-shift", {
+        clock_record_id: clockRecordId,
+        shift_record_id: shiftRecordId,
+      });
+    } catch (error) {
+      console.error("Link to provisional shift failed:", error);
       throw error;
     }
   },
