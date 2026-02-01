@@ -20,6 +20,7 @@ import {
   useUpdateShiftLeaveType,
   useShiftLeaveType,
 } from "@/hooks/useAttendance";
+import { ATTENDANCE_CATEGORY_OPTIONS, getCategoryDescription } from "@/lib/attendanceLabels";
 
 export const ShiftLeaveTypeForm = ({ open, onOpenChange, typeSlug = null }) => {
   const [formData, setFormData] = useState({
@@ -80,13 +81,7 @@ export const ShiftLeaveTypeForm = ({ open, onOpenChange, typeSlug = null }) => {
     }
   };
 
-  const categories = [
-    { value: "attendance", label: "Attendance" },
-    { value: "authorised_leave", label: "Authorised Leave" },
-    { value: "unauthorised_leave", label: "Unauthorised Leave" },
-    { value: "provisional", label: "Provisional" },
-    { value: "mapped", label: "Mapped" },
-  ];
+  const categories = ATTENDANCE_CATEGORY_OPTIONS;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -126,6 +121,9 @@ export const ShiftLeaveTypeForm = ({ open, onOpenChange, typeSlug = null }) => {
                 ))}
               </SelectContent>
             </Select>
+            {getCategoryDescription(formData.category) && (
+              <p className="text-xs text-muted-foreground">{getCategoryDescription(formData.category)}</p>
+            )}
           </div>
 
           <div className="space-y-2">

@@ -33,6 +33,9 @@ import { keepPreviousData } from "@tanstack/react-query";
 import { useShiftRecords, useDeleteShiftRecord } from "@/hooks/useShiftRecords";
 import { ShiftRecordForm } from "./ShiftRecordForm";
 import { useAuth } from "@/hooks/useAuth";
+import { useUsers } from "@/hooks/useUsers";
+import { useRoles } from "@/hooks/useRoles";
+import { useDepartments } from "@/hooks/useDepartments";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -44,14 +47,14 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
+import { getCategoryLabel, ATTENDANCE_CATEGORY_OPTIONS } from "@/lib/attendanceLabels";
+
 const CATEGORIES = [
   { value: "all", label: "All categories" },
-  { value: "attendance", label: "Attendance" },
-  { value: "authorised_leave", label: "Authorised Leave" },
-  { value: "unauthorised_leave", label: "Unauthorised Leave" },
-  { value: "provisional", label: "Provisional" },
-  { value: "mapped", label: "Mapped" },
+  ...ATTENDANCE_CATEGORY_OPTIONS,
 ];
+
+const ALL_FILTER_VALUE = "__all__";
 
 export const ShiftRecordList = ({
   userId = null,
@@ -63,10 +66,20 @@ export const ShiftRecordList = ({
   const { user } = useAuth();
   const [categoryFilter, setCategoryFilter] = useState(defaultCategory);
   const [dateRange, setDateRange] = useState(undefined);
+  const [userFilter, setUserFilter] = useState(ALL_FILTER_VALUE);
+  const [roleFilter, setRoleFilter] = useState(ALL_FILTER_VALUE);
+  const [departmentFilter, setDepartmentFilter] = useState(ALL_FILTER_VALUE);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [deleteSlug, setDeleteSlug] = useState(null);
+
+  const { data: usersData } = useUsers({ per_page: 100 }, { enabled: allowUserSelect });
+  const { data: rolesData } = useRoles({}, { enabled: allowUserSelect });
+  const { data: departmentsData } = useDepartments({}, { enabled: allowUserSelect });
+  const users = usersData?.users ?? usersData?.data ?? [];
+  const roles = rolesData?.roles ?? rolesData ?? [];
+  const departments = departmentsData?.departments ?? departmentsData?.data ?? [];
 
   const applyDatePreset = (preset) => {
     const today = new Date();
@@ -111,14 +124,16 @@ export const ShiftRecordList = ({
 
   const params = useMemo(
     () => ({
-      user_id: userId || undefined,
+      user_id: allowUserSelect && userFilter && userFilter !== ALL_FILTER_VALUE ? parseInt(userFilter, 10) : userId || undefined,
       category: categoryFilter !== "all" ? categoryFilter : undefined,
       start_date: dateRange?.from ? formatDateForAPI(dateRange.from) : undefined,
       end_date: dateRange?.to ? formatDateForAPI(dateRange.to) : undefined,
+      job_role_id: allowUserSelect && roleFilter && roleFilter !== ALL_FILTER_VALUE ? parseInt(roleFilter, 10) : undefined,
+      department_id: allowUserSelect && departmentFilter && departmentFilter !== ALL_FILTER_VALUE ? parseInt(departmentFilter, 10) : undefined,
       page: 1,
       per_page: 100,
     }),
-    [userId, categoryFilter, dateRange]
+    [userId, allowUserSelect, userFilter, roleFilter, departmentFilter, categoryFilter, dateRange]
   );
 
   const { data, isLoading, error } = useShiftRecords(params, {
@@ -165,7 +180,7 @@ export const ShiftRecordList = ({
     };
     return (
       <Badge variant="secondary" className={colors[category] || ""}>
-        {category?.replace(/_/g, " ") || "—"}
+        {getCategoryLabel(category) || "—"}
       </Badge>
     );
   };
@@ -195,7 +210,59 @@ export const ShiftRecordList = ({
         {!compactHeader && (
           <h2 className="text-lg font-semibold tracking-tight text-foreground">Shift Records</h2>
         )}
-        <div className="flex min-w-0 flex-col gap-2 sm:ml-auto sm:flex-row sm:items-end sm:gap-3">
+        <div className="flex min-w-0 flex-col gap-2 sm:ml-auto sm:flex-row sm:flex-wrap sm:items-end sm:gap-3">
+          {allowUserSelect && (
+            <>
+              <div className="flex flex-col gap-1">
+                <Label className="text-xs text-muted-foreground">Name</Label>
+                <Select value={userFilter} onValueChange={setUserFilter}>
+                  <SelectTrigger className="h-9 w-full min-w-0 sm:w-[180px]">
+                    <SelectValue placeholder="All users" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={ALL_FILTER_VALUE}>All users</SelectItem>
+                    {users.map((u) => (
+                      <SelectItem key={u.id} value={String(u.id)}>
+                        {u.display_name || `${u.first_name || ""} ${u.last_name || ""}`.trim() || u.email || `User #${u.id}`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex flex-col gap-1">
+                <Label className="text-xs text-muted-foreground">Role</Label>
+                <Select value={roleFilter} onValueChange={setRoleFilter}>
+                  <SelectTrigger className="h-9 w-full min-w-0 sm:w-[160px]">
+                    <SelectValue placeholder="All roles" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={ALL_FILTER_VALUE}>All roles</SelectItem>
+                    {roles.map((r) => (
+                      <SelectItem key={r.id} value={String(r.id)}>
+                        {r.display_name || r.name || r.slug || `Role #${r.id}`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex flex-col gap-1">
+                <Label className="text-xs text-muted-foreground">Department</Label>
+                <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
+                  <SelectTrigger className="h-9 w-full min-w-0 sm:w-[160px]">
+                    <SelectValue placeholder="All departments" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={ALL_FILTER_VALUE}>All departments</SelectItem>
+                    {departments.map((d) => (
+                      <SelectItem key={d.id} value={String(d.id)}>
+                        {d.name || `Department #${d.id}`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </>
+          )}
           <div className="flex flex-col gap-1">
             <Label className="text-xs text-muted-foreground">Category</Label>
             <Select value={categoryFilter} onValueChange={setCategoryFilter}>

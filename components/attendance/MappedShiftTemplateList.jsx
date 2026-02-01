@@ -121,7 +121,7 @@ export const MappedShiftTemplateList = () => {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-semibold">Mapped Shift Templates</h2>
+        <h2 className="text-2xl font-semibold">Required Shift Templates</h2>
         <Button onClick={handleAdd}>
           <Plus className="mr-2 h-4 w-4" />
           Add template
@@ -130,7 +130,7 @@ export const MappedShiftTemplateList = () => {
 
       {templates.length === 0 ? (
         <div className="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
-          No mapped shift templates. Create one to generate shift records from a pattern.
+          No required shift templates. Create one to generate shift records from a pattern.
         </div>
       ) : (
         <div className="rounded-md border">

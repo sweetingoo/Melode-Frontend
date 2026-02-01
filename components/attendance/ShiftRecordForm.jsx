@@ -26,14 +26,9 @@ import { useShiftLeaveTypes } from "@/hooks/useAttendance";
 import { useAssignments } from "@/hooks/useAssignments";
 import { useUsers } from "@/hooks/useUsers";
 import { useAuth } from "@/hooks/useAuth";
+import { ATTENDANCE_CATEGORY_OPTIONS, getCategoryDescription } from "@/lib/attendanceLabels";
 
-const ALL_CATEGORIES = [
-  { value: "attendance", label: "Attendance" },
-  { value: "authorised_leave", label: "Authorised Leave" },
-  { value: "unauthorised_leave", label: "Unauthorised Leave" },
-  { value: "provisional", label: "Provisional" },
-  { value: "mapped", label: "Mapped" },
-];
+const ALL_CATEGORIES = ATTENDANCE_CATEGORY_OPTIONS;
 
 /** When allowUserSelect is false, user can only add/edit attendance (not leave) - leave must go through request workflow */
 const CATEGORIES_ATTENDANCE_ONLY = ALL_CATEGORIES.filter((c) => c.value === "attendance");
@@ -205,6 +200,9 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
                 ))}
               </SelectContent>
             </Select>
+            {getCategoryDescription(category) && (
+              <p className="text-xs text-muted-foreground">{getCategoryDescription(category)}</p>
+            )}
             {!allowUserSelect && (
               <p className="text-xs text-muted-foreground">Leave must be requested via the leave request workflow.</p>
             )}

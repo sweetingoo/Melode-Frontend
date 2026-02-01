@@ -106,7 +106,7 @@ export const MappedShiftTemplateForm = ({ open, onOpenChange, template = null })
       }
       onOpenChange(false);
     } catch (err) {
-      console.error("Mapped shift template save failed:", err);
+      console.error("Required shift template save failed:", err);
     } finally {
       setIsSubmitting(false);
     }
@@ -116,7 +116,7 @@ export const MappedShiftTemplateForm = ({ open, onOpenChange, template = null })
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{template ? "Edit Mapped Shift Template" : "Add Mapped Shift Template"}</DialogTitle>
+          <DialogTitle>{template ? "Edit Required Shift Template" : "Add Required Shift Template"}</DialogTitle>
           <DialogDescription>
             Define a reusable shift pattern (e.g. by day of week, role, hours). Template data is JSON: an array of
             shift definitions with day_of_week, job_role_id, shift_role_id, start_time, end_time, hours, quantity,

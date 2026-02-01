@@ -63,6 +63,7 @@ import {
   Database,
   Mail,
   FolderKanban,
+  FolderOpen,
   Bell,
   MessageSquare,
   Megaphone,
@@ -354,6 +355,13 @@ const settingsItems = [
     icon: FileText,
     url: "/admin/form-types",
     permission: "form_type:list", // Permission to list form types
+  },
+  {
+    title: "Tracker Categories",
+    description: "Organize trackers into categories (like Form Types for trackers)",
+    icon: FolderOpen,
+    url: "/admin/tracker-categories",
+    permission: "tracker_category:list", // Permission to list tracker categories
   },
   {
     title: "Custom Fields",

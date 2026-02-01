@@ -97,10 +97,14 @@ import {
 } from "@/components/ui/select";
 import { PageSearchBar } from "@/components/admin/PageSearchBar";
 
+const ALL_FILTER_VALUE = "__all__";
+
 const UserManagementPage = () => {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [roleFilter, setRoleFilter] = useState(ALL_FILTER_VALUE);
+  const [departmentFilter, setDepartmentFilter] = useState(ALL_FILTER_VALUE);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [userFormData, setUserFormData] = useState({
     email: "",
@@ -118,12 +122,22 @@ const UserManagementPage = () => {
   const [validationErrors, setValidationErrors] = useState({});
   const itemsPerPage = 10;
 
-  // API hooks
-  const { data: usersResponse, isLoading, error, refetch } = useUsers();
+  // API hooks - pass page, per_page, search, role_id, department_id for server-side filtering and pagination
+  const usersParams = React.useMemo(
+    () => ({
+      page: currentPage,
+      per_page: itemsPerPage,
+      search: searchTerm.trim() || undefined,
+      role_id: roleFilter && roleFilter !== ALL_FILTER_VALUE ? parseInt(roleFilter, 10) : undefined,
+      department_id: departmentFilter && departmentFilter !== ALL_FILTER_VALUE ? parseInt(departmentFilter, 10) : undefined,
+    }),
+    [currentPage, searchTerm, roleFilter, departmentFilter]
+  );
+  const { data: usersResponse, isLoading, error, refetch } = useUsers(usersParams);
   const { data: departmentsData, isLoading: departmentsLoading } = useDepartments();
   const departments = departmentsData?.departments || departmentsData?.data || departmentsData || [];
   const { data: rolesData, isLoading: rolesLoading } = useRoles();
-  const roles = rolesData || [];
+  const roles = rolesData?.roles ?? rolesData ?? [];
   const { data: invitations = [], isLoading: invitationsLoading } = useInvitations();
   const deleteUserMutation = useDeleteUser();
   const deactivateUserMutation = useDeactivateUser();
@@ -244,26 +258,26 @@ const UserManagementPage = () => {
     }
   };
 
-  // Filter users based on search term (client-side filtering for demo)
-  // In production, you'd want to implement server-side search
-  const filteredUsers = transformedUsers.filter(
-    (user) =>
-      user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (user.email && user.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (user.username && user.username.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      userUtils.getStatus(user).toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  console.log(filteredUsers);
-
-  // Use API pagination data
+  // API returns filtered and paginated users; no client-side filtering
   const totalPages = pagination.total_pages;
-  const currentUsers = filteredUsers; // API already returns paginated data
+  const currentUsers = transformedUsers;
 
   const handlePageChange = (page) => {
     setCurrentPage(page);
-    // In production, you would call the API with the new page parameter
-    // For now, we'll just update the local state
+  };
+
+  // Reset to page 1 when search or filters change
+  const handleSearchChange = (value) => {
+    setSearchTerm(value);
+    setCurrentPage(1);
+  };
+  const handleRoleFilterChange = (value) => {
+    setRoleFilter(value);
+    setCurrentPage(1);
+  };
+  const handleDepartmentFilterChange = (value) => {
+    setDepartmentFilter(value);
+    setCurrentPage(1);
   };
 
   const handleDeleteUser = async (userSlug) => {
@@ -680,10 +694,10 @@ const UserManagementPage = () => {
         </Card>
       </div>
 
-      {/* Search and Create */}
+      {/* Search, filters, and Create */}
       <PageSearchBar
         searchValue={searchTerm}
-        onSearchChange={setSearchTerm}
+        onSearchChange={handleSearchChange}
         searchPlaceholder="Search people..."
         showFilters={false}
         showCreateButton={canCreateUser}
@@ -691,6 +705,42 @@ const UserManagementPage = () => {
         createButtonText="Create Person"
         createButtonIcon={UserPlus}
       />
+
+      {/* Role and Department filters */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-medium text-muted-foreground">Role</label>
+          <Select value={roleFilter} onValueChange={handleRoleFilterChange}>
+            <SelectTrigger className="w-[180px] h-9">
+              <SelectValue placeholder="All roles" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL_FILTER_VALUE}>All roles</SelectItem>
+              {roles.map((r) => (
+                <SelectItem key={r.id} value={String(r.id)}>
+                  {r.display_name || r.name || r.slug || `Role #${r.id}`}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-medium text-muted-foreground">Department</label>
+          <Select value={departmentFilter} onValueChange={handleDepartmentFilterChange}>
+            <SelectTrigger className="w-[180px] h-9">
+              <SelectValue placeholder="All departments" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL_FILTER_VALUE}>All departments</SelectItem>
+              {departments.map((d) => (
+                <SelectItem key={d.id} value={String(d.id)}>
+                  {d.name || `Department #${d.id}`}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
 
       {/* Main Content Area */}
       <Card>

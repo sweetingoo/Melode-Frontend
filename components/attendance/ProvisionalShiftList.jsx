@@ -88,7 +88,7 @@ export const ProvisionalShiftList = ({ userId = null, showCreateButton = true, c
   if (error) {
     return (
       <div className="p-4 text-center text-destructive">
-        Failed to load provisional shifts. Please try again.
+        Failed to load allocated shifts. Please try again.
       </div>
     );
   }
@@ -96,7 +96,7 @@ export const ProvisionalShiftList = ({ userId = null, showCreateButton = true, c
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        {!compactHeader && <h2 className="text-xl font-semibold">Provisional Shifts</h2>}
+        {!compactHeader && <h2 className="text-xl font-semibold">Allocated Shifts</h2>}
         <div className="flex flex-wrap items-center gap-2 ml-auto">
           <Input
             type="date"
@@ -115,7 +115,7 @@ export const ProvisionalShiftList = ({ userId = null, showCreateButton = true, c
           {showCreateButton && (
             <Button onClick={handleAdd}>
               <Plus className="mr-2 h-4 w-4" />
-              Add provisional shift
+              Add allocated shift
             </Button>
           )}
         </div>
@@ -123,7 +123,7 @@ export const ProvisionalShiftList = ({ userId = null, showCreateButton = true, c
 
       {records.length === 0 ? (
         <div className="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
-          No provisional shifts found. {showCreateButton && "Add one to plan shifts."}
+          No allocated shifts found. {showCreateButton && "Add one to plan shifts."}
         </div>
       ) : (
         <div className="rounded-md border">
@@ -219,9 +219,9 @@ export const ProvisionalShiftList = ({ userId = null, showCreateButton = true, c
       <AlertDialog open={!!deleteSlug} onOpenChange={(open) => !open && setDeleteSlug(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete provisional shift</AlertDialogTitle>
+            <AlertDialogTitle>Delete allocated shift</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. This will permanently remove the provisional shift.
+              This action cannot be undone. This will permanently remove the allocated shift.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

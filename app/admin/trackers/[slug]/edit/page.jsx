@@ -48,6 +48,7 @@ import {
   useUpdateTracker,
   useTrackerAuditLogs,
 } from "@/hooks/useTrackers";
+import { useActiveTrackerCategories } from "@/hooks/useTrackerCategories";
 import { useRoles } from "@/hooks/useRoles";
 import { useUsers } from "@/hooks/useUsers";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
@@ -105,6 +106,7 @@ const TrackerEditPage = () => {
   const updateMutation = useUpdateTracker();
   const { data: rolesData } = useRoles();
   const { data: usersResponse } = useUsers();
+  const { data: trackerCategories = [] } = useActiveTrackerCategories();
   const { hasPermission } = usePermissionsCheck();
   const [auditLogsPage, setAuditLogsPage] = useState(1);
   const [auditLogsActionFilter, setAuditLogsActionFilter] = useState("all");
@@ -831,16 +833,29 @@ const TrackerEditPage = () => {
               </div>
               <div>
                 <Label htmlFor="category">Category</Label>
-                <Input
-                  id="category"
-                  value={formData.category || ""}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, category: e.target.value }))
+                <Select
+                  value={formData.category || "__none__"}
+                  onValueChange={(value) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      category: value === "__none__" ? "" : value,
+                    }))
                   }
-                  placeholder="e.g., Patient Care, IT Support, Maintenance"
-                />
+                >
+                  <SelectTrigger id="category">
+                    <SelectValue placeholder="Select category (optional)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">No category</SelectItem>
+                    {trackerCategories.map((cat) => (
+                      <SelectItem key={cat.id} value={cat.name}>
+                        {cat.display_name || cat.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Category for organizing trackers
+                  Organize trackers. Manage categories in Admin → Tracker Categories.
                 </p>
               </div>
               <div className="flex items-center gap-2">

@@ -138,14 +138,14 @@ export const useCreateMappedShiftTemplate = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: attendanceKeys.mappedShiftTemplates() });
-      toast.success("Mapped shift template created successfully");
+      toast.success("Required shift template created successfully");
     },
     onError: (error) => {
       const errorMessage =
         error?.response?.data?.message ||
         error?.response?.data?.detail ||
-        "Failed to create mapped shift template";
-      toast.error("Failed to create mapped shift template", {
+        "Failed to create required shift template";
+      toast.error("Failed to create required shift template", {
         description: Array.isArray(errorMessage) ? errorMessage.map((e) => e.msg || e).join(", ") : errorMessage,
       });
     },
@@ -163,14 +163,14 @@ export const useUpdateMappedShiftTemplate = () => {
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: attendanceKeys.mappedShiftTemplate(variables.slug) });
       queryClient.invalidateQueries({ queryKey: attendanceKeys.mappedShiftTemplates() });
-      toast.success("Mapped shift template updated successfully");
+      toast.success("Required shift template updated successfully");
     },
     onError: (error) => {
       const errorMessage =
         error?.response?.data?.message ||
         error?.response?.data?.detail ||
-        "Failed to update mapped shift template";
-      toast.error("Failed to update mapped shift template", {
+        "Failed to update required shift template";
+      toast.error("Failed to update required shift template", {
         description: Array.isArray(errorMessage) ? errorMessage.map((e) => e.msg || e).join(", ") : errorMessage,
       });
     },
@@ -187,14 +187,14 @@ export const useDeleteMappedShiftTemplate = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: attendanceKeys.mappedShiftTemplates() });
-      toast.success("Mapped shift template deleted successfully");
+      toast.success("Required shift template deleted successfully");
     },
     onError: (error) => {
       const errorMessage =
         error?.response?.data?.message ||
         error?.response?.data?.detail ||
-        "Failed to delete mapped shift template";
-      toast.error("Failed to delete mapped shift template", {
+        "Failed to delete required shift template";
+      toast.error("Failed to delete required shift template", {
         description: Array.isArray(errorMessage) ? errorMessage.map((e) => e.msg || e).join(", ") : errorMessage,
       });
     },
@@ -264,14 +264,14 @@ export const useCreateProvisionalShift = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [...attendanceKeys.all, "provisional-shifts"] });
       queryClient.invalidateQueries({ queryKey: [...attendanceKeys.all, "shift-records"] });
-      toast.success("Provisional shift created successfully");
+      toast.success("Allocated shift created successfully");
     },
     onError: (error) => {
       const errorMessage =
         error?.response?.data?.message ||
         error?.response?.data?.detail ||
-        "Failed to create provisional shift";
-      toast.error("Failed to create provisional shift", {
+        "Failed to create allocated shift";
+      toast.error("Failed to create allocated shift", {
         description: Array.isArray(errorMessage) ? errorMessage.map((e) => e.msg || e).join(", ") : errorMessage,
       });
     },
@@ -290,14 +290,14 @@ export const useUpdateProvisionalShift = () => {
       queryClient.invalidateQueries({ queryKey: attendanceKeys.provisionalShift(variables.slug) });
       queryClient.invalidateQueries({ queryKey: [...attendanceKeys.all, "provisional-shifts"] });
       queryClient.invalidateQueries({ queryKey: [...attendanceKeys.all, "shift-records"] });
-      toast.success("Provisional shift updated successfully");
+      toast.success("Allocated shift updated successfully");
     },
     onError: (error) => {
       const errorMessage =
         error?.response?.data?.message ||
         error?.response?.data?.detail ||
-        "Failed to update provisional shift";
-      toast.error("Failed to update provisional shift", {
+        "Failed to update allocated shift";
+      toast.error("Failed to update allocated shift", {
         description: Array.isArray(errorMessage) ? errorMessage.map((e) => e.msg || e).join(", ") : errorMessage,
       });
     },
@@ -321,8 +321,8 @@ export const useDeleteProvisionalShift = () => {
       const errorMessage =
         error?.response?.data?.message ||
         error?.response?.data?.detail ||
-        "Failed to delete provisional shift";
-      toast.error("Failed to delete provisional shift", {
+        "Failed to delete allocated shift";
+      toast.error("Failed to delete allocated shift", {
         description: Array.isArray(errorMessage) ? errorMessage.map((e) => e.msg || e).join(", ") : errorMessage,
       });
     },

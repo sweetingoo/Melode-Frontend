@@ -37,6 +37,7 @@ import {
   useHolidayEntitlements,
 } from "@/hooks/useAttendance";
 import { useUsers } from "@/hooks/useUsers";
+import { getCategoryLabel } from "@/lib/attendanceLabels";
 import { ShiftLeaveTypeForm } from "@/components/attendance/ShiftLeaveTypeForm";
 import {
   AlertDialog,
@@ -168,10 +169,9 @@ export default function AttendanceSettingsPage() {
       provisional: "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400",
       mapped: "bg-purple-500/10 text-purple-700 dark:text-purple-400",
     };
-
     return (
       <Badge variant="outline" className={colors[category] || ""}>
-        {category.replace("_", " ").replace(/\b\w/g, (l) => l.toUpperCase())}
+        {getCategoryLabel(category) || category}
       </Badge>
     );
   };
@@ -696,7 +696,7 @@ export default function AttendanceSettingsPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="provisional-shift-window">Provisional shift link window (hours)</Label>
+                <Label htmlFor="provisional-shift-window">Allocated shift link window (hours)</Label>
                 <Input
                   id="provisional-shift-window"
                   type="number"
@@ -711,7 +711,7 @@ export default function AttendanceSettingsPage() {
                   }
                 />
                 <p className="text-xs text-muted-foreground">
-                  When a user clocks in, show provisional shifts starting within this many hours before or after. Used to prompt &quot;Are you logging in to this shift?&quot; (default 2)
+                  When a user clocks in, show allocated shifts starting within this many hours before or after. Used to prompt &quot;Are you logging in to this shift?&quot; (default 2)
                 </p>
               </div>
             </div>

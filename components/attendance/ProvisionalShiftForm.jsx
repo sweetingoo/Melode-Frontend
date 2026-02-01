@@ -120,7 +120,7 @@ export const ProvisionalShiftForm = ({ open, onOpenChange, shiftRecord = null })
       }
       onOpenChange(false);
     } catch (err) {
-      console.error("Provisional shift save failed:", err);
+      console.error("Allocated shift save failed:", err);
     } finally {
       setIsSubmitting(false);
     }
@@ -140,7 +140,7 @@ export const ProvisionalShiftForm = ({ open, onOpenChange, shiftRecord = null })
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>{shiftRecord ? "Edit Provisional Shift" : "Add Provisional Shift"}</DialogTitle>
+          <DialogTitle>{shiftRecord ? "Edit Allocated Shift" : "Add Allocated Shift"}</DialogTitle>
           <DialogDescription>
             Create or edit a provisional (planned) shift. These can be compared with actual attendance later.
           </DialogDescription>
@@ -163,7 +163,7 @@ export const ProvisionalShiftForm = ({ open, onOpenChange, shiftRecord = null })
           </div>
 
           <div className="space-y-2">
-            <Label>Shift / Leave Type (Provisional)</Label>
+            <Label>Shift / Leave Type (Allocated)</Label>
             <Select value={shiftLeaveTypeId} onValueChange={setShiftLeaveTypeId} required>
               <SelectTrigger>
                 <SelectValue placeholder="Select type" />

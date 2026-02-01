@@ -27,7 +27,13 @@ import { useAssignments } from "@/hooks/useAssignments";
 import { useUsers } from "@/hooks/useUsers";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
 import { getUserDisplayName } from "@/utils/user";
-import { BarChart3, Settings, Calendar, ClipboardList, UserCheck, MapPin, Layers, ChevronLeft, ChevronRight } from "lucide-react";
+import { BarChart3, Settings, Calendar, ClipboardList, UserCheck, MapPin, Layers, ChevronLeft, ChevronRight, Info } from "lucide-react";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { CATEGORY_LABELS, CATEGORY_DESCRIPTIONS } from "@/lib/attendanceLabels";
 
 /**
  * Attendance & Leave page – permission per tab
@@ -226,11 +232,11 @@ function AttendancePageContent() {
             <>
               <TabsTrigger value="provisional" className="min-h-[2.75rem] touch-manipulation rounded-md px-3 py-2 data-[state=active]:bg-background sm:min-h-0">
                 <MapPin className="mr-2 h-4 w-4 shrink-0" />
-                Provisional
+                Allocated
               </TabsTrigger>
               <TabsTrigger value="mapped-templates" className="min-h-[2.75rem] touch-manipulation rounded-md px-3 py-2 data-[state=active]:bg-background sm:min-h-0">
                 <Layers className="mr-2 h-4 w-4 shrink-0" />
-                Mapped Templates
+                Required Templates
               </TabsTrigger>
             </>
           )}
@@ -313,9 +319,28 @@ function AttendancePageContent() {
         <TabsContent value="shift-records" className="mt-0 focus-visible:outline-none">
           <Card className="overflow-hidden">
             <CardHeader className="space-y-1.5 p-4 sm:p-6">
-              <CardTitle className="text-lg sm:text-xl">
-                {canManageAllShiftRecords ? "Shift Records (All Users)" : "Your Shift Records"}
-              </CardTitle>
+              <div className="flex items-center gap-2">
+                <CardTitle className="text-lg sm:text-xl">
+                  {canManageAllShiftRecords ? "Shift Records (All Users)" : "Your Shift Records"}
+                </CardTitle>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground" aria-label="What do the categories mean?">
+                      <Info className="h-4 w-4" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[min(100vw-2rem,380px)]" align="start">
+                    <p className="font-medium text-sm mb-2">What do the categories mean?</p>
+                    <ul className="space-y-2 text-sm text-muted-foreground">
+                      <li><strong className="text-foreground">{CATEGORY_LABELS.mapped}</strong> — {CATEGORY_DESCRIPTIONS.mapped}</li>
+                      <li><strong className="text-foreground">{CATEGORY_LABELS.provisional}</strong> — {CATEGORY_DESCRIPTIONS.provisional}</li>
+                      <li><strong className="text-foreground">{CATEGORY_LABELS.attendance}</strong> — {CATEGORY_DESCRIPTIONS.attendance}</li>
+                      <li><strong className="text-foreground">{CATEGORY_LABELS.authorised_leave}</strong> — {CATEGORY_DESCRIPTIONS.authorised_leave}</li>
+                      <li><strong className="text-foreground">{CATEGORY_LABELS.unauthorised_leave}</strong> — {CATEGORY_DESCRIPTIONS.unauthorised_leave}</li>
+                    </ul>
+                  </PopoverContent>
+                </Popover>
+              </div>
               <CardDescription className="text-sm">
                 {canManageAllShiftRecords
                   ? "View and manage attendance and leave shift records for everyone. Use filters to narrow by user, date, or category."
@@ -339,7 +364,7 @@ function AttendancePageContent() {
               <Card className="overflow-hidden">
                 <CardHeader className="space-y-1.5 p-4 sm:p-6">
                   <CardTitle className="text-lg sm:text-xl">
-                    {canManageAll ? "Provisional Shifts (All Users)" : "Provisional Shifts"}
+                    {canManageAll ? "Allocated Shifts (All Users)" : "Allocated Shifts"}
                   </CardTitle>
                   <CardDescription className="text-sm">
                     {canManageAll
@@ -360,8 +385,8 @@ function AttendancePageContent() {
             <TabsContent value="mapped-templates" className="mt-0 focus-visible:outline-none">
               <Card className="overflow-hidden">
                 <CardHeader className="space-y-1.5 p-4 sm:p-6">
-                  <CardTitle className="text-lg sm:text-xl">Mapped Shift Templates</CardTitle>
-                  <CardDescription className="text-sm">Templates used for mapped shift instances</CardDescription>
+                  <CardTitle className="text-lg sm:text-xl">Required Shift Templates</CardTitle>
+                  <CardDescription className="text-sm">Templates used for required shift instances</CardDescription>
                 </CardHeader>
                 <CardContent className="p-4 sm:p-6">
                   <MappedShiftTemplateList />

@@ -51,11 +51,11 @@ function formatColumnHeader(key) {
     job_role_name: "Job Role",
     role_id: "Role",
     role_name: "Role",
-    attendance_hours: "Attendance (h)",
+    attendance_hours: "Attended (h)",
     authorised_leave_hours: "Authorised Leave (h)",
     unauthorised_leave_hours: "Unauthorised (h)",
-    provisional_hours: "Provisional (h)",
-    mapped_hours: "Mapped (h)",
+    provisional_hours: "Allocated (h)",
+    mapped_hours: "Required (h)",
     total_hours: "Total (h)",
     annual_allowance_hours: "Allowance (h)",
     carried_forward_hours: "Carried (h)",
@@ -402,7 +402,7 @@ export default function AttendanceReportsPage() {
               {individualData.totals && (
                 <div className="grid grid-cols-2 gap-2 text-sm md:grid-cols-5">
                   <div className="rounded border p-2">
-                    <span className="text-muted-foreground">Attendance</span>
+                    <span className="text-muted-foreground">Attended</span>
                     <p className="font-medium">{Number(individualData.totals.attendance_hours).toFixed(1)}h</p>
                   </div>
                   <div className="rounded border p-2">
@@ -414,7 +414,7 @@ export default function AttendanceReportsPage() {
                     <p className="font-medium">{Number(individualData.totals.unauthorised_leave_hours).toFixed(1)}h</p>
                   </div>
                   <div className="rounded border p-2">
-                    <span className="text-muted-foreground">Provisional</span>
+                    <span className="text-muted-foreground">Allocated</span>
                     <p className="font-medium">{Number(individualData.totals.provisional_hours || 0).toFixed(1)}h</p>
                   </div>
                   <div className="rounded border p-2">
@@ -453,7 +453,7 @@ export default function AttendanceReportsPage() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Date</TableHead>
-                        <TableHead>Attendance</TableHead>
+                        <TableHead>Attended</TableHead>
                         <TableHead>Authorised leave</TableHead>
                         <TableHead>Unauthorised</TableHead>
                         <TableHead>Total</TableHead>

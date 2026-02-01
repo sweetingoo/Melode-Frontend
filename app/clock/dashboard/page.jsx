@@ -335,7 +335,7 @@ export default function ClockDashboardPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <ClipboardList className="h-5 w-5 text-green-600 dark:text-green-400" />
-              Working provisional shift
+              Working allocated shift
             </CardTitle>
             <CardDescription>
               You linked this clock-in to the following shift

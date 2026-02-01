@@ -543,13 +543,13 @@ export default function ClockPage() {
         </CardContent>
       </Card>
 
-      {/* Modal: link clock-in to a provisional shift */}
+      {/* Modal: link clock-in to an allocated shift */}
       <Dialog open={!!linkProvisionalModal} onOpenChange={(open) => !open && handleDismissLinkProvisionalModal()}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Are you logging in to one of these shifts?</DialogTitle>
             <DialogDescription>
-              You have provisional shift(s) starting around this time. Linking your clock-in helps managers see that the shift is covered and track lateness.
+              You have allocated shift(s) starting around this time. Linking your clock-in helps managers see that the shift is covered and track lateness.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2 py-2">

@@ -37,6 +37,13 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Plus,
   Edit,
   Edit2,
@@ -52,6 +59,7 @@ import {
   useUpdateTracker,
   useDeleteTracker,
 } from "@/hooks/useTrackers";
+import { useActiveTrackerCategories, useCreateTrackerCategory } from "@/hooks/useTrackerCategories";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
 import { useCurrentUser } from "@/hooks/useAuth";
 import { format } from "date-fns";
@@ -64,6 +72,7 @@ const TrackersManagePage = () => {
   const searchParams = useSearchParams();
   const hasOpenedDialogRef = useRef(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("__all__");
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
 
@@ -81,11 +90,16 @@ const TrackersManagePage = () => {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [editingTracker, setEditingTracker] = useState(null);
   const [deleteTrackerId, setDeleteTrackerId] = useState(null);
+  const [isAddCategoryDialogOpen, setIsAddCategoryDialogOpen] = useState(false);
+  const [newCategoryForm, setNewCategoryForm] = useState({ display_name: "" });
 
   const { data: trackersResponse, isLoading } = useTrackers({
     page: 1,
     per_page: 100,
+    category: categoryFilter === "__all__" ? undefined : categoryFilter,
   });
+  const { data: trackerCategories = [], refetch: refetchTrackerCategories } = useActiveTrackerCategories();
+  const createCategoryMutation = useCreateTrackerCategory();
 
   const createMutation = useCreateTracker();
   const updateMutation = useUpdateTracker();
@@ -138,6 +152,7 @@ const TrackersManagePage = () => {
     setFormData({
       name: "",
       description: "",
+      category: "",
       is_active: true,
       tracker_config: {
         default_status: "open",
@@ -180,6 +195,7 @@ const TrackersManagePage = () => {
     setFormData({
       name: tracker.name || "",
       description: tracker.description || "",
+      category: tracker.category || "",
       slug: tracker.slug || "", // Keep slug for edit (read-only display)
       is_active: tracker.is_active !== undefined ? tracker.is_active : true,
       tracker_config: tracker.tracker_config || {
@@ -230,6 +246,21 @@ const TrackersManagePage = () => {
     }
   };
 
+  const handleAddCategory = async () => {
+    if (!newCategoryForm.display_name?.trim()) return;
+    try {
+      const created = await createCategoryMutation.mutateAsync({
+        display_name: newCategoryForm.display_name.trim(),
+      });
+      await refetchTrackerCategories();
+      setFormData((prev) => ({ ...prev, category: created?.name ?? "" }));
+      setNewCategoryForm({ display_name: "" });
+      setIsAddCategoryDialogOpen(false);
+    } catch (error) {
+      // Error handled by mutation
+    }
+  };
+
   const filteredTrackers = trackers.filter((tracker) => {
     const matchesSearch =
       !searchTerm ||
@@ -259,18 +290,49 @@ const TrackersManagePage = () => {
         </Link>
       </div>
 
-      {/* Search and Create */}
+      {/* Search, filters, and Create - default PageSearchBar */}
       <PageSearchBar
         searchValue={searchTerm}
         onSearchChange={setSearchTerm}
         searchPlaceholder="Search trackers..."
         showSearch={true}
-        showFilters={false}
+        showFilters={true}
+        isFiltersOpen={isFiltersOpen}
+        onToggleFilters={() => setIsFiltersOpen(!isFiltersOpen)}
         showCreateButton={canCreate}
         onCreateClick={() => setIsCreateDialogOpen(true)}
         createButtonText="Create Tracker"
         createButtonIcon={Plus}
       />
+
+      {/* Advanced Filters */}
+      {isFiltersOpen && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Filters</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">Category</Label>
+                <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">All categories</SelectItem>
+                    {trackerCategories.map((cat) => (
+                      <SelectItem key={cat.id} value={cat.name}>
+                        {cat.display_name || cat.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Create Tracker Dialog */}
       {canCreate && (
@@ -303,6 +365,84 @@ const TrackersManagePage = () => {
                     placeholder="Description of what this tracker is used for"
                     rows={3}
                   />
+                </div>
+                <div>
+                  <Label htmlFor="category">Category</Label>
+                  <div className="flex gap-2">
+                    <Select
+                      value={formData.category || "__none__"}
+                      onValueChange={(v) =>
+                        setFormData((prev) => ({ ...prev, category: v === "__none__" ? "" : v }))
+                      }
+                    >
+                      <SelectTrigger id="category" className="flex-1">
+                        <SelectValue placeholder="Select category (optional)" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">No category</SelectItem>
+                        {trackerCategories.map((cat) => (
+                          <SelectItem key={cat.id} value={cat.name}>
+                            {cat.display_name || cat.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Dialog open={isAddCategoryDialogOpen} onOpenChange={setIsAddCategoryDialogOpen}>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        title="Add new category"
+                        onClick={() => setIsAddCategoryDialogOpen(true)}
+                        className="shrink-0"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                      <DialogContent className="max-w-sm" onClick={(e) => e.stopPropagation()}>
+                        <DialogHeader>
+                          <DialogTitle>Add category</DialogTitle>
+                          <DialogDescription>
+                            Create a new tracker category. It will be selected for this tracker.
+                          </DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4 py-2">
+                          <div>
+                            <Label htmlFor="new-cat-display">Display name *</Label>
+                            <Input
+                              id="new-cat-display"
+                              value={newCategoryForm.display_name}
+                              onChange={(e) =>
+                                setNewCategoryForm((prev) => ({ ...prev, display_name: e.target.value }))
+                              }
+                              placeholder="e.g., Patient Care"
+                              className="mt-1"
+                            />
+                            <p className="text-xs text-muted-foreground mt-1">Name is derived from this (e.g. patient_care)</p>
+                          </div>
+                        </div>
+                        <DialogFooter>
+                          <Button variant="outline" onClick={() => setIsAddCategoryDialogOpen(false)}>
+                            Cancel
+                          </Button>
+                          <Button
+                            onClick={handleAddCategory}
+                            disabled={
+                              !newCategoryForm.display_name?.trim() ||
+                              createCategoryMutation.isPending
+                            }
+                          >
+                            {createCategoryMutation.isPending && (
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            )}
+                            Add category
+                          </Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Organize trackers. Manage categories in Admin → Tracker Categories.
+                  </p>
                 </div>
                 <div className="flex items-center gap-2">
                   <input
@@ -387,7 +527,7 @@ const TrackersManagePage = () => {
                             <span>{tracker.name}</span>
                             {tracker.category && (
                               <Badge variant="outline" className="text-xs">
-                                {tracker.category}
+                                {trackerCategories.find((c) => c.name === tracker.category)?.display_name ?? tracker.category}
                               </Badge>
                             )}
                           </div>
@@ -508,6 +648,27 @@ const TrackersManagePage = () => {
                 placeholder="Description of what this tracker is used for"
                 rows={3}
               />
+            </div>
+            <div>
+              <Label htmlFor="edit-category">Category</Label>
+              <Select
+                value={formData.category || "__none__"}
+                onValueChange={(v) =>
+                  setFormData((prev) => ({ ...prev, category: v === "__none__" ? "" : v }))
+                }
+              >
+                <SelectTrigger id="edit-category">
+                  <SelectValue placeholder="Select category (optional)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">No category</SelectItem>
+                  {trackerCategories.map((cat) => (
+                    <SelectItem key={cat.id} value={cat.name}>
+                      {cat.display_name || cat.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="flex items-center gap-2">
               <input
