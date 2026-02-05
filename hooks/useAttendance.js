@@ -23,6 +23,9 @@ export const attendanceKeys = {
   leaveRequests: (params) => [...attendanceKeys.all, "leave-requests", params],
   pendingLeaveRequests: (params) => [...attendanceKeys.all, "leave-requests", "pending", params],
   leaveRequest: (slug) => [...attendanceKeys.all, "leave-request", slug],
+  coverage: (params) => [...attendanceKeys.all, "coverage", params],
+  gaps: (params) => [...attendanceKeys.all, "gaps", params],
+  nowBoard: (params) => [...attendanceKeys.all, "now-board", params],
   shiftRecords: (params) => [...attendanceKeys.all, "shift-records", params],
   shiftRecord: (slug) => [...attendanceKeys.all, "shift-record", slug],
   provisionalShifts: (params) => [...attendanceKeys.all, "provisional-shifts", params],
@@ -38,6 +41,45 @@ export const attendanceKeys = {
     individual: (userId, params) => [...attendanceKeys.all, "reports", "individual", userId, params],
   },
   settings: () => [...attendanceKeys.all, "settings"],
+};
+
+// Coverage / Gaps / Now-board
+export const useCoverage = (params = {}, options = {}) => {
+  return useQuery({
+    queryKey: attendanceKeys.coverage(params),
+    queryFn: async () => {
+      const response = await attendanceService.getCoverage(params);
+      return response.data ?? response;
+    },
+    enabled: !!(params.start_date && params.end_date),
+    staleTime: 1 * 60 * 1000, // 1 minute
+    ...options,
+  });
+};
+
+export const useGaps = (params = {}, options = {}) => {
+  return useQuery({
+    queryKey: attendanceKeys.gaps(params),
+    queryFn: async () => {
+      const response = await attendanceService.getGaps(params);
+      return response.data ?? response;
+    },
+    enabled: !!(params.start_date && params.end_date),
+    staleTime: 1 * 60 * 1000,
+    ...options,
+  });
+};
+
+export const useNowBoard = (params = {}, options = {}) => {
+  return useQuery({
+    queryKey: attendanceKeys.nowBoard(params),
+    queryFn: async () => {
+      const response = await attendanceService.getNowBoard(params);
+      return response.data ?? response;
+    },
+    staleTime: 30 * 1000, // 30 seconds for live view
+    ...options,
+  });
 };
 
 // Shift/Leave Types

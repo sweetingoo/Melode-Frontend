@@ -18,6 +18,20 @@ export const useShiftRecords = (params = {}, options = {}) => {
   });
 };
 
+/** Fetches all pages of shift records (per_page=100) and returns { records, total }. Use for rota/timeline. */
+export const useShiftRecordsAllPages = (params = {}, options = {}) => {
+  const keyParams = { ...params };
+  delete keyParams.page;
+  delete keyParams.per_page;
+  return useQuery({
+    queryKey: [...attendanceKeys.shiftRecords(keyParams), "all-pages"],
+    queryFn: () => attendanceService.getShiftRecordsAllPages(params),
+    enabled: !!(params.start_date && params.end_date),
+    staleTime: 2 * 60 * 1000,
+    ...options,
+  });
+};
+
 export const useShiftRecord = (slug, options = {}) => {
   return useQuery({
     queryKey: attendanceKeys.shiftRecord(slug),

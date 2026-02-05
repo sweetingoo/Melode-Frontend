@@ -241,6 +241,34 @@ export const attendanceService = {
     }
   },
 
+  // Coverage / Gaps / Now-board (Time & Attendance UI)
+  getCoverage: async (params = {}) => {
+    try {
+      return await api.get("/attendance/coverage", { params });
+    } catch (error) {
+      console.error("Get coverage failed:", error);
+      throw error;
+    }
+  },
+
+  getGaps: async (params = {}) => {
+    try {
+      return await api.get("/attendance/gaps", { params });
+    } catch (error) {
+      console.error("Get gaps failed:", error);
+      throw error;
+    }
+  },
+
+  getNowBoard: async (params = {}) => {
+    try {
+      return await api.get("/attendance/now-board", { params });
+    } catch (error) {
+      console.error("Get now-board failed:", error);
+      throw error;
+    }
+  },
+
   // Shift Records
   getShiftRecords: async (params = {}) => {
     try {
@@ -249,6 +277,31 @@ export const attendanceService = {
       console.error("Get shift records failed:", error);
       throw error;
     }
+  },
+
+  /**
+   * Fetches all shift records by paginating with per_page=100 (backend max).
+   * Use when you need the full set for a date range (e.g. rota timeline).
+   */
+  getShiftRecordsAllPages: async (params = {}) => {
+    const { page: _page, per_page: _perPage, ...rest } = params;
+    const perPage = 100;
+    const first = await api.get("/attendance/shift-records", {
+      params: { ...rest, page: 1, per_page: perPage },
+    });
+    const data = first.data ?? first;
+    const total = data.total ?? 0;
+    const records = [...(data.records ?? [])];
+    const totalPages = data.total_pages ?? Math.max(1, Math.ceil(total / perPage));
+
+    for (let page = 2; page <= totalPages; page++) {
+      const res = await api.get("/attendance/shift-records", {
+        params: { ...rest, page, per_page: perPage },
+      });
+      const pageData = res.data ?? res;
+      records.push(...(pageData.records ?? []));
+    }
+    return { records, total };
   },
 
   getShiftRecord: async (slug) => {

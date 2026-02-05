@@ -14,6 +14,7 @@ import { HolidayBalanceCard } from "@/components/attendance/HolidayBalanceCard";
 import { ShiftRecordList } from "@/components/attendance/ShiftRecordList";
 import { ProvisionalShiftList } from "@/components/attendance/ProvisionalShiftList";
 import { MappedShiftTemplateList } from "@/components/attendance/MappedShiftTemplateList";
+import { RotaTimeline } from "@/components/attendance/RotaTimeline";
 import {
   Select,
   SelectContent,
@@ -27,7 +28,7 @@ import { useAssignments } from "@/hooks/useAssignments";
 import { useUsers } from "@/hooks/useUsers";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
 import { getUserDisplayName } from "@/utils/user";
-import { BarChart3, Settings, Calendar, ClipboardList, UserCheck, MapPin, Layers, ChevronLeft, ChevronRight, Info } from "lucide-react";
+import { BarChart3, Settings, Calendar, ClipboardList, UserCheck, MapPin, Layers, LayoutGrid, ChevronLeft, ChevronRight, Info } from "lucide-react";
 import {
   Popover,
   PopoverContent,
@@ -64,7 +65,7 @@ const PERM = {
   MANAGE_ALL_SHIFT_RECORDS: "attendance:manage_all_shift_records",
 };
 
-const TAB_VALUES = ["my-leave", "approvals", "shift-records", "provisional", "mapped-templates", "calendar", "balance"];
+const TAB_VALUES = ["my-leave", "approvals", "shift-records", "rota", "provisional", "mapped-templates", "calendar", "balance"];
 
 function AttendancePageContent() {
   const router = useRouter();
@@ -88,7 +89,7 @@ function AttendancePageContent() {
   const showBalanceUserSelector = !!isSuperuser;
 
   const allowedTabs = useMemo(() => {
-    const allowed = new Set(["my-leave", "shift-records", "balance"]);
+    const allowed = new Set(["my-leave", "shift-records", "rota", "balance"]);
     if (canApprove) allowed.add("approvals");
     if (canManageAll) {
       allowed.add("provisional");
@@ -228,6 +229,10 @@ function AttendancePageContent() {
             <ClipboardList className="mr-2 h-4 w-4 shrink-0" />
             Shift Records
           </TabsTrigger>
+          <TabsTrigger value="rota" className="min-h-[2.75rem] touch-manipulation rounded-md px-3 py-2 data-[state=active]:bg-background sm:min-h-0">
+            <LayoutGrid className="mr-2 h-4 w-4 shrink-0" />
+            Rota
+          </TabsTrigger>
           {canManageAll && (
             <>
               <TabsTrigger value="provisional" className="min-h-[2.75rem] touch-manipulation rounded-md px-3 py-2 data-[state=active]:bg-background sm:min-h-0">
@@ -315,6 +320,10 @@ function AttendancePageContent() {
             </Card>
           </TabsContent>
         )}
+
+        <TabsContent value="rota" className="mt-0 focus-visible:outline-none">
+          <RotaTimeline />
+        </TabsContent>
 
         <TabsContent value="shift-records" className="mt-0 focus-visible:outline-none">
           <Card className="overflow-hidden">

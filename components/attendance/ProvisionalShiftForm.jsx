@@ -25,7 +25,7 @@ import { useShiftLeaveTypes } from "@/hooks/useAttendance";
 import { useAssignments } from "@/hooks/useAssignments";
 import { useUsers } from "@/hooks/useUsers";
 
-export const ProvisionalShiftForm = ({ open, onOpenChange, shiftRecord = null }) => {
+export const ProvisionalShiftForm = ({ open, onOpenChange, shiftRecord = null, initialValues = null }) => {
   const [shiftDate, setShiftDate] = useState(null);
   const [shiftLeaveTypeId, setShiftLeaveTypeId] = useState("");
   const [selectedUserId, setSelectedUserId] = useState("");
@@ -63,6 +63,16 @@ export const ProvisionalShiftForm = ({ open, onOpenChange, shiftRecord = null })
       setStartTime(shiftRecord.start_time ? String(shiftRecord.start_time).slice(0, 5) : "09:00");
       setEndTime(shiftRecord.end_time ? String(shiftRecord.end_time).slice(0, 5) : "17:00");
       setNotes(shiftRecord.notes || "");
+    } else if (open && initialValues) {
+      setShiftDate(initialValues.shiftDate ? new Date(initialValues.shiftDate + "T12:00:00") : null);
+      setJobRoleId(initialValues.jobRoleId || "");
+      setDepartmentId(initialValues.departmentId || "");
+      setShiftLeaveTypeId("");
+      setSelectedUserId("");
+      setHours("7.5");
+      setStartTime("09:00");
+      setEndTime("17:00");
+      setNotes("");
     } else {
       setShiftDate(null);
       setShiftLeaveTypeId("");
@@ -74,7 +84,7 @@ export const ProvisionalShiftForm = ({ open, onOpenChange, shiftRecord = null })
       setEndTime("17:00");
       setNotes("");
     }
-  }, [shiftRecord, open]);
+  }, [shiftRecord, open, initialValues]);
 
   useEffect(() => {
     if (jobRoleId && assignments?.length) {
