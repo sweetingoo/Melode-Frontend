@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
+import Link from "next/link";
 import { format, addDays, startOfWeek, startOfMonth, endOfMonth, addMonths, subMonths, differenceInDays } from "date-fns";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -37,6 +38,7 @@ const ROTA_CATEGORY_OPTIONS = [
 const DEFAULT_VISIBLE_CATEGORIES = ["provisional", "authorised_leave", "unauthorised_leave", "attendance"];
 
 const RANGE_PRESETS = [
+  { id: "today", label: "Today" },
   { id: "thisWeek", label: "This week" },
   { id: "next7", label: "Next 7 days" },
   { id: "last7", label: "Last 7 days" },
@@ -85,14 +87,22 @@ const defaultWeekRange = () => {
   return { from: mon, to: addDays(mon, 6) };
 };
 
-export function RotaTimeline({ departmentId = null }) {
+export function RotaTimeline({ departmentId = null, initialRange = null }) {
   const defaultRange = useMemo(defaultWeekRange, []);
   const [customRange, setCustomRange] = useState(defaultRange);
   const [committedRange, setCommittedRange] = useState(defaultRange);
   const [rangeSource, setRangeSource] = useState("thisWeek");
   const [rangeCalendarOpen, setRangeCalendarOpen] = useState(false);
 
-  const { effectiveRangeStart, rangeEnd, days, rangeLabel } = useMemo(() => {
+  useEffect(() => {
+    if (initialRange?.from && initialRange?.to) {
+      setCustomRange({ from: initialRange.from, to: initialRange.to });
+      setCommittedRange({ from: initialRange.from, to: initialRange.to });
+      setRangeSource(differenceInDays(initialRange.to, initialRange.from) === 0 ? "today" : "custom");
+    }
+  }, [initialRange?.from?.getTime?.(), initialRange?.to?.getTime?.()]);
+
+  const { effectiveRangeStart, rangeEnd, days, rangeLabel, isSingleDay } = useMemo(() => {
     const range = committedRange?.from && committedRange?.to ? committedRange : defaultRange;
     const from = range.from;
     const to = range.to;
@@ -100,11 +110,14 @@ export function RotaTimeline({ departmentId = null }) {
     const toStr = formatDateForAPI(to);
     const dayCount = Math.max(1, differenceInDays(to, from) + 1);
     const daysArr = Array.from({ length: dayCount }, (_, i) => addDays(from, i));
+    const isSingleDay = dayCount === 1;
+    const rangeLabel = isSingleDay ? format(from, "EEEE d MMM yyyy") : `${format(from, "d MMM")} – ${format(to, "d MMM yyyy")}`;
     return {
       effectiveRangeStart: fromStr,
       rangeEnd: toStr,
       days: daysArr,
-      rangeLabel: `${format(from, "d MMM")} – ${format(to, "d MMM yyyy")}`,
+      rangeLabel,
+      isSingleDay: dayCount === 1,
     };
   }, [committedRange, defaultRange]);
 
@@ -214,6 +227,10 @@ export function RotaTimeline({ departmentId = null }) {
     let from;
     let to;
     switch (presetId) {
+      case "today":
+        from = today;
+        to = today;
+        break;
       case "thisWeek": {
         const mon = startOfWeek(today, { weekStartsOn: 1 });
         from = mon;
@@ -275,6 +292,14 @@ export function RotaTimeline({ departmentId = null }) {
             <CardTitle className="text-xl font-semibold tracking-tight">Rota</CardTitle>
             <CardDescription className="text-sm text-muted-foreground">
               Required vs allocated and leave by role. Use &quot;Shift types&quot; to show or hide Allocated, Authorised Leave, Attended, etc. Click a shift for details, or use + to add one.
+              {isSingleDay && (
+                <span className="mt-2 block">
+                  See who&apos;s checked in today →{" "}
+                  <Link href="/admin/attendance?tab=now" className="font-medium text-primary underline hover:no-underline">
+                    Now tab
+                  </Link>
+                </span>
+              )}
             </CardDescription>
           </div>
           <div className="flex flex-wrap items-center gap-3">

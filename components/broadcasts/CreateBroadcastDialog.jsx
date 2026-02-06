@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -54,6 +54,8 @@ const CreateBroadcastDialog = ({
   isLoading,
   usersData,
   rolesData,
+  initialTitle = "",
+  initialContent = "",
 }) => {
   const { data: currentUser } = useCurrentUser();
   const [step, setStep] = useState("compose"); // "select" or "compose"
@@ -63,6 +65,13 @@ const CreateBroadcastDialog = ({
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [category, setCategory] = useState("");
+
+  useEffect(() => {
+    if (open && (initialTitle || initialContent)) {
+      if (initialTitle) setTitle(initialTitle);
+      if (initialContent) setContent(initialContent);
+    }
+  }, [open, initialTitle, initialContent]);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [formData, setFormData] = useState({
     content_delivery_mode: "full", // "full", "app_only", "hybrid"

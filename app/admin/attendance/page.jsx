@@ -11,6 +11,7 @@ import { LeaveApprovalList } from "@/components/attendance/LeaveApprovalList";
 import { ShiftRecordList } from "@/components/attendance/ShiftRecordList";
 import { ProvisionalShiftList } from "@/components/attendance/ProvisionalShiftList";
 import { RotaTimeline } from "@/components/attendance/RotaTimeline";
+import { NowBoardView } from "@/components/attendance/NowBoardView";
 import {
   Select,
   SelectContent,
@@ -21,7 +22,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
-import { BarChart3, Settings, ClipboardList, UserCheck, MapPin, LayoutGrid, ChevronLeft, ChevronRight, Info } from "lucide-react";
+import { BarChart3, Settings, ClipboardList, UserCheck, MapPin, LayoutGrid, Radio, ChevronLeft, ChevronRight, Info } from "lucide-react";
 import {
   Popover,
   PopoverContent,
@@ -57,7 +58,7 @@ const PERM = {
   MANAGE_ALL_SHIFT_RECORDS: "attendance:manage_all_shift_records",
 };
 
-const TAB_VALUES = ["approvals", "shift-records", "rota", "provisional"];
+const TAB_VALUES = ["approvals", "shift-records", "rota", "now", "provisional"];
 
 function AttendancePageContent() {
   const router = useRouter();
@@ -73,7 +74,7 @@ function AttendancePageContent() {
     canManageAll || hasPermission(PERM.MANAGE_ALL_SHIFT_RECORDS);
 
   const allowedTabs = useMemo(() => {
-    const allowed = new Set(["shift-records", "rota"]);
+    const allowed = new Set(["shift-records", "rota", "now"]);
     if (canApprove) allowed.add("approvals");
     if (canManageAll) {
       allowed.add("provisional");
@@ -136,6 +137,17 @@ function AttendancePageContent() {
     el.scrollBy({ left: direction * 120, behavior: "smooth" });
   };
 
+  const initialRotaRange = useMemo(() => {
+    if (activeTab !== "rota") return null;
+    const from = searchParams.get("from");
+    const to = searchParams.get("to");
+    if (!from || !to) return null;
+    const fromDate = new Date(from + "T12:00:00");
+    const toDate = new Date(to + "T12:00:00");
+    if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) return null;
+    return { from: fromDate, to: toDate };
+  }, [activeTab, searchParams]);
+
   return (
     <div className="w-full space-y-4 px-2 py-4 sm:space-y-6 sm:px-0 sm:py-6">
       <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-4 sm:space-y-6">
@@ -175,6 +187,10 @@ function AttendancePageContent() {
           <TabsTrigger value="rota" className="min-h-[2.75rem] touch-manipulation rounded-md px-3 py-2 data-[state=active]:bg-background sm:min-h-0">
             <LayoutGrid className="mr-2 h-4 w-4 shrink-0" />
             Rota
+          </TabsTrigger>
+          <TabsTrigger value="now" className="min-h-[2.75rem] touch-manipulation rounded-md px-3 py-2 data-[state=active]:bg-background sm:min-h-0">
+            <Radio className="mr-2 h-4 w-4 shrink-0" />
+            Now
           </TabsTrigger>
           {canManageAll && (
             <>
@@ -239,7 +255,11 @@ function AttendancePageContent() {
         )}
 
         <TabsContent value="rota" className="mt-0 focus-visible:outline-none">
-          <RotaTimeline />
+          <RotaTimeline initialRange={initialRotaRange} />
+        </TabsContent>
+
+        <TabsContent value="now" className="mt-0 focus-visible:outline-none">
+          <NowBoardView />
         </TabsContent>
 
         <TabsContent value="shift-records" className="mt-0 focus-visible:outline-none">

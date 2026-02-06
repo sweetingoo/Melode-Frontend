@@ -38,7 +38,9 @@ import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { LeaveRequestList } from "@/components/attendance/LeaveRequestList";
 import { HolidayBalanceCard } from "@/components/attendance/HolidayBalanceCard";
-import { CalendarIcon, Clock, Coffee, User, MapPin, Building2, Loader2, ArrowLeft, History, Filter, RefreshCw, ChevronRight, Calendar } from "lucide-react";
+import { MyRotaView } from "@/components/attendance/MyRotaView";
+import { MyContractView } from "@/components/attendance/MyContractView";
+import { CalendarIcon, Clock, Coffee, User, MapPin, Building2, Loader2, ArrowLeft, History, Filter, RefreshCw, ChevronRight, Calendar, LayoutGrid, FileText } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -53,7 +55,7 @@ import { formatDateForAPI, startOfDay, endOfDay } from "@/utils/time";
 import { PageSearchBar } from "@/components/admin/PageSearchBar";
 import { Suspense } from "react";
 
-const MY_TIME_TAB_VALUES = ["my-time", "my-leave"];
+const MY_TIME_TAB_VALUES = ["my-time", "my-leave", "my-rota", "my-contract"];
 
 function ClockHistoryPageContent() {
   const router = useRouter();
@@ -225,6 +227,14 @@ function ClockHistoryPageContent() {
             <TabsTrigger value="my-leave" className="min-h-[2.75rem] touch-manipulation rounded-md px-3 py-2 data-[state=active]:bg-background sm:min-h-0">
               <Calendar className="mr-2 h-4 w-4 shrink-0" />
               My Leave
+            </TabsTrigger>
+            <TabsTrigger value="my-rota" className="min-h-[2.75rem] touch-manipulation rounded-md px-3 py-2 data-[state=active]:bg-background sm:min-h-0">
+              <LayoutGrid className="mr-2 h-4 w-4 shrink-0" />
+              My Rota
+            </TabsTrigger>
+            <TabsTrigger value="my-contract" className="min-h-[2.75rem] touch-manipulation rounded-md px-3 py-2 data-[state=active]:bg-background sm:min-h-0">
+              <FileText className="mr-2 h-4 w-4 shrink-0" />
+              My Contract
             </TabsTrigger>
           </TabsList>
         </div>
@@ -805,6 +815,14 @@ function ClockHistoryPageContent() {
           </div>
         </DialogContent>
       </Dialog>
+        </TabsContent>
+
+        <TabsContent value="my-rota" className="mt-0 focus-visible:outline-none space-y-6">
+          <MyRotaView />
+        </TabsContent>
+
+        <TabsContent value="my-contract" className="mt-0 focus-visible:outline-none space-y-6">
+          <MyContractView />
         </TabsContent>
 
         <TabsContent value="my-leave" className="mt-0 focus-visible:outline-none space-y-6">
