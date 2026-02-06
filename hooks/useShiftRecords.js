@@ -292,6 +292,32 @@ export const useCreateProvisionalShift = () => {
   });
 };
 
+export const useCreateProvisionalShiftsRecurring = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (shiftData) => {
+      const response = await attendanceService.createProvisionalShiftsRecurring(shiftData);
+      return response.data ?? response;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: [...attendanceKeys.all, "provisional-shifts"] });
+      queryClient.invalidateQueries({ queryKey: [...attendanceKeys.all, "shift-records"] });
+      const count = Array.isArray(data) ? data.length : 0;
+      toast.success(`${count} allocated shift${count === 1 ? "" : "s"} created`);
+    },
+    onError: (error) => {
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.response?.data?.detail ||
+        "Failed to create recurring allocated shifts";
+      toast.error("Failed to create recurring allocated shifts", {
+        description: Array.isArray(errorMessage) ? errorMessage.map((e) => e.msg || e).join(", ") : errorMessage,
+      });
+    },
+  });
+};
+
 export const useUpdateProvisionalShift = () => {
   const queryClient = useQueryClient();
 

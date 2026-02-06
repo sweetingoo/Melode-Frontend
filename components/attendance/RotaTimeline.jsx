@@ -261,6 +261,16 @@ export function RotaTimeline({ departmentId = null }) {
             </CardDescription>
           </div>
           <div className="flex flex-wrap items-center gap-3">
+            <Button
+              onClick={() => {
+                setAddShiftInitial(null);
+                setAddShiftOpen(true);
+              }}
+              className="h-9 gap-2"
+            >
+              <Plus className="h-4 w-4 shrink-0" />
+              Add Allocated shift
+            </Button>
             <Popover open={rangeCalendarOpen} onOpenChange={setRangeCalendarOpen}>
               <PopoverTrigger asChild>
                 <Button

@@ -481,6 +481,15 @@ export const attendanceService = {
     }
   },
 
+  createProvisionalShiftsRecurring: async (shiftData) => {
+    try {
+      return await api.post("/attendance/provisional-shifts/create-recurring", shiftData);
+    } catch (error) {
+      console.error("Create recurring allocated shifts failed:", error);
+      throw error;
+    }
+  },
+
   updateProvisionalShift: async (slug, shiftData) => {
     try {
       return await api.put(`/attendance/provisional-shifts/${slug}`, shiftData);
