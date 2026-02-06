@@ -153,15 +153,43 @@ export const useApproveLeaveRequest = () => {
   });
 };
 
-// Pending Leave Requests
-export const usePendingLeaveRequests = (params = {}, options = {}) => {
+/**
+ * Departments that have leave requests (for approval list filter). No department:read needed.
+ */
+export const usePendingLeaveRequestDepartments = (options = {}) => {
   return useQuery({
-    queryKey: attendanceKeys.pendingLeaveRequests(params),
+    queryKey: attendanceKeys.pendingLeaveRequestDepartments(),
     queryFn: async () => {
-      const response = await attendanceService.getPendingLeaveRequests(params);
-      return response.data || response;
+      const response = await attendanceService.getPendingLeaveRequestDepartments();
+      return response ?? [];
     },
-    staleTime: 1 * 60 * 1000, // 1 minute - pending requests change frequently
+    staleTime: 5 * 60 * 1000,
+    ...options,
+  });
+};
+
+/**
+ * Pending leave requests for approval list with filters.
+ * Params: { status, department_id, sort_by, sort_order, page, per_page }
+ * Changing any param triggers a new fetch; department_id is sent as number when set.
+ */
+export const usePendingLeaveRequests = (params = {}, options = {}) => {
+  const filters = {
+    status: params.status ?? "pending",
+    department_id: params.department_id,
+    sort_by: params.sort_by ?? "submitted_at",
+    sort_order: params.sort_order ?? "desc",
+    page: params.page ?? 1,
+    per_page: params.per_page ?? 100,
+  };
+  const queryKey = [...attendanceKeys.pendingLeaveRequests(filters), filters];
+  return useQuery({
+    queryKey,
+    queryFn: async () => {
+      const response = await attendanceService.getPendingLeaveRequests(filters);
+      return response.data ?? response;
+    },
+    staleTime: 1 * 60 * 1000,
     ...options,
   });
 };

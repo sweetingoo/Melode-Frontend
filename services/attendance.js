@@ -232,9 +232,36 @@ export const attendanceService = {
     }
   },
 
-  getPendingLeaveRequests: async (params = {}) => {
+  /**
+   * Get departments that have leave requests (for approval list filter). No department:read needed.
+   */
+  getPendingLeaveRequestDepartments: async () => {
     try {
-      return await api.get("/attendance/leave-requests/pending", { params });
+      const res = await api.get("/attendance/leave-requests/pending/departments");
+      return res.data ?? res;
+    } catch (error) {
+      console.error("Get pending leave request departments failed:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Get pending leave requests for approval list with filters.
+   * @param {Object} filters - { status, department_id, sort_by, sort_order, page, per_page }
+   * Only defined, non-empty values are sent as query params; department_id is sent as number.
+   */
+  getPendingLeaveRequests: async (filters = {}) => {
+    const queryParams = {};
+    if (filters.status != null && filters.status !== "") queryParams.status = filters.status;
+    if (filters.department_id != null && filters.department_id !== "") {
+      queryParams.department_id = Number(filters.department_id);
+    }
+    if (filters.sort_by != null && filters.sort_by !== "") queryParams.sort_by = filters.sort_by;
+    if (filters.sort_order != null && filters.sort_order !== "") queryParams.sort_order = filters.sort_order;
+    if (filters.page != null) queryParams.page = Number(filters.page);
+    if (filters.per_page != null) queryParams.per_page = Number(filters.per_page);
+    try {
+      return await api.get("/attendance/leave-requests/pending", { params: queryParams });
     } catch (error) {
       console.error("Get pending leave requests failed:", error);
       throw error;

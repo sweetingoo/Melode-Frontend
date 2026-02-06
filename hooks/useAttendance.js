@@ -22,6 +22,7 @@ export const attendanceKeys = {
   ],
   leaveRequests: (params) => [...attendanceKeys.all, "leave-requests", params],
   pendingLeaveRequests: (params) => [...attendanceKeys.all, "leave-requests", "pending", params],
+  pendingLeaveRequestDepartments: () => [...attendanceKeys.all, "leave-requests", "pending", "departments"],
   leaveRequest: (slug) => [...attendanceKeys.all, "leave-request", slug],
   coverage: (params) => [...attendanceKeys.all, "coverage", params],
   gaps: (params) => [...attendanceKeys.all, "gaps", params],
