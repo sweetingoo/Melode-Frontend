@@ -33,9 +33,11 @@ import {
 } from "@/components/ui/pagination";
 import { useClockRecords } from "@/hooks/useClock";
 import { useAuth } from "@/hooks/useAuth";
+import { useAssignments } from "@/hooks/useAssignments";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { LeaveRequestList } from "@/components/attendance/LeaveRequestList";
+import { HolidayBalanceCard } from "@/components/attendance/HolidayBalanceCard";
 import { CalendarIcon, Clock, Coffee, User, MapPin, Building2, Loader2, ArrowLeft, History, Filter, RefreshCw, ChevronRight, Calendar } from "lucide-react";
 import {
   Dialog,
@@ -49,13 +51,18 @@ import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { formatDateForAPI, startOfDay, endOfDay } from "@/utils/time";
 import { PageSearchBar } from "@/components/admin/PageSearchBar";
+import { Suspense } from "react";
 
 const MY_TIME_TAB_VALUES = ["my-time", "my-leave"];
 
-export default function ClockHistoryPage() {
+function ClockHistoryPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user } = useAuth();
+  const { data: assignmentsData } = useAssignments({ user_id: user?.id, is_active: true });
+  const assignments = assignmentsData?.assignments || assignmentsData || [];
+  const activeAssignment = assignments?.[0];
+  const jobRoleId = activeAssignment?.role_id ?? activeAssignment?.job_role_id;
   const [activeTab, setActiveTab] = useState("my-time");
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
 
@@ -800,7 +807,23 @@ export default function ClockHistoryPage() {
       </Dialog>
         </TabsContent>
 
-        <TabsContent value="my-leave" className="mt-0 focus-visible:outline-none">
+        <TabsContent value="my-leave" className="mt-0 focus-visible:outline-none space-y-6">
+          {/* Holiday balance at top so users see remaining leave whilst selecting leave */}
+          <Card className="overflow-hidden">
+            <CardHeader className="space-y-1.5 p-4 sm:p-6">
+              <CardTitle className="text-lg sm:text-xl">Holiday Balance</CardTitle>
+              <CardDescription className="text-sm">Your current holiday balance.</CardDescription>
+            </CardHeader>
+            <CardContent className="p-4 sm:p-6 pt-0">
+              {user?.id && jobRoleId ? (
+                <HolidayBalanceCard userId={user.id} jobRoleId={jobRoleId} />
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  No active job role found. Please contact your administrator to assign a role.
+                </p>
+              )}
+            </CardContent>
+          </Card>
           <Card className="overflow-hidden border-0 shadow-md sm:border sm:shadow-sm">
             <CardHeader className="space-y-1 border-b bg-muted/20 px-4 py-5 sm:px-6 sm:py-6">
               <CardTitle className="text-lg font-semibold tracking-tight sm:text-xl">My Leave Requests</CardTitle>
@@ -815,5 +838,13 @@ export default function ClockHistoryPage() {
         </TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+export default function ClockHistoryPage() {
+  return (
+    <Suspense fallback={<div className="flex min-h-[200px] items-center justify-center p-8 text-muted-foreground">Loading…</div>}>
+      <ClockHistoryPageContent />
+    </Suspense>
   );
 }

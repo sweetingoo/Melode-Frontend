@@ -22,6 +22,18 @@ import { formatDateForAPI } from "@/utils/time";
 import { getUserDisplayName } from "@/utils/user";
 import { ProvisionalShiftForm } from "./ProvisionalShiftForm";
 import { cn } from "@/lib/utils";
+import { CATEGORY_LABELS } from "@/lib/attendanceLabels";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Filter } from "lucide-react";
+
+/** Categories that can appear as blocks on the rota (excludes mapped = required slots from coverage). */
+const ROTA_CATEGORY_OPTIONS = [
+  { value: "provisional", label: CATEGORY_LABELS.provisional },
+  { value: "authorised_leave", label: CATEGORY_LABELS.authorised_leave },
+  { value: "unauthorised_leave", label: CATEGORY_LABELS.unauthorised_leave },
+  { value: "attendance", label: CATEGORY_LABELS.attendance },
+];
+const DEFAULT_VISIBLE_CATEGORIES = ["provisional", "authorised_leave", "unauthorised_leave", "attendance"];
 
 const RANGE_PRESETS = [
   { id: "thisWeek", label: "This week" },
@@ -31,7 +43,7 @@ const RANGE_PRESETS = [
   { id: "lastMonth", label: "Last month" },
 ];
 
-/** Distinct color sets per shift/leave type (by id). Same type = same color across the rota. */
+/** Distinct color sets: one per category so rota blocks and filter legend match. */
 const SHIFT_TYPE_COLOR_SETS = [
   { bg: "bg-blue-500/20", border: "border-l-blue-500", hover: "hover:bg-blue-500/30" },
   { bg: "bg-emerald-500/20", border: "border-l-emerald-500", hover: "hover:bg-emerald-500/30" },
@@ -43,7 +55,17 @@ const SHIFT_TYPE_COLOR_SETS = [
   { bg: "bg-indigo-500/20", border: "border-l-indigo-500", hover: "hover:bg-indigo-500/30" },
 ];
 
-function getShiftTypeColors(record) {
+/** Fixed color per category so filter legend and rota blocks match. */
+const CATEGORY_COLORS = {
+  provisional: SHIFT_TYPE_COLOR_SETS[0],      // blue – Allocated
+  authorised_leave: SHIFT_TYPE_COLOR_SETS[1], // emerald
+  unauthorised_leave: SHIFT_TYPE_COLOR_SETS[2], // amber
+  attendance: SHIFT_TYPE_COLOR_SETS[3],      // violet – Attended
+};
+
+function getBlockColors(record) {
+  const category = record?.category;
+  if (category && CATEGORY_COLORS[category]) return CATEGORY_COLORS[category];
   const id = record?.shift_leave_type_id ?? record?.shift_leave_type?.id;
   const name = record?.shift_leave_type?.name ?? "";
   const index =
@@ -95,10 +117,18 @@ export function RotaTimeline({ departmentId = null }) {
   );
 
   const { data: coverageData, isLoading: coverageLoading } = useCoverage(params);
-  const { data: shiftData, isLoading: shiftsLoading } = useShiftRecordsAllPages({
-    ...params,
-    category: "provisional",
-  });
+  const { data: shiftData, isLoading: shiftsLoading } = useShiftRecordsAllPages(params);
+
+  const [visibleCategories, setVisibleCategories] = useState(() => new Set(DEFAULT_VISIBLE_CATEGORIES));
+
+  const toggleCategory = (value) => {
+    setVisibleCategories((prev) => {
+      const next = new Set(prev);
+      if (next.has(value)) next.delete(value);
+      else next.add(value);
+      return next;
+    });
+  };
 
   const isLoading = coverageLoading || shiftsLoading;
 
@@ -125,6 +155,7 @@ export function RotaTimeline({ departmentId = null }) {
     const records = shiftData?.records ?? shiftData ?? [];
     const out = {};
     records.forEach((r) => {
+      if (!visibleCategories.has(r?.category)) return;
       const d = typeof r.shift_date === "string" ? r.shift_date : r.shift_date?.slice(0, 10);
       if (!d) return;
       const roleKey = r.shift_role_id ? `shift_role_${r.shift_role_id}` : `job_role_${r.job_role_id}`;
@@ -142,7 +173,7 @@ export function RotaTimeline({ departmentId = null }) {
       });
     });
     return out;
-  }, [shiftData]);
+  }, [shiftData, visibleCategories]);
 
   const [selectedBlock, setSelectedBlock] = useState(null);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -226,7 +257,7 @@ export function RotaTimeline({ departmentId = null }) {
           <div className="space-y-1">
             <CardTitle className="text-xl font-semibold tracking-tight">Rota</CardTitle>
             <CardDescription className="text-sm text-muted-foreground">
-              Required vs allocated by role. Click a shift for details, or use + to add one.
+              Required vs allocated and leave by role. Use &quot;Shift types&quot; to show or hide Allocated, Authorised Leave, Attended, etc. Click a shift for details, or use + to add one.
             </CardDescription>
           </div>
           <div className="flex flex-wrap items-center gap-3">
@@ -296,6 +327,49 @@ export function RotaTimeline({ departmentId = null }) {
                     }}
                   />
                 </div>
+                  </PopoverContent>
+            </Popover>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="h-9 min-w-[140px] justify-start gap-2 rounded-lg border bg-background px-3 py-2 text-sm font-medium shadow-sm transition-colors hover:bg-muted/50"
+                  aria-label="Filter shift types"
+                >
+                  <Filter className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <span>Shift types</span>
+                  <ChevronDown className="ml-auto h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-64 rounded-xl border bg-card p-3 shadow-lg" align="end" sideOffset={8}>
+                <p className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  Show on rota
+                </p>
+                <div className="space-y-2">
+                  {ROTA_CATEGORY_OPTIONS.map((opt) => {
+                    const colors = CATEGORY_COLORS[opt.value];
+                    return (
+                      <label
+                        key={opt.value}
+                        className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted/50"
+                      >
+                        <Checkbox
+                          checked={visibleCategories.has(opt.value)}
+                          onCheckedChange={() => toggleCategory(opt.value)}
+                          aria-label={opt.label}
+                        />
+                        {colors && (
+                          <span
+                            className={cn("h-5 w-2 shrink-0 rounded-sm border-l-4", colors.border, colors.bg)}
+                            title={opt.label}
+                            aria-hidden
+                          />
+                        )}
+                        <span className="text-sm">{opt.label}</span>
+                      </label>
+                    );
+                  })}
+                </div>
               </PopoverContent>
             </Popover>
           </div>
@@ -316,7 +390,7 @@ export function RotaTimeline({ departmentId = null }) {
                   <strong className="text-foreground">Req: X</strong> — From <strong>Required Templates</strong> (Mapped Shift Templates). When you &quot;Generate from template&quot; for a week, those created records (category <code className="rounded bg-muted px-1">mapped</code>) are the &quot;required&quot; slots per date/role/time.
                 </li>
                 <li>
-                  <strong className="text-foreground">Blocks (names)</strong> — From <strong>Allocated shifts</strong> (provisional). Each block is one shift record with category <code className="rounded bg-muted px-1">provisional</code> for that date and role.
+                  <strong className="text-foreground">Blocks (names)</strong> — Shift records for the selected types (Allocated, Authorised Leave, Unauthorised Leave, Attended). Use the &quot;Shift types&quot; filter to show or hide each category in one view.
                 </li>
                 <li>
                   <strong className="text-foreground">Rows</strong> — One row per role that has at least one required, allocated, or attended slot in the selected week.
@@ -405,16 +479,23 @@ export function RotaTimeline({ departmentId = null }) {
                                 </span>
                               )}
                               {blocks.map((b) => {
-                                const colors = getShiftTypeColors(b.record);
+                                const colors = getBlockColors(b.record);
+                                const categoryLabel = b.record?.category ? (CATEGORY_LABELS[b.record.category] ?? b.record.category) : null;
+                                const typeName = b.record?.shift_leave_type?.name;
                                 return (
                                   <button
                                     type="button"
                                     key={b.id}
                                     onClick={() => setSelectedBlock(b)}
                                     className={`flex w-full flex-col items-start rounded-lg border-l-4 px-2.5 py-1.5 text-left shadow-sm transition-all hover:shadow focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1 ${colors.bg} ${colors.border} ${colors.hover}`}
-                                    title={b.record?.shift_leave_type?.name}
+                                    title={typeName ? `${categoryLabel ?? ""} – ${typeName}` : categoryLabel}
                                   >
                                     <span className="truncate text-xs font-medium">{b.displayName}</span>
+                                    {(categoryLabel || typeName) && (
+                                      <span className="text-[10px] text-muted-foreground truncate w-full">
+                                        {typeName ?? categoryLabel}
+                                      </span>
+                                    )}
                                     {(b.start_time || b.end_time) && (
                                       <span className="text-[11px] text-muted-foreground">
                                         {b.start_time || "?"} – {b.end_time || "?"}
