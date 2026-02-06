@@ -131,8 +131,8 @@ const mainMenuItems = [
     permission: "clock:view", // Permission to view clock records
   },
   {
-    title: "Attendance & Leave",
-    description: "Manage leave requests and view holiday balance",
+    title: "Time & Attendance",
+    description: "Rota, shifts, leave and attendance",
     icon: Calendar,
     url: "/admin/attendance",
     permission: "attendance:view", // Permission to view attendance
@@ -1483,7 +1483,7 @@ export default function AdminLayout({ children }) {
         // Otherwise check for permission
       }
 
-      // Special case: Attendance & Leave - show if user has any attendance-related permission
+      // Special case: Time & Attendance - show if user has any attendance-related permission
       // (attendance:view, attendance:manage_own, or attendance:reports); backend enforces per-endpoint
       if (item.permission === "attendance:view") {
         const hasAnyAttendance = userPermissionNames.some(

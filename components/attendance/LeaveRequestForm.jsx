@@ -13,12 +13,30 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { CalendarIcon, Loader2, ChevronDown } from "lucide-react";
-import { format } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
 import { formatDateForAPI } from "@/utils/time";
+
+// Default hours: full day = 8, part day (morning/afternoon) = 4 (user-level override later)
+const FULL_DAY_HOURS = 8;
+const PART_DAY_HOURS = 4;
+
+/** Returns all dates in [from, to] inclusive (Date objects at start of day). */
+function datesInRange(from, to) {
+  if (!from || !to || to < from) return [];
+  const out = [];
+  let d = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+  const end = new Date(to.getFullYear(), to.getMonth(), to.getDate());
+  while (d <= end) {
+    out.push(new Date(d));
+    d.setDate(d.getDate() + 1);
+  }
+  return out;
+}
 import { useCreateLeaveRequest, useUpdateLeaveRequest } from "@/hooks/useLeaveRequests";
 import { useShiftLeaveTypes, useHolidayBalance, useAttendanceSettings } from "@/hooks/useAttendance";
 import { useAssignments } from "@/hooks/useAssignments";
@@ -34,9 +52,16 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
+const PART_DAY_OPTIONS = [
+  { value: "full", label: "Full Day" },
+  { value: "morning", label: "Morning" },
+  { value: "afternoon", label: "Afternoon" },
+];
+
 export const LeaveRequestForm = ({ open, onOpenChange, leaveRequest = null, userId = null }) => {
   const { user } = useAuth();
   const [dateRange, setDateRange] = useState(undefined);
+  const [dayEntries, setDayEntries] = useState([]); // { date (Date), included (bool), part_day: "full"|"morning"|"afternoon" }
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [shiftLeaveTypeId, setShiftLeaveTypeId] = useState("");
   const [jobRoleId, setJobRoleId] = useState("");
@@ -46,6 +71,11 @@ export const LeaveRequestForm = ({ open, onOpenChange, leaveRequest = null, user
   const [pendingSubmit, setPendingSubmit] = useState(null);
 
   const today = useMemo(() => new Date(new Date().setHours(0, 0, 0, 0)), []);
+  /** True if date is before today (date-only comparison). Used so past dates are clearly disabled in the calendar. */
+  const isPastDate = (date) => {
+    const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    return d < today;
+  };
   const applyDatePreset = (preset) => {
     const start = new Date(today);
     const end = new Date(today);
@@ -133,21 +163,58 @@ export const LeaveRequestForm = ({ open, onOpenChange, leaveRequest = null, user
   // Initialize form when leaveRequest is provided (edit mode)
   useEffect(() => {
     if (leaveRequest) {
-      setDateRange(
-        leaveRequest.start_date && leaveRequest.end_date
-          ? { from: new Date(leaveRequest.start_date), to: new Date(leaveRequest.end_date) }
-          : undefined
-      );
+      const from = leaveRequest.start_date ? (typeof leaveRequest.start_date === "string" ? parseISO(leaveRequest.start_date) : new Date(leaveRequest.start_date)) : null;
+      const to = leaveRequest.end_date ? (typeof leaveRequest.end_date === "string" ? parseISO(leaveRequest.end_date) : new Date(leaveRequest.end_date)) : null;
+      setDateRange(from && to ? { from, to } : undefined);
       setShiftLeaveTypeId(leaveRequest.shift_leave_type_id?.toString() || "");
       setJobRoleId(leaveRequest.job_role_id?.toString() || "");
       setReason(leaveRequest.reason || "");
+
+      if (from && to) {
+        const breakdownMap = {};
+        if (Array.isArray(leaveRequest.days_breakdown) && leaveRequest.days_breakdown.length > 0) {
+          leaveRequest.days_breakdown.forEach((e) => {
+            const ds = typeof e.date === "string" ? e.date : e.date?.iso?.() ?? null;
+            if (ds) breakdownMap[ds] = e.part_day || "full";
+          });
+        }
+        const dates = datesInRange(from, to);
+        const hasBreakdown = Object.keys(breakdownMap).length > 0;
+        setDayEntries(
+          dates.map((date) => {
+            const dateStr = formatDateForAPI(date);
+            return {
+              date,
+              included: hasBreakdown ? dateStr in breakdownMap : true,
+              part_day: breakdownMap[dateStr] || "full",
+            };
+          })
+        );
+      } else {
+        setDayEntries([]);
+      }
     } else {
       setDateRange(undefined);
+      setDayEntries([]);
       setShiftLeaveTypeId("");
       setJobRoleId("");
       setReason("");
     }
   }, [leaveRequest, open]);
+
+  // When user changes date range in create mode, rebuild day list (all included, full day)
+  useEffect(() => {
+    if (!open) return;
+    if (leaveRequest) return;
+    const from = dateRange?.from;
+    const to = dateRange?.to ?? from;
+    if (from && to && to >= from) {
+      const dates = datesInRange(from, to);
+      setDayEntries(dates.map((date) => ({ date, included: true, part_day: "full" })));
+    } else {
+      setDayEntries([]);
+    }
+  }, [dateRange?.from, dateRange?.to, leaveRequest, open]);
 
   // Auto-select first job role if only one (API returns role_id; some code uses job_role_id)
   useEffect(() => {
@@ -179,24 +246,40 @@ export const LeaveRequestForm = ({ open, onOpenChange, leaveRequest = null, user
     e.preventDefault();
 
     const roleId = jobRoleId || (assignments?.length === 1 ? getAssignmentRoleId(assignments[0]) : null);
-    const startDate = dateRange?.from;
-    const endDate = dateRange?.to ?? dateRange?.from;
-    if (!startDate || !shiftLeaveTypeId || !roleId) {
+    if (!shiftLeaveTypeId || !roleId) return;
+
+    if (leaveRequest) {
+      // Update: send start_date, end_date (backend update does not support days yet)
+      const startDate = dateRange?.from;
+      const endDate = dateRange?.to ?? dateRange?.from;
+      if (!startDate || !endDate || endDate < startDate) return;
+      const requestData = {
+        job_role_id: parseInt(roleId, 10),
+        shift_leave_type_id: parseInt(shiftLeaveTypeId),
+        start_date: formatDateForAPI(startDate),
+        end_date: formatDateForAPI(endDate),
+        reason: reason || null,
+      };
+      if (deductsFromAllowance && remainingHours != null && remainingHours < 0 && !allowNegative) {
+        setPendingSubmit(requestData);
+        setShowNegativeBalanceConfirm(true);
+        return;
+      }
+      await doSubmit(requestData);
       return;
     }
-    if (endDate < startDate) {
-      return;
-    }
+
+    // Create: send days (included only) so user can exclude days and set morning/afternoon
+    const included = dayEntries.filter((d) => d.included);
+    if (included.length === 0) return;
 
     const requestData = {
       job_role_id: parseInt(roleId, 10),
       shift_leave_type_id: parseInt(shiftLeaveTypeId),
-      start_date: formatDateForAPI(startDate),
-      end_date: formatDateForAPI(endDate),
       reason: reason || null,
+      days: included.map((d) => ({ date: formatDateForAPI(d.date), part_day: d.part_day })),
     };
 
-    // Negative balance warning: if type deducts and balance is negative and policy may not allow, confirm
     if (deductsFromAllowance && remainingHours != null && remainingHours < 0 && !allowNegative) {
       setPendingSubmit(requestData);
       setShowNegativeBalanceConfirm(true);
@@ -212,11 +295,22 @@ export const LeaveRequestForm = ({ open, onOpenChange, leaveRequest = null, user
 
   const startDate = dateRange?.from;
   const endDate = dateRange?.to ?? dateRange?.from;
-  const canSubmit = dateRange?.from && shiftLeaveTypeId && effectiveJobRoleId && (!endDate || endDate >= startDate);
+  const hasIncludedDay = dayEntries.some((d) => d.included);
+  const totalHoursFromBreakdown = useMemo(() => {
+    return dayEntries
+      .filter((d) => d.included)
+      .reduce((sum, d) => sum + (d.part_day === "full" ? FULL_DAY_HOURS : PART_DAY_HOURS), 0);
+  }, [dayEntries]);
+  const canSubmit =
+    shiftLeaveTypeId &&
+    effectiveJobRoleId &&
+    (leaveRequest
+      ? dateRange?.from && endDate && endDate >= startDate
+      : dayEntries.length > 0 && hasIncludedDay);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px]">
+      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{leaveRequest ? "Edit Leave Request" : "Request Leave"}</DialogTitle>
           <DialogDescription>
@@ -351,7 +445,7 @@ export const LeaveRequestForm = ({ open, onOpenChange, leaveRequest = null, user
                       selected={dateRange}
                       onSelect={setDateRange}
                       numberOfMonths={2}
-                      disabled={(date) => !leaveRequest && date < today}
+                      disabled={(date) => !leaveRequest && isPastDate(date)}
                       classNames={{
                         months: "flex flex-col gap-4 sm:flex-row",
                         month: "space-y-4",
@@ -367,15 +461,94 @@ export const LeaveRequestForm = ({ open, onOpenChange, leaveRequest = null, user
             <p className="text-sm text-destructive">End date must be on or after start date</p>
           )}
 
+          {/* Per-day list: include/exclude and Full Day / Morning / Afternoon */}
+          {dayEntries.length > 0 && (
+            <div className="space-y-2">
+              <Label>Days in range</Label>
+              <p className="text-xs text-muted-foreground">
+                Uncheck days to exclude (e.g. weekends). Full day = {FULL_DAY_HOURS}h, morning/afternoon = {PART_DAY_HOURS}h each.
+              </p>
+              {hasIncludedDay && (
+                <p className="text-sm font-medium">
+                  Total hours to be used: <span className="text-primary">{totalHoursFromBreakdown} hours</span>
+                </p>
+              )}
+              <div className="max-h-[220px] overflow-y-auto rounded-md border p-2 space-y-1.5">
+                {dayEntries.map((entry) => (
+                  <div key={formatDateForAPI(entry.date)} className="flex items-center gap-2">
+                    <Checkbox
+                      id={`day-${formatDateForAPI(entry.date)}`}
+                      checked={entry.included}
+                      onCheckedChange={(checked) => {
+                        setDayEntries((prev) =>
+                          prev.map((p) =>
+                            formatDateForAPI(p.date) === formatDateForAPI(entry.date)
+                              ? { ...p, included: !!checked }
+                              : p
+                          )
+                        );
+                      }}
+                    />
+                    <label
+                      htmlFor={`day-${formatDateForAPI(entry.date)}`}
+                      className={cn(
+                        "flex-1 text-sm cursor-pointer",
+                        !entry.included && "text-muted-foreground"
+                      )}
+                    >
+                      {format(entry.date, "EEE, d MMM yyyy")}
+                    </label>
+                    <Select
+                      value={entry.part_day}
+                      onValueChange={(value) => {
+                        setDayEntries((prev) =>
+                          prev.map((p) =>
+                            formatDateForAPI(p.date) === formatDateForAPI(entry.date)
+                              ? { ...p, part_day: value }
+                              : p
+                          )
+                        );
+                      }}
+                      disabled={!entry.included}
+                    >
+                      <SelectTrigger className="w-[120px] h-8">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PART_DAY_OPTIONS.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ))}
+              </div>
+              {!hasIncludedDay && (
+                <p className="text-sm text-destructive">Select at least one day to include.</p>
+              )}
+            </div>
+          )}
+
           {/* Holiday balance when type deducts from allowance */}
           {deductsFromAllowance && remainingHours != null && (
             <div className="rounded-md border p-3 text-sm">
               <span className="text-muted-foreground">Remaining holiday balance: </span>
-              <span className={remainingHours < 0 ? "font-medium text-destructive" : "font-medium"}>
+              <span
+                className={
+                  remainingHours < 0 || (hasIncludedDay && totalHoursFromBreakdown > remainingHours)
+                    ? "font-medium text-destructive"
+                    : "font-medium"
+                }
+              >
                 {remainingHours.toFixed(1)} hours
               </span>
               {remainingHours < 0 && (
                 <p className="mt-1 text-destructive">Your holiday balance is negative. This request may still be submitted for approval.</p>
+              )}
+              {hasIncludedDay && totalHoursFromBreakdown > remainingHours && remainingHours >= 0 && (
+                <p className="mt-1 text-destructive">This request uses more hours than your remaining balance.</p>
               )}
             </div>
           )}

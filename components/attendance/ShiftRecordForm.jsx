@@ -163,7 +163,7 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>{shiftRecord ? "Edit Shift Record" : "Add Shift Record"}</DialogTitle>
-          <DialogDescription>Record attendance, leave, or provisional shift. Hours are required.</DialogDescription>
+          <DialogDescription>Record attendance, leave, or allocated shift. Hours are required.</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           {allowUserSelect && (

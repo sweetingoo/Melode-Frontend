@@ -4,11 +4,12 @@ import React, { useMemo, useState } from "react";
 import { format, addDays, startOfWeek, startOfMonth, endOfMonth, addMonths, subMonths, differenceInDays } from "date-fns";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Calendar as CalendarIcon, ChevronDown, ChevronRight, Clock, FileText, HelpCircle, Loader2, Plus, User } from "lucide-react";
+import { Calendar as CalendarIcon, ChevronDown, ChevronRight, Clock, FileText, HelpCircle, Loader2, Pencil, Plus, Trash2, User } from "lucide-react";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -17,7 +18,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { useCoverage } from "@/hooks/useAttendance";
-import { useShiftRecordsAllPages } from "@/hooks/useShiftRecords";
+import { useDeleteProvisionalShift, useShiftRecordsAllPages } from "@/hooks/useShiftRecords";
 import { formatDateForAPI } from "@/utils/time";
 import { getUserDisplayName } from "@/utils/user";
 import { ProvisionalShiftForm } from "./ProvisionalShiftForm";
@@ -176,7 +177,23 @@ export function RotaTimeline({ departmentId = null }) {
   }, [shiftData, visibleCategories]);
 
   const [selectedBlock, setSelectedBlock] = useState(null);
+  const [editShiftRecord, setEditShiftRecord] = useState(null); // when set, open ProvisionalShiftForm in edit mode
   const [helpOpen, setHelpOpen] = useState(false);
+
+  const deleteProvisionalShift = useDeleteProvisionalShift();
+
+  const handleDeleteShift = async () => {
+    if (!selectedBlock?.record) return;
+    const slug = selectedBlock.record.slug ?? selectedBlock.record.id;
+    if (!slug) return;
+    if (!window.confirm("Remove this allocated shift? This cannot be undone.")) return;
+    try {
+      await deleteProvisionalShift.mutateAsync(slug);
+      setSelectedBlock(null);
+    } catch (err) {
+      console.error("Delete shift failed:", err);
+    }
+  };
 
   const weekSummary = useMemo(() => {
     let requiredTotal = 0;
@@ -552,8 +569,21 @@ export function RotaTimeline({ departmentId = null }) {
                 <DialogDescription>Allocated shift details</DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-2">
-                {selectedBlock.record.user?.email && (
-                  <p className="text-sm text-muted-foreground">{selectedBlock.record.user.email}</p>
+                {(selectedBlock.record.job_role_id != null || selectedBlock.record.shift_role_id != null) && (
+                  <dl className="grid gap-1 text-sm">
+                    {selectedBlock.record.job_role_id != null && (
+                      <div className="flex justify-between gap-4">
+                        <dt className="text-muted-foreground">Job role</dt>
+                        <dd>{roleRows.find((r) => r.key === `job_role_${selectedBlock.record.job_role_id}`)?.name ?? `Role ${selectedBlock.record.job_role_id}`}</dd>
+                      </div>
+                    )}
+                    {selectedBlock.record.shift_role_id != null && (
+                      <div className="flex justify-between gap-4">
+                        <dt className="text-muted-foreground">Shift role</dt>
+                        <dd>{roleRows.find((r) => r.key === `shift_role_${selectedBlock.record.shift_role_id}`)?.name ?? `Role ${selectedBlock.record.shift_role_id}`}</dd>
+                      </div>
+                    )}
+                  </dl>
                 )}
                 <Separator />
                 <div className="space-y-2">
@@ -610,17 +640,50 @@ export function RotaTimeline({ departmentId = null }) {
                   </>
                 )}
               </div>
+              {selectedBlock.record?.category === "provisional" && (
+                <DialogFooter className="border-t pt-4 mt-4 flex-row justify-between sm:justify-between">
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    onClick={handleDeleteShift}
+                    disabled={deleteProvisionalShift.isPending}
+                    className="gap-2"
+                  >
+                    {deleteProvisionalShift.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-4 w-4" />
+                    )}
+                    Remove shift
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setEditShiftRecord(selectedBlock.record);
+                      setSelectedBlock(null);
+                    }}
+                    className="gap-2"
+                  >
+                    <Pencil className="h-4 w-4" />
+                    Edit shift
+                  </Button>
+                </DialogFooter>
+              )}
             </>
           )}
         </DialogContent>
       </Dialog>
       <ProvisionalShiftForm
-        open={addShiftOpen}
+        open={addShiftOpen || !!editShiftRecord}
         onOpenChange={(open) => {
-          setAddShiftOpen(open);
-          if (!open) setAddShiftInitial(null);
+          if (!open) {
+            setAddShiftOpen(false);
+            setAddShiftInitial(null);
+            setEditShiftRecord(null);
+          }
         }}
-        shiftRecord={null}
+        shiftRecord={editShiftRecord ?? null}
         initialValues={addShiftInitial}
       />
     </Card>

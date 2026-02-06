@@ -8,10 +8,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { LeaveApprovalList } from "@/components/attendance/LeaveApprovalList";
-import { LeaveCalendar } from "@/components/attendance/LeaveCalendar";
 import { ShiftRecordList } from "@/components/attendance/ShiftRecordList";
 import { ProvisionalShiftList } from "@/components/attendance/ProvisionalShiftList";
-import { MappedShiftTemplateList } from "@/components/attendance/MappedShiftTemplateList";
 import { RotaTimeline } from "@/components/attendance/RotaTimeline";
 import {
   Select,
@@ -23,7 +21,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
-import { BarChart3, Settings, Calendar, ClipboardList, UserCheck, MapPin, Layers, LayoutGrid, ChevronLeft, ChevronRight, Info } from "lucide-react";
+import { BarChart3, Settings, ClipboardList, UserCheck, MapPin, LayoutGrid, ChevronLeft, ChevronRight, Info } from "lucide-react";
 import {
   Popover,
   PopoverContent,
@@ -41,10 +39,8 @@ import { CATEGORY_LABELS, CATEGORY_DESCRIPTIONS } from "@/lib/attendanceLabels";
  * - Approvals     – leave:approve
  * - Shift Records – no extra permission (everyone); content scope = own vs all (see below)
  * - Provisional   – attendance:manage_all
- * - Mapped        – attendance:manage_all
- * - Calendar      – attendance:reports
  *
- * (Balance removed: users see their balance on My Time → My Leave; admins can view anyone's in People Management → Edit Person.)
+ * (Required Templates tab removed: may do differently / not use. Calendar tab removed: rota tab now covers shift/leave view. Balance removed: users see their balance on My Time → My Leave; admins can view anyone's in People Management → Edit Person.)
  *
  * Shift Records content (not tab visibility):
  * - "Your Shift Records" (own only): default for users with attendance:view
@@ -61,7 +57,7 @@ const PERM = {
   MANAGE_ALL_SHIFT_RECORDS: "attendance:manage_all_shift_records",
 };
 
-const TAB_VALUES = ["approvals", "shift-records", "rota", "provisional", "mapped-templates", "calendar"];
+const TAB_VALUES = ["approvals", "shift-records", "rota", "provisional"];
 
 function AttendancePageContent() {
   const router = useRouter();
@@ -81,11 +77,9 @@ function AttendancePageContent() {
     if (canApprove) allowed.add("approvals");
     if (canManageAll) {
       allowed.add("provisional");
-      allowed.add("mapped-templates");
     }
-    if (canViewReports) allowed.add("calendar");
     return allowed;
-  }, [canApprove, canManageAll, canViewReports]);
+  }, [canApprove, canManageAll]);
 
   const [activeTab, setActiveTab] = useState(() => {
     if (typeof window === "undefined") return "shift-records";
@@ -188,16 +182,7 @@ function AttendancePageContent() {
                 <MapPin className="mr-2 h-4 w-4 shrink-0" />
                 Allocated
               </TabsTrigger>
-              <TabsTrigger value="mapped-templates" className="min-h-[2.75rem] touch-manipulation rounded-md px-3 py-2 data-[state=active]:bg-background sm:min-h-0">
-                <Layers className="mr-2 h-4 w-4 shrink-0" />
-                Required Templates
-              </TabsTrigger>
             </>
-          )}
-          {canViewReports && (
-            <TabsTrigger value="calendar" className="min-h-[2.75rem] touch-manipulation rounded-md px-3 py-2 data-[state=active]:bg-background sm:min-h-0">
-              Calendar
-            </TabsTrigger>
           )}
                 </TabsList>
                 {scrollIndicators.right && (
@@ -322,26 +307,9 @@ function AttendancePageContent() {
                 </CardContent>
               </Card>
             </TabsContent>
-
-            <TabsContent value="mapped-templates" className="mt-0 focus-visible:outline-none">
-              <Card className="overflow-hidden">
-                <CardHeader className="space-y-1.5 p-4 sm:p-6">
-                  <CardTitle className="text-lg sm:text-xl">Required Shift Templates</CardTitle>
-                  <CardDescription className="text-sm">Templates used for required shift instances</CardDescription>
-                </CardHeader>
-                <CardContent className="p-4 sm:p-6">
-                  <MappedShiftTemplateList />
-                </CardContent>
-              </Card>
-            </TabsContent>
           </>
         )}
 
-        {canViewReports && (
-          <TabsContent value="calendar" className="mt-0 focus-visible:outline-none">
-            <LeaveCalendar />
-          </TabsContent>
-        )}
       </Tabs>
     </div>
   );
