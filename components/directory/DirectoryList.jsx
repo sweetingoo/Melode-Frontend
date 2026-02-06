@@ -65,14 +65,9 @@ export const DirectoryList = ({ data }) => {
     <div className="space-y-4">
       {data.departments.map((deptGroup) => {
         const isDeptExpanded = expandedDepartments.has(deptGroup.department.id);
-        // Calculate total users from job roles, shift roles, and orphan shift roles
-        const totalUsers = 
-          deptGroup.job_roles?.reduce((sum, jr) => {
-            const jobRoleUsers = jr.job_role?.users?.length || 0;
-            const shiftRoleUsers = jr.shift_roles?.reduce((s, sr) => s + (sr.users?.length || 0), 0) || 0;
-            return sum + jobRoleUsers + shiftRoleUsers;
-          }, 0) || 0 +
-          (deptGroup.orphan_shift_roles?.reduce((sum, sr) => sum + (sr.users?.length || 0), 0) || 0);
+        // Total users from job roles only (shift roles duplicate the same people)
+        const totalUsers =
+          deptGroup.job_roles?.reduce((sum, jr) => sum + (jr.job_role?.users?.length || 0), 0) || 0;
 
         return (
           <Card key={deptGroup.department.id}>
@@ -180,148 +175,10 @@ export const DirectoryList = ({ data }) => {
                           </div>
                         )}
 
-                        {/* Shift Roles under this Job Role */}
-                        {isJobRoleExpanded && jobRoleGroup.shift_roles && jobRoleGroup.shift_roles.length > 0 && (
-                          <div className="ml-8 space-y-3 mt-4 border-l-2 border-secondary/50 pl-4">
-                            {jobRoleGroup.shift_roles.map((shiftRoleGroup) => {
-                              const shiftRole = shiftRoleGroup;
-                              const isShiftRoleExpanded = expandedRoles.has(shiftRole.role.id);
-                              
-                              return (
-                                <div key={shiftRole.role.id} className="space-y-2">
-                                  <div className="flex items-center gap-3">
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => toggleRole(shiftRole.role.id)}
-                                      className="h-6 w-6 p-0"
-                                    >
-                                      {isShiftRoleExpanded ? (
-                                        <ChevronDown className="h-3 w-3" />
-                                      ) : (
-                                        <ChevronRight className="h-3 w-3" />
-                                      )}
-                                    </Button>
-                                    <div className="flex items-center gap-2 flex-1">
-                                      <Users className="h-3 w-3 text-muted-foreground" />
-                                      <Badge variant="outline" className="font-normal text-xs">
-                                        {shiftRole.role.display_name || shiftRole.role.name}
-                                      </Badge>
-                                      <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">
-                                        Shift Role
-                                      </span>
-                                      <span className="text-xs text-muted-foreground">
-                                        ({shiftRole.users?.length || 0})
-                                      </span>
-                                    </div>
-                                  </div>
-                                  
-                                  {isShiftRoleExpanded && shiftRole.users && shiftRole.users.length > 0 && (
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 ml-8">
-                                      {shiftRole.users.map((user) => (
-                                        <div
-                                          key={user.id}
-                                          className="group relative flex items-center gap-3 p-3 rounded-lg border bg-card hover:border-secondary/50 hover:shadow-md transition-all cursor-pointer"
-                                        >
-                                          <AvatarWithUrl
-                                            avatarValue={user.avatar_url}
-                                            alt={user.display_name}
-                                            fallback={getInitials(user)}
-                                            className="h-10 w-10 border-2 border-background"
-                                          />
-                                          <div className="flex-1 min-w-0">
-                                            <p className="font-medium text-sm truncate">
-                                              {user.display_name}
-                                            </p>
-                                            {user.job_title && (
-                                              <p className="text-xs text-muted-foreground truncate mt-0.5">
-                                                {user.job_title}
-                                              </p>
-                                            )}
-                                          </div>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
                       </div>
                     </div>
                   );
                 })}
-                
-                {/* Orphan Shift Roles (without parent job role) */}
-                {deptGroup.orphan_shift_roles && deptGroup.orphan_shift_roles.length > 0 && (
-                  <div className="space-y-3 mt-6 pt-6 border-t">
-                    <h4 className="text-sm font-semibold text-muted-foreground mb-2">Shift Roles (Standalone)</h4>
-                    {deptGroup.orphan_shift_roles.map((shiftRoleGroup) => {
-                      const shiftRole = shiftRoleGroup;
-                      const isShiftRoleExpanded = expandedRoles.has(shiftRole.role.id);
-                      
-                      return (
-                        <div key={shiftRole.role.id} className="relative border-l-2 border-secondary/30 pl-6 space-y-2">
-                          <div className="flex items-center gap-3">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => toggleRole(shiftRole.role.id)}
-                              className="h-7 w-7 p-0 -ml-8"
-                            >
-                              {isShiftRoleExpanded ? (
-                                <ChevronDown className="h-4 w-4" />
-                              ) : (
-                                <ChevronRight className="h-4 w-4" />
-                              )}
-                            </Button>
-                            <div className="flex items-center gap-2 flex-1">
-                              <Users className="h-4 w-4 text-muted-foreground" />
-                              <Badge variant="outline" className="font-normal">
-                                {shiftRole.role.display_name || shiftRole.role.name}
-                              </Badge>
-                              <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">
-                                Shift Role
-                              </span>
-                              <span className="text-sm text-muted-foreground">
-                                ({shiftRole.users?.length || 0})
-                              </span>
-                            </div>
-                          </div>
-                          
-                          {isShiftRoleExpanded && shiftRole.users && shiftRole.users.length > 0 && (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 ml-4">
-                              {shiftRole.users.map((user) => (
-                                <div
-                                  key={user.id}
-                                  className="group relative flex items-center gap-3 p-3 rounded-lg border bg-card hover:border-secondary/50 hover:shadow-md transition-all cursor-pointer"
-                                >
-                                  <AvatarWithUrl
-                                    avatarValue={user.avatar_url}
-                                    alt={user.display_name}
-                                    fallback={getInitials(user)}
-                                    className="h-10 w-10 border-2 border-background"
-                                  />
-                                  <div className="flex-1 min-w-0">
-                                    <p className="font-medium text-sm truncate">
-                                      {user.display_name}
-                                    </p>
-                                    {user.job_title && (
-                                      <p className="text-xs text-muted-foreground truncate mt-0.5">
-                                        {user.job_title}
-                                      </p>
-                                    )}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
               </CardContent>
             )}
           </Card>
