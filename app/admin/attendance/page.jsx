@@ -7,7 +7,6 @@ import { useRouter } from "next/navigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { LeaveRequestList } from "@/components/attendance/LeaveRequestList";
 import { LeaveApprovalList } from "@/components/attendance/LeaveApprovalList";
 import { LeaveCalendar } from "@/components/attendance/LeaveCalendar";
 import { HolidayBalanceCard } from "@/components/attendance/HolidayBalanceCard";
@@ -42,7 +41,7 @@ import { CATEGORY_LABELS, CATEGORY_DESCRIPTIONS } from "@/lib/attendanceLabels";
  * Page access: attendance:view (sidebar). Who can open the page is controlled there.
  *
  * Tab visibility (each tab has its own permission where listed):
- * - My Leave       – no extra permission (everyone with page access)
+ * (My Leave is on My Time page: /admin/clock/history?tab=my-leave)
  * - Approvals     – leave:approve
  * - Shift Records – no extra permission (everyone); content scope = own vs all (see below)
  * - Provisional   – attendance:manage_all
@@ -65,7 +64,7 @@ const PERM = {
   MANAGE_ALL_SHIFT_RECORDS: "attendance:manage_all_shift_records",
 };
 
-const TAB_VALUES = ["my-leave", "approvals", "shift-records", "rota", "provisional", "mapped-templates", "calendar", "balance"];
+const TAB_VALUES = ["approvals", "shift-records", "rota", "provisional", "mapped-templates", "calendar", "balance"];
 
 function AttendancePageContent() {
   const router = useRouter();
@@ -89,7 +88,7 @@ function AttendancePageContent() {
   const showBalanceUserSelector = !!isSuperuser;
 
   const allowedTabs = useMemo(() => {
-    const allowed = new Set(["my-leave", "shift-records", "rota", "balance"]);
+    const allowed = new Set(["shift-records", "rota", "balance"]);
     if (canApprove) allowed.add("approvals");
     if (canManageAll) {
       allowed.add("provisional");
@@ -100,10 +99,10 @@ function AttendancePageContent() {
   }, [canApprove, canManageAll, canViewReports]);
 
   const [activeTab, setActiveTab] = useState(() => {
-    if (typeof window === "undefined") return "my-leave";
+    if (typeof window === "undefined") return "shift-records";
     const params = new URLSearchParams(window.location.search);
     const t = params.get("tab");
-    return t && TAB_VALUES.includes(t) ? t : "my-leave";
+    return t && TAB_VALUES.includes(t) ? t : "shift-records";
   });
   const [balanceUserId, setBalanceUserId] = useState(null);
   const [balanceJobRoleId, setBalanceJobRoleId] = useState(null);
@@ -111,9 +110,9 @@ function AttendancePageContent() {
   useEffect(() => {
     const urlTab = searchParams.get("tab");
     if (urlTab && TAB_VALUES.includes(urlTab)) {
-      setActiveTab(allowedTabs.has(urlTab) ? urlTab : "my-leave");
+      setActiveTab(allowedTabs.has(urlTab) ? urlTab : "shift-records");
     } else {
-      setActiveTab("my-leave");
+      setActiveTab("shift-records");
     }
   }, [searchParams, allowedTabs]);
 
@@ -215,10 +214,6 @@ function AttendancePageContent() {
                   </div>
                 )}
                 <TabsList className="inline-flex h-auto w-max flex-shrink-0 flex-nowrap gap-1 rounded-lg bg-muted/50 p-1 [&>button]:shrink-0">
-            <TabsTrigger value="my-leave" className="min-h-[2.75rem] touch-manipulation rounded-md px-3 py-2 data-[state=active]:bg-background sm:min-h-0">
-              <Calendar className="mr-2 h-4 w-4 shrink-0" />
-              My Leave
-            </TabsTrigger>
           {canApprove && (
             <TabsTrigger value="approvals" className="min-h-[2.75rem] touch-manipulation rounded-md px-3 py-2 data-[state=active]:bg-background sm:min-h-0">
               <UserCheck className="mr-2 h-4 w-4 shrink-0" />
@@ -292,20 +287,6 @@ function AttendancePageContent() {
             )}
           </div>
         </div>
-
-        <TabsContent value="my-leave" className="mt-0 focus-visible:outline-none">
-          <Card className="overflow-hidden border-0 shadow-md sm:border sm:shadow-sm">
-            <CardHeader className="space-y-1 border-b bg-muted/20 px-4 py-5 sm:px-6 sm:py-6">
-              <CardTitle className="text-lg font-semibold tracking-tight sm:text-xl">My Leave Requests</CardTitle>
-              <CardDescription className="text-sm text-muted-foreground">
-                Submit and track holiday, sick leave, and other time off. Pending requests need manager approval.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="p-4 sm:p-6">
-              <LeaveRequestList userId={user?.id} showCreateButton={true} compactHeader />
-            </CardContent>
-          </Card>
-        </TabsContent>
 
         {canApprove && (
           <TabsContent value="approvals" className="mt-0 focus-visible:outline-none">

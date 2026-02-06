@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
-import { useRouter } from "next/navigation";
+import React, { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -31,9 +32,11 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination";
 import { useClockRecords } from "@/hooks/useClock";
+import { useAuth } from "@/hooks/useAuth";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CalendarIcon, Clock, Coffee, User, MapPin, Building2, Loader2, ArrowLeft, History, Filter, RefreshCw, ChevronRight } from "lucide-react";
+import { LeaveRequestList } from "@/components/attendance/LeaveRequestList";
+import { CalendarIcon, Clock, Coffee, User, MapPin, Building2, Loader2, ArrowLeft, History, Filter, RefreshCw, ChevronRight, Calendar } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -47,9 +50,26 @@ import Link from "next/link";
 import { formatDateForAPI, startOfDay, endOfDay } from "@/utils/time";
 import { PageSearchBar } from "@/components/admin/PageSearchBar";
 
+const MY_TIME_TAB_VALUES = ["my-time", "my-leave"];
+
 export default function ClockHistoryPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const { user } = useAuth();
+  const [activeTab, setActiveTab] = useState("my-time");
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
+
+  useEffect(() => {
+    const urlTab = searchParams.get("tab");
+    setActiveTab(urlTab && MY_TIME_TAB_VALUES.includes(urlTab) ? urlTab : "my-time");
+  }, [searchParams]);
+
+  const handleTabChange = (value) => {
+    setActiveTab(value);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", value);
+    router.replace(`/admin/clock/history?${params.toString()}`, { scroll: false });
+  };
   const [startDate, setStartDate] = useState(() => {
     const date = new Date();
     date.setDate(date.getDate() - 30); // Default to last 30 days
@@ -187,7 +207,22 @@ export default function ClockHistoryPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="w-full space-y-4 px-2 py-4 sm:space-y-6 sm:px-0 sm:py-6">
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-4 sm:space-y-6">
+        <div className="sticky top-0 z-0 -mx-2 border-b bg-background px-3 pb-3 pt-2 shadow-[0_1px_0_0_hsl(var(--border))] sm:-mx-4 sm:px-4 sm:pb-2 sm:pt-1">
+          <TabsList className="inline-flex h-auto w-max flex-shrink-0 flex-nowrap gap-1 rounded-lg bg-muted/50 p-1 [&>button]:shrink-0">
+            <TabsTrigger value="my-time" className="min-h-[2.75rem] touch-manipulation rounded-md px-3 py-2 data-[state=active]:bg-background sm:min-h-0">
+              <History className="mr-2 h-4 w-4 shrink-0" />
+              My Time
+            </TabsTrigger>
+            <TabsTrigger value="my-leave" className="min-h-[2.75rem] touch-manipulation rounded-md px-3 py-2 data-[state=active]:bg-background sm:min-h-0">
+              <Calendar className="mr-2 h-4 w-4 shrink-0" />
+              My Leave
+            </TabsTrigger>
+          </TabsList>
+        </div>
+
+        <TabsContent value="my-time" className="mt-0 focus-visible:outline-none space-y-6">
       {/* Filters */}
       <PageSearchBar
         searchValue=""
@@ -763,6 +798,22 @@ export default function ClockHistoryPage() {
           </div>
         </DialogContent>
       </Dialog>
+        </TabsContent>
+
+        <TabsContent value="my-leave" className="mt-0 focus-visible:outline-none">
+          <Card className="overflow-hidden border-0 shadow-md sm:border sm:shadow-sm">
+            <CardHeader className="space-y-1 border-b bg-muted/20 px-4 py-5 sm:px-6 sm:py-6">
+              <CardTitle className="text-lg font-semibold tracking-tight sm:text-xl">My Leave Requests</CardTitle>
+              <CardDescription className="text-sm text-muted-foreground">
+                Submit and track holiday, sick leave, and other time off. Pending requests need manager approval.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-4 sm:p-6">
+              <LeaveRequestList userId={user?.id} showCreateButton={true} compactHeader />
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
