@@ -31,6 +31,7 @@ import {
   Zap,
   ArrowRight,
   FileText,
+  Images,
   MapPin,
 } from "lucide-react";
 import React, { useState, useEffect } from "react";
@@ -44,6 +45,21 @@ import { useAssets } from "@/hooks/useAssets";
 import { useForms } from "@/hooks/useForms";
 import { toast } from "sonner";
 import Link from "next/link";
+import {
+  DashboardPinnedBroadcast,
+  DashboardBroadcasts,
+  DashboardCompliance,
+  DashboardClock,
+  DashboardUpcomingShifts,
+  DashboardTasks,
+  DashboardAnnualLeave,
+  DashboardRecentActivity,
+  DashboardChartHoursWeek,
+  DashboardChartTasksSummary,
+  DashboardChartLeaveBalance,
+  DashboardChartOverview,
+  DashboardChartAssets,
+} from "@/components/dashboard";
 
 const Dashboard = () => {
   const [period, setPeriod] = useState("month");
@@ -381,713 +397,299 @@ const Dashboard = () => {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header with Controls */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div></div>
-
-        <div className="flex items-center gap-3">
-          {shouldFetchDashboard && (
-            <Select value={period} onValueChange={setPeriod}>
-              <SelectTrigger className="w-32">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="week">Week</SelectItem>
-                <SelectItem value="month">Month</SelectItem>
-                <SelectItem value="quarter">Quarter</SelectItem>
-                <SelectItem value="year">Year</SelectItem>
-              </SelectContent>
-            </Select>
-          )}
-
-          <Button
-            onClick={handleRefresh}
-            variant="outline"
-            size="sm"
-            disabled={isDashboardLoading}
-          >
-            {isDashboardLoading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <RefreshCw className="h-4 w-4" />
-            )}
-          </Button>
-        </div>
-      </div>
-
-      {/* Superadmin Dashboard - System Statistics */}
+    <div className="min-h-full">
+      {/* Superadmin Dashboard - dashboard-style layout */}
       {shouldFetchDashboard && (
-        <>
-          {/* Loading State */}
+        <div className="space-y-0">
+          {/* Page header: title + period + refresh */}
+          <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pb-6 border-b">
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                Overview for this {period}
+                {dashboardData?.generated_at && (
+                  <span className="ml-2 text-muted-foreground/80">
+                    · Updated {new Date(dashboardData.generated_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                  </span>
+                )}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              {shouldFetchDashboard && (
+                <Select value={period} onValueChange={setPeriod}>
+                  <SelectTrigger className="w-28 h-9">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="week">Week</SelectItem>
+                    <SelectItem value="month">Month</SelectItem>
+                    <SelectItem value="quarter">Quarter</SelectItem>
+                    <SelectItem value="year">Year</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
+              <Button variant="ghost" size="icon" className="h-9 w-9" onClick={handleRefresh} disabled={isDashboardLoading}>
+                {isDashboardLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              </Button>
+            </div>
+          </header>
+
+          {/* Loading */}
           {isDashboardLoading && (
-            <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-4">
-              {[...Array(4)].map((_, index) => (
-                <Card key={index} className="border-l-4 border-l-gray-300 animate-pulse">
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-20 mb-2"></div>
-                        <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-16 mb-2"></div>
-                        <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded w-24"></div>
-                      </div>
-                      <div className="h-10 w-10 rounded-full bg-gray-200 dark:bg-gray-700"></div>
-                    </div>
-                  </CardContent>
-                </Card>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-6">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="h-24 rounded-xl bg-muted/50 animate-pulse" />
               ))}
             </div>
           )}
 
-          {/* Main Stats Grid */}
           {!isDashboardLoading && dashboardData && (
-            <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-4">
-              {/* Total Users */}
-              <Card className="border-l-4 border-l-blue-500">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-medium text-muted-foreground mb-1">
-                        {dashboardData.total_users?.title || "Total Users"}
-                      </p>
-                      <div className="text-2xl font-bold">
-                        {dashboardData.total_users?.value?.toLocaleString() || "0"}
-                      </div>
-                      <div className="flex items-center space-x-1 text-xs text-muted-foreground mt-1">
-                        {getTrendIcon(dashboardData.total_users?.change_percentage)}
-                        <span
-                          className={getTrendColor(
-                            dashboardData.total_users?.change_percentage
-                          )}
-                        >
-                          {dashboardData.total_users?.change_text || "No change"}
-                        </span>
-                        <span>from last {period}</span>
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {dashboardData.total_users?.description ||
-                          "Active users in the system"}
-                      </p>
-                    </div>
-                    <div className="h-10 w-10 rounded-full bg-blue-500/10 flex items-center justify-center shrink-0">
-                      <Users className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+            <>
+              {/* System overview: users, invitations, roles, permissions (superuser sees a lot) */}
+              <section className="pt-6">
+                <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">System overview</h2>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  <Link href="/admin/people-management" className="rounded-2xl border bg-card shadow-sm p-4 hover:bg-muted/50 transition-colors">
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Total users</p>
+                    <p className="text-2xl font-bold mt-1 tabular-nums">{dashboardData?.total_users?.value ?? 0}</p>
+                  </Link>
+                  <Link href="/admin/people-management?tab=invitations" className="rounded-2xl border bg-card shadow-sm p-4 hover:bg-muted/50 transition-colors">
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Invitations</p>
+                    <p className="text-2xl font-bold mt-1 tabular-nums">{dashboardData?.new_invitations?.value ?? 0}</p>
+                  </Link>
+                  <Link href="/admin/role-management" className="rounded-2xl border bg-card shadow-sm p-4 hover:bg-muted/50 transition-colors">
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Active roles</p>
+                    <p className="text-2xl font-bold mt-1 tabular-nums">{dashboardData?.active_roles?.value ?? 0}</p>
+                  </Link>
+                  <Link href="/admin/permissions-management" className="rounded-2xl border bg-card shadow-sm p-4 hover:bg-muted/50 transition-colors">
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Permissions</p>
+                    <p className="text-2xl font-bold mt-1 tabular-nums">{dashboardData?.permissions?.value ?? 0}</p>
+                  </Link>
+                </div>
+              </section>
 
-              {/* New Invitations */}
-              <Card className="border-l-4 border-l-green-500">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-medium text-muted-foreground mb-1">
-                        {dashboardData.new_invitations?.title || "New Invitations"}
-                      </p>
-                      <div className="text-2xl font-bold">
-                        {dashboardData.new_invitations?.value?.toLocaleString() ||
-                          "0"}
-                      </div>
-                      <div className="flex items-center space-x-1 text-xs text-muted-foreground mt-1">
-                        {getTrendIcon(
-                          dashboardData.new_invitations?.change_percentage
-                        )}
-                        <span
-                          className={getTrendColor(
-                            dashboardData.new_invitations?.change_percentage
-                          )}
-                        >
-                          {dashboardData.new_invitations?.change_text ||
-                            "No change"}
-                        </span>
-                        <span>from last {period}</span>
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {dashboardData.new_invitations?.description ||
-                          "Invitations sent this period"}
-                      </p>
-                    </div>
-                    <div className="h-10 w-10 rounded-full bg-green-500/10 flex items-center justify-center shrink-0">
-                      <UserPlus className="h-5 w-5 text-green-600 dark:text-green-400" />
-                    </div>
+              {/* Operational: clocked in, tasks, online, completed */}
+              <section className="pt-6">
+                <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">This period</h2>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <Link href="/admin/clock/history" className="rounded-2xl border bg-card shadow-sm p-4 hover:bg-muted/50 transition-colors">
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Clocked in</p>
+                    <p className="text-2xl font-bold mt-1 tabular-nums">
+                      {dashboardData?.operational?.clock_ins_today ?? dashboardData?.active_now?.clocked_in_now_count ?? 0}
+                    </p>
+                  </Link>
+                  <Link href="/admin/tasks" className="rounded-2xl border bg-card shadow-sm p-4 hover:bg-muted/50 transition-colors">
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Tasks open</p>
+                    <p className="text-2xl font-bold mt-1 tabular-nums">
+                      {dashboardData?.operational?.tasks_open ?? 0}
+                    </p>
+                  </Link>
+                  <div className="rounded-2xl border bg-card shadow-sm p-4">
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Online (30m)</p>
+                    <p className="text-2xl font-bold mt-1 tabular-nums">
+                      {dashboardData?.active_now?.active_sessions_count ?? dashboardData?.system_activity?.active_sessions ?? 0}
+                    </p>
                   </div>
-                </CardContent>
-              </Card>
-
-              {/* Active Roles */}
-              <Card className="border-l-4 border-l-purple-500">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-medium text-muted-foreground mb-1">
-                        {dashboardData.active_roles?.title || "Active Roles"}
-                      </p>
-                      <div className="text-2xl font-bold">
-                        {dashboardData.active_roles?.value?.toLocaleString() || "0"}
-                      </div>
-                      <div className="flex items-center space-x-1 text-xs text-muted-foreground mt-1">
-                        {getTrendIcon(
-                          dashboardData.active_roles?.change_percentage
-                        )}
-                        <span
-                          className={getTrendColor(
-                            dashboardData.active_roles?.change_percentage
-                          )}
-                        >
-                          {dashboardData.active_roles?.change_text || "No change"}
-                        </span>
-                        <span>from last {period}</span>
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {dashboardData.active_roles?.description ||
-                          "Roles currently in use"}
-                      </p>
-                    </div>
-                    <div className="h-10 w-10 rounded-full bg-purple-500/10 flex items-center justify-center shrink-0">
-                      <Shield className="h-5 w-5 text-purple-600 dark:text-purple-400" />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Permissions */}
-              <Card className="border-l-4 border-l-orange-500">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-medium text-muted-foreground mb-1">
-                        {dashboardData.permissions?.title || "Permissions"}
-                      </p>
-                      <div className="text-2xl font-bold">
-                        {dashboardData.permissions?.value?.toLocaleString() || "0"}
-                      </div>
-                      <div className="flex items-center space-x-1 text-xs text-muted-foreground mt-1">
-                        {getTrendIcon(dashboardData.permissions?.change_percentage)}
-                        <span
-                          className={getTrendColor(
-                            dashboardData.permissions?.change_percentage
-                          )}
-                        >
-                          {dashboardData.permissions?.change_text || "No change"}
-                        </span>
-                        <span>from last {period}</span>
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {dashboardData.permissions?.description ||
-                          "Total permission sets"}
-                      </p>
-                    </div>
-                    <div className="h-10 w-10 rounded-full bg-orange-500/10 flex items-center justify-center shrink-0">
-                      <Key className="h-5 w-5 text-orange-600 dark:text-orange-400" />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          )}
-
-          {/* System Activity and Health */}
-          <div className="grid gap-4 md:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Activity className="h-5 w-5" />
-                  System Activity
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">
-                      User Registrations
-                    </span>
-                    <span className="text-sm text-muted-foreground">
-                      {dashboardData?.system_activity?.user_registrations?.toLocaleString() ||
-                        "0"}{" "}
-                      this {period}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">Active Sessions</span>
-                    <span className="text-sm text-muted-foreground">
-                      {dashboardData?.system_activity?.active_sessions?.toLocaleString() ||
-                        "0"}{" "}
-                      online
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">System Health</span>
-                    <div className="flex items-center gap-2">
-                      {dashboardData?.system_health && (
-                        <>
-                          <Badge
-                            variant="outline"
-                            className={`${getHealthStatus(
-                              dashboardData.system_health.status
-                            ).color
-                              } border-current`}
-                          >
-                            {dashboardData.system_health.status}
-                          </Badge>
-                          <span className="text-sm font-medium">
-                            {dashboardData.system_health.uptime_percentage?.toFixed(
-                              1
-                            ) || "0"}
-                            % uptime
-                          </span>
-                        </>
-                      )}
-                    </div>
+                  <div className="rounded-2xl border bg-card shadow-sm p-4">
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Completed ({period})</p>
+                    <p className="text-2xl font-bold mt-1 tabular-nums">
+                      {dashboardData?.operational?.tasks_completed_this_period ?? 0}
+                    </p>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
+              </section>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Quick Actions</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="my-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-2">
-                  {canManageUsers && (
-                    <Link href="/admin/people-management">
-                      <Button
-                        className="w-full justify-start cursor-pointer"
-                        variant="outline"
-                      >
-                        <Users className="mr-2 h-4 w-4" />
-                        Manage People
-                      </Button>
-                    </Link>
-                  )}
-                  {canManageRoles && (
-                    <Link href="/admin/role-management">
-                      <Button
-                        className="w-full justify-start cursor-pointer"
-                        variant="outline"
-                      >
-                        <Shield className="mr-2 h-4 w-4" />
-                        Configure Roles
-                      </Button>
-                    </Link>
-                  )}
-                  {canManagePermissions && (
-                    <Link href="/admin/permissions-management">
-                      <Button
-                        className="w-full justify-start cursor-pointer"
-                        variant="outline"
-                      >
-                        <Key className="mr-2 h-4 w-4" />
-                        Manage Permissions
-                      </Button>
-                    </Link>
-                  )}
-                  {!canManageUsers &&
-                    !canManageRoles &&
-                    !canManagePermissions && (
-                      <div className="text-center text-muted-foreground py-8">
-                        <AlertCircle className="h-8 w-8 mx-auto mb-2" />
-                        <p className="text-sm">
-                          No actions available with your current permissions.
-                        </p>
-                      </div>
-                    )}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Recent Activities Section */}
-          <Card className="mt-6">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Activity className="h-5 w-5" />
-                Recent Activities
-              </CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Latest updates across tasks, assets, forms, and more
-              </p>
-            </CardHeader>
-            <CardContent>
-              {recentActivities.length > 0 ? (
-                <div className="space-y-3">
-                  {recentActivities.slice(0, 8).map((activity) => {
-                    const Icon = activity.icon;
-                    const colorClasses = {
-                      blue: "bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400",
-                      green: "bg-green-100 dark:bg-green-900 text-green-600 dark:text-green-400",
-                      purple: "bg-purple-100 dark:bg-purple-900 text-purple-600 dark:text-purple-400",
-                      orange: "bg-orange-100 dark:bg-orange-900 text-orange-600 dark:text-orange-400",
-                    };
-                    return (
-                      <Link key={activity.id} href={activity.link}>
-                        <div className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/50 transition-colors cursor-pointer">
-                          <div className={`h-10 w-10 rounded-full ${colorClasses[activity.color] || colorClasses.blue} flex items-center justify-center flex-shrink-0`}>
-                            <Icon className="h-5 w-5" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <p className="text-sm font-medium">
-                                {activity.title}
-                              </p>
-                              <Badge variant="outline" className="text-xs">
-                                {activity.type}
-                              </Badge>
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {activity.description}
-                            </p>
-                            {activity.timestamp && (
-                              <p className="text-xs text-muted-foreground mt-1">
-                                {new Date(activity.timestamp).toLocaleDateString()} at {new Date(activity.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                              </p>
-                            )}
-                          </div>
-                          <ArrowRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                        </div>
+              {/* Needs attention: only when there is something */}
+              {dashboardData?.needs_attention && ((dashboardData.needs_attention.pending_invitations ?? 0) + (dashboardData.needs_attention.overdue_tasks ?? 0) + (dashboardData.needs_attention.submissions_pending_review ?? 0)) > 0 && (
+                <section className="pt-6">
+                  <div className="rounded-xl border border-amber-200 dark:border-amber-900/50 bg-amber-50/30 dark:bg-amber-950/20 px-4 py-3 flex flex-wrap items-center gap-3">
+                    <span className="text-xs font-semibold text-amber-800 dark:text-amber-200 uppercase tracking-wider">Needs attention</span>
+                    {(dashboardData.needs_attention.pending_invitations ?? 0) > 0 && (
+                      <Link href="/admin/people-management?tab=invitations" className="text-sm font-medium text-amber-800 dark:text-amber-200 hover:underline">
+                        {dashboardData.needs_attention.pending_invitations} pending invitation{dashboardData.needs_attention.pending_invitations !== 1 ? "s" : ""}
                       </Link>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="text-center py-8 text-muted-foreground">
-                  <Activity className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p>No recent activities to display</p>
-                </div>
+                    )}
+                    {(dashboardData.needs_attention.overdue_tasks ?? 0) > 0 && (
+                      <Link href="/admin/tasks?status=overdue" className="text-sm font-medium text-red-700 dark:text-red-300 hover:underline">
+                        {dashboardData.needs_attention.overdue_tasks} overdue task{dashboardData.needs_attention.overdue_tasks !== 1 ? "s" : ""}
+                      </Link>
+                    )}
+                    {(dashboardData.needs_attention.submissions_pending_review ?? 0) > 0 && (
+                      <Link href="/admin/forms?filter=pending_review" className="text-sm font-medium text-amber-800 dark:text-amber-200 hover:underline">
+                        {dashboardData.needs_attention.submissions_pending_review} submission{dashboardData.needs_attention.submissions_pending_review !== 1 ? "s" : ""} pending review
+                      </Link>
+                    )}
+                  </div>
+                </section>
               )}
-            </CardContent>
-          </Card>
 
-          {/* Last Updated */}
-          {dashboardData?.generated_at && (
-            <div className="text-center text-xs text-muted-foreground">
-              Last updated:{" "}
-              {new Date(dashboardData.generated_at).toLocaleString()}
-            </div>
-          )}
-        </>
-      )}
+              {/* Charts: only those that add insight (Overview = at-a-glance; Assets = proportion) */}
+              {dashboardData && (
+                <section className="pt-6">
+                  <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-4">Charts</h2>
+                  <div className="grid gap-5 sm:grid-cols-2">
+                    <DashboardChartOverview dashboardData={dashboardData} />
+                    <DashboardChartAssets dashboardData={dashboardData} />
+                  </div>
+                </section>
+              )}
 
-      {/* Personal Dashboard for Regular Users */}
-      {!shouldFetchDashboard && currentUserData && (
-        <>
-          {/* Personal Stats Grid */}
-          <div className={`grid gap-4 ${(myStats?.total_tasks || 0) > 0 ? 'md:grid-cols-2 lg:grid-cols-4' : 'md:grid-cols-3'}`}>
-            {/* My Tasks Card */}
-            <Card className="hover:shadow-lg transition-all duration-200 border-l-4 border-l-blue-500">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-medium text-muted-foreground mb-1">
-                      My Tasks
-                    </p>
-                    <div className="text-2xl font-bold">
-                      {myStats?.total_tasks || myTasksData?.total || 0}
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {myTasksData?.items?.filter(t => t.status === "pending").length || 0} pending
-                    </p>
-                  </div>
-                  <div className="h-10 w-10 rounded-full bg-blue-500/10 flex items-center justify-center shrink-0">
-                    <CheckSquare className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                  </div>
+              {/* Main content: shortcuts + activity */}
+              <section className="pt-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
+                {/* Shortcuts - compact list */}
+                <div className="lg:col-span-1">
+                  <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Shortcuts</h2>
+                  <nav className="flex flex-col gap-1">
+                    {canManageUsers && (
+                      <Link href="/admin/people-management" className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm hover:bg-muted/50 transition-colors">
+                        <Users className="h-4 w-4 text-muted-foreground" />
+                        <span>People</span>
+                        {(dashboardData?.needs_attention?.pending_invitations ?? 0) > 0 && (
+                          <Badge variant="secondary" className="ml-auto text-xs">{dashboardData.needs_attention.pending_invitations}</Badge>
+                        )}
+                      </Link>
+                    )}
+                    {canManageRoles && (
+                      <Link href="/admin/role-management" className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm hover:bg-muted/50 transition-colors">
+                        <Shield className="h-4 w-4 text-muted-foreground" />
+                        <span>Roles</span>
+                      </Link>
+                    )}
+                    {canManagePermissions && (
+                      <Link href="/admin/permissions-management" className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm hover:bg-muted/50 transition-colors">
+                        <Key className="h-4 w-4 text-muted-foreground" />
+                        <span>Permissions</span>
+                      </Link>
+                    )}
+                    <Link href="/admin/tasks" className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm hover:bg-muted/50 transition-colors">
+                      <CheckSquare className="h-4 w-4 text-muted-foreground" />
+                      <span>Tasks</span>
+                      {(dashboardData?.needs_attention?.overdue_tasks ?? 0) > 0 && (
+                        <Badge variant="destructive" className="ml-auto text-xs">{dashboardData.needs_attention.overdue_tasks}</Badge>
+                      )}
+                    </Link>
+                    <Link href="/admin/forms" className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm hover:bg-muted/50 transition-colors">
+                      <FileText className="h-4 w-4 text-muted-foreground" />
+                      <span>Forms</span>
+                    </Link>
+                    <Link href="/admin/assets" className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm hover:bg-muted/50 transition-colors">
+                      <Images className="h-4 w-4 text-muted-foreground" />
+                      <span>Assets</span>
+                      {(dashboardData?.operational?.assets_maintenance_due ?? 0) > 0 && (
+                        <Badge variant="outline" className="ml-auto text-xs">{dashboardData.operational.assets_maintenance_due} maintenance</Badge>
+                      )}
+                    </Link>
+                  </nav>
                 </div>
-                <Link href="/admin/my-tasks">
-                  <Button variant="ghost" size="sm" className="mt-3 w-full">
-                    View Tasks <ArrowRight className="ml-2 h-3 w-3" />
-                  </Button>
-                </Link>
-              </CardContent>
-            </Card>
 
-            {/* Clock Status Card */}
-            <Card className="hover:shadow-lg transition-all duration-200 border-l-4 border-l-green-500">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-medium text-muted-foreground mb-1">
-                      Clock Status
-                    </p>
-                    <div className="text-2xl font-bold">
-                      {(() => {
-                        // Check for clocked in status - API can return status, current_state, or is_clocked_in
-                        const isClockedIn =
-                          clockStatus?.is_clocked_in === true ||
-                          clockStatus?.status === "active" ||
-                          clockStatus?.status === "on_break" ||
-                          clockStatus?.current_state === "active" ||
-                          clockStatus?.current_state === "on_break";
-
-                        return isClockedIn ? (
-                          <span className="text-green-600">Checked In</span>
-                        ) : (
-                          <span className="text-muted-foreground">Checked Out</span>
-                        );
-                      })()}
-                    </div>
-                    {(() => {
-                      // Check if active (not on break)
-                      const isClockedIn =
-                        clockStatus?.is_clocked_in === true ||
-                        clockStatus?.status === "active" ||
-                        clockStatus?.status === "on_break" ||
-                        clockStatus?.current_state === "active" ||
-                        clockStatus?.current_state === "on_break";
-                      const isOnBreak =
-                        clockStatus?.is_on_break === true ||
-                        clockStatus?.status === "on_break" ||
-                        clockStatus?.current_state === "on_break";
-                      const isActive = isClockedIn && !isOnBreak;
-
-                      if (isActive && clockStatus?.clock_in_time) {
-                        return (
-                          <>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              Since {new Date(clockStatus.clock_in_time).toLocaleTimeString()}
-                            </p>
-                          </>
-                        );
-                      }
-                      return null;
-                    })()}
-                  </div>
-                  <div className="h-10 w-10 rounded-full bg-green-500/10 flex items-center justify-center shrink-0">
-                    <Clock className="h-5 w-5 text-green-600 dark:text-green-400" />
-                  </div>
-                </div>
-                <Link href="/clock">
-                  <Button variant="ghost" size="sm" className="mt-3 w-full">
-                    {(() => {
-                      const isClockedIn =
-                        clockStatus?.is_clocked_in === true ||
-                        clockStatus?.status === "active" ||
-                        clockStatus?.status === "on_break" ||
-                        clockStatus?.current_state === "active" ||
-                        clockStatus?.current_state === "on_break";
-                      return isClockedIn ? "View Shift" : "Check In";
-                    })()} <ArrowRight className="ml-2 h-3 w-3" />
-                  </Button>
-                </Link>
-              </CardContent>
-            </Card>
-
-            {/* My Time Card */}
-            <Card className="hover:shadow-lg transition-all duration-200 border-l-4 border-l-purple-500">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-medium text-muted-foreground mb-1">
-                      This Week
-                    </p>
-                    <div className="text-2xl font-bold">
-                      {myStats?.total_clock_records_this_week || recentClockRecords?.total || 0}
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Session records this week
-                    </p>
-                  </div>
-                  <div className="h-10 w-10 rounded-full bg-purple-500/10 flex items-center justify-center shrink-0">
-                    <Calendar className="h-5 w-5 text-purple-600 dark:text-purple-400" />
-                  </div>
-                </div>
-                <Link href="/admin/clock/history">
-                  <Button variant="ghost" size="sm" className="mt-3 w-full">
-                    View History <ArrowRight className="ml-2 h-3 w-3" />
-                  </Button>
-                </Link>
-              </CardContent>
-            </Card>
-
-            {/* Completion Rate Card - Only show when there are tasks */}
-            {(myStats?.total_tasks || 0) > 0 && (
-              <Card className="hover:shadow-lg transition-all duration-200 border-l-4 border-l-orange-500">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-medium text-muted-foreground mb-1">
-                        Completion
-                      </p>
-                      <div className="text-2xl font-bold">
-                        {Math.round((myStats?.completed_tasks || 0) / myStats.total_tasks * 100)}%
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {myStats?.completed_tasks || 0} of {myStats.total_tasks} completed
-                      </p>
-                      <div className="mt-2 w-full bg-muted rounded-full h-2">
-                        <div
-                          className="bg-orange-500 h-2 rounded-full transition-all"
-                          style={{
-                            width: `${Math.round((myStats?.completed_tasks || 0) / myStats.total_tasks * 100)}%`
-                          }}
-                        />
-                      </div>
-                    </div>
-                    <div className="h-10 w-10 rounded-full bg-orange-500/10 flex items-center justify-center shrink-0">
-                      <Target className="h-5 w-5 text-orange-600 dark:text-orange-400" />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-
-          {/* Quick Actions and Recent Activity */}
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 mt-6">
-            {/* Quick Actions */}
-            <Card className="lg:col-span-2">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Zap className="h-5 w-5" />
-                  Quick Actions
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 gap-3">
-                  <Link href="/clock">
-                    <Button className="w-full justify-start h-auto py-3" variant="outline">
-                      <Clock className="mr-2 h-4 w-4" />
-                      <div className="text-left">
-                        <div className="font-medium">Check In/Out</div>
-                        <div className="text-xs text-muted-foreground">Time tracking</div>
-                      </div>
-                    </Button>
-                  </Link>
-                  <Link href="/admin/my-tasks">
-                    <Button className="w-full justify-start h-auto py-3" variant="outline">
-                      <CheckSquare className="mr-2 h-4 w-4" />
-                      <div className="text-left">
-                        <div className="font-medium">My Tasks</div>
-                        <div className="text-xs text-muted-foreground">View & manage</div>
-                      </div>
-                    </Button>
-                  </Link>
-                  <Link href="/admin/clock/history">
-                    <Button className="w-full justify-start h-auto py-3" variant="outline">
-                      <Calendar className="mr-2 h-4 w-4" />
-                      <div className="text-left">
-                        <div className="font-medium">My Time</div>
-                        <div className="text-xs text-muted-foreground">Past records</div>
-                      </div>
-                    </Button>
-                  </Link>
-                  <Link href="/admin/preferences">
-                    <Button className="w-full justify-start h-auto py-3" variant="outline">
-                      <Activity className="mr-2 h-4 w-4" />
-                      <div className="text-left">
-                        <div className="font-medium">Preferences</div>
-                        <div className="text-xs text-muted-foreground">Settings</div>
-                      </div>
-                    </Button>
-                  </Link>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Recent Activity */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Activity className="h-5 w-5" />
-                  Recent Activity
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
+                {/* Recent activity - slim list */}
+                <div className="lg:col-span-2">
+                  <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Recent activity</h2>
                   {recentActivities.length > 0 ? (
-                    <>
+                    <ul className="rounded-xl border divide-y">
                       {recentActivities.slice(0, 5).map((activity) => {
                         const Icon = activity.icon;
-                        const colorClasses = {
-                          blue: "bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400",
-                          green: "bg-green-100 dark:bg-green-900 text-green-600 dark:text-green-400",
-                          purple: "bg-purple-100 dark:bg-purple-900 text-purple-600 dark:text-purple-400",
-                          orange: "bg-orange-100 dark:bg-orange-900 text-orange-600 dark:text-orange-400",
-                        };
                         return (
-                          <Link key={activity.id} href={activity.link}>
-                            <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer">
-                              <div className={`h-8 w-8 rounded-full ${colorClasses[activity.color] || colorClasses.blue} flex items-center justify-center flex-shrink-0`}>
-                                <Icon className="h-4 w-4" />
+                          <li key={activity.id}>
+                            <Link href={activity.link} className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/50 transition-colors">
+                              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted">
+                                <Icon className="h-4 w-4 text-muted-foreground" />
                               </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium truncate">
-                                  {activity.title}
-                                </p>
-                                <p className="text-xs text-muted-foreground truncate">
-                                  {activity.description}
-                                </p>
-                                {activity.timestamp && (
-                                  <p className="text-xs text-muted-foreground mt-0.5">
-                                    {new Date(activity.timestamp).toLocaleDateString()} {new Date(activity.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                  </p>
-                                )}
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm font-medium truncate">{activity.title}</p>
+                                <p className="text-xs text-muted-foreground truncate">{activity.description}</p>
                               </div>
-                            </div>
-                          </Link>
+                              {activity.timestamp && (
+                                <span className="text-xs text-muted-foreground shrink-0">
+                                  {new Date(activity.timestamp).toLocaleDateString(undefined, { month: "short", day: "numeric" })} {new Date(activity.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                </span>
+                              )}
+                            </Link>
+                          </li>
                         );
                       })}
-                      <Link href={shouldFetchDashboard ? "/admin" : "/admin/clock/history"}>
-                        <Button variant="ghost" size="sm" className="w-full mt-2">
-                          View All Activities <ArrowRight className="ml-2 h-3 w-3" />
-                        </Button>
-                      </Link>
-                    </>
+                    </ul>
                   ) : (
-                    <div className="text-center py-4 text-sm text-muted-foreground">
-                      No recent activity
-                    </div>
+                    <p className="text-sm text-muted-foreground py-6">No recent activity</p>
                   )}
                 </div>
-              </CardContent>
-            </Card>
+              </section>
+
+              {/* Secondary stats: forms, assets - one compact row */}
+              {dashboardData?.operational && (
+                <section className="pt-6 pb-2 flex flex-wrap gap-4 text-sm text-muted-foreground">
+                  <Link href="/admin/forms" className="hover:text-foreground">
+                    {dashboardData.operational.form_submissions_this_period ?? 0} form submission{(dashboardData.operational.form_submissions_this_period ?? 0) !== 1 ? "s" : ""} this {period}
+                  </Link>
+                  <Link href="/admin/assets" className="hover:text-foreground">
+                    {dashboardData.operational.assets_total ?? 0} assets
+                    {(dashboardData.operational.assets_maintenance_due ?? 0) > 0 && (
+                      <span className="text-amber-600 dark:text-amber-400"> · {dashboardData.operational.assets_maintenance_due} need maintenance</span>
+                    )}
+                  </Link>
+                </section>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Non-superadmin: keep existing header + personal dashboard */}
+      {!shouldFetchDashboard && (
+        <div className="space-y-6">
+          {/* Personal Dashboard – polished layout with greeting and charts */}
+      {!shouldFetchDashboard && currentUserData && (
+        <div className="min-h-full rounded-2xl bg-gradient-to-b from-muted/20 to-background p-6 md:p-8">
+          {/* Greeting + date on same row as refresh */}
+          <header className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-8">
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">
+                {(() => {
+                  const h = new Date().getHours();
+                  const time = h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
+                  return time;
+                })()}
+                , {currentUserData?.first_name || currentUserData?.display_name || "there"}
+              </p>
+              <p className="text-2xl font-semibold tracking-tight mt-0.5">
+                {new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}
+              </p>
+            </div>
+            <Button onClick={handleRefresh} variant="outline" size="sm" className="shrink-0" disabled={isDashboardLoading}>
+              {isDashboardLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            </Button>
+          </header>
+
+          {/* 1. Pinned Broadcast (top) */}
+          <div className="mb-6">
+            <DashboardPinnedBroadcast />
           </div>
 
-          {/* Pending Tasks */}
-          {myTasksData?.items && myTasksData.items.length > 0 && (
-            <Card className="mt-6">
-              <CardHeader className="flex flex-row items-center justify-between">
-                <div>
-                  <CardTitle className="flex items-center gap-2">
-                    <CheckSquare className="h-5 w-5" />
-                    Pending Tasks
-                  </CardTitle>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Tasks that need your attention
-                  </p>
-                </div>
-                <Link href="/admin/my-tasks">
-                  <Button variant="outline" size="sm">
-                    View All <ArrowRight className="ml-2 h-3 w-3" />
-                  </Button>
-                </Link>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {myTasksData.items.slice(0, 5).map((task) => (
-                    <Link key={task.id} href={`/admin/my-tasks?task=${task.slug || task.id}`}>
-                      <div className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors cursor-pointer">
-                        <div className="flex-1">
-                          <p className="font-medium text-sm">{task.title || task.name}</p>
-                          {task.due_date && (
-                            <p className="text-xs text-muted-foreground mt-1">
-                              Due: {new Date(task.due_date).toLocaleDateString()}
-                            </p>
-                          )}
-                        </div>
-                        {task.priority && (
-                          <Badge variant={task.priority === "high" ? "destructive" : task.priority === "medium" ? "default" : "secondary"}>
-                            {task.priority}
-                          </Badge>
-                        )}
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
+          {/* 2–8. Widget grid */}
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            <DashboardBroadcasts />
+            <DashboardCompliance />
+            <DashboardClock />
+            <DashboardUpcomingShifts />
+            <DashboardTasks />
+            <DashboardAnnualLeave />
+            <DashboardRecentActivity activities={recentActivities} />
+          </div>
 
-        </>
+          {/* Charts section */}
+          <section className="mt-10">
+            <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">
+              This week at a glance
+            </h2>
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              <DashboardChartHoursWeek />
+              <DashboardChartTasksSummary />
+              <DashboardChartLeaveBalance />
+            </div>
+          </section>
+        </div>
+      )}
+        </div>
       )}
     </div>
   );
