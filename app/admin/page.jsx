@@ -401,20 +401,9 @@ const Dashboard = () => {
       {/* Superadmin Dashboard - dashboard-style layout */}
       {shouldFetchDashboard && (
         <div className="space-y-0">
-          {/* Page header: title + period + refresh */}
-          <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pb-6 border-b">
-            <div>
-              <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-              <p className="text-sm text-muted-foreground mt-0.5">
-                Overview for this {period}
-                {dashboardData?.generated_at && (
-                  <span className="ml-2 text-muted-foreground/80">
-                    · Updated {new Date(dashboardData.generated_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                  </span>
-                )}
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
+          {/* Period + refresh (title/description shown once in layout) */}
+          <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end pb-6 border-b">
+            <div className="flex items-center gap-2 sm:ml-auto">
               {shouldFetchDashboard && (
                 <Select value={period} onValueChange={setPeriod}>
                   <SelectTrigger className="w-28 h-9">
