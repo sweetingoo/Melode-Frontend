@@ -1737,7 +1737,8 @@ export default function AdminLayout({ children }) {
               "flex-1 overflow-x-hidden min-w-0",
               pathname === "/admin/messages" ? "p-0" : 
               pathname === "/admin/tasks" ? "p-2" : 
-              pathname === "/admin/directory" ? "p-0" : "p-4"
+              pathname === "/admin/directory" ? "p-0" : 
+              pathname?.startsWith("/admin/trackers") ? "pt-0 px-4 pb-4" : "p-4"
             )}>{children}</main>
           </SidebarInset>
         </div>

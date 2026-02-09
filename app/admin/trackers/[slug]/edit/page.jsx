@@ -69,6 +69,8 @@ const fieldTypes = [
   { value: "select", label: "Select (Dropdown)" },
   { value: "multiselect", label: "Multi-Select" },
   { value: "people", label: "People (User Selection)" },
+  { value: "rag", label: "RAG (Red / Amber / Green)" },
+  { value: "calculated", label: "Calculated (Sum / Percentage)" },
 ];
 
 // Helper function to generate field ID from label
@@ -157,6 +159,8 @@ const TrackerEditPage = () => {
       sections: [],
       list_view_fields: [],
       note_categories: [],
+      constants: {},
+      table_aggregates: {},
     },
     tracker_fields: {
       fields: [],
@@ -218,16 +222,19 @@ const TrackerEditPage = () => {
         category: tracker.category || "",
         is_active: tracker.is_active !== undefined ? tracker.is_active : true,
         tracker_config: {
-          ...(tracker.tracker_config || {
-            default_status: "open",
-            statuses: ["open", "in_progress", "pending", "resolved", "closed"],
-            allow_inline_status_edit: true,
-            sections: [],
-          }),
-          list_view_fields: tracker.tracker_config?.list_view_fields || [],
-          create_view_fields: tracker.tracker_config?.create_view_fields || [],
-          note_categories: tracker.tracker_config?.note_categories || [],
-        },
+            ...(tracker.tracker_config || {
+              default_status: "open",
+              statuses: ["open", "in_progress", "pending", "resolved", "closed"],
+              allow_inline_status_edit: true,
+              sections: [],
+              constants: {},
+            }),
+            list_view_fields: tracker.tracker_config?.list_view_fields || [],
+            create_view_fields: tracker.tracker_config?.create_view_fields || [],
+            note_categories: tracker.tracker_config?.note_categories || [],
+            constants: tracker.tracker_config?.constants || {},
+            table_aggregates: tracker.tracker_config?.table_aggregates || {},
+          },
         tracker_fields: tracker.tracker_fields || {
           fields: [],
         },
@@ -921,6 +928,28 @@ const TrackerEditPage = () => {
                   Allow inline status editing in list view
                 </Label>
               </div>
+
+              {/* Tracker Constants (KPI / global values referenced by entries) */}
+              <div className="border-t pt-4 mt-4">
+                <Label className="text-base font-semibold mb-2 block">
+                  Tracker Constants (KPIs / global values)
+                </Label>
+                <p className="text-sm text-muted-foreground mb-3">
+                  Define key-value constants (e.g. target KPI) that all entries can reference. Use the key in calculated fields (e.g. target_volume).
+                </p>
+                <TrackerConstantsEditor
+                  constants={formData.tracker_config?.constants || {}}
+                  onChange={(constants) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      tracker_config: {
+                        ...prev.tracker_config,
+                        constants,
+                      },
+                    }))
+                  }
+                />
+              </div>
               
               {/* List View Fields Configuration */}
               <div className="border-t pt-4 mt-4">
@@ -984,6 +1013,38 @@ const TrackerEditPage = () => {
                                 {field.type}
                               </Badge>
                             </Label>
+                            {isSelected && (
+                              <Select
+                                value={formData.tracker_config?.table_aggregates?.[fieldId] || "none"}
+                                onValueChange={(value) => {
+                                  const v = value === "none" ? undefined : value;
+                                  setFormData((prev) => {
+                                    const nextAgg = { ...(prev.tracker_config?.table_aggregates || {}) };
+                                    if (v) nextAgg[fieldId] = v;
+                                    else delete nextAgg[fieldId];
+                                    return {
+                                      ...prev,
+                                      tracker_config: {
+                                        ...prev.tracker_config,
+                                        table_aggregates: nextAgg,
+                                      },
+                                    };
+                                  });
+                                }}
+                              >
+                                <SelectTrigger className="w-[120px] h-8 text-xs">
+                                  <SelectValue placeholder="Total" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="none">No total</SelectItem>
+                                  <SelectItem value="sum">Sum</SelectItem>
+                                  <SelectItem value="avg">Average</SelectItem>
+                                  <SelectItem value="count">Count</SelectItem>
+                                  <SelectItem value="min">Min</SelectItem>
+                                  <SelectItem value="max">Max</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            )}
                           </div>
                         );
                       })}
@@ -1266,6 +1327,200 @@ const TrackerEditPage = () => {
                                     </Button>
                                   </div>
                                 ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* RAG rules (Red / Amber / Green thresholds) */}
+                        {editingField.type === "rag" && (
+                          <div className="space-y-3 p-3 border rounded-md bg-muted/30">
+                            <Label className="font-medium">RAG thresholds (numeric)</Label>
+                            <p className="text-xs text-muted-foreground">
+                              Red = at or below max; Amber = between; Green = at or above min.
+                            </p>
+                            <div className="grid grid-cols-3 gap-2">
+                              <div>
+                                <Label className="text-xs">Red (max)</Label>
+                                <Input
+                                  type="number"
+                                  value={editingField.rag_rules?.red?.max ?? ""}
+                                  onChange={(e) =>
+                                    setEditingField((prev) => ({
+                                      ...prev,
+                                      rag_rules: {
+                                        ...prev.rag_rules,
+                                        red: { ...(prev.rag_rules?.red || {}), max: e.target.value === "" ? undefined : Number(e.target.value) },
+                                      },
+                                    }))
+                                  }
+                                  placeholder="40"
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-xs">Amber (min)</Label>
+                                <Input
+                                  type="number"
+                                  value={editingField.rag_rules?.amber?.min ?? ""}
+                                  onChange={(e) =>
+                                    setEditingField((prev) => ({
+                                      ...prev,
+                                      rag_rules: {
+                                        ...prev.rag_rules,
+                                        amber: { ...(prev.rag_rules?.amber || {}), min: e.target.value === "" ? undefined : Number(e.target.value) },
+                                      },
+                                    }))
+                                  }
+                                  placeholder="40"
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-xs">Amber (max)</Label>
+                                <Input
+                                  type="number"
+                                  value={editingField.rag_rules?.amber?.max ?? ""}
+                                  onChange={(e) =>
+                                    setEditingField((prev) => ({
+                                      ...prev,
+                                      rag_rules: {
+                                        ...prev.rag_rules,
+                                        amber: { ...(prev.rag_rules?.amber || {}), max: e.target.value === "" ? undefined : Number(e.target.value) },
+                                      },
+                                    }))
+                                  }
+                                  placeholder="80"
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-xs">Green (min)</Label>
+                                <Input
+                                  type="number"
+                                  value={editingField.rag_rules?.green?.min ?? ""}
+                                  onChange={(e) =>
+                                    setEditingField((prev) => ({
+                                      ...prev,
+                                      rag_rules: {
+                                        ...prev.rag_rules,
+                                        green: { ...(prev.rag_rules?.green || {}), min: e.target.value === "" ? undefined : Number(e.target.value) },
+                                      },
+                                    }))
+                                  }
+                                  placeholder="80"
+                                />
+                              </div>
+                            </div>
+                            <div>
+                              <Label className="text-xs">Source field ID (optional)</Label>
+                              <Input
+                                value={editingField.source_field_id ?? ""}
+                                onChange={(e) => setEditingField((prev) => ({ ...prev, source_field_id: e.target.value || undefined }))}
+                                placeholder="field_id to base RAG on (or this field stores value)"
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Calculated formula */}
+                        {editingField.type === "calculated" && (
+                          <div className="space-y-3 p-3 border rounded-md bg-muted/30">
+                            <Label className="font-medium">Formula</Label>
+                            {(editingField.formula?.field_ids?.length || editingField.formula?.numerator_field_id || editingField.formula?.value_field_id) && (
+                              <p className="text-xs font-mono text-muted-foreground bg-background/50 px-2 py-1 rounded border">
+                                {(editingField.formula?.type || "sum") === "sum"
+                                  ? `= SUM(${(editingField.formula?.field_ids || []).join(", ")})`
+                                  : editingField.formula?.value_field_id && editingField.formula?.target_constant_key
+                                    ? `= (${editingField.formula.value_field_id} / constant:${editingField.formula.target_constant_key}) × 100%`
+                                    : `= (${editingField.formula?.numerator_field_id || "?"} / ${editingField.formula?.denominator_field_id || "?"}) × 100%`}
+                              </p>
+                            )}
+                            <Select
+                              value={editingField.formula?.type || "sum"}
+                              onValueChange={(value) =>
+                                setEditingField((prev) => ({
+                                  ...prev,
+                                  formula: { ...(prev.formula || {}), type: value },
+                                }))
+                              }
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="sum">Sum of fields</SelectItem>
+                                <SelectItem value="percentage">Percentage</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            {(editingField.formula?.type || "sum") === "sum" && (
+                              <div>
+                                <Label className="text-xs">Field IDs to sum (comma-separated)</Label>
+                                <Input
+                                  value={(editingField.formula?.field_ids || []).join(", ")}
+                                  onChange={(e) =>
+                                    setEditingField((prev) => ({
+                                      ...prev,
+                                      formula: {
+                                        ...prev.formula,
+                                        field_ids: e.target.value.split(",").map((s) => s.trim()).filter(Boolean),
+                                      },
+                                    }))
+                                  }
+                                  placeholder="revenue, costs"
+                                />
+                              </div>
+                            )}
+                            {(editingField.formula?.type || "percentage") === "percentage" && (
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <Label className="text-xs">Numerator field ID</Label>
+                                  <Input
+                                    value={editingField.formula?.numerator_field_id ?? ""}
+                                    onChange={(e) =>
+                                      setEditingField((prev) => ({
+                                        ...prev,
+                                        formula: { ...prev.formula, numerator_field_id: e.target.value || undefined },
+                                      }))
+                                    }
+                                    placeholder="achieved"
+                                  />
+                                </div>
+                                <div>
+                                  <Label className="text-xs">Denominator field ID</Label>
+                                  <Input
+                                    value={editingField.formula?.denominator_field_id ?? ""}
+                                    onChange={(e) =>
+                                      setEditingField((prev) => ({
+                                        ...prev,
+                                        formula: { ...prev.formula, denominator_field_id: e.target.value || undefined },
+                                      }))
+                                    }
+                                    placeholder="target"
+                                  />
+                                </div>
+                                <div className="col-span-2">
+                                  <Label className="text-xs">Or: value field + tracker constant key</Label>
+                                  <div className="flex gap-2 mt-1">
+                                    <Input
+                                      value={editingField.formula?.value_field_id ?? ""}
+                                      onChange={(e) =>
+                                        setEditingField((prev) => ({
+                                          ...prev,
+                                          formula: { ...prev.formula, value_field_id: e.target.value || undefined },
+                                        }))
+                                      }
+                                      placeholder="value field ID"
+                                    />
+                                    <Input
+                                      value={editingField.formula?.target_constant_key ?? ""}
+                                      onChange={(e) =>
+                                        setEditingField((prev) => ({
+                                          ...prev,
+                                          formula: { ...prev.formula, target_constant_key: e.target.value || undefined },
+                                        }))
+                                      }
+                                      placeholder="constant key (e.g. target_kpi)"
+                                    />
+                                  </div>
+                                </div>
                               </div>
                             )}
                           </div>
@@ -1564,6 +1819,191 @@ const TrackerEditPage = () => {
                                 </Button>
                               </div>
                             ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* RAG rules for new field */}
+                    {newField.type === "rag" && (
+                      <div className="space-y-3 p-3 border rounded-md bg-muted/30">
+                        <Label className="font-medium">RAG thresholds (numeric)</Label>
+                        <p className="text-xs text-muted-foreground">
+                          Red = at or below max; Amber = between; Green = at or above min.
+                        </p>
+                        <div className="grid grid-cols-3 gap-2">
+                          <div>
+                            <Label className="text-xs">Red (max)</Label>
+                            <Input
+                              type="number"
+                              value={newField.rag_rules?.red?.max ?? ""}
+                              onChange={(e) =>
+                                setNewField((prev) => ({
+                                  ...prev,
+                                  rag_rules: {
+                                    ...prev.rag_rules,
+                                    red: { ...(prev.rag_rules?.red || {}), max: e.target.value === "" ? undefined : Number(e.target.value) },
+                                  },
+                                }))
+                              }
+                              placeholder="40"
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs">Amber (min / max)</Label>
+                            <div className="flex gap-1">
+                              <Input
+                                type="number"
+                                value={newField.rag_rules?.amber?.min ?? ""}
+                                onChange={(e) =>
+                                  setNewField((prev) => ({
+                                    ...prev,
+                                    rag_rules: {
+                                      ...prev.rag_rules,
+                                      amber: { ...(prev.rag_rules?.amber || {}), min: e.target.value === "" ? undefined : Number(e.target.value) },
+                                    },
+                                  }))
+                                }
+                                placeholder="40"
+                              />
+                              <Input
+                                type="number"
+                                value={newField.rag_rules?.amber?.max ?? ""}
+                                onChange={(e) =>
+                                  setNewField((prev) => ({
+                                    ...prev,
+                                    rag_rules: {
+                                      ...prev.rag_rules,
+                                      amber: { ...(prev.rag_rules?.amber || {}), max: e.target.value === "" ? undefined : Number(e.target.value) },
+                                    },
+                                  }))
+                                }
+                                placeholder="80"
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <Label className="text-xs">Green (min)</Label>
+                            <Input
+                              type="number"
+                              value={newField.rag_rules?.green?.min ?? ""}
+                              onChange={(e) =>
+                                setNewField((prev) => ({
+                                  ...prev,
+                                  rag_rules: {
+                                    ...prev.rag_rules,
+                                    green: { ...(prev.rag_rules?.green || {}), min: e.target.value === "" ? undefined : Number(e.target.value) },
+                                  },
+                                }))
+                              }
+                              placeholder="80"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Calculated formula for new field */}
+                    {newField.type === "calculated" && (
+                      <div className="space-y-3 p-3 border rounded-md bg-muted/30">
+                        <Label className="font-medium">Formula</Label>
+                        {(newField.formula?.field_ids?.length || newField.formula?.numerator_field_id || newField.formula?.value_field_id) && (
+                          <p className="text-xs font-mono text-muted-foreground bg-background/50 px-2 py-1 rounded border">
+                            {(newField.formula?.type || "sum") === "sum"
+                              ? `= SUM(${(newField.formula?.field_ids || []).join(", ")})`
+                              : newField.formula?.value_field_id && newField.formula?.target_constant_key
+                                ? `= (${newField.formula.value_field_id} / constant:${newField.formula.target_constant_key}) × 100%`
+                                : `= (${newField.formula?.numerator_field_id || "?"} / ${newField.formula?.denominator_field_id || "?"}) × 100%`}
+                          </p>
+                        )}
+                        <Select
+                          value={newField.formula?.type || "sum"}
+                          onValueChange={(value) =>
+                            setNewField((prev) => ({
+                              ...prev,
+                              formula: { ...(prev.formula || {}), type: value },
+                            }))
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="sum">Sum of fields</SelectItem>
+                            <SelectItem value="percentage">Percentage</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        {(newField.formula?.type || "sum") === "sum" && (
+                          <div>
+                            <Label className="text-xs">Field IDs to sum (comma-separated)</Label>
+                            <Input
+                              value={(newField.formula?.field_ids || []).join(", ")}
+                              onChange={(e) =>
+                                setNewField((prev) => ({
+                                  ...prev,
+                                  formula: {
+                                    ...prev.formula,
+                                    field_ids: e.target.value.split(",").map((s) => s.trim()).filter(Boolean),
+                                  },
+                                }))
+                              }
+                              placeholder="revenue, costs"
+                            />
+                          </div>
+                        )}
+                        {(newField.formula?.type || "percentage") === "percentage" && (
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <Label className="text-xs">Numerator field ID</Label>
+                              <Input
+                                value={newField.formula?.numerator_field_id ?? ""}
+                                onChange={(e) =>
+                                  setNewField((prev) => ({
+                                    ...prev,
+                                    formula: { ...prev.formula, numerator_field_id: e.target.value || undefined },
+                                  }))
+                                }
+                                placeholder="achieved"
+                              />
+                            </div>
+                            <div>
+                              <Label className="text-xs">Denominator field ID</Label>
+                              <Input
+                                value={newField.formula?.denominator_field_id ?? ""}
+                                onChange={(e) =>
+                                  setNewField((prev) => ({
+                                    ...prev,
+                                    formula: { ...prev.formula, denominator_field_id: e.target.value || undefined },
+                                  }))
+                                }
+                                placeholder="target"
+                              />
+                            </div>
+                            <div className="col-span-2">
+                              <Label className="text-xs">Or: value field + tracker constant key</Label>
+                              <div className="flex gap-2 mt-1">
+                                <Input
+                                  value={newField.formula?.value_field_id ?? ""}
+                                  onChange={(e) =>
+                                    setNewField((prev) => ({
+                                      ...prev,
+                                      formula: { ...prev.formula, value_field_id: e.target.value || undefined },
+                                    }))
+                                  }
+                                  placeholder="value field ID"
+                                />
+                                <Input
+                                  value={newField.formula?.target_constant_key ?? ""}
+                                  onChange={(e) =>
+                                    setNewField((prev) => ({
+                                      ...prev,
+                                      formula: { ...prev.formula, target_constant_key: e.target.value || undefined },
+                                    }))
+                                  }
+                                  placeholder="constant key (e.g. target_kpi)"
+                                />
+                              </div>
+                            </div>
                           </div>
                         )}
                       </div>
@@ -2231,6 +2671,64 @@ const TrackerEditPage = () => {
           </Card>
         </TabsContent>
       </Tabs>
+    </div>
+  );
+};
+
+// Tracker Constants Editor (key-value for KPI / global values)
+const TrackerConstantsEditor = ({ constants, onChange }) => {
+  const entries = Object.entries(constants || {});
+  const addConstant = () => {
+    const key = prompt("Constant key (e.g. target_kpi):");
+    if (!key || key.trim() === "") return;
+    const k = key.trim().replace(/\s+/g, "_").toLowerCase();
+    const val = prompt("Value (number or text):");
+    if (val === null) return;
+    onChange({ ...constants, [k]: isNaN(Number(val)) ? val : Number(val) });
+  };
+  const updateConstant = (oldKey, newKey, newVal) => {
+    const next = { ...constants };
+    delete next[oldKey];
+    next[newKey] = newVal;
+    onChange(next);
+  };
+  const removeConstant = (key) => {
+    const next = { ...constants };
+    delete next[key];
+    onChange(next);
+  };
+  return (
+    <div className="space-y-2">
+      {entries.map(([k, v]) => (
+        <div key={k} className="flex gap-2 items-center">
+          <Input
+            value={k}
+            onChange={(e) => updateConstant(k, e.target.value.replace(/\s+/g, "_").toLowerCase(), v)}
+            placeholder="key"
+            className="flex-1 max-w-[180px]"
+          />
+          <Input
+            type={typeof v === "number" ? "number" : "text"}
+            value={v}
+            onChange={(e) =>
+              updateConstant(
+                k,
+                k,
+                e.target.value === "" ? "" : (typeof v === "number" ? Number(e.target.value) : e.target.value)
+              )
+            }
+            placeholder="value"
+            className="flex-1"
+          />
+          <Button type="button" variant="ghost" size="sm" onClick={() => removeConstant(k)}>
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+      ))}
+      <Button type="button" variant="outline" size="sm" onClick={addConstant}>
+        <Plus className="mr-2 h-4 w-4" />
+        Add constant
+      </Button>
     </div>
   );
 };

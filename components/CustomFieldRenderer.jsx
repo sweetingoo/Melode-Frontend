@@ -499,6 +499,32 @@ const CustomFieldRenderer = ({
           />
         );
 
+      case 'rag':
+        // Value may be { value, rag } from backend or raw value
+        const ragObj = value && typeof value === 'object' && 'rag' in value ? value : { value, rag: null };
+        const ragColor = ragObj.rag?.toLowerCase();
+        const ragLabel = ragObj.value != null && ragObj.value !== '' ? String(ragObj.value) : '—';
+        const ragBadgeClass = ragColor === 'red' ? 'bg-red-500/90 text-white' : ragColor === 'amber' ? 'bg-amber-500/90 text-white' : ragColor === 'green' ? 'bg-green-600/90 text-white' : 'bg-muted text-muted-foreground';
+        return (
+          <div className="flex items-center gap-2 flex-wrap">
+            {ragColor && (
+              <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${ragBadgeClass}`}>
+                {ragColor.charAt(0).toUpperCase() + ragColor.slice(1)}
+              </span>
+            )}
+            <span className="text-sm">{ragLabel}</span>
+          </div>
+        );
+
+      case 'calculated':
+        // Read-only computed value (number or string)
+        const calcDisplay = value != null && value !== '' ? String(value) : '—';
+        return (
+          <span className="text-sm font-medium tabular-nums" title="Calculated (read-only)">
+            {calcDisplay}
+          </span>
+        );
+
       case 'page_break':
         return (
           <div 

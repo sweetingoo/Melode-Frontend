@@ -231,6 +231,45 @@ export const trackersService = {
     }
   },
 
+  // Get field value suggestions for query bar (distinct values from backend)
+  getTrackerFieldSuggestions: async (params = {}) => {
+    try {
+      const { form_id, tracker_slug, field_id, q, limit = 20 } = params;
+      const searchParams = new URLSearchParams();
+      if (form_id != null) searchParams.set("form_id", form_id);
+      if (tracker_slug) searchParams.set("tracker_slug", tracker_slug);
+      if (field_id) searchParams.set("field_id", field_id);
+      if (q) searchParams.set("q", q);
+      searchParams.set("limit", String(limit));
+      const response = await api.get(`/trackers/entries/field-suggestions?${searchParams.toString()}`);
+      return response.data;
+    } catch (error) {
+      console.error("Get tracker field suggestions failed:", error);
+      return [];
+    }
+  },
+
+  // Get tracker entries aggregates (sum/avg/count/min/max over all matching entries)
+  getTrackerEntriesAggregates: async (params = {}) => {
+    try {
+      const { form_id, status, query, field_filters, aggregate_fields } = params;
+      const body = {
+        page: 1,
+        per_page: 1,
+        ...(form_id != null && { form_id: Number(form_id) }),
+        ...(status && status !== "all" && { status }),
+        ...(query && { query }),
+        ...(field_filters && Object.keys(field_filters).length > 0 && { field_filters }),
+        ...(aggregate_fields && Object.keys(aggregate_fields).length > 0 && { aggregate_fields }),
+      };
+      const response = await api.post("/trackers/entries/aggregates", body);
+      return response.data;
+    } catch (error) {
+      console.error("Get tracker entries aggregates failed:", error);
+      throw error;
+    }
+  },
+
   // Search tracker entries
   searchTrackerEntries: async (searchData) => {
     try {

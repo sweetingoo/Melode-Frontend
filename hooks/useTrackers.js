@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
 import { trackersService } from "@/services/trackers";
 import { toast } from "sonner";
 
@@ -151,7 +151,7 @@ export const useSearchTrackers = (searchParams = {}, options = {}) => {
 };
 
 // Tracker Entry Hooks
-// Get tracker entries query
+// Get tracker entries query (single page)
 export const useTrackerEntries = (searchParams = {}, options = {}) => {
   return useQuery({
     queryKey: trackerKeys.entryList(searchParams),
@@ -160,6 +160,44 @@ export const useTrackerEntries = (searchParams = {}, options = {}) => {
       return response.data;
     },
     staleTime: 2 * 60 * 1000, // 2 minutes
+    ...options,
+  });
+};
+
+// Get tracker entries with infinite scroll (load more on scroll)
+export const useInfiniteTrackerEntries = (baseParams = {}, options = {}) => {
+  return useInfiniteQuery({
+    queryKey: [...trackerKeys.entryList(baseParams), "infinite"],
+    queryFn: async ({ pageParam = 1 }) => {
+      const response = await trackersService.getTrackerEntries({
+        ...baseParams,
+        page: pageParam,
+        per_page: baseParams.per_page ?? 50,
+      });
+      return response.data;
+    },
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) => {
+      if (!lastPage) return undefined;
+      const page = lastPage.page ?? 1;
+      const totalPages = lastPage.total_pages ?? 1;
+      return page < totalPages ? page + 1 : undefined;
+    },
+    staleTime: 2 * 60 * 1000,
+    ...options,
+  });
+};
+
+// Get tracker entries aggregates (sum/avg/count/min/max over all matching entries, backend)
+export const useTrackerEntriesAggregates = (baseParams = {}, options = {}) => {
+  return useQuery({
+    queryKey: [...trackerKeys.entryList(baseParams), "aggregates"],
+    queryFn: async () => {
+      const response = await trackersService.getTrackerEntriesAggregates(baseParams);
+      return response;
+    },
+    enabled: !!baseParams.form_id,
+    staleTime: 2 * 60 * 1000,
     ...options,
   });
 };

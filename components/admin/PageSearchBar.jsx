@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Search, Filter, Plus } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 /**
  * Reusable search bar component for admin pages
@@ -22,9 +23,11 @@ export const PageSearchBar = ({
   onCreateClick,
   createButtonText = "Create",
   createButtonIcon: CreateIcon = Plus,
+  className,
+  inputRef,
 }) => {
   return (
-    <Card className="overflow-hidden">
+    <Card className={cn("overflow-hidden", className)}>
       <CardContent className="pt-6 pb-4">
         <div className="flex flex-col gap-3">
           <div className="flex flex-col sm:flex-row gap-3">
@@ -32,6 +35,7 @@ export const PageSearchBar = ({
               <div className="relative flex-1 min-w-0">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
+                  ref={inputRef}
                   placeholder={searchPlaceholder}
                   value={searchValue}
                   onChange={(e) => onSearchChange(e.target.value)}

@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef, useCallback, Suspense } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -15,14 +15,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-} from "@/components/ui/pagination";
 import {
   Select,
   SelectContent,
@@ -60,14 +52,31 @@ import {
   EyeOff,
   Calendar,
   User as UserIcon,
+  LayoutGrid,
+  Columns as ColumnsIcon,
+  Download,
+  Settings,
+  X,
 } from "lucide-react";
 import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuCheckboxItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
+import {
   useTrackers,
-  useTrackerEntries,
+  useTracker,
+  useUpdateTracker,
+  useInfiniteTrackerEntries,
+  useTrackerEntriesAggregates,
   useDeleteTrackerEntry,
   useCreateTrackerEntry,
 } from "@/hooks/useTrackers";
-import { useTracker } from "@/hooks/useTrackers";
 import CustomFieldRenderer from "@/components/CustomFieldRenderer";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -77,19 +86,46 @@ import { toast } from "sonner";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
 import { useUsers } from "@/hooks/useUsers";
 import { PageSearchBar } from "@/components/admin/PageSearchBar";
+import { TrackerQuerySearchBar } from "@/components/admin/TrackerQuerySearchBar";
+import { trackersService } from "@/services/trackers";
+
+const TRACKER_PARAM = "tracker";
+const Q_PARAM = "q";
+const STATUS_PARAM = "status";
+const FIELD_PREFIX = "f_";
+const HIGHLIGHT_RULES_PARAM = "hl";
+const AGGREGATE_PREFIX = "ag_";
+
+const URL_OP_TO_STATE = { gt: ">", lt: "<", gte: ">=", lte: "<=", eq: "=", contains: "contains" };
+const STATE_OP_TO_URL = { ">": "gt", "<": "lt", ">=": "gte", "<=": "lte", "=": "eq", contains: "contains" };
+
+function formulaFieldIdFromLabel(label) {
+  if (!label) return "";
+  return label
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s_-]/g, "")
+    .replace(/\s+/g, "_")
+    .replace(/-+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .substring(0, 80);
+}
 
 const TrackersPage = () => {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { hasPermission } = usePermissionsCheck();
   const canCreateEntry = hasPermission("tracker_entry:create");
   const canReadEntries = hasPermission("tracker_entry:read") || hasPermission("tracker_entry:list");
   const canDeleteEntry = hasPermission("tracker_entry:delete");
-  const canReadTrackers = hasPermission("tracker:read") || hasPermission("tracker:list");
+  const   canReadTrackers = hasPermission("tracker:read") || hasPermission("tracker:list");
   const canCreateTracker = hasPermission("tracker:create");
+  const canUpdateTracker = hasPermission("tracker:update");
   const [selectedTracker, setSelectedTracker] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [committedSearchTerm, setCommittedSearchTerm] = useState(""); // only pushed to URL on Enter
   const [statusFilter, setStatusFilter] = useState("all");
-  const [currentPage, setCurrentPage] = useState(1);
   const [sortBy, setSortBy] = useState("created_at");
   const [sortOrder, setSortOrder] = useState("desc");
   const [isCreateEntryDialogOpen, setIsCreateEntryDialogOpen] = useState(false);
@@ -101,8 +137,196 @@ const TrackersPage = () => {
   const [entryFieldErrors, setEntryFieldErrors] = useState({});
   const [showMetadataColumns, setShowMetadataColumns] = useState(false);
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
+  // Sheet-like: selected cell for formula bar (rowIndex, fieldId)
+  const [selectedCell, setSelectedCell] = useState(null);
+  // View options: density and column visibility (better than sheet)
+  const [viewDensity, setViewDensity] = useState("comfortable"); // "compact" | "comfortable" | "spacious"
+  const [hiddenColumnsByTracker, setHiddenColumnsByTracker] = useState({}); // { [trackerId]: { [fieldId]: true } }
+  const searchInputRef = useRef(null);
+  // Highlight rules from query bar (e.g. highlight: revenue > 1000)
+  const [highlightRules, setHighlightRules] = useState([]); // [{ fieldId, operator, value }]
+  // Ad-hoc aggregate display from query bar (e.g. show sum risk_value) — sent to backend, no frontend load
+  const [queryBarAggregateFields, setQueryBarAggregateFields] = useState({}); // { fieldId: "sum"|"avg"|"count"|"min"|"max" }
+  // Add / Edit formula while viewing entries (sheet-like)
+  const [isFormulaDialogOpen, setIsFormulaDialogOpen] = useState(false);
+  const [formulaFieldToEdit, setFormulaFieldToEdit] = useState(null); // null = add, or { field, fieldId } = edit
+  const [formulaForm, setFormulaForm] = useState({
+    label: "",
+    type: "sum",
+    field_ids: [],
+    field_ids_raw: "",
+    numerator_field_id: "",
+    denominator_field_id: "",
+    value_field_id: "",
+    target_constant_key: "",
+  });
+
+  const toggleColumnVisibility = useCallback((trackerId, fieldId) => {
+    setHiddenColumnsByTracker((prev) => {
+      const curr = prev[trackerId] || {};
+      const next = { ...curr, [fieldId]: !curr[fieldId] };
+      const hasHidden = Object.values(next).some(Boolean);
+      return hasHidden ? { ...prev, [trackerId]: next } : (() => { const p = { ...prev }; delete p[trackerId]; return p; })();
+    });
+  }, []);
+
+  const openAddFormulaDialog = useCallback(() => {
+    setFormulaFieldToEdit(null);
+    setFormulaForm({
+      label: "",
+      type: "sum",
+      field_ids: [],
+      field_ids_raw: "",
+      numerator_field_id: "",
+      denominator_field_id: "",
+      value_field_id: "",
+      target_constant_key: "",
+    });
+    setIsFormulaDialogOpen(true);
+  }, []);
+
+  const openEditFormulaDialog = useCallback((field, fieldId) => {
+    const fid = fieldId || field?.id || field?.field_id || field?.name;
+    setFormulaFieldToEdit({ field: { ...field }, fieldId: fid });
+    const formula = field?.formula || field?.formula_config || {};
+    const type = formula.type || formula.formula_type || "sum";
+    const fieldIds = formula.field_ids || formula.formula_field_ids || [];
+    setFormulaForm({
+      label: field?.label || field?.field_label || field?.name || fid || "",
+      type: type === "percentage" ? "percentage" : "sum",
+      field_ids: fieldIds,
+      field_ids_raw: fieldIds.join(", "),
+      numerator_field_id: formula.numerator_field_id || formula.numerator || "",
+      denominator_field_id: formula.denominator_field_id || formula.denominator || "",
+      value_field_id: formula.value_field_id || formula.value_field || "",
+      target_constant_key: formula.target_constant_key || formula.target_constant || "",
+    });
+    setIsFormulaDialogOpen(true);
+  }, []);
 
   const itemsPerPage = 20;
+
+  const hasActiveFilters = useMemo(
+    () =>
+      !!searchTerm ||
+      statusFilter !== "all" ||
+      Object.keys(columnFilters).length > 0 ||
+      highlightRules.length > 0 ||
+      Object.keys(queryBarAggregateFields).length > 0,
+    [searchTerm, statusFilter, columnFilters, highlightRules, queryBarAggregateFields]
+  );
+  const clearAllFilters = useCallback(() => {
+    setSearchTerm("");
+    setCommittedSearchTerm("");
+    setStatusFilter("all");
+    setColumnFilters({});
+    setColumnSorting({});
+    setHighlightRules([]);
+    setQueryBarAggregateFields({});
+  }, []);
+
+  // Read filters from URL when searchParams change (e.g. load, back/forward)
+  useEffect(() => {
+    const q = searchParams.get(Q_PARAM) ?? "";
+    const status = searchParams.get(STATUS_PARAM) ?? "all";
+    const filters = {};
+    searchParams.forEach((value, key) => {
+      if (key.startsWith(FIELD_PREFIX)) {
+        const fieldId = key.slice(FIELD_PREFIX.length);
+        if (!fieldId) return;
+        const colonIdx = value.indexOf(":");
+        if (colonIdx >= 0) {
+          const opPart = value.slice(0, colonIdx).toLowerCase();
+          const op = URL_OP_TO_STATE[opPart] ?? "=";
+          filters[fieldId] = { op, value: value.slice(colonIdx + 1).trim() };
+        } else {
+          filters[fieldId] = value;
+        }
+      }
+    });
+    setSearchTerm(q);
+    setCommittedSearchTerm(q);
+    setStatusFilter(status);
+    setColumnFilters(filters);
+    // Highlight rules (hl = JSON array)
+    const hlRaw = searchParams.get(HIGHLIGHT_RULES_PARAM);
+    if (hlRaw) {
+      try {
+        const parsed = JSON.parse(decodeURIComponent(hlRaw));
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setHighlightRules(
+            parsed.map((r) => ({
+              fieldId: r.displayFieldId ?? r.fieldId,
+              displayFieldId: r.displayFieldId,
+              conditionFieldId: r.conditionFieldId ?? r.fieldId,
+              operator: r.operator ?? "=",
+              value: r.value,
+              color: r.color ?? "green",
+            }))
+          );
+        } else {
+          setHighlightRules([]);
+        }
+      } catch (_) {
+        setHighlightRules([]);
+      }
+    } else {
+      setHighlightRules([]);
+    }
+    // Aggregates (ag_<fieldId>=<type>)
+    const aggregates = {};
+    searchParams.forEach((value, key) => {
+      if (key.startsWith(AGGREGATE_PREFIX)) {
+        const fieldId = key.slice(AGGREGATE_PREFIX.length);
+        if (fieldId && ["sum", "avg", "count", "min", "max"].includes(value)) {
+          aggregates[fieldId] = value;
+        }
+      }
+    });
+    setQueryBarAggregateFields(aggregates);
+  }, [searchParams]);
+
+  // Write filters to URL (q, status, columnFilters, highlight rules, aggregates)
+  useEffect(() => {
+    const next = new URLSearchParams(searchParams.toString());
+    if (committedSearchTerm) next.set(Q_PARAM, committedSearchTerm);
+    else next.delete(Q_PARAM);
+    if (statusFilter && statusFilter !== "all") next.set(STATUS_PARAM, statusFilter);
+    else next.delete(STATUS_PARAM);
+    for (const key of Array.from(next.keys())) {
+      if (key.startsWith(FIELD_PREFIX) || key === HIGHLIGHT_RULES_PARAM || key.startsWith(AGGREGATE_PREFIX)) next.delete(key);
+    }
+    for (const [fieldId, v] of Object.entries(columnFilters)) {
+      if (v == null || v === "" || v === "all") continue;
+      const serialized =
+        typeof v === "object" && v !== null && "op" in v && "value" in v
+          ? `${STATE_OP_TO_URL[v.op] ?? "eq"}:${v.value}`
+          : String(v);
+      next.set(`${FIELD_PREFIX}${fieldId}`, serialized);
+    }
+    if (highlightRules.length > 0) {
+      next.set(HIGHLIGHT_RULES_PARAM, encodeURIComponent(JSON.stringify(highlightRules)));
+    }
+    for (const [fieldId, type] of Object.entries(queryBarAggregateFields)) {
+      if (fieldId && type) next.set(`${AGGREGATE_PREFIX}${fieldId}`, type);
+    }
+    const nextSearch = next.toString();
+    const currentSearch = typeof window !== "undefined" ? window.location.search.slice(1) : "";
+    if (nextSearch !== currentSearch) {
+      router.replace(`/admin/trackers?${nextSearch}`, { scroll: false });
+    }
+  }, [committedSearchTerm, statusFilter, columnFilters, highlightRules, queryBarAggregateFields, searchParams, router]);
+
+  // Clear formula bar selection, highlight rules, and query-bar aggregates when user switches tracker (not on initial load)
+  const prevSelectedTrackerRef = useRef(selectedTracker);
+  useEffect(() => {
+    setSelectedCell(null);
+    if (prevSelectedTrackerRef.current != null && prevSelectedTrackerRef.current !== selectedTracker) {
+      setHighlightRules([]);
+      setQueryBarAggregateFields({});
+    }
+    prevSelectedTrackerRef.current = selectedTracker;
+  }, [selectedTracker]);
 
   // Get users for "Updated By" display
   const { data: usersResponse } = useUsers();
@@ -134,44 +358,32 @@ const TrackersPage = () => {
     return trackersResponse.trackers || trackersResponse.forms || [];
   }, [trackersResponse]);
 
-  // Auto-select first tracker when trackers load
+  // Sync selected tracker with URL (?tracker=slug) so reload keeps the same tracker
   useEffect(() => {
-    if (trackers.length > 0 && !selectedTracker) {
-      setSelectedTracker(trackers[0].id.toString());
+    if (trackers.length === 0) return;
+    const param = searchParams.get(TRACKER_PARAM);
+    if (param) {
+      const match = trackers.find(
+        (t) => (t.slug && t.slug === param) || t.id.toString() === param
+      );
+      if (match) {
+        setSelectedTracker(match.id.toString());
+        return;
+      }
     }
-  }, [trackers, selectedTracker]);
+    // No valid param: default to first tracker and set URL
+    const first = trackers[0];
+    const slug = first?.slug || first?.id?.toString();
+    if (slug) {
+      setSelectedTracker(first.id.toString());
+      const next = new URLSearchParams(searchParams.toString());
+      next.set(TRACKER_PARAM, slug);
+      router.replace(`/admin/trackers?${next.toString()}`, { scroll: false });
+    } else if (!selectedTracker) {
+      setSelectedTracker(first.id.toString());
+    }
+  }, [trackers, searchParams]);
 
-  // Debug: Log configuration after page loads and after 10 seconds
-  useEffect(() => {
-    const logConfiguration = () => {
-      trackers.forEach((tracker) => {
-        const listViewFields = tracker?.tracker_config?.list_view_fields;
-        const trackerFields = tracker?.tracker_fields?.fields || [];
-        const allFields = trackerFields.filter((field) => {
-          const fieldType = field.type || field.field_type;
-          return !['text_block', 'image_block', 'line_break', 'page_break', 'youtube_video_embed'].includes(fieldType);
-        });
-        
-        console.log(`[${tracker.name}] Configuration Check:`, {
-          list_view_fields: listViewFields,
-          availableFields: allFields.map(f => ({ id: f.id, name: f.name, label: f.label })),
-          tracker_config: tracker.tracker_config,
-        });
-      });
-    };
-
-    // Log immediately after component mounts
-    const timeout1 = setTimeout(logConfiguration, 1000);
-    
-    // Log again after 10 seconds
-    const timeout2 = setTimeout(logConfiguration, 10000);
-
-    return () => {
-      clearTimeout(timeout1);
-      clearTimeout(timeout2);
-    };
-  }, [trackers]);
-  
   const createEntryMutation = useCreateTrackerEntry();
   
   // Get selected tracker details for form fields (using selectedTracker tab)
@@ -183,18 +395,89 @@ const TrackersPage = () => {
   const { data: trackerDetails } = useTracker(selectedTrackerObj?.slug || "", {
     enabled: !!selectedTrackerObj?.slug && isCreateEntryDialogOpen,
   });
+  const { data: trackerDetailForFormula } = useTracker(selectedTrackerObj?.slug || "", {
+    enabled: !!selectedTrackerObj?.slug && isFormulaDialogOpen,
+  });
+  const updateTrackerMutation = useUpdateTracker();
 
-  // Build search params for entries
-  const searchParams = useMemo(() => {
+  const saveFormulaColumn = useCallback(async () => {
+    const tracker = trackerDetailForFormula || selectedTrackerObj;
+    const slug = tracker?.slug ?? tracker?.id;
+    if (!slug) {
+      toast.error("No tracker selected");
+      return;
+    }
+    if (!tracker?.tracker_fields?.fields && !formulaFieldToEdit) {
+      toast.error("Tracker details still loading. Try again in a moment.");
+      return;
+    }
+    const listViewFields = tracker?.tracker_config?.list_view_fields || [];
+    const currentFields = tracker?.tracker_fields?.fields || [];
+    const isEdit = !!formulaFieldToEdit;
+    const fieldId = isEdit
+      ? formulaFieldToEdit.fieldId
+      : (formulaForm.label ? formulaFieldIdFromLabel(formulaForm.label) : "") || `calculated_${Date.now()}`;
+    if (!fieldId && !isEdit) {
+      toast.error("Formula column label is required");
+      return;
+    }
+    const formulaPayload = {
+      type: formulaForm.type,
+      ...(formulaForm.type === "sum"
+        ? { field_ids: formulaForm.field_ids_raw ? formulaForm.field_ids_raw.split(",").map((s) => s.trim()).filter(Boolean) : [] }
+        : {}),
+      ...(formulaForm.type === "percentage"
+        ? {
+            numerator_field_id: formulaForm.numerator_field_id || undefined,
+            denominator_field_id: formulaForm.denominator_field_id || undefined,
+            value_field_id: formulaForm.value_field_id || undefined,
+            target_constant_key: formulaForm.target_constant_key || undefined,
+          }
+        : {}),
+    };
+    const newField = {
+      id: fieldId,
+      name: fieldId,
+      type: "calculated",
+      label: formulaForm.label || fieldId,
+      required: false,
+      formula: formulaPayload,
+    };
+    let nextFields;
+    let nextListViewFields;
+    if (isEdit) {
+      nextFields = currentFields.map((f) => {
+        const fid = f.id || f.field_id || f.name;
+        return fid === fieldId ? { ...f, ...newField } : f;
+      });
+      nextListViewFields = listViewFields;
+    } else {
+      nextFields = [...currentFields, newField];
+      nextListViewFields = listViewFields.includes(fieldId) ? listViewFields : [...listViewFields, fieldId];
+    }
+    const trackerData = {
+      ...tracker,
+      tracker_fields: { ...(tracker.tracker_fields || {}), fields: nextFields },
+      tracker_config: { ...(tracker.tracker_config || {}), list_view_fields: nextListViewFields },
+    };
+    try {
+      await updateTrackerMutation.mutateAsync({ slug: String(slug), trackerData });
+      setIsFormulaDialogOpen(false);
+      setFormulaFieldToEdit(null);
+      toast.success(isEdit ? "Formula updated" : "Formula column added");
+    } catch (e) {
+      // toast from mutation
+    }
+  }, [trackerDetailForFormula, selectedTrackerObj, formulaFieldToEdit, formulaForm, updateTrackerMutation]);
+
+  // Build search params for entries (no page - infinite query uses pageParam)
+  const searchParamsBase = useMemo(() => {
     const params = {
-      page: currentPage,
       per_page: itemsPerPage,
       sort_by: sortBy,
       sort_order: sortOrder,
     };
 
-    // Send form_id instead of tracker_id - backend expects form_id
-    // Each tracker is separate, so we always filter by the selected tracker
     if (selectedTracker) {
       params.form_id = parseInt(selectedTracker);
     }
@@ -207,41 +490,121 @@ const TrackersPage = () => {
       params.query = searchTerm;
     }
 
-    // Add column filters - these will be sent as field-specific filters
-    // Format: { field_id: value }
     if (Object.keys(columnFilters).length > 0) {
-      params.field_filters = columnFilters;
+      params.field_filters = Object.fromEntries(
+        Object.entries(columnFilters).map(([fid, v]) => [
+          fid,
+          v && typeof v === "object" && "op" in v && "value" in v ? { op: v.op, value: v.value } : v,
+        ])
+      );
     }
 
     return params;
-  }, [currentPage, selectedTracker, statusFilter, searchTerm, sortBy, sortOrder, columnFilters]);
+  }, [selectedTracker, statusFilter, searchTerm, sortBy, sortOrder, columnFilters, itemsPerPage]);
 
-  // Get tracker entries
-  const { data: entriesResponse, isLoading: entriesLoading } = useTrackerEntries(
-    searchParams
+  // Get tracker entries with infinite scroll
+  const {
+    data: entriesData,
+    isLoading: entriesLoading,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteTrackerEntries(searchParamsBase, {
+    enabled: !!selectedTracker,
+  });
+
+  const aggregateParams = useMemo(
+    () => ({
+      form_id: selectedTracker ? parseInt(selectedTracker, 10) : undefined,
+      status: statusFilter !== "all" ? statusFilter : undefined,
+      query: searchTerm || undefined,
+      field_filters:
+        Object.keys(columnFilters).length > 0
+          ? Object.fromEntries(
+              Object.entries(columnFilters).map(([fid, v]) => [
+                fid,
+                v && typeof v === "object" && "op" in v && "value" in v ? { op: v.op, value: v.value } : v,
+              ])
+            )
+          : undefined,
+      aggregate_fields: Object.keys(queryBarAggregateFields).length > 0 ? queryBarAggregateFields : undefined,
+    }),
+    [selectedTracker, statusFilter, searchTerm, columnFilters, queryBarAggregateFields]
   );
+  const { data: backendAggregatesData } = useTrackerEntriesAggregates(aggregateParams, {
+    enabled: !!selectedTracker,
+  });
+
+  // Infinite scroll: load more when sentinel enters viewport (must be after useInfiniteTrackerEntries)
+  const loadMoreRef = useRef(null);
+  const loadMoreCallback = useCallback(
+    (entries) => {
+      const [entry] = entries;
+      if (entry?.isIntersecting && hasNextPage && !isFetchingNextPage) {
+        fetchNextPage();
+      }
+    },
+    [hasNextPage, isFetchingNextPage, fetchNextPage]
+  );
+  useEffect(() => {
+    const el = loadMoreRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(loadMoreCallback, {
+      root: null,
+      rootMargin: "200px",
+      threshold: 0.1,
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [loadMoreCallback]);
 
   const deleteEntryMutation = useDeleteTrackerEntry();
 
-  // Handle entries response
+  // Flatten all pages into one entries array
   const entries = useMemo(() => {
-    if (!entriesResponse) return [];
-    if (Array.isArray(entriesResponse)) return entriesResponse;
-    // Backend returns 'submissions' in FormSubmissionListResponse
-    const submissions = entriesResponse.submissions || entriesResponse.entries || [];
-    // Map form_id to tracker_id for consistency
-    return submissions.map((entry) => ({
-      ...entry,
-      tracker_id: entry.tracker_id || entry.form_id,
-    }));
-  }, [entriesResponse]);
+    if (!entriesData?.pages) return [];
+    return entriesData.pages.flatMap((page) => {
+      const submissions = page.submissions || page.entries || [];
+      return submissions.map((entry) => ({
+        ...entry,
+        tracker_id: entry.tracker_id || entry.form_id,
+      }));
+    });
+  }, [entriesData]);
 
-  const pagination = {
-    page: entriesResponse?.page ?? currentPage,
-    per_page: entriesResponse?.per_page ?? itemsPerPage,
-    total: entriesResponse?.total ?? 0,
-    total_pages: entriesResponse?.total_pages ?? 1,
-  };
+  // Keyboard shortcuts: Enter = open selected entry, Escape = clear selection, / = focus search
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") {
+        setSelectedCell(null);
+        return;
+      }
+      if (e.key === "Enter" && selectedCell != null && entries.length > 0) {
+        const entry = entries[selectedCell.rowIndex];
+        if (entry) {
+          e.preventDefault();
+          router.push(`/admin/trackers/entries/${entry.slug || entry.id}`);
+        }
+        return;
+      }
+      if (e.key === "/" && !["INPUT", "TEXTAREA"].includes(document.activeElement?.tagName)) {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedCell, entries, router]);
+
+  const pagination = useMemo(() => {
+    const lastPage = entriesData?.pages?.[entriesData.pages.length - 1];
+    return {
+      page: lastPage?.page ?? 1,
+      per_page: lastPage?.per_page ?? itemsPerPage,
+      total: lastPage?.total ?? 0,
+      total_pages: lastPage?.total_pages ?? 1,
+    };
+  }, [entriesData, itemsPerPage]);
 
   // Get available statuses from selected tracker
   const availableStatuses = useMemo(() => {
@@ -284,6 +647,104 @@ const TrackersPage = () => {
     // Default: show first 4 fields if no configuration
     return allFields.slice(0, 4);
   }, [selectedTracker, trackers]);
+
+  // All fields for query bar suggestions (filter/highlight by any field)
+  const allFieldsForQueryBar = useMemo(() => {
+    if (!selectedTrackerObj?.tracker_fields?.fields) return [];
+    return selectedTrackerObj.tracker_fields.fields.filter((field) => {
+      const fieldType = field.type || field.field_type;
+      return !["text_block", "image_block", "line_break", "page_break", "youtube_video_embed"].includes(fieldType);
+    });
+  }, [selectedTrackerObj]);
+
+  const fetchFieldSuggestions = useCallback(
+    (params) => trackersService.getTrackerFieldSuggestions(params),
+    []
+  );
+
+  const handleApplyFieldFilter = useCallback((fieldId, value, operator = "=") => {
+    if (operator && operator !== "=") {
+      setColumnFilters((prev) => ({ ...prev, [fieldId]: { op: operator, value } }));
+    } else {
+      setColumnFilters((prev) => ({ ...prev, [fieldId]: value }));
+    }
+  }, []);
+
+  const HIGHLIGHT_COLOR_CLASSES = useMemo(
+    () => ({
+      red: "bg-red-100 dark:bg-red-900/30",
+      green: "bg-green-100 dark:bg-green-900/30",
+      yellow: "bg-yellow-100 dark:bg-yellow-900/30",
+      orange: "bg-orange-100 dark:bg-orange-900/30",
+      blue: "bg-blue-100 dark:bg-blue-900/30",
+    }),
+    []
+  );
+
+  const handleApplyAggregateDisplay = useCallback(({ fieldId, type }) => {
+    setQueryBarAggregateFields((prev) => ({ ...prev, [fieldId]: type }));
+  }, []);
+
+  const handleApplyHighlightRule = useCallback((rule) => {
+    const normalized = {
+      fieldId: rule.displayFieldId ?? rule.fieldId,
+      displayFieldId: rule.displayFieldId,
+      conditionFieldId: rule.conditionFieldId ?? rule.fieldId,
+      operator: rule.operator ?? "=",
+      value: rule.value,
+      color: rule.color ?? "green",
+    };
+    setHighlightRules((prev) => [...prev, normalized]);
+  }, []);
+
+  // Helper: does this cell match a highlight rule? Returns { match, color }. Multiple rules for the same column are supported; last matching rule wins (so add most specific first, or add in order: red >75, green <=75, blue <=50).
+  const cellMatchesHighlightRule = useCallback(
+    (fieldId, cellValue, rules = highlightRules, rowDisplayValues = {}) => {
+      const getRaw = (val) =>
+        val != null && typeof val === "object" && "value" in val ? val.value : val;
+      let lastMatch = null;
+      for (const r of rules) {
+        const displayCol = r.displayFieldId ?? r.fieldId;
+        if (displayCol !== fieldId) continue;
+        const compareVal = r.conditionFieldId != null ? rowDisplayValues[r.conditionFieldId] : cellValue;
+        const raw = getRaw(compareVal);
+        const strVal = raw == null ? "" : String(raw).trim();
+        const numVal = Number(raw);
+        const isNum = Number.isFinite(numVal);
+        const rVal = r.value;
+        const rStr = String(rVal).trim();
+        const rNum = Number(rVal);
+        const rIsNum = Number.isFinite(rNum);
+        let match = false;
+        switch (r.operator) {
+          case "=":
+            if (strVal === rStr) match = true;
+            else if (isNum && rIsNum && numVal === rNum) match = true;
+            break;
+          case ">":
+            if (isNum && rIsNum && numVal > rNum) match = true;
+            break;
+          case "<":
+            if (isNum && rIsNum && numVal < rNum) match = true;
+            break;
+          case ">=":
+            if (isNum && rIsNum && numVal >= rNum) match = true;
+            break;
+          case "<=":
+            if (isNum && rIsNum && numVal <= rNum) match = true;
+            break;
+          case "contains":
+            if (strVal.toLowerCase().includes(rStr.toLowerCase())) match = true;
+            break;
+          default:
+            if (strVal === rStr) match = true;
+        }
+        if (match) lastMatch = { match: true, color: r.color ?? "green" };
+      }
+      return lastMatch ?? { match: false };
+    },
+    [highlightRules]
+  );
 
   // Helper function to format field value for display
   // Helper to check if a field is sortable (number, date, datetime)
@@ -346,7 +807,7 @@ const TrackersPage = () => {
       setSortBy(`field_${fieldId}`);
       setSortOrder(newSort);
     }
-    setCurrentPage(1);
+    // Infinite scroll: filter change resets query
   };
 
   // Handle column filter change
@@ -359,15 +820,37 @@ const TrackersPage = () => {
     } else {
       setColumnFilters({ ...columnFilters, [fieldId]: value });
     }
-    setCurrentPage(1);
+    // Infinite scroll: filter change resets query
+  };
+
+  // Extract numeric value for aggregates (handles { value, rag }, string numbers)
+  const getNumericValue = (value, field) => {
+    if (value == null || value === "") return null;
+    const raw = value && typeof value === "object" && "value" in value ? value.value : value;
+    if (raw == null || raw === "") return null;
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : null;
   };
 
   const formatFieldValue = (field, value) => {
+    const fieldType = field.type || field.field_type;
+
+    // RAG: value may be { value, rag } from formatted_data
+    if (fieldType === "rag" && value && typeof value === "object" && "rag" in value) {
+      const rag = value.rag?.toLowerCase();
+      const label = value.value != null && value.value !== "" ? String(value.value) : "—";
+      const badge = rag ? `[${rag.charAt(0).toUpperCase() + rag.slice(1)}] ` : "";
+      return badge + label;
+    }
+    // Calculated: show number or string
+    if (fieldType === "calculated") {
+      if (value === null || value === undefined || value === "") return "—";
+      return String(value);
+    }
+
     if (value === null || value === undefined || value === "") {
       return "—";
     }
-    
-    const fieldType = field.type || field.field_type;
     
     // Handle different field types
     if (fieldType === "date" && value) {
@@ -466,6 +949,39 @@ const TrackersPage = () => {
     return String(value);
   };
 
+  const exportEntriesToCsv = useCallback(
+    (entriesToExport, fields, trackerName) => {
+      const headers = ["#", "Status", ...fields.map((f) => f.label || f.field_label || f.name || f.id || "")];
+      const escape = (v) => {
+        const s = String(v == null ? "" : v);
+        return s.includes(",") || s.includes('"') || s.includes("\n") ? `"${s.replace(/"/g, '""')}"` : s;
+      };
+      const rows = entriesToExport.map((entry) => {
+        const data = entry.formatted_data || entry.submission_data || {};
+        const num = entry.tracker_entry_number ?? entry.id ?? "";
+        const status = entry.status ?? "";
+        const cells = [
+          num,
+          status,
+          ...fields.map((f) => {
+            const fieldId = f.id || f.field_id || f.name;
+            return formatFieldValue(f, data[fieldId]);
+          }),
+        ];
+        return cells.map(escape).join(",");
+      });
+      const csv = [headers.map(escape).join(","), ...rows].join("\r\n");
+      const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${(trackerName || "tracker").replace(/\s+/g, "-")}-entries.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    },
+    [formatFieldValue]
+  );
+
   const handleDelete = async (entryId) => {
     if (confirm("Are you sure you want to delete this entry?")) {
       try {
@@ -487,8 +1003,8 @@ const TrackersPage = () => {
   // Show message if no trackers exist
   if (trackers.length === 0) {
     return (
-      <div className="space-y-6">
-        <Card>
+      <div className="space-y-0">
+        <Card className="rounded-none">
           <CardContent className="py-12">
             <div className="text-center">
               <FileText className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
@@ -504,7 +1020,7 @@ const TrackersPage = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-0">
       {/* Create Entry Dialog */}
       {selectedTrackerObj && canCreateEntry && (
             <Dialog 
@@ -664,49 +1180,304 @@ const TrackersPage = () => {
             </Dialog>
       )}
 
-      {/* Tracker Tabs */}
+      {/* Add / Edit formula column (while viewing entries – sheet-like) */}
+      {selectedTrackerObj && canUpdateTracker && (
+        <Dialog open={isFormulaDialogOpen} onOpenChange={setIsFormulaDialogOpen}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>{formulaFieldToEdit ? "Edit formula" : "Add formula column"}</DialogTitle>
+              <DialogDescription>
+                {formulaFieldToEdit
+                  ? "Change how this column is calculated. It will update for all entries."
+                  : "Add a new column that is calculated from other fields (Sum or Percentage)."}
+              </DialogDescription>
+            </DialogHeader>
+            {!trackerDetailForFormula && !formulaFieldToEdit && (
+              <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading tracker details…
+              </div>
+            )}
+            <div className="space-y-4 py-4">
+              <div>
+                <Label htmlFor="formula-label">Column label</Label>
+                <Input
+                  id="formula-label"
+                  value={formulaForm.label}
+                  onChange={(e) => setFormulaForm((p) => ({ ...p, label: e.target.value }))}
+                  placeholder="e.g. Total, % of target"
+                  disabled={!!formulaFieldToEdit}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label>Formula type</Label>
+                <Select
+                  value={formulaForm.type}
+                  onValueChange={(v) => setFormulaForm((p) => ({ ...p, type: v }))}
+                >
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="sum">Sum of fields</SelectItem>
+                    <SelectItem value="percentage">Percentage</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {formulaForm.type === "sum" && (
+                <div>
+                  <Label htmlFor="formula-field-ids">Field IDs to sum (comma-separated)</Label>
+                  <Input
+                    id="formula-field-ids"
+                    value={formulaForm.field_ids_raw}
+                    onChange={(e) => setFormulaForm((p) => ({ ...p, field_ids_raw: e.target.value }))}
+                    placeholder="revenue, costs, fee"
+                    className="mt-1 font-mono text-sm"
+                  />
+                </div>
+              )}
+              {formulaForm.type === "percentage" && (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <Label htmlFor="formula-num">Numerator field ID</Label>
+                      <Input
+                        id="formula-num"
+                        value={formulaForm.numerator_field_id}
+                        onChange={(e) => setFormulaForm((p) => ({ ...p, numerator_field_id: e.target.value }))}
+                        placeholder="achieved"
+                        className="mt-1 font-mono text-sm"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="formula-den">Denominator field ID</Label>
+                      <Input
+                        id="formula-den"
+                        value={formulaForm.denominator_field_id}
+                        onChange={(e) => setFormulaForm((p) => ({ ...p, denominator_field_id: e.target.value }))}
+                        placeholder="target"
+                        className="mt-1 font-mono text-sm"
+                      />
+                    </div>
+                  </div>
+                  <div className="text-xs text-muted-foreground">Or use a value field and a tracker constant:</div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <Label htmlFor="formula-value">Value field ID</Label>
+                      <Input
+                        id="formula-value"
+                        value={formulaForm.value_field_id}
+                        onChange={(e) => setFormulaForm((p) => ({ ...p, value_field_id: e.target.value }))}
+                        placeholder="actual"
+                        className="mt-1 font-mono text-sm"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="formula-const">Constant key</Label>
+                      <Input
+                        id="formula-const"
+                        value={formulaForm.target_constant_key}
+                        onChange={(e) => setFormulaForm((p) => ({ ...p, target_constant_key: e.target.value }))}
+                        placeholder="target_kpi"
+                        className="mt-1 font-mono text-sm"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsFormulaDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                onClick={saveFormulaColumn}
+                disabled={
+                  updateTrackerMutation.isPending ||
+                  (!formulaFieldToEdit && !formulaForm.label?.trim()) ||
+                  (!trackerDetailForFormula && !formulaFieldToEdit)
+                }
+              >
+                {updateTrackerMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : formulaFieldToEdit ? (
+                  "Update formula"
+                ) : (
+                  "Add formula column"
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Tracker Tabs + Search: single sticky top block, no gap */}
       <Tabs 
         value={selectedTracker || undefined} 
         onValueChange={(value) => {
           setSelectedTracker(value);
-          setCurrentPage(1); // Reset to first page when switching trackers
-          setSearchTerm(""); // Reset search term
-          setStatusFilter("all"); // Reset status filter
-          setColumnFilters({}); // Reset column filters
-          setColumnSorting({}); // Reset column sorting
-          // Keep sort_by and sort_order as they're usually consistent across trackers
+          setColumnSorting({});
+          const t = trackers.find((tr) => tr.id.toString() === value);
+          const slug = t?.slug || t?.id?.toString();
+          if (slug) {
+            const next = new URLSearchParams(searchParams.toString());
+            next.set(TRACKER_PARAM, slug);
+            router.replace(`/admin/trackers?${next.toString()}`, { scroll: false });
+          }
         }}
         className="w-full"
       >
-        <div className="flex items-center gap-2 overflow-x-auto -mx-1 px-1 sm:overflow-x-visible sm:mx-0 sm:px-0">
-          <div className="flex-shrink-0">
-            <TabsList className="inline-flex w-auto min-w-max sm:w-auto justify-start">
-              {trackers
-                .filter((t) => t.is_active)
-                .map((tracker) => (
-                  <TabsTrigger key={tracker.id} value={tracker.id.toString()}>
-                    <div className="flex items-center gap-2">
-                      <span>{tracker.name}</span>
-                      {tracker.category && (
-                        <Badge variant="outline" className="text-xs">
-                          {tracker.category}
-                        </Badge>
-                      )}
-                    </div>
-                  </TabsTrigger>
-                ))}
-            </TabsList>
+        <div className="sticky top-0 z-20 bg-background border-b shadow-sm pt-0">
+          {/* Row 1: Tracker tabs */}
+          <div className="flex items-center gap-2 overflow-x-auto -mx-1 px-1 pt-0 pb-0 sm:overflow-x-visible sm:mx-0 sm:px-0">
+            <div className="flex-shrink-0">
+              <TabsList className="inline-flex w-auto min-w-max sm:w-auto justify-start rounded-none pt-0">
+                {trackers
+                  .filter((t) => t.is_active)
+                  .map((tracker) => (
+                    <TabsTrigger key={tracker.id} value={tracker.id.toString()} className="rounded-none">
+                      <div className="flex items-center gap-2">
+                        <span>{tracker.name}</span>
+                        {tracker.category && (
+                          <Badge variant="outline" className="text-xs">
+                            {tracker.category}
+                          </Badge>
+                        )}
+                      </div>
+                    </TabsTrigger>
+                  ))}
+              </TabsList>
+            </div>
+            {canCreateTracker && (
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => router.push("/admin/trackers/manage?create=true")}
+                className="flex-shrink-0"
+                title="Create New Tracker"
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            )}
           </div>
-          {canCreateTracker && (
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => router.push("/admin/trackers/manage?create=true")}
-              className="flex-shrink-0"
-              title="Create New Tracker"
-            >
-              <Plus className="h-4 w-4" />
-            </Button>
+          {/* Row 2: Query bar (formulas + suggestions) or plain search — relative z so dropdown appears above table */}
+          <div className="relative z-30 px-0 pb-0">
+            {selectedTrackerObj && allFieldsForQueryBar.length > 0 ? (
+              <TrackerQuerySearchBar
+                searchValue={searchTerm}
+                onSearchChange={(value) => setSearchTerm(value)}
+                onSearchCommit={(value) => setCommittedSearchTerm(value)}
+                fields={allFieldsForQueryBar}
+                formId={selectedTrackerObj.id}
+                trackerSlug={selectedTrackerObj.slug}
+                fetchFieldSuggestions={fetchFieldSuggestions}
+                onApplyFieldFilter={handleApplyFieldFilter}
+                onApplyHighlightRule={handleApplyHighlightRule}
+                onApplyAggregateDisplay={handleApplyAggregateDisplay}
+                searchPlaceholder="Search or type a formula… (press / to focus)"
+                showFilters={true}
+                isFiltersOpen={isFiltersOpen}
+                onToggleFilters={() => setIsFiltersOpen(!isFiltersOpen)}
+                showCreateButton={canCreateEntry}
+                onCreateClick={() => setIsCreateEntryDialogOpen(true)}
+                createButtonText="Create Entry"
+                createButtonIcon={Plus}
+                className="rounded-none border-t-0 shadow-none"
+                inputRef={searchInputRef}
+              />
+            ) : (
+              <PageSearchBar
+                searchValue={searchTerm}
+                onSearchChange={(value) => setSearchTerm(value)}
+                searchPlaceholder="Search entries... (press / to focus)"
+                showSearch={true}
+                showFilters={true}
+                isFiltersOpen={isFiltersOpen}
+                onToggleFilters={() => setIsFiltersOpen(!isFiltersOpen)}
+                showCreateButton={canCreateEntry}
+                onCreateClick={() => setIsCreateEntryDialogOpen(true)}
+                createButtonText="Create Entry"
+                createButtonIcon={Plus}
+                className="rounded-none border-t-0 shadow-none"
+                inputRef={searchInputRef}
+              />
+            )}
+          </div>
+          {/* Row 3: Advanced Filters (when open) */}
+          {isFiltersOpen && (
+            <Card className="rounded-none border-x-0 border-b border-t-0 shadow-none">
+              <CardHeader className="pb-3 pt-4">
+                <CardTitle className="text-base">Advanced Filters</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4 pb-4">
+                <div className="flex flex-col md:flex-row gap-4">
+                  <div className="flex-1">
+                    <Label>Status</Label>
+                    <Select
+                      value={statusFilter}
+                      onValueChange={(value) => setStatusFilter(value)}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="All Status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Status</SelectItem>
+                        {availableStatuses.length > 0 ? (
+                          availableStatuses.map((status) => (
+                            <SelectItem key={status} value={status}>
+                              {status}
+                            </SelectItem>
+                          ))
+                        ) : (
+                          <>
+                            <SelectItem value="open">Open</SelectItem>
+                            <SelectItem value="in_progress">In Progress</SelectItem>
+                            <SelectItem value="pending">Pending</SelectItem>
+                            <SelectItem value="resolved">Resolved</SelectItem>
+                            <SelectItem value="closed">Closed</SelectItem>
+                          </>
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex-1">
+                    <Label>Sort By</Label>
+                    <Select
+                      value={`${sortBy}:${sortOrder}`}
+                      onValueChange={(value) => {
+                        const [field, order] = value.split(":");
+                        setSortBy(field);
+                        setSortOrder(order);
+                      }}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Sort By" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="created_at:desc">Newest First</SelectItem>
+                        <SelectItem value="created_at:asc">Oldest First</SelectItem>
+                        <SelectItem value="updated_at:desc">Recently Updated</SelectItem>
+                        <SelectItem value="status:asc">Status A-Z</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex items-center gap-2 pt-8">
+                    <Label htmlFor="show-last-updated" className="text-sm font-normal cursor-pointer">
+                      Show Last Updated
+                    </Label>
+                    <Switch
+                      id="show-last-updated"
+                      checked={showMetadataColumns}
+                      onCheckedChange={setShowMetadataColumns}
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           )}
         </div>
 
@@ -732,7 +1503,6 @@ const TrackersPage = () => {
                 // Find and return ONLY the configured fields - strict filtering
                 const foundFields = listViewFields
                   .map((fieldId) => {
-                    // Match by id, field_id, or name (with type coercion for safety)
                     return allFields.find((f) => {
                       const fId = f.id || f.field_id || f.name;
                       return fId === fieldId || String(fId) === String(fieldId);
@@ -740,18 +1510,7 @@ const TrackersPage = () => {
                   })
                   .filter((f) => f !== undefined && f !== null);
                 
-                // Delayed logging to check configuration after render
-                setTimeout(() => {
-                  console.log(`[${tracker.name}] After page load - list_view_fields:`, listViewFields);
-                  console.log(`[${tracker.name}] After page load - Will display:`, foundFields.map(f => ({ id: f.id, name: f.name, label: f.label })));
-                }, 2000);
-                
-                setTimeout(() => {
-                  console.log(`[${tracker.name}] After 10 seconds - list_view_fields:`, listViewFields);
-                  console.log(`[${tracker.name}] After 10 seconds - Will display:`, foundFields.map(f => ({ id: f.id, name: f.name, label: f.label })));
-                }, 10000);
-                
-                // CRITICAL: Return ONLY configured fields, even if empty
+                // Return ONLY configured fields, even if empty
                 // This ensures we don't fall back to showing all fields
                 return foundFields;
               }
@@ -760,144 +1519,396 @@ const TrackersPage = () => {
               return allFields.slice(0, 4);
             })();
             
-            // Get available statuses for this tracker
-            const trackerStatuses = tracker?.tracker_config?.statuses || [];
+            // Table aggregates (totals row): compute from current page entries
+            const tableAggregatesConfig = tracker?.tracker_config?.table_aggregates || {};
+            const aggregatesForTable = (() => {
+              const result = {};
+              trackerDisplayableFields.forEach((field) => {
+                const fieldId = field.id || field.field_id || field.name;
+                const aggType = tableAggregatesConfig[fieldId];
+                if (!aggType) return;
+                const nums = entries
+                  .map((e) => {
+                    const data = e.formatted_data || e.submission_data || {};
+                    return getNumericValue(data[fieldId], field);
+                  })
+                  .filter((n) => n !== null);
+                if (aggType === "count") {
+                  result[fieldId] = { type: "count", value: entries.filter((e) => {
+                    const data = e.formatted_data || e.submission_data || {};
+                    const v = data[fieldId];
+                    return v != null && v !== "" && (typeof v !== "object" || (v.value != null && v.value !== ""));
+                  }).length };
+                } else if (nums.length) {
+                  const sum = nums.reduce((a, b) => a + b, 0);
+                  result[fieldId] = {
+                    type: aggType,
+                    value: aggType === "sum" ? sum : aggType === "avg" ? sum / nums.length : aggType === "min" ? Math.min(...nums) : Math.max(...nums),
+                    count: nums.length,
+                  };
+                } else {
+                  result[fieldId] = { type: aggType, value: aggType === "count" ? 0 : null };
+                }
+              });
+              return result;
+            })();
+
+            const hiddenForTracker = hiddenColumnsByTracker[tracker.id] || {};
+            const visibleFields = trackerDisplayableFields.filter(
+              (f) => !hiddenForTracker[f.id || f.field_id || f.name]
+            );
+            const densityClass = viewDensity === "compact" ? "py-1 text-xs" : viewDensity === "spacious" ? "py-3 text-sm" : "py-2 text-sm";
+
+            // Prefer backend aggregates (all matching entries) when available; else use client-side (loaded only)
+            const effectiveAggregates = (() => {
+              const out = {};
+              visibleFields.forEach((field) => {
+                const fid = field.id || field.field_id || field.name;
+                out[fid] = backendAggregatesData?.aggregates?.[fid] ?? aggregatesForTable[fid];
+              });
+              return out;
+            })();
+            const hasBackendAggregates = backendAggregatesData?.aggregates && Object.keys(backendAggregatesData.aggregates).length > 0;
+            const totalsLabel = hasBackendAggregates
+              ? backendAggregatesData.truncated
+                ? `Total (first ${(backendAggregatesData.entries_used ?? 0).toLocaleString()} of ${(backendAggregatesData.total_entries ?? 0).toLocaleString()})`
+                : "Total (all)"
+              : hasNextPage
+                ? `Total (${entries.length.toLocaleString()} loaded)`
+                : "Total";
 
             return (
-              <TabsContent key={tracker.id} value={tracker.id.toString()} className="space-y-4">
-      {/* Search and Create */}
-      <PageSearchBar
-        searchValue={searchTerm}
-        onSearchChange={(value) => {
-          setSearchTerm(value);
-          setCurrentPage(1);
-        }}
-        searchPlaceholder="Search entries..."
-        showSearch={true}
-        showFilters={true}
-        isFiltersOpen={isFiltersOpen}
-        onToggleFilters={() => setIsFiltersOpen(!isFiltersOpen)}
-        showCreateButton={canCreateEntry}
-        onCreateClick={() => setIsCreateEntryDialogOpen(true)}
-        createButtonText="Create Entry"
-        createButtonIcon={Plus}
-      />
-
-      {/* Advanced Filters */}
-      {isFiltersOpen && (
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Advanced Filters</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex flex-col md:flex-row gap-4">
-              <div className="flex-1">
-                <Label>Status</Label>
-                <Select
-                  value={statusFilter}
-                  onValueChange={(value) => {
-                    setStatusFilter(value);
-                    setCurrentPage(1);
-                  }}
+              <TabsContent key={tracker.id} value={tracker.id.toString()} className="mt-0 pt-0">
+      {/* Entries: toolbar + quick filters + table */}
+      <Card className="rounded-none border-t-0 shadow-none">
+        {/* Toolbar: title, count, view options, export, edit, clear filters */}
+        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2 border-b bg-muted/30 min-h-10">
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="font-medium text-sm truncate">{tracker.name}</span>
+            <span className="text-muted-foreground text-xs tabular-nums shrink-0">
+              {entriesLoading ? "…" : `${pagination.total.toLocaleString()} entries`}
+            </span>
+            {!entriesLoading && entries.length > 0 && hasNextPage && (
+              <span className="text-muted-foreground text-xs shrink-0">
+                · {entries.length} loaded
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            {hasActiveFilters && (
+              <Button variant="ghost" size="sm" onClick={clearAllFilters} className="text-muted-foreground hover:text-foreground">
+                <X className="h-4 w-4 mr-1" />
+                Clear filters
+              </Button>
+            )}
+            {canReadEntries && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-8">
+                    <LayoutGrid className="h-4 w-4 mr-1" />
+                    View
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuLabel>Density</DropdownMenuLabel>
+                  {["compact", "comfortable", "spacious"].map((d) => (
+                    <DropdownMenuCheckboxItem
+                      key={d}
+                      checked={viewDensity === d}
+                      onCheckedChange={() => setViewDensity(d)}
+                    >
+                      {d.charAt(0).toUpperCase() + d.slice(1)}
+                    </DropdownMenuCheckboxItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+            {canReadEntries && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-8">
+                    <ColumnsIcon className="h-4 w-4 mr-1" />
+                    Columns
+                  </Button>
+                </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="max-h-[60vh] overflow-y-auto">
+                <DropdownMenuLabel>Show / hide columns</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {trackerDisplayableFields.map((field) => {
+                  const fieldId = field.id || field.field_id || field.name;
+                  const label = field.label || field.field_label || field.name || fieldId;
+                  const isHidden = !!hiddenForTracker[fieldId];
+                  return (
+                    <DropdownMenuCheckboxItem
+                      key={fieldId}
+                      checked={!isHidden}
+                      onCheckedChange={() => toggleColumnVisibility(tracker.id, fieldId)}
+                    >
+                      {label}
+                    </DropdownMenuCheckboxItem>
+                  );
+                })}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            )}
+            {canReadEntries && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8"
+                onClick={() => exportEntriesToCsv(entries, visibleFields, tracker.name)}
+                disabled={entries.length === 0}
+                title={
+                  hasNextPage
+                    ? `Exports currently loaded entries only (${entries.length.toLocaleString()} of ${pagination.total.toLocaleString()}). Scroll to bottom to load all, then export again for full data.`
+                    : `Export ${entries.length.toLocaleString()} entries to CSV`
+                }
+              >
+                <Download className="h-4 w-4 mr-1" />
+                {hasNextPage ? `Export CSV (${entries.length.toLocaleString()} loaded)` : "Export CSV"}
+              </Button>
+            )}
+            {canUpdateTracker && (
+              <Button variant="outline" size="sm" className="h-8" onClick={openAddFormulaDialog}>
+                <Plus className="h-4 w-4 mr-1" />
+                Add formula
+              </Button>
+            )}
+            {canUpdateTracker && (
+              <Button variant="ghost" size="sm" className="h-8" asChild>
+                <Link href={`/admin/trackers/${tracker.slug || tracker.id}/edit`}>
+                  <Settings className="h-4 w-4 mr-1" />
+                  Configure
+                </Link>
+              </Button>
+            )}
+          </div>
+        </div>
+        {/* Applied filters (search + column filters + highlights + aggregates) — visible chips */}
+        {(searchTerm || Object.keys(columnFilters).length > 0 || highlightRules.length > 0 || Object.keys(queryBarAggregateFields).length > 0) && selectedTracker === tracker.id.toString() && (
+          <div className="flex flex-wrap items-center gap-1.5 px-4 py-2 border-b bg-muted/20">
+            <span className="text-muted-foreground text-xs mr-1 shrink-0">Applied:</span>
+            {searchTerm && (
+              <Badge variant="secondary" className="text-xs font-normal gap-1 pr-1">
+                Search: &quot;{searchTerm.length > 20 ? searchTerm.slice(0, 20) + "…" : searchTerm}&quot;
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-4 w-4 shrink-0"
+                  onClick={() => setSearchTerm("")}
+                  aria-label="Clear search"
                 >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="All Status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Status</SelectItem>
-                    {trackerStatuses.length > 0 ? (
-                      trackerStatuses.map((status) => (
-                        <SelectItem key={status} value={status}>
-                          {status}
-                        </SelectItem>
-                      ))
-                    ) : (
-                      <>
-                        <SelectItem value="open">Open</SelectItem>
-                        <SelectItem value="in_progress">In Progress</SelectItem>
-                        <SelectItem value="pending">Pending</SelectItem>
-                        <SelectItem value="resolved">Resolved</SelectItem>
-                        <SelectItem value="closed">Closed</SelectItem>
-                      </>
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex-1">
-                <Label>Sort By</Label>
-                <Select
-                  value={`${sortBy}:${sortOrder}`}
-                  onValueChange={(value) => {
-                    const [field, order] = value.split(":");
-                    setSortBy(field);
-                    setSortOrder(order);
-                    setCurrentPage(1);
-                  }}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Sort By" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="created_at:desc">Newest First</SelectItem>
-                    <SelectItem value="created_at:asc">Oldest First</SelectItem>
-                    <SelectItem value="updated_at:desc">Recently Updated</SelectItem>
-                    <SelectItem value="status:asc">Status A-Z</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex items-center gap-2 pt-8">
-                <Label htmlFor="show-last-updated" className="text-sm font-normal cursor-pointer">
-                  Show Last Updated
-                </Label>
-                <Switch
-                  id="show-last-updated"
-                  checked={showMetadataColumns}
-                  onCheckedChange={setShowMetadataColumns}
-                />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Entries Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>
-            Entries ({pagination.total})
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
+                  <X className="h-3 w-3" />
+                </Button>
+              </Badge>
+            )}
+            {Object.entries(columnFilters).map(([fieldId, value]) => {
+              const op = value && typeof value === "object" && "op" in value ? value.op : "=";
+              const displayVal = value && typeof value === "object" && "value" in value ? value.value : value;
+              if (displayVal == null || displayVal === "" || displayVal === "all") return null;
+              const field = allFields.find((f) => (f.id || f.field_id || f.name) === fieldId);
+              const label = field?.label || field?.field_label || field?.name || fieldId;
+              const displayStr = String(displayVal).length > 16 ? String(displayVal).slice(0, 16) + "…" : displayVal;
+              return (
+                <Badge key={fieldId} variant="secondary" className="text-xs font-normal gap-1 pr-1">
+                  {label} {op} {displayStr}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-4 w-4 shrink-0"
+                    onClick={() => setColumnFilters((prev) => { const next = { ...prev }; delete next[fieldId]; return next; })}
+                    aria-label={`Remove filter ${label}`}
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </Badge>
+              );
+            })}
+            {highlightRules.map((rule, idx) => {
+              const displayFieldId = rule.displayFieldId ?? rule.fieldId;
+              const condFieldId = rule.conditionFieldId ?? rule.fieldId;
+              const displayLabel = allFields.find((f) => (f.id || f.field_id || f.name) === displayFieldId)?.label || displayFieldId;
+              const condLabel = allFields.find((f) => (f.id || f.field_id || f.name) === condFieldId)?.label || condFieldId;
+              const desc = displayFieldId === condFieldId
+                ? `${displayLabel} ${rule.operator} ${rule.value} (${rule.color ?? "green"})`
+                : `Make ${displayLabel} ${rule.color ?? "green"} if ${condLabel} ${rule.operator} ${rule.value}`;
+              return (
+                <Badge key={`hl-${idx}`} variant="secondary" className="text-xs font-normal gap-1 pr-1">
+                  {desc.length > 28 ? desc.slice(0, 28) + "…" : desc}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-4 w-4 shrink-0"
+                    onClick={() => setHighlightRules((prev) => prev.filter((_, i) => i !== idx))}
+                    aria-label="Remove highlight rule"
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </Badge>
+              );
+            })}
+            {Object.entries(queryBarAggregateFields).map(([fieldId, type]) => {
+              const field = allFields.find((f) => (f.id || f.field_id || f.name) === fieldId);
+              const label = field?.label || field?.field_label || field?.name || fieldId;
+              return (
+                <Badge key={`ag-${fieldId}`} variant="secondary" className="text-xs font-normal gap-1 pr-1">
+                  Show {type} {label}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-4 w-4 shrink-0"
+                    onClick={() => setQueryBarAggregateFields((prev) => { const next = { ...prev }; delete next[fieldId]; return next; })}
+                    aria-label={`Remove aggregate ${label}`}
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </Badge>
+              );
+            })}
+          </div>
+        )}
+        {/* Quick status filter chips */}
+        {availableStatuses.length > 0 && selectedTracker === tracker.id.toString() && (
+          <div className="flex flex-wrap items-center gap-1.5 px-4 py-2 border-b bg-muted/20">
+            <Button
+              variant={statusFilter === "all" ? "secondary" : "ghost"}
+              size="sm"
+              className="h-7 text-xs"
+              onClick={() => setStatusFilter("all")}
+            >
+              All
+            </Button>
+            {availableStatuses.map((status) => (
+              <Button
+                key={status}
+                variant={statusFilter === status ? "secondary" : "ghost"}
+                size="sm"
+                className="h-7 text-xs"
+                onClick={() => setStatusFilter(status)}
+              >
+                {status}
+              </Button>
+            ))}
+          </div>
+        )}
+        <CardContent className="p-0">
           {entriesLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin" />
+            <div className="flex flex-col items-center justify-center py-16 gap-4">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">Loading entries…</p>
+              <div className="w-full max-w-md space-y-2 px-4">
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <div key={i} className="h-10 rounded-none bg-muted/50 animate-pulse" />
+                ))}
+              </div>
             </div>
           ) : entries.length === 0 ? (
-            <div className="text-center py-12">
-              <FileText className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No entries found</h3>
-              <p className="text-muted-foreground mb-4">
-                          {searchTerm || statusFilter !== "all"
-                  ? "Try adjusting your filters"
-                            : `No entries yet for ${tracker.name}`}
+            <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
+              <div className="rounded-full bg-muted/50 p-4 mb-4">
+                <FileText className="h-10 w-10 text-muted-foreground" />
+              </div>
+              <h3 className="text-lg font-semibold mb-1">
+                {searchTerm || statusFilter !== "all" ? "No entries match" : "No entries yet"}
+              </h3>
+              <p className="text-muted-foreground text-sm mb-6 max-w-sm">
+                {searchTerm || statusFilter !== "all"
+                  ? "Try adjusting search or filters."
+                  : `Create the first entry for ${tracker.name}.`}
               </p>
+              {canCreateEntry && !searchTerm && statusFilter === "all" && (
+                <Button onClick={() => setIsCreateEntryDialogOpen(true)}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Create first entry
+                </Button>
+              )}
             </div>
           ) : (
             <>
-                        <div className="rounded-md border overflow-x-auto">
+              {/* Formula bar (sheet-like): shows selected cell name + value */}
+              {selectedCell && selectedCell.rowIndex >= 0 && selectedCell.rowIndex < entries.length && (
+                <div className="flex items-center justify-between gap-2 px-3 py-1.5 rounded-none border border-t-0 bg-muted/30 text-sm font-mono min-h-9">
+                  <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-muted-foreground shrink-0 text-xs uppercase tracking-wide">Cell</span>
+                  <span className="text-muted-foreground">:</span>
+                  {(() => {
+                    const entry = entries[selectedCell.rowIndex];
+                    if (selectedCell.fieldId === "_entry#") {
+                      const n = entry?.tracker_entry_number || entry?.id;
+                      return (
+                        <>
+                          <span className="font-medium">#</span>
+                          <span className="text-muted-foreground">=</span>
+                          <span>#{n}</span>
+                        </>
+                      );
+                    }
+                    if (selectedCell.fieldId === "_status") {
+                      return (
+                        <>
+                          <span className="font-medium">Status</span>
+                          <span className="text-muted-foreground">=</span>
+                          <span>{entry?.status || "open"}</span>
+                        </>
+                      );
+                    }
+                    const field = trackerDisplayableFields.find(
+                      (f) => (f.id || f.field_id || f.name) === selectedCell.fieldId
+                    );
+                    // field may be from hidden column; still resolve for formula bar
+                    const displayData = entry?.formatted_data || entry?.submission_data || {};
+                    const value = displayData[selectedCell.fieldId];
+                    const fieldType = field?.type || field?.field_type;
+                    const label = field?.label || field?.field_label || field?.name || selectedCell.fieldId;
+                    const isFormula = fieldType === "calculated" || fieldType === "rag";
+                    return (
+                      <>
+                        <span className="font-medium">{label}</span>
+                        <span className="text-muted-foreground">=</span>
+                        {isFormula ? (
+                          <span className="italic text-muted-foreground">
+                            {fieldType === "calculated" ? "Formula (calculated)" : "RAG"}
+                          </span>
+                        ) : (
+                          <span className="truncate max-w-md" title={formatFieldValue(field || {}, value)}>
+                            {formatFieldValue(field || {}, value)}
+                          </span>
+                        )}
+                        {fieldType === "calculated" && canUpdateTracker && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 text-xs ml-2 shrink-0"
+                            onClick={(e) => { e.stopPropagation(); openEditFormulaDialog(field, selectedCell.fieldId); }}
+                          >
+                            <Edit className="h-3 w-3 mr-1" />
+                            Edit formula
+                          </Button>
+                        )}
+                      </>
+                    );
+                  })()}
+                  </div>
+                  <span className="text-muted-foreground text-xs shrink-0 hidden sm:inline">Enter to open · Esc to clear</span>
+                </div>
+              )}
+                        <div className="rounded-none border overflow-x-auto overflow-y-auto max-h-[70vh]">
                 <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>ID</TableHead>
-                      <TableHead>Status</TableHead>
-                                {/* Dynamic field columns */}
-                                {trackerDisplayableFields.map((field) => {
+                  <TableHeader className="sticky top-0 z-10 bg-background shadow-sm">
+                    <TableRow className="border-b bg-muted/50 hover:bg-muted/50">
+                      <TableHead className="sticky left-0 z-20 bg-muted/80 backdrop-blur border-r font-semibold min-w-[72px]">#</TableHead>
+                      <TableHead className="sticky left-[72px] z-20 bg-muted/80 backdrop-blur border-r font-semibold min-w-[100px]">Status</TableHead>
+                                {/* Dynamic field columns (only visible) */}
+                                {visibleFields.map((field) => {
                                   const fieldId = field.id || field.field_id || field.name;
                                   const fieldType = field.type || field.field_type;
                                   const isSortable = isFieldSortable(field);
                                   const isFilterable = isFieldFilterable(field);
                                   const currentSort = columnSorting[fieldId];
-                                  const currentFilter = columnFilters[fieldId] || "all";
+                                  const rawFilter = columnFilters[fieldId];
+                                  const currentFilter =
+                                    rawFilter && typeof rawFilter === "object" && "value" in rawFilter
+                                      ? rawFilter.value
+                                      : rawFilter || "all";
                                   const uniqueValues = isFilterable ? getFieldUniqueValues(field, entries) : [];
 
                                   return (
@@ -990,10 +2001,20 @@ const TrackersPage = () => {
                       return (
                         <TableRow 
                           key={entry.id}
-                          className="cursor-pointer hover:bg-muted/50 transition-colors"
+                          className={cn(
+                            "cursor-pointer transition-colors border-b",
+                            index % 2 === 0 ? "bg-background hover:bg-muted/40" : "bg-muted/20 hover:bg-muted/50"
+                          )}
                           onClick={() => router.push(`/admin/trackers/entries/${entry.slug || entry.id}`)}
                         >
-                          <TableCell className="font-medium">
+                          <TableCell
+                            className={cn(
+                              "font-medium sticky left-0 z-[5] border-r",
+                              densityClass,
+                              index % 2 === 0 ? "bg-background hover:bg-muted/40" : "bg-muted/20 hover:bg-muted/50"
+                            )}
+                            onClick={(e) => { e.stopPropagation(); setSelectedCell({ rowIndex: index, fieldId: "_entry#" }); }}
+                          >
                             <Link
                               href={`/admin/trackers/entries/${entry.slug || entry.id}`}
                               className="hover:underline"
@@ -1002,15 +2023,33 @@ const TrackersPage = () => {
                                       #{entryNumber}
                             </Link>
                           </TableCell>
-                          <TableCell>
-                            <Badge variant="outline">{entry.status || "open"}</Badge>
+                          <TableCell
+                            className={cn(
+                              "sticky left-[72px] z-[5] border-r",
+                              densityClass,
+                              index % 2 === 0 ? "bg-background hover:bg-muted/40" : "bg-muted/20 hover:bg-muted/50"
+                            )}
+                            onClick={(e) => { e.stopPropagation(); setSelectedCell({ rowIndex: index, fieldId: "_status" }); }}
+                          >
+                            <Badge variant="outline" className="font-normal">{entry.status || "open"}</Badge>
                           </TableCell>
-                                  {/* Dynamic field values - only show configured fields */}
-                                  {trackerDisplayableFields.map((field) => {
+                                  {/* Dynamic field values - only visible columns */}
+                                  {visibleFields.map((field) => {
                                     const fieldId = field.id || field.field_id || field.name;
                                     const value = displayValues[fieldId];
+                                    const isSelected = selectedCell?.rowIndex === index && selectedCell?.fieldId === fieldId;
+                                    const highlight = cellMatchesHighlightRule(fieldId, value, highlightRules, displayValues);
                                     return (
-                                      <TableCell key={fieldId} className="text-sm">
+                                      <TableCell
+                                        key={fieldId}
+                                        className={cn(
+                                          "border-r min-w-[120px] max-w-[220px] tabular-nums",
+                                          densityClass,
+                                          isSelected && "ring-1 ring-primary bg-primary/5",
+                                          highlight.match && (HIGHLIGHT_COLOR_CLASSES[highlight.color] || HIGHLIGHT_COLOR_CLASSES.green)
+                                        )}
+                                        onClick={(e) => { e.stopPropagation(); setSelectedCell({ rowIndex: index, fieldId }); }}
+                                      >
                                         <div className="max-w-[200px] truncate" title={formatFieldValue(field, value)}>
                                           {formatFieldValue(field, value)}
                                         </div>
@@ -1019,19 +2058,19 @@ const TrackersPage = () => {
                                   })}
                                   {showMetadataColumns && (
                                     <>
-                          <TableCell className="text-sm text-muted-foreground">
+                          <TableCell className={cn("text-muted-foreground", densityClass)}>
                             {entry.updated_at
                               ? format(parseUTCDate(entry.updated_at), "MMM d, yyyy HH:mm")
                                           : entry.created_at
                                           ? format(parseUTCDate(entry.created_at), "MMM d, yyyy HH:mm")
                               : "—"}
                           </TableCell>
-                                      <TableCell className="text-sm text-muted-foreground">
+                                      <TableCell className={cn("text-muted-foreground", densityClass)}>
                                         {getUserName(entry.updated_by_user_id || entry.submitted_by_user_id) || "—"}
                                       </TableCell>
                                     </>
                                   )}
-                          <TableCell onClick={(e) => e.stopPropagation()}>
+                          <TableCell onClick={(e) => e.stopPropagation()} className="bg-muted/30">
                             <div className="flex items-center gap-2">
                                         {canReadEntries && (
                               <Link href={`/admin/trackers/entries/${entry.slug || entry.id}`}>
@@ -1055,76 +2094,93 @@ const TrackersPage = () => {
                         </TableRow>
                       );
                     })}
+                    {/* Totals row: backend aggregates (all entries) when available, else client-side (loaded only) */}
+                    {Object.keys(effectiveAggregates).length > 0 && (
+                      <TableRow className="border-t-2 border-border bg-muted font-medium hover:bg-muted">
+                        <TableCell
+                          className="sticky left-0 z-[5] bg-muted border-r text-muted-foreground text-xs uppercase tracking-wide"
+                          title={
+                            hasBackendAggregates
+                              ? backendAggregatesData.truncated
+                                ? `Totals over first ${(backendAggregatesData.entries_used ?? 0).toLocaleString()} of ${(backendAggregatesData.total_entries ?? 0).toLocaleString()} entries (capped for performance).`
+                                : `Totals over all ${(backendAggregatesData.total_entries ?? 0).toLocaleString()} matching entries.`
+                              : hasNextPage
+                                ? `Totals over loaded rows only. Scroll to load more or use backend totals (all entries).`
+                                : undefined
+                          }
+                        >
+                          {totalsLabel}
+                        </TableCell>
+                        <TableCell className="sticky left-[72px] z-[5] bg-muted border-r" />
+                        {visibleFields.map((field) => {
+                          const fieldId = field.id || field.field_id || field.name;
+                          const agg = effectiveAggregates[fieldId];
+                          if (!agg) {
+                            return <TableCell key={fieldId} className="border-r bg-muted" />;
+                          }
+                          const display =
+                            agg.value != null
+                              ? agg.type === "avg"
+                                ? Number(agg.value).toFixed(2)
+                                : agg.type === "count"
+                                  ? agg.value
+                                  : Number(agg.value).toLocaleString(undefined, { maximumFractionDigits: 2 })
+                              : "—";
+                          return (
+                            <TableCell key={fieldId} className="border-r tabular-nums text-sm">
+                              <span className="text-muted-foreground text-xs uppercase mr-1">{agg.type}:</span>
+                              {display}
+                            </TableCell>
+                          );
+                        })}
+                        {showMetadataColumns && (
+                          <>
+                            <TableCell className="bg-muted" />
+                            <TableCell className="bg-muted" />
+                          </>
+                        )}
+                        <TableCell className="bg-muted" />
+                      </TableRow>
+                    )}
                   </TableBody>
                 </Table>
               </div>
 
-              {/* Pagination */}
-              {pagination.total_pages > 1 && (
-                <div className="mt-4">
-                  <Pagination>
-                    <PaginationContent>
-                      <PaginationItem>
-                        <PaginationPrevious
-                          href="#"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            if (currentPage > 1) setCurrentPage(currentPage - 1);
-                          }}
-                          className={
-                            currentPage === 1 ? "pointer-events-none opacity-50" : ""
-                          }
-                        />
-                      </PaginationItem>
-                      {Array.from({ length: pagination.total_pages }, (_, i) => i + 1)
-                        .filter(
-                          (page) =>
-                            page === 1 ||
-                            page === pagination.total_pages ||
-                            (page >= currentPage - 2 && page <= currentPage + 2)
-                        )
-                        .map((page, idx, arr) => (
-                          <React.Fragment key={page}>
-                            {idx > 0 && arr[idx - 1] !== page - 1 && (
-                              <PaginationItem>
-                                <PaginationLink href="#" disabled>
-                                  ...
-                                </PaginationLink>
-                              </PaginationItem>
-                            )}
-                            <PaginationItem>
-                              <PaginationLink
-                                href="#"
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  setCurrentPage(page);
-                                }}
-                                isActive={currentPage === page}
-                              >
-                                {page}
-                              </PaginationLink>
-                            </PaginationItem>
-                          </React.Fragment>
-                        ))}
-                      <PaginationItem>
-                        <PaginationNext
-                          href="#"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            if (currentPage < pagination.total_pages)
-                              setCurrentPage(currentPage + 1);
-                          }}
-                          className={
-                            currentPage === pagination.total_pages
-                              ? "pointer-events-none opacity-50"
-                              : ""
-                          }
-                        />
-                      </PaginationItem>
-                    </PaginationContent>
-                  </Pagination>
-                </div>
-              )}
+              {/* Infinite scroll: loaded count + sentinel + load more */}
+              <div className="mt-0 pt-2 flex flex-col items-center gap-2">
+                <p className="text-sm text-muted-foreground">
+                  {entries.length} of {pagination.total.toLocaleString()} entries
+                  {hasNextPage && " — scroll down to load more"}
+                </p>
+                {hasNextPage && (
+                  <p className="text-xs text-muted-foreground">
+                    {backendAggregatesData?.aggregates && Object.keys(backendAggregatesData.aggregates).length > 0
+                      ? "Totals row uses all matching entries (backend). Export CSV uses loaded rows only—scroll to load more, then export."
+                      : "Totals row and Export CSV use loaded rows only. Scroll to the bottom to load all entries, then export or view full totals."}
+                  </p>
+                )}
+                <div
+                  ref={selectedTracker === tracker.id.toString() ? loadMoreRef : undefined}
+                  className="h-4 w-full min-h-[1rem]"
+                  aria-hidden="true"
+                />
+                {isFetchingNextPage && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Loading more…
+                  </div>
+                )}
+                {hasNextPage && !isFetchingNextPage && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => fetchNextPage()}
+                    className="mt-1"
+                  >
+                    Load more
+                  </Button>
+                )}
+              </div>
             </>
           )}
         </CardContent>
@@ -1137,4 +2193,14 @@ const TrackersPage = () => {
   );
 };
 
-export default TrackersPage;
+export default function TrackersPageWithSuspense() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-[200px]">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    }>
+      <TrackersPage />
+    </Suspense>
+  );
+}
