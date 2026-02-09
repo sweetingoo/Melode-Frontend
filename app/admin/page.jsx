@@ -82,7 +82,7 @@ const Dashboard = () => {
     limit: 5,
     status: "pending"
   });
-  const { data: recentClockRecords } = useClockRecords({ limit: 5 });
+  const { data: recentClockRecords } = useClockRecords({ page: 1, per_page: 5 });
 
   // Get current user's permissions
   const currentUserPermissions = currentUserData?.permissions || [];
@@ -146,6 +146,7 @@ const Dashboard = () => {
     if (data.tasks && Array.isArray(data.tasks)) return data.tasks;
     if (data.assets && Array.isArray(data.assets)) return data.assets;
     if (data.forms && Array.isArray(data.forms)) return data.forms;
+    if (data.records && Array.isArray(data.records)) return data.records;
     if (data.data && Array.isArray(data.data)) return data.data;
     if (data.results && Array.isArray(data.results)) return data.results;
     return [];
@@ -221,12 +222,14 @@ const Dashboard = () => {
       });
     });
 
-    // Sort by timestamp (most recent first)
-    return activities.sort((a, b) => {
-      const timeA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
-      const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
-      return timeB - timeA;
-    }).slice(0, 10); // Limit to 10 most recent
+    // Sort by timestamp descending so latest activity is first (null/undefined timestamps last)
+    return activities
+      .sort((a, b) => {
+        const timeA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+        const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+        return (timeB || 0) - (timeA || 0);
+      })
+      .slice(0, 10); // Keep only 10 most recent
   }, [shouldFetchDashboard, recentTasksData, recentAssetsData, recentFormsData, recentClockRecords]);
 
   // Get all permission names/slugs that the user has
@@ -375,9 +378,8 @@ const Dashboard = () => {
 
   if (dashboardError) {
     return (
-      <div className="space-y-6">
-
-        <Card>
+      <div className="min-h-full rounded-2xl bg-gradient-to-b from-muted/20 to-background p-6 md:p-8">
+        <Card className="rounded-2xl border shadow-sm">
           <CardContent className="flex flex-col items-center justify-center py-12">
             <AlertCircle className="h-12 w-12 text-red-500 mb-4" />
             <h3 className="text-lg font-semibold mb-2">
@@ -398,26 +400,37 @@ const Dashboard = () => {
 
   return (
     <div className="min-h-full">
-      {/* Superadmin Dashboard - dashboard-style layout */}
+      {/* Superadmin Dashboard - same design as Normal user dashboard */}
       {shouldFetchDashboard && (
-        <div className="space-y-0">
-          {/* Period + refresh (title/description shown once in layout) */}
-          <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end pb-6 border-b">
-            <div className="flex items-center gap-2 sm:ml-auto">
-              {shouldFetchDashboard && (
-                <Select value={period} onValueChange={setPeriod}>
-                  <SelectTrigger className="w-28 h-9">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="week">Week</SelectItem>
-                    <SelectItem value="month">Month</SelectItem>
-                    <SelectItem value="quarter">Quarter</SelectItem>
-                    <SelectItem value="year">Year</SelectItem>
-                  </SelectContent>
-                </Select>
-              )}
-              <Button variant="ghost" size="icon" className="h-9 w-9" onClick={handleRefresh} disabled={isDashboardLoading}>
+        <div className="min-h-full rounded-2xl bg-gradient-to-b from-muted/20 to-background p-6 md:p-8">
+          {/* Greeting + date (same as Normal user), period + refresh on the right */}
+          <header className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-8">
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">
+                {(() => {
+                  const h = new Date().getHours();
+                  const time = h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
+                  return time;
+                })()}
+                , {currentUserData?.first_name || currentUserData?.display_name || "there"}
+              </p>
+              <p className="text-2xl font-semibold tracking-tight mt-0.5">
+                {new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <Select value={period} onValueChange={setPeriod}>
+                <SelectTrigger className="w-28 h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="week">Week</SelectItem>
+                  <SelectItem value="month">Month</SelectItem>
+                  <SelectItem value="quarter">Quarter</SelectItem>
+                  <SelectItem value="year">Year</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button variant="outline" size="sm" className="h-9 w-9 p-0" onClick={handleRefresh} disabled={isDashboardLoading}>
                 {isDashboardLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
               </Button>
             </div>
@@ -425,9 +438,9 @@ const Dashboard = () => {
 
           {/* Loading */}
           {isDashboardLoading && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-6">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
               {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="h-24 rounded-xl bg-muted/50 animate-pulse" />
+                <div key={i} className="h-24 rounded-2xl bg-muted/50 animate-pulse" />
               ))}
             </div>
           )}
@@ -435,22 +448,22 @@ const Dashboard = () => {
           {!isDashboardLoading && dashboardData && (
             <>
               {/* System overview: users, invitations, roles, permissions (superuser sees a lot) */}
-              <section className="pt-6">
-                <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">System overview</h2>
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                  <Link href="/admin/people-management" className="rounded-2xl border bg-card shadow-sm p-4 hover:bg-muted/50 transition-colors">
+              <section className="mb-10">
+                <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">System overview</h2>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
+                  <Link href="/admin/people-management" className="rounded-2xl border bg-card shadow-sm p-5 hover:bg-muted/50 hover:shadow transition-colors">
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Total users</p>
                     <p className="text-2xl font-bold mt-1 tabular-nums">{dashboardData?.total_users?.value ?? 0}</p>
                   </Link>
-                  <Link href="/admin/people-management?tab=invitations" className="rounded-2xl border bg-card shadow-sm p-4 hover:bg-muted/50 transition-colors">
+                  <Link href="/admin/people-management?tab=invitations" className="rounded-2xl border bg-card shadow-sm p-5 hover:bg-muted/50 hover:shadow transition-colors">
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Invitations</p>
                     <p className="text-2xl font-bold mt-1 tabular-nums">{dashboardData?.new_invitations?.value ?? 0}</p>
                   </Link>
-                  <Link href="/admin/role-management" className="rounded-2xl border bg-card shadow-sm p-4 hover:bg-muted/50 transition-colors">
+                  <Link href="/admin/role-management" className="rounded-2xl border bg-card shadow-sm p-5 hover:bg-muted/50 hover:shadow transition-colors">
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Active roles</p>
                     <p className="text-2xl font-bold mt-1 tabular-nums">{dashboardData?.active_roles?.value ?? 0}</p>
                   </Link>
-                  <Link href="/admin/permissions-management" className="rounded-2xl border bg-card shadow-sm p-4 hover:bg-muted/50 transition-colors">
+                  <Link href="/admin/permissions-management" className="rounded-2xl border bg-card shadow-sm p-5 hover:bg-muted/50 hover:shadow transition-colors">
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Permissions</p>
                     <p className="text-2xl font-bold mt-1 tabular-nums">{dashboardData?.permissions?.value ?? 0}</p>
                   </Link>
@@ -458,28 +471,28 @@ const Dashboard = () => {
               </section>
 
               {/* Operational: clocked in, tasks, online, completed */}
-              <section className="pt-6">
-                <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">This period</h2>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <Link href="/admin/clock/history" className="rounded-2xl border bg-card shadow-sm p-4 hover:bg-muted/50 transition-colors">
+              <section className="mb-10">
+                <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">This period</h2>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
+                  <Link href="/admin/clock/history" className="rounded-2xl border bg-card shadow-sm p-5 hover:bg-muted/50 hover:shadow transition-colors">
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Clocked in</p>
                     <p className="text-2xl font-bold mt-1 tabular-nums">
                       {dashboardData?.operational?.clock_ins_today ?? dashboardData?.active_now?.clocked_in_now_count ?? 0}
                     </p>
                   </Link>
-                  <Link href="/admin/tasks" className="rounded-2xl border bg-card shadow-sm p-4 hover:bg-muted/50 transition-colors">
+                  <Link href="/admin/tasks" className="rounded-2xl border bg-card shadow-sm p-5 hover:bg-muted/50 hover:shadow transition-colors">
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Tasks open</p>
                     <p className="text-2xl font-bold mt-1 tabular-nums">
                       {dashboardData?.operational?.tasks_open ?? 0}
                     </p>
                   </Link>
-                  <div className="rounded-2xl border bg-card shadow-sm p-4">
+                  <div className="rounded-2xl border bg-card shadow-sm p-5">
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Online (30m)</p>
                     <p className="text-2xl font-bold mt-1 tabular-nums">
                       {dashboardData?.active_now?.active_sessions_count ?? dashboardData?.system_activity?.active_sessions ?? 0}
                     </p>
                   </div>
-                  <div className="rounded-2xl border bg-card shadow-sm p-4">
+                  <div className="rounded-2xl border bg-card shadow-sm p-5">
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Completed ({period})</p>
                     <p className="text-2xl font-bold mt-1 tabular-nums">
                       {dashboardData?.operational?.tasks_completed_this_period ?? 0}
@@ -490,8 +503,8 @@ const Dashboard = () => {
 
               {/* Needs attention: only when there is something */}
               {dashboardData?.needs_attention && ((dashboardData.needs_attention.pending_invitations ?? 0) + (dashboardData.needs_attention.overdue_tasks ?? 0) + (dashboardData.needs_attention.submissions_pending_review ?? 0)) > 0 && (
-                <section className="pt-6">
-                  <div className="rounded-xl border border-amber-200 dark:border-amber-900/50 bg-amber-50/30 dark:bg-amber-950/20 px-4 py-3 flex flex-wrap items-center gap-3">
+                <section className="mb-10">
+                  <div className="rounded-2xl border border-amber-200 dark:border-amber-900/50 bg-amber-50/30 dark:bg-amber-950/20 px-5 py-4 flex flex-wrap items-center gap-3">
                     <span className="text-xs font-semibold text-amber-800 dark:text-amber-200 uppercase tracking-wider">Needs attention</span>
                     {(dashboardData.needs_attention.pending_invitations ?? 0) > 0 && (
                       <Link href="/admin/people-management?tab=invitations" className="text-sm font-medium text-amber-800 dark:text-amber-200 hover:underline">
@@ -514,8 +527,8 @@ const Dashboard = () => {
 
               {/* Charts: only those that add insight (Overview = at-a-glance; Assets = proportion) */}
               {dashboardData && (
-                <section className="pt-6">
-                  <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-4">Charts</h2>
+                <section className="mb-10">
+                  <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">At a glance</h2>
                   <div className="grid gap-5 sm:grid-cols-2">
                     <DashboardChartOverview dashboardData={dashboardData} />
                     <DashboardChartAssets dashboardData={dashboardData} />
@@ -524,10 +537,10 @@ const Dashboard = () => {
               )}
 
               {/* Main content: shortcuts + activity */}
-              <section className="pt-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
+              <section className="mb-10 grid grid-cols-1 lg:grid-cols-3 gap-8">
                 {/* Shortcuts - compact list */}
                 <div className="lg:col-span-1">
-                  <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Shortcuts</h2>
+                  <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">Shortcuts</h2>
                   <nav className="flex flex-col gap-1">
                     {canManageUsers && (
                       <Link href="/admin/people-management" className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm hover:bg-muted/50 transition-colors">
@@ -573,9 +586,9 @@ const Dashboard = () => {
 
                 {/* Recent activity - slim list */}
                 <div className="lg:col-span-2">
-                  <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Recent activity</h2>
+                  <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">Recent activity</h2>
                   {recentActivities.length > 0 ? (
-                    <ul className="rounded-xl border divide-y">
+                    <ul className="rounded-2xl border divide-y overflow-hidden bg-card shadow-sm">
                       {recentActivities.slice(0, 5).map((activity) => {
                         const Icon = activity.icon;
                         return (
@@ -606,7 +619,7 @@ const Dashboard = () => {
 
               {/* Secondary stats: forms, assets - one compact row */}
               {dashboardData?.operational && (
-                <section className="pt-6 pb-2 flex flex-wrap gap-4 text-sm text-muted-foreground">
+                <section className="pb-2 flex flex-wrap gap-4 text-sm text-muted-foreground">
                   <Link href="/admin/forms" className="hover:text-foreground">
                     {dashboardData.operational.form_submissions_this_period ?? 0} form submission{(dashboardData.operational.form_submissions_this_period ?? 0) !== 1 ? "s" : ""} this {period}
                   </Link>

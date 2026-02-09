@@ -695,6 +695,9 @@ const TaskDetailPage = () => {
                         {localProgress !== null ? localProgress : (task.progress_percentage || 0)}%
                       </span>
                     </div>
+                    <p className="text-xs text-muted-foreground mb-2">
+                      Drag the slider or enter a number below to set the completion percentage (0–100%).
+                    </p>
                     <div className="w-full bg-muted rounded-full h-2.5 mb-3">
                       <div
                         className="bg-primary h-2.5 rounded-full transition-all duration-150"

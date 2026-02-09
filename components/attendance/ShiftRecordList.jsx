@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -11,6 +11,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 import {
   Select,
   SelectContent,
@@ -69,10 +77,17 @@ export const ShiftRecordList = ({
   const [userFilter, setUserFilter] = useState(ALL_FILTER_VALUE);
   const [roleFilter, setRoleFilter] = useState(ALL_FILTER_VALUE);
   const [departmentFilter, setDepartmentFilter] = useState(ALL_FILTER_VALUE);
+  const [page, setPage] = useState(1);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [deleteSlug, setDeleteSlug] = useState(null);
+
+  const perPage = 20;
+
+  useEffect(() => {
+    setPage(1);
+  }, [categoryFilter, dateRange, userFilter, roleFilter, departmentFilter]);
 
   const { data: usersData } = useUsers({ per_page: 100 }, { enabled: allowUserSelect });
   const { data: rolesData } = useRoles({}, { enabled: allowUserSelect });
@@ -130,10 +145,10 @@ export const ShiftRecordList = ({
       end_date: dateRange?.to ? formatDateForAPI(dateRange.to) : undefined,
       job_role_id: allowUserSelect && roleFilter && roleFilter !== ALL_FILTER_VALUE ? parseInt(roleFilter, 10) : undefined,
       department_id: allowUserSelect && departmentFilter && departmentFilter !== ALL_FILTER_VALUE ? parseInt(departmentFilter, 10) : undefined,
-      page: 1,
-      per_page: 100,
+      page,
+      per_page: perPage,
     }),
-    [userId, allowUserSelect, userFilter, roleFilter, departmentFilter, categoryFilter, dateRange]
+    [userId, allowUserSelect, userFilter, roleFilter, departmentFilter, categoryFilter, dateRange, page]
   );
 
   const { data, isLoading, error } = useShiftRecords(params, {
@@ -142,6 +157,8 @@ export const ShiftRecordList = ({
   const deleteShiftRecord = useDeleteShiftRecord();
 
   const records = data?.records || data || [];
+  const total = typeof data?.total === "number" ? data.total : records.length;
+  const totalPages = typeof data?.total_pages === "number" ? data.total_pages : Math.max(1, Math.ceil(total / perPage));
   const targetUserId = userId || user?.id;
 
   const handleEdit = (record) => {
@@ -445,6 +462,50 @@ export const ShiftRecordList = ({
               ))}
             </TableBody>
           </Table>
+        </div>
+      )}
+
+      {records.length > 0 && totalPages > 1 && (
+        <div className="flex items-center justify-center pt-4">
+          <Pagination>
+            <PaginationContent>
+              <PaginationItem>
+                <PaginationPrevious
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  className={page === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                />
+              </PaginationItem>
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                let pageNum;
+                if (totalPages <= 5) {
+                  pageNum = i + 1;
+                } else if (page <= 3) {
+                  pageNum = i + 1;
+                } else if (page >= totalPages - 2) {
+                  pageNum = totalPages - 4 + i;
+                } else {
+                  pageNum = page - 2 + i;
+                }
+                return (
+                  <PaginationItem key={pageNum}>
+                    <PaginationLink
+                      onClick={() => setPage(pageNum)}
+                      isActive={page === pageNum}
+                      className="cursor-pointer"
+                    >
+                      {pageNum}
+                    </PaginationLink>
+                  </PaginationItem>
+                );
+              })}
+              <PaginationItem>
+                <PaginationNext
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  className={page === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                />
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
         </div>
       )}
 

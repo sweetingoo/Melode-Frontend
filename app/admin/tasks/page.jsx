@@ -147,6 +147,7 @@ const TasksPage = () => {
     is_overdue: "",
     project_id: "",
   });
+  const [localProgressByTaskId, setLocalProgressByTaskId] = useState({});
   const [taskFormData, setTaskFormData] = useState({
     title: "",
     task_type: "",
@@ -1162,154 +1163,42 @@ const TasksPage = () => {
     );
   };
 
+  // Badge counts for tab ribbon: statsData for All/Overdue (always), pagination.total when that tab is active for others
+  const getTabCount = (value) => {
+    if (value === viewMode && typeof pagination.total === "number") {
+      if (value === "all" && statsData != null) {
+        const t = typeof statsData.total_tasks === "number" ? statsData.total_tasks : typeof statsData.total === "number" ? statsData.total : null;
+        if (t != null) return t;
+      }
+      if (value === "overdue" && statsData != null) {
+        const o = typeof statsData.overdue_count === "number" ? statsData.overdue_count : typeof statsData.overdue === "number" ? statsData.overdue : null;
+        if (o != null) return o;
+      }
+      return pagination.total;
+    }
+    if (value === "all" && statsData != null) {
+      const t = typeof statsData.total_tasks === "number" ? statsData.total_tasks : typeof statsData.total === "number" ? statsData.total : null;
+      return t ?? null;
+    }
+    if (value === "overdue" && statsData != null) {
+      const o = typeof statsData.overdue_count === "number" ? statsData.overdue_count : typeof statsData.overdue === "number" ? statsData.overdue : null;
+      return o ?? null;
+    }
+    return null;
+  };
+
+  const TASK_VIEW_OPTIONS = [
+    { value: "all", label: "All Tasks" },
+    { value: "my-tasks", label: "My Tasks" },
+    { value: "overdue", label: "Overdue" },
+    { value: "due-soon", label: "Due Soon" },
+    { value: "compliance", label: "Compliance" },
+    { value: "automated", label: "Automated" },
+  ];
+
   return (
-    <div className="space-y-4 max-w-7xl mx-auto overflow-hidden">
-      {/* Statistics Cards */}
-      {!statsLoading && !statsError && statsData && (
-        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-          <Card className="border-l-4 border-l-blue-500">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-1">Total Tasks</p>
-                  <p className="text-2xl font-bold">
-                    {typeof statsData.total_tasks === 'number' ? statsData.total_tasks :
-                      typeof statsData.total === 'number' ? statsData.total : 0}
-                  </p>
-                </div>
-                <div className="h-10 w-10 rounded-full bg-blue-500/10 flex items-center justify-center">
-                  <FileText className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="border-l-4 border-l-yellow-500">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-1">Pending</p>
-                  <p className="text-2xl font-bold">
-                    {typeof statsData.pending_count === 'number' ? statsData.pending_count :
-                      typeof statsData.pending === 'number' ? statsData.pending : 0}
-                  </p>
-                </div>
-                <div className="h-10 w-10 rounded-full bg-yellow-500/10 flex items-center justify-center">
-                  <Clock className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="border-l-4 border-l-red-500">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-1">Overdue</p>
-                  <p className="text-2xl font-bold text-red-600 dark:text-red-400">
-                    {typeof statsData.overdue_count === 'number' ? statsData.overdue_count :
-                      typeof statsData.overdue === 'number' ? statsData.overdue : 0}
-                  </p>
-                </div>
-                <div className="h-10 w-10 rounded-full bg-red-500/10 flex items-center justify-center">
-                  <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="border-l-4 border-l-green-500">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-1">Completed</p>
-                  <p className="text-2xl font-bold text-green-600 dark:text-green-400">
-                    {typeof statsData.completed_count === 'number' ? statsData.completed_count :
-                      typeof statsData.completed === 'number' ? statsData.completed : 0}
-                  </p>
-                </div>
-                <div className="h-10 w-10 rounded-full bg-green-500/10 flex items-center justify-center">
-                  <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-      {statsLoading && (
-        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-          {[1, 2, 3, 4].map((i) => (
-            <Card key={i}>
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs font-medium text-muted-foreground mb-1">Loading...</p>
-                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                  </div>
-                  <div className="h-10 w-10 rounded-full bg-muted/50" />
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
-
-      {/* View Mode Tabs */}
-      <Card className="overflow-hidden">
-        <CardContent className="pt-6 pb-4">
-          <div className="flex gap-1 overflow-x-auto">
-            <div className="flex gap-1 min-w-max">
-              <Button
-                variant={viewMode === "all" ? "default" : "ghost"}
-                onClick={() => setViewMode("all")}
-                className="whitespace-nowrap"
-                size="sm"
-              >
-                All Tasks
-              </Button>
-              <Button
-                variant={viewMode === "my-tasks" ? "default" : "ghost"}
-                onClick={() => setViewMode("my-tasks")}
-                className="whitespace-nowrap"
-                size="sm"
-              >
-                My Tasks
-              </Button>
-              <Button
-                variant={viewMode === "overdue" ? "default" : "ghost"}
-                onClick={() => setViewMode("overdue")}
-                className="whitespace-nowrap"
-                size="sm"
-              >
-                Overdue
-              </Button>
-              <Button
-                variant={viewMode === "due-soon" ? "default" : "ghost"}
-                onClick={() => setViewMode("due-soon")}
-                className="whitespace-nowrap"
-                size="sm"
-              >
-                Due Soon
-              </Button>
-              <Button
-                variant={viewMode === "compliance" ? "default" : "ghost"}
-                onClick={() => setViewMode("compliance")}
-                className="whitespace-nowrap"
-                size="sm"
-              >
-                Compliance
-              </Button>
-              <Button
-                variant={viewMode === "automated" ? "default" : "ghost"}
-                onClick={() => setViewMode("automated")}
-                className="whitespace-nowrap"
-                size="sm"
-              >
-                Automated
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Search and Create */}
+    <div className="space-y-4 md:space-y-6 p-4 md:p-0 max-w-full overflow-hidden">
+      {/* Search and Create - same order as Projects */}
       <PageSearchBar
         searchValue={searchTerm}
         onSearchChange={setSearchTerm}
@@ -1322,14 +1211,24 @@ const TasksPage = () => {
         createButtonText="Create Task"
       />
 
-      {/* Advanced Filters */}
+      {/* Advanced Filters - View is just another filter like Projects */}
       {isFiltersOpen && (
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Advanced Filters</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <Select value={viewMode} onValueChange={setViewMode}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="List" />
+                </SelectTrigger>
+                <SelectContent>
+                  {TASK_VIEW_OPTIONS.map(({ value, label }) => (
+                    <SelectItem key={value} value={value}>{label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <Select
                 value={filters.status || "all"}
                 onValueChange={(value) =>
@@ -1370,10 +1269,10 @@ const TasksPage = () => {
                 }
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Task Type" />
+                  <SelectValue placeholder="Category" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Types</SelectItem>
+                  <SelectItem value="all">All Categories</SelectItem>
                   {taskTypes.map((taskType) => (
                     <SelectItem key={taskType.id} value={taskType.name}>
                       <div className="flex items-center gap-2">
@@ -1422,10 +1321,11 @@ const TasksPage = () => {
                   ))}
                 </SelectContent>
               </Select>
-              {(filters.status || filters.priority || filters.task_type || filters.project_id || filters.assigned_to_user_id) && (
+              {(filters.status || filters.priority || filters.task_type || filters.project_id || filters.assigned_to_user_id || viewMode !== "all") && (
                 <Button
                   variant="outline"
-                  onClick={() =>
+                  onClick={() => {
+                    setViewMode("all");
                     setFilters({
                       status: "",
                       priority: "",
@@ -1433,8 +1333,8 @@ const TasksPage = () => {
                       assigned_to_user_id: "",
                       is_overdue: "",
                       project_id: "",
-                    })
-                  }
+                    });
+                  }}
                   className="w-full sm:w-auto"
                 >
                   <X className="mr-2 h-4 w-4" />
@@ -1446,441 +1346,336 @@ const TasksPage = () => {
       </Card>
       )}
 
-      {/* Tasks Table */}
+      {/* Tasks List - same structure as Projects */}
       <Card>
         <CardHeader>
-          <CardTitle>
-            {viewMode === "all"
-              ? "All Tasks"
-              : viewMode === "my-tasks"
-                ? "My Tasks"
-                : viewMode === "overdue"
-                  ? "Overdue Tasks"
-                  : viewMode === "due-soon"
-                    ? "Due Soon Tasks"
-                    : viewMode === "compliance"
-                      ? "Compliance Tasks"
-                      : "Automated Tasks"}
-          </CardTitle>
+          <CardTitle>Tasks</CardTitle>
         </CardHeader>
-        <CardContent className="overflow-x-auto">
+        <CardContent>
           {isLoading ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin" />
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin" />
             </div>
           ) : filteredTasks.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              No tasks found
+            <div className="text-center py-12">
+              <FileText className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+              <h3 className="text-lg font-semibold mb-2">No tasks found</h3>
+              <p className="text-muted-foreground mb-4">
+                {searchTerm
+                  ? "Try adjusting your search or filters"
+                  : "Create a task or change the list filter in Advanced Filters"}
+              </p>
+              {canCreateTask && !searchTerm && (
+                <Button onClick={() => setIsCreateModalOpen(true)}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Create Task
+                </Button>
+              )}
             </div>
           ) : isMobile ? (
-            // Mobile Card View
-            <div className="space-y-4">
+            <>
+            <div className="space-y-3">
               {filteredTasks.map((task) => (
                 <Card key={task.id} className="overflow-hidden">
-                  <CardContent className="p-4 space-y-3">
-                    {/* Title and Badges */}
-                    <div className="space-y-2">
-                      <div className="flex items-start justify-between gap-2">
-                        <Link
-                          href={`/admin/tasks/${task.slug || task.id}`}
-                          className="font-medium hover:underline flex-1"
-                        >
-                          {task.title}
-                        </Link>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            {canUpdateTask && (
-                              <DropdownMenuItem
-                                onClick={() => openEditModal(task)}
-                              >
-                                <Edit className="mr-2 h-4 w-4" />
-                                Edit
-                              </DropdownMenuItem>
-                            )}
-                            {canAssignTask && (
-                              <DropdownMenuItem
-                                onClick={() => openAssignModal(task)}
-                              >
-                                <User className="mr-2 h-4 w-4" />
-                                Assign
-                              </DropdownMenuItem>
-                            )}
-                            {task.status !== "completed" && (
-                              <DropdownMenuItem
-                                onClick={() => openCompleteModal(task)}
-                              >
-                                <CheckCircle className="mr-2 h-4 w-4" />
-                                Complete
-                              </DropdownMenuItem>
-                            )}
-                            {canDeleteTask && (
-                              <>
-                                <DropdownMenuSeparator />
-                                <AlertDialog>
-                                  <AlertDialogTrigger asChild>
-                                    <DropdownMenuItem
-                                      onSelect={(e) => e.preventDefault()}
-                                      className="text-red-600"
+                  <CardContent className="p-4">
+                    <div className="flex items-start justify-between gap-2 mb-3">
+                      <Link
+                        href={`/admin/tasks/${task.slug || task.id}`}
+                        className="font-medium hover:underline line-clamp-2 flex-1 min-w-0"
+                      >
+                        {task.title}
+                      </Link>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 -mr-2 -mt-2">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          {canUpdateTask && (
+                            <DropdownMenuItem onClick={() => openEditModal(task)}>
+                              <Edit className="mr-2 h-4 w-4" />
+                              Edit
+                            </DropdownMenuItem>
+                          )}
+                          {canAssignTask && (
+                            <DropdownMenuItem onClick={() => openAssignModal(task)}>
+                              <User className="mr-2 h-4 w-4" />
+                              Assign
+                            </DropdownMenuItem>
+                          )}
+                          {task.status !== "completed" && (
+                            <DropdownMenuItem onClick={() => openCompleteModal(task)}>
+                              <CheckCircle className="mr-2 h-4 w-4" />
+                              Complete
+                            </DropdownMenuItem>
+                          )}
+                          {canDeleteTask && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="text-red-600">
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    Delete
+                                  </DropdownMenuItem>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Delete Task</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Are you sure you want to delete this task? This action cannot be undone.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      onClick={() => handleDeleteTask(task.slug || task.id)}
+                                      className="bg-red-600 hover:bg-red-700"
                                     >
-                                      <Trash2 className="mr-2 h-4 w-4" />
                                       Delete
-                                    </DropdownMenuItem>
-                                  </AlertDialogTrigger>
-                                  <AlertDialogContent>
-                                    <AlertDialogHeader>
-                                      <AlertDialogTitle>Delete Task</AlertDialogTitle>
-                                      <AlertDialogDescription>
-                                        Are you sure you want to delete this task? This
-                                        action cannot be undone.
-                                      </AlertDialogDescription>
-                                    </AlertDialogHeader>
-                                    <AlertDialogFooter>
-                                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                      <AlertDialogAction
-                                        onClick={() => handleDeleteTask(task.slug || task.id)}
-                                        className="bg-red-600 hover:bg-red-700"
-                                      >
-                                        Delete
-                                      </AlertDialogAction>
-                                    </AlertDialogFooter>
-                                  </AlertDialogContent>
-                                </AlertDialog>
-                              </>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs text-muted-foreground">Progress</span>
+                        <span className="text-xs tabular-nums text-muted-foreground">
+                          {localProgressByTaskId[task.id] !== undefined ? localProgressByTaskId[task.id] : (task.progress_percentage ?? 0)}%
+                        </span>
                       </div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        {task.is_recurring && (
-                          <Badge variant="outline" className="text-xs border-purple-500/50 text-purple-700 dark:text-purple-400">
-                            <Repeat className="mr-1 h-3 w-3" />
-                            Recurring
-                          </Badge>
-                        )}
-                        {task.assigned_to_role_id && (
-                          <Badge variant="outline" className="text-xs border-blue-500/50 text-blue-700 dark:text-blue-400">
-                            <Users className="mr-1 h-3 w-3" />
-                            From Role
-                          </Badge>
-                        )}
-                        {task.create_individual_tasks && task.assigned_user_ids?.length > 0 && (
-                          <Badge variant="secondary" className="text-xs">
-                            <Users className="mr-1 h-3 w-3" />
-                            Individual Tasks
-                          </Badge>
-                        )}
-                        {!task.create_individual_tasks && task.assigned_user_ids?.length > 1 && (
-                          <Badge variant="outline" className="text-xs border-green-500/50 text-green-700 dark:text-green-400">
-                            <Users className="mr-1 h-3 w-3" />
-                            Collaborative
-                          </Badge>
-                        )}
-                        {task.form_id && (
-                          <Badge variant="outline" className="text-xs">
-                            <FileText className="mr-1 h-3 w-3" />
-                            From Form
-                          </Badge>
-                        )}
+                      <div className="relative h-2 bg-muted rounded-full overflow-hidden">
+                        <div
+                          className="absolute inset-y-0 left-0 bg-primary rounded-full transition-all pointer-events-none"
+                          style={{
+                            width: `${localProgressByTaskId[task.id] !== undefined ? localProgressByTaskId[task.id] : (task.progress_percentage ?? 0)}%`,
+                          }}
+                        />
+                        <input
+                          type="range"
+                          min="0"
+                          max="100"
+                          step="1"
+                          value={localProgressByTaskId[task.id] !== undefined ? localProgressByTaskId[task.id] : (task.progress_percentage ?? 0)}
+                          onChange={(e) => {
+                            const v = parseInt(e.target.value, 10);
+                            setLocalProgressByTaskId((prev) => ({ ...prev, [task.id]: v }));
+                          }}
+                          onMouseUp={(e) => {
+                            const v = parseInt(e.target.value, 10);
+                            updateTaskMutation.mutate(
+                              { slug: task.slug || task.id, taskData: { progress_percentage: v } },
+                              {
+                                onSettled: () => setLocalProgressByTaskId((prev) => {
+                                  const next = { ...prev };
+                                  delete next[task.id];
+                                  return next;
+                                }),
+                              }
+                            );
+                          }}
+                          onTouchEnd={(e) => {
+                            const v = parseInt(e.target.value, 10);
+                            updateTaskMutation.mutate(
+                              { slug: task.slug || task.id, taskData: { progress_percentage: v } },
+                              {
+                                onSettled: () => setLocalProgressByTaskId((prev) => {
+                                  const next = { ...prev };
+                                  delete next[task.id];
+                                  return next;
+                                }),
+                              }
+                            );
+                          }}
+                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-[1]"
+                          disabled={task.status === "completed" || updateTaskMutation.isPending}
+                        />
                       </div>
                     </div>
-
-                    {/* Task Details Grid */}
-                    <div className="grid grid-cols-2 gap-3 text-sm">
-                      <div>
-                        <span className="text-muted-foreground">Project:</span>
-                        <div className="mt-1">
-                          {task.project_id ? (
-                            (() => {
-                              const project = projects.find((p) => p.id === task.project_id);
-                              return project ? (
-                                <Link
-                                  href={`/admin/projects/${project.slug || project.id}`}
-                                  className="inline-flex items-center gap-1 hover:underline"
-                                >
-                                  <FolderKanban className="h-3 w-3" />
-                                  <Badge variant="outline" className="text-xs">
-                                    {project.name}
-                                  </Badge>
-                                </Link>
-                              ) : (
-                                <span className="text-xs text-muted-foreground">Unknown Project</span>
-                              );
-                            })()
-                          ) : (
-                            <span className="text-xs text-muted-foreground">No Project</span>
-                          )}
-                        </div>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Type:</span>
-                        <div className="mt-1">
-                          {(() => {
-                            const taskType = taskTypes.find(tt => tt.name === task.task_type);
-                            return taskType ? (
-                              <Badge
-                                variant="outline"
-                                className="text-xs"
-                                style={{
-                                  borderColor: taskType.color || undefined,
-                                  color: taskType.color || undefined
-                                }}
-                              >
-                                {taskType.icon && <span className="mr-1">{taskType.icon}</span>}
-                                {taskType.display_name || task.task_type}
-                              </Badge>
-                            ) : (
-                              <Badge variant="outline" className="text-xs">{task.task_type || "N/A"}</Badge>
-                            );
-                          })()}
-                        </div>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Status:</span>
-                        <div className="mt-1">
-                          <Badge className={cn("text-xs", getStatusColor(task.status))}>
-                            {task.status || "N/A"}
-                          </Badge>
-                        </div>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Priority:</span>
-                        <div className="mt-1">
-                          <Badge className={cn("text-xs", getPriorityColor(task.priority))}>
-                            {task.priority || "N/A"}
-                          </Badge>
-                        </div>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Assigned:</span>
-                        <div className="mt-1 flex items-center gap-1">
-                          {task.assigned_user_ids?.length > 0 ? (
-                            <>
-                              <Users className="h-3 w-3" />
-                              <span className="text-xs">
-                                {task.assigned_user_ids.length} Users
-                              </span>
-                            </>
-                          ) : task.assignee_display ? (
-                            <>
-                              <User className="h-3 w-3" />
-                              <span className="text-xs truncate">{task.assignee_display}</span>
-                            </>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">
-                              Unassigned
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      {/* Progress */}
-                      {task.progress_percentage !== undefined && task.progress_percentage !== null && (
-                        <div>
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-muted-foreground text-xs">Progress</span>
-                            <span className="text-xs font-medium">{task.progress_percentage}%</span>
-                          </div>
-                          <div className="w-full bg-muted rounded-full h-1.5">
-                            <div
-                              className="bg-primary h-1.5 rounded-full transition-all"
-                              style={{
-                                width: `${task.progress_percentage}%`,
-                              }}
-                            />
-                          </div>
-                        </div>
+                    <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t">
+                      <Badge className={cn("text-xs", getStatusColor(task.status))}>
+                        {task.status?.replace("_", " ") || "—"}
+                      </Badge>
+                      <Badge variant="outline" className="text-xs">
+                        {task.priority || "—"}
+                      </Badge>
+                      {task.due_date && (
+                        <span className="text-xs text-muted-foreground flex items-center gap-1">
+                          <Calendar className="h-3 w-3" />
+                          {format(new Date(task.due_date), "MMM d, yyyy")}
+                        </span>
+                      )}
+                      {task.is_overdue && (
+                        <Badge variant="destructive" className="text-xs">Overdue</Badge>
+                      )}
+                      {(task.assignee_display || task.assigned_user_ids?.length > 0) && (
+                        <span className="text-xs text-muted-foreground flex items-center gap-1 ml-auto">
+                          <User className="h-3 w-3" />
+                          {task.assignee_display || `${task.assigned_user_ids?.length ?? 0} assigned`}
+                        </span>
                       )}
                     </div>
-
-                    {/* Due Date */}
-                    {task.due_date && (
-                      <div className="flex items-center gap-2 pt-2 border-t">
-                        <Calendar className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm">
-                          Due: {format(new Date(task.due_date), "MMM dd, yyyy")}
-                        </span>
-                        {task.is_overdue && (
-                          <Badge variant="destructive" className="ml-auto">
-                            Overdue
-                          </Badge>
-                        )}
-                      </div>
-                    )}
                   </CardContent>
                 </Card>
               ))}
             </div>
+            {pagination.total_pages > 1 && (
+              <div className="mt-4">
+                <Pagination>
+                  <PaginationContent>
+                    <PaginationItem>
+                      <PaginationPrevious
+                        onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                        className={currentPage === 1 ? "pointer-events-none opacity-50" : ""}
+                      />
+                    </PaginationItem>
+                    {Array.from({ length: pagination.total_pages }, (_, i) => i + 1)
+                      .filter((page) => page === 1 || page === pagination.total_pages || Math.abs(page - currentPage) <= 1)
+                      .map((page, index, array) => (
+                        <React.Fragment key={page}>
+                          {index > 0 && array[index - 1] !== page - 1 && <PaginationEllipsis />}
+                          <PaginationItem>
+                            <PaginationLink onClick={() => setCurrentPage(page)} isActive={currentPage === page}>
+                              {page}
+                            </PaginationLink>
+                          </PaginationItem>
+                        </React.Fragment>
+                      ))}
+                    <PaginationItem>
+                      <PaginationNext
+                        onClick={() => setCurrentPage((p) => Math.min(pagination.total_pages, p + 1))}
+                        className={currentPage === pagination.total_pages ? "pointer-events-none opacity-50" : ""}
+                      />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
+              </div>
+            )}
+            </>
           ) : (
-            // Desktop Table View
-            <div className="rounded-md border overflow-x-auto max-w-full">
-              <Table className="w-full">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[18%]">Title</TableHead>
-                    <TableHead className="w-[10%]">Project</TableHead>
-                    <TableHead className="w-[10%]">Type</TableHead>
-                    <TableHead className="w-[9%]">Status</TableHead>
-                    <TableHead className="w-[9%]">Priority</TableHead>
-                    <TableHead className="w-[10%]">Progress</TableHead>
-                    <TableHead className="w-[13%]">Assigned To</TableHead>
-                    <TableHead className="w-[11%]">Due Date</TableHead>
-                    <TableHead className="w-[10%]">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredTasks.map((task) => (
-                    <TableRow key={task.id}>
-                      <TableCell className="font-medium w-[20%]">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <Link
-                            href={`/admin/tasks/${task.slug || task.id}`}
-                            className="hover:underline truncate max-w-full"
-                          >
-                            {task.title}
-                          </Link>
-                          {task.is_recurring && (
-                            <Badge variant="outline" className="text-xs border-purple-500/50 text-purple-700 dark:text-purple-400">
-                              <Repeat className="mr-1 h-3 w-3" />
-                              Recurring
-                            </Badge>
-                          )}
-                          {task.assigned_to_role_id && (
-                            <Badge variant="outline" className="text-xs border-blue-500/50 text-blue-700 dark:text-blue-400">
-                              <Users className="mr-1 h-3 w-3" />
-                              From Role
-                            </Badge>
-                          )}
-                          {task.create_individual_tasks && task.assigned_user_ids?.length > 0 && (
-                            <Badge variant="secondary" className="text-xs">
-                              <Users className="mr-1 h-3 w-3" />
-                              Individual Tasks
-                            </Badge>
-                          )}
-                          {!task.create_individual_tasks && task.assigned_user_ids?.length > 1 && (
-                            <Badge variant="outline" className="text-xs border-green-500/50 text-green-700 dark:text-green-400">
-                              <Users className="mr-1 h-3 w-3" />
-                              Collaborative
-                            </Badge>
-                          )}
-                          {task.form_id && (
-                            <Badge variant="outline" className="text-xs">
-                              <FileText className="mr-1 h-3 w-3" />
-                              From Form
-                            </Badge>
-                          )}
+            <>
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Title</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Priority</TableHead>
+                      <TableHead>Progress</TableHead>
+                      <TableHead>Due</TableHead>
+                      <TableHead>Assigned</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+              <TableBody>
+                {filteredTasks.map((task) => (
+                  <TableRow
+                    key={task.id}
+                    className="cursor-pointer hover:bg-muted/50 transition-colors"
+                    onClick={() => router.push(`/admin/tasks/${task.slug || task.id}`)}
+                  >
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <Link
+                        href={`/admin/tasks/${task.slug || task.id}`}
+                        className="font-medium hover:underline"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {task.title}
+                      </Link>
+                      {task.is_overdue && (
+                        <Badge variant="destructive" className="ml-2 text-xs">Overdue</Badge>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Badge className={getStatusColor(task.status)}>
+                        {task.status?.replace("_", " ") || "—"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge className={getPriorityColor(task.priority)}>
+                        {task.priority || "—"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center gap-2 min-w-[80px] max-w-[120px]">
+                        <div className="relative flex-1 min-w-0 h-2 bg-muted rounded-full overflow-hidden">
+                          <div
+                            className="absolute inset-y-0 left-0 bg-primary rounded-full transition-all pointer-events-none"
+                            style={{
+                              width: `${localProgressByTaskId[task.id] !== undefined ? localProgressByTaskId[task.id] : (task.progress_percentage ?? 0)}%`,
+                            }}
+                          />
+                          <input
+                            type="range"
+                            min="0"
+                            max="100"
+                            step="1"
+                            value={localProgressByTaskId[task.id] !== undefined ? localProgressByTaskId[task.id] : (task.progress_percentage ?? 0)}
+                            onChange={(e) => {
+                              const v = parseInt(e.target.value, 10);
+                              setLocalProgressByTaskId((prev) => ({ ...prev, [task.id]: v }));
+                            }}
+                            onMouseUp={(e) => {
+                              e.stopPropagation();
+                              const v = parseInt(e.target.value, 10);
+                              updateTaskMutation.mutate(
+                                { slug: task.slug || task.id, taskData: { progress_percentage: v } },
+                                {
+                                  onSettled: () => setLocalProgressByTaskId((prev) => {
+                                    const next = { ...prev };
+                                    delete next[task.id];
+                                    return next;
+                                  }),
+                                }
+                              );
+                            }}
+                            onTouchEnd={(e) => {
+                              const v = parseInt(e.target.value, 10);
+                              updateTaskMutation.mutate(
+                                { slug: task.slug || task.id, taskData: { progress_percentage: v } },
+                                {
+                                  onSettled: () => setLocalProgressByTaskId((prev) => {
+                                    const next = { ...prev };
+                                    delete next[task.id];
+                                    return next;
+                                  }),
+                                }
+                              );
+                            }}
+                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-[1]"
+                            disabled={task.status === "completed" || updateTaskMutation.isPending}
+                          />
                         </div>
-                      </TableCell>
-                      <TableCell>
-                        {task.project_id ? (
-                          (() => {
-                            const project = projects.find((p) => p.id === task.project_id);
-                            return project ? (
-                              <Link
-                                href={`/admin/projects/${project.slug || project.id}`}
-                                className="inline-flex items-center gap-1 hover:underline"
-                              >
-                                <FolderKanban className="h-3 w-3" />
-                                <Badge variant="outline" className="text-xs">
-                                  {project.name}
-                                </Badge>
-                              </Link>
-                            ) : (
-                              <span className="text-xs text-muted-foreground">Unknown Project</span>
-                            );
-                          })()
-                        ) : (
-                          <span className="text-xs text-muted-foreground">No Project</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {(() => {
-                          const taskType = taskTypes.find(tt => tt.name === task.task_type);
-                          return taskType ? (
-                            <Badge
-                              variant="outline"
-                              style={{
-                                borderColor: taskType.color || undefined,
-                                color: taskType.color || undefined
-                              }}
-                            >
-                              {taskType.icon && <span className="mr-1">{taskType.icon}</span>}
-                              {taskType.display_name || task.task_type}
-                            </Badge>
-                          ) : (
-                            <Badge variant="outline">{task.task_type || "N/A"}</Badge>
-                          );
-                        })()}
-                      </TableCell>
-                      <TableCell>
-                        <Badge className={getStatusColor(task.status)}>
-                          {task.status || "N/A"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge className={getPriorityColor(task.priority)}>
-                          {task.priority || "N/A"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {task.progress_percentage !== undefined && task.progress_percentage !== null ? (
-                          <div className="flex items-center gap-2 min-w-[80px]">
-                            <div className="flex-1 bg-muted rounded-full h-2">
-                              <div
-                                className="bg-primary h-2 rounded-full transition-all"
-                                style={{
-                                  width: `${task.progress_percentage}%`,
-                                }}
-                              />
-                            </div>
-                            <span className="text-xs font-medium w-10 text-right">{task.progress_percentage}%</span>
-                          </div>
-                        ) : (
-                          <span className="text-sm text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          {task.assigned_user_ids?.length > 0 ? (
-                            <div className="flex items-center gap-1">
-                              <Users className="h-4 w-4" />
-                              <span className="text-sm">
-                                {task.assigned_user_ids.length} Users
-                              </span>
-                            </div>
-                          ) : task.assignee_display ? (
-                            <div className="flex items-center gap-1">
-                              <User className="h-4 w-4" />
-                              <span className="text-sm">{task.assignee_display}</span>
-                            </div>
-                          ) : (
-                            <span className="text-sm text-muted-foreground">
-                              Unassigned
-                            </span>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {task.due_date ? (
-                          <div className="flex items-center gap-1">
-                            <Calendar className="h-4 w-4 text-muted-foreground" />
-                            <span className="text-sm">
-                              {format(new Date(task.due_date), "MMM dd, yyyy")}
-                            </span>
-                            {task.is_overdue && (
-                              <Badge variant="destructive" className="ml-2">
-                                Overdue
-                              </Badge>
-                            )}
-                          </div>
-                        ) : (
-                          <span className="text-sm text-muted-foreground">No due date</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
+                        <span className="text-xs tabular-nums text-muted-foreground shrink-0 w-8">
+                          {localProgressByTaskId[task.id] !== undefined ? localProgressByTaskId[task.id] : (task.progress_percentage ?? 0)}%
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      {task.due_date ? (
+                        <span className="text-sm text-muted-foreground">
+                          {format(new Date(task.due_date), "MMM dd, yyyy")}
+                        </span>
+                      ) : (
+                        <span className="text-sm text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {task.assigned_user_ids?.length > 0 ? (
+                        <span className="text-sm">{task.assigned_user_ids.length} users</span>
+                      ) : task.assignee_display ? (
+                        <span className="text-sm">{task.assignee_display}</span>
+                      ) : (
+                        <span className="text-sm text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="icon">
@@ -1952,13 +1747,12 @@ const TasksPage = () => {
                     </TableRow>
                   ))}
                 </TableBody>
-              </Table>
-            </div>
-          )}
+                </Table>
+              </div>
 
-          {/* Pagination */}
-          {pagination.total_pages > 1 && (
-            <div className="mt-4">
+              {/* Pagination */}
+              {pagination.total_pages > 1 && (
+                <div className="mt-4">
               <Pagination>
                 <PaginationContent>
                   <PaginationItem>
@@ -2009,7 +1803,9 @@ const TasksPage = () => {
                   </PaginationItem>
                 </PaginationContent>
               </Pagination>
-            </div>
+                </div>
+              )}
+            </>
           )}
         </CardContent>
       </Card>

@@ -208,8 +208,8 @@ const mainMenuItems = [
     permission: null, // Preferences are visible to all users
   },
   {
-    title: "Compliance",
-    description: "Manage your compliance documents and complete your profile information",
+    title: "My Information",
+    description: "Manage your information and compliance documents",
     icon: Shield,
     url: "/admin/compliance",
     permission: null, // Available to all users for uploading compliance documents
@@ -818,7 +818,7 @@ function SidebarNavigationContent({
                               {missingCount} required compliance field{missingCount !== 1 ? 's' : ''} missing
                             </p>
                             <p className="text-xs text-muted-foreground mt-1">
-                              Complete your compliance requirements in the Additional Information tab
+                              Complete your requirements in the My Information tab
                             </p>
                           </TooltipContent>
                         </Tooltip>
@@ -1734,7 +1734,7 @@ export default function AdminLayout({ children }) {
             </header>
 
             <main className={cn(
-              "flex-1 overflow-x-hidden",
+              "flex-1 overflow-x-hidden min-w-0",
               pathname === "/admin/messages" ? "p-0" : 
               pathname === "/admin/tasks" ? "p-2" : 
               pathname === "/admin/directory" ? "p-0" : "p-4"

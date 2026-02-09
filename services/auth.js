@@ -121,7 +121,7 @@ export const authService = {
   hijackUser: async (targetUserId) => {
     try {
       return await api.post("/auth/hijack-user", {
-        target_user_id: targetUserId,
+        target_user_id: parseInt(targetUserId, 10),
       });
     } catch (error) {
       console.error("Hijack user failed:", error);

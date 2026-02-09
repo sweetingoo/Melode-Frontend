@@ -40,7 +40,7 @@ import { LeaveRequestList } from "@/components/attendance/LeaveRequestList";
 import { HolidayBalanceCard } from "@/components/attendance/HolidayBalanceCard";
 import { MyRotaView } from "@/components/attendance/MyRotaView";
 import { MyContractView } from "@/components/attendance/MyContractView";
-import { CalendarIcon, Clock, Coffee, User, MapPin, Building2, Loader2, ArrowLeft, History, Filter, RefreshCw, ChevronRight, Calendar, LayoutGrid, FileText } from "lucide-react";
+import { CalendarIcon, Clock, Coffee, User, MapPin, Building2, Loader2, ArrowLeft, History, Filter, RefreshCw, ChevronRight, ChevronLeft, Calendar, LayoutGrid, FileText } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -90,6 +90,29 @@ function ClockHistoryPageContent() {
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(20);
   const [selectedRecordForBreaks, setSelectedRecordForBreaks] = useState(null);
+  const tabsScrollRef = React.useRef(null);
+  const [tabsScrollState, setTabsScrollState] = useState({ left: false, right: false });
+
+  const updateTabsScrollState = React.useCallback(() => {
+    const el = tabsScrollRef.current;
+    if (!el) return;
+    const left = el.scrollLeft > 0;
+    const right = el.scrollLeft < el.scrollWidth - el.clientWidth - 1;
+    setTabsScrollState((prev) => (prev.left === left && prev.right === right ? prev : { left, right }));
+  }, []);
+
+  React.useEffect(() => {
+    const el = tabsScrollRef.current;
+    if (!el) return;
+    updateTabsScrollState();
+    el.addEventListener("scroll", updateTabsScrollState);
+    const ro = new ResizeObserver(updateTabsScrollState);
+    ro.observe(el);
+    return () => {
+      el.removeEventListener("scroll", updateTabsScrollState);
+      ro.disconnect();
+    };
+  }, [updateTabsScrollState]);
 
   // Build params with date/time formatting
   // Send dates as-is - backend should handle timezone interpretation correctly
@@ -219,24 +242,55 @@ function ClockHistoryPageContent() {
     <div className="w-full space-y-4 px-2 py-4 sm:space-y-6 sm:px-0 sm:py-6">
       <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-4 sm:space-y-6">
         <div className="sticky top-0 z-0 -mx-2 border-b bg-background px-3 pb-3 pt-2 shadow-[0_1px_0_0_hsl(var(--border))] sm:-mx-4 sm:px-4 sm:pb-2 sm:pt-1">
-          <TabsList className="inline-flex h-auto w-max flex-shrink-0 flex-nowrap gap-1 rounded-lg bg-muted/50 p-1 [&>button]:shrink-0">
-            <TabsTrigger value="my-time" className="min-h-[2.75rem] touch-manipulation rounded-md px-3 py-2 data-[state=active]:bg-background sm:min-h-0">
-              <History className="mr-2 h-4 w-4 shrink-0" />
-              My Time
-            </TabsTrigger>
-            <TabsTrigger value="my-leave" className="min-h-[2.75rem] touch-manipulation rounded-md px-3 py-2 data-[state=active]:bg-background sm:min-h-0">
-              <Calendar className="mr-2 h-4 w-4 shrink-0" />
-              My Leave
-            </TabsTrigger>
-            <TabsTrigger value="my-rota" className="min-h-[2.75rem] touch-manipulation rounded-md px-3 py-2 data-[state=active]:bg-background sm:min-h-0">
-              <LayoutGrid className="mr-2 h-4 w-4 shrink-0" />
-              My Rota
-            </TabsTrigger>
-            <TabsTrigger value="my-contract" className="min-h-[2.75rem] touch-manipulation rounded-md px-3 py-2 data-[state=active]:bg-background sm:min-h-0">
-              <FileText className="mr-2 h-4 w-4 shrink-0" />
-              My Contract
-            </TabsTrigger>
-          </TabsList>
+          <div className="relative flex items-center">
+            {tabsScrollState.left && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="absolute left-0 z-10 h-8 w-8 shrink-0 rounded-full bg-background/80 shadow-sm hover:bg-muted"
+                onClick={() => tabsScrollRef.current?.scrollBy({ left: -200, behavior: "smooth" })}
+                aria-label="Scroll tabs left"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+            )}
+            <div
+              ref={tabsScrollRef}
+              className="min-w-0 flex-1 overflow-x-auto scrollbar-hide pr-8"
+            >
+              <TabsList className="inline-flex h-auto w-max flex-shrink-0 flex-nowrap gap-1 rounded-lg bg-muted/50 p-1 [&>button]:shrink-0">
+                <TabsTrigger value="my-time" className="min-h-[2.75rem] touch-manipulation rounded-md px-3 py-2 data-[state=active]:bg-background sm:min-h-0">
+                  <History className="mr-2 h-4 w-4 shrink-0" />
+                  My Time
+                </TabsTrigger>
+                <TabsTrigger value="my-leave" className="min-h-[2.75rem] touch-manipulation rounded-md px-3 py-2 data-[state=active]:bg-background sm:min-h-0">
+                  <Calendar className="mr-2 h-4 w-4 shrink-0" />
+                  My Leave
+                </TabsTrigger>
+                <TabsTrigger value="my-rota" className="min-h-[2.75rem] touch-manipulation rounded-md px-3 py-2 data-[state=active]:bg-background sm:min-h-0">
+                  <LayoutGrid className="mr-2 h-4 w-4 shrink-0" />
+                  My Rota
+                </TabsTrigger>
+                <TabsTrigger value="my-contract" className="min-h-[2.75rem] touch-manipulation rounded-md px-3 py-2 data-[state=active]:bg-background sm:min-h-0">
+                  <FileText className="mr-2 h-4 w-4 shrink-0" />
+                  My Contract
+                </TabsTrigger>
+              </TabsList>
+            </div>
+            {tabsScrollState.right && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="absolute right-0 z-10 h-8 w-8 shrink-0 rounded-full bg-background/80 shadow-sm hover:bg-muted"
+                onClick={() => tabsScrollRef.current?.scrollBy({ left: 200, behavior: "smooth" })}
+                aria-label="Scroll tabs right"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
         </div>
 
         <TabsContent value="my-time" className="mt-0 focus-visible:outline-none space-y-6">
@@ -522,7 +576,6 @@ function ClockHistoryPageContent() {
                       <TableHead className="font-semibold">Check Out</TableHead>
                       <TableHead className="font-semibold">Duration</TableHead>
                       <TableHead className="font-semibold">Breaks</TableHead>
-                      <TableHead className="font-semibold">Status</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -610,7 +663,9 @@ function ClockHistoryPageContent() {
                                     {format(new Date(record.clock_out_time), "dd MMM")}
                                   </span>
                                 </div>
-                              ) : record.status === "active" ? (
+                              ) : record.status === "on_break" || record.current_state === "on_break" ? (
+                                <Badge variant="secondary" className="text-xs">On Break</Badge>
+                              ) : record.status === "active" || record.current_state === "active" ? (
                                 <Badge variant="default" className="text-xs">Active</Badge>
                               ) : (
                                 <span className="text-muted-foreground text-sm">—</span>
@@ -649,23 +704,6 @@ function ClockHistoryPageContent() {
                               ) : (
                                 <span className="text-muted-foreground text-sm">No breaks</span>
                               )}
-                            </TableCell>
-                            <TableCell>
-                              <Badge
-                                variant={
-                                  record.status === "active" || record.current_state === "active"
-                                    ? "default"
-                                    : record.status === "on_break" || record.current_state === "on_break"
-                                      ? "secondary"
-                                      : "outline"
-                                }
-                              >
-                                {record.status === "active" || record.current_state === "active"
-                                  ? "Active"
-                                  : record.status === "on_break" || record.current_state === "on_break"
-                                    ? "On Break"
-                                    : "Completed"}
-                              </Badge>
                             </TableCell>
                           </TableRow>
                         </React.Fragment>

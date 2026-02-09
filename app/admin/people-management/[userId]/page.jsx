@@ -64,7 +64,6 @@ import {
   Search,
   AlertCircle,
   Building2,
-  Network,
   FileCheck,
   ChevronLeft,
   ChevronRight,
@@ -98,7 +97,6 @@ import {
 import { useDepartments } from "@/hooks/useDepartments";
 import { useQueryClient } from "@tanstack/react-query";
 import { userKeys } from "@/hooks/useUsers";
-import { useHierarchyImage } from "@/hooks/useEmployees";
 import UserAuditLogs from "@/components/UserAuditLogs";
 import { ComplianceSection } from "@/components/ComplianceSection";
 import { AvatarWithUrl } from "@/components/AvatarWithUrl";
@@ -146,7 +144,7 @@ const UserEditPage = () => {
   
   // Nested tabs state for compliance tab (Compliance / Additional Information)
   const [complianceSubTab, setComplianceSubTab] = useState(() => {
-    return getStoredTabState('complianceSubTab', 'compliance');
+    return getStoredTabState('complianceSubTab', 'additional');
   });
   const [activeSectionTab, setActiveSectionTab] = useState(() => {
     return getStoredTabState('activeSectionTab', null);
@@ -158,6 +156,13 @@ const UserEditPage = () => {
       setActiveTab(tabParam);
     }
   }, [tabParam]);
+
+  // Redirect removed hierarchy tab to basic
+  useEffect(() => {
+    if (activeTab === "hierarchy") {
+      setActiveTab("basic");
+    }
+  }, [activeTab]);
 
   // Persist activeTab to localStorage
   useEffect(() => {
@@ -883,9 +888,6 @@ const UserEditPage = () => {
   // Get current user (admin) data to check what permissions they can assign
   const { data: currentUserData, isLoading: currentUserLoading } = useCurrentUser();
 
-  // Get hierarchy image
-  const { data: hierarchyImageUrl, isLoading: hierarchyLoading, error: hierarchyError } = useHierarchyImage();
-
   // Get current user's permissions to determine what they can assign
   const currentUserPermissions = currentUserData?.permissions || [];
   const currentUserDirectPermissions =
@@ -1424,10 +1426,8 @@ const UserEditPage = () => {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Edit Person</h1>
-            <p className="text-muted-foreground mt-1">
-              Loading person data...
-            </p>
+            <h1 className="text-3xl font-bold tracking-tight">Loading...</h1>
+            <p className="text-muted-foreground mt-1">Manage Person</p>
           </div>
         </div>
         <div className="animate-pulse space-y-6">
@@ -1449,10 +1449,10 @@ const UserEditPage = () => {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Edit Person</h1>
-            <p className="text-muted-foreground mt-1">
+            <h1 className="text-3xl font-bold tracking-tight">
               {is404Error ? "Person not found" : "Error loading person"}
-            </p>
+            </h1>
+            <p className="text-muted-foreground mt-1">Manage Person</p>
           </div>
         </div>
         <Card>
@@ -1510,10 +1510,10 @@ const UserEditPage = () => {
             />
           )}
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Edit Person</h1>
-            <p className="text-muted-foreground mt-1">
+            <h1 className="text-3xl font-bold tracking-tight">
               {transformedUser?.name || transformedUser?.email || "Loading..."}
-            </p>
+            </h1>
+            <p className="text-muted-foreground mt-1">Manage Person</p>
           </div>
         </div>
         <Button
@@ -1529,7 +1529,7 @@ const UserEditPage = () => {
       {/* Tabs Section */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <div className="overflow-x-auto scrollbar-hide">
-          <TabsList className={cn("inline-flex w-auto flex-nowrap gap-1 sm:gap-0 lg:grid lg:w-full", canViewAttendance ? "lg:grid-cols-7" : "lg:grid-cols-6")}>
+            <TabsList className={cn("inline-flex w-auto flex-nowrap gap-1 sm:gap-0 lg:grid lg:w-full", canViewAttendance ? "lg:grid-cols-6" : "lg:grid-cols-5")}>
             <TabsTrigger value="basic" className="flex items-center gap-2 whitespace-nowrap">
               <User className="h-4 w-4" />
               <span className="hidden sm:inline">Basic Information</span>
@@ -1544,11 +1544,6 @@ const UserEditPage = () => {
               <FileCheck className="h-4 w-4" />
               <span className="hidden sm:inline">Compliance</span>
               <span className="sm:hidden">Compliance</span>
-            </TabsTrigger>
-            <TabsTrigger value="hierarchy" className="flex items-center gap-2 whitespace-nowrap">
-              <Network className="h-4 w-4" />
-              <span className="hidden sm:inline">Hierarchy</span>
-              <span className="sm:hidden">Hierarchy</span>
             </TabsTrigger>
             {canViewAttendance && (
               <TabsTrigger value="attendance" className="flex items-center gap-2 whitespace-nowrap">
@@ -2213,79 +2208,6 @@ const UserEditPage = () => {
           </Card>
         </TabsContent>
 
-        {/* Hierarchy Tab */}
-        <TabsContent value="hierarchy" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Network className="h-5 w-5" />
-                Department Hierarchy
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {hierarchyLoading ? (
-                <div className="flex flex-col items-center justify-center py-12">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
-                  <p className="text-muted-foreground">Loading hierarchy image...</p>
-                </div>
-              ) : hierarchyError ? (
-                <div className="flex flex-col items-center justify-center py-12">
-                  <AlertCircle className="h-12 w-12 text-red-500 mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">Error Loading Hierarchy</h3>
-                  <p className="text-muted-foreground mb-4">
-                    {hierarchyError?.response?.data?.message || "Failed to load hierarchy image. Please try again."}
-                  </p>
-                  <Button
-                    variant="outline"
-                    onClick={() => window.location.reload()}
-                  >
-                    <RefreshCw className="h-4 w-4 mr-2" />
-                    Retry
-                  </Button>
-                </div>
-              ) : hierarchyImageUrl ? (
-                <div className="space-y-4">
-                  <div className="rounded-lg border bg-muted/50 p-4">
-                    <p className="text-sm text-muted-foreground mb-4">
-                      This visualization shows the organisational hierarchy structure for all departments.
-                    </p>
-                    <div className="w-full overflow-auto border rounded-lg bg-white">
-                      <img
-                        src={hierarchyImageUrl}
-                        alt="Department Hierarchy"
-                        className="w-full h-auto"
-                        style={{ maxWidth: "100%" }}
-                      />
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between pt-4 border-t">
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Info className="h-4 w-4" />
-                      <span>Hierarchy image is automatically generated from department structure</span>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => window.open(hierarchyImageUrl, "_blank")}
-                    >
-                      <Eye className="h-4 w-4 mr-2" />
-                      Open in New Tab
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center py-12">
-                  <Network className="h-12 w-12 text-muted-foreground mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">No Hierarchy Available</h3>
-                  <p className="text-muted-foreground">
-                    No hierarchy image is available at this time.
-                  </p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
         {/* Shifts & Attendance Tab */}
         {canViewAttendance && (
           <TabsContent value="attendance" className="space-y-6">
@@ -2591,8 +2513,8 @@ const UserEditPage = () => {
         <TabsContent value="compliance" className="space-y-6">
           <Tabs value={complianceSubTab} onValueChange={setComplianceSubTab} className="space-y-6">
             <TabsList>
-              <TabsTrigger value="compliance">Compliance</TabsTrigger>
-              <TabsTrigger value="additional">Additional Information</TabsTrigger>
+              <TabsTrigger value="additional">My Information</TabsTrigger>
+              <TabsTrigger value="compliance">My Compliance</TabsTrigger>
             </TabsList>
 
             <TabsContent value="compliance" className="space-y-6">
@@ -2622,10 +2544,10 @@ const UserEditPage = () => {
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <User className="h-5 w-5" />
-                      Additional Information
+                      My Information
                     </CardTitle>
                     <CardDescription>
-                      View and manage additional information for this user
+                      View and manage information for this user
                     </CardDescription>
                   </CardHeader>
                   <CardContent>

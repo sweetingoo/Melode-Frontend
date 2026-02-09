@@ -304,9 +304,9 @@ const UserManagementPage = () => {
     }
   };
 
-  const handleHijackUser = async (userSlug) => {
+  const handleHijackUser = async (userId) => {
     try {
-      await hijackUserMutation.mutateAsync(userSlug);
+      await hijackUserMutation.mutateAsync(Number(userId));
     } catch (error) {
       console.error("Failed to hijack user:", error);
     }
@@ -867,7 +867,7 @@ const UserManagementPage = () => {
                                 className="flex items-center"
                               >
                                 <Edit className="mr-2 h-4 w-4" />
-                                Edit Person
+                                Manage Person
                               </Link>
                             </DropdownMenuItem>
                           )}
@@ -986,7 +986,7 @@ const UserManagementPage = () => {
                                 <AlertDialogFooter>
                                   <AlertDialogCancel>Cancel</AlertDialogCancel>
                                   <AlertDialogAction
-                                    onClick={() => handleHijackUser(user.slug || user.id)}
+                                    onClick={() => handleHijackUser(user.id)}
                                     className="bg-blue-600 hover:bg-blue-700"
                                   >
                                     Hijack User

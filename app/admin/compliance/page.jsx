@@ -20,7 +20,7 @@ import { toast } from "sonner";
 
 export default function CompliancePage() {
   const { data: currentUserData, isLoading: currentUserLoading } = useCurrentUser();
-  const [activeTab, setActiveTab] = useState("compliance");
+  const [activeTab, setActiveTab] = useState("additional");
   const [activeSectionTab, setActiveSectionTab] = useState(null);
   const [mounted, setMounted] = useState(false);
 
@@ -782,8 +782,8 @@ export default function CompliancePage() {
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <TabsList>
-          <TabsTrigger value="compliance">Compliance</TabsTrigger>
-          <TabsTrigger value="additional">Additional Information</TabsTrigger>
+          <TabsTrigger value="additional">My Information</TabsTrigger>
+          <TabsTrigger value="compliance">My Compliance</TabsTrigger>
         </TabsList>
 
         <TabsContent value="compliance" className="space-y-6">
@@ -813,7 +813,7 @@ export default function CompliancePage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <User className="h-5 w-5" />
-                  Additional Information
+                  My Information
                 </CardTitle>
                 <CardDescription>
                   Complete your profile with additional details required by your organisation
@@ -1270,7 +1270,7 @@ export default function CompliancePage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <User className="h-5 w-5" />
-                  Additional Information
+                  My Information
                 </CardTitle>
                 <CardDescription>
                   Complete your profile with additional details required by your organisation
@@ -1279,7 +1279,7 @@ export default function CompliancePage() {
               <CardContent>
                 <div className="text-center py-8">
                   <User className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">No Additional Information Required</h3>
+                  <h3 className="text-lg font-semibold mb-2">No information required</h3>
                   <p className="text-muted-foreground mb-4">
                     Your organisation hasn't configured any additional profile fields yet. Contact your administrator if you need to add more information to your profile.
                   </p>

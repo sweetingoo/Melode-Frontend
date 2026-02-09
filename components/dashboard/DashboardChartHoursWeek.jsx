@@ -53,7 +53,7 @@ export function DashboardChartHoursWeek() {
   return (
     <Card className="rounded-2xl border shadow-sm overflow-hidden">
       <CardHeader className="pb-1 pt-5 px-5">
-        <CardTitle className="flex items-center gap-2.5 text-base font-semibold">
+        <CardTitle className="flex items-center gap-2.5 text-base font-semibold text-foreground">
           <div className="h-9 w-9 rounded-lg bg-sky-500/10 flex items-center justify-center">
             <Clock className="h-4 w-4 text-sky-600 dark:text-sky-400" />
           </div>
@@ -73,7 +73,13 @@ export function DashboardChartHoursWeek() {
               <XAxis dataKey="label" tick={{ fontSize: 12, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} width={28} tickFormatter={(v) => `${v}h`} axisLine={false} tickLine={false} />
               <Tooltip
-                contentStyle={{ borderRadius: 12, border: "none", boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }}
+                contentStyle={{
+                  borderRadius: 12,
+                  border: "1px solid hsl(var(--border))",
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+                  backgroundColor: "hsl(var(--card))",
+                  color: "hsl(var(--card-foreground))",
+                }}
                 formatter={(v) => [`${Number(v).toFixed(1)}h`, "Hours"]}
                 labelFormatter={(_, payload) => payload[0]?.payload?.date}
               />

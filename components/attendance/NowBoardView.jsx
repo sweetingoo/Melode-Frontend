@@ -73,6 +73,7 @@ export function NowBoardView({ departmentId = null }) {
   });
 
   const byRole = data?.by_role ?? [];
+  const clockedInNow = data?.clocked_in_now ?? [];
   const boardDate = data?.date ?? dateStr;
 
   const weekSummary = useMemo(() => {
@@ -283,12 +284,34 @@ export function NowBoardView({ departmentId = null }) {
           <div className="flex min-h-[200px] items-center justify-center py-12">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
-        ) : byRole.length === 0 ? (
+        ) : byRole.length === 0 && clockedInNow.length === 0 ? (
           <div className="py-12 text-center text-sm text-muted-foreground">
             No roles with expected shifts today. Add provisional shifts for today on the Rota or Allocated tab.
           </div>
         ) : (
           <div className="overflow-x-auto">
+            {clockedInNow.length > 0 && (
+              <div className="border-b border-border bg-emerald-500/5 px-4 py-3 sm:px-6">
+                <p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  <UserCheck className="h-4 w-4 text-emerald-600" aria-hidden />
+                  Clocked in now ({clockedInNow.length})
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {clockedInNow.map((u) => (
+                    <span
+                      key={u.user_id}
+                      className="inline-flex items-center gap-1.5 rounded-md bg-emerald-500/15 px-2.5 py-1 text-sm font-medium text-emerald-800 dark:text-emerald-200"
+                    >
+                      {u.display_name ?? `User ${u.user_id}`}
+                      {u.role_name && (
+                        <span className="text-emerald-600/80 dark:text-emerald-300/80">· {u.role_name}</span>
+                      )}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {byRole.length > 0 && (
             <div className="min-w-[320px] divide-y divide-border">
               <div className="grid grid-cols-[1fr_auto_auto_1fr] gap-4 border-b bg-muted/30 px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground sm:px-6">
                 <span>Role</span>
@@ -355,6 +378,7 @@ export function NowBoardView({ departmentId = null }) {
               );
             })}
             </div>
+            )}
           </div>
         )}
       </CardContent>
