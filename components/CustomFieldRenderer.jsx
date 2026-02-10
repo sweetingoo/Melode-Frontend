@@ -36,12 +36,28 @@ const CustomFieldRenderer = ({
   const renderField = () => {
     switch (fieldType?.toLowerCase()) {
       case 'text':
-      case 'string':
+      case 'string': {
+        const textObj = value && typeof value === 'object' && 'rag' in value ? value : { value, rag: null };
+        const ragColor = textObj.rag?.toLowerCase();
+        const textVal = textObj.value != null && textObj.value !== '' ? String(textObj.value) : '';
+        if (readOnly && ragColor) {
+          const ragBadgeClass = ragColor === 'red' ? 'bg-red-500/90 text-white' : ragColor === 'amber' ? 'bg-amber-500/90 text-white' : ragColor === 'green' ? 'bg-green-600/90 text-white' : null;
+          return (
+            <div className="flex items-center gap-2 flex-wrap">
+              {ragBadgeClass && (
+                <span className={cn('inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium', ragBadgeClass)}>
+                  {(ragColor || '').charAt(0).toUpperCase() + (ragColor || '').slice(1)}
+                </span>
+              )}
+              <span className="text-sm">{textVal || '—'}</span>
+            </div>
+          );
+        }
         return (
           <Input
             id={fieldId}
             type="text"
-            value={value || ''}
+            value={textVal}
             onChange={(e) => handleChange(e.target.value)}
             placeholder={field.field_description || `Enter ${field.field_label || field.name}`}
             maxLength={field.max_length}
@@ -50,6 +66,7 @@ const CustomFieldRenderer = ({
             readOnly={readOnly}
           />
         );
+      }
 
       case 'email':
         return (
@@ -66,12 +83,29 @@ const CustomFieldRenderer = ({
         );
 
       case 'number':
-      case 'integer':
+      case 'integer': {
+        const numObj = value && typeof value === 'object' && 'rag' in value ? value : { value, rag: null };
+        const ragColor = numObj.rag?.toLowerCase();
+        if (readOnly && ragColor) {
+          const numDisplay = numObj.value != null && numObj.value !== '' ? String(numObj.value) : '—';
+          const ragBadgeClass = ragColor === 'red' ? 'bg-red-500/90 text-white' : ragColor === 'amber' ? 'bg-amber-500/90 text-white' : ragColor === 'green' ? 'bg-green-600/90 text-white' : null;
+          return (
+            <div className="flex items-center gap-2 flex-wrap">
+              {ragBadgeClass && (
+                <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${ragBadgeClass}`}>
+                  {(ragColor || '').charAt(0).toUpperCase() + (ragColor || '').slice(1)}
+                </span>
+              )}
+              <span className="text-sm tabular-nums">{numDisplay}</span>
+            </div>
+          );
+        }
+        const inputVal = numObj.value != null && numObj.value !== '' ? numObj.value : '';
         return (
           <Input
             id={fieldId}
             type="number"
-            value={value || ''}
+            value={inputVal}
             onChange={(e) => handleChange(e.target.value)}
             placeholder={field.field_description || `Enter ${field.field_label || field.name}`}
             min={field.min_value}
@@ -81,6 +115,7 @@ const CustomFieldRenderer = ({
             readOnly={readOnly}
           />
         );
+      }
 
       case 'decimal':
       case 'float':
@@ -133,11 +168,29 @@ const CustomFieldRenderer = ({
         );
 
       case 'select':
-      case 'dropdown':
+      case 'dropdown': {
         const options = field.field_options?.options || field.options || [];
+        const selectObj = value && typeof value === 'object' && 'rag' in value ? value : { value, rag: null };
+        const ragColor = selectObj.rag?.toLowerCase();
+        const selectVal = selectObj.value != null && selectObj.value !== '' ? selectObj.value : undefined;
+        if (readOnly && ragColor) {
+          const displayVal = options.find(o => (o.value ?? o) === selectVal);
+          const displayLabel = displayVal?.label ?? displayVal ?? selectVal ?? '—';
+          const ragBadgeClass = ragColor === 'red' ? 'bg-red-500/90 text-white' : ragColor === 'amber' ? 'bg-amber-500/90 text-white' : ragColor === 'green' ? 'bg-green-600/90 text-white' : null;
+          return (
+            <div className="flex items-center gap-2 flex-wrap">
+              {ragBadgeClass && (
+                <span className={cn('inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium', ragBadgeClass)}>
+                  {(ragColor || '').charAt(0).toUpperCase() + (ragColor || '').slice(1)}
+                </span>
+              )}
+              <span className="text-sm">{displayLabel}</span>
+            </div>
+          );
+        }
         return (
           <Select
-            value={value || undefined}
+            value={selectVal || undefined}
             onValueChange={handleChange}
             disabled={readOnly}
           >
@@ -168,6 +221,7 @@ const CustomFieldRenderer = ({
             </SelectContent>
           </Select>
         );
+      }
 
       case 'radio':
       case 'radio_group':
@@ -190,32 +244,68 @@ const CustomFieldRenderer = ({
           </RadioGroup>
         );
 
-      case 'date':
-        // Date field: Calendar only (no time selection)
+      case 'date': {
+        // Date field: Calendar only (no time selection); support RAG { value, rag }
+        const dateObj = value && typeof value === 'object' && 'rag' in value ? value : { value, rag: null };
+        const dateRag = dateObj.rag?.toLowerCase();
+        const dateVal = dateObj.value ?? value;
+        if (readOnly && dateRag) {
+          const displayDate = dateVal ? (typeof dateVal === 'string' ? dateVal : dateVal instanceof Date ? format(dateVal, 'PPP') : String(dateVal)) : '—';
+          const ragBadgeClass = dateRag === 'red' ? 'bg-red-500/90 text-white' : dateRag === 'amber' ? 'bg-amber-500/90 text-white' : dateRag === 'green' ? 'bg-green-600/90 text-white' : null;
+          return (
+            <div className="flex items-center gap-2 flex-wrap">
+              {ragBadgeClass && (
+                <span className={cn('inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium', ragBadgeClass)}>
+                  {(dateRag || '').charAt(0).toUpperCase() + (dateRag || '').slice(1)}
+                </span>
+              )}
+              <span className="text-sm">{displayDate}</span>
+            </div>
+          );
+        }
         return (
           <DatePickerWithTime
             fieldId={fieldId}
-            value={value}
+            value={dateVal}
             onChange={handleChange}
             error={error}
             readOnly={readOnly}
             shouldShowTime={false}
           />
         );
+      }
 
       case 'datetime':
-      case 'date_time':
-        // Date & Time field: Calendar with time input
+      case 'date_time': {
+        // Date & Time field: Calendar with time input; support RAG { value, rag }
+        const dtObj = value && typeof value === 'object' && 'rag' in value ? value : { value, rag: null };
+        const dtRag = dtObj.rag?.toLowerCase();
+        const dtVal = dtObj.value ?? value;
+        if (readOnly && dtRag) {
+          const displayDt = dtVal ? (typeof dtVal === 'string' ? dtVal : dtVal instanceof Date ? format(dtVal, 'PPP p') : String(dtVal)) : '—';
+          const ragBadgeClass = dtRag === 'red' ? 'bg-red-500/90 text-white' : dtRag === 'amber' ? 'bg-amber-500/90 text-white' : dtRag === 'green' ? 'bg-green-600/90 text-white' : null;
+          return (
+            <div className="flex items-center gap-2 flex-wrap">
+              {ragBadgeClass && (
+                <span className={cn('inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium', ragBadgeClass)}>
+                  {(dtRag || '').charAt(0).toUpperCase() + (dtRag || '').slice(1)}
+                </span>
+              )}
+              <span className="text-sm">{displayDt}</span>
+            </div>
+          );
+        }
         return (
           <DatePickerWithTime
             fieldId={fieldId}
-            value={value}
+            value={dtVal}
             onChange={handleChange}
             error={error}
             readOnly={readOnly}
             shouldShowTime={true}
           />
         );
+      }
 
       case 'time':
         // Time-only field: Just time input (no date/calendar)
@@ -276,17 +366,35 @@ const CustomFieldRenderer = ({
           />
         );
 
-      case 'multiselect':
+      case 'multiselect': {
         const multiOptions = field.field_options?.options || field.options || [];
-        const selectedValues = Array.isArray(value) ? value : (value ? [value] : []);
-        
+        const multiObj = value && typeof value === 'object' && 'rag' in value ? value : { value, rag: null };
+        const selectedValues = Array.isArray(multiObj.value) ? multiObj.value : (multiObj.value ? [multiObj.value] : []);
+        const multiRag = multiObj.rag?.toLowerCase();
+        if (readOnly && multiRag) {
+          const labels = selectedValues.map((v) => {
+            const o = multiOptions.find((opt) => (opt.value ?? opt) === v);
+            return o?.label ?? o ?? v;
+          });
+          const displayLabel = labels.length > 0 ? labels.join(', ') : '—';
+          const ragBadgeClass = multiRag === 'red' ? 'bg-red-500/90 text-white' : multiRag === 'amber' ? 'bg-amber-500/90 text-white' : multiRag === 'green' ? 'bg-green-600/90 text-white' : null;
+          return (
+            <div className="flex items-center gap-2 flex-wrap">
+              {ragBadgeClass && (
+                <span className={cn('inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium', ragBadgeClass)}>
+                  {(multiRag || '').charAt(0).toUpperCase() + (multiRag || '').slice(1)}
+                </span>
+              )}
+              <span className="text-sm">{displayLabel}</span>
+            </div>
+          );
+        }
         return (
           <div className="space-y-2">
             <div className="flex flex-wrap gap-2">
               {multiOptions.map((option, index) => {
                 const optionValue = option.value || option;
                 const isSelected = selectedValues.includes(optionValue);
-                
                 return (
                   <div key={index} className="flex items-center space-x-2">
                     <Checkbox
@@ -314,6 +422,7 @@ const CustomFieldRenderer = ({
             )}
           </div>
         );
+      }
 
       case 'people':
       case 'user':
@@ -516,14 +625,25 @@ const CustomFieldRenderer = ({
           </div>
         );
 
-      case 'calculated':
-        // Read-only computed value (number or string)
-        const calcDisplay = value != null && value !== '' ? String(value) : '—';
+      case 'calculated': {
+        // May be { value, rag } when field has rag_rules (calculated + RAG display)
+        const calcObj = value && typeof value === 'object' && 'rag' in value ? value : { value, rag: null };
+        const ragColor = calcObj.rag?.toLowerCase();
+        const calcDisplay = calcObj.value != null && calcObj.value !== '' ? String(calcObj.value) : '—';
+        const ragBadgeClass = ragColor === 'red' ? 'bg-red-500/90 text-white' : ragColor === 'amber' ? 'bg-amber-500/90 text-white' : ragColor === 'green' ? 'bg-green-600/90 text-white' : null;
         return (
-          <span className="text-sm font-medium tabular-nums" title="Calculated (read-only)">
-            {calcDisplay}
-          </span>
+          <div className="flex items-center gap-2 flex-wrap">
+            {ragBadgeClass && (
+              <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${ragBadgeClass}`}>
+                {(ragColor || '').charAt(0).toUpperCase() + (ragColor || '').slice(1)}
+              </span>
+            )}
+            <span className="text-sm font-medium tabular-nums" title="Calculated (read-only)">
+              {calcDisplay}
+            </span>
+          </div>
         );
+      }
 
       case 'page_break':
         return (

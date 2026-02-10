@@ -1526,6 +1526,195 @@ const TrackerEditPage = () => {
                           </div>
                         )}
 
+                        {/* Optional RAG display: numeric / date / options by field type */}
+                        {editingField.type && editingField.type !== "rag" && !["line_break", "page_break", "text_block", "image_block"].includes(editingField.type) && (() => {
+                          const isNumericRag = ["number", "integer", "calculated"].includes(editingField.type);
+                          const isDateRag = ["date", "datetime", "date_time"].includes(editingField.type);
+                          const isOptionsRag = ["select", "multiselect", "dropdown"].includes(editingField.type);
+                          const opts = editingField.options || [];
+                          if (!isNumericRag && !isDateRag && !isOptionsRag) return null;
+                          const getRagForOption = (optionValue) => {
+                            const r = editingField.rag_rules;
+                            if (Array.isArray(r?.red) && r.red.includes(optionValue)) return "red";
+                            if (Array.isArray(r?.amber) && r.amber.includes(optionValue)) return "amber";
+                            if (Array.isArray(r?.green) && r.green.includes(optionValue)) return "green";
+                            return "";
+                          };
+                          const setRagForOption = (optionValue, color) => {
+                            setEditingField((prev) => {
+                              const r = { ...(prev.rag_rules || {}) };
+                              ["red", "amber", "green"].forEach((c) => {
+                                r[c] = Array.isArray(r[c]) ? r[c].filter((v) => v !== optionValue) : [];
+                              });
+                              if (color) r[color] = [...(r[color] || []), optionValue];
+                              return { ...prev, rag_rules: r };
+                            });
+                          };
+                          return (
+                          <div className="space-y-3 p-3 border rounded-md bg-muted/30">
+                            <Label className="font-medium">RAG display (optional)</Label>
+                            {isNumericRag && (
+                              <>
+                                <p className="text-xs text-muted-foreground">
+                                  Red ≤ max, Amber between min–max, Green ≥ min.
+                                </p>
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                  <div>
+                                    <Label className="text-xs">Red (max)</Label>
+                                    <Input
+                                      type="number"
+                                      value={editingField.rag_rules?.red?.max ?? ""}
+                                      onChange={(e) =>
+                                        setEditingField((prev) => ({
+                                          ...prev,
+                                          rag_rules: {
+                                            ...prev.rag_rules,
+                                            red: { ...(prev.rag_rules?.red || {}), max: e.target.value === "" ? undefined : Number(e.target.value) },
+                                          },
+                                        }))
+                                      }
+                                      placeholder="40"
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label className="text-xs">Amber (min)</Label>
+                                    <Input
+                                      type="number"
+                                      value={editingField.rag_rules?.amber?.min ?? ""}
+                                      onChange={(e) =>
+                                        setEditingField((prev) => ({
+                                          ...prev,
+                                          rag_rules: {
+                                            ...prev.rag_rules,
+                                            amber: { ...(prev.rag_rules?.amber || {}), min: e.target.value === "" ? undefined : Number(e.target.value) },
+                                          },
+                                        }))
+                                      }
+                                      placeholder="40"
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label className="text-xs">Amber (max)</Label>
+                                    <Input
+                                      type="number"
+                                      value={editingField.rag_rules?.amber?.max ?? ""}
+                                      onChange={(e) =>
+                                        setEditingField((prev) => ({
+                                          ...prev,
+                                          rag_rules: {
+                                            ...prev.rag_rules,
+                                            amber: { ...(prev.rag_rules?.amber || {}), max: e.target.value === "" ? undefined : Number(e.target.value) },
+                                          },
+                                        }))
+                                      }
+                                      placeholder="80"
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label className="text-xs">Green (min)</Label>
+                                    <Input
+                                      type="number"
+                                      value={editingField.rag_rules?.green?.min ?? ""}
+                                      onChange={(e) =>
+                                        setEditingField((prev) => ({
+                                          ...prev,
+                                          rag_rules: {
+                                            ...prev.rag_rules,
+                                            green: { ...(prev.rag_rules?.green || {}), min: e.target.value === "" ? undefined : Number(e.target.value) },
+                                          },
+                                        }))
+                                      }
+                                      placeholder="80"
+                                    />
+                                  </div>
+                                </div>
+                              </>
+                            )}
+                            {isDateRag && (
+                              <>
+                                <p className="text-xs text-muted-foreground">
+                                  Red before date, Green after date (e.g. expiry or deadline).
+                                </p>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div>
+                                    <Label className="text-xs">Red before (date)</Label>
+                                    <Input
+                                      type="text"
+                                      value={editingField.rag_rules?.red?.before ?? ""}
+                                      onChange={(e) =>
+                                        setEditingField((prev) => ({
+                                          ...prev,
+                                          rag_rules: {
+                                            ...prev.rag_rules,
+                                            red: { ...(prev.rag_rules?.red || {}), before: e.target.value || undefined },
+                                          },
+                                        }))
+                                      }
+                                      placeholder="2025-01-01"
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label className="text-xs">Green after (date)</Label>
+                                    <Input
+                                      type="text"
+                                      value={editingField.rag_rules?.green?.after ?? ""}
+                                      onChange={(e) =>
+                                        setEditingField((prev) => ({
+                                          ...prev,
+                                          rag_rules: {
+                                            ...prev.rag_rules,
+                                            green: { ...(prev.rag_rules?.green || {}), after: e.target.value || undefined },
+                                          },
+                                        }))
+                                      }
+                                      placeholder="2025-06-01"
+                                    />
+                                  </div>
+                                </div>
+                              </>
+                            )}
+                            {isOptionsRag && (
+                              <>
+                                <p className="text-xs text-muted-foreground">
+                                  {opts.length > 0
+                                    ? "Map each option to a RAG colour. Selected value(s) will show that colour."
+                                    : "Add options above first, then map each option to Red / Amber / Green below."}
+                                </p>
+                                {opts.length > 0 ? (
+                                  <div className="space-y-2">
+                                    {opts.map((opt, idx) => {
+                                      const optionValue = opt.value ?? opt.label ?? String(idx);
+                                      const ragVal = getRagForOption(optionValue);
+                                      return (
+                                        <div key={idx} className="flex items-center gap-2 flex-wrap">
+                                          <span className="text-sm font-medium min-w-[100px]">{opt.label ?? optionValue}</span>
+                                          <Select
+                                            value={ragVal || "none"}
+                                            onValueChange={(v) => setRagForOption(optionValue, v === "none" ? "" : v)}
+                                          >
+                                            <SelectTrigger className="w-[120px]">
+                                              <SelectValue placeholder="RAG" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                              <SelectItem value="none">None</SelectItem>
+                                              <SelectItem value="red">Red</SelectItem>
+                                              <SelectItem value="amber">Amber</SelectItem>
+                                              <SelectItem value="green">Green</SelectItem>
+                                            </SelectContent>
+                                          </Select>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                ) : (
+                                  <p className="text-xs text-muted-foreground italic">No options yet. Add options in the section above.</p>
+                                )}
+                              </>
+                            )}
+                          </div>
+                          );
+                        })()}
+
                         <div className="flex gap-2">
                           <Button 
                             onClick={handleUpdateField} 
@@ -1823,6 +2012,195 @@ const TrackerEditPage = () => {
                         )}
                       </div>
                     )}
+
+                    {/* Optional RAG display: numeric / date / options by field type */}
+                    {newField.type && newField.type !== "rag" && !["line_break", "page_break", "text_block", "image_block"].includes(newField.type) && (() => {
+                      const isNumericRag = ["number", "integer", "calculated"].includes(newField.type);
+                      const isDateRag = ["date", "datetime", "date_time"].includes(newField.type);
+                      const isOptionsRag = ["select", "multiselect", "dropdown"].includes(newField.type);
+                      const opts = newField.options || [];
+                      if (!isNumericRag && !isDateRag && !isOptionsRag) return null;
+                      const getRagForOption = (optionValue) => {
+                        const r = newField.rag_rules;
+                        if (Array.isArray(r?.red) && r.red.includes(optionValue)) return "red";
+                        if (Array.isArray(r?.amber) && r.amber.includes(optionValue)) return "amber";
+                        if (Array.isArray(r?.green) && r.green.includes(optionValue)) return "green";
+                        return "";
+                      };
+                      const setRagForOption = (optionValue, color) => {
+                        setNewField((prev) => {
+                          const r = { ...(prev.rag_rules || {}) };
+                          ["red", "amber", "green"].forEach((c) => {
+                            r[c] = Array.isArray(r[c]) ? r[c].filter((v) => v !== optionValue) : [];
+                          });
+                          if (color) r[color] = [...(r[color] || []), optionValue];
+                          return { ...prev, rag_rules: r };
+                        });
+                      };
+                      return (
+                      <div className="space-y-3 p-3 border rounded-md bg-muted/30">
+                        <Label className="font-medium">RAG display (optional)</Label>
+                        {isNumericRag && (
+                          <>
+                            <p className="text-xs text-muted-foreground">
+                              Red ≤ max, Amber between min–max, Green ≥ min.
+                            </p>
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                              <div>
+                                <Label className="text-xs">Red (max)</Label>
+                                <Input
+                                  type="number"
+                                  value={newField.rag_rules?.red?.max ?? ""}
+                                  onChange={(e) =>
+                                    setNewField((prev) => ({
+                                      ...prev,
+                                      rag_rules: {
+                                        ...prev.rag_rules,
+                                        red: { ...(prev.rag_rules?.red || {}), max: e.target.value === "" ? undefined : Number(e.target.value) },
+                                      },
+                                    }))
+                                  }
+                                  placeholder="40"
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-xs">Amber (min)</Label>
+                                <Input
+                                  type="number"
+                                  value={newField.rag_rules?.amber?.min ?? ""}
+                                  onChange={(e) =>
+                                    setNewField((prev) => ({
+                                      ...prev,
+                                      rag_rules: {
+                                        ...prev.rag_rules,
+                                        amber: { ...(prev.rag_rules?.amber || {}), min: e.target.value === "" ? undefined : Number(e.target.value) },
+                                      },
+                                    }))
+                                  }
+                                  placeholder="40"
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-xs">Amber (max)</Label>
+                                <Input
+                                  type="number"
+                                  value={newField.rag_rules?.amber?.max ?? ""}
+                                  onChange={(e) =>
+                                    setNewField((prev) => ({
+                                      ...prev,
+                                      rag_rules: {
+                                        ...prev.rag_rules,
+                                        amber: { ...(prev.rag_rules?.amber || {}), max: e.target.value === "" ? undefined : Number(e.target.value) },
+                                      },
+                                    }))
+                                  }
+                                  placeholder="80"
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-xs">Green (min)</Label>
+                                <Input
+                                  type="number"
+                                  value={newField.rag_rules?.green?.min ?? ""}
+                                  onChange={(e) =>
+                                    setNewField((prev) => ({
+                                      ...prev,
+                                      rag_rules: {
+                                        ...prev.rag_rules,
+                                        green: { ...(prev.rag_rules?.green || {}), min: e.target.value === "" ? undefined : Number(e.target.value) },
+                                      },
+                                    }))
+                                  }
+                                  placeholder="80"
+                                />
+                              </div>
+                            </div>
+                          </>
+                        )}
+                        {isDateRag && (
+                          <>
+                            <p className="text-xs text-muted-foreground">
+                              Red before date, Green after date (e.g. expiry or deadline).
+                            </p>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <Label className="text-xs">Red before (date)</Label>
+                                <Input
+                                  type="text"
+                                  value={newField.rag_rules?.red?.before ?? ""}
+                                  onChange={(e) =>
+                                    setNewField((prev) => ({
+                                      ...prev,
+                                      rag_rules: {
+                                        ...prev.rag_rules,
+                                        red: { ...(prev.rag_rules?.red || {}), before: e.target.value || undefined },
+                                      },
+                                    }))
+                                  }
+                                  placeholder="2025-01-01"
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-xs">Green after (date)</Label>
+                                <Input
+                                  type="text"
+                                  value={newField.rag_rules?.green?.after ?? ""}
+                                  onChange={(e) =>
+                                    setNewField((prev) => ({
+                                      ...prev,
+                                      rag_rules: {
+                                        ...prev.rag_rules,
+                                        green: { ...(prev.rag_rules?.green || {}), after: e.target.value || undefined },
+                                      },
+                                    }))
+                                  }
+                                  placeholder="2025-06-01"
+                                />
+                              </div>
+                            </div>
+                          </>
+                        )}
+                        {isOptionsRag && (
+                          <>
+                            <p className="text-xs text-muted-foreground">
+                              {opts.length > 0
+                                ? "Map each option to a RAG colour. Selected value(s) will show that colour."
+                                : "Add options above first, then map each option to Red / Amber / Green below."}
+                            </p>
+                            {opts.length > 0 ? (
+                              <div className="space-y-2">
+                                {opts.map((opt, idx) => {
+                                  const optionValue = opt.value ?? opt.label ?? String(idx);
+                                  const ragVal = getRagForOption(optionValue);
+                                  return (
+                                    <div key={idx} className="flex items-center gap-2 flex-wrap">
+                                      <span className="text-sm font-medium min-w-[100px]">{opt.label ?? optionValue}</span>
+                                      <Select
+                                        value={ragVal || "none"}
+                                        onValueChange={(v) => setRagForOption(optionValue, v === "none" ? "" : v)}
+                                      >
+                                        <SelectTrigger className="w-[120px]">
+                                          <SelectValue placeholder="RAG" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="none">None</SelectItem>
+                                          <SelectItem value="red">Red</SelectItem>
+                                          <SelectItem value="amber">Amber</SelectItem>
+                                          <SelectItem value="green">Green</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <p className="text-xs text-muted-foreground italic">No options yet. Add options in the section above.</p>
+                            )}
+                          </>
+                        )}
+                      </div>
+                      );
+                    })()}
 
                     {/* RAG rules for new field */}
                     {newField.type === "rag" && (

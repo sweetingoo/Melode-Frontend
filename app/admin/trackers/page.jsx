@@ -835,14 +835,14 @@ const TrackersPage = () => {
   const formatFieldValue = (field, value) => {
     const fieldType = field.type || field.field_type;
 
-    // RAG: value may be { value, rag } from formatted_data
-    if (fieldType === "rag" && value && typeof value === "object" && "rag" in value) {
+    // Any field with RAG display (rag, calculated+rag, number+rag): value is { value, rag }
+    if (value && typeof value === "object" && "rag" in value) {
       const rag = value.rag?.toLowerCase();
       const label = value.value != null && value.value !== "" ? String(value.value) : "—";
       const badge = rag ? `[${rag.charAt(0).toUpperCase() + rag.slice(1)}] ` : "";
       return badge + label;
     }
-    // Calculated: show number or string
+    // Calculated (no RAG): raw value
     if (fieldType === "calculated") {
       if (value === null || value === undefined || value === "") return "—";
       return String(value);
