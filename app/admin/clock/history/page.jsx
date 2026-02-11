@@ -40,6 +40,7 @@ import { LeaveRequestList } from "@/components/attendance/LeaveRequestList";
 import { HolidayBalanceCard } from "@/components/attendance/HolidayBalanceCard";
 import { MyRotaView } from "@/components/attendance/MyRotaView";
 import { MyContractView } from "@/components/attendance/MyContractView";
+import { ShiftRecordList } from "@/components/attendance/ShiftRecordList";
 import { CalendarIcon, Clock, Coffee, User, MapPin, Building2, Loader2, ArrowLeft, History, Filter, RefreshCw, ChevronRight, ChevronLeft, Calendar, LayoutGrid, FileText } from "lucide-react";
 import {
   Dialog,
@@ -759,6 +760,25 @@ function ClockHistoryPageContent() {
               )}
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Shift Records (same view as Time & Attendance -> Shift Records, for current user) */}
+      <Card className="overflow-hidden">
+        <CardHeader className="space-y-1.5 p-4 sm:p-6">
+          <CardTitle className="text-lg sm:text-xl">Your Shift Records</CardTitle>
+          <CardDescription className="text-sm">
+            Attendance, leave, and shift records. Add or edit records below.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="p-4 sm:p-6 pt-0">
+          <ShiftRecordList
+            userId={user?.id}
+            showCreateButton={true}
+            allowUserSelect={false}
+            defaultCategory="all"
+            compactHeader
+          />
         </CardContent>
       </Card>
 

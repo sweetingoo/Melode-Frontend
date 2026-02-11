@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -17,21 +17,36 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import Link from "next/link";
-import { CalendarIcon, Loader2, Plus } from "lucide-react";
+import { CalendarIcon, Loader2, Plus, ChevronDown } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { formatDateForAPI } from "@/utils/time";
+import { getUserDisplayName } from "@/utils/user";
 import { useCreateShiftRecord, useUpdateShiftRecord } from "@/hooks/useShiftRecords";
 import { useShiftLeaveTypes } from "@/hooks/useAttendance";
-import { useAssignments } from "@/hooks/useAssignments";
+import { useAssignments, useEmployeeAssignments } from "@/hooks/useAssignments";
 import { useUsers } from "@/hooks/useUsers";
+import { useDepartments } from "@/hooks/useDepartments";
 import { useAuth } from "@/hooks/useAuth";
 import { ATTENDANCE_CATEGORY_OPTIONS, getCategoryDescription } from "@/lib/attendanceLabels";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 const ALL_CATEGORIES = ATTENDANCE_CATEGORY_OPTIONS;
 
 /** When allowUserSelect is false, user can only add/edit attendance (not leave) - leave must go through request workflow */
 const CATEGORIES_ATTENDANCE_ONLY = ALL_CATEGORIES.filter((c) => c.value === "attendance");
+
+/** Parse "HH:mm" to decimal hours (e.g. "09:00" and "17:30" -> 8.5). Returns null if invalid. */
+function hoursFromStartEnd(startStr, endStr) {
+  if (!startStr || !endStr || !/^\d{1,2}:\d{2}$/.test(startStr) || !/^\d{1,2}:\d{2}$/.test(endStr)) return null;
+  const [sh, sm] = startStr.split(":").map(Number);
+  const [eh, em] = endStr.split(":").map(Number);
+  const startMins = sh * 60 + sm;
+  const endMins = eh * 60 + em;
+  if (endMins <= startMins) return null;
+  const hours = (endMins - startMins) / 60;
+  return Math.round(hours * 100) / 100;
+}
 
 export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId = null, allowUserSelect = false }) => {
   const { user } = useAuth();
@@ -39,6 +54,11 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
   const [category, setCategory] = useState("attendance");
   const [shiftLeaveTypeId, setShiftLeaveTypeId] = useState("");
   const [selectedUserId, setSelectedUserId] = useState("");
+  const [selectedUserForDisplay, setSelectedUserForDisplay] = useState(null);
+  const [userDepartmentFilter, setUserDepartmentFilter] = useState("");
+  const [userSearch, setUserSearch] = useState("");
+  const [debouncedUserSearch, setDebouncedUserSearch] = useState("");
+  const [userComboboxOpen, setUserComboboxOpen] = useState(false);
   const [jobRoleId, setJobRoleId] = useState("");
   const [departmentId, setDepartmentId] = useState("");
   const [hours, setHours] = useState("7.5");
@@ -53,16 +73,57 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
 
   const getAssignmentRoleId = (a) => a?.role_id ?? a?.job_role_id ?? a?.roleId;
 
-  const { data: usersData } = useUsers(allowUserSelect ? { per_page: 100 } : { limit: 0 });
+  const { data: usersData, isLoading: usersSearchLoading } = useUsers(
+    allowUserSelect
+      ? {
+          search: debouncedUserSearch.trim() || undefined,
+          department_id: userDepartmentFilter ? parseInt(userDepartmentFilter, 10) : undefined,
+          per_page: 20,
+        }
+      : { limit: 0 },
+    {
+      enabled:
+        allowUserSelect &&
+        open &&
+        userComboboxOpen &&
+        debouncedUserSearch.trim().length >= 1,
+    }
+  );
   const users = usersData?.users || usersData?.data || [];
+  const usersSorted = useMemo(
+    () =>
+      [...users].sort((a, b) =>
+        getUserDisplayName(a).localeCompare(getUserDisplayName(b), undefined, { sensitivity: "base" })
+      ),
+    [users]
+  );
+  const selectedUser = allowUserSelect
+    ? selectedUserForDisplay ?? users.find((u) => String(u.id) === selectedUserId)
+    : null;
+  const selectedUserSlug = open ? selectedUser?.slug : null;
 
-  const { data: assignmentsData, isLoading: assignmentsLoading } = useAssignments(
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedUserSearch(userSearch), 300);
+    return () => clearTimeout(t);
+  }, [userSearch]);
+
+  const { data: departmentsData } = useDepartments({}, { enabled: allowUserSelect && open });
+  const departments = departmentsData?.departments ?? departmentsData?.data ?? [];
+  const departmentsSorted = [...departments].sort((a, b) =>
+    (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" })
+  );
+
+  const listAssignmentsQuery = useAssignments(
     {
       user_id: targetUserId ? parseInt(targetUserId, 10) : undefined,
       is_active: true,
     },
-    { enabled: open && !!targetUserId }
+    { enabled: open && !!targetUserId && !selectedUserSlug }
   );
+  const employeeAssignmentsQuery = useEmployeeAssignments(selectedUserSlug || "");
+
+  const assignmentsData = selectedUserSlug ? employeeAssignmentsQuery.data : listAssignmentsQuery.data;
+  const assignmentsLoading = selectedUserSlug ? employeeAssignmentsQuery.isLoading : listAssignmentsQuery.isLoading;
   const rawAssignments = assignmentsData?.assignments ?? assignmentsData;
   const assignments = Array.isArray(rawAssignments) ? rawAssignments : [];
   const assignmentsWithRole = assignments.filter((a) => getAssignmentRoleId(a) != null);
@@ -76,6 +137,7 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
       setCategory(shiftRecord.category || "attendance");
       setShiftLeaveTypeId(shiftRecord.shift_leave_type_id?.toString() || "");
       setSelectedUserId(shiftRecord.user_id?.toString() || "");
+      setSelectedUserForDisplay(shiftRecord.user ?? null);
       setJobRoleId(shiftRecord.job_role_id?.toString() || "");
       setDepartmentId(shiftRecord.department_id?.toString() || "");
       setHours(shiftRecord.hours?.toString() || "7.5");
@@ -87,6 +149,11 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
       setCategory("attendance");
       setShiftLeaveTypeId("");
       setSelectedUserId(userId?.toString() || "");
+      setSelectedUserForDisplay(null);
+      setUserDepartmentFilter("");
+      setUserSearch("");
+      setDebouncedUserSearch("");
+      setUserComboboxOpen(false);
       setJobRoleId("");
       setDepartmentId("");
       setHours("7.5");
@@ -95,6 +162,24 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
       setNotes("");
     }
   }, [shiftRecord, open, userId, user?.id]);
+
+  useEffect(() => {
+    if (allowUserSelect && userDepartmentFilter) {
+      setSelectedUserId("");
+      setSelectedUserForDisplay(null);
+    }
+  }, [userDepartmentFilter, allowUserSelect]);
+
+  const prevSelectedUserIdRef = useRef(selectedUserId);
+  useEffect(() => {
+    if (allowUserSelect && prevSelectedUserIdRef.current !== selectedUserId) {
+      prevSelectedUserIdRef.current = selectedUserId;
+      setJobRoleId("");
+      setDepartmentId("");
+    } else {
+      prevSelectedUserIdRef.current = selectedUserId;
+    }
+  }, [selectedUserId, allowUserSelect]);
 
   // Auto-select first job role when adding and user has only one assignment
   useEffect(() => {
@@ -112,6 +197,12 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
       if (assignment?.department_id) setDepartmentId(String(assignment.department_id));
     }
   }, [jobRoleId, assignments]);
+
+  // Auto-calculate hours when start time or end time changes
+  useEffect(() => {
+    const calculated = hoursFromStartEnd(startTime, endTime);
+    if (calculated != null) setHours(String(calculated));
+  }, [startTime, endTime]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -156,32 +247,107 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
     }
   };
 
-  const canSubmit = shiftDate && shiftLeaveTypeId && jobRoleId && departmentId && hours && parseFloat(hours) > 0 && parseFloat(hours) <= 24;
+  const canSubmit =
+    shiftDate &&
+    shiftLeaveTypeId &&
+    jobRoleId &&
+    departmentId &&
+    hours &&
+    parseFloat(hours) > 0 &&
+    parseFloat(hours) <= 24 &&
+    (!allowUserSelect || !!selectedUserId);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
+      <DialogContent className="max-w-lg max-h-[90vh] flex flex-col p-0 gap-0">
+        <DialogHeader className="shrink-0 px-6 pt-6 pb-2">
           <DialogTitle>{shiftRecord ? "Edit Shift Record" : "Add Shift Record"}</DialogTitle>
           <DialogDescription>Record attendance, leave, or allocated shift. Hours are required.</DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+          <div className="overflow-y-auto px-6 pb-4 space-y-4 flex-1 min-h-0">
           {allowUserSelect && (
-            <div className="space-y-2">
-              <Label>User</Label>
-              <Select value={selectedUserId} onValueChange={setSelectedUserId} required>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select user" />
-                </SelectTrigger>
-                <SelectContent>
-                  {users.map((u) => (
-                    <SelectItem key={u.id} value={String(u.id)}>
-                      {u.display_name || u.email}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <>
+              <div className="space-y-2">
+                <Label>Department (filter)</Label>
+                <Select
+                  value={userDepartmentFilter || "__all__"}
+                  onValueChange={(v) => setUserDepartmentFilter(v === "__all__" ? "" : v)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="All departments" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">All departments</SelectItem>
+                    {departmentsSorted.map((d) => (
+                      <SelectItem key={d.id} value={String(d.id)}>
+                        {d.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>User</Label>
+                <Popover open={userComboboxOpen} onOpenChange={(open) => { setUserComboboxOpen(open); if (!open) { setUserSearch(""); setDebouncedUserSearch(""); } }}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={userComboboxOpen}
+                      className={cn("w-full justify-between font-normal", !selectedUserId && "text-muted-foreground")}
+                    >
+                      {selectedUser ? getUserDisplayName(selectedUser) : "Type to search users..."}
+                      <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                    <div className="p-2 border-b">
+                      <Input
+                        placeholder="Search by name..."
+                        value={userSearch}
+                        onChange={(e) => setUserSearch(e.target.value)}
+                        className="h-9"
+                        autoFocus
+                      />
+                    </div>
+                    <ScrollArea className="max-h-64">
+                      {!debouncedUserSearch.trim() ? (
+                        <p className="py-6 text-center text-sm text-muted-foreground">Type to search users.</p>
+                      ) : usersSearchLoading ? (
+                        <p className="py-6 text-center text-sm text-muted-foreground">Loading…</p>
+                      ) : usersSorted.length === 0 ? (
+                        <p className="py-6 text-center text-sm text-muted-foreground">No users found.</p>
+                      ) : (
+                        <ul className="p-1">
+                          {usersSorted.map((u) => (
+                            <li key={u.id}>
+                              <button
+                                type="button"
+                                className={cn(
+                                  "w-full rounded-sm px-2 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground",
+                                  String(u.id) === selectedUserId && "bg-accent"
+                                )}
+                                onClick={() => {
+                                  setSelectedUserId(String(u.id));
+                                  setSelectedUserForDisplay(u);
+                                  setUserComboboxOpen(false);
+                                  setUserSearch("");
+                                  setDebouncedUserSearch("");
+                                }}
+                              >
+                                {getUserDisplayName(u)}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </ScrollArea>
+                  </PopoverContent>
+                </Popover>
+              </div>
+            </>
           )}
 
           <div className="space-y-2">
@@ -209,7 +375,7 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
           </div>
 
           <div className="space-y-2">
-            <Label>Shift / Leave Type</Label>
+            <Label>Shift Type</Label>
             <div className="flex gap-2">
               <Select value={shiftLeaveTypeId} onValueChange={setShiftLeaveTypeId} required className="flex-1 min-w-0">
                 <SelectTrigger>
@@ -299,8 +465,9 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
             <Label>Notes (optional)</Label>
             <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
           </div>
+          </div>
 
-          <DialogFooter>
+          <DialogFooter className="shrink-0 px-6 pb-6 pt-4 border-t">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
