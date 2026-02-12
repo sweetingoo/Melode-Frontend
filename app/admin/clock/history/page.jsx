@@ -247,9 +247,9 @@ function ClockHistoryPageContent() {
   };
 
   return (
-    <div className="w-full space-y-4 px-2 py-4 sm:space-y-6 sm:px-0 sm:py-6">
+    <div className="w-full space-y-4 px-2 pt-0 pb-4 sm:space-y-6 sm:px-0 sm:pt-0 sm:pb-6">
       <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-4 sm:space-y-6">
-        <div className="sticky top-0 z-0 -mx-2 border-b bg-background px-3 pb-3 pt-2 shadow-[0_1px_0_0_hsl(var(--border))] sm:-mx-4 sm:px-4 sm:pb-2 sm:pt-1">
+        <div className="sticky top-0 z-0 -mx-2 -mt-px border-b bg-background px-3 py-0 shadow-[0_1px_0_0_hsl(var(--border))] sm:-mx-4 sm:px-4">
           <div className="relative flex items-center">
             {tabsScrollState.left && (
               <Button

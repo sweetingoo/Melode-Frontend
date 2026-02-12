@@ -23,6 +23,7 @@ export const PageSearchBar = ({
   onCreateClick,
   createButtonText = "Create",
   createButtonIcon: CreateIcon = Plus,
+  leftOfCreateButton,
   className,
   inputRef,
 }) => {
@@ -54,6 +55,7 @@ export const PageSearchBar = ({
                   Filters
                 </Button>
               )}
+              {leftOfCreateButton}
               {showCreateButton && (
                 <Button
                   onClick={onCreateClick}

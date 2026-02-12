@@ -339,4 +339,24 @@ export const trackersService = {
       throw error;
     }
   },
+
+  // --- Excel import ---
+  analyzeExcelImport: async (file) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    const response = await api.post("/trackers/import/excel/analyze", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return response.data;
+  },
+
+  applyExcelImport: async (file, config) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("config", JSON.stringify(config));
+    const response = await api.post("/trackers/import/excel/apply", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return response.data;
+  },
 };

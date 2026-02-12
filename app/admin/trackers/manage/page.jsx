@@ -52,6 +52,7 @@ import {
   CheckCircle,
   XCircle,
   ArrowLeft,
+  FileSpreadsheet,
 } from "lucide-react";
 import {
   useTrackers,
@@ -291,19 +292,33 @@ const TrackersManagePage = () => {
       </div>
 
       {/* Search, filters, and Create - default PageSearchBar */}
-      <PageSearchBar
-        searchValue={searchTerm}
-        onSearchChange={setSearchTerm}
-        searchPlaceholder="Search trackers..."
-        showSearch={true}
-        showFilters={true}
-        isFiltersOpen={isFiltersOpen}
-        onToggleFilters={() => setIsFiltersOpen(!isFiltersOpen)}
-        showCreateButton={canCreate}
-        onCreateClick={() => setIsCreateDialogOpen(true)}
-        createButtonText="Create Tracker"
-        createButtonIcon={Plus}
-      />
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+        <div className="flex-1 min-w-0">
+          <PageSearchBar
+            searchValue={searchTerm}
+            onSearchChange={setSearchTerm}
+            searchPlaceholder="Search trackers..."
+            showSearch={true}
+            showFilters={true}
+            isFiltersOpen={isFiltersOpen}
+            onToggleFilters={() => setIsFiltersOpen(!isFiltersOpen)}
+            showCreateButton={canCreate}
+            onCreateClick={() => setIsCreateDialogOpen(true)}
+            createButtonText="Create Tracker"
+            createButtonIcon={Plus}
+            leftOfCreateButton={
+              canCreate ? (
+                <Link href="/admin/trackers/import">
+                  <Button variant="outline" size="sm" className="h-10 shrink-0">
+                    <FileSpreadsheet className="mr-2 h-4 w-4" />
+                    Import from Excel
+                  </Button>
+                </Link>
+              ) : null
+            }
+          />
+        </div>
+      </div>
 
       {/* Advanced Filters */}
       {isFiltersOpen && (
