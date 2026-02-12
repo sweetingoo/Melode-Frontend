@@ -945,11 +945,21 @@ const TrackerEntryDetailPage = () => {
                                       </Badge>
                                     )}
                                   </div>
-                                  {event.description && (
+                                  {(event.type === "field_updates" || event.type === "created_fields" || event.type === "created") && event.changes?.length > 0 ? (
+                                    <ul className="text-sm text-muted-foreground mt-2 space-y-1 list-none pl-0">
+                                      {event.changes.map((c, i) => (
+                                        <li key={c.field_id || i} className="break-words">
+                                          {event.type === "field_updates"
+                                            ? `${c.field_label}: ${c.old_value ?? "—"} → ${c.new_value ?? "—"}`
+                                            : `${c.field_label}: ${c.new_value ?? "—"}`}
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  ) : event.description ? (
                                     <p className="text-sm text-muted-foreground mt-2 break-words">
                                       {formatTimelineDescription(event.description, event)}
                                     </p>
-                                  )}
+                                  ) : null}
                                 </div>
                                 <div className={`flex flex-col ${isLeft ? "items-end" : "items-start"} mt-3 pt-3 border-t`}>
                                   <span className="text-xs text-muted-foreground whitespace-nowrap">
