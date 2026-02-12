@@ -42,6 +42,7 @@ import { keepPreviousData } from "@tanstack/react-query";
 import { useShiftRecords, useDeleteShiftRecord } from "@/hooks/useShiftRecords";
 import { ShiftRecordForm } from "./ShiftRecordForm";
 import { useAuth } from "@/hooks/useAuth";
+import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
 import { useUsers } from "@/hooks/useUsers";
 import { useRoles } from "@/hooks/useRoles";
 import { useDepartments } from "@/hooks/useDepartments";
@@ -65,6 +66,8 @@ const CATEGORIES = [
 
 const ALL_FILTER_VALUE = "__all__";
 
+const PERM_MANAGE_OWN = "attendance:manage_own";
+
 export const ShiftRecordList = ({
   userId = null,
   showCreateButton = true,
@@ -73,6 +76,10 @@ export const ShiftRecordList = ({
   compactHeader = false,
 }) => {
   const { user } = useAuth();
+  const { hasPermission } = usePermissionsCheck();
+  const canManageOwn = hasPermission(PERM_MANAGE_OWN);
+  const canAddOwnOrAll = allowUserSelect || canManageOwn;
+  const effectiveShowCreate = showCreateButton && canAddOwnOrAll;
   const [categoryFilter, setCategoryFilter] = useState(defaultCategory);
   const [dateRange, setDateRange] = useState(undefined);
   const [userFilter, setUserFilter] = useState(ALL_FILTER_VALUE);
@@ -161,6 +168,10 @@ export const ShiftRecordList = ({
   const total = typeof data?.total === "number" ? data.total : records.length;
   const totalPages = typeof data?.total_pages === "number" ? data.total_pages : Math.max(1, Math.ceil(total / perPage));
   const targetUserId = userId || user?.id;
+
+  const canEditRecord = (record) =>
+    allowUserSelect ||
+    (String(record.user_id) === String(user?.id) && record.category === "attendance" && canManageOwn);
 
   const handleEdit = (record) => {
     setSelectedRecord(record);
@@ -368,7 +379,7 @@ export const ShiftRecordList = ({
               </PopoverContent>
             </Popover>
           </div>
-          {showCreateButton && (
+          {effectiveShowCreate && (
             <Button onClick={handleAdd} size="sm" className="h-9 gap-2 shadow-sm">
               <Plus className="h-4 w-4 shrink-0" />
               Add shift record
@@ -379,7 +390,7 @@ export const ShiftRecordList = ({
 
       {records.length === 0 ? (
         <div className="rounded-xl border border-dashed p-8 text-center text-muted-foreground">
-          No shift records found. {showCreateButton && "Add one to get started."}
+          No shift records found. {effectiveShowCreate && "Add one to get started."}
         </div>
       ) : (
         <div className="min-w-0 overflow-x-auto rounded-xl border bg-card shadow-sm">
@@ -439,25 +450,29 @@ export const ShiftRecordList = ({
                     ) : "—"}
                   </TableCell>
                   <TableCell>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleEdit(record)}
-                        aria-label="Edit"
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => setDeleteSlug(record.slug)}
-                        aria-label="Delete"
-                        className="text-destructive hover:text-destructive"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
+                    {canEditRecord(record) ? (
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleEdit(record)}
+                          aria-label="Edit"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setDeleteSlug(record.slug)}
+                          aria-label="Delete"
+                          className="text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground text-xs">—</span>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}
