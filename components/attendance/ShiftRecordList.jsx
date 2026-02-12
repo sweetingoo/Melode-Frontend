@@ -36,6 +36,7 @@ import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { Plus, Pencil, Trash2, Loader2, CalendarIcon, ChevronDown } from "lucide-react";
 import { format } from "date-fns";
 import { formatDateForAPI } from "@/utils/time";
+import { getUserDisplayName } from "@/utils/user";
 import { cn } from "@/lib/utils";
 import { keepPreviousData } from "@tanstack/react-query";
 import { useShiftRecords, useDeleteShiftRecord } from "@/hooks/useShiftRecords";
@@ -401,7 +402,7 @@ export const ShiftRecordList = ({
                 <TableRow key={record.id || record.slug}>
                   {allowUserSelect && (
                     <TableCell>
-                      {record.user?.display_name || record.user?.email || `User #${record.user_id}`}
+                      {record.user ? getUserDisplayName(record.user) : `User #${record.user_id}`}
                     </TableCell>
                   )}
                   <TableCell>

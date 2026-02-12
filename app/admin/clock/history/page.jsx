@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/pagination";
 import { useClockRecords } from "@/hooks/useClock";
 import { useAuth } from "@/hooks/useAuth";
+import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
 import { useAssignments } from "@/hooks/useAssignments";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -58,10 +59,16 @@ import { Suspense } from "react";
 
 const MY_TIME_TAB_VALUES = ["my-time", "my-leave", "my-rota", "my-contract"];
 
+const PERM_MANAGE_ALL = "attendance:manage_all";
+const PERM_MANAGE_ALL_SHIFT_RECORDS = "attendance:manage_all_shift_records";
+
 function ClockHistoryPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user } = useAuth();
+  const { hasPermission } = usePermissionsCheck();
+  const canManageAllShiftRecords =
+    hasPermission(PERM_MANAGE_ALL) || hasPermission(PERM_MANAGE_ALL_SHIFT_RECORDS);
   const { data: assignmentsData } = useAssignments({ user_id: user?.id, is_active: true });
   const assignments = assignmentsData?.assignments || assignmentsData || [];
   const activeAssignment = assignments?.[0];
@@ -763,19 +770,23 @@ function ClockHistoryPageContent() {
         </CardContent>
       </Card>
 
-      {/* Shift Records (same view as Time & Attendance -> Shift Records, for current user) */}
+      {/* Shift Records: all users for admin/manage permission, own only otherwise */}
       <Card className="overflow-hidden">
         <CardHeader className="space-y-1.5 p-4 sm:p-6">
-          <CardTitle className="text-lg sm:text-xl">Your Shift Records</CardTitle>
+          <CardTitle className="text-lg sm:text-xl">
+            {canManageAllShiftRecords ? "Shift Records (All Users)" : "Your Shift Records"}
+          </CardTitle>
           <CardDescription className="text-sm">
-            Attendance, leave, and shift records. Add or edit records below.
+            {canManageAllShiftRecords
+              ? "View and manage attendance and leave shift records for everyone. Use filters to narrow by user, date, or category."
+              : "Attendance, leave, and shift records. Add or edit records below."}
           </CardDescription>
         </CardHeader>
         <CardContent className="p-4 sm:p-6 pt-0">
           <ShiftRecordList
-            userId={user?.id}
+            userId={canManageAllShiftRecords ? undefined : user?.id}
             showCreateButton={true}
-            allowUserSelect={false}
+            allowUserSelect={canManageAllShiftRecords}
             defaultCategory="all"
             compactHeader
           />
