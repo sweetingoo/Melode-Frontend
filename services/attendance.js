@@ -296,6 +296,34 @@ export const attendanceService = {
     }
   },
 
+  /**
+   * Get departments for attendance filter dropdown (list/reports).
+   * Returns [{ id, name }]. Requires attendance:view.
+   */
+  getAttendanceDepartments: async () => {
+    try {
+      const res = await api.get("/attendance/departments");
+      return res.data ?? res;
+    } catch (error) {
+      console.error("Get attendance departments failed:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Suggest employees for adding shifts / reports. Returns { employees: [{ id, slug, display_name, department_id?, department_name? }] }.
+   * Use q for name search and department_id to narrow by department.
+   */
+  suggestAttendanceEmployees: async (params = {}) => {
+    try {
+      const res = await api.get("/attendance/employees/suggest", { params });
+      return res.data ?? res;
+    } catch (error) {
+      console.error("Suggest attendance employees failed:", error);
+      throw error;
+    }
+  },
+
   // Shift Records
   getShiftRecords: async (params = {}) => {
     try {

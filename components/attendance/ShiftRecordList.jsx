@@ -27,11 +27,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { Plus, Pencil, Trash2, Loader2, CalendarIcon, ChevronDown } from "lucide-react";
 import { format } from "date-fns";
@@ -43,9 +45,8 @@ import { useShiftRecords, useDeleteShiftRecord } from "@/hooks/useShiftRecords";
 import { ShiftRecordForm } from "./ShiftRecordForm";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
-import { useUsers } from "@/hooks/useUsers";
 import { useRoles } from "@/hooks/useRoles";
-import { useDepartments } from "@/hooks/useDepartments";
+import { useAttendanceDepartments, useAttendanceEmployeeSuggest } from "@/hooks/useAttendance";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -87,22 +88,48 @@ export const ShiftRecordList = ({
   const [departmentFilter, setDepartmentFilter] = useState(ALL_FILTER_VALUE);
   const [page, setPage] = useState(1);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const [departmentComboboxOpen, setDepartmentComboboxOpen] = useState(false);
+  const [departmentSearch, setDepartmentSearch] = useState("");
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [deleteSlug, setDeleteSlug] = useState(null);
 
+  const [userComboboxOpen, setUserComboboxOpen] = useState(false);
+  const [userSearch, setUserSearch] = useState("");
+  const [debouncedUserSearch, setDebouncedUserSearch] = useState("");
+  const [selectedUserForFilter, setSelectedUserForFilter] = useState(null);
   const perPage = 20;
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedUserSearch(userSearch), 300);
+    return () => clearTimeout(t);
+  }, [userSearch]);
 
   useEffect(() => {
     setPage(1);
   }, [categoryFilter, dateRange, userFilter, roleFilter, departmentFilter]);
 
-  const { data: usersData } = useUsers({ per_page: 100 }, { enabled: allowUserSelect });
   const { data: rolesData } = useRoles({}, { enabled: allowUserSelect });
-  const { data: departmentsData } = useDepartments({}, { enabled: allowUserSelect });
-  const users = usersData?.users ?? usersData?.data ?? [];
+  const { data: departments } = useAttendanceDepartments({ enabled: true });
+  const departmentsList = Array.isArray(departments) ? departments : [];
   const roles = rolesData?.roles ?? rolesData ?? [];
-  const departments = departmentsData?.departments ?? departmentsData?.data ?? [];
+
+  const { data: suggestEmployees = [], isLoading: usersSuggestLoading } = useAttendanceEmployeeSuggest(
+    {
+      q: debouncedUserSearch.trim() || undefined,
+      department_id: departmentFilter && departmentFilter !== ALL_FILTER_VALUE ? parseInt(departmentFilter, 10) : undefined,
+      limit: 20,
+    },
+    { enabled: allowUserSelect && userComboboxOpen }
+  );
+
+  const departmentsFiltered = useMemo(() => {
+    if (!departmentSearch.trim()) return departmentsList;
+    const q = departmentSearch.trim().toLowerCase();
+    return departmentsList.filter(
+      (d) => (d.name || "").toLowerCase().includes(q) || String(d.id).includes(q)
+    );
+  }, [departmentsList, departmentSearch]);
 
   const applyDatePreset = (preset) => {
     const today = new Date();
@@ -152,7 +179,7 @@ export const ShiftRecordList = ({
       start_date: dateRange?.from ? formatDateForAPI(dateRange.from) : undefined,
       end_date: dateRange?.to ? formatDateForAPI(dateRange.to) : undefined,
       job_role_id: allowUserSelect && roleFilter && roleFilter !== ALL_FILTER_VALUE ? parseInt(roleFilter, 10) : undefined,
-      department_id: allowUserSelect && departmentFilter && departmentFilter !== ALL_FILTER_VALUE ? parseInt(departmentFilter, 10) : undefined,
+      department_id: departmentFilter && departmentFilter !== ALL_FILTER_VALUE ? parseInt(departmentFilter, 10) : undefined,
       page,
       per_page: perPage,
     }),
@@ -240,28 +267,183 @@ export const ShiftRecordList = ({
           <h2 className="text-lg font-semibold tracking-tight text-foreground">Shift Records</h2>
         )}
         <div className="flex min-w-0 flex-col gap-2 sm:ml-auto sm:flex-row sm:flex-wrap sm:items-end sm:gap-3">
+          <div className="flex flex-col gap-1">
+            <Label className="text-xs text-muted-foreground">Department</Label>
+            <Popover
+              open={departmentComboboxOpen}
+              onOpenChange={(open) => {
+                setDepartmentComboboxOpen(open);
+                if (!open) setDepartmentSearch("");
+              }}
+            >
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={departmentComboboxOpen}
+                  className="h-9 w-full min-w-0 justify-between font-normal sm:w-[220px]"
+                >
+                  <span className="truncate">
+                    {departmentFilter === ALL_FILTER_VALUE
+                      ? "All departments"
+                      : departmentsList.find((d) => String(d.id) === departmentFilter)?.name || `Department #${departmentFilter}`}
+                  </span>
+                  <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                <div className="p-2 border-b">
+                  <Input
+                    placeholder="Search departments..."
+                    value={departmentSearch}
+                    onChange={(e) => setDepartmentSearch(e.target.value)}
+                    className="h-9"
+                    autoFocus
+                  />
+                </div>
+                <ScrollArea className="max-h-64">
+                  <ul className="p-1">
+                    <li>
+                      <button
+                        type="button"
+                        className={cn(
+                          "w-full rounded-sm px-2 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground",
+                          departmentFilter === ALL_FILTER_VALUE && "bg-accent"
+                        )}
+                        onClick={() => {
+                          setDepartmentFilter(ALL_FILTER_VALUE);
+                          setDepartmentComboboxOpen(false);
+                          setDepartmentSearch("");
+                        }}
+                      >
+                        All departments
+                      </button>
+                    </li>
+                    {departmentsFiltered.map((d) => (
+                      <li key={d.id}>
+                        <button
+                          type="button"
+                          className={cn(
+                            "w-full rounded-sm px-2 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground",
+                            String(d.id) === departmentFilter && "bg-accent"
+                          )}
+                          onClick={() => {
+                            setDepartmentFilter(String(d.id));
+                            setDepartmentComboboxOpen(false);
+                            setDepartmentSearch("");
+                          }}
+                        >
+                          {d.name || `Department #${d.id}`}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </ScrollArea>
+                {departmentsFiltered.length === 0 && departmentSearch.trim() && (
+                  <p className="py-4 text-center text-sm text-muted-foreground">No department found.</p>
+                )}
+              </PopoverContent>
+            </Popover>
+          </div>
           {allowUserSelect && (
             <>
               <div className="flex flex-col gap-1">
                 <Label className="text-xs text-muted-foreground">Name</Label>
-                <Select value={userFilter} onValueChange={setUserFilter}>
-                  <SelectTrigger className="h-9 w-full min-w-0 sm:w-[180px]">
-                    <SelectValue placeholder="All users" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={ALL_FILTER_VALUE}>All users</SelectItem>
-                    {users.map((u) => (
-                      <SelectItem key={u.id} value={String(u.id)}>
-                        {u.display_name || `${u.first_name || ""} ${u.last_name || ""}`.trim() || u.email || `User #${u.id}`}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Popover
+                  open={userComboboxOpen}
+                  onOpenChange={(open) => {
+                    setUserComboboxOpen(open);
+                    if (!open) {
+                      setUserSearch("");
+                      setDebouncedUserSearch("");
+                    }
+                  }}
+                >
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={userComboboxOpen}
+                      className="h-9 w-full min-w-0 justify-between font-normal sm:w-[280px]"
+                    >
+                      <span className="truncate">
+                        {userFilter === ALL_FILTER_VALUE
+                          ? "All users"
+                          : selectedUserForFilter?.display_name || `User #${userFilter}`}
+                      </span>
+                      <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                    <div className="p-2 border-b">
+                      <Input
+                        placeholder="Search by name..."
+                        value={userSearch}
+                        onChange={(e) => setUserSearch(e.target.value)}
+                        className="h-9"
+                        autoFocus
+                      />
+                    </div>
+                    <ScrollArea className="max-h-64">
+                      {usersSuggestLoading ? (
+                        <p className="py-6 text-center text-sm text-muted-foreground">Loading…</p>
+                      ) : (
+                        <ul className="p-1">
+                          <li>
+                            <button
+                              type="button"
+                              className={cn(
+                                "w-full rounded-sm px-2 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground",
+                                userFilter === ALL_FILTER_VALUE && "bg-accent"
+                              )}
+                              onClick={() => {
+                                setUserFilter(ALL_FILTER_VALUE);
+                                setSelectedUserForFilter(null);
+                                setUserComboboxOpen(false);
+                                setUserSearch("");
+                                setDebouncedUserSearch("");
+                              }}
+                            >
+                              All users
+                            </button>
+                          </li>
+                          {suggestEmployees.map((e) => (
+                            <li key={e.id}>
+                              <button
+                                type="button"
+                                className={cn(
+                                  "w-full rounded-sm px-2 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground",
+                                  String(e.id) === userFilter && "bg-accent"
+                                )}
+                                onClick={() => {
+                                  setUserFilter(String(e.id));
+                                  setSelectedUserForFilter({ id: e.id, display_name: e.display_name });
+                                  setUserComboboxOpen(false);
+                                  setUserSearch("");
+                                  setDebouncedUserSearch("");
+                                }}
+                              >
+                                {e.department_name ? `${e.display_name} — ${e.department_name}` : e.display_name}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </ScrollArea>
+                    {!usersSuggestLoading && suggestEmployees.length === 0 && (
+                      <p className="py-4 text-center text-sm text-muted-foreground">
+                        {debouncedUserSearch.trim() ? "No one found. Try another name or department." : "Type to search."}
+                      </p>
+                    )}
+                  </PopoverContent>
+                </Popover>
               </div>
               <div className="flex flex-col gap-1">
                 <Label className="text-xs text-muted-foreground">Role</Label>
                 <Select value={roleFilter} onValueChange={setRoleFilter}>
-                  <SelectTrigger className="h-9 w-full min-w-0 sm:w-[160px]">
+                  <SelectTrigger className="h-9 w-full min-w-0 sm:w-[200px]">
                     <SelectValue placeholder="All roles" />
                   </SelectTrigger>
                   <SelectContent>
@@ -274,28 +456,12 @@ export const ShiftRecordList = ({
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex flex-col gap-1">
-                <Label className="text-xs text-muted-foreground">Department</Label>
-                <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
-                  <SelectTrigger className="h-9 w-full min-w-0 sm:w-[160px]">
-                    <SelectValue placeholder="All departments" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={ALL_FILTER_VALUE}>All departments</SelectItem>
-                    {departments.map((d) => (
-                      <SelectItem key={d.id} value={String(d.id)}>
-                        {d.name || `Department #${d.id}`}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
             </>
           )}
           <div className="flex flex-col gap-1">
             <Label className="text-xs text-muted-foreground">Category</Label>
             <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-              <SelectTrigger className="h-9 w-full min-w-0 sm:w-[160px]">
+              <SelectTrigger className="h-9 w-full min-w-0 sm:w-[200px]">
                 <SelectValue placeholder={categoryFilterLabel}>{categoryFilterLabel}</SelectValue>
               </SelectTrigger>
               <SelectContent>

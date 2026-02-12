@@ -2,6 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { attendanceService } from "@/services/attendance";
+import { departmentsService } from "@/services/departments";
 import { toast } from "sonner";
 
 // Attendance query keys
@@ -27,6 +28,8 @@ export const attendanceKeys = {
   coverage: (params) => [...attendanceKeys.all, "coverage", params],
   gaps: (params) => [...attendanceKeys.all, "gaps", params],
   nowBoard: (params) => [...attendanceKeys.all, "now-board", params],
+  departments: () => [...attendanceKeys.all, "departments"],
+  employeeSuggest: (params) => [...attendanceKeys.all, "employees", "suggest", params],
   shiftRecords: (params) => [...attendanceKeys.all, "shift-records", params],
   shiftRecord: (slug) => [...attendanceKeys.all, "shift-record", slug],
   provisionalShifts: (params) => [...attendanceKeys.all, "provisional-shifts", params],
@@ -441,6 +444,49 @@ export const useUpdateHolidayEntitlement = () => {
         description: Array.isArray(errorMessage) ? errorMessage.map((e) => e.msg || e).join(", ") : errorMessage,
       });
     },
+  });
+};
+
+// Attendance filter: departments for list/reports dropdown (fallback to /departments if attendance endpoint fails or is empty)
+export const useAttendanceDepartments = (options = {}) => {
+  return useQuery({
+    queryKey: attendanceKeys.departments(),
+    queryFn: async () => {
+      try {
+        const response = await attendanceService.getAttendanceDepartments();
+        const list = Array.isArray(response) ? response : response?.data ?? response?.departments ?? [];
+        if (Array.isArray(list) && list.length > 0) return list;
+      } catch (_) {
+        // fallback below
+      }
+      try {
+        const fallback = await departmentsService.getDepartments({ is_active: true, per_page: 50 });
+        const data = fallback?.data ?? fallback;
+        const departments = data?.departments ?? data?.data ?? (Array.isArray(data) ? data : []);
+        return Array.isArray(departments)
+          ? departments.map((d) => ({ id: d.id, name: d.name ?? `Department ${d.id}` }))
+          : [];
+      } catch (_) {
+        return [];
+      }
+    },
+    staleTime: 5 * 60 * 1000,
+    ...options,
+  });
+};
+
+// Auto-suggest employees when adding shifts / running reports (id, slug, display_name, department_id, department_name)
+export const useAttendanceEmployeeSuggest = (params = {}, options = {}) => {
+  const { q, department_id, limit = 20, enabled = true } = params;
+  return useQuery({
+    queryKey: attendanceKeys.employeeSuggest({ q, department_id, limit }),
+    queryFn: async () => {
+      const response = await attendanceService.suggestAttendanceEmployees({ q, department_id, limit });
+      return response?.employees ?? [];
+    },
+    enabled: !!enabled,
+    staleTime: 60 * 1000,
+    ...options,
   });
 };
 

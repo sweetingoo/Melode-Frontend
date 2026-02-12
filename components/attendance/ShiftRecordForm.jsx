@@ -23,10 +23,8 @@ import { cn } from "@/lib/utils";
 import { formatDateForAPI } from "@/utils/time";
 import { getUserDisplayName } from "@/utils/user";
 import { useCreateShiftRecord, useUpdateShiftRecord } from "@/hooks/useShiftRecords";
-import { useShiftLeaveTypes } from "@/hooks/useAttendance";
+import { useShiftLeaveTypes, useAttendanceDepartments, useAttendanceEmployeeSuggest } from "@/hooks/useAttendance";
 import { useAssignments, useEmployeeAssignments } from "@/hooks/useAssignments";
-import { useUsers } from "@/hooks/useUsers";
-import { useDepartments } from "@/hooks/useDepartments";
 import { useAuth } from "@/hooks/useAuth";
 import { ATTENDANCE_CATEGORY_OPTIONS, getCategoryDescription } from "@/lib/attendanceLabels";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -73,32 +71,25 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
 
   const getAssignmentRoleId = (a) => a?.role_id ?? a?.job_role_id ?? a?.roleId;
 
-  const { data: usersData, isLoading: usersSearchLoading } = useUsers(
-    allowUserSelect
-      ? {
-          search: debouncedUserSearch.trim() || undefined,
-          department_id: userDepartmentFilter ? parseInt(userDepartmentFilter, 10) : undefined,
-          per_page: 20,
-        }
-      : { limit: 0 },
+  const { data: suggestEmployees = [], isLoading: usersSearchLoading } = useAttendanceEmployeeSuggest(
     {
-      enabled:
-        allowUserSelect &&
-        open &&
-        userComboboxOpen &&
-        debouncedUserSearch.trim().length >= 1,
+      q: debouncedUserSearch.trim() || undefined,
+      department_id: userDepartmentFilter ? parseInt(userDepartmentFilter, 10) : undefined,
+      limit: 20,
+    },
+    {
+      enabled: allowUserSelect && open && userComboboxOpen,
     }
   );
-  const users = usersData?.users || usersData?.data || [];
-  const usersSorted = useMemo(
+  const employeesSorted = useMemo(
     () =>
-      [...users].sort((a, b) =>
-        getUserDisplayName(a).localeCompare(getUserDisplayName(b), undefined, { sensitivity: "base" })
+      [...suggestEmployees].sort((a, b) =>
+        (a.display_name || "").localeCompare(b.display_name || "", undefined, { sensitivity: "base" })
       ),
-    [users]
+    [suggestEmployees]
   );
   const selectedUser = allowUserSelect
-    ? selectedUserForDisplay ?? users.find((u) => String(u.id) === selectedUserId)
+    ? selectedUserForDisplay ?? suggestEmployees.find((e) => String(e.id) === selectedUserId)
     : null;
   const selectedUserSlug = open ? selectedUser?.slug : null;
 
@@ -107,9 +98,8 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
     return () => clearTimeout(t);
   }, [userSearch]);
 
-  const { data: departmentsData } = useDepartments({}, { enabled: allowUserSelect && open });
-  const departments = departmentsData?.departments ?? departmentsData?.data ?? [];
-  const departmentsSorted = [...departments].sort((a, b) =>
+  const { data: attendanceDepartments = [] } = useAttendanceDepartments({ enabled: allowUserSelect && open });
+  const departmentsSorted = [...(Array.isArray(attendanceDepartments) ? attendanceDepartments : [])].sort((a, b) =>
     (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" })
   );
 
@@ -313,31 +303,31 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
                       />
                     </div>
                     <ScrollArea className="max-h-64">
-                      {!debouncedUserSearch.trim() ? (
-                        <p className="py-6 text-center text-sm text-muted-foreground">Type to search users.</p>
-                      ) : usersSearchLoading ? (
+                      {usersSearchLoading ? (
                         <p className="py-6 text-center text-sm text-muted-foreground">Loading…</p>
-                      ) : usersSorted.length === 0 ? (
-                        <p className="py-6 text-center text-sm text-muted-foreground">No users found.</p>
+                      ) : employeesSorted.length === 0 ? (
+                        <p className="py-6 text-center text-sm text-muted-foreground">
+                          {debouncedUserSearch.trim() ? "No one found. Try another name or department." : "Type to search or pick a department first."}
+                        </p>
                       ) : (
                         <ul className="p-1">
-                          {usersSorted.map((u) => (
-                            <li key={u.id}>
+                          {employeesSorted.map((e) => (
+                            <li key={e.id}>
                               <button
                                 type="button"
                                 className={cn(
                                   "w-full rounded-sm px-2 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground",
-                                  String(u.id) === selectedUserId && "bg-accent"
+                                  String(e.id) === selectedUserId && "bg-accent"
                                 )}
                                 onClick={() => {
-                                  setSelectedUserId(String(u.id));
-                                  setSelectedUserForDisplay(u);
+                                  setSelectedUserId(String(e.id));
+                                  setSelectedUserForDisplay({ id: e.id, slug: e.slug, display_name: e.display_name, department_id: e.department_id, department_name: e.department_name });
                                   setUserComboboxOpen(false);
                                   setUserSearch("");
                                   setDebouncedUserSearch("");
                                 }}
                               >
-                                {getUserDisplayName(u)}
+                                {e.department_name ? `${e.display_name} — ${e.department_name}` : e.display_name}
                               </button>
                             </li>
                           ))}
