@@ -169,7 +169,14 @@ export const LeaveRequestList = ({ userId = null, showCreateButton = true, compa
             </Select>
           </div>
           {showCreateButton && (
-            <Button onClick={() => { setSelectedRequest(null); setIsFormOpen(true); }} size="sm" className="h-9 gap-2 shadow-sm">
+            <Button
+              size="sm"
+              className="h-9 gap-2 shadow-sm"
+              onClick={() => {
+                setSelectedRequest(null);
+                setIsFormOpen(true);
+              }}
+            >
               <Plus className="h-4 w-4 shrink-0" />
               Request Leave
             </Button>
@@ -188,9 +195,9 @@ export const LeaveRequestList = ({ userId = null, showCreateButton = true, compa
           </p>
           {showCreateButton && (
             <Button
-              onClick={() => setIsFormOpen(true)}
               className="mt-6 gap-2"
               size="sm"
+              onClick={() => setIsFormOpen(true)}
             >
               <Plus className="h-4 w-4 shrink-0" />
               Create your first leave request

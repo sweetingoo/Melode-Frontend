@@ -27,6 +27,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 
 export const ProvisionalShiftList = ({ userId = null, showCreateButton = true, compactHeader = false }) => {
   const [startDate, setStartDate] = useState("");
@@ -34,6 +43,7 @@ export const ProvisionalShiftList = ({ userId = null, showCreateButton = true, c
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [deleteSlug, setDeleteSlug] = useState(null);
+  const [detailRecord, setDetailRecord] = useState(null);
 
   const params = useMemo(
     () => ({
@@ -166,14 +176,15 @@ export const ProvisionalShiftList = ({ userId = null, showCreateButton = true, c
                         <Badge className="bg-green-600/15 text-green-700 dark:text-green-400 border-green-600/30">
                           Covered
                         </Badge>
-                        <Link
-                          href="/admin/clock/history"
-                          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-                          title="View clock record"
+                        <Button
+                          variant="link"
+                          className="h-auto p-0 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                          title="View shift details"
+                          onClick={() => setDetailRecord(record)}
                         >
                           <Clock className="h-3.5 w-3.5" />
                           View clock
-                        </Link>
+                        </Button>
                       </span>
                     ) : (
                       <Badge variant="secondary" className="bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30">
@@ -215,6 +226,72 @@ export const ProvisionalShiftList = ({ userId = null, showCreateButton = true, c
         onOpenChange={handleFormClose}
         shiftRecord={selectedRecord}
       />
+
+      <Dialog open={!!detailRecord} onOpenChange={(open) => !open && setDetailRecord(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Shift details</DialogTitle>
+            <DialogDescription>Allocated shift information</DialogDescription>
+          </DialogHeader>
+          {detailRecord && (
+            <div className="grid gap-4 py-2">
+              <div className="grid grid-cols-[100px_1fr] gap-2 text-sm items-baseline">
+                <Label className="text-muted-foreground font-normal">User</Label>
+                <span>{detailRecord.user?.display_name || detailRecord.user?.email || `User #${detailRecord.user_id}`}</span>
+              </div>
+              <div className="grid grid-cols-[100px_1fr] gap-2 text-sm items-baseline">
+                <Label className="text-muted-foreground font-normal">Date</Label>
+                <span>{detailRecord.shift_date ? format(new Date(detailRecord.shift_date), "dd MMM yyyy") : "—"}</span>
+              </div>
+              <div className="grid grid-cols-[100px_1fr] gap-2 text-sm items-baseline">
+                <Label className="text-muted-foreground font-normal">Type</Label>
+                <span>{detailRecord.shift_leave_type?.name || detailRecord.shift_leave_type_id || "—"}</span>
+              </div>
+              <div className="grid grid-cols-[100px_1fr] gap-2 text-sm items-baseline">
+                <Label className="text-muted-foreground font-normal">Hours</Label>
+                <span>{detailRecord.hours ?? "—"}</span>
+              </div>
+              <div className="grid grid-cols-[100px_1fr] gap-2 text-sm items-baseline">
+                <Label className="text-muted-foreground font-normal">Time</Label>
+                <span>
+                  {detailRecord.start_time && detailRecord.end_time
+                    ? `${String(detailRecord.start_time).slice(0, 5)} – ${String(detailRecord.end_time).slice(0, 5)}`
+                    : "—"}
+                </span>
+              </div>
+              <div className="grid grid-cols-[100px_1fr] gap-2 text-sm items-baseline">
+                <Label className="text-muted-foreground font-normal">Status</Label>
+                <span>
+                  {detailRecord.clock_record_id ? (
+                    <Badge className="bg-green-600/15 text-green-700 dark:text-green-400 border-green-600/30">Covered</Badge>
+                  ) : (
+                    <Badge variant="secondary" className="bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30">Uncovered</Badge>
+                  )}
+                </span>
+              </div>
+              {detailRecord.notes && (
+                <div className="grid grid-cols-[100px_1fr] gap-2 text-sm items-baseline">
+                  <Label className="text-muted-foreground font-normal">Notes</Label>
+                  <span className="break-words">{detailRecord.notes}</span>
+                </div>
+              )}
+              {detailRecord.clock_record_id && (
+                <p className="text-xs text-muted-foreground pt-1">This shift is linked to a clock session.</p>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            {detailRecord?.clock_record_id && (
+              <Button variant="outline" size="sm" asChild>
+                <Link href="/admin/clock/history">View in My Time</Link>
+              </Button>
+            )}
+            <Button variant="default" size="sm" onClick={() => setDetailRecord(null)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <AlertDialog open={!!deleteSlug} onOpenChange={(open) => !open && setDeleteSlug(null)}>
         <AlertDialogContent>

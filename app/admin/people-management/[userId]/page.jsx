@@ -142,10 +142,8 @@ const UserEditPage = () => {
     return tabParam || getStoredTabState('activeTab', 'basic');
   });
   
-  // Nested tabs state for compliance tab (Compliance / Additional Information)
-  const [complianceSubTab, setComplianceSubTab] = useState(() => {
-    return getStoredTabState('complianceSubTab', 'additional');
-  });
+  // Nested tabs state for compliance tab (My Information / My Compliance) - always default to My Information on load
+  const [complianceSubTab, setComplianceSubTab] = useState('additional');
   const [activeSectionTab, setActiveSectionTab] = useState(() => {
     return getStoredTabState('activeSectionTab', null);
   });
@@ -174,17 +172,6 @@ const UserEditPage = () => {
       }
     }
   }, [activeTab, userSlug]);
-
-  // Persist complianceSubTab to localStorage
-  useEffect(() => {
-    if (typeof window !== 'undefined' && complianceSubTab) {
-      try {
-        localStorage.setItem(`people-management-${userSlug}-complianceSubTab`, complianceSubTab);
-      } catch (error) {
-        console.warn('Failed to save complianceSubTab to localStorage:', error);
-      }
-    }
-  }, [complianceSubTab, userSlug]);
 
   // Persist activeSectionTab to localStorage
   useEffect(() => {
@@ -1542,8 +1529,8 @@ const UserEditPage = () => {
             </TabsTrigger>
             <TabsTrigger value="compliance" className="flex items-center gap-2 whitespace-nowrap">
               <FileCheck className="h-4 w-4" />
-              <span className="hidden sm:inline">Compliance</span>
-              <span className="sm:hidden">Compliance</span>
+              <span className="hidden sm:inline">Information</span>
+              <span className="sm:hidden">Information</span>
             </TabsTrigger>
             {canViewAttendance && (
               <TabsTrigger value="attendance" className="flex items-center gap-2 whitespace-nowrap">

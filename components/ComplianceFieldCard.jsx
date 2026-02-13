@@ -271,16 +271,16 @@ export const ComplianceFieldCard = ({
             </div>
           )}
 
-          {/* Actions */}
-          {value && value.id && value.id > 0 && (onViewHistory || ((isExpired || isExpiringSoon) && canUpload)) ? (
+          {/* Actions - show for any item with a value so users can view details/history for compliant items too */}
+          {value && value.id && value.id > 0 ? (
             <div className="flex gap-2 pt-2 border-t">
-              {value && value.id && value.id > 0 && (isExpired || isExpiringSoon) && canUpload ? (
+              {(isExpired || isExpiringSoon) && canUpload ? (
                 <Button onClick={() => onRenew(value, field)} size="sm" variant="default">
                   <Upload className="h-4 w-4 mr-2" />
                   Renew
                 </Button>
               ) : null}
-              {value && value.id && value.id > 0 && onViewHistory ? (
+              {onViewHistory ? (
                 <Button onClick={() => onViewHistory(field, value)} size="sm" variant="outline">
                   <History className="h-4 w-4 mr-2" />
                   View History
