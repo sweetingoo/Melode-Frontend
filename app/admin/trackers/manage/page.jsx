@@ -130,6 +130,7 @@ const TrackersManagePage = () => {
       statuses: ["open", "in_progress", "pending", "resolved", "closed"],
       allow_inline_status_edit: true,
       sections: [],
+      is_patient_referral: false,
     },
     tracker_fields: {
       fields: [],
@@ -160,6 +161,7 @@ const TrackersManagePage = () => {
         statuses: ["open", "in_progress", "pending", "resolved", "closed"],
         allow_inline_status_edit: true,
         sections: [],
+        is_patient_referral: false,
       },
       tracker_fields: {
         fields: [],
@@ -199,11 +201,14 @@ const TrackersManagePage = () => {
       category: tracker.category || "",
       slug: tracker.slug || "", // Keep slug for edit (read-only display)
       is_active: tracker.is_active !== undefined ? tracker.is_active : true,
-      tracker_config: tracker.tracker_config || {
-        default_status: "open",
-        statuses: ["open", "in_progress", "pending", "resolved", "closed"],
-        allow_inline_status_edit: true,
-        sections: [],
+      tracker_config: {
+        ...(tracker.tracker_config || {
+          default_status: "open",
+          statuses: ["open", "in_progress", "pending", "resolved", "closed"],
+          allow_inline_status_edit: true,
+          sections: [],
+        }),
+        is_patient_referral: tracker.tracker_config?.is_patient_referral ?? false,
       },
       tracker_fields: tracker.tracker_fields || {
         fields: [],
@@ -456,7 +461,11 @@ const TrackersManagePage = () => {
                     </Dialog>
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Organize trackers. Manage categories in Admin → Tracker Categories.
+                    Organize trackers. Manage categories in{" "}
+                    <Link href="/admin/tracker-categories" className="text-primary underline hover:no-underline">
+                      Admin → Tracker Categories
+                    </Link>
+                    .
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -471,6 +480,26 @@ const TrackersManagePage = () => {
                   />
                   <Label htmlFor="is_active" className="cursor-pointer">
                     Active
+                  </Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="is_patient_referral_create"
+                    checked={formData.tracker_config?.is_patient_referral || false}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        tracker_config: {
+                          ...prev.tracker_config,
+                          is_patient_referral: e.target.checked,
+                        },
+                      }))
+                    }
+                    className="rounded"
+                  />
+                  <Label htmlFor="is_patient_referral_create" className="cursor-pointer">
+                    This tracker uses stages (Stage column, queues, SMS, etc.)
                   </Label>
                 </div>
                 <div className="text-sm text-muted-foreground">
@@ -697,6 +726,26 @@ const TrackersManagePage = () => {
               />
               <Label htmlFor="edit-is_active" className="cursor-pointer">
                 Active
+              </Label>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="edit-is_patient_referral"
+                checked={formData.tracker_config?.is_patient_referral || false}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    tracker_config: {
+                      ...prev.tracker_config,
+                      is_patient_referral: e.target.checked,
+                    },
+                  }))
+                }
+                className="rounded"
+              />
+              <Label htmlFor="edit-is_patient_referral" className="cursor-pointer">
+                This tracker uses stages (Stage column, queues, SMS, etc.)
               </Label>
             </div>
             <div className="text-sm text-muted-foreground">

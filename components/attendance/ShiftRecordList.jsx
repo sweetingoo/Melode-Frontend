@@ -629,7 +629,7 @@ export const ShiftRecordList = ({
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => setDeleteSlug(record.slug)}
+                          onClick={() => setDeleteSlug(record.slug ?? String(record.id))}
                           aria-label="Delete"
                           className="text-destructive hover:text-destructive"
                         >

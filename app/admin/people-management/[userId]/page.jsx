@@ -70,6 +70,7 @@ import {
   Loader2,
   Clock,
   ClipboardList,
+  Edit,
 } from "lucide-react";
 import {
   useUser,
@@ -115,6 +116,13 @@ import { cn } from "@/lib/utils";
 import { HolidayBalanceCard } from "@/components/attendance/HolidayBalanceCard";
 import { ShiftRecordList } from "@/components/attendance/ShiftRecordList";
 import { LeaveRequestList } from "@/components/attendance/LeaveRequestList";
+import { EmployeeSettingsForm } from "@/components/attendance/EmployeeSettingsForm";
+import { HolidayEntitlementForm } from "@/components/attendance/HolidayEntitlementForm";
+import {
+  useEmployeeSettings,
+  useHolidayEntitlements,
+  useHolidayYears,
+} from "@/hooks/useAttendance";
 import { filesService } from "@/services/files";
 
 const UserEditPage = () => {
@@ -199,6 +207,11 @@ const UserEditPage = () => {
     useState(null);
   const [selectedRoleForDepartment, setSelectedRoleForDepartment] =
     useState("");
+  const [selectedEmployeeSetting, setSelectedEmployeeSetting] = useState(null);
+  const [isEmployeeSettingsFormOpen, setIsEmployeeSettingsFormOpen] = useState(false);
+  const [selectedEntitlement, setSelectedEntitlement] = useState(null);
+  const [isEntitlementFormOpen, setIsEntitlementFormOpen] = useState(false);
+  const [entitlementFilterYearId, setEntitlementFilterYearId] = useState("all");
 
   const {
     data: userData,
@@ -253,6 +266,24 @@ const UserEditPage = () => {
   const createAssignmentMutation = useCreateAssignment();
   const deleteAssignmentMutation = useDeleteAssignment();
   const queryClient = useQueryClient();
+
+  // Employee job role settings and holiday entitlements (Shifts & Attendance tab)
+  const { data: employeeSettingsData, isLoading: employeeSettingsLoading } = useEmployeeSettings(
+    userData?.id ?? null,
+    {},
+    { enabled: !!userData?.id }
+  );
+  const employeeSettingsList = Array.isArray(employeeSettingsData) ? employeeSettingsData : (employeeSettingsData ?? []);
+  const { data: yearsData } = useHolidayYears({});
+  const years = Array.isArray(yearsData) ? yearsData : (yearsData?.years ?? yearsData ?? []);
+  const entitlementParams = {
+    user_id: userData?.id,
+    ...(entitlementFilterYearId && entitlementFilterYearId !== "all" ? { holiday_year_id: parseInt(entitlementFilterYearId, 10) } : {}),
+  };
+  const { data: entitlementsData, isLoading: entitlementsLoading } = useHolidayEntitlements(entitlementParams, {
+    enabled: !!userData?.id,
+  });
+  const entitlementsList = Array.isArray(entitlementsData) ? entitlementsData : (entitlementsData ?? []);
 
   // Get available roles from API (needed for Superuser role lookup)
   const { data: rolesData, isLoading: rolesLoading } = useRoles();
@@ -919,6 +950,7 @@ const UserEditPage = () => {
   // Current user permission check (for tab visibility)
   const { hasPermission: currentUserHasPermission, isSuperuser: currentUserIsSuperuser } = usePermissionsCheck();
   const canViewAttendance = currentUserHasPermission("attendance:view") || currentUserIsSuperuser;
+  const canManageAttendanceSettings = currentUserHasPermission("attendance:settings") || currentUserIsSuperuser;
   const isViewingSelf = currentUserData?.id === userData?.id;
 
   // Check if current user has wildcard permissions
@@ -2208,6 +2240,199 @@ const UserEditPage = () => {
                   <HolidayBalanceCard userId={userData?.id} />
                 </CardContent>
               </Card>
+
+              {/* Employee job role settings */}
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle>Employee job role settings</CardTitle>
+                      <CardDescription>Start date, hours per day and normal working days per job role</CardDescription>
+                    </div>
+                    {canManageAttendanceSettings && (
+                      <Button
+                        onClick={() => {
+                          setSelectedEmployeeSetting(null);
+                          setIsEmployeeSettingsFormOpen(true);
+                        }}
+                      >
+                        <Plus className="mr-2 h-4 w-4" />
+                        Add settings
+                      </Button>
+                    )}
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {!userData?.id ? (
+                    <p className="text-sm text-muted-foreground">Loading…</p>
+                  ) : employeeSettingsLoading ? (
+                    <div className="flex justify-center p-8">
+                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : employeeSettingsList.length === 0 ? (
+                    <div className="rounded-lg border border-dashed p-6 text-center">
+                      <p className="text-sm text-muted-foreground">No job role settings for this person</p>
+                      {canManageAttendanceSettings && (
+                        <Button
+                          onClick={() => {
+                            setSelectedEmployeeSetting(null);
+                            setIsEmployeeSettingsFormOpen(true);
+                          }}
+                          className="mt-2"
+                          variant="outline"
+                        >
+                          <Plus className="mr-2 h-4 w-4" />
+                          Add settings
+                        </Button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="rounded-md border">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Job role</TableHead>
+                            <TableHead>Department</TableHead>
+                            <TableHead>Start</TableHead>
+                            <TableHead>End</TableHead>
+                            <TableHead>Hours/day</TableHead>
+                            <TableHead>Working days</TableHead>
+                            {canManageAttendanceSettings && <TableHead>Actions</TableHead>}
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {employeeSettingsList.map((s) => (
+                            <TableRow key={s.id}>
+                              <TableCell>{s.job_role?.display_name || s.job_role?.name || s.role?.display_name || s.role?.name || s.job_role_id}</TableCell>
+                              <TableCell>{s.department?.name || s.department_id}</TableCell>
+                              <TableCell>{s.start_date ? String(s.start_date).slice(0, 10) : "—"}</TableCell>
+                              <TableCell>{s.end_date ? String(s.end_date).slice(0, 10) : "—"}</TableCell>
+                              <TableCell>{s.hours_per_day ?? "—"}</TableCell>
+                              <TableCell className="max-w-[200px] truncate">
+                                {Array.isArray(s.normal_working_days) ? s.normal_working_days.map((d) => d.slice(0, 2)).join(", ") : "—"}
+                              </TableCell>
+                              {canManageAttendanceSettings && (
+                                <TableCell>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                      setSelectedEmployeeSetting(s);
+                                      setIsEmployeeSettingsFormOpen(true);
+                                    }}
+                                  >
+                                    <Edit className="h-4 w-4" />
+                                  </Button>
+                                </TableCell>
+                              )}
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Holiday entitlements */}
+              <Card>
+                <CardHeader>
+                  <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div>
+                      <CardTitle>Holiday entitlements</CardTitle>
+                      <CardDescription>Annual allowance (hours) per job role and holiday year</CardDescription>
+                    </div>
+                    {canManageAttendanceSettings && (
+                      <Button onClick={() => { setSelectedEntitlement(null); setIsEntitlementFormOpen(true); }}>
+                        <Plus className="mr-2 h-4 w-4" />
+                        Add entitlement
+                      </Button>
+                    )}
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {userData?.id && (
+                    <div className="flex flex-wrap items-end gap-4">
+                      <div className="space-y-2">
+                        <Label>Filter by holiday year</Label>
+                        <Select value={entitlementFilterYearId} onValueChange={setEntitlementFilterYearId}>
+                          <SelectTrigger className="w-[200px]">
+                            <SelectValue placeholder="All years" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All years</SelectItem>
+                            {years.map((y) => (
+                              <SelectItem key={y.id} value={String(y.id)}>
+                                {y.year_name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  )}
+                  {!userData?.id ? (
+                    <p className="text-sm text-muted-foreground">Loading…</p>
+                  ) : entitlementsLoading ? (
+                    <div className="flex justify-center p-8">
+                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : entitlementsList.length === 0 ? (
+                    <div className="rounded-lg border border-dashed p-6 text-center">
+                      <p className="text-sm text-muted-foreground">No holiday entitlements for this person</p>
+                      {canManageAttendanceSettings && (
+                        <Button onClick={() => { setSelectedEntitlement(null); setIsEntitlementFormOpen(true); }} className="mt-2" variant="outline">
+                          <Plus className="mr-2 h-4 w-4" />
+                          Add entitlement
+                        </Button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="rounded-md border">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Job role</TableHead>
+                            <TableHead>Holiday year</TableHead>
+                            <TableHead>Allowance (h)</TableHead>
+                            <TableHead>Carried</TableHead>
+                            <TableHead>Used</TableHead>
+                            <TableHead>Remaining</TableHead>
+                            {canManageAttendanceSettings && <TableHead>Actions</TableHead>}
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {entitlementsList.map((ent) => (
+                            <TableRow key={ent.id}>
+                              <TableCell>{ent.job_role?.display_name || ent.job_role?.name || ent.role?.display_name || ent.role?.name || ent.job_role_id}</TableCell>
+                              <TableCell>{ent.holiday_year?.year_name || ent.holiday_year_id}</TableCell>
+                              <TableCell>{ent.annual_allowance_hours ?? "—"}</TableCell>
+                              <TableCell>{ent.carried_forward_hours ?? "0"}</TableCell>
+                              <TableCell>{ent.used_hours ?? "—"}</TableCell>
+                              <TableCell>{ent.remaining_hours ?? "—"}</TableCell>
+                              {canManageAttendanceSettings && (
+                                <TableCell>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                      setSelectedEntitlement(ent);
+                                      setIsEntitlementFormOpen(true);
+                                    }}
+                                  >
+                                    <Edit className="h-4 w-4" />
+                                  </Button>
+                                </TableCell>
+                              )}
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
               <Card>
                 <CardHeader>
                   <CardTitle>Leave Requests</CardTitle>
@@ -2242,6 +2467,19 @@ const UserEditPage = () => {
                   </Button>
                 </Link>
               </div>
+
+              <EmployeeSettingsForm
+                open={isEmployeeSettingsFormOpen}
+                onOpenChange={setIsEmployeeSettingsFormOpen}
+                setting={selectedEmployeeSetting}
+                preselectedUserId={userData?.id}
+              />
+              <HolidayEntitlementForm
+                open={isEntitlementFormOpen}
+                onOpenChange={setIsEntitlementFormOpen}
+                entitlement={selectedEntitlement}
+                preselectedUserId={userData?.id}
+              />
             </div>
           </TabsContent>
         )}

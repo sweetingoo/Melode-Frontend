@@ -57,6 +57,7 @@ import {
   Download,
   Settings,
   X,
+  ChevronRight,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -71,17 +72,21 @@ import { cn } from "@/lib/utils";
 import {
   useTrackers,
   useTracker,
+  useTrackerQueueCounts,
   useUpdateTracker,
   useInfiniteTrackerEntries,
   useTrackerEntriesAggregates,
   useDeleteTrackerEntry,
   useCreateTrackerEntry,
+  useUpdateTrackerEntry,
 } from "@/hooks/useTrackers";
 import CustomFieldRenderer from "@/components/CustomFieldRenderer";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { format } from "date-fns";
+import { Textarea } from "@/components/ui/textarea";
+import { format, addDays, startOfDay, subDays } from "date-fns";
 import { parseUTCDate } from "@/utils/time";
+import { humanizeStatusForDisplay } from "@/utils/slug";
 import { toast } from "sonner";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
 import { useUsers } from "@/hooks/useUsers";
@@ -95,6 +100,47 @@ const STATUS_PARAM = "status";
 const FIELD_PREFIX = "f_";
 const HIGHLIGHT_RULES_PARAM = "hl";
 const AGGREGATE_PREFIX = "ag_";
+
+// Patient Referral queue presets (Phase 3)
+const PATIENT_REFERRAL_QUEUE_IDS = {
+  ALL: "all",
+  AWAITING_TRIAGE: "awaiting_triage",
+  ACTION_REQUIRED: "action_required",
+  CHASE_OVERDUE: "chase_overdue",
+  UPCOMING_APPOINTMENTS: "upcoming_appointments",
+  PAST_OUTCOME_NOT_CHECKED: "past_outcome_not_checked",
+  READY_TO_BOOK: "ready_to_book",
+  DRAFT: "draft",
+};
+function getPatientReferralQueuePreset(queueId) {
+  const today = format(startOfDay(new Date()), "yyyy-MM-dd");
+  const in7Days = format(addDays(startOfDay(new Date()), 7), "yyyy-MM-dd");
+  switch (queueId) {
+    case PATIENT_REFERRAL_QUEUE_IDS.ALL:
+      return { status: "all", field_filters: {}, next_appointment_date_after: null, next_appointment_date_before: null };
+    case PATIENT_REFERRAL_QUEUE_IDS.AWAITING_TRIAGE:
+      return { status: "Awaiting Triage", field_filters: {}, next_appointment_date_after: null, next_appointment_date_before: null };
+    case PATIENT_REFERRAL_QUEUE_IDS.ACTION_REQUIRED:
+      return { status: "Triage Completed – Action Required", field_filters: {}, next_appointment_date_after: null, next_appointment_date_before: null };
+    case PATIENT_REFERRAL_QUEUE_IDS.CHASE_OVERDUE:
+      return { status: "all", field_filters: { chase_due: { op: "<=", value: today } }, next_appointment_date_after: null, next_appointment_date_before: null };
+    case PATIENT_REFERRAL_QUEUE_IDS.UPCOMING_APPOINTMENTS:
+      return { status: "all", field_filters: {}, next_appointment_date_after: today, next_appointment_date_before: in7Days };
+    case PATIENT_REFERRAL_QUEUE_IDS.PAST_OUTCOME_NOT_CHECKED:
+      return {
+        status: "Awaiting Outcome Check (EMIS)",
+        field_filters: { next_appointment_date: { op: "<", value: today } },
+        next_appointment_date_after: null,
+        next_appointment_date_before: null,
+      };
+    case PATIENT_REFERRAL_QUEUE_IDS.READY_TO_BOOK:
+      return { status: "Ready to Book Procedure", field_filters: {}, next_appointment_date_after: null, next_appointment_date_before: null };
+    case PATIENT_REFERRAL_QUEUE_IDS.DRAFT:
+      return { status: "New Referral Received", field_filters: {}, next_appointment_date_after: null, next_appointment_date_before: null };
+    default:
+      return { status: "all", field_filters: {}, next_appointment_date_after: null, next_appointment_date_before: null };
+  }
+}
 
 const URL_OP_TO_STATE = { gt: ">", lt: "<", gte: ">=", lte: "<=", eq: "=", contains: "contains" };
 const STATE_OP_TO_URL = { ">": "gt", "<": "lt", ">=": "gte", "<=": "lte", "=": "eq", contains: "contains" };
@@ -118,6 +164,7 @@ const TrackersPage = () => {
   const { hasPermission } = usePermissionsCheck();
   const canCreateEntry = hasPermission("tracker_entry:create");
   const canReadEntries = hasPermission("tracker_entry:read") || hasPermission("tracker_entry:list");
+  const canUpdateEntry = hasPermission("tracker_entry:update");
   const canDeleteEntry = hasPermission("tracker_entry:delete");
   const   canReadTrackers = hasPermission("tracker:read") || hasPermission("tracker:list");
   const canCreateTracker = hasPermission("tracker:create");
@@ -139,6 +186,9 @@ const TrackersPage = () => {
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   // Sheet-like: selected cell for formula bar (rowIndex, fieldId)
   const [selectedCell, setSelectedCell] = useState(null);
+  // Stage change: show "Any notes?" popup before applying. { entry, newStatus, stageLabel }
+  const [stageChangePending, setStageChangePending] = useState(null);
+  const [stageChangeNotes, setStageChangeNotes] = useState("");
   // View options: density and column visibility (better than sheet)
   const [viewDensity, setViewDensity] = useState("comfortable"); // "compact" | "comfortable" | "spacious"
   const [hiddenColumnsByTracker, setHiddenColumnsByTracker] = useState({}); // { [trackerId]: { [fieldId]: true } }
@@ -147,9 +197,16 @@ const TrackersPage = () => {
   const [highlightRules, setHighlightRules] = useState([]); // [{ fieldId, operator, value }]
   // Ad-hoc aggregate display from query bar (e.g. show sum risk_value) — sent to backend, no frontend load
   const [queryBarAggregateFields, setQueryBarAggregateFields] = useState({}); // { fieldId: "sum"|"avg"|"count"|"min"|"max" }
+  // Phase 3: Last updated filters + queue preset (patient-referral)
+  const [updatedAtAfter, setUpdatedAtAfter] = useState(null); // ISO string or null
+  const [updatedAtBefore, setUpdatedAtBefore] = useState(null);
+  const [nextAppointmentDateAfter, setNextAppointmentDateAfter] = useState(null);
+  const [nextAppointmentDateBefore, setNextAppointmentDateBefore] = useState(null);
+  const [activeQueue, setActiveQueue] = useState(null); // "awaiting_triage" | "chase_overdue" | ... | null
   // Add / Edit formula while viewing entries (sheet-like)
   const [isFormulaDialogOpen, setIsFormulaDialogOpen] = useState(false);
-  const [formulaFieldToEdit, setFormulaFieldToEdit] = useState(null); // null = add, or { field, fieldId } = edit
+  const [formulaFieldToEdit, setFormulaFieldToEdit] = useState(null);
+  const [isPsaQuickGuideOpen, setIsPsaQuickGuideOpen] = useState(false); // null = add, or { field, fieldId } = edit
   const [formulaForm, setFormulaForm] = useState({
     label: "",
     type: "sum",
@@ -398,6 +455,10 @@ const TrackersPage = () => {
   const { data: trackerDetailForFormula } = useTracker(selectedTrackerObj?.slug || "", {
     enabled: !!selectedTrackerObj?.slug && isFormulaDialogOpen,
   });
+  // Full tracker config for stage/status resolution (list may return minimal form_config)
+  const { data: selectedTrackerDetail } = useTracker(selectedTrackerObj?.slug || "", {
+    enabled: !!selectedTrackerObj?.slug,
+  });
   const updateTrackerMutation = useUpdateTracker();
 
   const saveFormulaColumn = useCallback(async () => {
@@ -498,9 +559,13 @@ const TrackersPage = () => {
         ])
       );
     }
+    if (updatedAtAfter) params.updated_at_after = updatedAtAfter;
+    if (updatedAtBefore) params.updated_at_before = updatedAtBefore;
+    if (nextAppointmentDateAfter) params.next_appointment_date_after = nextAppointmentDateAfter;
+    if (nextAppointmentDateBefore) params.next_appointment_date_before = nextAppointmentDateBefore;
 
     return params;
-  }, [selectedTracker, statusFilter, searchTerm, sortBy, sortOrder, columnFilters, itemsPerPage]);
+  }, [selectedTracker, statusFilter, searchTerm, sortBy, sortOrder, columnFilters, itemsPerPage, updatedAtAfter, updatedAtBefore, nextAppointmentDateAfter, nextAppointmentDateBefore]);
 
   // Get tracker entries with infinite scroll
   const {
@@ -528,11 +593,21 @@ const TrackersPage = () => {
             )
           : undefined,
       aggregate_fields: Object.keys(queryBarAggregateFields).length > 0 ? queryBarAggregateFields : undefined,
+      updated_at_after: updatedAtAfter || undefined,
+      updated_at_before: updatedAtBefore || undefined,
+      next_appointment_date_after: nextAppointmentDateAfter || undefined,
+      next_appointment_date_before: nextAppointmentDateBefore || undefined,
     }),
-    [selectedTracker, statusFilter, searchTerm, columnFilters, queryBarAggregateFields]
+    [selectedTracker, statusFilter, searchTerm, columnFilters, queryBarAggregateFields, updatedAtAfter, updatedAtBefore, nextAppointmentDateAfter, nextAppointmentDateBefore]
   );
   const { data: backendAggregatesData } = useTrackerEntriesAggregates(aggregateParams, {
     enabled: !!selectedTracker,
+  });
+  // Show queue presets for any tracker; counts come from backend (match "Awaiting Triage", "Chase Due", etc.).
+  // If your tracker uses different status names, queue counts may be 0 until you add those statuses (Edit tracker → Statuses).
+  const isPatientReferralTracker = !!selectedTrackerObj?.tracker_config?.is_patient_referral;
+  const { data: queueCountsData } = useTrackerQueueCounts(selectedTrackerObj?.slug ?? "", {
+    enabled: !!selectedTrackerObj?.slug,
   });
 
   // Infinite scroll: load more when sentinel enters viewport (must be after useInfiniteTrackerEntries)
@@ -559,6 +634,7 @@ const TrackersPage = () => {
   }, [loadMoreCallback]);
 
   const deleteEntryMutation = useDeleteTrackerEntry();
+  const updateEntryMutation = useUpdateTrackerEntry();
 
   // Flatten all pages into one entries array
   const entries = useMemo(() => {
@@ -606,13 +682,15 @@ const TrackersPage = () => {
     };
   }, [entriesData, itemsPerPage]);
 
-  // Get available statuses from selected tracker
+  // Get available statuses from selected tracker (prefer detail API for full config)
   const availableStatuses = useMemo(() => {
     if (!selectedTracker) return [];
+    const fromDetail = selectedTrackerDetail?.tracker_config?.statuses;
+    if (fromDetail && Array.isArray(fromDetail) && fromDetail.length > 0) return fromDetail;
     const tracker = trackers.find((t) => t.id === parseInt(selectedTracker));
     if (!tracker?.tracker_config?.statuses) return [];
     return tracker.tracker_config.statuses;
-  }, [selectedTracker, trackers]);
+  }, [selectedTracker, trackers, selectedTrackerDetail]);
 
   // Get displayable fields for the selected tracker (for table columns)
   // Uses list_view_fields from tracker_config if specified, otherwise shows first 4 fields
@@ -695,6 +773,16 @@ const TrackersPage = () => {
       color: rule.color ?? "green",
     };
     setHighlightRules((prev) => [...prev, normalized]);
+  }, []);
+
+  // Phase 3: Apply Patient Referral queue preset (status + field_filters + appointment range)
+  const applyQueue = useCallback((queueId) => {
+    setActiveQueue(queueId === PATIENT_REFERRAL_QUEUE_IDS.ALL ? null : queueId);
+    const preset = getPatientReferralQueuePreset(queueId);
+    setStatusFilter(preset.status);
+    setColumnFilters(preset.field_filters || {});
+    setNextAppointmentDateAfter(preset.next_appointment_date_after || null);
+    setNextAppointmentDateBefore(preset.next_appointment_date_before || null);
   }, []);
 
   // Helper: does this cell match a highlight rule? Returns { match, color }. Multiple rules for the same column are supported; last matching rule wins (so add most specific first, or add in order: red >75, green <=75, blue <=50).
@@ -982,6 +1070,87 @@ const TrackersPage = () => {
     [formatFieldValue]
   );
 
+  // Status and Stage are different: stage has many statuses. When changing status we pass stage so backend can verify.
+  const handleStatusChange = useCallback(
+    async (entry, newStatus, notes = null, stageForVerification = null) => {
+      const entryId = entry.slug ?? entry.id;
+      if (entryId == null || entryId === "") {
+        toast.error("Cannot update: entry has no id");
+        return;
+      }
+      try {
+        const entryData = { status: newStatus };
+        if (stageForVerification != null && String(stageForVerification).trim() !== "")
+          entryData.stage = String(stageForVerification).trim();
+        if (notes != null && String(notes).trim() !== "") entryData.notes = String(notes).trim();
+        await updateEntryMutation.mutateAsync({
+          entryIdentifier: String(entryId),
+          entryData,
+        });
+      } catch (error) {
+        console.error("Status update failed:", error);
+      }
+    },
+    [updateEntryMutation]
+  );
+
+  // Move entry to a stage: open "Any notes?" dialog; on confirm send stage (backend resolves status for that stage).
+  const handleStageChange = useCallback((entry, stageName, stageMapping) => {
+    const name = (stageName ?? "").toString().trim();
+    if (!name) return;
+    const mapping = Array.isArray(stageMapping) ? stageMapping : [];
+    if (mapping.length === 0) {
+      toast.error("No stages configured for this tracker");
+      return;
+    }
+    const stageIndex = mapping.findIndex((s) => String(s?.stage ?? s?.name ?? "").trim() === name);
+    if (stageIndex < 0) {
+      toast.error(`Stage "${name}" not found in tracker config`);
+      return;
+    }
+    setStageChangePending({ entry, stageLabel: name, stageName: name });
+    setStageChangeNotes("");
+  }, []);
+
+  // Advance to next stage: open "Any notes?" dialog; on confirm send that stage.
+  const handleNextStage = useCallback((entry, stageMapping) => {
+    if (!stageMapping?.length) return;
+    const currentStage = String(entry?.formatted_data?.derived_stage ?? "").trim();
+    const idx = stageMapping.findIndex((s) => String(s?.stage ?? s?.name ?? "").trim() === currentStage);
+    if (idx < 0 || idx >= stageMapping.length - 1) return;
+    const nextItem = stageMapping[idx + 1];
+    const nextStageLabel = String(nextItem?.stage ?? nextItem?.name ?? "Next stage").trim();
+    if (!nextStageLabel) return;
+    setStageChangePending({ entry, stageLabel: nextStageLabel, stageName: nextStageLabel });
+    setStageChangeNotes("");
+  }, []);
+
+  // Confirm stage change: send stage (and notes) to API; backend resolves status for that stage.
+  const confirmStageChangeWithNotes = useCallback(async () => {
+    if (!stageChangePending) return;
+    const { entry, stageName } = stageChangePending;
+    const entryId = entry.slug ?? entry.id;
+    if (entryId == null || entryId === "") {
+      toast.error("Cannot update: entry has no id");
+      setStageChangePending(null);
+      setStageChangeNotes("");
+      return;
+    }
+    try {
+      const entryData = { stage: stageName };
+      if (stageChangeNotes != null && String(stageChangeNotes).trim() !== "")
+        entryData.notes = String(stageChangeNotes).trim();
+      await updateEntryMutation.mutateAsync({
+        entryIdentifier: String(entryId),
+        entryData,
+      });
+    } catch (error) {
+      console.error("Stage update failed:", error);
+    }
+    setStageChangePending(null);
+    setStageChangeNotes("");
+  }, [stageChangePending, stageChangeNotes, updateEntryMutation]);
+
   const handleDelete = async (entryId) => {
     if (confirm("Are you sure you want to delete this entry?")) {
       try {
@@ -1020,7 +1189,7 @@ const TrackersPage = () => {
   }
 
   return (
-    <div className="space-y-0">
+    <div className="space-y-0 min-w-0 overflow-x-hidden">
       {/* Create Entry Dialog */}
       {selectedTrackerObj && canCreateEntry && (
             <Dialog 
@@ -1180,6 +1349,59 @@ const TrackersPage = () => {
             </Dialog>
       )}
 
+      {/* Stage change: "Any notes?" popup before moving to next stage */}
+      <Dialog
+        open={!!stageChangePending}
+        onOpenChange={(open) => {
+          if (!open) {
+            setStageChangePending(null);
+            setStageChangeNotes("");
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Move to {stageChangePending?.stageLabel ?? "next stage"}?</DialogTitle>
+            <DialogDescription>Optionally add a note for this stage change.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <Label htmlFor="stage-change-notes">Any notes?</Label>
+            <Textarea
+              id="stage-change-notes"
+              placeholder="e.g. Called patient, rebooked for next week"
+              value={stageChangeNotes}
+              onChange={(e) => setStageChangeNotes(e.target.value)}
+              className="min-h-[80px] resize-y"
+              autoFocus
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setStageChangePending(null);
+                setStageChangeNotes("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={confirmStageChangeWithNotes}
+              disabled={updateEntryMutation.isPending}
+            >
+              {updateEntryMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Updating…
+                </>
+              ) : (
+                "Confirm"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Add / Edit formula column (while viewing entries – sheet-like) */}
       {selectedTrackerObj && canUpdateTracker && (
         <Dialog open={isFormulaDialogOpen} onOpenChange={setIsFormulaDialogOpen}>
@@ -1315,6 +1537,41 @@ const TrackersPage = () => {
         </Dialog>
       )}
 
+      {/* Phase 5.3: PSA Quick Guide – "If this happens, set THIS" (Section 9 of spec) */}
+      <Dialog open={isPsaQuickGuideOpen} onOpenChange={setIsPsaQuickGuideOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>PSA Quick Guide</DialogTitle>
+            <DialogDescription>If this happens, set THIS. Use for training and quick reference.</DialogDescription>
+          </DialogHeader>
+          <div className="py-2">
+            <div className="rounded-md border overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/50">
+                    <th className="text-left p-3 font-medium">Situation</th>
+                    <th className="text-left p-3 font-medium">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="border-b"><td className="p-3">Referral arrives</td><td className="p-3">Upload documents → Set <strong>Awaiting Triage</strong>.</td></tr>
+                  <tr className="border-b"><td className="p-3">Consultant has triaged</td><td className="p-3">Open case → Follow triage instruction → Move to: Contact patient to book consultation / Bloods required / Ready to book procedure / Refer back / etc.</td></tr>
+                  <tr className="border-b"><td className="p-3">You call, no answer</td><td className="p-3">Add note (e.g. <strong>Patient phoned</strong>) → Set <strong>Chase Patient (No Answer)</strong> → Set <strong>Chase Due</strong> (e.g. tomorrow).</td></tr>
+                  <tr className="border-b"><td className="p-3">Patient calls back later</td><td className="p-3">Add note → Move back to appropriate booking status.</td></tr>
+                  <tr className="border-b"><td className="p-3">Patient agrees appointment</td><td className="p-3">Set <strong>Consultation Booked</strong> or <strong>Procedure Booked</strong> → Enter date/time → Send SMS if needed.</td></tr>
+                  <tr className="border-b"><td className="p-3">Patient does not attend</td><td className="p-3">Set <strong>DNA – Consultation</strong> or <strong>DNA – Procedure</strong> → Add note → Move to <strong>Rebook … Required</strong> (unless consultant says otherwise).</td></tr>
+                  <tr className="border-b"><td className="p-3">Bloods or prep required</td><td className="p-3">Set appropriate waiting status → Add tasks/reminders → When complete → Move forward.</td></tr>
+                  <tr className="border-b"><td className="p-3">Procedure booked</td><td className="p-3">Set <strong>Procedure Booked</strong> → Enter date/time → Send prep reminder/SMS if required.</td></tr>
+                  <tr className="border-b"><td className="p-3">After appointment date passes</td><td className="p-3">Check EMIS → Then set: Follow-up / Surveillance / Discharge / Onward referral / etc.</td></tr>
+                  <tr className="border-b"><td className="p-3">Cannot contact after multiple tries</td><td className="p-3">Add notes of attempts → Set <strong>Refer Back Required</strong> (then close with <strong>Closed – Referred Back to GP</strong> + reason).</td></tr>
+                  <tr className="border-b"><td className="p-3">Service finished for patient</td><td className="p-3">Set a <strong>Closed</strong> status (Discharged / Referred Back / Onward Referred / Other).</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Tracker Tabs + Search: single sticky top block, no gap */}
       <Tabs 
         value={selectedTracker || undefined} 
@@ -1331,11 +1588,11 @@ const TrackersPage = () => {
         }}
         className="w-full"
       >
-        <div className="sticky top-0 z-20 bg-background border-b shadow-sm pt-0">
+        <div className="sticky top-0 z-20 bg-background border-b shadow-sm pt-0 min-w-0 max-w-full">
           {/* Row 1: Tracker tabs */}
-          <div className="flex items-center gap-2 overflow-x-auto -mx-1 px-1 pt-0 pb-0 sm:overflow-x-visible sm:mx-0 sm:px-0">
-            <div className="flex-shrink-0">
-              <TabsList className="inline-flex w-auto min-w-max sm:w-auto justify-start rounded-none pt-0">
+          <div className="flex items-center gap-2 overflow-x-auto overflow-y-hidden pt-0 pb-0 min-w-0 w-full max-w-full">
+            <div className="flex-shrink-0 min-w-0">
+              <TabsList className="inline-flex w-auto min-w-max justify-start rounded-none pt-0">
                 {trackers
                   .filter((t) => t.is_active)
                   .map((tracker) => (
@@ -1429,7 +1686,7 @@ const TrackersPage = () => {
                         {availableStatuses.length > 0 ? (
                           availableStatuses.map((status) => (
                             <SelectItem key={status} value={status}>
-                              {status}
+                              {humanizeStatusForDisplay(status)}
                             </SelectItem>
                           ))
                         ) : (
@@ -1476,6 +1733,69 @@ const TrackersPage = () => {
                     />
                   </div>
                 </div>
+                {/* Phase 3: Last updated range (optional) */}
+                {selectedTrackerObj?.tracker_config?.is_patient_referral && (
+                  <div className="flex flex-col md:flex-row gap-4 pt-2 border-t">
+                    <div className="flex-1 max-w-[200px]">
+                      <Label className="text-xs text-muted-foreground">Updated in last (days)</Label>
+                      <Input
+                        type="number"
+                        min={1}
+                        placeholder="e.g. 7"
+                        className="mt-1"
+                        value={updatedAtAfter ? (() => {
+                          try {
+                            const after = new Date(updatedAtAfter);
+                            const now = new Date();
+                            const days = Math.round((now - after) / (24 * 60 * 60 * 1000));
+                            return days > 0 ? String(days) : "";
+                          } catch { return ""; }
+                        })() : ""}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          if (v === "" || v === null) {
+                            setUpdatedAtAfter(null);
+                            return;
+                          }
+                          const days = parseInt(v, 10);
+                          if (Number.isFinite(days) && days >= 1) {
+                            setUpdatedAtAfter(format(subDays(startOfDay(new Date()), days), "yyyy-MM-dd'T'00:00:00"));
+                            setUpdatedAtBefore(null);
+                          }
+                        }}
+                      />
+                    </div>
+                    <div className="flex-1 max-w-[200px]">
+                      <Label className="text-xs text-muted-foreground">Not updated in (days)</Label>
+                      <Input
+                        type="number"
+                        min={1}
+                        placeholder="e.g. 7"
+                        className="mt-1"
+                        value={updatedAtBefore ? (() => {
+                          try {
+                            const before = new Date(updatedAtBefore);
+                            const now = new Date();
+                            const days = Math.round((now - before) / (24 * 60 * 60 * 1000));
+                            return days > 0 ? String(days) : "";
+                          } catch { return ""; }
+                        })() : ""}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          if (v === "" || v === null) {
+                            setUpdatedAtBefore(null);
+                            return;
+                          }
+                          const days = parseInt(v, 10);
+                          if (Number.isFinite(days) && days >= 1) {
+                            setUpdatedAtBefore(format(subDays(startOfDay(new Date()), days), "yyyy-MM-dd'T'23:59:59"));
+                            setUpdatedAtAfter(null);
+                          }
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}
@@ -1578,7 +1898,7 @@ const TrackersPage = () => {
                 : "Total";
 
             return (
-              <TabsContent key={tracker.id} value={tracker.id.toString()} className="mt-0 pt-0">
+              <TabsContent key={tracker.id} value={tracker.id.toString()} className="mt-0 pt-0 min-w-0 max-w-full overflow-x-hidden">
       {/* Entries: toolbar + quick filters + table */}
       <Card className="rounded-none border-t-0 shadow-none">
         {/* Toolbar: title, count, view options, export, edit, clear filters */}
@@ -1767,6 +2087,58 @@ const TrackersPage = () => {
             })}
           </div>
         )}
+        {/* Phase 3: Queue presets (counts by status: Awaiting Triage, Chase Due, etc.). Add these statuses in Edit tracker → Statuses to see counts. */}
+        {isPatientReferralTracker && selectedTracker === selectedTrackerObj?.id?.toString() && (
+          <div className="flex flex-wrap items-center gap-1.5 px-4 py-2 border-b bg-muted/30">
+            <span className="text-xs text-muted-foreground mr-1 shrink-0">Queues:</span>
+            {[
+              { id: PATIENT_REFERRAL_QUEUE_IDS.ALL, label: "All" },
+              { id: PATIENT_REFERRAL_QUEUE_IDS.AWAITING_TRIAGE, label: "Awaiting Triage" },
+              { id: PATIENT_REFERRAL_QUEUE_IDS.ACTION_REQUIRED, label: "Action Required" },
+              { id: PATIENT_REFERRAL_QUEUE_IDS.CHASE_OVERDUE, label: "Chase Due / Overdue" },
+              { id: PATIENT_REFERRAL_QUEUE_IDS.UPCOMING_APPOINTMENTS, label: "Upcoming (7 days)" },
+              { id: PATIENT_REFERRAL_QUEUE_IDS.PAST_OUTCOME_NOT_CHECKED, label: "Past – Outcome Not Checked" },
+              { id: PATIENT_REFERRAL_QUEUE_IDS.READY_TO_BOOK, label: "Ready to Book" },
+              { id: PATIENT_REFERRAL_QUEUE_IDS.DRAFT, label: "Draft" },
+            ].map(({ id, label }) => {
+              const count = queueCountsData?.queue_counts?.[id] ?? null;
+              const avgDays = queueCountsData?.avg_days_by_queue?.[id];
+              const isOverdue = id === PATIENT_REFERRAL_QUEUE_IDS.CHASE_OVERDUE && count != null && count > 0;
+              const title = avgDays != null && id !== PATIENT_REFERRAL_QUEUE_IDS.ALL
+                ? `Avg ${avgDays} days in queue`
+                : undefined;
+              return (
+                <Button
+                  key={id}
+                  variant={activeQueue === id || (id === PATIENT_REFERRAL_QUEUE_IDS.ALL && !activeQueue) ? "secondary" : "ghost"}
+                  size="sm"
+                  className={cn("h-7 text-xs", isOverdue && "border-amber-500/70 text-amber-700 dark:text-amber-400")}
+                  onClick={() => applyQueue(id)}
+                  title={title}
+                >
+                  {label}
+                  {count != null ? ` (${count})` : ""}
+                  {avgDays != null && id !== PATIENT_REFERRAL_QUEUE_IDS.ALL ? ` · ${avgDays}d` : ""}
+                </Button>
+              );
+            })}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 text-xs ml-2"
+              onClick={() => setIsPsaQuickGuideOpen(true)}
+            >
+              PSA Quick Guide
+            </Button>
+            <span className="text-xs text-muted-foreground ml-2 self-center">
+              Counts use <strong>Status</strong>. Allowed values are in{" "}
+              <Link href={selectedTrackerObj?.slug ? `/admin/trackers/${selectedTrackerObj.slug}/edit` : "#"} className="underline">
+                Edit tracker → Statuses
+              </Link>
+              . The form field that holds status (e.g. &quot;Current status&quot;) is just a field; Stage is derived from status.
+            </span>
+          </div>
+        )}
         {/* Quick status filter chips */}
         {availableStatuses.length > 0 && selectedTracker === tracker.id.toString() && (
           <div className="flex flex-wrap items-center gap-1.5 px-4 py-2 border-b bg-muted/20">
@@ -1786,7 +2158,7 @@ const TrackersPage = () => {
                 className="h-7 text-xs"
                 onClick={() => setStatusFilter(status)}
               >
-                {status}
+                {humanizeStatusForDisplay(status)}
               </Button>
             ))}
           </div>
@@ -1808,14 +2180,23 @@ const TrackersPage = () => {
                 <FileText className="h-10 w-10 text-muted-foreground" />
               </div>
               <h3 className="text-lg font-semibold mb-1">
-                {searchTerm || statusFilter !== "all" ? "No entries match" : "No entries yet"}
+                {searchTerm || statusFilter !== "all" || Object.keys(columnFilters).length > 0 || nextAppointmentDateAfter || nextAppointmentDateBefore || updatedAtAfter || updatedAtBefore
+                  ? "No entries match"
+                  : "No entries yet"}
               </h3>
               <p className="text-muted-foreground text-sm mb-6 max-w-sm">
-                {searchTerm || statusFilter !== "all"
+                {searchTerm || statusFilter !== "all" || Object.keys(columnFilters).length > 0 || nextAppointmentDateAfter || nextAppointmentDateBefore || updatedAtAfter || updatedAtBefore
                   ? "Try adjusting search or filters."
                   : `Create the first entry for ${tracker.name}.`}
               </p>
-              {canCreateEntry && !searchTerm && statusFilter === "all" && (
+              {canCreateEntry &&
+                !searchTerm &&
+                statusFilter === "all" &&
+                Object.keys(columnFilters).length === 0 &&
+                !nextAppointmentDateAfter &&
+                !nextAppointmentDateBefore &&
+                !updatedAtAfter &&
+                !updatedAtBefore && (
                 <Button onClick={() => setIsCreateEntryDialogOpen(true)}>
                   <Plus className="mr-2 h-4 w-4" />
                   Create first entry
@@ -1847,7 +2228,16 @@ const TrackersPage = () => {
                         <>
                           <span className="font-medium">Status</span>
                           <span className="text-muted-foreground">=</span>
-                          <span>{entry?.status || "open"}</span>
+                          <span>{humanizeStatusForDisplay(entry?.status || "open")}</span>
+                        </>
+                      );
+                    }
+                    if (selectedCell.fieldId === "_derived_stage") {
+                      return (
+                        <>
+                          <span className="font-medium">Stage</span>
+                          <span className="text-muted-foreground">=</span>
+                          <span>{entry?.formatted_data?.derived_stage ?? "—"}</span>
                         </>
                       );
                     }
@@ -1891,7 +2281,7 @@ const TrackersPage = () => {
                   <span className="text-muted-foreground text-xs shrink-0 hidden sm:inline">Enter to open · Esc to clear</span>
                 </div>
               )}
-                        <div className="rounded-none border overflow-x-auto overflow-y-auto max-h-[70vh]">
+                        <div className="rounded-none border overflow-x-auto overflow-y-auto max-h-[70vh] w-full min-w-0">
                 <Table>
                   <TableHeader className="sticky top-0 z-10 bg-background shadow-sm">
                     <TableRow className="border-b bg-muted/50 hover:bg-muted/50">
@@ -1980,6 +2370,9 @@ const TrackersPage = () => {
                                     </TableHead>
                                   </>
                                 )}
+                      {(tracker?.tracker_config?.stage_mapping?.length > 0 || tracker?.tracker_config?.is_patient_referral) && (
+                        <TableHead className="font-semibold min-w-[140px]">Stage</TableHead>
+                      )}
                       <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -2031,7 +2424,33 @@ const TrackersPage = () => {
                             )}
                             onClick={(e) => { e.stopPropagation(); setSelectedCell({ rowIndex: index, fieldId: "_status" }); }}
                           >
-                            <Badge variant="outline" className="font-normal">{entry.status || "open"}</Badge>
+                            {canUpdateEntry && availableStatuses.length > 0 ? (
+                              <Select
+                                value={entry.status || ""}
+                                onValueChange={(newStatus) => {
+                                  if (newStatus && newStatus !== (entry.status || "")) {
+                                    handleStatusChange(entry, newStatus, undefined, entry.formatted_data?.derived_stage);
+                                  }
+                                }}
+                                disabled={updateEntryMutation.isPending}
+                              >
+                                <SelectTrigger
+                                  className="h-8 min-w-[120px] font-normal"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <SelectValue placeholder="Status" />
+                                </SelectTrigger>
+                                <SelectContent onClick={(e) => e.stopPropagation()}>
+                                  {availableStatuses.map((status) => (
+                                    <SelectItem key={status} value={status}>
+                                      {humanizeStatusForDisplay(status)}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <Badge variant="outline" className="font-normal">{humanizeStatusForDisplay(entry.status || "open")}</Badge>
+                            )}
                           </TableCell>
                                   {/* Dynamic field values - only visible columns */}
                                   {visibleFields.map((field) => {
@@ -2039,6 +2458,21 @@ const TrackersPage = () => {
                                     const value = displayValues[fieldId];
                                     const isSelected = selectedCell?.rowIndex === index && selectedCell?.fieldId === fieldId;
                                     const highlight = cellMatchesHighlightRule(fieldId, value, highlightRules, displayValues);
+                                    const isChaseDue = fieldId === "chase_due";
+                                    const isOverdue =
+                                      isChaseDue &&
+                                      tracker?.tracker_config?.is_patient_referral &&
+                                      value != null &&
+                                      String(value).trim() !== "" &&
+                                      !String(entry.status || "").startsWith("Closed") &&
+                                      (() => {
+                                        try {
+                                          const d = new Date(String(value).split("T")[0]);
+                                          return !Number.isNaN(d.getTime()) && d < startOfDay(new Date());
+                                        } catch {
+                                          return false;
+                                        }
+                                      })();
                                     return (
                                       <TableCell
                                         key={fieldId}
@@ -2046,12 +2480,18 @@ const TrackersPage = () => {
                                           "border-r min-w-[120px] max-w-[220px] tabular-nums",
                                           densityClass,
                                           isSelected && "ring-1 ring-primary bg-primary/5",
-                                          highlight.match && (HIGHLIGHT_COLOR_CLASSES[highlight.color] || HIGHLIGHT_COLOR_CLASSES.green)
+                                          highlight.match && (HIGHLIGHT_COLOR_CLASSES[highlight.color] || HIGHLIGHT_COLOR_CLASSES.green),
+                                          isOverdue && "bg-red-100 dark:bg-red-900/30"
                                         )}
                                         onClick={(e) => { e.stopPropagation(); setSelectedCell({ rowIndex: index, fieldId }); }}
                                       >
-                                        <div className="max-w-[200px] truncate" title={formatFieldValue(field, value)}>
+                                        <div className="max-w-[200px] truncate flex items-center gap-1" title={formatFieldValue(field, value)}>
                                           {formatFieldValue(field, value)}
+                                          {isOverdue && (
+                                            <Badge variant="destructive" className="text-[10px] px-1 py-0 shrink-0">
+                                              Overdue
+                                            </Badge>
+                                          )}
                                         </div>
                           </TableCell>
                                     );
@@ -2070,6 +2510,86 @@ const TrackersPage = () => {
                                       </TableCell>
                                     </>
                                   )}
+                          {(tracker?.tracker_config?.stage_mapping?.length > 0 || tracker?.tracker_config?.is_patient_referral) && (
+                            <TableCell
+                              className={cn(
+                                "border-r min-w-[140px]",
+                                densityClass,
+                                index % 2 === 0 ? "bg-background hover:bg-muted/40" : "bg-muted/20 hover:bg-muted/50"
+                              )}
+                              onClick={(e) => { e.stopPropagation(); setSelectedCell({ rowIndex: index, fieldId: "_derived_stage" }); }}
+                              onPointerDown={(e) => e.stopPropagation()}
+                            >
+                              <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+                                {canUpdateEntry && tracker?.tracker_config?.stage_mapping?.length > 0 ? (
+                                  <>
+                                    <Select
+                                      key={`stage-${entry.id}-${entry.formatted_data?.derived_stage ?? ""}`}
+                                      value={entry.formatted_data?.derived_stage ?? ""}
+                                      onValueChange={(stageName) => {
+                                        const isSelected = selectedTracker === tracker.id.toString();
+                                        const mapping = (isSelected && selectedTrackerDetail?.tracker_config?.stage_mapping)
+                                          ? selectedTrackerDetail.tracker_config.stage_mapping
+                                          : (tracker?.tracker_config?.stage_mapping ?? []);
+                                        if (stageName && mapping.length > 0) {
+                                          handleStageChange(entry, stageName, mapping);
+                                        }
+                                      }}
+                                      disabled={updateEntryMutation.isPending}
+                                    >
+                                      <SelectTrigger
+                                        className="h-8 min-w-[100px] font-normal text-xs"
+                                        onClick={(e) => e.stopPropagation()}
+                                        onPointerDown={(e) => e.stopPropagation()}
+                                      >
+                                        <SelectValue placeholder="Stage" />
+                                      </SelectTrigger>
+                                      <SelectContent onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+                                        {(tracker.tracker_config.stage_mapping || []).map((item) => {
+                                          const stageName = item?.stage ?? item?.name ?? "";
+                                          if (!stageName) return null;
+                                          return (
+                                            <SelectItem key={stageName} value={stageName}>
+                                              {stageName}
+                                            </SelectItem>
+                                          );
+                                        })}
+                                      </SelectContent>
+                                    </Select>
+                                    {(() => {
+                                      const isSelected = selectedTracker === tracker.id.toString();
+                                      const stageMapping = (isSelected && selectedTrackerDetail?.tracker_config?.stage_mapping)
+                                        ? selectedTrackerDetail.tracker_config.stage_mapping
+                                        : (tracker?.tracker_config?.stage_mapping || []);
+                                      const currentStage = entry?.formatted_data?.derived_stage ?? "";
+                                      const idx = stageMapping.findIndex((s) => (s?.stage ?? s?.name) === currentStage);
+                                      const hasNext = idx >= 0 && idx < stageMapping.length - 1;
+                                      if (!hasNext) return null;
+                                      return (
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-8 w-8 p-0 shrink-0"
+                                          title="Next stage"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            e.preventDefault();
+                                            handleNextStage(entry, stageMapping);
+                                          }}
+                                          disabled={updateEntryMutation.isPending}
+                                        >
+                                          <ChevronRight className="h-4 w-4" />
+                                        </Button>
+                                      );
+                                    })()}
+                                  </>
+                                ) : (
+                                  <span>{entry.formatted_data?.derived_stage ?? "—"}</span>
+                                )}
+                              </div>
+                            </TableCell>
+                          )}
                           <TableCell onClick={(e) => e.stopPropagation()} className="bg-muted/30">
                             <div className="flex items-center gap-2">
                                         {canReadEntries && (
@@ -2138,6 +2658,9 @@ const TrackersPage = () => {
                             <TableCell className="bg-muted" />
                             <TableCell className="bg-muted" />
                           </>
+                        )}
+                        {(tracker?.tracker_config?.stage_mapping?.length > 0 || tracker?.tracker_config?.is_patient_referral) && (
+                          <TableCell className="bg-muted border-r" />
                         )}
                         <TableCell className="bg-muted" />
                       </TableRow>

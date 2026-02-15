@@ -1576,7 +1576,7 @@ export default function AdminLayout({ children }) {
   return (
     <AuthGuard>
       <SidebarProvider>
-        <div className="flex min-h-screen w-full" id="admin-layout-wrapper">
+        <div className="flex min-h-screen w-full min-w-0 overflow-x-hidden" id="admin-layout-wrapper">
           <Sidebar collapsible="icon" id="admin-sidebar">
             <SidebarHeader>
               <div className="flex items-center gap-2 px-2 py-2 group-data-[collapsible=icon]:justify-center">
@@ -1644,7 +1644,7 @@ export default function AdminLayout({ children }) {
             <SidebarRail />
           </Sidebar>
 
-          <SidebarInset>
+          <SidebarInset className="min-w-0 overflow-x-hidden">
             <header className="flex flex-col gap-2 border-b px-4 py-3 md:flex-row md:h-20 md:shrink-0 md:items-center md:gap-2 md:py-0" id="admin-header">
               {/* Row 1 on mobile: title row; on md+ title and actions share one row */}
               <div className="flex items-center gap-2 min-w-0 flex-1">

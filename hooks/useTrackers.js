@@ -16,6 +16,7 @@ export const trackerKeys = {
   entryDetail: (identifier) => [...trackerKeys.entries(), "detail", identifier],
   entryTimeline: (identifier, page, per_page) => [...trackerKeys.entries(), "timeline", identifier, page, per_page],
   entryAuditLogs: (identifier) => [...trackerKeys.entries(), "audit-logs", identifier],
+  queueCounts: (slug) => [...trackerKeys.details(), slug, "queue-counts"],
 };
 
 // Get all trackers query
@@ -41,6 +42,20 @@ export const useTracker = (slug, options = {}) => {
     },
     enabled: !!slug,
     staleTime: 5 * 60 * 1000, // 5 minutes
+    ...options,
+  });
+};
+
+// Queue counts for patient-referral style trackers (Awaiting Triage, Chase Overdue, etc.)
+export const useTrackerQueueCounts = (slug, options = {}) => {
+  return useQuery({
+    queryKey: trackerKeys.queueCounts(slug),
+    queryFn: async () => {
+      const response = await trackersService.getQueueCounts(slug);
+      return response;
+    },
+    enabled: !!slug,
+    staleTime: 1 * 60 * 1000, // 1 minute
     ...options,
   });
 };
@@ -244,11 +259,12 @@ export const useCreateTrackerEntry = () => {
     },
     onSuccess: (data) => {
       // Invalidate all entry list queries (with any params) to refresh the table
-      queryClient.invalidateQueries({ 
+      queryClient.invalidateQueries({
         queryKey: trackerKeys.entries(),
-        exact: false 
+        exact: false,
       });
-      // Use slug if available, fallback to id
+      // Refresh queue counts on trackers list when an entry is created
+      queryClient.invalidateQueries({ queryKey: trackerKeys.details() });
       const identifier = data.slug || data.id;
       if (identifier) {
         queryClient.invalidateQueries({ queryKey: trackerKeys.entryTimeline(identifier) });
@@ -281,7 +297,10 @@ export const useUpdateTrackerEntry = () => {
     },
     onSuccess: (data, variables) => {
       queryClient.setQueryData(trackerKeys.entryDetail(variables.entryIdentifier), data);
-      queryClient.invalidateQueries({ queryKey: trackerKeys.entryList() });
+      // Invalidate and refetch entry list so Stage/Status columns update immediately
+      queryClient.invalidateQueries({ queryKey: trackerKeys.entries() });
+      queryClient.refetchQueries({ queryKey: trackerKeys.entries() });
+      queryClient.invalidateQueries({ queryKey: trackerKeys.details() }); // refresh queue counts
       queryClient.invalidateQueries({ queryKey: trackerKeys.entryTimeline(variables.entryIdentifier) });
       queryClient.invalidateQueries({ queryKey: trackerKeys.entryAuditLogs(variables.entryIdentifier) });
       toast.success("Entry updated successfully");
@@ -311,11 +330,11 @@ export const useDeleteTrackerEntry = () => {
       return entryIdentifier;
     },
     onSuccess: (entryIdentifier) => {
-      // Invalidate all entry list queries (with any params) to refresh the table
-      queryClient.invalidateQueries({ 
+      queryClient.invalidateQueries({
         queryKey: trackerKeys.entries(),
-        exact: false 
+        exact: false,
       });
+      queryClient.invalidateQueries({ queryKey: trackerKeys.details() }); // refresh queue counts
       queryClient.removeQueries({ queryKey: trackerKeys.entryDetail(entryIdentifier) });
       toast.success("Entry deleted successfully");
     },

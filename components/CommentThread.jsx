@@ -328,6 +328,13 @@ const CommentItem = ({
           <p className="text-sm text-foreground whitespace-pre-wrap">
             {comment.comment_text}
           </p>
+          {(comment.note_category || comment.contact_method || comment.contact_outcome) && (
+            <div className="flex flex-wrap gap-1.5 mt-1 text-xs text-muted-foreground">
+              {comment.note_category && <span className="rounded bg-muted px-1.5 py-0.5">{comment.note_category}</span>}
+              {comment.contact_method && <span>Method: {comment.contact_method}</span>}
+              {comment.contact_outcome && <span>Outcome: {comment.contact_outcome}</span>}
+            </div>
+          )}
           {/* Comment Attachments */}
           {commentSlug && <CommentAttachments commentSlug={commentSlug} />}
           <div className="flex items-center gap-3">
@@ -513,6 +520,8 @@ export const CommentThread = ({
   const [page, setPage] = useState(initialPage);
   const [newCommentText, setNewCommentText] = useState("");
   const [newCommentNoteCategory, setNewCommentNoteCategory] = useState("");
+  const [newCommentContactMethod, setNewCommentContactMethod] = useState("");
+  const [newCommentContactOutcome, setNewCommentContactOutcome] = useState("");
   const [newCommentFiles, setNewCommentFiles] = useState([]);
   const [editingCommentId, setEditingCommentId] = useState(null);
   const newCommentFileInputRef = useRef(null);
@@ -550,6 +559,8 @@ export const CommentThread = ({
         comment_text: newCommentText.trim() || "",
         parent_comment_id: null,
         note_category: newCommentNoteCategory || null,
+        contact_method: newCommentContactMethod || null,
+        contact_outcome: newCommentContactOutcome || null,
       },
     });
 
@@ -567,6 +578,8 @@ export const CommentThread = ({
 
     setNewCommentText("");
     setNewCommentNoteCategory("");
+    setNewCommentContactMethod("");
+    setNewCommentContactOutcome("");
     setNewCommentFiles([]);
   };
 
@@ -665,24 +678,63 @@ export const CommentThread = ({
       {/* Add Comment Form */}
       <div className="space-y-2">
         {entityType === "tracker_entry" && noteCategories && noteCategories.length > 0 && (
-          <div className="space-y-2">
-            <Label htmlFor="note-category" className="text-sm">Note Category (Optional)</Label>
-            <Select
-              value={newCommentNoteCategory}
-              onValueChange={setNewCommentNoteCategory}
-            >
-              <SelectTrigger id="note-category">
-                <SelectValue placeholder="Select category (optional)" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="">None</SelectItem>
-                {noteCategories.map((category) => (
-                  <SelectItem key={category} value={category}>
-                    {category}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <div className="space-y-1">
+              <Label htmlFor="note-category" className="text-sm">Note Category (Optional)</Label>
+              <Select
+                value={newCommentNoteCategory}
+                onValueChange={setNewCommentNoteCategory}
+              >
+                <SelectTrigger id="note-category">
+                  <SelectValue placeholder="Select category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">None</SelectItem>
+                  {noteCategories.map((category) => (
+                    <SelectItem key={category} value={category}>
+                      {category}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="contact-method" className="text-sm">Contact Method (Optional)</Label>
+              <Select
+                value={newCommentContactMethod}
+                onValueChange={setNewCommentContactMethod}
+              >
+                <SelectTrigger id="contact-method">
+                  <SelectValue placeholder="Call, SMS, etc." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">None</SelectItem>
+                  <SelectItem value="Call">Call</SelectItem>
+                  <SelectItem value="SMS">SMS</SelectItem>
+                  <SelectItem value="Email">Email</SelectItem>
+                  <SelectItem value="Letter">Letter</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="contact-outcome" className="text-sm">Contact Outcome (Optional)</Label>
+              <Select
+                value={newCommentContactOutcome}
+                onValueChange={setNewCommentContactOutcome}
+              >
+                <SelectTrigger id="contact-outcome">
+                  <SelectValue placeholder="Answered, No answer, etc." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">None</SelectItem>
+                  <SelectItem value="Answered">Answered</SelectItem>
+                  <SelectItem value="No answer">No answer</SelectItem>
+                  <SelectItem value="Left voicemail">Left voicemail</SelectItem>
+                  <SelectItem value="Letter sent">Letter sent</SelectItem>
+                  <SelectItem value="Other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         )}
         <Textarea

@@ -52,7 +52,7 @@ import { useActiveTrackerCategories } from "@/hooks/useTrackerCategories";
 import { useRoles } from "@/hooks/useRoles";
 import { useUsers } from "@/hooks/useUsers";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
-import { generateSlug } from "@/utils/slug";
+import { generateSlug, humanizeStatusForDisplay } from "@/utils/slug";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { parseUTCDate } from "@/utils/time";
@@ -72,6 +72,9 @@ const fieldTypes = [
   { value: "rag", label: "RAG (Red / Amber / Green)" },
   { value: "calculated", label: "Calculated (Sum / Percentage)" },
 ];
+
+// No fixed default stages – each tracker/service defines its own. Used when tracker has no stage_mapping set.
+const DEFAULT_STAGE_MAPPING = [];
 
 // Helper function to generate field ID from label
 const generateFieldIdFromLabel = (label) => {
@@ -234,6 +237,9 @@ const TrackerEditPage = () => {
             note_categories: tracker.tracker_config?.note_categories || [],
             constants: tracker.tracker_config?.constants || {},
             table_aggregates: tracker.tracker_config?.table_aggregates || {},
+            stage_mapping: (tracker.tracker_config?.stage_mapping && Array.isArray(tracker.tracker_config.stage_mapping))
+              ? JSON.parse(JSON.stringify(tracker.tracker_config.stage_mapping))
+              : [...DEFAULT_STAGE_MAPPING],
           },
         tracker_fields: tracker.tracker_fields || {
           fields: [],
@@ -251,9 +257,16 @@ const TrackerEditPage = () => {
 
   const handleSave = async (shouldRedirect = true) => {
     try {
-      // Log what we're saving to verify list_view_fields is included
-      console.log("Saving tracker with list_view_fields:", formData.tracker_config?.list_view_fields);
-      
+      const defaultStatuses = formData.tracker_config?.statuses || [];
+      const stageMapping = formData.tracker_config?.stage_mapping || [];
+      const stagesWithNoStatuses = stageMapping.filter((item) => !(item.statuses || []).length);
+      if (stagesWithNoStatuses.length > 0 && defaultStatuses.length === 0) {
+        const names = stagesWithNoStatuses.map((s) => s.stage || s.name || "Unnamed").join(", ");
+        toast.warning("Some stages have no statuses and tracker has no default", {
+          description: `"${names}" will use the default list. Add statuses in the Statuses tab so these stages can be used.`,
+        });
+      }
+
       await updateMutation.mutateAsync({
         slug: slug,
         trackerData: formData,
@@ -750,33 +763,76 @@ const TrackerEditPage = () => {
   const sections = formData.tracker_config?.sections || [];
   const fields = formData.tracker_fields?.fields || [];
   const statuses = formData.tracker_config?.statuses || [];
+  const stageMapping = formData.tracker_config?.stage_mapping || [];
+
+  const handleAddStage = () => {
+    setFormData((prev) => ({
+      ...prev,
+      tracker_config: {
+        ...prev.tracker_config,
+        stage_mapping: [...(prev.tracker_config?.stage_mapping || []), { stage: "New Stage", statuses: [] }],
+      },
+    }));
+  };
+
+  const handleRemoveStage = (index) => {
+    setFormData((prev) => ({
+      ...prev,
+      tracker_config: {
+        ...prev.tracker_config,
+        stage_mapping: (prev.tracker_config?.stage_mapping || []).filter((_, i) => i !== index),
+      },
+    }));
+  };
+
+  const handleUpdateStage = (index, field, value) => {
+    setFormData((prev) => {
+      const list = [...(prev.tracker_config?.stage_mapping || [])];
+      if (!list[index]) return prev;
+      list[index] = { ...list[index], [field]: value };
+      return {
+        ...prev,
+        tracker_config: { ...prev.tracker_config, stage_mapping: list },
+      };
+    });
+  };
+
+  const handleResetStagesToDefault = () => {
+    setFormData((prev) => ({
+      ...prev,
+      tracker_config: {
+        ...prev.tracker_config,
+        stage_mapping: JSON.parse(JSON.stringify(DEFAULT_STAGE_MAPPING)),
+      },
+    }));
+  };
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
+      {/* Sticky header at top: title, subtitle, and actions */}
+      <header className="sticky top-0 z-30 flex items-center justify-between gap-4 py-3 -mx-4 px-4 sm:-mx-6 sm:px-6 bg-background border-b shadow-sm">
+        <div className="flex items-center gap-4 min-w-0">
           <Link href="/admin/trackers/manage">
-            <Button variant="ghost" size="sm">
+            <Button variant="ghost" size="sm" className="shrink-0">
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back
             </Button>
           </Link>
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold">Edit Tracker</h1>
-            <p className="text-sm text-muted-foreground mt-1">
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl font-bold truncate">Edit Tracker</h1>
+            <p className="text-sm text-muted-foreground mt-0.5 truncate">
               Configure fields, sections, statuses, and permissions
             </p>
           </div>
         </div>
-        <Button onClick={handleSave} disabled={updateMutation.isPending}>
+        <Button onClick={handleSave} disabled={updateMutation.isPending} className="shrink-0">
           {updateMutation.isPending && (
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
           )}
           <Save className="mr-2 h-4 w-4" />
           Save Changes
         </Button>
-      </div>
+      </header>
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
@@ -786,6 +842,7 @@ const TrackerEditPage = () => {
             <TabsTrigger value="fields">Fields ({fields.length})</TabsTrigger>
             <TabsTrigger value="sections">Sections ({sections.length})</TabsTrigger>
             <TabsTrigger value="statuses">Statuses ({statuses.length})</TabsTrigger>
+            <TabsTrigger value="stages">Stages ({stageMapping.length})</TabsTrigger>
             <TabsTrigger value="permissions">Permissions</TabsTrigger>
             <TabsTrigger value="audit">Audit Logs</TabsTrigger>
           </TabsList>
@@ -868,6 +925,36 @@ const TrackerEditPage = () => {
               <div className="flex items-center gap-2">
                 <input
                   type="checkbox"
+                  id="is_patient_referral"
+                  checked={formData.tracker_config?.is_patient_referral || false}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      tracker_config: {
+                        ...prev.tracker_config,
+                        is_patient_referral: e.target.checked,
+                      },
+                    }))
+                  }
+                  className="rounded"
+                />
+                <Label htmlFor="is_patient_referral" className="cursor-pointer">
+                  This tracker uses stages (Stage column, queues, SMS, etc.)
+                </Label>
+              </div>
+              <div className="mt-1">
+                <Button
+                  type="button"
+                  variant="link"
+                  className="h-auto p-0 text-muted-foreground hover:text-primary text-sm font-normal"
+                  onClick={() => setActiveTab("stages")}
+                >
+                  Open Stages tab →
+                </Button>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
                   id="is_active"
                   checked={formData.is_active}
                   onChange={(e) =>
@@ -902,7 +989,7 @@ const TrackerEditPage = () => {
                   <SelectContent>
                     {statuses.map((status) => (
                       <SelectItem key={status} value={status}>
-                        {status}
+                        {humanizeStatusForDisplay(status)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -1285,7 +1372,7 @@ const TrackerEditPage = () => {
                         {(editingField.type === "select" || editingField.type === "multiselect") && (
                           <div className="space-y-2">
                             <Label>Options</Label>
-                            <div className="flex gap-2">
+                            <div className="flex flex-wrap gap-2 items-end">
                               <Input
                                 placeholder="Label *"
                                 value={editingOption.label}
@@ -1294,10 +1381,16 @@ const TrackerEditPage = () => {
                                   setEditingOption((prev) => ({
                                     ...prev,
                                     label: newLabel,
-                                    value: generateFieldIdFromLabel(newLabel),
+                                    value: prev.value === "" || prev.value === generateFieldIdFromLabel(prev.label) ? generateFieldIdFromLabel(newLabel) : prev.value,
                                   }));
                                 }}
-                                className="flex-1"
+                                className="flex-1 min-w-[120px]"
+                              />
+                              <Input
+                                placeholder="Value (optional)"
+                                value={editingOption.value}
+                                onChange={(e) => setEditingOption((prev) => ({ ...prev, value: e.target.value }))}
+                                className="flex-1 min-w-[120px]"
                               />
                               <Button
                                 type="button"
@@ -1308,6 +1401,9 @@ const TrackerEditPage = () => {
                                 <Plus className="h-4 w-4" />
                               </Button>
                             </div>
+                            <p className="text-xs text-muted-foreground">
+                              Value is what gets stored; label is what users see. Leave value blank to auto-generate from label.
+                            </p>
                             {editingField.options && editingField.options.length > 0 && (
                               <div className="space-y-1">
                                 {editingField.options.map((option, idx) => (
@@ -1963,7 +2059,7 @@ const TrackerEditPage = () => {
                     {(newField.type === "select" || newField.type === "multiselect") && (
                       <div className="space-y-2">
                         <Label>Options</Label>
-                        <div className="flex gap-2">
+                        <div className="flex flex-wrap gap-2 items-end">
                           <Input
                             placeholder="Label *"
                             value={newOption.label}
@@ -1972,10 +2068,16 @@ const TrackerEditPage = () => {
                               setNewOption((prev) => ({
                                 ...prev,
                                 label: newLabel,
-                                value: generateFieldIdFromLabel(newLabel),
+                                value: prev.value === "" || prev.value === generateFieldIdFromLabel(prev.label) ? generateFieldIdFromLabel(newLabel) : prev.value,
                               }));
                             }}
-                            className="flex-1"
+                            className="flex-1 min-w-[120px]"
+                          />
+                          <Input
+                            placeholder="Value (optional)"
+                            value={newOption.value}
+                            onChange={(e) => setNewOption((prev) => ({ ...prev, value: e.target.value }))}
+                            className="flex-1 min-w-[120px]"
                           />
                           <Button
                             type="button"
@@ -1987,7 +2089,7 @@ const TrackerEditPage = () => {
                           </Button>
                         </div>
                         <p className="text-xs text-muted-foreground">
-                          Value will be auto-generated from label (e.g., "First Option" → "first_option")
+                          Value is what gets stored; label is what users see. Leave value blank to auto-generate from label.
                         </p>
                         {newField.options.length > 0 && (
                           <div className="space-y-1">
@@ -2571,6 +2673,9 @@ const TrackerEditPage = () => {
           <Card>
             <CardHeader>
               <CardTitle>Tracker Statuses</CardTitle>
+              <p className="text-sm text-muted-foreground mt-1">
+                Allowed <strong>Status</strong> values (workflow state). Queue counts use status. The field that holds it in the form (e.g. &quot;Current status&quot;) is configured in Fields. Stage is derived from status.
+              </p>
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Existing Statuses */}
@@ -2588,7 +2693,7 @@ const TrackerEditPage = () => {
                         }
                         className="flex items-center gap-2"
                       >
-                        {status}
+                        {humanizeStatusForDisplay(status)}
                         {status === formData.tracker_config?.default_status && (
                           <span className="text-xs">(Default)</span>
                         )}
@@ -2697,6 +2802,97 @@ const TrackerEditPage = () => {
                     Categories will appear when adding notes to tracker entries
                   </p>
                 </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Stages Tab */}
+        <TabsContent value="stages" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Stages</CardTitle>
+              <p className="text-sm text-muted-foreground mt-1">
+                Stages and their statuses are fully configurable. Define the <strong>default status list</strong> in the <strong>Statuses</strong> tab. Here, add stages and optionally assign a specific set of statuses to each stage; if a stage has no statuses assigned, it uses the tracker&apos;s default status list.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {stageMapping.some((item) => !(item.statuses || []).length) && statuses.length === 0 && (
+                <p className="text-sm text-amber-600 dark:text-amber-500 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 rounded-md">
+                  Stages with no statuses use the tracker default list. Add statuses in the <strong>Statuses</strong> tab so those stages can be used.
+                </p>
+              )}
+              <div>
+                <Label>Stages for this tracker</Label>
+                <p className="text-xs text-muted-foreground mb-2">
+                  Add or remove stages. Assign statuses per stage to override the default; leave empty to use the tracker&apos;s default status list for that stage.
+                </p>
+                {stageMapping.length > 0 && (
+                  <Button variant="outline" size="sm" className="mb-2" onClick={handleResetStagesToDefault}>
+                    Clear all stages
+                  </Button>
+                )}
+                {stageMapping.map((item, index) => {
+                  const assigned = item.statuses || [];
+                  const availableToAdd = statuses.filter((s) => !assigned.includes(s));
+                  return (
+                    <div key={index} className="flex flex-wrap gap-2 items-center p-3 rounded-md border bg-background mb-2">
+                      <Input
+                        placeholder="Stage name"
+                        value={item.stage || ""}
+                        onChange={(e) => handleUpdateStage(index, "stage", e.target.value)}
+                        className="w-40"
+                      />
+                      <span className="text-muted-foreground text-sm">←</span>
+                      <div className="flex flex-wrap gap-1 items-center">
+                        {assigned.length > 0 ? (
+                          assigned.map((s) => (
+                            <Badge key={s} variant="secondary" className="text-xs">
+                              {humanizeStatusForDisplay(s)}
+                              <button
+                                type="button"
+                                className="ml-1 hover:text-destructive"
+                                onClick={() => handleUpdateStage(index, "statuses", assigned.filter((x) => x !== s))}
+                                aria-label={`Remove ${s}`}
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </Badge>
+                          ))
+                        ) : (
+                          <span className="text-xs text-muted-foreground">Uses default ({statuses.length} statuses)</span>
+                        )}
+                        {availableToAdd.length > 0 && (
+                          <Select
+                            value="__add__"
+                            onValueChange={(val) => {
+                              if (val && val !== "__add__") {
+                                handleUpdateStage(index, "statuses", [...assigned, val]);
+                              }
+                            }}
+                          >
+                            <SelectTrigger className="w-40 h-8 text-xs">
+                              <SelectValue placeholder="+ Add status" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__add__">+ Add status</SelectItem>
+                              {availableToAdd.map((s) => (
+                                <SelectItem key={s} value={s}>{humanizeStatusForDisplay(s)}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                      </div>
+                      <Button variant="ghost" size="sm" onClick={() => handleRemoveStage(index)} aria-label="Remove stage">
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  );
+                })}
+                <Button variant="outline" size="sm" onClick={handleAddStage}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add stage
+                </Button>
               </div>
             </CardContent>
           </Card>

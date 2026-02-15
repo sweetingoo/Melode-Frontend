@@ -180,6 +180,17 @@ export const trackersService = {
     }
   },
 
+  // Queue counts (patient-referral style: Awaiting Triage, Chase Overdue, etc.)
+  getQueueCounts: async (slug) => {
+    try {
+      const response = await api.get(`/trackers/${slug}/queue-counts`);
+      return response.data;
+    } catch (error) {
+      console.error(`Get queue counts for ${slug} failed:`, error);
+      throw error;
+    }
+  },
+
   // Tracker Entries
   // Get all tracker entries
   getTrackerEntries: async (params = {}) => {
@@ -231,6 +242,17 @@ export const trackersService = {
     }
   },
 
+  // Send SMS from tracker entry (Phase 5.2)
+  sendSmsFromEntry: async (entryIdentifier, body) => {
+    try {
+      const response = await api.post(`/trackers/entries/${entryIdentifier}/send-sms`, body);
+      return response.data;
+    } catch (error) {
+      console.error(`Send SMS from entry ${entryIdentifier} failed:`, error);
+      throw error;
+    }
+  },
+
   // Get field value suggestions for query bar (distinct values from backend)
   getTrackerFieldSuggestions: async (params = {}) => {
     try {
@@ -252,7 +274,17 @@ export const trackersService = {
   // Get tracker entries aggregates (sum/avg/count/min/max over all matching entries)
   getTrackerEntriesAggregates: async (params = {}) => {
     try {
-      const { form_id, status, query, field_filters, aggregate_fields } = params;
+      const {
+        form_id,
+        status,
+        query,
+        field_filters,
+        aggregate_fields,
+        updated_at_after,
+        updated_at_before,
+        next_appointment_date_after,
+        next_appointment_date_before,
+      } = params;
       const body = {
         page: 1,
         per_page: 1,
@@ -261,6 +293,10 @@ export const trackersService = {
         ...(query && { query }),
         ...(field_filters && Object.keys(field_filters).length > 0 && { field_filters }),
         ...(aggregate_fields && Object.keys(aggregate_fields).length > 0 && { aggregate_fields }),
+        ...(updated_at_after && { updated_at_after }),
+        ...(updated_at_before && { updated_at_before }),
+        ...(next_appointment_date_after && { next_appointment_date_after }),
+        ...(next_appointment_date_before && { next_appointment_date_before }),
       };
       const response = await api.post("/trackers/entries/aggregates", body);
       return response.data;

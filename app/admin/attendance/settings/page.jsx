@@ -33,10 +33,7 @@ import {
   useRolloverHolidayYear,
   useAttendanceSettings,
   useUpdateAttendanceSettings,
-  useEmployeeSettings,
-  useHolidayEntitlements,
 } from "@/hooks/useAttendance";
-import { useUsers } from "@/hooks/useUsers";
 import { getCategoryLabel } from "@/lib/attendanceLabels";
 import { ShiftLeaveTypeForm } from "@/components/attendance/ShiftLeaveTypeForm";
 import {
@@ -51,8 +48,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { HolidayYearForm } from "@/components/attendance/HolidayYearForm";
-import { EmployeeSettingsForm } from "@/components/attendance/EmployeeSettingsForm";
-import { HolidayEntitlementForm } from "@/components/attendance/HolidayEntitlementForm";
 import { toast } from "sonner";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
 import { useCurrentUser } from "@/hooks/useAuth";
@@ -68,13 +63,6 @@ export default function AttendanceSettingsPage() {
   const [isTypeFormOpen, setIsTypeFormOpen] = useState(false);
   const [deleteSlug, setDeleteSlug] = useState(null);
   const [isYearFormOpen, setIsYearFormOpen] = useState(false);
-  const [employeeSettingsUserId, setEmployeeSettingsUserId] = useState("");
-  const [selectedEmployeeSetting, setSelectedEmployeeSetting] = useState(null);
-  const [isEmployeeSettingsFormOpen, setIsEmployeeSettingsFormOpen] = useState(false);
-  const [entitlementFilterUserId, setEntitlementFilterUserId] = useState("all");
-  const [entitlementFilterYearId, setEntitlementFilterYearId] = useState("all");
-  const [selectedEntitlement, setSelectedEntitlement] = useState(null);
-  const [isEntitlementFormOpen, setIsEntitlementFormOpen] = useState(false);
   const [rolloverDialogOpen, setRolloverDialogOpen] = useState(false);
   const [rolloverAllowNegative, setRolloverAllowNegative] = useState(false);
   const deleteSlugRef = useRef(null);
@@ -90,20 +78,6 @@ export default function AttendanceSettingsPage() {
   const updateSettings = useUpdateAttendanceSettings();
   const updateShiftLeaveType = useUpdateShiftLeaveType();
   const deleteType = useDeleteShiftLeaveType();
-  const { data: usersData } = useUsers({ per_page: 100 });
-  const users = usersData?.users ?? usersData?.data ?? [];
-  const { data: employeeSettingsData, isLoading: employeeSettingsLoading } = useEmployeeSettings(
-    employeeSettingsUserId ? parseInt(employeeSettingsUserId, 10) : null,
-    {},
-    { enabled: !!employeeSettingsUserId }
-  );
-  const employeeSettingsList = Array.isArray(employeeSettingsData) ? employeeSettingsData : (employeeSettingsData ?? []);
-  const entitlementParams = {
-    ...(entitlementFilterUserId && entitlementFilterUserId !== "all" ? { user_id: parseInt(entitlementFilterUserId, 10) } : {}),
-    ...(entitlementFilterYearId && entitlementFilterYearId !== "all" ? { holiday_year_id: parseInt(entitlementFilterYearId, 10) } : {}),
-  };
-  const { data: entitlementsData, isLoading: entitlementsLoading } = useHolidayEntitlements(entitlementParams);
-  const entitlementsList = Array.isArray(entitlementsData) ? entitlementsData : (entitlementsData ?? []);
 
   const types = typesData?.types || typesData || [];
   const years = Array.isArray(yearsData) ? yearsData : (yearsData?.years ?? yearsData ?? []);
@@ -404,232 +378,6 @@ export default function AttendanceSettingsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
-      {/* Employee Job Role Settings */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Employee job role settings</CardTitle>
-              <CardDescription>Start date, hours per day and normal working days per employee/job role</CardDescription>
-            </div>
-            <Button
-              onClick={() => {
-                setSelectedEmployeeSetting(null);
-                setIsEmployeeSettingsFormOpen(true);
-              }}
-              disabled={!employeeSettingsUserId}
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Add settings
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center gap-4">
-            <div className="space-y-2">
-              <Label>Employee</Label>
-              <Select value={employeeSettingsUserId} onValueChange={setEmployeeSettingsUserId}>
-                <SelectTrigger className="w-[220px]">
-                  <SelectValue placeholder="Select employee" />
-                </SelectTrigger>
-                <SelectContent>
-                  {users.map((u) => (
-                    <SelectItem key={u.id} value={String(u.id)}>
-                      {u.display_name || u.full_name || u.email}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          {!employeeSettingsUserId ? (
-            <p className="text-sm text-muted-foreground">Select an employee to view or add their job role settings.</p>
-          ) : employeeSettingsLoading ? (
-            <div className="flex items-center justify-center p-8">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
-          ) : employeeSettingsList.length === 0 ? (
-            <div className="rounded-lg border border-dashed p-6 text-center">
-              <p className="text-sm text-muted-foreground">No settings for this employee</p>
-              <Button
-                onClick={() => {
-                  setSelectedEmployeeSetting(null);
-                  setIsEmployeeSettingsFormOpen(true);
-                }}
-                className="mt-2"
-                variant="outline"
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                Add settings
-              </Button>
-            </div>
-          ) : (
-            <div className="rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Job role</TableHead>
-                    <TableHead>Department</TableHead>
-                    <TableHead>Start</TableHead>
-                    <TableHead>End</TableHead>
-                    <TableHead>Hours/day</TableHead>
-                    <TableHead>Working days</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {employeeSettingsList.map((s) => (
-                    <TableRow key={s.id}>
-                      <TableCell>{s.job_role?.display_name || s.job_role?.name || s.role?.display_name || s.role?.name || s.job_role_id}</TableCell>
-                      <TableCell>{s.department?.name || s.department_id}</TableCell>
-                      <TableCell>{s.start_date ? String(s.start_date).slice(0, 10) : "—"}</TableCell>
-                      <TableCell>{s.end_date ? String(s.end_date).slice(0, 10) : "—"}</TableCell>
-                      <TableCell>{s.hours_per_day ?? "—"}</TableCell>
-                      <TableCell className="max-w-[200px] truncate">
-                        {Array.isArray(s.normal_working_days) ? s.normal_working_days.map((d) => d.slice(0, 2)).join(", ") : "—"}
-                      </TableCell>
-                      <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            setSelectedEmployeeSetting(s);
-                            setIsEmployeeSettingsFormOpen(true);
-                          }}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <EmployeeSettingsForm
-        open={isEmployeeSettingsFormOpen}
-        onOpenChange={setIsEmployeeSettingsFormOpen}
-        setting={selectedEmployeeSetting}
-        preselectedUserId={employeeSettingsUserId || undefined}
-      />
-
-      {/* Holiday Entitlements */}
-      <Card>
-        <CardHeader>
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <CardTitle>Holiday entitlements</CardTitle>
-              <CardDescription>Annual allowance (hours) per employee, job role and holiday year</CardDescription>
-            </div>
-            <Button onClick={() => { setSelectedEntitlement(null); setIsEntitlementFormOpen(true); }}>
-              <Plus className="mr-2 h-4 w-4" />
-              Add entitlement
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex flex-wrap items-end gap-4">
-            <div className="space-y-2">
-              <Label>Filter by employee</Label>
-              <Select value={entitlementFilterUserId} onValueChange={setEntitlementFilterUserId}>
-                <SelectTrigger className="w-[220px]">
-                  <SelectValue placeholder="All employees" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All employees</SelectItem>
-                  {users.map((u) => (
-                    <SelectItem key={u.id} value={String(u.id)}>
-                      {u.display_name || u.full_name || u.email}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Filter by holiday year</Label>
-              <Select value={entitlementFilterYearId} onValueChange={setEntitlementFilterYearId}>
-                <SelectTrigger className="w-[200px]">
-                  <SelectValue placeholder="All years" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All years</SelectItem>
-                  {years.map((y) => (
-                    <SelectItem key={y.id} value={String(y.id)}>
-                      {y.year_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          {entitlementsLoading ? (
-            <div className="flex items-center justify-center p-8">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
-          ) : entitlementsList.length === 0 ? (
-            <div className="rounded-lg border border-dashed p-6 text-center">
-              <p className="text-sm text-muted-foreground">No holiday entitlements found</p>
-              <Button onClick={() => { setSelectedEntitlement(null); setIsEntitlementFormOpen(true); }} className="mt-2" variant="outline">
-                <Plus className="mr-2 h-4 w-4" />
-                Add entitlement
-              </Button>
-            </div>
-          ) : (
-            <div className="rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Employee</TableHead>
-                    <TableHead>Job role</TableHead>
-                    <TableHead>Holiday year</TableHead>
-                    <TableHead>Allowance (h)</TableHead>
-                    <TableHead>Carried</TableHead>
-                    <TableHead>Used</TableHead>
-                    <TableHead>Remaining</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {entitlementsList.map((ent) => (
-                    <TableRow key={ent.id}>
-                      <TableCell>{ent.user?.display_name || ent.user?.email || ent.user_id}</TableCell>
-                      <TableCell>{ent.job_role?.display_name || ent.job_role?.name || ent.role?.display_name || ent.role?.name || ent.job_role_id}</TableCell>
-                      <TableCell>{ent.holiday_year?.year_name || ent.holiday_year_id}</TableCell>
-                      <TableCell>{ent.annual_allowance_hours ?? "—"}</TableCell>
-                      <TableCell>{ent.carried_forward_hours ?? "0"}</TableCell>
-                      <TableCell>{ent.used_hours ?? "—"}</TableCell>
-                      <TableCell>{ent.remaining_hours ?? "—"}</TableCell>
-                      <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            setSelectedEntitlement(ent);
-                            setIsEntitlementFormOpen(true);
-                          }}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <HolidayEntitlementForm
-        open={isEntitlementFormOpen}
-        onOpenChange={setIsEntitlementFormOpen}
-        entitlement={selectedEntitlement}
-        preselectedUserId={entitlementFilterUserId && entitlementFilterUserId !== "all" ? entitlementFilterUserId : undefined}
-      />
 
       {/* System Settings */}
       <Card>

@@ -53,7 +53,7 @@ export const useCreateShiftRecord = () => {
       return response.data || response;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: attendanceKeys.shiftRecords() });
+      queryClient.invalidateQueries({ queryKey: [...attendanceKeys.all, "shift-records"] });
       toast.success("Shift record created successfully");
     },
     onError: (error) => {
@@ -78,7 +78,7 @@ export const useUpdateShiftRecord = () => {
     },
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: attendanceKeys.shiftRecord(variables.slug) });
-      queryClient.invalidateQueries({ queryKey: attendanceKeys.shiftRecords() });
+      queryClient.invalidateQueries({ queryKey: [...attendanceKeys.all, "shift-records"] });
       toast.success("Shift record updated successfully");
     },
     onError: (error) => {
@@ -102,7 +102,7 @@ export const useDeleteShiftRecord = () => {
       return response.data || response;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: attendanceKeys.shiftRecords() });
+      queryClient.invalidateQueries({ queryKey: [...attendanceKeys.all, "shift-records"] });
       toast.success("Shift record deleted successfully");
     },
     onError: (error) => {
@@ -225,7 +225,7 @@ export const useGenerateShiftsFromTemplate = () => {
     },
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: attendanceKeys.mappedShiftTemplate(variables.slug) });
-      queryClient.invalidateQueries({ queryKey: attendanceKeys.shiftRecords() });
+      queryClient.invalidateQueries({ queryKey: [...attendanceKeys.all, "shift-records"] });
       toast.success("Shifts generated successfully", {
         description: `Generated ${data?.count || 0} shift records from template.`,
       });

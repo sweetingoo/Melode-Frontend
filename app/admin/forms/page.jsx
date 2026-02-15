@@ -196,9 +196,9 @@ const FormsPage = () => {
     }
   };
 
-  const handleDeleteForm = async (formId) => {
+  const handleDeleteForm = async (formSlug) => {
     try {
-      await deleteFormMutation.mutateAsync(formId);
+      await deleteFormMutation.mutateAsync(formSlug);
     } catch (error) {
       console.error("Failed to delete form:", error);
     }
@@ -465,7 +465,7 @@ const FormsPage = () => {
                                     <AlertDialogFooter>
                                       <AlertDialogCancel>Cancel</AlertDialogCancel>
                                       <AlertDialogAction
-                                        onClick={() => handleDeleteForm(form.id)}
+                                        onClick={() => handleDeleteForm(form.slug ?? form.id)}
                                         className="bg-red-600 hover:bg-red-700"
                                       >
                                         Delete

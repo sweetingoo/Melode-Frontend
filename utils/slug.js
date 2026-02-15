@@ -33,3 +33,20 @@ export function isValidSlug(slug) {
     return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug);
 }
 
+/**
+ * Humanize a status value for display (e.g. "in_progress" → "In Progress").
+ * Leaves already human-readable strings unchanged (e.g. "Awaiting Triage").
+ * @param {string} status - The status value (may be snake_case or human-readable)
+ * @returns {string} - Display label for end users
+ */
+export function humanizeStatusForDisplay(status) {
+    if (status == null || typeof status !== 'string') return String(status ?? '');
+    const s = status.trim();
+    if (!s) return s;
+    // If snake_case (contains underscore and all lowercase), humanize
+    if (s.includes('_') && s === s.toLowerCase()) {
+        return s.split('_').map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+    }
+    return s;
+}
+

@@ -25,7 +25,16 @@ import {
   PaginationPrevious,
   PaginationEllipsis,
 } from "@/components/ui/pagination";
-import { Loader2, ArrowLeft, Edit, Save, X, Clock, MessageSquare, FileText } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Loader2, ArrowLeft, Edit, Save, X, Clock, MessageSquare, FileText, User as UserIcon, Calendar, ListTodo, Paperclip, Smartphone, ChevronRight } from "lucide-react";
 import {
   useTrackerEntry,
   useTrackerEntryTimeline,
@@ -35,12 +44,17 @@ import {
   useTrackerEntries,
 } from "@/hooks/useTrackers";
 import { useComments } from "@/hooks/useComments";
+import { useCreateTask } from "@/hooks/useTasks";
 import CommentThread from "@/components/CommentThread";
-import { format } from "date-fns";
+import { format, startOfDay } from "date-fns";
 import { parseUTCDate } from "@/utils/time";
+import { humanizeStatusForDisplay } from "@/utils/slug";
 import CustomFieldRenderer from "@/components/CustomFieldRenderer";
 import { toast } from "sonner";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
+import { filesService } from "@/services/files";
+import { trackersService } from "@/services/trackers";
+import { cn } from "@/lib/utils";
 
 const TrackerEntryDetailPage = () => {
   const params = useParams();
@@ -69,6 +83,18 @@ const TrackerEntryDetailPage = () => {
   const [auditLogsPage, setAuditLogsPage] = useState(1);
   const [auditLogsActionFilter, setAuditLogsActionFilter] = useState("all");
   const auditLogsPerPage = 20;
+  const [triageOutcome, setTriageOutcome] = useState("");
+  const [triageSubmitting, setTriageSubmitting] = useState(false);
+  const [rebookTaskSubmitting, setRebookTaskSubmitting] = useState(false);
+  const createTaskMutation = useCreateTask();
+  const [attachments, setAttachments] = useState([]);
+  const [attachmentsLoading, setAttachmentsLoading] = useState(false);
+  const [attachmentUploading, setAttachmentUploading] = useState(false);
+  const [isCreateTaskModalOpen, setIsCreateTaskModalOpen] = useState(false);
+  const [createTaskForm, setCreateTaskForm] = useState({ title: "", due_date: "", task_type: "" });
+  const [isSendSmsModalOpen, setIsSendSmsModalOpen] = useState(false);
+  const [sendSmsTemplate, setSendSmsTemplate] = useState("please_contact_us");
+  const [sendSmsSubmitting, setSendSmsSubmitting] = useState(false);
 
   const { data: entry, isLoading: entryLoading, error: entryError } = useTrackerEntry(entrySlug);
   
@@ -191,6 +217,18 @@ const TrackerEntryDetailPage = () => {
   // Use entry ID for comments (comments API might still use ID)
   const { data: commentsData } = useComments("tracker_entry", entry?.id?.toString() || entrySlug);
   const updateEntryMutation = useUpdateTrackerEntry();
+
+  // Fetch attachments for this entry (Phase 4.4)
+  const entitySlugForFiles = entry?.id?.toString() || entrySlug;
+  useEffect(() => {
+    if (!entitySlugForFiles) return;
+    setAttachmentsLoading(true);
+    filesService
+      .getEntityAttachments("tracker_entry", entitySlugForFiles)
+      .then((res) => setAttachments(res?.attachments || []))
+      .catch(() => setAttachments([]))
+      .finally(() => setAttachmentsLoading(false));
+  }, [entitySlugForFiles]);
   
   // Fetch tracker form using form_id from entry
   const { data: trackersResponse } = useTrackers({ page: 1, per_page: 100 });
@@ -399,7 +437,18 @@ const TrackerEntryDetailPage = () => {
 
   const trackerFields = tracker?.tracker_fields?.fields || [];
   const trackerConfig = tracker?.tracker_config || {};
-  const sections = trackerConfig.sections || [];
+  // Sections can live in form_config (tracker_config) or in form_fields (tracker_fields) for patient-referral-style configs
+  const sections = (trackerConfig.sections?.length ? trackerConfig.sections : tracker?.tracker_fields?.sections) || [];
+
+  // Phase 5.4: Closed cases are read-only (no edit, no status change, no actions)
+  const isClosed = Boolean(entry?.status && String(entry.status).startsWith("Closed"));
+  const canEditCase = canUpdateEntry && !isClosed;
+
+  // Phase 5.2: Can send SMS when case has phone + consent and not closed
+  const submissionData = entry?.submission_data || entry?.formatted_data || {};
+  const hasPhone = Boolean((submissionData.phone || "").toString().trim());
+  const hasSmsConsent = submissionData.sms_consent === "yes" || submissionData.sms_consent === true;
+  const canSendSms = canEditCase && tracker?.tracker_config?.is_patient_referral && hasPhone && hasSmsConsent;
 
   // Format field value for read-only display
   const formatFieldValue = (field, value) => {
@@ -473,11 +522,16 @@ const TrackerEntryDetailPage = () => {
     return String(value);
   };
 
-  // Group fields by section
-  const fieldsBySection = sections.reduce((acc, section) => {
-    acc[section.id] = {
+  // Group fields by section: use section.fields (list of field ids) when present, else field.section
+  const fieldsBySection = sections.reduce((acc, section, index) => {
+    const sectionKey = section.id ?? section.title ?? section.label ?? `section-${index}`;
+    const sectionFields = (section.fields?.length)
+      ? (section.fields || []).map((fid) => trackerFields.find((f) => (f.id || f.name || f.field_id) === fid)).filter(Boolean)
+      : trackerFields.filter((field) => field.section === section.id || field.section === sectionKey);
+    acc[sectionKey] = {
       ...section,
-      fields: trackerFields.filter((field) => field.section === section.id),
+      id: section.id ?? sectionKey,
+      fields: sectionFields,
     };
     return acc;
   }, {});
@@ -503,7 +557,7 @@ const TrackerEntryDetailPage = () => {
     }
   };
 
-  // Validate form
+  // Validate form (field required + status guardrails when changing status)
   const validateForm = () => {
     const errors = {};
     let isValid = true;
@@ -519,6 +573,21 @@ const TrackerEntryDetailPage = () => {
       }
     });
 
+    // Status guardrails: when setting a status that requires specific fields, validate them
+    const statusGuardrails = tracker?.tracker_config?.status_guardrails || {};
+    const guardrail = statusGuardrails[entryStatus];
+    if (guardrail?.required_fields?.length) {
+      guardrail.required_fields.forEach((fieldId) => {
+        const value = entryData[fieldId];
+        const isEmpty = value === undefined || value === null || (typeof value === "string" && !value.trim());
+        if (isEmpty) {
+          const label = fieldId.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+          errors[fieldId] = guardrail.message || `${label} is required when setting this status`;
+          isValid = false;
+        }
+      });
+    }
+
     setFieldErrors(errors);
     return isValid;
   };
@@ -530,18 +599,23 @@ const TrackerEntryDetailPage = () => {
       return;
     }
 
+    // Status is only the tracker's default status (top "Change Status" dropdown). current_status in the form is just a normal field.
     try {
       await updateEntryMutation.mutateAsync({
         entryIdentifier: entrySlug,
         entryData: {
-          submission_data: entryData, // API expects submission_data, not entry_data
+          submission_data: entryData,
           status: entryStatus,
         },
       });
       setIsEditing(false);
       toast.success("Entry updated successfully");
     } catch (error) {
-      // Error handled by mutation
+      const detail = error?.response?.data?.detail;
+      const message = typeof detail === "object" ? detail?.message : detail;
+      const guardrailErrors = typeof detail === "object" ? detail?.guardrail_errors : null;
+      const toShow = message || (Array.isArray(guardrailErrors) ? guardrailErrors.join(" ") : String(detail || error?.message));
+      if (toShow) toast.error(toShow);
     }
   };
 
@@ -603,7 +677,7 @@ const TrackerEntryDetailPage = () => {
                 <SelectContent>
                   {(tracker?.tracker_config?.statuses || ["open", "in_progress", "pending", "resolved", "closed"]).map((status) => (
                     <SelectItem key={status} value={status}>
-                      {status}
+                      {humanizeStatusForDisplay(status)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -623,18 +697,112 @@ const TrackerEntryDetailPage = () => {
           ) : (
             <>
               <Badge variant="outline" className="text-sm">
-                {entry.status || "open"}
+                {humanizeStatusForDisplay(entry.status || "open")}
               </Badge>
-              {canUpdateEntry && (
+              {canEditCase && (
               <Button onClick={() => setIsEditing(true)}>
                 <Edit className="mr-2 h-4 w-4" />
                 Edit
               </Button>
               )}
+              {isClosed && (
+                <Badge variant="secondary" className="text-xs">Read-only (closed)</Badge>
+              )}
             </>
           )}
         </div>
       </div>
+
+      {/* Phase 4.1: Snapshot panel – Status, Chase Due, Next Appt, Owner (prominent for patient-referral) */}
+      <Card className="border-primary/20">
+        <CardContent className="pt-4 pb-4">
+          <div className="flex flex-wrap items-center gap-6">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-muted-foreground">Case #</span>
+              <span className="font-semibold">#{entryNumber}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-muted-foreground">Status</span>
+              <Badge variant="outline" className="font-normal">{humanizeStatusForDisplay(entry?.status || "open")}</Badge>
+            </div>
+            {tracker?.tracker_config?.stage_mapping?.length > 0 && (
+              <div className="w-full basis-full flex flex-wrap items-center gap-1.5">
+                <span className="text-sm font-medium text-muted-foreground shrink-0">Stages:</span>
+                {(tracker.tracker_config.stage_mapping || []).map((item, index) => {
+                  const stageName = item?.stage ?? item?.name ?? "";
+                  if (!stageName) return null;
+                  const isCurrent = (entry?.formatted_data?.derived_stage ?? "") === stageName;
+                  const stages = tracker.tracker_config.stage_mapping || [];
+                  const isLast = index === stages.length - 1;
+                  return (
+                    <React.Fragment key={stageName}>
+                      <Badge
+                        variant={isCurrent ? "default" : "outline"}
+                        className={cn(
+                          "font-normal",
+                          isCurrent && "ring-2 ring-primary ring-offset-2"
+                        )}
+                      >
+                        {stageName}
+                      </Badge>
+                      {!isLast && (
+                        <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" aria-hidden />
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Phase 4.2 / 5.2: Actions – Change Status, Add Note, Create Task, Send SMS (5.4: disabled when closed) */}
+      {canEditCase && (
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setIsEditing(true)}
+          >
+            <Edit className="mr-2 h-4 w-4" />
+            Change Status
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setActiveTab("notes")}
+          >
+            <MessageSquare className="mr-2 h-4 w-4" />
+            Add Note
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setCreateTaskForm({
+                title: `Task for case #${entryNumber}`,
+                due_date: format(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), "yyyy-MM-dd"),
+                task_type: "",
+              });
+              setIsCreateTaskModalOpen(true);
+            }}
+          >
+            <ListTodo className="mr-2 h-4 w-4" />
+            Create Task
+          </Button>
+          {canSendSms && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => { setSendSmsTemplate("please_contact_us"); setIsSendSmsModalOpen(true); }}
+            >
+              <Smartphone className="mr-2 h-4 w-4" />
+              Send SMS
+            </Button>
+          )}
+        </div>
+      )}
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
@@ -661,6 +829,107 @@ const TrackerEntryDetailPage = () => {
 
         {/* Details Tab */}
         <TabsContent value="details" className="space-y-4">
+          {/* Complete Triage: when status is Awaiting Triage and tracker has triage_outcome */}
+          {!isEditing && canEditCase && entry?.status === "Awaiting Triage" && tracker?.tracker_fields?.fields?.some((f) => (f.id || f.name) === "triage_outcome") && (
+            <Card className="border-primary/50">
+              <CardHeader>
+                <CardTitle>Complete Triage</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Select triage outcome and submit to move this case to Action Required (PSA).
+                </p>
+              </CardHeader>
+              <CardContent className="flex flex-wrap items-end gap-4">
+                <div className="flex-1 min-w-[200px] space-y-2">
+                  <Label>Triage outcome</Label>
+                  <Select value={triageOutcome} onValueChange={setTriageOutcome}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select outcome" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="direct_to_procedure">Direct to test – procedure</SelectItem>
+                      <SelectItem value="f2f_tc">F2F / TC appointment required</SelectItem>
+                      <SelectItem value="requires_bloods">Requires bloods</SelectItem>
+                      <SelectItem value="requires_further_info">Requires further information</SelectItem>
+                      <SelectItem value="rejected">Rejected (refer back)</SelectItem>
+                      <SelectItem value="onward_referred">Onward referred</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button
+                  disabled={!triageOutcome || triageSubmitting}
+                  onClick={async () => {
+                    if (!triageOutcome) return;
+                    setTriageSubmitting(true);
+                    try {
+                      const currentData = entry?.submission_data || entry?.formatted_data || {};
+                      await updateEntryMutation.mutateAsync({
+                        entryIdentifier: entrySlug,
+                        entryData: {
+                          submission_data: { ...currentData, triage_outcome: triageOutcome },
+                          status: "Triage Completed – Action Required",
+                        },
+                      });
+                      setTriageOutcome("");
+                      toast.success("Triage completed. Case moved to Action Required.");
+                    } catch (err) {
+                      const d = err?.response?.data?.detail;
+                      toast.error(typeof d === "object" ? d?.message : d || "Failed to complete triage");
+                    } finally {
+                      setTriageSubmitting(false);
+                    }
+                  }}
+                >
+                  {triageSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Complete Triage
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Create rebook task: when status is DNA – Consultation or DNA – Procedure */}
+          {!isEditing && canEditCase && (entry?.status === "DNA – Consultation" || entry?.status === "DNA – Procedure") && (
+            <Card className="border-amber-500/30">
+              <CardHeader>
+                <CardTitle>Rebook</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Create a task to rebook this patient after DNA.
+                </p>
+              </CardHeader>
+              <CardContent>
+                <Button
+                  variant="outline"
+                  disabled={rebookTaskSubmitting}
+                  onClick={async () => {
+                    setRebookTaskSubmitting(true);
+                    try {
+                      const due = new Date();
+                      due.setDate(due.getDate() + 7);
+                      await createTaskMutation.mutateAsync({
+                        title: "Rebook patient (DNA)",
+                        task_type: "rebook",
+                        description: `Rebook after DNA – ${entry?.status || "DNA"}. Tracker entry: ${entrySlug}`,
+                        form_submission_id: entry?.id,
+                        form_id: entry?.form_id,
+                        due_date: due.toISOString(),
+                        status: "pending",
+                        priority: "medium",
+                      });
+                      toast.success("Rebook task created.");
+                    } catch (err) {
+                      const d = err?.response?.data?.detail;
+                      toast.error(typeof d === "object" ? d?.message : d || "Failed to create rebook task");
+                    } finally {
+                      setRebookTaskSubmitting(false);
+                    }
+                  }}
+                >
+                  {rebookTaskSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Create rebook task
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
           {isEditing ? (
             <div className="space-y-4">
               {/* Render fields without sections first */}
@@ -695,12 +964,13 @@ const TrackerEntryDetailPage = () => {
 
               {/* Render fields by section for editing */}
               {sections.length > 0 && (
-                sections.map((section) => {
-                  const sectionFields = fieldsBySection[section.id]?.fields || [];
+                sections.map((section, sectionIndex) => {
+                  const sectionKey = section.id ?? section.title ?? section.label ?? `section-${sectionIndex}`;
+                  const sectionFields = fieldsBySection[sectionKey]?.fields || [];
                   if (sectionFields.length === 0) return null;
 
                   return (
-                    <Card key={section.id}>
+                    <Card key={sectionKey}>
                       <CardHeader>
                         <CardTitle>{section.label || section.id}</CardTitle>
                       </CardHeader>
@@ -804,12 +1074,13 @@ const TrackerEntryDetailPage = () => {
 
               {/* Render fields by section */}
               {sections.length > 0 ? (
-                sections.map((section) => {
-                  const sectionFields = fieldsBySection[section.id]?.fields || [];
+                sections.map((section, sectionIndex) => {
+                  const sectionKey = section.id ?? section.title ?? section.label ?? `section-${sectionIndex}`;
+                  const sectionFields = fieldsBySection[sectionKey]?.fields || [];
                   if (sectionFields.length === 0) return null;
 
                   return (
-                    <Card key={section.id}>
+                    <Card key={sectionKey}>
                       <CardHeader>
                         <CardTitle>{section.label || section.id}</CardTitle>
                       </CardHeader>
@@ -903,6 +1174,82 @@ const TrackerEntryDetailPage = () => {
               />
             </CardContent>
           </Card>
+
+          {/* Phase 4.4: Attachments – Referral PDF and other files */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <Paperclip className="h-5 w-5" />
+                  Attachments
+                </CardTitle>
+                {canEditCase && (
+                  <label className="cursor-pointer">
+                    <span className="sr-only">Upload file</span>
+                    <input
+                      type="file"
+                      className="hidden"
+                      multiple
+                      onChange={async (e) => {
+                        const files = Array.from(e.target.files || []);
+                        if (!files.length || !entitySlugForFiles) return;
+                        setAttachmentUploading(true);
+                        try {
+                          await filesService.attachFiles("tracker_entry", entitySlugForFiles, files);
+                          const res = await filesService.getEntityAttachments("tracker_entry", entitySlugForFiles);
+                          setAttachments(res?.attachments || []);
+                          toast.success(`Uploaded ${files.length} file(s)`);
+                        } catch (err) {
+                          toast.error(err?.response?.data?.detail || "Upload failed");
+                        } finally {
+                          setAttachmentUploading(false);
+                          e.target.value = "";
+                        }
+                      }}
+                      disabled={attachmentUploading}
+                    />
+                    <Button type="button" variant="outline" size="sm" asChild>
+                      <span>
+                        {attachmentUploading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                        Upload
+                      </span>
+                    </Button>
+                  </label>
+                )}
+              </div>
+              <p className="text-sm text-muted-foreground mt-1">
+                Referral PDF and other documents attached to this case.
+              </p>
+            </CardHeader>
+            <CardContent>
+              {attachmentsLoading ? (
+                <div className="flex items-center justify-center py-6">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : attachments.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-4">No attachments yet.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {attachments.map((att) => (
+                    <li key={att.id} className="flex items-center justify-between rounded border px-3 py-2">
+                      <span className="text-sm truncate">{att.description || att.file_name || `File #${att.file_id}`}</span>
+                      {att.download_url ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => window.open(att.download_url, "_blank")}
+                        >
+                          Download
+                        </Button>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* Timeline Tab */}
@@ -943,6 +1290,11 @@ const TrackerEntryDetailPage = () => {
                                       <Badge variant="secondary" className="text-xs">
                                         {event.note_category}
                                       </Badge>
+                                    )}
+                                    {(event.contact_method || event.contact_outcome) && (
+                                      <span className="text-xs text-muted-foreground">
+                                        {[event.contact_method, event.contact_outcome].filter(Boolean).join(" · ")}
+                                      </span>
                                     )}
                                   </div>
                                   {(event.type === "field_updates" || event.type === "created_fields" || event.type === "created") && event.changes?.length > 0 ? (
@@ -1329,6 +1681,121 @@ const TrackerEntryDetailPage = () => {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Phase 4.2: Create Task modal */}
+      <Dialog open={isCreateTaskModalOpen} onOpenChange={setIsCreateTaskModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create Task</DialogTitle>
+            <DialogDescription>Create a task linked to this case. It will be associated with this tracker entry.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label>Title</Label>
+              <Input
+                value={createTaskForm.title}
+                onChange={(e) => setCreateTaskForm((p) => ({ ...p, title: e.target.value }))}
+                placeholder="Task title"
+              />
+            </div>
+            <div>
+              <Label>Due date</Label>
+              <Input
+                type="date"
+                value={createTaskForm.due_date}
+                onChange={(e) => setCreateTaskForm((p) => ({ ...p, due_date: e.target.value }))}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsCreateTaskModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={async () => {
+                if (!createTaskForm.title?.trim()) {
+                  toast.error("Title is required");
+                  return;
+                }
+                try {
+                  await createTaskMutation.mutateAsync({
+                    title: createTaskForm.title.trim(),
+                    form_submission_id: entry?.id,
+                    form_id: entry?.form_id,
+                    due_date: createTaskForm.due_date ? new Date(createTaskForm.due_date).toISOString() : undefined,
+                    status: "pending",
+                    priority: "medium",
+                  });
+                  setIsCreateTaskModalOpen(false);
+                  setCreateTaskForm({ title: "", due_date: "", task_type: "" });
+                  toast.success("Task created");
+                } catch (err) {
+                  toast.error(err?.response?.data?.detail || "Failed to create task");
+                }
+              }}
+              disabled={createTaskMutation.isPending}
+            >
+              {createTaskMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Create Task
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Phase 5.2: Send SMS modal */}
+      <Dialog open={isSendSmsModalOpen} onOpenChange={setIsSendSmsModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Send SMS</DialogTitle>
+            <DialogDescription>
+              Send an SMS to the patient. Phone and SMS consent must be set on this case.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label>Template</Label>
+              <Select value={sendSmsTemplate} onValueChange={setSendSmsTemplate}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="appointment_reminder">Appointment reminder</SelectItem>
+                  <SelectItem value="prep_reminder">Prep reminder</SelectItem>
+                  <SelectItem value="please_contact_us">Please contact us</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsSendSmsModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={async () => {
+                setSendSmsSubmitting(true);
+                try {
+                  const res = await trackersService.sendSmsFromEntry(entrySlug, { template_key: sendSmsTemplate });
+                  setIsSendSmsModalOpen(false);
+                  if (res?.success) {
+                    toast.success("SMS sent. A note has been added to the timeline.");
+                  } else {
+                    toast.error(res?.error || "SMS could not be sent (check Twilio config).");
+                  }
+                } catch (err) {
+                  const d = err?.response?.data?.detail;
+                  toast.error(typeof d === "string" ? d : d?.message || "Failed to send SMS");
+                } finally {
+                  setSendSmsSubmitting(false);
+                }
+              }}
+              disabled={sendSmsSubmitting}
+            >
+              {sendSmsSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Send SMS
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
