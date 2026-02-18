@@ -593,8 +593,10 @@ export const ShiftRecordList = ({
                   </TableCell>
                   <TableCell>{record.hours ?? "—"}</TableCell>
                   <TableCell>
-                    {record.start_time && record.end_time
-                      ? `${String(record.start_time).slice(0, 5)} – ${String(record.end_time).slice(0, 5)}`
+                    {record.start_time
+                      ? record.end_time
+                        ? `${String(record.start_time).slice(0, 5)} – ${String(record.end_time).slice(0, 5)}`
+                        : `${String(record.start_time).slice(0, 5)} – (add end later)`
                       : "—"}
                   </TableCell>
                   <TableCell className="max-w-[200px] truncate">

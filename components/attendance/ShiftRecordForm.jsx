@@ -188,17 +188,20 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
     }
   }, [jobRoleId, assignments]);
 
-  // Auto-calculate hours when start time or end time changes
+  // Auto-calculate hours when both start and end time are set; clear to 0 when end time is removed (start-only)
   useEffect(() => {
     const calculated = hoursFromStartEnd(startTime, endTime);
     if (calculated != null) setHours(String(calculated));
+    else if (startTime && !endTime) setHours("0");
   }, [startTime, endTime]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!shiftDate || !shiftLeaveTypeId || !jobRoleId || !departmentId || !hours) return;
-    const numHours = parseFloat(hours);
-    if (numHours <= 0 || numHours > 24) return;
+    if (!shiftDate || !shiftLeaveTypeId || !jobRoleId || !departmentId) return;
+    const numHours = hours === "" || hours == null ? 0 : parseFloat(hours);
+    if (numHours < 0 || numHours > 24) return;
+    // When only start time is set (no end time), allow 0 hours so user can add end time later
+    if (numHours === 0 && (!startTime || endTime)) return;
 
     setIsSubmitting(true);
     try {
@@ -237,14 +240,15 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
     }
   };
 
+  const numHoursParsed = hours === "" || hours == null ? 0 : parseFloat(hours);
   const canSubmit =
     shiftDate &&
     shiftLeaveTypeId &&
     jobRoleId &&
     departmentId &&
-    hours &&
-    parseFloat(hours) > 0 &&
-    parseFloat(hours) <= 24 &&
+    numHoursParsed >= 0 &&
+    numHoursParsed <= 24 &&
+    (numHoursParsed > 0 || (startTime && !endTime)) &&
     (!allowUserSelect || !!selectedUserId);
 
   return (
@@ -436,18 +440,23 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
             </div>
             <div className="space-y-2">
               <Label>Hours</Label>
-              <Input type="number" step="0.25" min="0.25" max="24" value={hours} onChange={(e) => setHours(e.target.value)} required />
+              <Input type="number" step="0.25" min="0" max="24" value={hours} onChange={(e) => setHours(e.target.value)} placeholder={!endTime ? "0 if adding end time later" : undefined} />
+              {!endTime && startTime && (
+                <p className="text-xs text-muted-foreground">Use 0 when recording start only; add end time and hours when you finish.</p>
+              )}
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>Start time (optional)</Label>
+              <Label>Start time</Label>
               <Input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
+              {!endTime && <p className="text-xs text-muted-foreground">Add end time when you leave (you can edit this record later).</p>}
             </div>
             <div className="space-y-2">
               <Label>End time (optional)</Label>
               <Input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
+              <p className="text-xs text-muted-foreground">Leave blank to add when you finish work.</p>
             </div>
           </div>
 

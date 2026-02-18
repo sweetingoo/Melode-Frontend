@@ -506,6 +506,45 @@ const RoleManagementPage = () => {
       .replace(/^_|_$/g, ""); // Remove leading/trailing underscores
   };
 
+  // Build role name key: DEPT_CODE_ROLE_TYPE_ROLE_NAME (backend expects ^[a-z_]+$)
+  const buildRoleNameKey = (deptCode, roleType, roleNamePart) => {
+    const sanitize = (s) =>
+      (s || "")
+        .toLowerCase()
+        .replace(/[^a-z]/g, "_")
+        .replace(/_+/g, "_")
+        .replace(/^_|_$/g, "");
+    const a = sanitize(deptCode) || "dept";
+    const b = roleType === "shift_role" ? "shift_role" : "job_role";
+    const c = sanitize(roleNamePart) || "role";
+    return `${a}_${b}_${c}`.slice(0, 50);
+  };
+
+  // Preview key for create modal (DEPT_CODE_ROLE_TYPE_ROLE_NAME)
+  const createRoleKeyPreview = React.useMemo(() => {
+    if (editingRole) return null;
+    let deptCode = "";
+    if (formData.roleType === "job_role" && formData.departmentId) {
+      const dept = departments.find((d) => d.id === formData.departmentId || d.id === parseInt(formData.departmentId, 10));
+      deptCode = dept?.code || dept?.name || "";
+    } else if (formData.roleType === "shift_role" && formData.parentRoleId) {
+      const parentRole = allRoles.find((r) => r.id === formData.parentRoleId || r.id === parseInt(formData.parentRoleId, 10));
+      const parentDeptId = parentRole?.departmentId ?? parentRole?.department_id;
+      if (parentDeptId != null) {
+        const dept = departments.find((d) => d.id === parentDeptId || d.id === parseInt(parentDeptId, 10));
+        deptCode = dept?.code || dept?.name || "";
+      }
+    }
+    return buildRoleNameKey(deptCode, formData.roleType, formData.roleName);
+  }, [editingRole, formData.roleType, formData.departmentId, formData.parentRoleId, formData.roleName, departments, allRoles]);
+
+  // Quick create role key preview
+  const quickCreateRoleKeyPreview = React.useMemo(() => {
+    const dept = departments.find((d) => d.id === quickCreateRoleData.departmentId || d.id === parseInt(quickCreateRoleData.departmentId, 10));
+    const deptCode = dept?.code || dept?.name || "";
+    return buildRoleNameKey(deptCode, "job_role", quickCreateRoleData.roleName);
+  }, [quickCreateRoleData.departmentId, quickCreateRoleData.roleName, departments]);
+
   const handleInputChange = (field, value) => {
     setFormData((prev) => {
       const newData = {
@@ -539,9 +578,23 @@ const RoleManagementPage = () => {
         return;
       }
 
+      // Resolve department code for role name key (DEPT_CODE_ROLE_TYPE_ROLE_NAME)
+      let deptCode = "";
+      if (formData.roleType === "job_role" && formData.departmentId) {
+        const dept = departments.find((d) => d.id === formData.departmentId || d.id === parseInt(formData.departmentId, 10));
+        deptCode = dept?.code || dept?.name || "";
+      } else if (formData.roleType === "shift_role" && formData.parentRoleId) {
+        const parentRole = allRoles.find((r) => r.id === formData.parentRoleId || r.id === parseInt(formData.parentRoleId, 10));
+        const parentDeptId = parentRole?.departmentId ?? parentRole?.department_id;
+        if (parentDeptId != null) {
+          const dept = departments.find((d) => d.id === parentDeptId || d.id === parseInt(parentDeptId, 10));
+          deptCode = dept?.code || dept?.name || "";
+        }
+      }
+
       const roleData = {
         display_name: formData.displayName,
-        name: formData.roleName,
+        name: editingRole ? formData.roleName : buildRoleNameKey(deptCode, formData.roleType, formData.roleName),
         description: formData.description,
         priority: formData.priority,
         role_type: formData.roleType,
@@ -666,9 +719,11 @@ const RoleManagementPage = () => {
     }
 
     try {
+      const dept = departments.find((d) => d.id === quickCreateRoleData.departmentId || d.id === parseInt(quickCreateRoleData.departmentId, 10));
+      const deptCode = dept?.code || dept?.name || "";
       const roleData = {
         display_name: quickCreateRoleData.displayName,
-        name: quickCreateRoleData.roleName,
+        name: buildRoleNameKey(deptCode, "job_role", quickCreateRoleData.roleName),
         description: quickCreateRoleData.description || "",
         priority: quickCreateRoleData.priority,
         role_type: "job_role",
@@ -1643,6 +1698,11 @@ const RoleManagementPage = () => {
                   <span className="text-blue-600 dark:text-blue-400">Auto-generated from display name.</span>
                 )}
               </p>
+              {!editingRole && createRoleKeyPreview && (
+                <p className="text-xs text-muted-foreground rounded bg-muted/50 px-2 py-1.5 font-mono">
+                  Key (stored): <span className="font-medium text-foreground">{createRoleKeyPreview}</span>
+                </p>
+              )}
             </div>
 
             {/* Department (for Job Role) */}
@@ -2475,6 +2535,11 @@ const RoleManagementPage = () => {
                   <span className="text-blue-600 dark:text-blue-400">Auto-generated from display name.</span>
                 )}
               </p>
+              {quickCreateRoleKeyPreview && (
+                <p className="text-xs text-muted-foreground rounded bg-muted/50 px-2 py-1.5 font-mono">
+                  Key (stored): <span className="font-medium text-foreground">{quickCreateRoleKeyPreview}</span>
+                </p>
+              )}
             </div>
 
             <div className="space-y-2">
