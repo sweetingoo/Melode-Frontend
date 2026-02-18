@@ -447,6 +447,37 @@ export const useUpdateHolidayEntitlement = () => {
   });
 };
 
+export const useRecalculateHolidayEntitlementHours = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (entitlementIdOrSlug) => {
+      const response = await attendanceService.recalculateHolidayEntitlementHours(entitlementIdOrSlug);
+      return response.data ?? response;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: attendanceKeys.holidayEntitlements() });
+      if (data?.user_id != null && data?.job_role_id != null) {
+        queryClient.invalidateQueries({
+          queryKey: attendanceKeys.holidayBalance({
+            user_id: data.user_id,
+            job_role_id: data.job_role_id,
+            holiday_year_id: data.holiday_year_id,
+          }),
+        });
+      }
+      toast.success("Holiday hours recalculated from leave");
+    },
+    onError: (error) => {
+      const errorMessage =
+        error?.response?.data?.detail || "Failed to recalculate holiday hours";
+      toast.error("Recalculate failed", {
+        description: Array.isArray(errorMessage) ? errorMessage.map((e) => e.msg || e).join(", ") : errorMessage,
+      });
+    },
+  });
+};
+
 // Attendance filter: departments for list/reports dropdown (fallback to /departments if attendance endpoint fails or is empty)
 export const useAttendanceDepartments = (options = {}) => {
   return useQuery({

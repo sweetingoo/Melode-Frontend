@@ -122,6 +122,7 @@ import {
   useEmployeeSettings,
   useHolidayEntitlements,
   useHolidayYears,
+  useRecalculateHolidayEntitlementHours,
 } from "@/hooks/useAttendance";
 import { filesService } from "@/services/files";
 
@@ -284,6 +285,7 @@ const UserEditPage = () => {
     enabled: !!userData?.id,
   });
   const entitlementsList = Array.isArray(entitlementsData) ? entitlementsData : (entitlementsData ?? []);
+  const recalculateHoursMutation = useRecalculateHolidayEntitlementHours();
 
   // Get available roles from API (needed for Superuser role lookup)
   const { data: rolesData, isLoading: rolesLoading } = useRoles();
@@ -1381,6 +1383,16 @@ const UserEditPage = () => {
     return departments.filter((dept) => !assignedDeptIds.includes(dept.id));
   }, [departments, assignmentsByDepartment]);
 
+  // Roles available in the Assign Department modal: only roles that belong to the selected department (or system roles with no department)
+  const rolesForAssignDepartmentModal = React.useMemo(() => {
+    if (!selectedDepartmentId || !availableRoles.length) return [];
+    const deptId = parseInt(selectedDepartmentId, 10);
+    return availableRoles.filter((role) => {
+      const roleDeptId = role.department_id ?? role.departmentId ?? role.department?.id;
+      return roleDeptId === deptId || roleDeptId == null;
+    });
+  }, [selectedDepartmentId, availableRoles]);
+
   // Get available roles for a department (not already assigned in that department)
   const getAvailableRolesForDepartment = (departmentId) => {
     const departmentAssignments = assignmentsByDepartment.find(
@@ -1412,14 +1424,21 @@ const UserEditPage = () => {
       });
     }
 
-    // Filter out shift roles and already assigned roles
+    // Filter to roles that belong to this department (or system roles), exclude shift roles and already assigned
+    const deptIdNum = typeof departmentId === "string" ? parseInt(departmentId, 10) : departmentId;
     return availableRoles.filter(
-      (role) =>
-        !assignedRoleIds.has(role.id) &&
-        role.role_type !== "shift_role" &&
-        role.roleType !== "shift_role" &&
-        !role.parent_role_id &&
-        !role.parentRoleId
+      (role) => {
+        const roleDeptId = role.department_id ?? role.departmentId ?? role.department?.id;
+        const belongsToDepartment = roleDeptId === deptIdNum || roleDeptId == null;
+        return (
+          belongsToDepartment &&
+          !assignedRoleIds.has(role.id) &&
+          role.role_type !== "shift_role" &&
+          role.roleType !== "shift_role" &&
+          !role.parent_role_id &&
+          !role.parentRoleId
+        );
+      }
     );
   };
 
@@ -2340,14 +2359,31 @@ const UserEditPage = () => {
                   <div className="flex flex-wrap items-center justify-between gap-4">
                     <div>
                       <CardTitle>Holiday entitlements</CardTitle>
-                      <CardDescription>Annual allowance (hours) per job role and holiday year</CardDescription>
+                      <CardDescription>Annual allowance (hours) per job role and holiday year. Used and pending hours are calculated from leave each time you view this.</CardDescription>
                     </div>
-                    {canManageAttendanceSettings && (
-                      <Button onClick={() => { setSelectedEntitlement(null); setIsEntitlementFormOpen(true); }}>
-                        <Plus className="mr-2 h-4 w-4" />
-                        Add entitlement
-                      </Button>
-                    )}
+                    <div className="flex flex-wrap items-center gap-2">
+                      {canManageAttendanceSettings && entitlementsList.length > 0 && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={async () => {
+                            for (const ent of entitlementsList) {
+                              await recalculateHoursMutation.mutateAsync(ent.id ?? ent.slug);
+                            }
+                          }}
+                          disabled={recalculateHoursMutation.isPending}
+                        >
+                          {recalculateHoursMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+                          Recalculate hours from leave
+                        </Button>
+                      )}
+                      {canManageAttendanceSettings && (
+                        <Button onClick={() => { setSelectedEntitlement(null); setIsEntitlementFormOpen(true); }}>
+                          <Plus className="mr-2 h-4 w-4" />
+                          Add entitlement
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -3559,7 +3595,10 @@ const UserEditPage = () => {
               <Label htmlFor="department">Department</Label>
               <Select
                 value={selectedDepartmentId}
-                onValueChange={setSelectedDepartmentId}
+                onValueChange={(value) => {
+                  setSelectedDepartmentId(value);
+                  setSelectedRoleForDepartment(""); // Reset role when department changes
+                }}
                 disabled={
                   departmentsLoading || createAssignmentMutation.isPending
                 }
@@ -3591,7 +3630,7 @@ const UserEditPage = () => {
                   <SelectValue placeholder="Select a role..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {availableRoles.map((role) => (
+                  {rolesForAssignDepartmentModal.map((role) => (
                     <SelectItem key={role.id} value={role.id.toString()}>
                       {role.display_name || role.name} -{" "}
                       {role.description || "No description"}

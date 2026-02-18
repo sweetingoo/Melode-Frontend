@@ -177,6 +177,18 @@ export const attendanceService = {
     }
   },
 
+  recalculateHolidayEntitlementHours: async (entitlementIdOrSlug) => {
+    try {
+      const response = await api.post(
+        `/attendance/holiday-entitlements/${entitlementIdOrSlug}/recalculate-hours`
+      );
+      return response.data ?? response;
+    } catch (error) {
+      console.error("Recalculate holiday entitlement hours failed:", error);
+      throw error;
+    }
+  },
+
   // Leave Requests
   getLeaveRequests: async (params = {}) => {
     try {

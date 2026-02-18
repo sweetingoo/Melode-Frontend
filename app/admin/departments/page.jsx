@@ -209,9 +209,9 @@ const DepartmentsPage = () => {
     // Debounced search term will trigger API call and reset page
   };
 
-  const handleDeleteDepartment = async (departmentId) => {
+  const handleDeleteDepartment = async (departmentSlug) => {
     try {
-      await deleteDepartmentMutation.mutateAsync(departmentId);
+      await deleteDepartmentMutation.mutateAsync(departmentSlug);
       refetch();
     } catch (error) {
       console.error("Failed to delete department:", error);
@@ -272,7 +272,7 @@ const DepartmentsPage = () => {
     if (selectedDepartment) {
       // Update existing department
       updateDepartmentMutation.mutate(
-        { id: selectedDepartment.id, departmentData },
+        { slug: selectedDepartment.slug, departmentData },
         {
           onSuccess: () => {
             setIsEditModalOpen(false);
@@ -632,7 +632,7 @@ const DepartmentsPage = () => {
                                           <AlertDialogCancel>Cancel</AlertDialogCancel>
                                           <AlertDialogAction
                                             onClick={() =>
-                                              handleDeleteDepartment(department.id)
+                                              handleDeleteDepartment(department.slug)
                                             }
                                             className="bg-red-600 hover:bg-red-700"
                                           >
