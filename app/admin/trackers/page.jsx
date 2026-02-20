@@ -1046,6 +1046,13 @@ const TrackersPage = () => {
         }
       }
     }
+
+    // Repeatable group: value is array of row objects
+    if (fieldType === "repeatable_group") {
+      const rows = Array.isArray(value) ? value : [];
+      if (rows.length === 0) return "—";
+      return `${rows.length} row${rows.length !== 1 ? "s" : ""}`;
+    }
     
     if (Array.isArray(value)) {
       return value.join(", ");

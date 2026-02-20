@@ -73,6 +73,7 @@ const fieldTypes = [
   { value: "people", label: "People (User Selection)" },
   { value: "rag", label: "RAG (Red / Amber / Green)" },
   { value: "calculated", label: "Calculated (Sum / Percentage)" },
+  { value: "repeatable_group", label: "Repeatable group (linked rows)" },
 ];
 
 // No fixed default stages – each tracker/service defines its own. Used when tracker has no stage_mapping set.
@@ -187,6 +188,7 @@ const TrackerEditPage = () => {
     required: false,
     section: "",
     options: [],
+    fields: [],
   });
 
   const [editingFieldIndex, setEditingFieldIndex] = useState(null);
@@ -303,6 +305,11 @@ const TrackerEditPage = () => {
       return;
     }
 
+    // Repeatable group: suggest adding at least one child field
+    if (newField.type === "repeatable_group" && (!newField.fields || newField.fields.length === 0)) {
+      toast.warning("Add at least one child field so each row has columns. You can edit this field later to add more.");
+    }
+
     const field = {
       id: fieldId,
       name: fieldId,
@@ -311,6 +318,7 @@ const TrackerEditPage = () => {
       required: newField.required || false,
       section: newField.section || null,
       ...(newField.options.length > 0 && { options: newField.options }),
+      ...(newField.type === "repeatable_group" && { fields: newField.fields || [] }),
     };
 
     setFormData((prev) => ({
@@ -330,6 +338,7 @@ const TrackerEditPage = () => {
       required: false,
       section: "",
       options: [],
+      fields: [],
     });
     setNewOption({ value: "", label: "" });
     setFieldIdManuallyEdited(false);
@@ -357,6 +366,7 @@ const TrackerEditPage = () => {
     setEditingField({
       ...field,
       options: field.options || [],
+      fields: field.fields || [],
     });
     setEditingOption({ value: "", label: "" });
   };
@@ -385,6 +395,7 @@ const TrackerEditPage = () => {
     newFields[editingFieldIndex] = {
       ...editingField,
       options: editingField.options || [],
+      fields: editingField.fields || [],
     };
 
     const updatedFormData = {
@@ -1685,6 +1696,86 @@ const TrackerEditPage = () => {
                           </div>
                         )}
 
+                        {/* Repeatable group: child fields (ID auto-generated from label) */}
+                        {editingField.type === "repeatable_group" && (
+                          <div className="space-y-3 p-3 border rounded-md bg-muted/30">
+                            <Label className="font-medium">Child fields (one per column in each row)</Label>
+                            {(editingField.fields || []).map((child, childIdx) => (
+                              <div key={childIdx} className="flex flex-wrap items-center gap-2 p-2 rounded border bg-background">
+                                <Input
+                                  className="flex-1 min-w-[100px]"
+                                  placeholder="Label"
+                                  value={child.label || child.field_label || ""}
+                                  onChange={(e) => {
+                                    const label = e.target.value;
+                                    const id = generateFieldIdFromLabel(label) || `field_${childIdx + 1}`;
+                                    setEditingField((prev) => ({
+                                      ...prev,
+                                      fields: (prev.fields || []).map((c, i) =>
+                                        i === childIdx ? { ...c, label, field_label: label, id, name: id } : c
+                                      ),
+                                    }));
+                                  }}
+                                />
+                                <Select
+                                  value={(child.type || child.field_type || "text").toLowerCase()}
+                                  onValueChange={(value) =>
+                                    setEditingField((prev) => ({
+                                      ...prev,
+                                      fields: (prev.fields || []).map((c, i) => i === childIdx ? { ...c, type: value, field_type: value } : c),
+                                    }))
+                                  }
+                                >
+                                  <SelectTrigger className="w-[120px]">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="text">Text</SelectItem>
+                                    <SelectItem value="number">Number</SelectItem>
+                                    <SelectItem value="date">Date</SelectItem>
+                                    <SelectItem value="select">Select</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                <span className="text-xs text-muted-foreground shrink-0">
+                                  ID: {child.id || child.name || generateFieldIdFromLabel(child.label) || `field_${childIdx + 1}`}
+                                </span>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-destructive hover:text-destructive"
+                                  onClick={() =>
+                                    setEditingField((prev) => ({
+                                      ...prev,
+                                      fields: (prev.fields || []).filter((_, i) => i !== childIdx),
+                                    }))
+                                  }
+                                >
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            ))}
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                setEditingField((prev) => {
+                                  const n = (prev.fields || []).length + 1;
+                                  const label = `New field ${n}`;
+                                  const id = generateFieldIdFromLabel(label) || `field_${n}`;
+                                  return {
+                                    ...prev,
+                                    fields: [...(prev.fields || []), { id, name: id, type: "text", label }],
+                                  };
+                                })
+                              }
+                            >
+                              Add child field
+                            </Button>
+                          </div>
+                        )}
+
                         {/* Optional RAG display: numeric / date / options by field type */}
                         {editingField.type && editingField.type !== "rag" && !["line_break", "page_break", "text_block", "image_block"].includes(editingField.type) && (() => {
                           const isNumericRag = ["number", "integer", "calculated"].includes(editingField.type);
@@ -2023,7 +2114,11 @@ const TrackerEditPage = () => {
                       <Select
                         value={newField.type}
                         onValueChange={(value) =>
-                          setNewField((prev) => ({ ...prev, type: value }))
+                          setNewField((prev) => ({
+                            ...prev,
+                            type: value,
+                            ...(value === "repeatable_group" && { fields: Array.isArray(prev.fields) ? prev.fields : [] }),
+                          }))
                         }
                       >
                         <SelectTrigger>
@@ -2549,6 +2644,86 @@ const TrackerEditPage = () => {
                             </div>
                           </div>
                         )}
+                      </div>
+                    )}
+
+                    {/* Repeatable group: child fields (ID auto-generated from label) */}
+                    {newField.type === "repeatable_group" && (
+                      <div className="space-y-3 p-3 border rounded-md bg-muted/30">
+                        <Label className="font-medium">Child fields (one per column in each row)</Label>
+                        {(newField.fields || []).map((child, childIdx) => (
+                          <div key={childIdx} className="flex flex-wrap items-center gap-2 p-2 rounded border bg-background">
+                            <Input
+                              className="flex-1 min-w-[100px]"
+                              placeholder="Label"
+                              value={child.label || child.field_label || ""}
+                              onChange={(e) => {
+                                const label = e.target.value;
+                                const id = generateFieldIdFromLabel(label) || `field_${childIdx + 1}`;
+                                setNewField((prev) => ({
+                                  ...prev,
+                                  fields: (prev.fields || []).map((c, i) =>
+                                    i === childIdx ? { ...c, label, field_label: label, id, name: id } : c
+                                  ),
+                                }));
+                              }}
+                            />
+                            <Select
+                              value={(child.type || child.field_type || "text").toLowerCase()}
+                              onValueChange={(value) =>
+                                setNewField((prev) => ({
+                                  ...prev,
+                                  fields: (prev.fields || []).map((c, i) => i === childIdx ? { ...c, type: value, field_type: value } : c),
+                                }))
+                              }
+                            >
+                              <SelectTrigger className="w-[120px]">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="text">Text</SelectItem>
+                                <SelectItem value="number">Number</SelectItem>
+                                <SelectItem value="date">Date</SelectItem>
+                                <SelectItem value="select">Select</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <span className="text-xs text-muted-foreground shrink-0">
+                              ID: {child.id || child.name || generateFieldIdFromLabel(child.label) || `field_${childIdx + 1}`}
+                            </span>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="text-destructive hover:text-destructive"
+                              onClick={() =>
+                                setNewField((prev) => ({
+                                  ...prev,
+                                  fields: (prev.fields || []).filter((_, i) => i !== childIdx),
+                                }))
+                              }
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ))}
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            setNewField((prev) => {
+                              const n = (prev.fields || []).length + 1;
+                              const label = `New field ${n}`;
+                              const id = generateFieldIdFromLabel(label) || `field_${n}`;
+                              return {
+                                ...prev,
+                                fields: [...(prev.fields || []), { id, name: id, type: "text", label }],
+                              };
+                            })
+                          }
+                        >
+                          Add child field
+                        </Button>
                       </div>
                     )}
 

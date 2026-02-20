@@ -455,11 +455,36 @@ const TrackerEntryDetailPage = () => {
 
   // Format field value for read-only display
   const formatFieldValue = (field, value) => {
+    const fieldType = field.type || field.field_type;
+
+    // Repeatable group: value is array of row objects
+    if (fieldType === "repeatable_group") {
+      const rows = Array.isArray(value) ? value : [];
+      if (rows.length === 0) return "—";
+      const childFields = field.fields || [];
+      return (
+        <div className="space-y-2 mt-1">
+          {rows.map((row, rowIndex) => (
+            <div key={rowIndex} className="rounded border p-2 bg-muted/30 text-sm">
+              {childFields.map((child) => {
+                const cid = child.id || child.name || child.field_id;
+                const cval = row[cid];
+                return (
+                  <div key={cid}>
+                    <span className="text-muted-foreground">{child.label || cid}: </span>
+                    {cval != null && cval !== "" ? String(cval) : "—"}
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      );
+    }
+
     if (value === null || value === undefined || value === "") {
       return "—";
     }
-    
-    const fieldType = field.type || field.field_type;
     
     // Handle different field types
     if (fieldType === "date" && value) {
@@ -1143,7 +1168,7 @@ const TrackerEntryDetailPage = () => {
                             {field.label || "Untitled Field"}
                           </label>
                           <div className="mt-1">
-                            <p className="text-sm">{formatFieldValue(field, value)}</p>
+                            <div className="text-sm">{formatFieldValue(field, value)}</div>
                           </div>
                         </div>
                       );
@@ -1182,7 +1207,7 @@ const TrackerEntryDetailPage = () => {
                                 {field.label || "Untitled Field"}
                               </label>
                               <div className="mt-1">
-                                <p className="text-sm">{formatFieldValue(field, value)}</p>
+                                <div className="text-sm">{formatFieldValue(field, value)}</div>
                               </div>
                             </div>
                           );
@@ -1219,7 +1244,7 @@ const TrackerEntryDetailPage = () => {
                               {field.label || "Untitled Field"}
                             </label>
                             <div className="mt-1">
-                              <p className="text-sm">{formatFieldValue(field, value)}</p>
+                              <div className="text-sm">{formatFieldValue(field, value)}</div>
                             </div>
                           </div>
                         );
