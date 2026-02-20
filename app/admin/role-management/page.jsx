@@ -56,7 +56,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import {
-  useRoles,
+  useRolesAll,
   useCreateRole,
   useUpdateRole,
   useDeleteRole,
@@ -135,7 +135,7 @@ const RoleManagementPage = () => {
     data: rolesData,
     isLoading: rolesLoading,
     error: rolesError,
-  } = useRoles();
+  } = useRolesAll();
   // Build query params for permissions API - include search when modal is open
   const permissionsQueryParams = React.useMemo(() => {
     if (!isPermissionsModalOpen) {

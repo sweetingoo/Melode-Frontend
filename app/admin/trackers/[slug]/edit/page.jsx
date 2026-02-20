@@ -49,7 +49,7 @@ import {
   useTrackerAuditLogs,
 } from "@/hooks/useTrackers";
 import { useActiveTrackerCategories } from "@/hooks/useTrackerCategories";
-import { useRoles } from "@/hooks/useRoles";
+import { useRoles, useRolesAll } from "@/hooks/useRoles";
 import { useUsers } from "@/hooks/useUsers";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
 import { generateSlug, humanizeStatusForDisplay } from "@/utils/slug";
@@ -3309,7 +3309,7 @@ const TrackerConstantsEditor = ({ constants, onChange }) => {
 
 // People Field Role Selector Component
 const PeopleFieldRoleSelector = ({ selectedRoleIds, onChange }) => {
-  const { data: rolesData, isLoading } = useRoles({ per_page: 100 });
+  const { data: rolesData, isLoading } = useRolesAll();
   // Handle both array and object response formats
   const roles = Array.isArray(rolesData)
     ? rolesData

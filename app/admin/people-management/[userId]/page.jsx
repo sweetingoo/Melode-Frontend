@@ -84,9 +84,9 @@ import {
   useUserRoles,
   useAssignDirectPermission,
   useRemoveDirectPermission,
-  useRoles,
   userUtils,
 } from "@/hooks/useUsers";
+import { useRolesAll } from "@/hooks/useRoles";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useCurrentUser } from "@/hooks/useAuth";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
@@ -287,8 +287,8 @@ const UserEditPage = () => {
   const entitlementsList = Array.isArray(entitlementsData) ? entitlementsData : (entitlementsData ?? []);
   const recalculateHoursMutation = useRecalculateHolidayEntitlementHours();
 
-  // Get available roles from API (needed for Superuser role lookup)
-  const { data: rolesData, isLoading: rolesLoading } = useRoles();
+  // Get available roles from API (needed for Superuser role lookup and Assign Department modal)
+  const { data: rolesData, isLoading: rolesLoading } = useRolesAll();
 
   // Custom Fields hooks for Additional Information tab
   const { data: customFieldsHierarchy, isLoading: customFieldsHierarchyLoading } = 
@@ -888,13 +888,11 @@ const UserEditPage = () => {
 
   const availableRoles = React.useMemo(() => {
     if (!rolesData) return [];
-    // Filter out shift roles - they cannot be directly assigned to users
+    // All job roles (including those with a parent, e.g. Service lead in Gastro) can be assigned to a department
     return rolesData.filter(
       (role) =>
         role.role_type !== "shift_role" &&
-        role.roleType !== "shift_role" &&
-        !role.parent_role_id &&
-        !role.parentRoleId
+        role.roleType !== "shift_role"
     );
   }, [rolesData]);
 
@@ -1434,9 +1432,7 @@ const UserEditPage = () => {
           belongsToDepartment &&
           !assignedRoleIds.has(role.id) &&
           role.role_type !== "shift_role" &&
-          role.roleType !== "shift_role" &&
-          !role.parent_role_id &&
-          !role.parentRoleId
+          role.roleType !== "shift_role"
         );
       }
     );

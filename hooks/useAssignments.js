@@ -151,6 +151,8 @@ export const useDeleteAssignment = () => {
         queryKey: assignmentKeys.department(variables.departmentSlug),
       });
       queryClient.invalidateQueries({ queryKey: assignmentKeys.lists() });
+      // Invalidate users list so people-management page shows updated role (no stale "removed" role)
+      queryClient.invalidateQueries({ queryKey: ["users"] });
       toast.success("Assignment removed successfully", {
         description: "The assignment has been removed.",
       });

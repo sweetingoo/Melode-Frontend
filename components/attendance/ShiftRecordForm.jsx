@@ -23,7 +23,7 @@ import { cn } from "@/lib/utils";
 import { formatDateForAPI } from "@/utils/time";
 import { getUserDisplayName } from "@/utils/user";
 import { useCreateShiftRecord, useUpdateShiftRecord } from "@/hooks/useShiftRecords";
-import { useShiftLeaveTypes, useAttendanceDepartments, useAttendanceEmployeeSuggest } from "@/hooks/useAttendance";
+import { useShiftLeaveTypes, useAttendanceEmployeeSuggest } from "@/hooks/useAttendance";
 import { useAssignments, useEmployeeAssignments } from "@/hooks/useAssignments";
 import { useAuth } from "@/hooks/useAuth";
 import { ATTENDANCE_CATEGORY_OPTIONS, getCategoryDescription } from "@/lib/attendanceLabels";
@@ -53,7 +53,6 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
   const [shiftLeaveTypeId, setShiftLeaveTypeId] = useState("");
   const [selectedUserId, setSelectedUserId] = useState("");
   const [selectedUserForDisplay, setSelectedUserForDisplay] = useState(null);
-  const [userDepartmentFilter, setUserDepartmentFilter] = useState("");
   const [userSearch, setUserSearch] = useState("");
   const [debouncedUserSearch, setDebouncedUserSearch] = useState("");
   const [userComboboxOpen, setUserComboboxOpen] = useState(false);
@@ -66,6 +65,13 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const targetUserId = userId || selectedUserId || user?.id;
+  // When editing, use the record's user so assignments load for that user from first render (state lags)
+  const effectiveUserIdForAssignments =
+    open && shiftRecord?.user_id != null
+      ? shiftRecord.user_id
+      : targetUserId
+        ? parseInt(targetUserId, 10)
+        : undefined;
   const createShiftRecord = useCreateShiftRecord();
   const updateShiftRecord = useUpdateShiftRecord();
 
@@ -74,7 +80,7 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
   const { data: suggestEmployees = [], isLoading: usersSearchLoading } = useAttendanceEmployeeSuggest(
     {
       q: debouncedUserSearch.trim() || undefined,
-      department_id: userDepartmentFilter ? parseInt(userDepartmentFilter, 10) : undefined,
+      department_id: undefined,
       limit: 20,
     },
     {
@@ -91,24 +97,21 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
   const selectedUser = allowUserSelect
     ? selectedUserForDisplay ?? suggestEmployees.find((e) => String(e.id) === selectedUserId)
     : null;
-  const selectedUserSlug = open ? selectedUser?.slug : null;
+  // When editing, prefer shiftRecord.user.slug so we fetch that user's assignments immediately (state lags)
+  const selectedUserSlug =
+    open && shiftRecord?.user?.slug ? shiftRecord.user.slug : open ? selectedUser?.slug : null;
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedUserSearch(userSearch), 300);
     return () => clearTimeout(t);
   }, [userSearch]);
 
-  const { data: attendanceDepartments = [] } = useAttendanceDepartments({ enabled: allowUserSelect && open });
-  const departmentsSorted = [...(Array.isArray(attendanceDepartments) ? attendanceDepartments : [])].sort((a, b) =>
-    (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" })
-  );
-
   const listAssignmentsQuery = useAssignments(
     {
-      user_id: targetUserId ? parseInt(targetUserId, 10) : undefined,
+      user_id: effectiveUserIdForAssignments,
       is_active: true,
     },
-    { enabled: open && !!targetUserId && !selectedUserSlug }
+    { enabled: open && !!effectiveUserIdForAssignments && !selectedUserSlug }
   );
   const employeeAssignmentsQuery = useEmployeeAssignments(selectedUserSlug || "");
 
@@ -117,6 +120,34 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
   const rawAssignments = assignmentsData?.assignments ?? assignmentsData;
   const assignments = Array.isArray(rawAssignments) ? rawAssignments : [];
   const assignmentsWithRole = assignments.filter((a) => getAssignmentRoleId(a) != null);
+
+  // Normalize assignment department id (support snake_case and camelCase from API)
+  const getAssignmentDepartmentId = (a) => {
+    const raw = a.department_id ?? a.departmentId ?? a.department?.id;
+    if (raw == null) return null;
+    const num = Number(raw);
+    return Number.isNaN(num) ? null : num;
+  };
+
+  // Departments the selected user is assigned to (for Department dropdown) — normalize id to number for consistent filtering
+  const departmentsForUser = useMemo(() => {
+    const seen = new Set();
+    return assignmentsWithRole
+      .map((a) => {
+        const id = getAssignmentDepartmentId(a);
+        const name = a.department?.name ?? a.department_name;
+        return id != null ? { id, name } : null;
+      })
+      .filter((d) => d != null && !seen.has(d.id) && (seen.add(d.id), true));
+  }, [assignmentsWithRole]);
+
+  // Job roles filtered by selected department (User -> Department -> Role)
+  const assignmentsInSelectedDept = useMemo(() => {
+    if (!departmentId) return [];
+    const deptIdNum = parseInt(departmentId, 10);
+    if (Number.isNaN(deptIdNum)) return [];
+    return assignmentsWithRole.filter((a) => getAssignmentDepartmentId(a) === deptIdNum);
+  }, [assignmentsWithRole, departmentId]);
 
   const { data: shiftLeaveTypesData } = useShiftLeaveTypes({ category, is_active: true });
   const shiftLeaveTypes = shiftLeaveTypesData?.types || shiftLeaveTypesData || [];
@@ -140,7 +171,6 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
       setShiftLeaveTypeId("");
       setSelectedUserId(userId?.toString() || "");
       setSelectedUserForDisplay(null);
-      setUserDepartmentFilter("");
       setUserSearch("");
       setDebouncedUserSearch("");
       setUserComboboxOpen(false);
@@ -153,13 +183,6 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
     }
   }, [shiftRecord, open, userId, user?.id]);
 
-  useEffect(() => {
-    if (allowUserSelect && userDepartmentFilter) {
-      setSelectedUserId("");
-      setSelectedUserForDisplay(null);
-    }
-  }, [userDepartmentFilter, allowUserSelect]);
-
   const prevSelectedUserIdRef = useRef(selectedUserId);
   useEffect(() => {
     if (allowUserSelect && prevSelectedUserIdRef.current !== selectedUserId) {
@@ -171,22 +194,48 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
     }
   }, [selectedUserId, allowUserSelect]);
 
-  // Auto-select first job role when adding and user has only one assignment
+  const prevDepartmentIdRef = useRef(departmentId);
   useEffect(() => {
-    if (!shiftRecord && !jobRoleId && assignmentsWithRole?.length === 1) {
-      const roleId = getAssignmentRoleId(assignmentsWithRole[0]);
+    if (prevDepartmentIdRef.current !== departmentId) {
+      prevDepartmentIdRef.current = departmentId;
+      setJobRoleId("");
+    } else {
+      prevDepartmentIdRef.current = departmentId;
+    }
+  }, [departmentId]);
+
+  // Auto-select department when adding and user has only one department
+  useEffect(() => {
+    if (!shiftRecord && !departmentId && departmentsForUser?.length === 1) {
+      setDepartmentId(String(departmentsForUser[0].id));
+    }
+  }, [shiftRecord, departmentId, departmentsForUser]);
+
+  // Auto-select first job role when adding and selected department has only one role
+  useEffect(() => {
+    if (!shiftRecord && !jobRoleId && assignmentsInSelectedDept?.length === 1) {
+      const roleId = getAssignmentRoleId(assignmentsInSelectedDept[0]);
       if (roleId != null) {
         setJobRoleId(String(roleId));
       }
     }
-  }, [shiftRecord, jobRoleId, assignmentsWithRole]);
+  }, [shiftRecord, jobRoleId, assignmentsInSelectedDept]);
 
+  // When job role is set (e.g. from edit), ensure department is set from assignment
   useEffect(() => {
-    if (jobRoleId && assignments?.length) {
+    if (jobRoleId && assignments?.length && !departmentId) {
       const assignment = assignments.find((a) => String(getAssignmentRoleId(a)) === jobRoleId);
-      if (assignment?.department_id) setDepartmentId(String(assignment.department_id));
+      const deptId = assignment && getAssignmentDepartmentId(assignment);
+      if (deptId != null) setDepartmentId(String(deptId));
     }
-  }, [jobRoleId, assignments]);
+  }, [jobRoleId, assignments, departmentId]);
+
+  // Clear job role if it is not in the selected department (e.g. after switching department)
+  useEffect(() => {
+    if (!departmentId || !jobRoleId || assignmentsInSelectedDept.length === 0) return;
+    const isInDept = assignmentsInSelectedDept.some((a) => String(getAssignmentRoleId(a)) === jobRoleId);
+    if (!isInDept) setJobRoleId("");
+  }, [departmentId, jobRoleId, assignmentsInSelectedDept]);
 
   // Auto-calculate hours when both start and end time are set; clear to 0 when end time is removed (start-only)
   useEffect(() => {
@@ -261,28 +310,8 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
           <div className="overflow-y-auto px-6 pb-4 space-y-4 flex-1 min-h-0">
           {allowUserSelect && (
-            <>
-              <div className="space-y-2">
-                <Label>Department (filter)</Label>
-                <Select
-                  value={userDepartmentFilter || "__all__"}
-                  onValueChange={(v) => setUserDepartmentFilter(v === "__all__" ? "" : v)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="All departments" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__all__">All departments</SelectItem>
-                    {departmentsSorted.map((d) => (
-                      <SelectItem key={d.id} value={String(d.id)}>
-                        {d.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>User</Label>
+            <div className="space-y-2">
+              <Label>User</Label>
                 <Popover open={userComboboxOpen} onOpenChange={(open) => { setUserComboboxOpen(open); if (!open) { setUserSearch(""); setDebouncedUserSearch(""); } }}>
                   <PopoverTrigger asChild>
                     <Button
@@ -311,7 +340,7 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
                         <p className="py-6 text-center text-sm text-muted-foreground">Loading…</p>
                       ) : employeesSorted.length === 0 ? (
                         <p className="py-6 text-center text-sm text-muted-foreground">
-                          {debouncedUserSearch.trim() ? "No one found. Try another name or department." : "Type to search or pick a department first."}
+                          {debouncedUserSearch.trim() ? "No one found. Try another name." : "Type to search users."}
                         </p>
                       ) : (
                         <ul className="p-1">
@@ -340,8 +369,43 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
                     </ScrollArea>
                   </PopoverContent>
                 </Popover>
-              </div>
-            </>
+            </div>
+          )}
+
+          {(allowUserSelect || effectiveUserIdForAssignments) && (
+            <div className="space-y-2">
+              <Label>Department</Label>
+              <Select
+                value={departmentId || ""}
+                onValueChange={(v) => {
+                  setDepartmentId(v);
+                  setJobRoleId("");
+                }}
+                required
+                disabled={!effectiveUserIdForAssignments || assignmentsLoading}
+              >
+                <SelectTrigger>
+                  <SelectValue
+                    placeholder={
+                      !effectiveUserIdForAssignments
+                        ? "Select user first"
+                        : assignmentsLoading
+                          ? "Loading…"
+                          : departmentsForUser.length === 0
+                            ? "No departments found"
+                            : "Select department"
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {departmentsForUser.map((d) => (
+                    <SelectItem key={d.id} value={String(d.id)}>
+                      {d.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           )}
 
           <div className="space-y-2">
@@ -392,26 +456,29 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
           <div className="space-y-2">
             <Label>Job Role</Label>
             <Select
+              key={departmentId || "no-dept"}
               value={jobRoleId}
               onValueChange={setJobRoleId}
               required
-              disabled={!targetUserId || assignmentsLoading}
+              disabled={!departmentId || assignmentsLoading}
             >
               <SelectTrigger>
                 <SelectValue
                   placeholder={
-                    !targetUserId
+                    !effectiveUserIdForAssignments
                       ? "Select user first"
-                      : assignmentsLoading
-                        ? "Loading…"
-                        : assignmentsWithRole.length === 0
-                          ? "No job roles found"
-                          : "Select job role"
+                      : !departmentId
+                        ? "Select department first"
+                        : assignmentsLoading
+                          ? "Loading…"
+                          : assignmentsInSelectedDept.length === 0
+                            ? "No job roles in this department"
+                            : "Select job role"
                   }
                 />
               </SelectTrigger>
               <SelectContent>
-                {assignmentsWithRole.map((a) => {
+                {assignmentsInSelectedDept.map((a) => {
                   const roleId = getAssignmentRoleId(a);
                   return (
                     <SelectItem key={a.id} value={String(roleId)}>

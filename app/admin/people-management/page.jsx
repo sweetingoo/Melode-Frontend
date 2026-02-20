@@ -77,7 +77,7 @@ import {
 import { useHijackUser, useCurrentUser } from "@/hooks/useAuth";
 import { useInvitations, invitationUtils } from "@/hooks/useInvitations";
 import { useDepartments } from "@/hooks/useDepartments";
-import { useRoles } from "@/hooks/useRoles";
+import { useRolesAll } from "@/hooks/useRoles";
 import {
   Dialog,
   DialogContent,
@@ -136,7 +136,7 @@ const UserManagementPage = () => {
   const { data: usersResponse, isLoading, error, refetch } = useUsers(usersParams);
   const { data: departmentsData, isLoading: departmentsLoading } = useDepartments();
   const departments = departmentsData?.departments || departmentsData?.data || departmentsData || [];
-  const { data: rolesData, isLoading: rolesLoading } = useRoles();
+  const { data: rolesData, isLoading: rolesLoading } = useRolesAll();
   const roles = rolesData?.roles ?? rolesData ?? [];
   const { data: invitations = [], isLoading: invitationsLoading } = useInvitations();
   const deleteUserMutation = useDeleteUser();
@@ -1466,9 +1466,7 @@ const UserManagementPage = () => {
                       const departmentRoles = roles.filter(
                         (role) =>
                           (role.department_id || role.departmentId) === parseInt(userFormData.department_id) &&
-                          (role.role_type === "job_role" || role.roleType === "job_role" || !role.role_type) &&
-                          !role.parent_role_id &&
-                          !role.parentRoleId
+                          (role.role_type === "job_role" || role.roleType === "job_role" || !role.role_type)
                       );
                       return departmentRoles.length === 0 ? (
                         <SelectItem value="no-roles" disabled>

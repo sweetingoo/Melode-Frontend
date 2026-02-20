@@ -21,7 +21,7 @@ import {
 import { useCreateAssignment, useUpdateAssignment, useAssignment } from "@/hooks/useAssignments";
 import { useDepartments } from "@/hooks/useDepartments";
 import { useEmployees } from "@/hooks/useEmployees";
-import { useRoles } from "@/hooks/useRoles";
+import { useRolesAll } from "@/hooks/useRoles";
 import { Loader2, Shield } from "lucide-react";
 import { toast } from "sonner";
 import { Calendar } from "@/components/ui/calendar";
@@ -52,7 +52,7 @@ const EmployeeAssignmentModal = ({
 
   const { data: departmentsResponse } = useDepartments();
   const { data: employeesResponse } = useEmployees();
-  const { data: rolesData } = useRoles();
+  const { data: rolesData } = useRolesAll();
   const { data: assignmentData } = useAssignment(assignmentId);
   const createAssignmentMutation = useCreateAssignment();
   const updateAssignmentMutation = useUpdateAssignment();

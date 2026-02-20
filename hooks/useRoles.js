@@ -20,12 +20,25 @@ export const roleKeys = {
   roleUsers: (roleId) => [...roleKeys.all, "role-users", roleId],
 };
 
-// Get all roles query
+// Get all roles query (single page)
 export const useRoles = (params = {}, options = {}) => {
   return useQuery({
     queryKey: roleKeys.list(params),
     queryFn: async () => {
       const response = await rolesService.getRoles(params);
+      return response.data;
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    ...options,
+  });
+};
+
+// Get all roles by fetching pages until there is no next page (small page size)
+export const useRolesAll = (perPage = 20, options = {}) => {
+  return useQuery({
+    queryKey: [...roleKeys.lists(), "all-pages", perPage],
+    queryFn: async () => {
+      const response = await rolesService.getRolesAllPages(perPage);
       return response.data;
     },
     staleTime: 5 * 60 * 1000, // 5 minutes

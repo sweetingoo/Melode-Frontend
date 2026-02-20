@@ -64,7 +64,7 @@ import {
   useCreateDepartment,
   useUpdateDepartment,
 } from "@/hooks/useDepartments";
-import { useRoles, roleUtils } from "@/hooks/useRoles";
+import { useRolesAll, roleUtils } from "@/hooks/useRoles";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
 import {
   Dialog,
@@ -124,7 +124,7 @@ const DepartmentsPage = () => {
   const canDeleteDepartment = hasPermission("department:delete");
 
   // Fetch all roles for hierarchy display
-  const { data: rolesData } = useRoles();
+  const { data: rolesData } = useRolesAll();
   const allRoles = rolesData ? rolesData.map(roleUtils.transformRole) : [];
 
   // Group roles by department and job role

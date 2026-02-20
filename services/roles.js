@@ -2,7 +2,7 @@ import { api } from "./api-client";
 
 // Roles API service
 export const rolesService = {
-  // Get all roles
+  // Get all roles (single page)
   getRoles: async (params = {}) => {
     try {
       return await api.get("/roles", { params });
@@ -10,6 +10,24 @@ export const rolesService = {
       console.error("Get roles failed:", error);
       throw error;
     }
+  },
+
+  // Get all roles by requesting pages until there is no next page (small page size)
+  getRolesAllPages: async (perPage = 20, params = {}) => {
+    const all = [];
+    let page = 1;
+    let hasMore = true;
+    while (hasMore) {
+      const response = await api.get("/roles", {
+        params: { page, per_page: perPage, ...params },
+      });
+      const data = response.data ?? response;
+      const chunk = Array.isArray(data) ? data : [];
+      all.push(...chunk);
+      hasMore = chunk.length >= perPage;
+      page += 1;
+    }
+    return { data: all };
   },
 
   // Get role by slug

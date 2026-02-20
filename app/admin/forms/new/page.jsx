@@ -114,7 +114,7 @@ const FILE_TYPE_CATEGORIES = {
 };
 import { useCreateForm } from "@/hooks/useForms";
 import { generateSlug } from "@/utils/slug";
-import { useRoles, useCreateRole } from "@/hooks/useRoles";
+import { useRoles, useRolesAll, useCreateRole } from "@/hooks/useRoles";
 import { useUsers } from "@/hooks/useUsers";
 import { useActiveFormTypes, useCreateFormType } from "@/hooks/useFormTypes";
 import { useUploadFile } from "@/hooks/useProfile";
@@ -3464,7 +3464,7 @@ const NewFormPage = () => {
 
 // People Field Role Selector Component
 const PeopleFieldRoleSelector = ({ selectedRoleIds, onChange }) => {
-  const { data: rolesData, isLoading } = useRoles({ per_page: 100 });
+  const { data: rolesData, isLoading } = useRolesAll();
   // Handle both array and object response formats
   const roles = Array.isArray(rolesData)
     ? rolesData
