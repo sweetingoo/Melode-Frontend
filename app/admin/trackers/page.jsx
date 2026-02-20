@@ -58,6 +58,7 @@ import {
   Settings,
   X,
   ChevronRight,
+  Link2,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -182,6 +183,8 @@ const TrackersPage = () => {
   // Column-specific sorting: field_id -> sort order (null, 'asc', 'desc')
   const [columnSorting, setColumnSorting] = useState({});
   const [entryFieldErrors, setEntryFieldErrors] = useState({});
+  // Create entry wizard: current stage index when tracker has sections (0 = first stage)
+  const [createEntryStageIndex, setCreateEntryStageIndex] = useState(0);
   const [showMetadataColumns, setShowMetadataColumns] = useState(false);
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   // Sheet-like: selected cell for formula bar (rowIndex, fieldId)
@@ -1215,9 +1218,9 @@ const TrackersPage = () => {
               onOpenChange={(open) => {
                 setIsCreateEntryDialogOpen(open);
                 if (!open) {
-                  // Reset form when dialog closes
                   setEntryFormData({});
                   setEntryFieldErrors({});
+                  setCreateEntryStageIndex(0);
                 }
               }}
             >
@@ -1246,122 +1249,241 @@ const TrackersPage = () => {
                         })
                       : allFields; // Show all fields if not configured (backward compatibility)
                     
+                    // Group by section (stage) when tracker has sections
+                    const sections = trackerDetails.tracker_fields?.sections || [];
+                    const stageMapping = trackerDetails.tracker_config?.stage_mapping || [];
+                    // Wizard steps: only when use_stages is enabled; then stage_mapping (e.g. 5) or sections (e.g. 3)
+                    const useStages = trackerDetails.tracker_config?.use_stages !== false;
+                    const wizardSteps = useStages && stageMapping.length > 0 ? stageMapping : (useStages ? sections : []);
+                    const fieldsBySection = {};
+                    if (sections.length > 0) {
+                      sections.forEach((section, index) => {
+                        const sectionKey = section.id ?? section.title ?? section.label ?? `section-${index}`;
+                        const sectionFieldIds = section.fields || [];
+                        const sectionFields = sectionFieldIds
+                          .map((fid) => fieldsToShow.find((f) => (f.id || f.field_id || f.name) === fid))
+                          .filter(Boolean);
+                        fieldsBySection[sectionKey] = { ...section, id: section.id ?? sectionKey, fields: sectionFields };
+                      });
+                      const assignedIds = new Set(sections.flatMap((s) => s.fields || []));
+                      const unassignedFields = fieldsToShow.filter((f) => !assignedIds.has(f.id || f.field_id || f.name));
+                      if (unassignedFields.length > 0) {
+                        fieldsBySection._other = { id: "_other", title: "Other", label: "Other", fields: unassignedFields };
+                      }
+                    }
+                    
+                    const renderField = (field) => {
+                      const fieldId = field.id || field.field_id;
+                      const fieldValue = entryFormData[fieldId] || "";
+                      return (
+                        <CustomFieldRenderer
+                          key={fieldId}
+                          field={{
+                            ...field,
+                            id: fieldId,
+                            field_label: field.label || field.field_label,
+                            field_type: field.type || field.field_type,
+                            is_required: field.required || field.is_required,
+                          }}
+                          value={fieldValue}
+                          onChange={(id, value) => {
+                            setEntryFormData((prev) => ({ ...prev, [id]: value }));
+                            if (entryFieldErrors[id]) {
+                              setEntryFieldErrors((prev) => {
+                                const next = { ...prev };
+                                delete next[id];
+                                return next;
+                              });
+                            }
+                          }}
+                          error={entryFieldErrors[fieldId]}
+                        />
+                      );
+                    };
+                    
                     return (
                       <div className="space-y-4">
-                        <Label className="text-base font-semibold">Entry Details</Label>
                         {fieldsToShow.length === 0 ? (
                           <p className="text-sm text-muted-foreground">
                             No fields configured for creation. Please configure "Create View Fields" in tracker settings.
                           </p>
-                        ) : (
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {fieldsToShow.map((field) => {
-                            const fieldId = field.id || field.field_id;
-                            const fieldValue = entryFormData[fieldId] || "";
-                            
+                        ) : wizardSteps.length > 0 ? (
+                          // One stage at a time: steps from stage_mapping (or sections); fields from sections by index
+                          (() => {
+                            const currentIndex = Math.min(createEntryStageIndex, wizardSteps.length - 1);
+                            const step = wizardSteps[currentIndex];
+                            const stepLabel = step?.stage ?? step?.name ?? step?.title ?? step?.label ?? step?.id ?? `Stage ${currentIndex + 1}`;
+                            // Fields for this step: use section at same index if available
+                            const section = currentIndex < sections.length ? sections[currentIndex] : null;
+                            const sectionKey = section ? (section.id ?? section.title ?? section.label ?? `section-${currentIndex}`) : null;
+                            const sectionFields = sectionKey ? (fieldsBySection[sectionKey]?.fields || []) : [];
                             return (
-                              <CustomFieldRenderer
-                                key={fieldId}
-                                field={{
-                                  ...field,
-                                  id: fieldId,
-                                  field_label: field.label || field.field_label,
-                                  field_type: field.type || field.field_type,
-                                  is_required: field.required || field.is_required,
-                                }}
-                                value={fieldValue}
-                                onChange={(id, value) => {
-                                  setEntryFormData((prev) => ({
-                                    ...prev,
-                                    [id]: value,
-                                  }));
-                                  // Clear error when user starts typing
-                                  if (entryFieldErrors[id]) {
-                                    setEntryFieldErrors((prev) => {
-                                      const newErrors = { ...prev };
-                                      delete newErrors[id];
-                                      return newErrors;
-                                    });
-                                  }
-                                }}
-                                error={entryFieldErrors[fieldId]}
-                              />
+                              <div className="space-y-4">
+                                <p className="text-sm text-muted-foreground">
+                                  Stage {currentIndex + 1} of {wizardSteps.length}
+                                </p>
+                                <Card>
+                                  <CardHeader className="py-3">
+                                    <CardTitle className="text-base">{stepLabel}</CardTitle>
+                                  </CardHeader>
+                                  <CardContent className="pt-0">
+                                    {sectionFields.length === 0 ? (
+                                      <p className="text-sm text-muted-foreground">No fields for this stage.</p>
+                                    ) : (
+                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        {sectionFields.map((field) => renderField(field))}
+                                      </div>
+                                    )}
+                                  </CardContent>
+                                </Card>
+                              </div>
                             );
-                          })}
-                    </div>
-                  )}
+                          })()
+                        ) : (
+                          // No sections: flat list (backward compatibility)
+                          <>
+                            <Label className="text-base font-semibold">Entry Details</Label>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              {fieldsToShow.map((field) => renderField(field))}
+                            </div>
+                          </>
+                        )}
                       </div>
                     );
                   })()}
                 </div>
-                <DialogFooter>
+                <DialogFooter className="flex-wrap gap-2">
                   <Button
                     variant="outline"
-                    onClick={() => setIsCreateEntryDialogOpen(false)}
+                    onClick={() => {
+                      setIsCreateEntryDialogOpen(false);
+                      setCreateEntryStageIndex(0);
+                    }}
                     disabled={createEntryMutation.isPending}
                   >
                     Cancel
                   </Button>
-                  <Button
-                    onClick={async () => {
-                      if (!selectedTrackerObj || !trackerDetails) {
-                        toast.error("Please select a tracker");
-                        return;
-                      }
-                      
-                      // Basic validation - only validate fields that are shown in creation modal
-                      const errors = {};
-                      const allFields = trackerDetails.tracker_fields?.fields?.filter((field) => {
-                        const fieldType = field.type || field.field_type;
-                        return !['text_block', 'image_block', 'line_break', 'page_break', 'youtube_video_embed'].includes(fieldType);
-                      }) || [];
-                      
-                      const createViewFields = trackerDetails.tracker_config?.create_view_fields;
-                      const fieldsToValidate = createViewFields && Array.isArray(createViewFields) && createViewFields.length > 0
-                        ? allFields.filter((field) => {
-                            const fieldId = field.id || field.field_id || field.name;
-                            return createViewFields.includes(fieldId);
-                          })
-                        : allFields; // Validate all if not configured
-                      
-                      fieldsToValidate.forEach((field) => {
-                        const fieldId = field.id || field.field_id || field.name;
-                        const isRequired = field.required || field.is_required;
-                        if (isRequired && !entryFormData[fieldId]) {
-                          errors[fieldId] = `${field.label || field.field_label || "This field"} is required`;
-                        }
-                      });
-                      
-                      if (Object.keys(errors).length > 0) {
-                        setEntryFieldErrors(errors);
-                        toast.error("Please fill in all required fields");
-                        return;
-                      }
-                      
-                      try {
-                        await createEntryMutation.mutateAsync({
-                          form_id: trackerDetails.id,
-                          submission_data: entryFormData,
-                          status: trackerDetails.tracker_config?.default_status || "open",
+                  {(() => {
+                    const useStages = trackerDetails?.tracker_config?.use_stages !== false;
+                    const sm = trackerDetails?.tracker_config?.stage_mapping || [];
+                    const sec = trackerDetails?.tracker_fields?.sections || [];
+                    const wizardStepCount = useStages ? (sm.length > 0 ? sm.length : sec.length) : 0;
+                    return wizardStepCount > 0;
+                  })() && createEntryStageIndex > 0 && (
+                    <Button
+                      variant="outline"
+                      onClick={() => setCreateEntryStageIndex((i) => Math.max(0, i - 1))}
+                      disabled={createEntryMutation.isPending}
+                    >
+                      Previous
+                    </Button>
+                  )}
+                  {(() => {
+                    const useStages = trackerDetails?.tracker_config?.use_stages !== false;
+                    const sm = trackerDetails?.tracker_config?.stage_mapping || [];
+                    const sec = trackerDetails?.tracker_fields?.sections || [];
+                    const wizardStepCount = useStages ? (sm.length > 0 ? sm.length : sec.length) : 0;
+                    return wizardStepCount > 0 && createEntryStageIndex < wizardStepCount - 1;
+                  })() && (
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        const sections = trackerDetails.tracker_fields.sections || [];
+                        const section = sections[createEntryStageIndex];
+                        const sectionFieldIds = section?.fields || [];
+                        const allFields = trackerDetails.tracker_fields?.fields || [];
+                        const createViewFields = trackerDetails.tracker_config?.create_view_fields;
+                        const errors = {};
+                        sectionFieldIds.forEach((fid) => {
+                          const field = allFields.find((f) => (f.id || f.field_id || f.name) === fid);
+                          if (!field || !(field.required || field.is_required)) return;
+                          if (createViewFields?.length && !createViewFields.includes(fid)) return;
+                          if (!entryFormData[fid]) {
+                            errors[fid] = `${field.label || field.field_label || "This field"} is required`;
+                          }
                         });
-                        setIsCreateEntryDialogOpen(false);
-                        setEntryFormData({});
+                        if (Object.keys(errors).length > 0) {
+                          setEntryFieldErrors(errors);
+                          toast.error("Please fill in all required fields for this stage");
+                          return;
+                        }
                         setEntryFieldErrors({});
-                      } catch (error) {
-                        // Error handled by mutation
-                      }
-                    }}
-                    disabled={!selectedTrackerObj || !trackerDetails || createEntryMutation.isPending}
-                  >
-                    {createEntryMutation.isPending ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Creating...
-                      </>
-                    ) : (
-                      "Create Entry"
-                    )}
-                  </Button>
+                        const useStages = trackerDetails?.tracker_config?.use_stages !== false;
+                        const wizardStepCount = useStages
+                          ? ((trackerDetails.tracker_config?.stage_mapping?.length || 0) > 0
+                            ? (trackerDetails.tracker_config.stage_mapping?.length || 0)
+                            : sections.length)
+                          : 0;
+                        setCreateEntryStageIndex((i) => Math.min(wizardStepCount - 1, i + 1));
+                      }}
+                      disabled={createEntryMutation.isPending}
+                    >
+                      Next stage
+                    </Button>
+                  )}
+                  {(() => {
+                    const useStages = trackerDetails?.tracker_config?.use_stages !== false;
+                    const sm = trackerDetails?.tracker_config?.stage_mapping || [];
+                    const sec = trackerDetails?.tracker_fields?.sections || [];
+                    const wizardStepCount = useStages ? (sm.length > 0 ? sm.length : sec.length) : 0;
+                    return wizardStepCount === 0 || createEntryStageIndex >= wizardStepCount - 1;
+                  })() && (
+                    <Button
+                      onClick={async () => {
+                        if (!selectedTrackerObj || !trackerDetails) {
+                          toast.error("Please select a tracker");
+                          return;
+                        }
+                        const errors = {};
+                        const allFields = trackerDetails.tracker_fields?.fields?.filter((field) => {
+                          const fieldType = field.type || field.field_type;
+                          return !['text_block', 'image_block', 'line_break', 'page_break', 'youtube_video_embed'].includes(fieldType);
+                        }) || [];
+                        const createViewFields = trackerDetails.tracker_config?.create_view_fields;
+                        const fieldsToValidate = createViewFields && Array.isArray(createViewFields) && createViewFields.length > 0
+                          ? allFields.filter((field) => {
+                              const fieldId = field.id || field.field_id || field.name;
+                              return createViewFields.includes(fieldId);
+                            })
+                          : allFields;
+                        fieldsToValidate.forEach((field) => {
+                          const fieldId = field.id || field.field_id || field.name;
+                          const isRequired = field.required || field.is_required;
+                          if (isRequired && !entryFormData[fieldId]) {
+                            errors[fieldId] = `${field.label || field.field_label || "This field"} is required`;
+                          }
+                        });
+                        if (Object.keys(errors).length > 0) {
+                          setEntryFieldErrors(errors);
+                          toast.error("Please fill in all required fields");
+                          return;
+                        }
+                        try {
+                          await createEntryMutation.mutateAsync({
+                            form_id: trackerDetails.id,
+                            submission_data: entryFormData,
+                            status: trackerDetails.tracker_config?.default_status || "open",
+                          });
+                          setIsCreateEntryDialogOpen(false);
+                          setEntryFormData({});
+                          setEntryFieldErrors({});
+                          setCreateEntryStageIndex(0);
+                        } catch (error) {
+                          // Error handled by mutation
+                        }
+                      }}
+                      disabled={!selectedTrackerObj || !trackerDetails || createEntryMutation.isPending}
+                    >
+                      {createEntryMutation.isPending ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Creating...
+                        </>
+                      ) : (
+                        "Create Entry"
+                      )}
+                    </Button>
+                  )}
                 </DialogFooter>
               </DialogContent>
             </Dialog>
@@ -2020,6 +2142,27 @@ const TrackersPage = () => {
                 </Link>
               </Button>
             )}
+            {tracker?.tracker_config?.allow_public_submit && tracker?.slug && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 gap-1.5"
+                title="Copy shareable form link"
+                onClick={async () => {
+                  const link = typeof window !== "undefined" ? `${window.location.origin}/forms/${tracker.slug}/submit` : "";
+                  if (!link) return;
+                  try {
+                    await navigator.clipboard.writeText(link);
+                    toast.success("Shareable link copied to clipboard");
+                  } catch (err) {
+                    toast.error("Failed to copy link");
+                  }
+                }}
+              >
+                <Link2 className="h-4 w-4" />
+                Share form
+              </Button>
+            )}
           </div>
         </div>
         {/* Applied filters (search + column filters + highlights + aggregates) — visible chips */}
@@ -2105,8 +2248,8 @@ const TrackersPage = () => {
             })}
           </div>
         )}
-        {/* Queues: per-tracker presets from backend (patient-referral or stage-styled). */}
-        {queuePresets.length > 0 && selectedTracker === selectedTrackerObj?.id?.toString() && (
+        {/* Queues: per-tracker presets from backend (only when tracker uses stages). */}
+        {queuePresets.length > 0 && selectedTracker === selectedTrackerObj?.id?.toString() && selectedTrackerObj?.tracker_config?.use_stages !== false && (
           <div className="flex flex-wrap items-center gap-1.5 px-4 py-2 border-b bg-muted/30">
             <span className="text-xs text-muted-foreground mr-1 shrink-0">Queues:</span>
             {queuePresets.map((preset) => {
@@ -2383,7 +2526,7 @@ const TrackersPage = () => {
                                     </TableHead>
                                   </>
                                 )}
-                      {(tracker?.tracker_config?.stage_mapping?.length > 0 || tracker?.tracker_config?.is_patient_referral) && (
+                      {tracker?.tracker_config?.use_stages !== false && (tracker?.tracker_config?.stage_mapping?.length > 0 || tracker?.tracker_config?.is_patient_referral) && (
                         <TableHead className="font-semibold min-w-[140px]">Stage</TableHead>
                       )}
                       <TableHead>Actions</TableHead>
@@ -2523,7 +2666,7 @@ const TrackersPage = () => {
                                       </TableCell>
                                     </>
                                   )}
-                          {(tracker?.tracker_config?.stage_mapping?.length > 0 || tracker?.tracker_config?.is_patient_referral) && (
+                          {(tracker?.tracker_config?.use_stages !== false && (tracker?.tracker_config?.stage_mapping?.length > 0 || tracker?.tracker_config?.is_patient_referral)) && (
                             <TableCell
                               className={cn(
                                 "border-r min-w-[140px]",
@@ -2672,7 +2815,7 @@ const TrackersPage = () => {
                             <TableCell className="bg-muted" />
                           </>
                         )}
-                        {(tracker?.tracker_config?.stage_mapping?.length > 0 || tracker?.tracker_config?.is_patient_referral) && (
+                        {(tracker?.tracker_config?.use_stages !== false && (tracker?.tracker_config?.stage_mapping?.length > 0 || tracker?.tracker_config?.is_patient_referral)) && (
                           <TableCell className="bg-muted border-r" />
                         )}
                         <TableCell className="bg-muted" />

@@ -725,7 +725,7 @@ const TrackerEntryDetailPage = () => {
               <span className="text-sm font-medium text-muted-foreground">Status</span>
               <Badge variant="outline" className="font-normal">{humanizeStatusForDisplay(entry?.status || "open")}</Badge>
             </div>
-            {tracker?.tracker_config?.stage_mapping?.length > 0 && (
+            {tracker?.tracker_config?.use_stages !== false && tracker?.tracker_config?.stage_mapping?.length > 0 && (
               <div className="w-full basis-full flex flex-wrap items-center gap-1.5">
                 <span className="text-sm font-medium text-muted-foreground shrink-0">Stages:</span>
                 {(tracker.tracker_config.stage_mapping || []).map((item, index) => {

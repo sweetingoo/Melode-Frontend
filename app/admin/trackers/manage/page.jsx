@@ -144,6 +144,7 @@ const TrackersManagePage = () => {
       statuses: ["open", "in_progress", "pending", "resolved", "closed"],
       allow_inline_status_edit: true,
       sections: [],
+      use_stages: false,
       is_patient_referral: false,
     },
     tracker_fields: {
@@ -170,13 +171,14 @@ const TrackersManagePage = () => {
       description: "",
       category: "",
       is_active: true,
-      tracker_config: {
-        default_status: "open",
-        statuses: ["open", "in_progress", "pending", "resolved", "closed"],
-        allow_inline_status_edit: true,
-        sections: [],
-        is_patient_referral: false,
-      },
+        tracker_config: {
+          default_status: "open",
+          statuses: ["open", "in_progress", "pending", "resolved", "closed"],
+          allow_inline_status_edit: true,
+          sections: [],
+          use_stages: false,
+          is_patient_referral: false,
+        },
       tracker_fields: {
         fields: [],
       },
@@ -222,6 +224,7 @@ const TrackersManagePage = () => {
           allow_inline_status_edit: true,
           sections: [],
         }),
+        use_stages: tracker.tracker_config?.use_stages ?? (!!(tracker.tracker_config?.stage_mapping?.length || tracker.tracker_config?.is_patient_referral)),
         is_patient_referral: tracker.tracker_config?.is_patient_referral ?? false,
       },
       tracker_fields: tracker.tracker_fields || {
@@ -531,20 +534,20 @@ const TrackersManagePage = () => {
                 <div className="flex items-center gap-2">
                   <input
                     type="checkbox"
-                    id="is_patient_referral_create"
-                    checked={formData.tracker_config?.is_patient_referral || false}
+                    id="use_stages_create"
+                    checked={formData.tracker_config?.use_stages || false}
                     onChange={(e) =>
                       setFormData((prev) => ({
                         ...prev,
                         tracker_config: {
                           ...prev.tracker_config,
-                          is_patient_referral: e.target.checked,
+                          use_stages: e.target.checked,
                         },
                       }))
                     }
                     className="rounded"
                   />
-                  <Label htmlFor="is_patient_referral_create" className="cursor-pointer">
+                  <Label htmlFor="use_stages_create" className="cursor-pointer">
                     This tracker uses stages (Stage column, queues, SMS, etc.)
                   </Label>
                 </div>
@@ -777,20 +780,20 @@ const TrackersManagePage = () => {
             <div className="flex items-center gap-2">
               <input
                 type="checkbox"
-                id="edit-is_patient_referral"
-                checked={formData.tracker_config?.is_patient_referral || false}
+                id="edit-use_stages"
+                checked={formData.tracker_config?.use_stages || false}
                 onChange={(e) =>
                   setFormData((prev) => ({
                     ...prev,
                     tracker_config: {
                       ...prev.tracker_config,
-                      is_patient_referral: e.target.checked,
+                      use_stages: e.target.checked,
                     },
                   }))
                 }
                 className="rounded"
               />
-              <Label htmlFor="edit-is_patient_referral" className="cursor-pointer">
+              <Label htmlFor="edit-use_stages" className="cursor-pointer">
                 This tracker uses stages (Stage column, queues, SMS, etc.)
               </Label>
             </div>

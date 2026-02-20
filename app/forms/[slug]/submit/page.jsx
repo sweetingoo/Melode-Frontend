@@ -284,12 +284,11 @@ const FormSubmitPage = () => {
         return;
       }
 
-      // Validate all required fields across all pages
-      const allFields = form.form_fields?.fields || [];
+      // Validate all required fields across all pages (use filtered fields for trackers with public stages)
       const errors = {};
       const displayOnlyTypes = ['text_block', 'image_block', 'youtube_video_embed', 'line_break', 'page_break', 'download_link'];
 
-      for (const field of allFields) {
+      for (const field of fields) {
         const fieldType = field.field_type?.toLowerCase();
         if (displayOnlyTypes.includes(fieldType)) {
           continue;
@@ -320,9 +319,9 @@ const FormSubmitPage = () => {
         setIsSubmitting(false);
         toast.error("Please fill in all required fields");
         // Navigate to first page with errors
-        const firstErrorField = allFields.find(f => errors[f.field_id || f.field_name]);
+        const firstErrorField = fields.find(f => errors[f.field_id || f.field_name]);
         if (firstErrorField) {
-          const errorPageIndex = pages.findIndex(page => 
+          const errorPageIndex = pages.findIndex(page =>
             page.some(f => (f.field_id || f.field_name) === (firstErrorField.field_id || firstErrorField.field_name))
           );
           if (errorPageIndex >= 0) {
@@ -401,7 +400,31 @@ const FormSubmitPage = () => {
   };
 
   // All hooks must be called before any conditional returns
-  const fields = form?.form_fields?.fields || [];
+  const allFields = form?.form_fields?.fields || [];
+  // For trackers with stages: show only fields from stages that allow public submit (shareable form = current stage only for external users)
+  const fields = useMemo(() => {
+    if (!form?.is_tracker) return allFields;
+    const stageMapping = form?.form_config?.stage_mapping || [];
+    const sections = form?.form_fields?.sections || [];
+    if (!stageMapping.length || !sections.length) return allFields;
+    const publicStageIndices = stageMapping
+      .map((s, i) => (s?.allow_public_submit === true ? i : -1))
+      .filter((i) => i >= 0);
+    if (publicStageIndices.length === 0) return [];
+    const publicFieldIds = new Set();
+    publicStageIndices.forEach((i) => {
+      const sec = sections[i];
+      (sec?.fields || []).forEach((fid) => publicFieldIds.add(fid));
+    });
+    return allFields.filter((f) => publicFieldIds.has(f.id || f.field_id || f.name));
+  }, [form?.is_tracker, form?.form_config?.stage_mapping, form?.form_fields?.sections, form?.form_fields?.fields, allFields]);
+
+  const isTrackerWithStages = !!(form?.is_tracker && (form?.form_config?.stage_mapping?.length || 0) > 0 && (form?.form_fields?.sections?.length || 0) > 0);
+  const hasPublicStages = useMemo(() => {
+    if (!isTrackerWithStages) return true;
+    const stageMapping = form?.form_config?.stage_mapping || [];
+    return stageMapping.some((s) => s?.allow_public_submit === true);
+  }, [isTrackerWithStages, form?.form_config?.stage_mapping]);
 
   // Split fields into pages based on page_break
   const pages = useMemo(() => {
@@ -452,6 +475,21 @@ const FormSubmitPage = () => {
         <Card className="w-full max-w-md">
           <CardContent className="py-12 text-center">
             <p className="text-muted-foreground">Form not found</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (isTrackerWithStages && !hasPublicStages) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Card className="w-full max-w-md">
+          <CardContent className="py-12 text-center space-y-2">
+            <p className="font-medium">This form is not available for public submission</p>
+            <p className="text-sm text-muted-foreground">
+              No stages are configured for external users. An internal team member will need to create or update entries for this tracker.
+            </p>
           </CardContent>
         </Card>
       </div>

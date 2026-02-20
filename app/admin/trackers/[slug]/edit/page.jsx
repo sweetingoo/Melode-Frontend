@@ -33,6 +33,8 @@ import {
   GripVertical,
   X,
   ChevronDown,
+  Copy,
+  Link2,
 } from "lucide-react";
 import {
   Pagination,
@@ -213,6 +215,7 @@ const TrackerEditPage = () => {
   const [newNoteCategory, setNewNoteCategory] = useState("");
   const [newOption, setNewOption] = useState({ value: "", label: "" });
   const [editingOption, setEditingOption] = useState({ value: "", label: "" });
+  const [shareLinkCopied, setShareLinkCopied] = useState(false);
 
   // Load tracker data
   useEffect(() => {
@@ -232,6 +235,7 @@ const TrackerEditPage = () => {
               sections: [],
               constants: {},
             }),
+            use_stages: tracker.tracker_config?.use_stages ?? (!!(tracker.tracker_config?.stage_mapping?.length || tracker.tracker_config?.is_patient_referral)),
             list_view_fields: tracker.tracker_config?.list_view_fields || [],
             create_view_fields: tracker.tracker_config?.create_view_fields || [],
             note_categories: tracker.tracker_config?.note_categories || [],
@@ -770,7 +774,7 @@ const TrackerEditPage = () => {
       ...prev,
       tracker_config: {
         ...prev.tracker_config,
-        stage_mapping: [...(prev.tracker_config?.stage_mapping || []), { stage: "New Stage", statuses: [] }],
+        stage_mapping: [...(prev.tracker_config?.stage_mapping || []), { stage: "New Stage", statuses: [], allow_public_submit: false }],
       },
     }));
   };
@@ -842,7 +846,9 @@ const TrackerEditPage = () => {
             <TabsTrigger value="fields">Fields ({fields.length})</TabsTrigger>
             <TabsTrigger value="sections">Sections ({sections.length})</TabsTrigger>
             <TabsTrigger value="statuses">Statuses ({statuses.length})</TabsTrigger>
-            <TabsTrigger value="stages">Stages ({stageMapping.length})</TabsTrigger>
+            {formData.tracker_config?.use_stages && (
+              <TabsTrigger value="stages">Stages ({stageMapping.length})</TabsTrigger>
+            )}
             <TabsTrigger value="permissions">Permissions</TabsTrigger>
             <TabsTrigger value="audit">Audit Logs</TabsTrigger>
           </TabsList>
@@ -925,20 +931,20 @@ const TrackerEditPage = () => {
               <div className="flex items-center gap-2">
                 <input
                   type="checkbox"
-                  id="is_patient_referral"
-                  checked={formData.tracker_config?.is_patient_referral || false}
+                  id="use_stages"
+                  checked={formData.tracker_config?.use_stages || false}
                   onChange={(e) =>
                     setFormData((prev) => ({
                       ...prev,
                       tracker_config: {
                         ...prev.tracker_config,
-                        is_patient_referral: e.target.checked,
+                        use_stages: e.target.checked,
                       },
                     }))
                   }
                   className="rounded"
                 />
-                <Label htmlFor="is_patient_referral" className="cursor-pointer">
+                <Label htmlFor="use_stages" className="cursor-pointer">
                   This tracker uses stages (Stage column, queues, SMS, etc.)
                 </Label>
               </div>
@@ -1014,6 +1020,63 @@ const TrackerEditPage = () => {
                 <Label htmlFor="allow_inline_status_edit" className="cursor-pointer">
                   Allow inline status editing in list view
                 </Label>
+              </div>
+
+              {/* Shareable form (public submit link, like Google Forms / Microsoft Forms) */}
+              <div className="border-t pt-4 mt-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="allow_public_submit"
+                    checked={formData.tracker_config?.allow_public_submit || false}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        tracker_config: {
+                          ...prev.tracker_config,
+                          allow_public_submit: e.target.checked,
+                        },
+                      }))
+                    }
+                    className="rounded"
+                  />
+                  <Label htmlFor="allow_public_submit" className="cursor-pointer font-medium">
+                    Allow public form submission (shareable link)
+                  </Label>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  When enabled, anyone with the link can submit the form and create an entry in this tracker (no login required). Submissions record who and when; anonymous submissions show &quot;Anonymous&quot;.
+                </p>
+                {formData.tracker_config?.allow_public_submit && slug && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex-1 min-w-0 flex items-center gap-2 rounded-md border bg-muted/30 px-3 py-2">
+                      <Link2 className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      <code className="text-sm truncate">
+                        {typeof window !== "undefined" ? `${window.location.origin}/forms/${slug}/submit` : `/forms/${slug}/submit`}
+                      </code>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={async () => {
+                        const link = typeof window !== "undefined" ? `${window.location.origin}/forms/${slug}/submit` : "";
+                        if (!link) return;
+                        try {
+                          await navigator.clipboard.writeText(link);
+                          setShareLinkCopied(true);
+                          toast.success("Shareable link copied to clipboard");
+                          setTimeout(() => setShareLinkCopied(false), 2000);
+                        } catch (err) {
+                          toast.error("Failed to copy link");
+                        }
+                      }}
+                    >
+                      <Copy className="h-4 w-4 mr-1" />
+                      {shareLinkCopied ? "Copied" : "Copy link"}
+                    </Button>
+                  </div>
+                )}
               </div>
 
               {/* Tracker Constants (KPI / global values referenced by entries) */}
@@ -2807,7 +2870,8 @@ const TrackerEditPage = () => {
           </Card>
         </TabsContent>
 
-        {/* Stages Tab */}
+        {/* Stages Tab – only when use_stages is enabled */}
+        {formData.tracker_config?.use_stages && (
         <TabsContent value="stages" className="space-y-4">
           <Card>
             <CardHeader>
@@ -2835,6 +2899,7 @@ const TrackerEditPage = () => {
                 {stageMapping.map((item, index) => {
                   const assigned = item.statuses || [];
                   const availableToAdd = statuses.filter((s) => !assigned.includes(s));
+                  const allowPublicSubmit = item.allow_public_submit === true;
                   return (
                     <div key={index} className="flex flex-wrap gap-2 items-center p-3 rounded-md border bg-background mb-2">
                       <Input
@@ -2883,6 +2948,18 @@ const TrackerEditPage = () => {
                           </Select>
                         )}
                       </div>
+                      <div className="flex items-center gap-1.5 shrink-0" title="When checked, external users can fill this stage via the shareable form link; internal users move the entry to next stages.">
+                        <input
+                          type="checkbox"
+                          id={`stage-public-${index}`}
+                          checked={allowPublicSubmit}
+                          onChange={(e) => handleUpdateStage(index, "allow_public_submit", e.target.checked)}
+                          className="rounded"
+                        />
+                        <Label htmlFor={`stage-public-${index}`} className="text-xs text-muted-foreground cursor-pointer whitespace-nowrap">
+                          External can fill
+                        </Label>
+                      </div>
                       <Button variant="ghost" size="sm" onClick={() => handleRemoveStage(index)} aria-label="Remove stage">
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -2897,6 +2974,7 @@ const TrackerEditPage = () => {
             </CardContent>
           </Card>
         </TabsContent>
+        )}
 
         {/* Permissions Tab */}
         <TabsContent value="permissions" className="space-y-4">
