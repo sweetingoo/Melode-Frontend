@@ -98,7 +98,7 @@ const FormSubmitPage = () => {
     let normalizedValue = value;
     if (value === undefined || value === null) {
       // Check if this is a checkbox/boolean field by checking the field type
-      const field = form?.form_fields?.fields?.find(f => (f.field_id || f.field_name) === fieldId);
+      const field = form?.form_fields?.fields?.find(f => (f.id || f.field_id || f.field_name || f.name) === fieldId);
       if (field && (field.field_type?.toLowerCase() === 'checkbox' || field.field_type?.toLowerCase() === 'boolean')) {
         normalizedValue = false;
       }
@@ -289,7 +289,7 @@ const FormSubmitPage = () => {
       const displayOnlyTypes = ['text_block', 'image_block', 'youtube_video_embed', 'line_break', 'page_break', 'download_link'];
 
       for (const field of fields) {
-        const fieldType = field.field_type?.toLowerCase();
+        const fieldType = (field.type || field.field_type)?.toLowerCase();
         if (displayOnlyTypes.includes(fieldType)) {
           continue;
         }
@@ -299,17 +299,17 @@ const FormSubmitPage = () => {
           continue;
         }
 
-        const fieldId = field.field_id || field.field_name;
+        const fieldId = field.id || field.field_id || field.field_name || field.name;
         const value = submissionData[fieldId];
 
-        if (field.required) {
+        if (field.required || field.is_required) {
           if (
             value === null ||
             value === undefined ||
             value === "" ||
             (Array.isArray(value) && value.length === 0)
           ) {
-            errors[fieldId] = `${field.label || fieldId} is required`;
+            errors[fieldId] = `${field.label || field.field_label || fieldId} is required`;
           }
         }
       }
@@ -319,10 +319,11 @@ const FormSubmitPage = () => {
         setIsSubmitting(false);
         toast.error("Please fill in all required fields");
         // Navigate to first page with errors
-        const firstErrorField = fields.find(f => errors[f.field_id || f.field_name]);
+        const firstErrorField = fields.find(f => errors[f.id || f.field_id || f.field_name || f.name]);
         if (firstErrorField) {
+          const errFieldId = firstErrorField.id || firstErrorField.field_id || firstErrorField.field_name || firstErrorField.name;
           const errorPageIndex = pages.findIndex(page =>
-            page.some(f => (f.field_id || f.field_name) === (firstErrorField.field_id || firstErrorField.field_name))
+            page.some(f => (f.id || f.field_id || f.field_name || f.name) === errFieldId)
           );
           if (errorPageIndex >= 0) {
             setCurrentPage(errorPageIndex);
@@ -432,7 +433,7 @@ const FormSubmitPage = () => {
     let currentPageFields = [];
     
     fields.forEach((field) => {
-      const fieldType = field.field_type?.toLowerCase();
+      const fieldType = (field.type || field.field_type)?.toLowerCase();
       
       if (fieldType === 'page_break' && currentPageFields.length > 0) {
         // Save current page and start new one
@@ -552,7 +553,7 @@ const FormSubmitPage = () => {
     const displayOnlyTypes = ['text_block', 'image_block', 'line_break', 'page_break', 'download_link'];
 
     for (const field of fields) {
-      const fieldType = field.field_type?.toLowerCase();
+      const fieldType = (field.type || field.field_type)?.toLowerCase();
       if (displayOnlyTypes.includes(fieldType)) {
         continue;
       }
@@ -562,7 +563,7 @@ const FormSubmitPage = () => {
         continue;
       }
 
-      const fieldId = field.field_id || field.field_name;
+      const fieldId = field.id || field.field_id || field.field_name || field.name;
       const value = submissionData[fieldId];
 
       if (fieldType === "file") {
@@ -715,22 +716,22 @@ const FormSubmitPage = () => {
     const displayOnlyTypes = ['text_block', 'image_block', 'line_break', 'page_break', 'download_link'];
 
     for (const field of currentPageFields) {
-      const fieldType = field.field_type?.toLowerCase();
+      const fieldType = (field.type || field.field_type)?.toLowerCase();
       if (displayOnlyTypes.includes(fieldType)) {
         continue;
       }
 
-      const fieldId = field.field_id || field.field_name;
+      const fieldId = field.id || field.field_id || field.field_name || field.name;
       const value = submissionData[fieldId];
 
-      if (field.required) {
+      if (field.required || field.is_required) {
         if (
           value === null ||
           value === undefined ||
           value === "" ||
           (Array.isArray(value) && value.length === 0)
         ) {
-          errors[fieldId] = `${field.label || fieldId} is required`;
+          errors[fieldId] = `${field.label || field.field_label || fieldId} is required`;
         }
       }
     }
@@ -787,8 +788,8 @@ const FormSubmitPage = () => {
               ) : (
                 <div className="space-y-6">
                   {currentPageFields.map((field) => {
-                    const fieldId = field.field_id || field.field_name;
-                    const fieldType = field.field_type?.toLowerCase();
+                    const fieldId = field.id || field.field_id || field.field_name || field.name;
+                    const fieldType = (field.type || field.field_type)?.toLowerCase();
                     
                     // Display-only fields don't need value, onChange, or error handling
                     const isDisplayOnly = ['text_block', 'image_block', 'youtube_video_embed', 'line_break', 'page_break', 'download_link'].includes(fieldType);
@@ -802,17 +803,17 @@ const FormSubmitPage = () => {
                     const value = isDisplayOnly ? undefined : submissionData[fieldId];
                     const error = isDisplayOnly ? undefined : fieldErrors[fieldId];
 
-                    // Map field structure for CustomFieldRenderer
+                    // Map field structure for CustomFieldRenderer (support both id/name/type and field_id/field_name/field_type)
                     const mappedField = {
                       ...field,
                       id: fieldId,
                       field_label: field.label || field.field_label,
                       label: field.label, // Preserve original label as well
-                      name: field.name || field.field_name, // Preserve name
+                      name: field.name || field.field_name || fieldId, // Preserve name
                       field_description: field.help_text,
-                      field_type: field.field_type,
-                      is_required: field.required,
-                      required: field.required,
+                      field_type: field.type || field.field_type,
+                      is_required: field.required ?? field.is_required,
+                      required: field.required ?? field.is_required,
                       // Preserve display-only field properties
                       content: field.content,
                       image_url: field.image_url,
