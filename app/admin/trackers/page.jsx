@@ -1421,69 +1421,61 @@ const TrackersPage = () => {
                       Next stage
                     </Button>
                   )}
-                  {(() => {
-                    const useStages = trackerDetails?.tracker_config?.use_stages !== false;
-                    const sm = trackerDetails?.tracker_config?.stage_mapping || [];
-                    const sec = trackerDetails?.tracker_fields?.sections || [];
-                    const wizardStepCount = useStages ? (sm.length > 0 ? sm.length : sec.length) : 0;
-                    return wizardStepCount === 0 || createEntryStageIndex >= wizardStepCount - 1;
-                  })() && (
-                    <Button
-                      onClick={async () => {
-                        if (!selectedTrackerObj || !trackerDetails) {
-                          toast.error("Please select a tracker");
-                          return;
+                  <Button
+                    onClick={async () => {
+                      if (!selectedTrackerObj || !trackerDetails) {
+                        toast.error("Please select a tracker");
+                        return;
+                      }
+                      const errors = {};
+                      const allFields = trackerDetails.tracker_fields?.fields?.filter((field) => {
+                        const fieldType = field.type || field.field_type;
+                        return !['text_block', 'image_block', 'line_break', 'page_break', 'youtube_video_embed'].includes(fieldType);
+                      }) || [];
+                      const createViewFields = trackerDetails.tracker_config?.create_view_fields;
+                      const fieldsToValidate = createViewFields && Array.isArray(createViewFields) && createViewFields.length > 0
+                        ? allFields.filter((field) => {
+                            const fieldId = field.id || field.field_id || field.name;
+                            return createViewFields.includes(fieldId);
+                          })
+                        : allFields;
+                      fieldsToValidate.forEach((field) => {
+                        const fieldId = field.id || field.field_id || field.name;
+                        const isRequired = field.required || field.is_required;
+                        if (isRequired && !entryFormData[fieldId]) {
+                          errors[fieldId] = `${field.label || field.field_label || "This field"} is required`;
                         }
-                        const errors = {};
-                        const allFields = trackerDetails.tracker_fields?.fields?.filter((field) => {
-                          const fieldType = field.type || field.field_type;
-                          return !['text_block', 'image_block', 'line_break', 'page_break', 'youtube_video_embed'].includes(fieldType);
-                        }) || [];
-                        const createViewFields = trackerDetails.tracker_config?.create_view_fields;
-                        const fieldsToValidate = createViewFields && Array.isArray(createViewFields) && createViewFields.length > 0
-                          ? allFields.filter((field) => {
-                              const fieldId = field.id || field.field_id || field.name;
-                              return createViewFields.includes(fieldId);
-                            })
-                          : allFields;
-                        fieldsToValidate.forEach((field) => {
-                          const fieldId = field.id || field.field_id || field.name;
-                          const isRequired = field.required || field.is_required;
-                          if (isRequired && !entryFormData[fieldId]) {
-                            errors[fieldId] = `${field.label || field.field_label || "This field"} is required`;
-                          }
+                      });
+                      if (Object.keys(errors).length > 0) {
+                        setEntryFieldErrors(errors);
+                        toast.error("Please fill in all required fields");
+                        return;
+                      }
+                      try {
+                        await createEntryMutation.mutateAsync({
+                          form_id: trackerDetails.id,
+                          submission_data: entryFormData,
+                          status: trackerDetails.tracker_config?.default_status || "open",
                         });
-                        if (Object.keys(errors).length > 0) {
-                          setEntryFieldErrors(errors);
-                          toast.error("Please fill in all required fields");
-                          return;
-                        }
-                        try {
-                          await createEntryMutation.mutateAsync({
-                            form_id: trackerDetails.id,
-                            submission_data: entryFormData,
-                            status: trackerDetails.tracker_config?.default_status || "open",
-                          });
-                          setIsCreateEntryDialogOpen(false);
-                          setEntryFormData({});
-                          setEntryFieldErrors({});
-                          setCreateEntryStageIndex(0);
-                        } catch (error) {
-                          // Error handled by mutation
-                        }
-                      }}
-                      disabled={!selectedTrackerObj || !trackerDetails || createEntryMutation.isPending}
-                    >
-                      {createEntryMutation.isPending ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Creating...
-                        </>
-                      ) : (
-                        "Create Entry"
-                      )}
-                    </Button>
-                  )}
+                        setIsCreateEntryDialogOpen(false);
+                        setEntryFormData({});
+                        setEntryFieldErrors({});
+                        setCreateEntryStageIndex(0);
+                      } catch (error) {
+                        // Error handled by mutation
+                      }
+                    }}
+                    disabled={!selectedTrackerObj || !trackerDetails || createEntryMutation.isPending}
+                  >
+                    {createEntryMutation.isPending ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      "Save"
+                    )}
+                  </Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>

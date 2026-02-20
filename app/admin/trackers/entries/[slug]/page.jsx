@@ -34,6 +34,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Loader2, ArrowLeft, Edit, Save, X, Clock, MessageSquare, FileText, User as UserIcon, Calendar, ListTodo, Paperclip, Smartphone, ChevronRight } from "lucide-react";
 import {
   useTrackerEntry,
@@ -95,6 +96,8 @@ const TrackerEntryDetailPage = () => {
   const [isSendSmsModalOpen, setIsSendSmsModalOpen] = useState(false);
   const [sendSmsTemplate, setSendSmsTemplate] = useState("please_contact_us");
   const [sendSmsSubmitting, setSendSmsSubmitting] = useState(false);
+  const [stageChangePending, setStageChangePending] = useState(null);
+  const [stageChangeNotes, setStageChangeNotes] = useState("");
 
   const { data: entry, isLoading: entryLoading, error: entryError } = useTrackerEntry(entrySlug);
   
@@ -631,6 +634,47 @@ const TrackerEntryDetailPage = () => {
     setIsEditing(false);
   };
 
+  const stageMapping = tracker?.tracker_config?.stage_mapping || [];
+  const currentStage = String(entry?.formatted_data?.derived_stage ?? "").trim();
+  const currentStageIndex = stageMapping.findIndex((s) => String(s?.stage ?? s?.name ?? "").trim() === currentStage);
+  const hasNextStage = currentStageIndex >= 0 && currentStageIndex < stageMapping.length - 1;
+  const nextStageLabel = hasNextStage ? (stageMapping[currentStageIndex + 1]?.stage ?? stageMapping[currentStageIndex + 1]?.name ?? "Next stage") : null;
+
+  const handleStageChange = (stageName) => {
+    const name = (stageName ?? "").toString().trim();
+    if (!name || stageMapping.length === 0) return;
+    if (name === currentStage) return;
+    setStageChangePending({ stageLabel: name, stageName: name });
+    setStageChangeNotes("");
+  };
+
+  const handleNextStage = () => {
+    if (!hasNextStage || !nextStageLabel) return;
+    setStageChangePending({ stageLabel: nextStageLabel, stageName: nextStageLabel });
+    setStageChangeNotes("");
+  };
+
+  const confirmStageChangeWithNotes = async () => {
+    if (!stageChangePending) return;
+    const { stageName } = stageChangePending;
+    try {
+      const entryDataPayload = { stage: stageName };
+      if (stageChangeNotes != null && String(stageChangeNotes).trim() !== "")
+        entryDataPayload.notes = String(stageChangeNotes).trim();
+      await updateEntryMutation.mutateAsync({
+        entryIdentifier: entrySlug,
+        entryData: entryDataPayload,
+      });
+      setStageChangePending(null);
+      setStageChangeNotes("");
+      toast.success(`Moved to ${stageName}`);
+    } catch (error) {
+      const detail = error?.response?.data?.detail;
+      const message = typeof detail === "object" ? detail?.message : detail;
+      toast.error(message || "Failed to move stage");
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -757,7 +801,7 @@ const TrackerEntryDetailPage = () => {
         </CardContent>
       </Card>
 
-      {/* Phase 4.2 / 5.2: Actions – Change Status, Add Note, Create Task, Send SMS (5.4: disabled when closed) */}
+      {/* Phase 4.2 / 5.2: Actions – Change Status, Next stage, Add Note, Create Task, Send SMS (5.4: disabled when closed) */}
       {canEditCase && (
         <div className="flex flex-wrap items-center gap-2">
           <Button
@@ -768,6 +812,42 @@ const TrackerEntryDetailPage = () => {
             <Edit className="mr-2 h-4 w-4" />
             Change Status
           </Button>
+          {tracker?.tracker_config?.use_stages !== false && stageMapping.length > 0 && (
+            <>
+              {hasNextStage && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleNextStage}
+                  disabled={updateEntryMutation.isPending}
+                >
+                  <ChevronRight className="mr-2 h-4 w-4" />
+                  Next stage
+                </Button>
+              )}
+              <Select
+                value={currentStage || ""}
+                onValueChange={(value) => value && handleStageChange(value)}
+              >
+                <SelectTrigger className="w-[180px] h-8 text-sm">
+                  <SelectValue placeholder="Stage" />
+                </SelectTrigger>
+                <SelectContent>
+                  {!currentStage && <SelectItem value="">—</SelectItem>}
+                  {(tracker.tracker_config.stage_mapping || []).map((item) => {
+                    const stageName = item?.stage ?? item?.name ?? "";
+                    if (!stageName) return null;
+                    const isCurrent = (entry?.formatted_data?.derived_stage ?? "") === stageName;
+                    return (
+                      <SelectItem key={stageName} value={stageName}>
+                        {stageName}{isCurrent ? " (current)" : ""}
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+            </>
+          )}
           <Button
             variant="outline"
             size="sm"
@@ -1792,6 +1872,43 @@ const TrackerEntryDetailPage = () => {
             >
               {sendSmsSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               Send SMS
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Stage change: "Any notes?" dialog before moving to next stage */}
+      <Dialog
+        open={!!stageChangePending}
+        onOpenChange={(open) => {
+          if (!open) {
+            setStageChangePending(null);
+            setStageChangeNotes("");
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Move to {stageChangePending?.stageLabel ?? "next stage"}?</DialogTitle>
+            <DialogDescription>Optionally add a note for this stage change.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <Label htmlFor="stage-change-notes">Any notes?</Label>
+            <Textarea
+              id="stage-change-notes"
+              placeholder="e.g. Called patient, rebooked for next week"
+              value={stageChangeNotes}
+              onChange={(e) => setStageChangeNotes(e.target.value)}
+              className="min-h-[80px] resize-y"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setStageChangePending(null); setStageChangeNotes(""); }}>
+              Cancel
+            </Button>
+            <Button onClick={confirmStageChangeWithNotes} disabled={updateEntryMutation.isPending}>
+              {updateEntryMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Move
             </Button>
           </DialogFooter>
         </DialogContent>

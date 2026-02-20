@@ -328,6 +328,8 @@ export const useUpdateTrackerEntry = () => {
     },
     onSuccess: (data, variables) => {
       queryClient.setQueryData(trackerKeys.entryDetail(variables.entryIdentifier), data);
+      // Refetch entry detail so UI shows updated stage/status (derived_stage) immediately
+      queryClient.refetchQueries({ queryKey: trackerKeys.entryDetail(variables.entryIdentifier) });
       // Invalidate and refetch entry list so Stage/Status columns update immediately
       queryClient.invalidateQueries({ queryKey: trackerKeys.entries() });
       queryClient.refetchQueries({ queryKey: trackerKeys.entries() });
