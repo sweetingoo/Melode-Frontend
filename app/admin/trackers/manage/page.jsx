@@ -53,10 +53,18 @@ import {
   XCircle,
   ArrowLeft,
   FileSpreadsheet,
+  ChevronDown,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   useTrackers,
   useCreateTracker,
+  useCreateTrackerFromTemplate,
   useUpdateTracker,
   useDeleteTracker,
 } from "@/hooks/useTrackers";
@@ -103,6 +111,12 @@ const TrackersManagePage = () => {
   const createCategoryMutation = useCreateTrackerCategory();
 
   const createMutation = useCreateTracker();
+  const createFromTemplateMutation = useCreateTrackerFromTemplate({
+    onCreated: (data) => {
+      const slug = data?.slug || data?.form_name;
+      if (slug) router.push(`/admin/trackers/${slug}/edit`);
+    },
+  });
   const updateMutation = useUpdateTracker();
   const deleteMutation = useDeleteTracker();
   const { data: currentUser } = useCurrentUser();
@@ -313,12 +327,44 @@ const TrackersManagePage = () => {
             createButtonIcon={Plus}
             leftOfCreateButton={
               canCreate ? (
-                <Link href="/admin/trackers/import">
-                  <Button variant="outline" size="sm" className="h-10 shrink-0">
-                    <FileSpreadsheet className="mr-2 h-4 w-4" />
-                    Import from Excel
-                  </Button>
-                </Link>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Link href="/admin/trackers/import">
+                    <Button variant="outline" size="sm" className="h-10">
+                      <FileSpreadsheet className="mr-2 h-4 w-4" />
+                      Import from Excel
+                    </Button>
+                  </Link>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-10"
+                        disabled={createFromTemplateMutation.isPending}
+                      >
+                        {createFromTemplateMutation.isPending ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : null}
+                        Create from template
+                        <ChevronDown className="ml-2 h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        onClick={() => createFromTemplateMutation.mutate("gastroenterology")}
+                        disabled={createFromTemplateMutation.isPending}
+                      >
+                        Gastroenterology (Outpatient Triage)
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => createFromTemplateMutation.mutate("patient-referral")}
+                        disabled={createFromTemplateMutation.isPending}
+                      >
+                        Patient Referral
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               ) : null
             }
           />

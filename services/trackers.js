@@ -121,6 +121,20 @@ export const trackersService = {
     }
   },
 
+  // Create tracker from template (e.g. "gastroenterology", "patient-referral")
+  createTrackerFromTemplate: async (templateKey) => {
+    try {
+      const response = await api.post(`/trackers/from-template/${templateKey}`);
+      if (response.data) {
+        response.data = transformFormToTracker(response.data);
+      }
+      return response;
+    } catch (error) {
+      console.error(`Create tracker from template ${templateKey} failed:`, error);
+      throw error;
+    }
+  },
+
   // Create tracker
   createTracker: async (trackerData) => {
     try {

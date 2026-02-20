@@ -60,6 +60,37 @@ export const useTrackerQueueCounts = (slug, options = {}) => {
   });
 };
 
+// Create tracker from template mutation (e.g. "gastroenterology", "patient-referral")
+export const useCreateTrackerFromTemplate = (options = {}) => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (templateKey) => {
+      const response = await trackersService.createTrackerFromTemplate(templateKey);
+      return response.data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: trackerKeys.lists() });
+      toast.success("Tracker created from template", {
+        description: `"${data.name}" has been created. You can edit it now.`,
+      });
+      options.onCreated?.(data);
+    },
+    onError: (error) => {
+      console.error("Create tracker from template error:", error);
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.response?.data?.detail ||
+        "Failed to create tracker from template";
+      toast.error("Failed to create tracker from template", {
+        description: Array.isArray(errorMessage)
+          ? errorMessage.map((e) => e.msg || e).join(", ")
+          : errorMessage,
+      });
+    },
+  });
+};
+
 // Create tracker mutation
 export const useCreateTracker = () => {
   const queryClient = useQueryClient();
