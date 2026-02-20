@@ -202,7 +202,8 @@ const TrackersPage = () => {
   const [updatedAtBefore, setUpdatedAtBefore] = useState(null);
   const [nextAppointmentDateAfter, setNextAppointmentDateAfter] = useState(null);
   const [nextAppointmentDateBefore, setNextAppointmentDateBefore] = useState(null);
-  const [activeQueue, setActiveQueue] = useState(null); // "awaiting_triage" | "chase_overdue" | ... | null
+  const [activeQueue, setActiveQueue] = useState(null); // queue preset id or null
+  const [statusesFilter, setStatusesFilter] = useState(null); // array of status strings when queue has multiple statuses, else null
   // Add / Edit formula while viewing entries (sheet-like)
   const [isFormulaDialogOpen, setIsFormulaDialogOpen] = useState(false);
   const [formulaFieldToEdit, setFormulaFieldToEdit] = useState(null);
@@ -374,13 +375,16 @@ const TrackersPage = () => {
     }
   }, [committedSearchTerm, statusFilter, columnFilters, highlightRules, queryBarAggregateFields, searchParams, router]);
 
-  // Clear formula bar selection, highlight rules, and query-bar aggregates when user switches tracker (not on initial load)
+  // Clear formula bar selection, highlight rules, query-bar aggregates, and queue filter when user switches tracker (not on initial load)
   const prevSelectedTrackerRef = useRef(selectedTracker);
   useEffect(() => {
     setSelectedCell(null);
     if (prevSelectedTrackerRef.current != null && prevSelectedTrackerRef.current !== selectedTracker) {
       setHighlightRules([]);
       setQueryBarAggregateFields({});
+      setActiveQueue(null);
+      setStatusFilter("all");
+      setStatusesFilter(null);
     }
     prevSelectedTrackerRef.current = selectedTracker;
   }, [selectedTracker]);
@@ -543,7 +547,9 @@ const TrackersPage = () => {
       params.form_id = parseInt(selectedTracker);
     }
 
-    if (statusFilter !== "all") {
+    if (statusesFilter?.length) {
+      params.statuses = statusesFilter;
+    } else if (statusFilter !== "all") {
       params.status = statusFilter;
     }
 
@@ -565,7 +571,7 @@ const TrackersPage = () => {
     if (nextAppointmentDateBefore) params.next_appointment_date_before = nextAppointmentDateBefore;
 
     return params;
-  }, [selectedTracker, statusFilter, searchTerm, sortBy, sortOrder, columnFilters, itemsPerPage, updatedAtAfter, updatedAtBefore, nextAppointmentDateAfter, nextAppointmentDateBefore]);
+  }, [selectedTracker, statusFilter, statusesFilter, searchTerm, sortBy, sortOrder, columnFilters, itemsPerPage, updatedAtAfter, updatedAtBefore, nextAppointmentDateAfter, nextAppointmentDateBefore]);
 
   // Get tracker entries with infinite scroll
   const {
@@ -581,7 +587,8 @@ const TrackersPage = () => {
   const aggregateParams = useMemo(
     () => ({
       form_id: selectedTracker ? parseInt(selectedTracker, 10) : undefined,
-      status: statusFilter !== "all" ? statusFilter : undefined,
+      status: statusesFilter?.length ? undefined : (statusFilter !== "all" ? statusFilter : undefined),
+      statuses: statusesFilter?.length ? statusesFilter : undefined,
       query: searchTerm || undefined,
       field_filters:
         Object.keys(columnFilters).length > 0
@@ -598,17 +605,17 @@ const TrackersPage = () => {
       next_appointment_date_after: nextAppointmentDateAfter || undefined,
       next_appointment_date_before: nextAppointmentDateBefore || undefined,
     }),
-    [selectedTracker, statusFilter, searchTerm, columnFilters, queryBarAggregateFields, updatedAtAfter, updatedAtBefore, nextAppointmentDateAfter, nextAppointmentDateBefore]
+    [selectedTracker, statusFilter, statusesFilter, searchTerm, columnFilters, queryBarAggregateFields, updatedAtAfter, updatedAtBefore, nextAppointmentDateAfter, nextAppointmentDateBefore]
   );
   const { data: backendAggregatesData } = useTrackerEntriesAggregates(aggregateParams, {
     enabled: !!selectedTracker,
   });
-  // Show queue presets for any tracker; counts come from backend (match "Awaiting Triage", "Chase Due", etc.).
-  // If your tracker uses different status names, queue counts may be 0 until you add those statuses (Edit tracker → Statuses).
+  // Queue presets come from backend per tracker (patient-referral: fixed presets; stage-styled: one per stage).
   const isPatientReferralTracker = !!selectedTrackerObj?.tracker_config?.is_patient_referral;
   const { data: queueCountsData } = useTrackerQueueCounts(selectedTrackerObj?.slug ?? "", {
     enabled: !!selectedTrackerObj?.slug,
   });
+  const queuePresets = queueCountsData?.queue_presets ?? [];
 
   // Infinite scroll: load more when sentinel enters viewport (must be after useInfiniteTrackerEntries)
   const loadMoreRef = useRef(null);
@@ -775,15 +782,26 @@ const TrackersPage = () => {
     setHighlightRules((prev) => [...prev, normalized]);
   }, []);
 
-  // Phase 3: Apply Patient Referral queue preset (status + field_filters + appointment range)
+  // Apply queue preset: use backend queue_presets when available (per-tracker queues); else fall back to patient-referral preset helper
   const applyQueue = useCallback((queueId) => {
-    setActiveQueue(queueId === PATIENT_REFERRAL_QUEUE_IDS.ALL ? null : queueId);
-    const preset = getPatientReferralQueuePreset(queueId);
-    setStatusFilter(preset.status);
-    setColumnFilters(preset.field_filters || {});
-    setNextAppointmentDateAfter(preset.next_appointment_date_after || null);
-    setNextAppointmentDateBefore(preset.next_appointment_date_before || null);
-  }, []);
+    setActiveQueue(queueId === "all" ? null : queueId);
+    const presets = queueCountsData?.queue_presets;
+    const preset = presets?.find((p) => p.id === queueId);
+    if (preset) {
+      setStatusFilter(preset.status ?? (preset.statuses?.length === 1 ? preset.statuses[0] : "all"));
+      setStatusesFilter(preset.statuses?.length > 1 ? preset.statuses : null);
+      setColumnFilters(preset.field_filters || {});
+      setNextAppointmentDateAfter(preset.next_appointment_date_after || null);
+      setNextAppointmentDateBefore(preset.next_appointment_date_before || null);
+    } else {
+      const legacy = getPatientReferralQueuePreset(queueId);
+      setStatusFilter(legacy.status ?? "all");
+      setStatusesFilter(null);
+      setColumnFilters(legacy.field_filters || {});
+      setNextAppointmentDateAfter(legacy.next_appointment_date_after || null);
+      setNextAppointmentDateBefore(legacy.next_appointment_date_before || null);
+    }
+  }, [queueCountsData?.queue_presets]);
 
   // Helper: does this cell match a highlight rule? Returns { match, color }. Multiple rules for the same column are supported; last matching rule wins (so add most specific first, or add in order: red >75, green <=75, blue <=50).
   const cellMatchesHighlightRule = useCallback(
@@ -2087,30 +2105,23 @@ const TrackersPage = () => {
             })}
           </div>
         )}
-        {/* Phase 3: Queue presets (counts by status: Awaiting Triage, Chase Due, etc.). Add these statuses in Edit tracker → Statuses to see counts. */}
-        {isPatientReferralTracker && selectedTracker === selectedTrackerObj?.id?.toString() && (
+        {/* Queues: per-tracker presets from backend (patient-referral or stage-styled). */}
+        {queuePresets.length > 0 && selectedTracker === selectedTrackerObj?.id?.toString() && (
           <div className="flex flex-wrap items-center gap-1.5 px-4 py-2 border-b bg-muted/30">
             <span className="text-xs text-muted-foreground mr-1 shrink-0">Queues:</span>
-            {[
-              { id: PATIENT_REFERRAL_QUEUE_IDS.ALL, label: "All" },
-              { id: PATIENT_REFERRAL_QUEUE_IDS.AWAITING_TRIAGE, label: "Awaiting Triage" },
-              { id: PATIENT_REFERRAL_QUEUE_IDS.ACTION_REQUIRED, label: "Action Required" },
-              { id: PATIENT_REFERRAL_QUEUE_IDS.CHASE_OVERDUE, label: "Chase Due / Overdue" },
-              { id: PATIENT_REFERRAL_QUEUE_IDS.UPCOMING_APPOINTMENTS, label: "Upcoming (7 days)" },
-              { id: PATIENT_REFERRAL_QUEUE_IDS.PAST_OUTCOME_NOT_CHECKED, label: "Past – Outcome Not Checked" },
-              { id: PATIENT_REFERRAL_QUEUE_IDS.READY_TO_BOOK, label: "Ready to Book" },
-              { id: PATIENT_REFERRAL_QUEUE_IDS.DRAFT, label: "Draft" },
-            ].map(({ id, label }) => {
+            {queuePresets.map((preset) => {
+              const id = preset.id;
+              const label = preset.label ?? id;
               const count = queueCountsData?.queue_counts?.[id] ?? null;
               const avgDays = queueCountsData?.avg_days_by_queue?.[id];
-              const isOverdue = id === PATIENT_REFERRAL_QUEUE_IDS.CHASE_OVERDUE && count != null && count > 0;
-              const title = avgDays != null && id !== PATIENT_REFERRAL_QUEUE_IDS.ALL
+              const isOverdue = id === "chase_overdue" && count != null && count > 0;
+              const title = avgDays != null && id !== "all"
                 ? `Avg ${avgDays} days in queue`
                 : undefined;
               return (
                 <Button
                   key={id}
-                  variant={activeQueue === id || (id === PATIENT_REFERRAL_QUEUE_IDS.ALL && !activeQueue) ? "secondary" : "ghost"}
+                  variant={activeQueue === id || (id === "all" && !activeQueue) ? "secondary" : "ghost"}
                   size="sm"
                   className={cn("h-7 text-xs", isOverdue && "border-amber-500/70 text-amber-700 dark:text-amber-400")}
                   onClick={() => applyQueue(id)}
@@ -2118,18 +2129,20 @@ const TrackersPage = () => {
                 >
                   {label}
                   {count != null ? ` (${count})` : ""}
-                  {avgDays != null && id !== PATIENT_REFERRAL_QUEUE_IDS.ALL ? ` · ${avgDays}d` : ""}
+                  {avgDays != null && id !== "all" ? ` · ${avgDays}d` : ""}
                 </Button>
               );
             })}
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 text-xs ml-2"
-              onClick={() => setIsPsaQuickGuideOpen(true)}
-            >
-              PSA Quick Guide
-            </Button>
+            {isPatientReferralTracker && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs ml-2"
+                onClick={() => setIsPsaQuickGuideOpen(true)}
+              >
+                PSA Quick Guide
+              </Button>
+            )}
             <span className="text-xs text-muted-foreground ml-2 self-center">
               Counts use <strong>Status</strong>. Allowed values are in{" "}
               <Link href={selectedTrackerObj?.slug ? `/admin/trackers/${selectedTrackerObj.slug}/edit` : "#"} className="underline">

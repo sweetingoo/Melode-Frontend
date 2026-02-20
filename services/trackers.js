@@ -291,6 +291,7 @@ export const trackersService = {
       const {
         form_id,
         status,
+        statuses,
         query,
         field_filters,
         aggregate_fields,
@@ -303,7 +304,8 @@ export const trackersService = {
         page: 1,
         per_page: 1,
         ...(form_id != null && { form_id: Number(form_id) }),
-        ...(status && status !== "all" && { status }),
+        ...(status != null && status !== "all" && { status }),
+        ...(statuses?.length && { statuses }),
         ...(query && { query }),
         ...(field_filters && Object.keys(field_filters).length > 0 && { field_filters }),
         ...(aggregate_fields && Object.keys(aggregate_fields).length > 0 && { aggregate_fields }),
