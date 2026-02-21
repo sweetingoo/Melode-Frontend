@@ -226,20 +226,44 @@ export const trackersService = {
     }
   },
 
-  // Create tracker entry
+  // Get entry + form for public form (no auth) - external user fill stage
+  getEntryPublicForm: async (entryIdentifier) => {
+    try {
+      const response = await api.get(`/trackers/entries/${entryIdentifier}/public-form`);
+      return response.data;
+    } catch (error) {
+      console.error(`Get entry public form ${entryIdentifier} failed:`, error);
+      throw error;
+    }
+  },
+
+  // Submit form data for existing entry (no auth) - external user
+  publicSubmitEntry: async (entryIdentifier, body) => {
+    try {
+      const response = await api.put(`/trackers/entries/${entryIdentifier}/public-submit`, body);
+      return response.data;
+    } catch (error) {
+      console.error(`Public submit entry ${entryIdentifier} failed:`, error);
+      throw error;
+    }
+  },
+
+  // Create tracker entry (slug is server-generated; do not send from frontend)
   createTrackerEntry: async (entryData) => {
     try {
-      return await api.post("/trackers/entries", entryData);
+      const { slug: _slug, ...payload } = entryData ?? {};
+      return await api.post("/trackers/entries", payload);
     } catch (error) {
       console.error("Create tracker entry failed:", error);
       throw error;
     }
   },
 
-  // Update tracker entry by slug or ID
+  // Update tracker entry by slug or ID (slug is immutable; do not send from frontend)
   updateTrackerEntry: async (entryIdentifier, entryData) => {
     try {
-      return await api.put(`/trackers/entries/${entryIdentifier}`, entryData);
+      const { slug: _slug, ...payload } = entryData ?? {};
+      return await api.put(`/trackers/entries/${entryIdentifier}`, payload);
     } catch (error) {
       console.error(`Update tracker entry ${entryIdentifier} failed:`, error);
       throw error;

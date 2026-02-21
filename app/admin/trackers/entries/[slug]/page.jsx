@@ -35,7 +35,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, ArrowLeft, Edit, Save, X, Clock, MessageSquare, FileText, User as UserIcon, Calendar, ListTodo, Paperclip, Smartphone, ChevronRight } from "lucide-react";
+import { Loader2, ArrowLeft, Edit, Save, X, Clock, MessageSquare, FileText, User as UserIcon, Calendar, ListTodo, Paperclip, Smartphone, ChevronRight, Link2, Share2 } from "lucide-react";
 import {
   useTrackerEntry,
   useTrackerEntryTimeline,
@@ -98,6 +98,9 @@ const TrackerEntryDetailPage = () => {
   const [sendSmsSubmitting, setSendSmsSubmitting] = useState(false);
   const [stageChangePending, setStageChangePending] = useState(null);
   const [stageChangeNotes, setStageChangeNotes] = useState("");
+  const [stageChangeStatus, setStageChangeStatus] = useState("");
+  const [entryLinkCopied, setEntryLinkCopied] = useState(false);
+  const [shareableLinkCopied, setShareableLinkCopied] = useState(false);
 
   const { data: entry, isLoading: entryLoading, error: entryError } = useTrackerEntry(entrySlug);
   
@@ -339,6 +342,14 @@ const TrackerEntryDetailPage = () => {
     // If no description/title/name found, use tracker name
     return tracker.name || "Tracker Entry";
   }, [entry, tracker, formatValueForHeader]);
+
+  // Stage mapping and statuses for target stage (must be before any early return to satisfy Rules of Hooks)
+  const stageMappingForMemo = tracker?.tracker_config?.stage_mapping || [];
+  const statusesForTargetStage = useMemo(() => {
+    if (!stageChangePending?.stageName || !stageMappingForMemo?.length) return [];
+    const item = stageMappingForMemo.find((s) => (s?.stage ?? s?.name ?? "").toString().trim() === stageChangePending.stageName);
+    return (item?.statuses ?? item?.status_list ?? []).filter(Boolean);
+  }, [stageChangePending?.stageName, stageMappingForMemo]);
 
   // Initialize form data when entry loads
   useEffect(() => {
@@ -669,29 +680,44 @@ const TrackerEntryDetailPage = () => {
     const name = (stageName ?? "").toString().trim();
     if (!name || stageMapping.length === 0) return;
     if (name === currentStage) return;
+    const item = stageMapping.find((s) => (s?.stage ?? s?.name ?? "").toString().trim() === name);
+    const statuses = (item?.statuses ?? item?.status_list ?? []).filter(Boolean);
     setStageChangePending({ stageLabel: name, stageName: name });
     setStageChangeNotes("");
+    setStageChangeStatus(statuses[0] ?? "");
   };
 
   const handleNextStage = () => {
     if (!hasNextStage || !nextStageLabel) return;
+    const item = stageMapping.find((s) => (s?.stage ?? s?.name ?? "").toString().trim() === nextStageLabel);
+    const statuses = (item?.statuses ?? item?.status_list ?? []).filter(Boolean);
     setStageChangePending({ stageLabel: nextStageLabel, stageName: nextStageLabel });
     setStageChangeNotes("");
+    setStageChangeStatus(statuses[0] ?? "");
   };
 
   const confirmStageChangeWithNotes = async () => {
     if (!stageChangePending) return;
     const { stageName } = stageChangePending;
+    const noteTrimmed = stageChangeNotes != null ? String(stageChangeNotes).trim() : "";
+    if (!noteTrimmed) {
+      toast.error("Note is required when moving to another stage.");
+      return;
+    }
+    if (statusesForTargetStage.length > 0 && !stageChangeStatus) {
+      toast.error("Please select a status for the target stage.");
+      return;
+    }
     try {
-      const entryDataPayload = { stage: stageName };
-      if (stageChangeNotes != null && String(stageChangeNotes).trim() !== "")
-        entryDataPayload.notes = String(stageChangeNotes).trim();
+      const entryDataPayload = { stage: stageName, notes: noteTrimmed };
+      if (stageChangeStatus) entryDataPayload.status = stageChangeStatus;
       await updateEntryMutation.mutateAsync({
         entryIdentifier: entrySlug,
         entryData: entryDataPayload,
       });
       setStageChangePending(null);
       setStageChangeNotes("");
+      setStageChangeStatus("");
       toast.success(`Moved to ${stageName}`);
     } catch (error) {
       const detail = error?.response?.data?.detail;
@@ -703,28 +729,28 @@ const TrackerEntryDetailPage = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Link href="/admin/trackers">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
+        <div className="min-w-0 flex-1 flex items-start gap-3 sm:gap-4">
+          <Link href="/admin/trackers" className="shrink-0">
             <Button variant="ghost" size="sm">
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back
             </Button>
           </Link>
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-2xl sm:text-3xl font-bold truncate" title={headingValue}>
               {headingValue}
             </h1>
-            <div className="space-y-1">
+            <div className="space-y-1 mt-1">
               {tracker && (
                 <div className="flex items-center gap-2 flex-wrap">
                   {headingValue !== tracker.name && (
-                    <p className="text-sm font-medium text-muted-foreground">
+                    <p className="text-sm font-medium text-muted-foreground truncate">
                       {tracker.name}
                     </p>
                   )}
                   {tracker.category && (
-                    <Badge variant="secondary" className="text-xs">
+                    <Badge variant="secondary" className="text-xs shrink-0">
                       {tracker.category}
                     </Badge>
                   )}
@@ -736,7 +762,7 @@ const TrackerEntryDetailPage = () => {
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
           {isEditing ? (
             <>
               <Select value={entryStatus} onValueChange={setEntryStatus}>
@@ -768,6 +794,61 @@ const TrackerEntryDetailPage = () => {
               <Badge variant="outline" className="text-sm">
                 {humanizeStatusForDisplay(entry.status || "open")}
               </Badge>
+              <Button
+                variant="outline"
+                size="sm"
+                title="Copy link to this entry"
+                onClick={async () => {
+                  const link =
+                    typeof window !== "undefined"
+                      ? `${window.location.origin}/admin/trackers/entries/${entrySlug}`
+                      : "";
+                  if (!link) return;
+                  try {
+                    await navigator.clipboard.writeText(link);
+                    setEntryLinkCopied(true);
+                    toast.success("Link to this entry copied to clipboard");
+                    setTimeout(() => setEntryLinkCopied(false), 2000);
+                  } catch (err) {
+                    toast.error("Failed to copy link");
+                  }
+                }}
+              >
+                <Link2 className="h-4 w-4 mr-1" />
+                {entryLinkCopied ? "Copied" : "Copy link"}
+              </Button>
+              {tracker?.tracker_config?.allow_public_submit && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  title="Copy shareable form link for external user"
+                  onClick={async () => {
+                    const trackerSlug = tracker?.slug || tracker?.form_name;
+                    if (!trackerSlug) return;
+                    const slugToUse = entry?.slug ?? entrySlug;
+                    if (!slugToUse) {
+                      toast.error("Entry slug not available");
+                      return;
+                    }
+                    try {
+                      const link =
+                        typeof window !== "undefined"
+                          ? `${window.location.origin}/forms/${trackerSlug}/entry/${slugToUse}/submit`
+                          : "";
+                      if (!link) return;
+                      await navigator.clipboard.writeText(link);
+                      setShareableLinkCopied(true);
+                      toast.success("Shareable form link copied — external user can open it to submit the stage");
+                      setTimeout(() => setShareableLinkCopied(false), 2000);
+                    } catch (err) {
+                      toast.error(err?.response?.data?.detail || "Failed to copy link");
+                    }
+                  }}
+                >
+                  <Share2 className="h-4 w-4 mr-1" />
+                  {shareableLinkCopied ? "Copied" : "Share form link"}
+                </Button>
+              )}
               {canEditCase && (
               <Button onClick={() => setIsEditing(true)}>
                 <Edit className="mr-2 h-4 w-4" />
@@ -1902,36 +1983,71 @@ const TrackerEntryDetailPage = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Stage change: "Any notes?" dialog before moving to next stage */}
+      {/* Stage change: require Stage, Status, and Note before moving */}
       <Dialog
         open={!!stageChangePending}
         onOpenChange={(open) => {
           if (!open) {
             setStageChangePending(null);
             setStageChangeNotes("");
+            setStageChangeStatus("");
           }
         }}
       >
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Move to {stageChangePending?.stageLabel ?? "next stage"}?</DialogTitle>
-            <DialogDescription>Optionally add a note for this stage change.</DialogDescription>
+            <DialogTitle>Move to {stageChangePending?.stageLabel ?? "next stage"}</DialogTitle>
+            <DialogDescription>
+              Choose the status for this stage and add a note (required).
+            </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3 py-2">
-            <Label htmlFor="stage-change-notes">Any notes?</Label>
-            <Textarea
-              id="stage-change-notes"
-              placeholder="e.g. Called patient, rebooked for next week"
-              value={stageChangeNotes}
-              onChange={(e) => setStageChangeNotes(e.target.value)}
-              className="min-h-[80px] resize-y"
-            />
+          <div className="space-y-4 py-2">
+            {statusesForTargetStage.length > 0 && (
+              <div className="space-y-2">
+                <Label htmlFor="stage-change-status">Status</Label>
+                <Select
+                  value={stageChangeStatus}
+                  onValueChange={setStageChangeStatus}
+                >
+                  <SelectTrigger id="stage-change-status">
+                    <SelectValue placeholder="Select status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {statusesForTargetStage.map((s) => (
+                      <SelectItem key={s} value={s}>
+                        {humanizeStatusForDisplay(s)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            {statusesForTargetStage.length === 0 && stageChangePending && (
+              <p className="text-sm text-amber-600">This stage has no statuses configured; move may not be allowed.</p>
+            )}
+            <div className="space-y-2">
+              <Label htmlFor="stage-change-notes">Note (required)</Label>
+              <Textarea
+                id="stage-change-notes"
+                placeholder="e.g. Called patient, rebooked for next week"
+                value={stageChangeNotes}
+                onChange={(e) => setStageChangeNotes(e.target.value)}
+                className="min-h-[80px] resize-y"
+              />
+            </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setStageChangePending(null); setStageChangeNotes(""); }}>
+            <Button variant="outline" onClick={() => { setStageChangePending(null); setStageChangeNotes(""); setStageChangeStatus(""); }}>
               Cancel
             </Button>
-            <Button onClick={confirmStageChangeWithNotes} disabled={updateEntryMutation.isPending}>
+            <Button
+              onClick={confirmStageChangeWithNotes}
+              disabled={
+                updateEntryMutation.isPending ||
+                !(stageChangeNotes != null && String(stageChangeNotes).trim() !== "") ||
+                (statusesForTargetStage.length > 0 && !stageChangeStatus)
+              }
+            >
               {updateEntryMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               Move
             </Button>

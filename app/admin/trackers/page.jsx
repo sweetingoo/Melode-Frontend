@@ -189,9 +189,10 @@ const TrackersPage = () => {
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   // Sheet-like: selected cell for formula bar (rowIndex, fieldId)
   const [selectedCell, setSelectedCell] = useState(null);
-  // Stage change: show "Any notes?" popup before applying. { entry, newStatus, stageLabel }
+  // Stage change: same as entry detail — Stage, Status (if stage has statuses), and Note (required)
   const [stageChangePending, setStageChangePending] = useState(null);
   const [stageChangeNotes, setStageChangeNotes] = useState("");
+  const [stageChangeStatus, setStageChangeStatus] = useState("");
   // View options: density and column visibility (better than sheet)
   const [viewDensity, setViewDensity] = useState("comfortable"); // "compact" | "comfortable" | "spacious"
   const [hiddenColumnsByTracker, setHiddenColumnsByTracker] = useState({}); // { [trackerId]: { [fieldId]: true } }
@@ -1122,7 +1123,15 @@ const TrackersPage = () => {
     [updateEntryMutation]
   );
 
-  // Move entry to a stage: open "Any notes?" dialog; on confirm send stage (backend resolves status for that stage).
+  // Statuses for the target stage (when changing stage) — same as entry detail
+  const statusesForTargetStage = useMemo(() => {
+    if (!stageChangePending?.stageName || !selectedTrackerDetail?.tracker_config?.stage_mapping?.length) return [];
+    const mapping = selectedTrackerDetail.tracker_config.stage_mapping;
+    const item = mapping.find((s) => String(s?.stage ?? s?.name ?? "").trim() === String(stageChangePending.stageName).trim());
+    return (item?.statuses ?? item?.status_list ?? []).filter(Boolean);
+  }, [stageChangePending?.stageName, selectedTrackerDetail?.tracker_config?.stage_mapping]);
+
+  // Move entry to a stage: open dialog with Status + Note (required); same as entry detail.
   const handleStageChange = useCallback((entry, stageName, stageMapping) => {
     const name = (stageName ?? "").toString().trim();
     if (!name) return;
@@ -1138,9 +1147,10 @@ const TrackersPage = () => {
     }
     setStageChangePending({ entry, stageLabel: name, stageName: name });
     setStageChangeNotes("");
+    setStageChangeStatus("");
   }, []);
 
-  // Advance to next stage: open "Any notes?" dialog; on confirm send that stage.
+  // Advance to next stage: open dialog with Status + Note (required); same as entry detail.
   const handleNextStage = useCallback((entry, stageMapping) => {
     if (!stageMapping?.length) return;
     const currentStage = String(entry?.formatted_data?.derived_stage ?? "").trim();
@@ -1151,9 +1161,10 @@ const TrackersPage = () => {
     if (!nextStageLabel) return;
     setStageChangePending({ entry, stageLabel: nextStageLabel, stageName: nextStageLabel });
     setStageChangeNotes("");
+    setStageChangeStatus("");
   }, []);
 
-  // Confirm stage change: send stage (and notes) to API; backend resolves status for that stage.
+  // Confirm stage change: send stage, status (if required), and note (required); same as entry detail.
   const confirmStageChangeWithNotes = useCallback(async () => {
     if (!stageChangePending) return;
     const { entry, stageName } = stageChangePending;
@@ -1162,22 +1173,35 @@ const TrackersPage = () => {
       toast.error("Cannot update: entry has no id");
       setStageChangePending(null);
       setStageChangeNotes("");
+      setStageChangeStatus("");
+      return;
+    }
+    const noteTrimmed = stageChangeNotes != null ? String(stageChangeNotes).trim() : "";
+    if (!noteTrimmed) {
+      toast.error("Note is required when moving to another stage.");
+      return;
+    }
+    if (statusesForTargetStage.length > 0 && !stageChangeStatus) {
+      toast.error("Please select a status for the target stage.");
       return;
     }
     try {
-      const entryData = { stage: stageName };
-      if (stageChangeNotes != null && String(stageChangeNotes).trim() !== "")
-        entryData.notes = String(stageChangeNotes).trim();
+      const entryData = { stage: stageName, notes: noteTrimmed };
+      if (stageChangeStatus) entryData.status = stageChangeStatus;
       await updateEntryMutation.mutateAsync({
         entryIdentifier: String(entryId),
         entryData,
       });
+      setStageChangePending(null);
+      setStageChangeNotes("");
+      setStageChangeStatus("");
     } catch (error) {
       console.error("Stage update failed:", error);
     }
     setStageChangePending(null);
     setStageChangeNotes("");
-  }, [stageChangePending, stageChangeNotes, updateEntryMutation]);
+    setStageChangeStatus("");
+  }, [stageChangePending, stageChangeNotes, stageChangeStatus, statusesForTargetStage.length, updateEntryMutation]);
 
   const handleDelete = async (entryId) => {
     if (confirm("Are you sure you want to delete this entry?")) {
@@ -1459,7 +1483,7 @@ const TrackersPage = () => {
                         return;
                       }
                       try {
-                        await createEntryMutation.mutateAsync({
+                        const result = await createEntryMutation.mutateAsync({
                           form_id: trackerDetails.id,
                           submission_data: entryFormData,
                           status: trackerDetails.tracker_config?.default_status || "open",
@@ -1468,6 +1492,10 @@ const TrackersPage = () => {
                         setEntryFormData({});
                         setEntryFieldErrors({});
                         setCreateEntryStageIndex(0);
+                        const entryIdentifier = result?.slug ?? result?.id;
+                        if (entryIdentifier) {
+                          router.push(`/admin/trackers/entries/${entryIdentifier}`);
+                        }
                       } catch (error) {
                         // Error handled by mutation
                       }
@@ -1488,31 +1516,59 @@ const TrackersPage = () => {
             </Dialog>
       )}
 
-      {/* Stage change: "Any notes?" popup before moving to next stage */}
+      {/* Stage change: require Status (if stage has statuses) and Note (required) — same as entry detail */}
       <Dialog
         open={!!stageChangePending}
         onOpenChange={(open) => {
           if (!open) {
             setStageChangePending(null);
             setStageChangeNotes("");
+            setStageChangeStatus("");
           }
         }}
       >
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Move to {stageChangePending?.stageLabel ?? "next stage"}?</DialogTitle>
-            <DialogDescription>Optionally add a note for this stage change.</DialogDescription>
+            <DialogTitle>Move to {stageChangePending?.stageLabel ?? "next stage"}</DialogTitle>
+            <DialogDescription>
+              Choose the status for this stage and add a note (required).
+            </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3 py-2">
-            <Label htmlFor="stage-change-notes">Any notes?</Label>
-            <Textarea
-              id="stage-change-notes"
-              placeholder="e.g. Called patient, rebooked for next week"
-              value={stageChangeNotes}
-              onChange={(e) => setStageChangeNotes(e.target.value)}
-              className="min-h-[80px] resize-y"
-              autoFocus
-            />
+          <div className="space-y-4 py-2">
+            {statusesForTargetStage.length > 0 && (
+              <div className="space-y-2">
+                <Label htmlFor="stage-change-status">Status</Label>
+                <Select
+                  value={stageChangeStatus}
+                  onValueChange={setStageChangeStatus}
+                >
+                  <SelectTrigger id="stage-change-status">
+                    <SelectValue placeholder="Select status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {statusesForTargetStage.map((s) => (
+                      <SelectItem key={s} value={s}>
+                        {humanizeStatusForDisplay(s)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            {statusesForTargetStage.length === 0 && stageChangePending && (
+              <p className="text-sm text-amber-600">This stage has no statuses configured; move may not be allowed.</p>
+            )}
+            <div className="space-y-2">
+              <Label htmlFor="stage-change-notes">Note (required)</Label>
+              <Textarea
+                id="stage-change-notes"
+                placeholder="e.g. Called patient, rebooked for next week"
+                value={stageChangeNotes}
+                onChange={(e) => setStageChangeNotes(e.target.value)}
+                className="min-h-[80px] resize-y"
+                autoFocus
+              />
+            </div>
           </div>
           <DialogFooter>
             <Button
@@ -1520,13 +1576,18 @@ const TrackersPage = () => {
               onClick={() => {
                 setStageChangePending(null);
                 setStageChangeNotes("");
+                setStageChangeStatus("");
               }}
             >
               Cancel
             </Button>
             <Button
               onClick={confirmStageChangeWithNotes}
-              disabled={updateEntryMutation.isPending}
+              disabled={
+                updateEntryMutation.isPending ||
+                !(stageChangeNotes != null && String(stageChangeNotes).trim() !== "") ||
+                (statusesForTargetStage.length > 0 && !stageChangeStatus)
+              }
             >
               {updateEntryMutation.isPending ? (
                 <>
@@ -1534,7 +1595,7 @@ const TrackersPage = () => {
                   Updating…
                 </>
               ) : (
-                "Confirm"
+                "Move"
               )}
             </Button>
           </DialogFooter>
