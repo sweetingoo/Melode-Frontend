@@ -91,6 +91,7 @@ import { humanizeStatusForDisplay } from "@/utils/slug";
 import { toast } from "sonner";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
 import { useUsers } from "@/hooks/useUsers";
+import { api } from "@/services/api-client";
 import { PageSearchBar } from "@/components/admin/PageSearchBar";
 import { TrackerQuerySearchBar } from "@/components/admin/TrackerQuerySearchBar";
 import { trackersService } from "@/services/trackers";
@@ -450,7 +451,7 @@ const TrackersPage = () => {
   }, [trackers, searchParams]);
 
   const createEntryMutation = useCreateTrackerEntry();
-  
+
   // Get selected tracker details for form fields (using selectedTracker tab)
   const selectedTrackerObj = useMemo(() => {
     if (!selectedTracker) return null;
@@ -1483,9 +1484,70 @@ const TrackersPage = () => {
                         return;
                       }
                       try {
+                        // Build submission_data: upload file fields first and store file_id(s); copy other fields as-is (no File objects – API expects file_id)
+                        const allFields = trackerDetails.tracker_fields?.fields || [];
+                        const submission_data = {};
+                        Object.entries(entryFormData).forEach(([k, v]) => {
+                          if (v instanceof File || (v && typeof v === "object" && v.file instanceof File)) return; // skip raw files; file fields filled below
+                          submission_data[k] = v;
+                        });
+                        const getFileFromValue = (val) => {
+                          if (val instanceof File) return { file: val, expiryDate: null };
+                          if (val && typeof val === "object" && val.file) return val;
+                          return null;
+                        };
+                        // Upload file fields via settings endpoint (returns file_reference_id; prefer over id)
+                        const uploadFileToSettings = async (file, formId, fieldId) => {
+                          const formData = new FormData();
+                          formData.append("file", file);
+                          formData.append("form_id", String(formId));
+                          formData.append("field_id", String(fieldId));
+                          const res = await api.post("/settings/files/upload", formData);
+                          const data = res?.data ?? res;
+                          return data?.file_reference_id ?? data?.id ?? data?.file_id ?? null;
+                        };
+                        for (const field of allFields) {
+                          const fieldType = (field.type || field.field_type || "").toLowerCase();
+                          if (fieldType !== "file") continue;
+                          const fieldId = field.id || field.field_id || field.name;
+                          const value = entryFormData[fieldId];
+                          if (value == null) continue;
+                          // Single file (File or { file, expiryDate })
+                          if (value instanceof File || (value && typeof value === "object" && value.file && !Array.isArray(value))) {
+                            const fileData = getFileFromValue(value);
+                            const file = fileData?.file || value;
+                            const fileRef = await uploadFileToSettings(file, trackerDetails.id, fieldId);
+                            if (fileRef != null) {
+                              submission_data[fieldId] = field.file_expiry_date && fileData?.expiryDate
+                                ? { file_reference_id: fileRef, expiry_date: fileData.expiryDate }
+                                : fileRef;
+                            }
+                            continue;
+                          }
+                          // Multiple files (array)
+                          if (Array.isArray(value) && value.length > 0) {
+                            const first = value[0];
+                            if (first instanceof File || (first && typeof first === "object" && first.file)) {
+                              const fileRefs = [];
+                              for (let i = 0; i < value.length; i++) {
+                                const fileData = getFileFromValue(value[i]);
+                                const file = fileData?.file || value[i];
+                                const fileRef = await uploadFileToSettings(file, trackerDetails.id, fieldId);
+                                if (fileRef != null) {
+                                  if (field.file_expiry_date && fileData?.expiryDate) {
+                                    fileRefs.push({ file_reference_id: fileRef, expiry_date: fileData.expiryDate });
+                                  } else {
+                                    fileRefs.push(fileRef);
+                                  }
+                                }
+                              }
+                              submission_data[fieldId] = fileRefs;
+                            }
+                          }
+                        }
                         const result = await createEntryMutation.mutateAsync({
                           form_id: trackerDetails.id,
-                          submission_data: entryFormData,
+                          submission_data,
                           status: trackerDetails.tracker_config?.default_status || "open",
                         });
                         setIsCreateEntryDialogOpen(false);
@@ -1497,7 +1559,7 @@ const TrackersPage = () => {
                           router.push(`/admin/trackers/entries/${entryIdentifier}`);
                         }
                       } catch (error) {
-                        // Error handled by mutation
+                        // Error handled by mutation or upload
                       }
                     }}
                     disabled={!selectedTrackerObj || !trackerDetails || createEntryMutation.isPending}
@@ -2074,9 +2136,16 @@ const TrackersPage = () => {
             })();
 
             const hiddenForTracker = hiddenColumnsByTracker[tracker.id] || {};
-            const visibleFields = trackerDisplayableFields.filter(
-              (f) => !hiddenForTracker[f.id || f.field_id || f.name]
-            );
+            // Exclude the status form field from columns — status is already shown in the fixed second column
+            const statusFieldIds = new Set([
+              "status",
+              "current_status",
+              ...(tracker?.tracker_config?.status_field_id ? [tracker.tracker_config.status_field_id] : []),
+            ]);
+            const visibleFields = trackerDisplayableFields.filter((f) => {
+              const fid = f.id || f.field_id || f.name;
+              return !hiddenForTracker[fid] && !statusFieldIds.has(fid);
+            });
             const densityClass = viewDensity === "compact" ? "py-1 text-xs" : viewDensity === "spacious" ? "py-3 text-sm" : "py-2 text-sm";
 
             // Prefer backend aggregates (all matching entries) when available; else use client-side (loaded only)
@@ -2308,10 +2377,10 @@ const TrackersPage = () => {
             })}
           </div>
         )}
-        {/* Queues: per-tracker presets from backend (only when tracker uses stages). */}
+        {/* Stages: per-tracker presets from backend (only when tracker uses stages). */}
         {queuePresets.length > 0 && selectedTracker === selectedTrackerObj?.id?.toString() && selectedTrackerObj?.tracker_config?.use_stages !== false && (
           <div className="flex flex-wrap items-center gap-1.5 px-4 py-2 border-b bg-muted/30">
-            <span className="text-xs text-muted-foreground mr-1 shrink-0">Queues:</span>
+            <span className="text-xs text-muted-foreground mr-1 shrink-0">Stages:</span>
             {queuePresets.map((preset) => {
               const id = preset.id;
               const label = preset.label ?? id;
@@ -2319,7 +2388,7 @@ const TrackersPage = () => {
               const avgDays = queueCountsData?.avg_days_by_queue?.[id];
               const isOverdue = id === "chase_overdue" && count != null && count > 0;
               const title = avgDays != null && id !== "all"
-                ? `Avg ${avgDays} days in queue`
+                ? `Avg ${avgDays} days in stage`
                 : undefined;
               return (
                 <Button

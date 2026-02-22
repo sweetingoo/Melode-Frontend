@@ -35,7 +35,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, ArrowLeft, Edit, Save, X, Clock, MessageSquare, FileText, User as UserIcon, Calendar, ListTodo, Paperclip, Smartphone, ChevronRight, Link2, Share2 } from "lucide-react";
+import { Loader2, ArrowLeft, Edit, Save, X, Clock, MessageSquare, FileText, User as UserIcon, Calendar, ListTodo, Paperclip, Smartphone, ChevronRight, ChevronDown, Link2, Share2 } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   useTrackerEntry,
   useTrackerEntryTimeline,
@@ -47,15 +48,18 @@ import {
 import { useComments } from "@/hooks/useComments";
 import { useCreateTask } from "@/hooks/useTasks";
 import CommentThread from "@/components/CommentThread";
-import { format, startOfDay } from "date-fns";
+import { format, startOfDay, differenceInDays } from "date-fns";
 import { parseUTCDate } from "@/utils/time";
 import { humanizeStatusForDisplay } from "@/utils/slug";
 import CustomFieldRenderer from "@/components/CustomFieldRenderer";
 import { toast } from "sonner";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
+import { api } from "@/services/api-client";
 import { filesService } from "@/services/files";
 import { trackersService } from "@/services/trackers";
 import { cn } from "@/lib/utils";
+
+const ENTRY_DATA_TAB = "__entry_data__";
 
 const TrackerEntryDetailPage = () => {
   const params = useParams();
@@ -99,6 +103,11 @@ const TrackerEntryDetailPage = () => {
   const [stageChangePending, setStageChangePending] = useState(null);
   const [stageChangeNotes, setStageChangeNotes] = useState("");
   const [stageChangeStatus, setStageChangeStatus] = useState("");
+  const [isChangeStatusDialogOpen, setIsChangeStatusDialogOpen] = useState(false);
+  const [changeStatusStage, setChangeStatusStage] = useState("");
+  const [changeStatusNote, setChangeStatusNote] = useState("");
+  const [editModeStage, setEditModeStage] = useState("");
+  const [activeStageTab, setActiveStageTab] = useState("");
   const [entryLinkCopied, setEntryLinkCopied] = useState(false);
   const [shareableLinkCopied, setShareableLinkCopied] = useState(false);
 
@@ -255,6 +264,35 @@ const TrackerEntryDetailPage = () => {
   // This is calculated based on creation order within the tracker
   const entryNumber = entry?.tracker_entry_number || entry?.id || null;
 
+  // Files uploaded at case creation (form file fields) – show in Attachments so triage can view referral PDF
+  // Must be before any early returns to keep hook order consistent.
+  const formFileAttachments = useMemo(() => {
+    const displayData = entry?.formatted_data || entry?.submission_data || {};
+    const fields = tracker?.tracker_fields?.fields || [];
+    const list = [];
+    fields.forEach((field) => {
+      const ft = (field.type || field.field_type || "").toLowerCase();
+      if (ft !== "file") return;
+      const fieldId = field.id || field.name || field.field_id;
+      const value = fieldId ? displayData[fieldId] : null;
+      const fileRefId = typeof value === "object" && value !== null ? value.file_reference_id : null;
+      const fileId = typeof value === "object" && value !== null ? value.file_id : typeof value === "number" ? value : null;
+      const identifier = fileRefId ?? fileId ?? (typeof value === "string" && value.trim() ? value.trim() : null);
+      if (identifier == null) return;
+      const fileName = typeof value === "object" && value !== null ? value.file_name : null;
+      const fileUrlPath = typeof value === "object" && value !== null && value.file_url ? value.file_url : `/settings/files/${identifier}/download`;
+      list.push({
+        key: `form-file-${fieldId}-${identifier}`,
+        label: field.label || field.name || fieldId || "File",
+        file_name: fileName || `File #${identifier}`,
+        file_id: fileId,
+        file_reference_id: fileRefId,
+        file_url_path: fileUrlPath,
+      });
+    });
+    return list;
+  }, [entry?.formatted_data, entry?.submission_data, tracker?.tracker_fields?.fields]);
+
   // Helper to format field value for header (simplified version)
   const formatValueForHeader = React.useCallback((field, value) => {
     if (value === null || value === undefined || value === "") {
@@ -351,6 +389,20 @@ const TrackerEntryDetailPage = () => {
     return (item?.statuses ?? item?.status_list ?? []).filter(Boolean);
   }, [stageChangePending?.stageName, stageMappingForMemo]);
 
+  // Statuses for the stage selected in the "Change status" dialog (Stage → Status flow)
+  const statusesForChangeStatusStage = useMemo(() => {
+    if (!changeStatusStage || !stageMappingForMemo?.length) return [];
+    const item = stageMappingForMemo.find((s) => (s?.stage ?? s?.name ?? "").toString().trim() === changeStatusStage);
+    return (item?.statuses ?? item?.status_list ?? []).filter(Boolean);
+  }, [changeStatusStage, stageMappingForMemo]);
+
+  // Statuses for the stage selected in edit mode header (Stage → Status)
+  const statusesForEditModeStage = useMemo(() => {
+    if (!editModeStage || !stageMappingForMemo?.length) return [];
+    const item = stageMappingForMemo.find((s) => (s?.stage ?? s?.name ?? "").toString().trim() === editModeStage);
+    return (item?.statuses ?? item?.status_list ?? []).filter(Boolean);
+  }, [editModeStage, stageMappingForMemo]);
+
   // Initialize form data when entry loads
   useEffect(() => {
     if (entry) {
@@ -359,6 +411,23 @@ const TrackerEntryDetailPage = () => {
       setEntryStatus(entry.status || "open");
     }
   }, [entry]);
+
+  // When entering edit mode on a stage-styled tracker, set edit-mode stage to current stage
+  useEffect(() => {
+    if (isEditing && entry && tracker?.tracker_config?.stage_mapping?.length) {
+      const cur = String(entry?.formatted_data?.derived_stage ?? "").trim();
+      const firstStage = tracker.tracker_config.stage_mapping[0]?.stage ?? tracker.tracker_config.stage_mapping[0]?.name ?? "";
+      setEditModeStage(cur || firstStage);
+    }
+  }, [isEditing, entry?.formatted_data?.derived_stage, entry?.id, tracker?.tracker_config?.stage_mapping]);
+
+  // Default the stage tab to current stage when visiting the page (stage-styled trackers)
+  useEffect(() => {
+    if (!entry || !tracker?.tracker_config?.stage_mapping?.length) return;
+    const cur = String(entry?.formatted_data?.derived_stage ?? "").trim();
+    const firstStage = tracker.tracker_config.stage_mapping[0]?.stage ?? tracker.tracker_config.stage_mapping[0]?.name ?? "";
+    setActiveStageTab((prev) => (prev === "" ? (cur || firstStage) : prev));
+  }, [entry?.id, entry?.formatted_data?.derived_stage, tracker?.tracker_config?.stage_mapping]);
 
   // Debug: Log field structure when entry and tracker are loaded
   useEffect(() => {
@@ -495,6 +564,38 @@ const TrackerEntryDetailPage = () => {
 
     if (value === null || value === undefined || value === "") {
       return "—";
+    }
+
+    // Handle file fields: show View/Download link (use file_reference_id for URL when available)
+    if (fieldType === "file") {
+      const fileRefId = typeof value === "object" && value !== null ? value.file_reference_id : null;
+      const fileId = typeof value === "object" && value !== null ? value.file_id : typeof value === "number" ? value : null;
+      const identifier = fileRefId ?? fileId ?? (typeof value === "string" && value.trim() ? value.trim() : null);
+      const fileName = typeof value === "object" && value !== null ? value.file_name : null;
+      const fileUrlPath = typeof value === "object" && value !== null && value.file_url ? value.file_url : identifier != null ? `/settings/files/${identifier}/download` : null;
+      if (identifier == null && !fileUrlPath) return "—";
+      const handleFileOpen = async (e) => {
+        e.preventDefault();
+        if (identifier == null) return;
+        const apiPath = `/settings/files/${identifier}/download`;
+        try {
+          const res = await api.get(apiPath);
+          const data = res?.data ?? res;
+          const downloadUrl = data?.download_url;
+          if (downloadUrl) window.open(downloadUrl, "_blank", "noopener,noreferrer");
+          else toast.error("Could not open file");
+        } catch (err) {
+          toast.error("Could not open file");
+        }
+      };
+      return (
+        <span className="flex items-center gap-2">
+          <Button type="button" variant="link" className="h-auto p-0 text-primary" onClick={handleFileOpen}>
+            {fileName || `File #${identifier}`}
+          </Button>
+          <span className="text-xs text-muted-foreground">(View)</span>
+        </span>
+      );
     }
     
     // Handle different field types
@@ -640,12 +741,14 @@ const TrackerEntryDetailPage = () => {
 
     // Status is only the tracker's default status (top "Change Status" dropdown). current_status in the form is just a normal field.
     try {
+      const currentStage = String(entry?.formatted_data?.derived_stage ?? "").trim();
+      const payload = { submission_data: entryData, status: entryStatus };
+      if (isStageStyledTracker && editModeStage && editModeStage.trim() !== currentStage) {
+        payload.stage = editModeStage.trim();
+      }
       await updateEntryMutation.mutateAsync({
         entryIdentifier: entrySlug,
-        entryData: {
-          submission_data: entryData,
-          status: entryStatus,
-        },
+        entryData: payload,
       });
       setIsEditing(false);
       toast.success("Entry updated successfully");
@@ -718,12 +821,78 @@ const TrackerEntryDetailPage = () => {
       setStageChangePending(null);
       setStageChangeNotes("");
       setStageChangeStatus("");
+      setActiveStageTab(stageName);
       toast.success(`Moved to ${stageName}`);
     } catch (error) {
       const detail = error?.response?.data?.detail;
       const message = typeof detail === "object" ? detail?.message : detail;
       toast.error(message || "Failed to move stage");
     }
+  };
+
+  const isStageStyledTracker = !!(tracker?.tracker_config?.use_stages !== false && stageMapping.length > 0);
+
+  // For stage-styled trackers with stage tabs: which section to show in Details (section index matches stage index)
+  const activeStageSectionIndex =
+    isStageStyledTracker && activeStageTab && stageMapping.length && sections.length
+      ? stageMapping.findIndex((s) => (s?.stage ?? s?.name ?? "").toString().trim() === (activeStageTab || "").toString().trim())
+      : -1;
+  const activeStageSection =
+    activeStageSectionIndex >= 0 && sections[activeStageSectionIndex]
+      ? sections[activeStageSectionIndex]
+      : null;
+  const showDetailsFilteredByStage = isStageStyledTracker && activeStageSection != null;
+
+  const openChangeStatusDialog = () => {
+    const curStage = String(entry?.formatted_data?.derived_stage ?? "").trim();
+    const initialStage = curStage || (stageMapping[0]?.stage ?? stageMapping[0]?.name ?? "");
+    const stageItem = stageMapping.find((s) => (s?.stage ?? s?.name ?? "").toString().trim() === initialStage);
+    const statuses = (stageItem?.statuses ?? stageItem?.status_list ?? []).filter(Boolean);
+    const curStatus = entry?.status ?? "";
+    const defaultStatus = statuses.length && (statuses.includes(curStatus) ? curStatus : statuses[0]) || "";
+    setChangeStatusStage(initialStage);
+    setStageChangeStatus(defaultStatus);
+    setChangeStatusNote("");
+    setIsChangeStatusDialogOpen(true);
+  };
+
+  const confirmChangeStatus = async () => {
+    const stageName = (changeStatusStage ?? "").toString().trim();
+    const statuses = statusesForChangeStatusStage;
+    if (statuses.length > 0 && !stageChangeStatus) {
+      toast.error("Please select a status.");
+      return;
+    }
+    try {
+      const entryDataPayload = { status: stageChangeStatus };
+      if (stageName) entryDataPayload.stage = stageName;
+      const noteTrimmed = (changeStatusNote ?? "").toString().trim();
+      if (noteTrimmed) entryDataPayload.notes = noteTrimmed;
+      await updateEntryMutation.mutateAsync({
+        entryIdentifier: entrySlug,
+        entryData: entryDataPayload,
+      });
+      setIsChangeStatusDialogOpen(false);
+      setChangeStatusStage("");
+      setStageChangeStatus("");
+      setChangeStatusNote("");
+      if (stageName) setActiveStageTab(stageName);
+      toast.success("Status updated");
+    } catch (error) {
+      const detail = error?.response?.data?.detail;
+      const message = typeof detail === "object" ? detail?.message : detail;
+      toast.error(message || "Failed to update status");
+    }
+  };
+
+  const handleChangeStatusStageSelect = (stageName) => {
+    const name = (stageName ?? "").toString().trim();
+    if (!name) return;
+    setChangeStatusStage(name);
+    const stageItem = stageMapping.find((s) => (s?.stage ?? s?.name ?? "").toString().trim() === name);
+    const statuses = (stageItem?.statuses ?? stageItem?.status_list ?? []).filter(Boolean);
+    const curStatus = entry?.status ?? "";
+    setStageChangeStatus(statuses.includes(curStatus) ? curStatus : (statuses[0] ?? ""));
   };
 
   return (
@@ -765,18 +934,65 @@ const TrackerEntryDetailPage = () => {
         <div className="flex flex-wrap items-center gap-2 shrink-0">
           {isEditing ? (
             <>
-              <Select value={entryStatus} onValueChange={setEntryStatus}>
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {(tracker?.tracker_config?.statuses || ["open", "in_progress", "pending", "resolved", "closed"]).map((status) => (
-                    <SelectItem key={status} value={status}>
-                      {humanizeStatusForDisplay(status)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {isStageStyledTracker ? (
+                <>
+                  <Select
+                    value={editModeStage || ""}
+                    onValueChange={(stageName) => {
+                      const name = (stageName ?? "").toString().trim();
+                      if (!name) return;
+                      setEditModeStage(name);
+                      const stageItem = stageMapping.find((s) => (s?.stage ?? s?.name ?? "").toString().trim() === name);
+                      const statuses = (stageItem?.statuses ?? stageItem?.status_list ?? []).filter(Boolean);
+                      const cur = entry?.status ?? "";
+                      setEntryStatus(statuses.includes(cur) ? cur : (statuses[0] ?? ""));
+                    }}
+                  >
+                    <SelectTrigger className="w-[160px]">
+                      <SelectValue placeholder="Stage" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(tracker?.tracker_config?.stage_mapping || []).map((item) => {
+                        const stageName = item?.stage ?? item?.name ?? "";
+                        if (!stageName) return null;
+                        return (
+                          <SelectItem key={stageName} value={stageName}>
+                            {stageName}
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                  <Select
+                    value={statusesForEditModeStage.includes(entryStatus) ? entryStatus : (statusesForEditModeStage[0] ?? "")}
+                    onValueChange={setEntryStatus}
+                  >
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue placeholder="Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {statusesForEditModeStage.map((status) => (
+                        <SelectItem key={status} value={status}>
+                          {humanizeStatusForDisplay(status)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </>
+              ) : (
+                <Select value={entryStatus} onValueChange={setEntryStatus}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(tracker?.tracker_config?.statuses || ["open", "in_progress", "pending", "resolved", "closed"]).map((status) => (
+                      <SelectItem key={status} value={status}>
+                        {humanizeStatusForDisplay(status)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
               <Button onClick={handleSave} disabled={updateEntryMutation.isPending}>
                 {updateEntryMutation.isPending && (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -875,37 +1091,48 @@ const TrackerEntryDetailPage = () => {
               <span className="text-sm font-medium text-muted-foreground">Status</span>
               <Badge variant="outline" className="font-normal">{humanizeStatusForDisplay(entry?.status || "open")}</Badge>
             </div>
-            {tracker?.tracker_config?.use_stages !== false && tracker?.tracker_config?.stage_mapping?.length > 0 && (
-              <div className="w-full basis-full flex flex-wrap items-center gap-1.5">
-                <span className="text-sm font-medium text-muted-foreground shrink-0">Stages:</span>
-                {(tracker.tracker_config.stage_mapping || []).map((item, index) => {
-                  const stageName = item?.stage ?? item?.name ?? "";
-                  if (!stageName) return null;
-                  const isCurrent = (entry?.formatted_data?.derived_stage ?? "") === stageName;
-                  const stages = tracker.tracker_config.stage_mapping || [];
-                  const isLast = index === stages.length - 1;
-                  return (
-                    <React.Fragment key={stageName}>
-                      <Badge
-                        variant={isCurrent ? "default" : "outline"}
-                        className={cn(
-                          "font-normal",
-                          isCurrent && "ring-2 ring-primary ring-offset-2"
-                        )}
-                      >
-                        {stageName}
-                      </Badge>
-                      {!isLast && (
-                        <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" aria-hidden />
-                      )}
-                    </React.Fragment>
-                  );
-                })}
-              </div>
-            )}
           </div>
         </CardContent>
       </Card>
+
+      {/* Stage tabs: one tab per stage, then Entry data (last); current stage open by default (stage-styled trackers only) */}
+      {isStageStyledTracker && stageMapping.length > 0 && (
+        <Tabs
+          value={activeStageTab || currentStage || (stageMapping[0]?.stage ?? stageMapping[0]?.name ?? "")}
+          onValueChange={setActiveStageTab}
+          className="w-full"
+        >
+          <div className="overflow-x-auto -mx-1 px-1 sm:overflow-x-visible sm:mx-0 sm:px-0">
+            <TabsList className="inline-flex w-auto min-w-max sm:w-auto h-auto flex-wrap gap-1 bg-muted/50">
+              {(tracker?.tracker_config?.stage_mapping || []).map((item) => {
+                const stageName = item?.stage ?? item?.name ?? "";
+                if (!stageName) return null;
+                const isCurrent = (entry?.formatted_data?.derived_stage ?? "") === stageName;
+                return (
+                  <TabsTrigger
+                    key={stageName}
+                    value={stageName}
+                    className={cn(
+                      "font-normal",
+                      isCurrent && "ring-2 ring-primary ring-offset-2"
+                    )}
+                  >
+                    {stageName}
+                    {isCurrent && (
+                      <span className="ml-1.5 text-xs text-muted-foreground font-normal">(current)</span>
+                    )}
+                  </TabsTrigger>
+                );
+              })}
+              {fieldsWithoutSection.length > 0 && (
+                <TabsTrigger key={ENTRY_DATA_TAB} value={ENTRY_DATA_TAB} className="font-normal text-muted-foreground">
+                  Entry data
+                </TabsTrigger>
+              )}
+            </TabsList>
+          </div>
+        </Tabs>
+      )}
 
       {/* Phase 4.2 / 5.2: Actions – Change Status, Next stage, Add Note, Create Task, Send SMS (5.4: disabled when closed) */}
       {canEditCase && (
@@ -913,7 +1140,7 @@ const TrackerEntryDetailPage = () => {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => setIsEditing(true)}
+            onClick={() => (isStageStyledTracker ? openChangeStatusDialog() : setIsEditing(true))}
           >
             <Edit className="mr-2 h-4 w-4" />
             Change Status
@@ -1118,50 +1345,164 @@ const TrackerEntryDetailPage = () => {
 
           {isEditing ? (
             <div className="space-y-4">
-              {/* Render fields without sections first */}
-              {fieldsWithoutSection.length > 0 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Entry Data</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {fieldsWithoutSection.map((field) => {
-                      const fieldId = field.id || field.name || field.field_id;
-                      const value = entryData[fieldId];
-                      return (
-                        <CustomFieldRenderer
-                          key={fieldId}
-                          field={{
-                            ...field,
-                            type: field.type || field.field_type,
-                            field_label: field.label || field.field_label || field.name, // Map label to field_label for CustomFieldRenderer
-                            field_name: field.name || field.id, // Map name to field_name
-                          }}
-                          value={value}
-                          onChange={handleFieldChange}
-                          error={fieldErrors[fieldId]}
-                          readOnly={false}
-                        />
-                      );
-                    })}
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Render fields by section for editing */}
-              {sections.length > 0 && (
-                sections.map((section, sectionIndex) => {
-                  const sectionKey = section.id ?? section.title ?? section.label ?? `section-${sectionIndex}`;
-                  const sectionFields = fieldsBySection[sectionKey]?.fields || [];
-                  if (sectionFields.length === 0) return null;
-
-                  return (
-                    <Card key={sectionKey}>
+              {/* Stage-styled + Entry data tab: show only shared/entry data (summarises across stages) */}
+              {isStageStyledTracker && activeStageTab === ENTRY_DATA_TAB ? (
+                fieldsWithoutSection.length > 0 ? (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Entry data</CardTitle>
+                      <p className="text-sm text-muted-foreground">Shared fields that apply across stages.</p>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      {/* Metadata: created, created by, last updated, last updated by */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 py-3 px-4 rounded-lg bg-muted/40 text-sm">
+                        <div>
+                          <span className="text-muted-foreground">Created</span>
+                          <p className="font-medium">{entry?.created_at ? format(parseUTCDate(entry.created_at), "PPp") : "—"}</p>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Created by</span>
+                          <p className="font-medium">{entry?.submitted_by_display_name || (entry?.submitted_by_user_id ? `User #${entry.submitted_by_user_id}` : null) || "—"}</p>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Last updated</span>
+                          <p className="font-medium">{entry?.updated_at ? format(parseUTCDate(entry.updated_at), "PPp") : "—"}</p>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Last updated by</span>
+                          <p className="font-medium">{entry?.updated_by_display_name || (entry?.updated_by_user_id ? `User #${entry.updated_by_user_id}` : null) || "—"}</p>
+                        </div>
+                      </div>
+                      {fieldsWithoutSection.map((field) => {
+                        const fieldId = field.id || field.name || field.field_id;
+                        const value = entryData[fieldId];
+                        return (
+                          <CustomFieldRenderer
+                            key={fieldId}
+                            field={{
+                              ...field,
+                              type: field.type || field.field_type,
+                              field_label: field.label || field.field_label || field.name,
+                              field_name: field.name || field.id,
+                            }}
+                            value={value}
+                            onChange={handleFieldChange}
+                            error={fieldErrors[fieldId]}
+                            readOnly={false}
+                          />
+                        );
+                      })}
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 py-3 px-4 rounded-lg bg-muted/40 text-sm">
+                      <div><span className="text-muted-foreground">Created</span><p className="font-medium">{entry?.created_at ? format(parseUTCDate(entry.created_at), "PPp") : "—"}</p></div>
+                      <div><span className="text-muted-foreground">Created by</span><p className="font-medium">{entry?.submitted_by_display_name || (entry?.submitted_by_user_id ? `User #${entry.submitted_by_user_id}` : null) || "—"}</p></div>
+                      <div><span className="text-muted-foreground">Last updated</span><p className="font-medium">{entry?.updated_at ? format(parseUTCDate(entry.updated_at), "PPp") : "—"}</p></div>
+                      <div><span className="text-muted-foreground">Last updated by</span><p className="font-medium">{entry?.updated_by_display_name || (entry?.updated_by_user_id ? `User #${entry.updated_by_user_id}` : null) || "—"}</p></div>
+                    </div>
+                    <p className="text-sm text-muted-foreground py-4">No shared fields for this tracker.</p>
+                  </>
+                )
+              ) : showDetailsFilteredByStage ? (
+                <>
+                  {/* Current stage section only (no Entry data at top; use Entry data tab for that) */}
+                  {activeStageSection && (() => {
+                    const sectionKey = activeStageSection.id ?? activeStageSection.title ?? activeStageSection.label ?? `section-${activeStageSectionIndex}`;
+                    const sectionFields = fieldsBySection[sectionKey]?.fields || [];
+                    if (sectionFields.length === 0) return null;
+                    return (
+                      <Card key={sectionKey}>
+                        <CardHeader>
+                          <CardTitle>{activeStageSection.label || activeStageSection.id}</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                          {sectionFields.map((field) => {
+                            const fieldId = field.id || field.name || field.field_id;
+                            const value = entryData[fieldId];
+                            return (
+                              <CustomFieldRenderer
+                                key={fieldId}
+                                field={{
+                                  ...field,
+                                  type: field.type || field.field_type,
+                                  field_label: field.label || field.field_label || field.name,
+                                  field_name: field.name || field.id,
+                                }}
+                                value={value}
+                                onChange={handleFieldChange}
+                                error={fieldErrors[fieldId]}
+                                readOnly={false}
+                              />
+                            );
+                          })}
+                        </CardContent>
+                      </Card>
+                    );
+                  })()}
+                  {/* Other stages: expand to see previous/other stage data */}
+                  {sections.filter((_, i) => i !== activeStageSectionIndex).length > 0 && (
+                    <Collapsible className="group rounded-lg border bg-muted/30">
+                      <CollapsibleTrigger className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-medium hover:bg-muted/50 rounded-t-lg data-[state=open]:rounded-b-none">
+                        <span className="text-muted-foreground">View other stages</span>
+                        <ChevronDown className="h-4 w-4 shrink-0 transition-transform duration-200 group-data-[state=open]:rotate-180" />
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <div className="rounded-b-lg border border-t-0 bg-background divide-y">
+                          {sections.map((section, sectionIndex) => {
+                            if (sectionIndex === activeStageSectionIndex) return null;
+                            const sectionKey = section.id ?? section.title ?? section.label ?? `section-${sectionIndex}`;
+                            const sectionFields = fieldsBySection[sectionKey]?.fields || [];
+                            if (sectionFields.length === 0) return null;
+                            const stageName = stageMapping[sectionIndex]?.stage ?? stageMapping[sectionIndex]?.name ?? section.label ?? sectionKey;
+                            return (
+                              <Collapsible key={sectionKey} className="group">
+                                <CollapsibleTrigger className="flex w-full items-center justify-between px-4 py-2.5 text-left text-sm hover:bg-muted/50">
+                                  <span>{stageName}</span>
+                                  <ChevronRight className="h-4 w-4 shrink-0 transition-transform duration-200 group-data-[state=open]:rotate-90" />
+                                </CollapsibleTrigger>
+                                <CollapsibleContent>
+                                  <div className="px-4 pb-4 pt-1 space-y-3">
+                                    {sectionFields.map((field) => {
+                                      const fieldId = field.id || field.name || field.field_id;
+                                      const value = entryData[fieldId];
+                                      return (
+                                        <CustomFieldRenderer
+                                          key={fieldId}
+                                          field={{
+                                            ...field,
+                                            type: field.type || field.field_type,
+                                            field_label: field.label || field.field_label || field.name,
+                                            field_name: field.name || field.id,
+                                          }}
+                                          value={value}
+                                          onChange={handleFieldChange}
+                                          error={fieldErrors[fieldId]}
+                                          readOnly={false}
+                                        />
+                                      );
+                                    })}
+                                  </div>
+                                </CollapsibleContent>
+                              </Collapsible>
+                            );
+                          })}
+                        </div>
+                      </CollapsibleContent>
+                    </Collapsible>
+                  )}
+                </>
+              ) : (
+                <>
+                  {/* Non-stage-styled: Entry Data card when there are fields without section */}
+                  {fieldsWithoutSection.length > 0 && (
+                    <Card>
                       <CardHeader>
-                        <CardTitle>{section.label || section.id}</CardTitle>
+                        <CardTitle>Entry Data</CardTitle>
                       </CardHeader>
                       <CardContent className="space-y-4">
-                        {sectionFields.map((field) => {
+                        {fieldsWithoutSection.map((field) => {
                           const fieldId = field.id || field.name || field.field_id;
                           const value = entryData[fieldId];
                           return (
@@ -1170,8 +1511,8 @@ const TrackerEntryDetailPage = () => {
                               field={{
                                 ...field,
                                 type: field.type || field.field_type,
-                                field_label: field.label || field.field_label || field.name, // Map label to field_label for CustomFieldRenderer
-                                field_name: field.name || field.id, // Map name to field_name
+                                field_label: field.label || field.field_label || field.name,
+                                field_name: field.name || field.id,
                               }}
                               value={value}
                               onChange={handleFieldChange}
@@ -1182,163 +1523,291 @@ const TrackerEntryDetailPage = () => {
                         })}
                       </CardContent>
                     </Card>
-                  );
-                })
-              )}
+                  )}
 
-              {/* Fallback: If no sections and no fields without sections, show all fields */}
-              {sections.length === 0 && fieldsWithoutSection.length === 0 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Entry Data</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {trackerFields.length > 0 ? (
-                      trackerFields.map((field) => {
-                        const fieldId = field.id || field.name || field.field_id;
-                        const value = entryData[fieldId];
-                        return (
-                          <CustomFieldRenderer
-                            key={fieldId}
-                            field={{
-                              ...field,
-                              type: field.type || field.field_type,
-                              field_label: field.label || field.field_label || field.name, // Map label to field_label for CustomFieldRenderer
-                              field_name: field.name || field.id, // Map name to field_name
-                            }}
-                            value={value}
-                            onChange={handleFieldChange}
-                            error={fieldErrors[fieldId]}
-                            readOnly={false}
-                          />
-                        );
-                      })
-                    ) : (
-                      <p className="text-sm text-muted-foreground">
-                        No fields defined for this tracker
-                      </p>
-                    )}
-                  </CardContent>
-                </Card>
-              )}
+                  {/* Render fields by section for editing (all sections when not stage-filtered) */}
+                  {sections.length > 0 && (
+                    sections.map((section, sectionIndex) => {
+                      const sectionKey = section.id ?? section.title ?? section.label ?? `section-${sectionIndex}`;
+                      const sectionFields = fieldsBySection[sectionKey]?.fields || [];
+                      if (sectionFields.length === 0) return null;
 
+                      return (
+                        <Card key={sectionKey}>
+                          <CardHeader>
+                            <CardTitle>{section.label || section.id}</CardTitle>
+                          </CardHeader>
+                          <CardContent className="space-y-4">
+                            {sectionFields.map((field) => {
+                              const fieldId = field.id || field.name || field.field_id;
+                              const value = entryData[fieldId];
+                              return (
+                                <CustomFieldRenderer
+                                  key={fieldId}
+                                  field={{
+                                    ...field,
+                                    type: field.type || field.field_type,
+                                    field_label: field.label || field.field_label || field.name,
+                                    field_name: field.name || field.id,
+                                  }}
+                                  value={value}
+                                  onChange={handleFieldChange}
+                                  error={fieldErrors[fieldId]}
+                                  readOnly={false}
+                                />
+                              );
+                            })}
+                          </CardContent>
+                        </Card>
+                      );
+                    })
+                  )}
+
+                  {/* Fallback: If no sections and no fields without sections, show all fields */}
+                  {sections.length === 0 && fieldsWithoutSection.length === 0 && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Entry Data</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        {trackerFields.length > 0 ? (
+                          trackerFields.map((field) => {
+                            const fieldId = field.id || field.name || field.field_id;
+                            const value = entryData[fieldId];
+                            return (
+                              <CustomFieldRenderer
+                                key={fieldId}
+                                field={{
+                                  ...field,
+                                  type: field.type || field.field_type,
+                                  field_label: field.label || field.field_label || field.name,
+                                  field_name: field.name || field.id,
+                                }}
+                                value={value}
+                                onChange={handleFieldChange}
+                                error={fieldErrors[fieldId]}
+                                readOnly={false}
+                              />
+                            );
+                          })
+                        ) : (
+                          <p className="text-sm text-muted-foreground">
+                            No fields defined for this tracker
+                          </p>
+                        )}
+                      </CardContent>
+                    </Card>
+                  )}
+                </>
+              )}
             </div>
           ) : (
             <div className="space-y-4">
-              {/* Render fields without sections first */}
-              {fieldsWithoutSection.length > 0 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Entry Data</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {fieldsWithoutSection.map((field) => {
-                      // Prefer formatted_data for display, fallback to submission_data
-                      const displayData = entry.formatted_data || entry.submission_data || entry.entry_data || {};
-                      
-                      // Fields use 'id' or 'name' to match submission_data keys (not 'field_id')
-                      // Priority: id -> name -> field_id (for backward compatibility)
-                      const fieldId = field.id || field.name || field.field_id;
-                      
-                      // Get value from displayData using the field identifier
-                      const value = fieldId ? displayData[fieldId] : null;
-                      
-                      return (
-                        <div key={field.id || field.name || field.field_id}>
-                          <label className="text-sm font-medium text-muted-foreground">
-                            {field.label || "Untitled Field"}
-                          </label>
-                          <div className="mt-1">
-                            <div className="text-sm">{formatFieldValue(field, value)}</div>
-                          </div>
+              {/* Stage-styled + Entry data tab: show only shared/entry data (summarises across stages) */}
+              {isStageStyledTracker && activeStageTab === ENTRY_DATA_TAB ? (
+                fieldsWithoutSection.length > 0 ? (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Entry data</CardTitle>
+                      <p className="text-sm text-muted-foreground">Shared fields that apply across stages.</p>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      {/* Metadata: created, created by, last updated, last updated by */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 py-3 px-4 rounded-lg bg-muted/40 text-sm">
+                        <div>
+                          <span className="text-muted-foreground">Created</span>
+                          <p className="font-medium">{entry?.created_at ? format(parseUTCDate(entry.created_at), "PPp") : "—"}</p>
                         </div>
-                      );
-                    })}
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Render fields by section */}
-              {sections.length > 0 ? (
-                sections.map((section, sectionIndex) => {
-                  const sectionKey = section.id ?? section.title ?? section.label ?? `section-${sectionIndex}`;
-                  const sectionFields = fieldsBySection[sectionKey]?.fields || [];
-                  if (sectionFields.length === 0) return null;
-
-                  return (
-                    <Card key={sectionKey}>
+                        <div>
+                          <span className="text-muted-foreground">Created by</span>
+                          <p className="font-medium">{entry?.submitted_by_display_name || (entry?.submitted_by_user_id ? `User #${entry.submitted_by_user_id}` : null) || "—"}</p>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Last updated</span>
+                          <p className="font-medium">{entry?.updated_at ? format(parseUTCDate(entry.updated_at), "PPp") : "—"}</p>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Last updated by</span>
+                          <p className="font-medium">{entry?.updated_by_display_name || (entry?.updated_by_user_id ? `User #${entry.updated_by_user_id}` : null) || "—"}</p>
+                        </div>
+                      </div>
+                      {fieldsWithoutSection.map((field) => {
+                        const displayData = entry.formatted_data || entry.submission_data || entry.entry_data || {};
+                        const fieldId = field.id || field.name || field.field_id;
+                        const value = fieldId ? displayData[fieldId] : null;
+                        return (
+                          <div key={field.id || field.name || field.field_id}>
+                            <label className="text-sm font-medium text-muted-foreground">{field.label || "Untitled Field"}</label>
+                            <div className="mt-1 text-sm">{formatFieldValue(field, value)}</div>
+                          </div>
+                        );
+                      })}
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 py-3 px-4 rounded-lg bg-muted/40 text-sm">
+                      <div><span className="text-muted-foreground">Created</span><p className="font-medium">{entry?.created_at ? format(parseUTCDate(entry.created_at), "PPp") : "—"}</p></div>
+                      <div><span className="text-muted-foreground">Created by</span><p className="font-medium">{entry?.submitted_by_display_name || (entry?.submitted_by_user_id ? `User #${entry.submitted_by_user_id}` : null) || "—"}</p></div>
+                      <div><span className="text-muted-foreground">Last updated</span><p className="font-medium">{entry?.updated_at ? format(parseUTCDate(entry.updated_at), "PPp") : "—"}</p></div>
+                      <div><span className="text-muted-foreground">Last updated by</span><p className="font-medium">{entry?.updated_by_display_name || (entry?.updated_by_user_id ? `User #${entry.updated_by_user_id}` : null) || "—"}</p></div>
+                    </div>
+                    <p className="text-sm text-muted-foreground py-4">No shared fields for this tracker.</p>
+                  </>
+                )
+              ) : showDetailsFilteredByStage ? (
+                <>
+                  {/* Current stage section only (no Entry data at top; use Entry data tab for that) */}
+                  {activeStageSection && (() => {
+                    const displayData = entry.formatted_data || entry.submission_data || entry.entry_data || {};
+                    const sectionKey = activeStageSection.id ?? activeStageSection.title ?? activeStageSection.label ?? `section-${activeStageSectionIndex}`;
+                    const sectionFields = fieldsBySection[sectionKey]?.fields || [];
+                    if (sectionFields.length === 0) return null;
+                    return (
+                      <Card key={sectionKey}>
+                        <CardHeader>
+                          <CardTitle>{activeStageSection.label || activeStageSection.id}</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                          {sectionFields.map((field) => {
+                            const fieldId = field.id || field.name || field.field_id;
+                            const value = fieldId ? displayData[fieldId] : null;
+                            return (
+                              <div key={field.id || field.name || field.field_id}>
+                                <label className="text-sm font-medium text-muted-foreground">{field.label || "Untitled Field"}</label>
+                                <div className="mt-1 text-sm">{formatFieldValue(field, value)}</div>
+                              </div>
+                            );
+                          })}
+                        </CardContent>
+                      </Card>
+                    );
+                  })()}
+                  {/* Other stages: expand to see previous/other stage data */}
+                  {sections.filter((_, i) => i !== activeStageSectionIndex).length > 0 && (
+                    <Collapsible className="group rounded-lg border bg-muted/30">
+                      <CollapsibleTrigger className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-medium hover:bg-muted/50 rounded-t-lg data-[state=open]:rounded-b-none">
+                        <span className="text-muted-foreground">View other stages</span>
+                        <ChevronDown className="h-4 w-4 shrink-0 transition-transform duration-200 group-data-[state=open]:rotate-180" />
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <div className="rounded-b-lg border border-t-0 bg-background divide-y">
+                          {sections.map((section, sectionIndex) => {
+                            if (sectionIndex === activeStageSectionIndex) return null;
+                            const displayData = entry.formatted_data || entry.submission_data || entry.entry_data || {};
+                            const sectionKey = section.id ?? section.title ?? section.label ?? `section-${sectionIndex}`;
+                            const sectionFields = fieldsBySection[sectionKey]?.fields || [];
+                            if (sectionFields.length === 0) return null;
+                            const stageName = stageMapping[sectionIndex]?.stage ?? stageMapping[sectionIndex]?.name ?? section.label ?? sectionKey;
+                            return (
+                              <Collapsible key={sectionKey} className="group">
+                                <CollapsibleTrigger className="flex w-full items-center justify-between px-4 py-2.5 text-left text-sm hover:bg-muted/50">
+                                  <span>{stageName}</span>
+                                  <ChevronRight className="h-4 w-4 shrink-0 transition-transform duration-200 group-data-[state=open]:rotate-90" />
+                                </CollapsibleTrigger>
+                                <CollapsibleContent>
+                                  <div className="px-4 pb-4 pt-1 space-y-3">
+                                    {sectionFields.map((field) => {
+                                      const fieldId = field.id || field.name || field.field_id;
+                                      const value = fieldId ? displayData[fieldId] : null;
+                                      return (
+                                        <div key={field.id || field.name || field.field_id}>
+                                          <label className="text-sm font-medium text-muted-foreground">{field.label || "Untitled Field"}</label>
+                                          <div className="mt-1 text-sm">{formatFieldValue(field, value)}</div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </CollapsibleContent>
+                              </Collapsible>
+                            );
+                          })}
+                        </div>
+                      </CollapsibleContent>
+                    </Collapsible>
+                  )}
+                </>
+              ) : (
+                <>
+                  {/* Non-stage-styled: Entry Data card when there are fields without section */}
+                  {fieldsWithoutSection.length > 0 && (
+                    <Card>
                       <CardHeader>
-                        <CardTitle>{section.label || section.id}</CardTitle>
+                        <CardTitle>Entry Data</CardTitle>
                       </CardHeader>
                       <CardContent className="space-y-4">
-                        {sectionFields.map((field) => {
-                          // Prefer formatted_data for display, fallback to submission_data
+                        {fieldsWithoutSection.map((field) => {
                           const displayData = entry.formatted_data || entry.submission_data || entry.entry_data || {};
-                          
-                          // Fields use 'id' or 'name' to match submission_data keys (not 'field_id')
-                          // Priority: id -> name -> field_id (for backward compatibility)
                           const fieldId = field.id || field.name || field.field_id;
-                          
-                          // Get value from displayData using the field identifier
                           const value = fieldId ? displayData[fieldId] : null;
-                          
                           return (
                             <div key={field.id || field.name || field.field_id}>
-                              <label className="text-sm font-medium text-muted-foreground">
-                                {field.label || "Untitled Field"}
-                              </label>
-                              <div className="mt-1">
-                                <div className="text-sm">{formatFieldValue(field, value)}</div>
-                              </div>
+                              <label className="text-sm font-medium text-muted-foreground">{field.label || "Untitled Field"}</label>
+                              <div className="mt-1 text-sm">{formatFieldValue(field, value)}</div>
                             </div>
                           );
                         })}
                       </CardContent>
                     </Card>
-                  );
-                })
-              ) : null}
-              
-              {/* Fallback: If no sections and no fields without sections, show all fields */}
-              {sections.length === 0 && fieldsWithoutSection.length === 0 ? (
-                // If no sections, render all fields in a single card
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Entry Data</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {trackerFields.length > 0 ? (
-                      trackerFields.map((field) => {
-                        // Prefer formatted_data for display, fallback to submission_data
-                        const displayData = entry.formatted_data || entry.submission_data || entry.entry_data || {};
-                        
-                        // Fields use 'id' or 'name' to match submission_data keys (not 'field_id')
-                        // Priority: id -> name -> field_id (for backward compatibility)
-                        const fieldId = field.id || field.name || field.field_id;
-                        
-                        // Get value from displayData using the field identifier
-                        const value = fieldId ? displayData[fieldId] : null;
-                        
-                        return (
-                          <div key={field.id || field.name || field.field_id}>
-                            <label className="text-sm font-medium text-muted-foreground">
-                              {field.label || "Untitled Field"}
-                            </label>
-                            <div className="mt-1">
-                              <div className="text-sm">{formatFieldValue(field, value)}</div>
-                            </div>
-                          </div>
-                        );
-                      })
-                    ) : (
-                      <p className="text-sm text-muted-foreground">
-                        No fields defined for this tracker
-                      </p>
-                    )}
-                  </CardContent>
-                </Card>
-              ) : null}
+                  )}
 
+                  {/* Render fields by section (all sections when not stage-filtered) */}
+                  {sections.length > 0 ? (
+                    sections.map((section, sectionIndex) => {
+                      const displayData = entry.formatted_data || entry.submission_data || entry.entry_data || {};
+                      const sectionKey = section.id ?? section.title ?? section.label ?? `section-${sectionIndex}`;
+                      const sectionFields = fieldsBySection[sectionKey]?.fields || [];
+                      if (sectionFields.length === 0) return null;
+
+                      return (
+                        <Card key={sectionKey}>
+                          <CardHeader>
+                            <CardTitle>{section.label || section.id}</CardTitle>
+                          </CardHeader>
+                          <CardContent className="space-y-4">
+                            {sectionFields.map((field) => {
+                              const fieldId = field.id || field.name || field.field_id;
+                              const value = fieldId ? displayData[fieldId] : null;
+                              return (
+                                <div key={field.id || field.name || field.field_id}>
+                                  <label className="text-sm font-medium text-muted-foreground">{field.label || "Untitled Field"}</label>
+                                  <div className="mt-1 text-sm">{formatFieldValue(field, value)}</div>
+                                </div>
+                              );
+                            })}
+                          </CardContent>
+                        </Card>
+                      );
+                    })
+                  ) : null}
+
+                  {/* Fallback: If no sections and no fields without sections, show all fields */}
+                  {sections.length === 0 && fieldsWithoutSection.length === 0 ? (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Entry Data</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        {trackerFields.length > 0 ? (
+                          trackerFields.map((field) => {
+                            const displayData = entry.formatted_data || entry.submission_data || entry.entry_data || {};
+                            const fieldId = field.id || field.name || field.field_id;
+                            const value = fieldId ? displayData[fieldId] : null;
+                            return (
+                              <div key={field.id || field.name || field.field_id}>
+                                <label className="text-sm font-medium text-muted-foreground">{field.label || "Untitled Field"}</label>
+                                <div className="mt-1 text-sm">{formatFieldValue(field, value)}</div>
+                              </div>
+                            );
+                          })
+                        ) : (
+                          <p className="text-sm text-muted-foreground">No fields defined for this tracker</p>
+                        )}
+                      </CardContent>
+                    </Card>
+                  ) : null}
+                </>
+              )}
             </div>
           )}
         </TabsContent>
@@ -1408,17 +1877,41 @@ const TrackerEntryDetailPage = () => {
               </p>
             </CardHeader>
             <CardContent>
-              {attachmentsLoading ? (
+              {attachmentsLoading && formFileAttachments.length === 0 ? (
                 <div className="flex items-center justify-center py-6">
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                 </div>
-              ) : attachments.length === 0 ? (
+              ) : formFileAttachments.length === 0 && attachments.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-4">No attachments yet.</p>
               ) : (
                 <ul className="space-y-2">
+                  {/* Files uploaded at case creation (e.g. referral PDF) – visible for triage */}
+                  {formFileAttachments.map((att) => {
+                    const openFormFile = async () => {
+                      const id = att.file_reference_id ?? att.file_id;
+                      if (id == null) return;
+                      try {
+                        const res = await api.get(`/settings/files/${id}/download`);
+                        const data = res?.data ?? res;
+                        const downloadUrl = data?.download_url;
+                        if (downloadUrl) window.open(downloadUrl, "_blank", "noopener,noreferrer");
+                        else toast.error("Could not open file");
+                      } catch (err) {
+                        toast.error("Could not open file");
+                      }
+                    };
+                    return (
+                      <li key={att.key} className="flex items-center justify-between rounded border px-3 py-2 bg-muted/30">
+                        <span className="text-sm truncate">{att.label}: {att.file_name}</span>
+                        <Button variant="ghost" size="sm" onClick={openFormFile}>
+                          View
+                        </Button>
+                      </li>
+                    );
+                  })}
                   {attachments.map((att) => (
                     <li key={att.id} className="flex items-center justify-between rounded border px-3 py-2">
-                      <span className="text-sm truncate">{att.description || att.file_name || `File #${att.file_id}`}</span>
+                      <span className="text-sm truncate">{att.description || att.file_name || `File #${att.file_reference_id ?? att.file_id}`}</span>
                       {att.download_url ? (
                         <Button
                           variant="ghost"
@@ -1455,23 +1948,48 @@ const TrackerEntryDetailPage = () => {
                   <div className="absolute left-1/2 top-0 bottom-0 w-px bg-border transform -translate-x-1/2" />
                   
                   {/* Timeline events */}
-                  <div className="space-y-8">
+                  <div className="space-y-0">
                     {allTimelineEvents.map((event, index) => {
                       // Alternate between left and right (0 = left, 1 = right)
                       const isLeft = index % 2 === 0;
+                      const prevEvent = allTimelineEvents[index - 1];
+                      const daysBetween = index > 0 && prevEvent?.timestamp && event.timestamp
+                        ? Math.abs(differenceInDays(parseUTCDate(prevEvent.timestamp), parseUTCDate(event.timestamp)))
+                        : null;
                       
                       return (
-                        <div
-                          key={event.id || index}
-                          className={`relative flex ${isLeft ? "justify-start" : "justify-end"}`}
-                        >
-                          {/* Event content */}
-                          <div className={`w-[45%] ${isLeft ? "pr-8 text-right" : "pl-8 text-left"}`}>
-                            <div className="bg-card border rounded-lg p-4 shadow-sm">
-                              <div className="flex flex-col">
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2 flex-wrap">
-                                    <h4 className="font-medium">{event.title}</h4>
+                        <div key={event.id || index} className="relative">
+                          {/* Days between this event and the previous (on the vertical line) */}
+                          {daysBetween != null && (
+                            <div className="flex justify-center py-1">
+                              <span className="text-xs text-muted-foreground bg-background px-2 py-0.5 rounded border z-10">
+                                {daysBetween === 0 ? "Same day" : `${daysBetween} day${daysBetween === 1 ? "" : "s"}`}
+                              </span>
+                            </div>
+                          )}
+                          <div className={`relative flex ${isLeft ? "justify-start" : "justify-end"} pt-2 pb-6`}>
+                            {/* Event content */}
+                            <div className={`w-[45%] ${isLeft ? "pr-8 text-right" : "pl-8 text-left"}`}>
+                              <div className="bg-card border rounded-lg p-4 shadow-sm">
+                                <div className="flex flex-col">
+                                  <div className="flex-1 min-w-0">
+                                    {/* Stage and status at top of each entry */}
+                                    {(event.stage || event.status) && (
+                                      <div className="flex items-center gap-2 flex-wrap mb-2 pb-2 border-b">
+                                        {event.stage && (
+                                          <Badge variant="secondary" className="text-xs font-normal">
+                                            {event.stage}
+                                          </Badge>
+                                        )}
+                                        {event.status && (
+                                          <Badge variant="outline" className="text-xs font-normal">
+                                            {event.status}
+                                          </Badge>
+                                        )}
+                                      </div>
+                                    )}
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <h4 className="font-medium">{event.title}</h4>
                                     {event.note_category && (
                                       <Badge variant="secondary" className="text-xs">
                                         {event.note_category}
@@ -1516,6 +2034,7 @@ const TrackerEntryDetailPage = () => {
                           {/* Center dot */}
                           <div className="absolute left-1/2 transform -translate-x-1/2 w-3 h-3 rounded-full bg-primary border-2 border-background z-10" />
                         </div>
+                          </div>
                       );
                     })}
                   </div>
@@ -2050,6 +2569,98 @@ const TrackerEntryDetailPage = () => {
             >
               {updateEntryMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               Move
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Change status dialog: Stage then Status (stage-styled trackers only) */}
+      <Dialog
+        open={isChangeStatusDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setIsChangeStatusDialogOpen(false);
+            setChangeStatusStage("");
+            setStageChangeStatus("");
+            setChangeStatusNote("");
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Change status</DialogTitle>
+            <DialogDescription>
+              Pick a stage, then the status for that stage. Only statuses for the selected stage are shown.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="change-status-stage">Stage</Label>
+              <Select
+                value={changeStatusStage || ""}
+                onValueChange={handleChangeStatusStageSelect}
+              >
+                <SelectTrigger id="change-status-stage">
+                  <SelectValue placeholder="Select stage" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(tracker?.tracker_config?.stage_mapping || []).map((item) => {
+                    const stageName = item?.stage ?? item?.name ?? "";
+                    if (!stageName) return null;
+                    const isCurrent = (entry?.formatted_data?.derived_stage ?? "") === stageName;
+                    return (
+                      <SelectItem key={stageName} value={stageName}>
+                        {stageName}{isCurrent ? " (current)" : ""}
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+            </div>
+            {statusesForChangeStatusStage.length > 0 && (
+              <div className="space-y-2">
+                <Label htmlFor="change-status-status">Status</Label>
+                <Select
+                  value={stageChangeStatus}
+                  onValueChange={setStageChangeStatus}
+                >
+                  <SelectTrigger id="change-status-status">
+                    <SelectValue placeholder="Select status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {statusesForChangeStatusStage.map((s) => (
+                      <SelectItem key={s} value={s}>
+                        {humanizeStatusForDisplay(s)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            {statusesForChangeStatusStage.length === 0 && changeStatusStage && (
+              <p className="text-sm text-amber-600">This stage has no statuses configured.</p>
+            )}
+            <div className="space-y-2">
+              <Label htmlFor="change-status-note">Note (optional)</Label>
+              <Textarea
+                id="change-status-note"
+                placeholder="e.g. Updated after call"
+                value={changeStatusNote}
+                onChange={(e) => setChangeStatusNote(e.target.value)}
+                className="min-h-[60px] resize-y"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setIsChangeStatusDialogOpen(false); setChangeStatusStage(""); setStageChangeStatus(""); setChangeStatusNote(""); }}>
+              Cancel
+            </Button>
+            <Button
+              onClick={confirmChangeStatus}
+              disabled={updateEntryMutation.isPending || (statusesForChangeStatusStage.length > 0 && !stageChangeStatus)}
+            >
+              {updateEntryMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Update status
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -60,16 +60,25 @@ This is a Next.js frontend application for the Melode project. The codebase uses
   - Example: `href={`/admin/trackers/entries/${entry.slug || entry.id}`}`
 - **Tracker entries specifically:** Always use `entry.slug || entry.id` when linking to or referencing tracker entries
 
-## File Handling
-- **NEVER store or use direct S3 signed URLs directly** - they expire and become invalid
-- **ALWAYS use file references (file_slug) instead of signed URLs** for persistent storage
-- When displaying or downloading files, use `file_slug` with `filesService.getFileUrl(fileSlug)` to get a fresh signed URL
-- The backend provides both `file_slug` (persistent reference) and `download_url` (temporary signed URL) in responses
-- Prefer `file_slug` over `download_url` - use `download_url` only as a fallback if `file_slug` is not available
-- Store file references (slugs) in state/database, not signed URLs
-- **ALWAYS use the generic upload endpoint** (`/settings/files/upload` via `profileService.uploadFile` or `useUploadFile` hook) for all file uploads
-- **NEVER upload files directly to entity-specific endpoints** (e.g., compliance upload endpoint)
-- Upload flow: First upload file using generic endpoint → Get file_slug from response → Send file_slug to entity-specific endpoint
-- The generic upload endpoint returns a file reference (file_slug/id) which should be stored, not the file itself
-- For compliance uploads: Upload file using `profileService.uploadFile()`, then send the returned `file_slug` to the compliance endpoint
+## File Handling (Cursor knowledge – upload & retrieve)
+
+**Endpoints:**
+- Upload: `POST /api/v1/settings/files/upload`
+- Retrieve URL: `GET /api/v1/settings/files/{file_identifier}/download`
+
+**Process 1 – Upload (correct when):**
+1. Upload using the upload endpoint above.
+2. From the response, get `file_reference_id` (or fallback to `file_id` if that’s all the backend returns).
+3. Pass that value as the **form submission value for the file field** (key = field name / field_id). Do not send the raw File object in the submission.
+
+**Process 2 – Retrieve (correct when):**
+1. When you have entry/details, the value for the file field (key = **field name**) is `file_reference_id` (or `file_id`).
+2. Call the file URL endpoint: `GET /api/v1/settings/files/{file_reference_id}/download` (or use `file_id` if that’s what you have).
+3. The endpoint returns **JSON** (e.g. `{ "download_url": "https://...", "file_id": 70 }`). Do **not** request this endpoint with `responseType: "blob"`.
+4. Use the **`download_url`** from the response (e.g. `window.open(download_url)`) to open or download the file.
+
+**Rules:**
+- **NEVER** store or use direct S3 signed URLs for persistence; they expire. Store only `file_reference_id` (or `file_id`) per field.
+- **ALWAYS** use the upload endpoint above for file uploads; then put the returned reference into the form submission for that field.
+- To show a “View”/“Download” link: call the retrieve endpoint with the field’s value (file_reference_id/file_id), then open the returned `download_url`.
 

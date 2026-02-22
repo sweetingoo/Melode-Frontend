@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useEffect } from "react";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -38,7 +39,8 @@ const FormSubmitPage = () => {
   const [fieldErrors, setFieldErrors] = useState({});
   const [currentPage, setCurrentPage] = useState(0);
   const [draftSubmissionId, setDraftSubmissionId] = useState(null);
-  
+  const [submissionSuccess, setSubmissionSuccess] = useState(false);
+
   // Update storage key when form is loaded
   useEffect(() => {
     if (form?.id) {
@@ -360,40 +362,14 @@ const FormSubmitPage = () => {
       // Clear saved submission from sessionStorage after successful submission
       clearSubmissionStorage();
 
-      // Show success message
+      // Show success state on this page (no redirect)
+      setSubmissionSuccess(true);
+      setIsSubmitting(false);
       toast.success("Form submitted successfully", {
-        description: isAuthenticated 
-          ? `Thank you ${currentUser?.first_name || currentUser?.email || ''} for your submission.`
+        description: isAuthenticated
+          ? `Thank you ${currentUser?.first_name || currentUser?.email || ""} for your submission.`
           : "Thank you for your submission.",
       });
-
-      // Navigate to a success page or show success message
-      // For anonymous users, we might want to show a simple success page
-      if (isAuthenticated) {
-        // If tasks were created, handle individual vs collaborative tasks
-        if (result.processing_result?.task_creation?.created) {
-          const taskInfo = result.processing_result.task_creation;
-
-          if (
-            taskInfo.individual_tasks &&
-            taskInfo.task_ids &&
-            taskInfo.task_ids.length > 0
-          ) {
-            // Individual tasks created - navigate to tasks
-            router.push(`/admin/tasks`);
-          } else if (taskInfo.task_id) {
-            // Single collaborative task
-            router.push(`/admin/tasks/${taskInfo.task_slug || taskInfo.task_id}`);
-          } else {
-            router.push(`/admin/forms/${form.slug || form.id}/submissions/${result.slug || result.id}`);
-          }
-        } else {
-          router.push(`/admin/forms/${form.slug || form.id}/submissions/${result.slug || result.id}`);
-        }
-      } else {
-        // For anonymous users, show a success page
-        router.push(`/forms/${slug}/submitted?submission_id=${result.slug || result.id}`);
-      }
     } catch (error) {
       console.error("Failed to submit form:", error);
       setIsSubmitting(false);
@@ -497,6 +473,34 @@ const FormSubmitPage = () => {
     );
   }
 
+  if (submissionSuccess) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <Card className="w-full max-w-md">
+          <CardContent className="py-12 text-center space-y-4">
+            <div className="flex justify-center">
+              <CheckCircle className="h-12 w-12 text-green-600" />
+            </div>
+            <h2 className="text-xl font-semibold">Thank you for your submission</h2>
+            <p className="text-muted-foreground">
+              Your response has been submitted successfully.
+            </p>
+            {isAuthenticated && (
+              <p className="pt-2">
+                <Link
+                  href="/admin/trackers"
+                  className="text-primary font-medium underline underline-offset-4 hover:no-underline"
+                >
+                  Go to tracker entries
+                </Link>
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   // Save draft functionality
   const handleSaveDraft = async () => {
     if (!form.form_config?.allow_draft) {
@@ -587,15 +591,15 @@ const FormSubmitPage = () => {
                 field_id: fieldId,
               })
               .then((uploadResult) => {
-                const fileId = uploadResult.id || uploadResult.file_id;
-                // Store file ID with expiry date if provided
+                const fileRef = uploadResult.file_reference_id ?? uploadResult.id ?? uploadResult.file_id;
+                // Store file_reference_id (prefer over id) with expiry date if provided
                 if (field.file_expiry_date && fileData?.expiryDate) {
                   processedSubmissionData[fieldId] = {
-                    file_id: fileId,
+                    file_reference_id: fileRef,
                     expiry_date: fileData.expiryDate,
                   };
                 } else {
-                  processedSubmissionData[fieldId] = fileId;
+                  processedSubmissionData[fieldId] = fileRef;
                 }
               })
               .catch((error) => {
@@ -626,15 +630,15 @@ const FormSubmitPage = () => {
                   field_id: fieldId,
                 })
                 .then((uploadResult) => {
-                  const fileId = uploadResult.id || uploadResult.file_id;
-                  // Store file ID with expiry date if provided
+                  const fileRef = uploadResult.file_reference_id ?? uploadResult.id ?? uploadResult.file_id;
+                  // Store file_reference_id with expiry date if provided
                   if (field.file_expiry_date && fileData?.expiryDate) {
                     return {
-                      file_id: fileId,
+                      file_reference_id: fileRef,
                       expiry_date: fileData.expiryDate,
                     };
                   }
-                  return fileId;
+                  return fileRef;
                 })
                 .catch((error) => {
                   console.error(`Failed to upload file ${index + 1} for field ${fieldId}:`, error);
@@ -655,8 +659,8 @@ const FormSubmitPage = () => {
             );
           }
         } 
-        // Handle existing file IDs (already uploaded, from edit mode or draft)
-        else if (typeof value === 'number' || (Array.isArray(value) && value.every(v => typeof v === 'number' || (typeof v === 'object' && v.file_id)))) {
+        // Handle existing file refs (already uploaded: file_reference_id string or legacy file_id number)
+        else if (typeof value === 'number' || (typeof value === 'string' && value.trim()) || (Array.isArray(value) && value.every(v => typeof v === 'number' || typeof v === 'string' || (typeof v === 'object' && (v.file_reference_id || v.file_id))))) {
           processedSubmissionData[fieldId] = value;
         }
       } else {
