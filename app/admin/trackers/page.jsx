@@ -88,6 +88,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { format, addDays, startOfDay, subDays } from "date-fns";
 import { parseUTCDate } from "@/utils/time";
 import { humanizeStatusForDisplay } from "@/utils/slug";
+import { getStageColor } from "@/utils/stageColors";
 import { toast } from "sonner";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
 import { useUsers } from "@/hooks/useUsers";
@@ -2806,6 +2807,13 @@ const TrackersPage = () => {
                               onPointerDown={(e) => e.stopPropagation()}
                             >
                               <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+                                {(() => {
+                                  const stageMapping = (selectedTracker === tracker.id.toString() && selectedTrackerDetail?.tracker_config?.stage_mapping)
+                                    ? selectedTrackerDetail.tracker_config.stage_mapping
+                                    : (tracker?.tracker_config?.stage_mapping ?? []);
+                                  const stageColor = getStageColor(stageMapping, entry?.formatted_data?.derived_stage ?? "");
+                                  return (
+                                    <div className="flex items-center gap-1.5 min-w-0 flex-1" style={stageColor ? { borderLeft: `3px solid ${stageColor}`, paddingLeft: 6 } : undefined}>
                                 {canUpdateEntry && tracker?.tracker_config?.stage_mapping?.length > 0 ? (
                                   <>
                                     <Select
@@ -2872,6 +2880,9 @@ const TrackersPage = () => {
                                 ) : (
                                   <span>{entry.formatted_data?.derived_stage ?? "—"}</span>
                                 )}
+                                    </div>
+                                  );
+                                })()}
                               </div>
                             </TableCell>
                           )}

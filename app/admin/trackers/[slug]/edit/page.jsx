@@ -55,6 +55,7 @@ import { useRoles, useRolesAll } from "@/hooks/useRoles";
 import { useUsers } from "@/hooks/useUsers";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
 import { generateSlug, humanizeStatusForDisplay } from "@/utils/slug";
+import { STAGE_COLOR_PALETTE } from "@/utils/stageColors";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { parseUTCDate } from "@/utils/time";
@@ -781,13 +782,17 @@ const TrackerEditPage = () => {
   const stageMapping = formData.tracker_config?.stage_mapping || [];
 
   const handleAddStage = () => {
-    setFormData((prev) => ({
-      ...prev,
-      tracker_config: {
-        ...prev.tracker_config,
-        stage_mapping: [...(prev.tracker_config?.stage_mapping || []), { stage: "New Stage", statuses: [], allow_public_submit: false }],
-      },
-    }));
+    setFormData((prev) => {
+      const list = prev.tracker_config?.stage_mapping || [];
+      const defaultColor = STAGE_COLOR_PALETTE[list.length % STAGE_COLOR_PALETTE.length].value;
+      return {
+        ...prev,
+        tracker_config: {
+          ...prev.tracker_config,
+          stage_mapping: [...list, { stage: "New Stage", statuses: [], allow_public_submit: false, color: defaultColor }],
+        },
+      };
+    });
   };
 
   const handleRemoveStage = (index) => {
@@ -3075,8 +3080,28 @@ const TrackerEditPage = () => {
                   const assigned = item.statuses || [];
                   const availableToAdd = statuses.filter((s) => !assigned.includes(s));
                   const allowPublicSubmit = item.allow_public_submit === true;
+                  const stageColor = item.color || STAGE_COLOR_PALETTE[index % STAGE_COLOR_PALETTE.length].value;
                   return (
                     <div key={index} className="flex flex-wrap gap-2 items-center p-3 rounded-md border bg-background mb-2">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-muted-foreground whitespace-nowrap">Colour</span>
+                        <div className="flex gap-0.5">
+                          {STAGE_COLOR_PALETTE.map((c) => (
+                            <button
+                              key={c.value}
+                              type="button"
+                              title={c.label}
+                              className="w-6 h-6 rounded-full border-2 border-background shadow-sm hover:scale-110 focus:outline-none focus:ring-2 focus:ring-primary"
+                              style={{
+                                backgroundColor: c.value,
+                                borderColor: stageColor === c.value ? "var(--primary)" : "transparent",
+                                boxShadow: stageColor === c.value ? "0 0 0 2px var(--primary)" : undefined,
+                              }}
+                              onClick={() => handleUpdateStage(index, "color", c.value)}
+                            />
+                          ))}
+                        </div>
+                      </div>
                       <Input
                         placeholder="Stage name"
                         value={item.stage || ""}

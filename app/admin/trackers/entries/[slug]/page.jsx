@@ -51,6 +51,7 @@ import CommentThread from "@/components/CommentThread";
 import { format, startOfDay, differenceInDays } from "date-fns";
 import { parseUTCDate } from "@/utils/time";
 import { humanizeStatusForDisplay } from "@/utils/slug";
+import { getStageColor } from "@/utils/stageColors";
 import CustomFieldRenderer from "@/components/CustomFieldRenderer";
 import { toast } from "sonner";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
@@ -1108,6 +1109,7 @@ const TrackerEntryDetailPage = () => {
                 const stageName = item?.stage ?? item?.name ?? "";
                 if (!stageName) return null;
                 const isCurrent = (entry?.formatted_data?.derived_stage ?? "") === stageName;
+                const stageColor = getStageColor(tracker?.tracker_config?.stage_mapping || [], stageName);
                 return (
                   <TabsTrigger
                     key={stageName}
@@ -1116,6 +1118,7 @@ const TrackerEntryDetailPage = () => {
                       "font-normal",
                       isCurrent && "ring-2 ring-primary ring-offset-2"
                     )}
+                    style={stageColor ? { borderLeft: `3px solid ${stageColor}` } : undefined}
                   >
                     {stageName}
                     {isCurrent && (
@@ -1976,11 +1979,18 @@ const TrackerEntryDetailPage = () => {
                                     {/* Stage and status at top of each entry */}
                                     {(event.stage || event.status) && (
                                       <div className="flex items-center gap-2 flex-wrap mb-2 pb-2 border-b">
-                                        {event.stage && (
-                                          <Badge variant="secondary" className="text-xs font-normal">
-                                            {event.stage}
-                                          </Badge>
-                                        )}
+                                        {event.stage && (() => {
+                                          const stageColor = getStageColor(tracker?.tracker_config?.stage_mapping || [], event.stage);
+                                          return (
+                                            <Badge
+                                              variant="secondary"
+                                              className="text-xs font-normal border-0"
+                                              style={stageColor ? { backgroundColor: stageColor, color: "#fff" } : undefined}
+                                            >
+                                              {event.stage}
+                                            </Badge>
+                                          );
+                                        })()}
                                         {event.status && (
                                           <Badge variant="outline" className="text-xs font-normal">
                                             {event.status}
