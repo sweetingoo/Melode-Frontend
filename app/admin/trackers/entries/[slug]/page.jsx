@@ -536,11 +536,8 @@ const TrackerEntryDetailPage = () => {
   const isClosed = Boolean(entry?.status && String(entry.status).startsWith("Closed"));
   const canEditCase = canUpdateEntry && !isClosed;
 
-  // Phase 5.2: Can send SMS when case has phone + consent and not closed
-  const submissionData = entry?.submission_data || entry?.formatted_data || {};
-  const hasPhone = Boolean((submissionData.phone || "").toString().trim());
-  const hasSmsConsent = submissionData.sms_consent === "yes" || submissionData.sms_consent === true;
-  const canSendSms = canEditCase && tracker?.tracker_config?.is_patient_referral && hasPhone && hasSmsConsent;
+  // Phase 5.2: Send SMS available for all trackers when user can edit (backend validates phone + consent)
+  const canSendSms = canEditCase;
 
   // Format field value for read-only display
   const formatFieldValue = (field, value) => {
