@@ -496,8 +496,8 @@ export default function PreferencesPage() {
               {/* Important Note */}
               <div className="p-4 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg">
                 <p className="text-sm text-blue-900 dark:text-blue-100">
-                  <strong>Note:</strong> These settings only apply to automatic notifications (tasks, forms, projects). 
-                  Direct messages will always be delivered regardless of these settings.
+                  <strong>Note:</strong> These settings apply to automatic notifications (tasks, forms, trackers, projects). 
+                  Direct messages will always be delivered. To turn off notifications for a specific tracker, edit that tracker and disable &quot;Send notifications for entries&quot; in Basic Info.
                 </p>
               </div>
 

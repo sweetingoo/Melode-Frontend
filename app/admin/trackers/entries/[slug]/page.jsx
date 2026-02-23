@@ -833,6 +833,21 @@ const TrackerEntryDetailPage = () => {
 
   const isStageStyledTracker = !!(tracker?.tracker_config?.use_stages !== false && stageMapping.length > 0);
 
+  // For stage-styled trackers: when rendering the status form field in edit mode, only show statuses for the chosen stage (backend validates this; frontend should not offer invalid options).
+  const getFieldWithStageFilteredStatusOptions = (field, statusesForStage) => {
+    if (!isStageStyledTracker || !statusesForStage?.length) return field;
+    const statusFieldId = tracker?.tracker_config?.status_field_id;
+    if (!statusFieldId) return field;
+    const fieldId = (field.id ?? field.field_id ?? field.name)?.toString().trim();
+    if (!fieldId || fieldId !== String(statusFieldId).trim()) return field;
+    const options = statusesForStage.map((s) => ({ value: s, label: humanizeStatusForDisplay(s) }));
+    return {
+      ...field,
+      field_options: { ...(field.field_options || {}), options },
+      options,
+    };
+  };
+
   // For stage-styled trackers with stage tabs: which section to show in Details (section index matches stage index)
   const activeStageSectionIndex =
     isStageStyledTracker && activeStageTab && stageMapping.length && sections.length
@@ -1379,15 +1394,11 @@ const TrackerEntryDetailPage = () => {
                       {fieldsWithoutSection.map((field) => {
                         const fieldId = field.id || field.name || field.field_id;
                         const value = entryData[fieldId];
+                        const baseField = { ...field, type: field.type || field.field_type, field_label: field.label || field.field_label || field.name, field_name: field.name || field.id };
                         return (
                           <CustomFieldRenderer
                             key={fieldId}
-                            field={{
-                              ...field,
-                              type: field.type || field.field_type,
-                              field_label: field.label || field.field_label || field.name,
-                              field_name: field.name || field.id,
-                            }}
+                            field={getFieldWithStageFilteredStatusOptions(baseField, statusesForEditModeStage)}
                             value={value}
                             onChange={handleFieldChange}
                             error={fieldErrors[fieldId]}
@@ -1424,15 +1435,11 @@ const TrackerEntryDetailPage = () => {
                           {sectionFields.map((field) => {
                             const fieldId = field.id || field.name || field.field_id;
                             const value = entryData[fieldId];
+                            const baseField = { ...field, type: field.type || field.field_type, field_label: field.label || field.field_label || field.name, field_name: field.name || field.id };
                             return (
                               <CustomFieldRenderer
                                 key={fieldId}
-                                field={{
-                                  ...field,
-                                  type: field.type || field.field_type,
-                                  field_label: field.label || field.field_label || field.name,
-                                  field_name: field.name || field.id,
-                                }}
+                                field={getFieldWithStageFilteredStatusOptions(baseField, statusesForEditModeStage)}
                                 value={value}
                                 onChange={handleFieldChange}
                                 error={fieldErrors[fieldId]}
@@ -1470,15 +1477,13 @@ const TrackerEntryDetailPage = () => {
                                     {sectionFields.map((field) => {
                                       const fieldId = field.id || field.name || field.field_id;
                                       const value = entryData[fieldId];
+                                      const stageForSection = stageMapping[sectionIndex];
+                                      const statusesForSectionStage = (stageForSection?.statuses ?? stageForSection?.status_list ?? []).filter(Boolean);
+                                      const baseField = { ...field, type: field.type || field.field_type, field_label: field.label || field.field_label || field.name, field_name: field.name || field.id };
                                       return (
                                         <CustomFieldRenderer
                                           key={fieldId}
-                                          field={{
-                                            ...field,
-                                            type: field.type || field.field_type,
-                                            field_label: field.label || field.field_label || field.name,
-                                            field_name: field.name || field.id,
-                                          }}
+                                          field={getFieldWithStageFilteredStatusOptions(baseField, statusesForSectionStage.length ? statusesForSectionStage : statusesForEditModeStage)}
                                           value={value}
                                           onChange={handleFieldChange}
                                           error={fieldErrors[fieldId]}
@@ -1508,15 +1513,11 @@ const TrackerEntryDetailPage = () => {
                         {fieldsWithoutSection.map((field) => {
                           const fieldId = field.id || field.name || field.field_id;
                           const value = entryData[fieldId];
+                          const baseField = { ...field, type: field.type || field.field_type, field_label: field.label || field.field_label || field.name, field_name: field.name || field.id };
                           return (
                             <CustomFieldRenderer
                               key={fieldId}
-                              field={{
-                                ...field,
-                                type: field.type || field.field_type,
-                                field_label: field.label || field.field_label || field.name,
-                                field_name: field.name || field.id,
-                              }}
+                              field={getFieldWithStageFilteredStatusOptions(baseField, statusesForEditModeStage)}
                               value={value}
                               onChange={handleFieldChange}
                               error={fieldErrors[fieldId]}
@@ -1544,15 +1545,13 @@ const TrackerEntryDetailPage = () => {
                             {sectionFields.map((field) => {
                               const fieldId = field.id || field.name || field.field_id;
                               const value = entryData[fieldId];
+                              const stageForSection = stageMapping[sectionIndex];
+                              const statusesForSectionStage = (stageForSection?.statuses ?? stageForSection?.status_list ?? []).filter(Boolean);
+                              const baseField = { ...field, type: field.type || field.field_type, field_label: field.label || field.field_label || field.name, field_name: field.name || field.id };
                               return (
                                 <CustomFieldRenderer
                                   key={fieldId}
-                                  field={{
-                                    ...field,
-                                    type: field.type || field.field_type,
-                                    field_label: field.label || field.field_label || field.name,
-                                    field_name: field.name || field.id,
-                                  }}
+                                  field={getFieldWithStageFilteredStatusOptions(baseField, statusesForSectionStage.length ? statusesForSectionStage : statusesForEditModeStage)}
                                   value={value}
                                   onChange={handleFieldChange}
                                   error={fieldErrors[fieldId]}
@@ -1577,15 +1576,11 @@ const TrackerEntryDetailPage = () => {
                           trackerFields.map((field) => {
                             const fieldId = field.id || field.name || field.field_id;
                             const value = entryData[fieldId];
+                            const baseField = { ...field, type: field.type || field.field_type, field_label: field.label || field.field_label || field.name, field_name: field.name || field.id };
                             return (
                               <CustomFieldRenderer
                                 key={fieldId}
-                                field={{
-                                  ...field,
-                                  type: field.type || field.field_type,
-                                  field_label: field.label || field.field_label || field.name,
-                                  field_name: field.name || field.id,
-                                }}
+                                field={getFieldWithStageFilteredStatusOptions(baseField, statusesForEditModeStage)}
                                 value={value}
                                 onChange={handleFieldChange}
                                 error={fieldErrors[fieldId]}

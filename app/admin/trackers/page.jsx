@@ -1304,20 +1304,35 @@ const TrackersPage = () => {
                         fieldsBySection._other = { id: "_other", title: "Other", label: "Other", fields: unassignedFields };
                       }
                     }
-                    
+                    // Statuses for the current wizard stage (so status field only shows options for this stage)
+                    const currentCreateStepIndex = wizardSteps.length > 0 ? Math.min(createEntryStageIndex, wizardSteps.length - 1) : -1;
+                    const currentCreateStageConfig = currentCreateStepIndex >= 0 ? wizardSteps[currentCreateStepIndex] : null;
+                    const statusesForCurrentCreateStage = (currentCreateStageConfig?.statuses ?? currentCreateStageConfig?.status_list ?? []).filter(Boolean);
+                    const statusFieldId = trackerDetails.tracker_config?.status_field_id;
+
                     const renderField = (field) => {
                       const fieldId = field.id || field.field_id;
                       const fieldValue = entryFormData[fieldId] || "";
+                      const baseField = {
+                        ...field,
+                        id: fieldId,
+                        field_label: field.label || field.field_label,
+                        field_type: field.type || field.field_type,
+                        is_required: field.required || field.is_required,
+                      };
+                      // For stage-styled trackers, restrict status field to current stage's statuses only (use empty list if stage has none)
+                      const isStatusField = statusFieldId && (String((field.id ?? field.field_id ?? field.name) || "").trim() === String(statusFieldId).trim());
+                      const fieldToRender = (isStatusField && wizardSteps.length > 0)
+                        ? {
+                            ...baseField,
+                            field_options: { ...(baseField.field_options || {}), options: statusesForCurrentCreateStage.map((s) => ({ value: s, label: humanizeStatusForDisplay(s) })) },
+                            options: statusesForCurrentCreateStage.map((s) => ({ value: s, label: humanizeStatusForDisplay(s) })),
+                          }
+                        : baseField;
                       return (
                         <CustomFieldRenderer
                           key={fieldId}
-                          field={{
-                            ...field,
-                            id: fieldId,
-                            field_label: field.label || field.field_label,
-                            field_type: field.type || field.field_type,
-                            is_required: field.required || field.is_required,
-                          }}
+                          field={fieldToRender}
                           value={fieldValue}
                           onChange={(id, value) => {
                             setEntryFormData((prev) => ({ ...prev, [id]: value }));
@@ -2571,8 +2586,11 @@ const TrackersPage = () => {
                 <Table>
                   <TableHeader className="sticky top-0 z-10 bg-background shadow-sm">
                     <TableRow className="border-b bg-muted/50 hover:bg-muted/50">
-                      <TableHead className="sticky left-0 z-20 bg-muted/80 backdrop-blur border-r font-semibold min-w-[72px]">#</TableHead>
-                      <TableHead className="sticky left-[72px] z-20 bg-muted/80 backdrop-blur border-r font-semibold min-w-[100px]">Status</TableHead>
+                      <TableHead className="border-r font-semibold min-w-[72px]">#</TableHead>
+                      {tracker?.tracker_config?.use_stages !== false && (tracker?.tracker_config?.stage_mapping?.length > 0 || tracker?.tracker_config?.is_patient_referral) && (
+                        <TableHead className="font-semibold min-w-[140px]">Stage</TableHead>
+                      )}
+                      <TableHead className="border-r font-semibold min-w-[100px]">Status</TableHead>
                                 {/* Dynamic field columns (only visible) */}
                                 {visibleFields.map((field) => {
                                   const fieldId = field.id || field.field_id || field.name;
@@ -2656,9 +2674,6 @@ const TrackersPage = () => {
                                     </TableHead>
                                   </>
                                 )}
-                      {tracker?.tracker_config?.use_stages !== false && (tracker?.tracker_config?.stage_mapping?.length > 0 || tracker?.tracker_config?.is_patient_referral) && (
-                        <TableHead className="font-semibold min-w-[140px]">Stage</TableHead>
-                      )}
                       <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -2688,7 +2703,7 @@ const TrackersPage = () => {
                         >
                           <TableCell
                             className={cn(
-                              "font-medium sticky left-0 z-[5] border-r",
+                              "font-medium border-r",
                               densityClass,
                               index % 2 === 0 ? "bg-background hover:bg-muted/40" : "bg-muted/20 hover:bg-muted/50"
                             )}
@@ -2702,100 +2717,6 @@ const TrackersPage = () => {
                                       #{entryNumber}
                             </Link>
                           </TableCell>
-                          <TableCell
-                            className={cn(
-                              "sticky left-[72px] z-[5] border-r",
-                              densityClass,
-                              index % 2 === 0 ? "bg-background hover:bg-muted/40" : "bg-muted/20 hover:bg-muted/50"
-                            )}
-                            onClick={(e) => { e.stopPropagation(); setSelectedCell({ rowIndex: index, fieldId: "_status" }); }}
-                          >
-                            {canUpdateEntry && availableStatuses.length > 0 ? (
-                              <Select
-                                value={entry.status || ""}
-                                onValueChange={(newStatus) => {
-                                  if (newStatus && newStatus !== (entry.status || "")) {
-                                    handleStatusChange(entry, newStatus, undefined, entry.formatted_data?.derived_stage);
-                                  }
-                                }}
-                                disabled={updateEntryMutation.isPending}
-                              >
-                                <SelectTrigger
-                                  className="h-8 min-w-[120px] font-normal"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <SelectValue placeholder="Status" />
-                                </SelectTrigger>
-                                <SelectContent onClick={(e) => e.stopPropagation()}>
-                                  {availableStatuses.map((status) => (
-                                    <SelectItem key={status} value={status}>
-                                      {humanizeStatusForDisplay(status)}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            ) : (
-                              <Badge variant="outline" className="font-normal">{humanizeStatusForDisplay(entry.status || "open")}</Badge>
-                            )}
-                          </TableCell>
-                                  {/* Dynamic field values - only visible columns */}
-                                  {visibleFields.map((field) => {
-                                    const fieldId = field.id || field.field_id || field.name;
-                                    const value = displayValues[fieldId];
-                                    const isSelected = selectedCell?.rowIndex === index && selectedCell?.fieldId === fieldId;
-                                    const highlight = cellMatchesHighlightRule(fieldId, value, highlightRules, displayValues);
-                                    const isChaseDue = fieldId === "chase_due";
-                                    const isOverdue =
-                                      isChaseDue &&
-                                      tracker?.tracker_config?.is_patient_referral &&
-                                      value != null &&
-                                      String(value).trim() !== "" &&
-                                      !String(entry.status || "").startsWith("Closed") &&
-                                      (() => {
-                                        try {
-                                          const d = new Date(String(value).split("T")[0]);
-                                          return !Number.isNaN(d.getTime()) && d < startOfDay(new Date());
-                                        } catch {
-                                          return false;
-                                        }
-                                      })();
-                                    return (
-                                      <TableCell
-                                        key={fieldId}
-                                        className={cn(
-                                          "border-r min-w-[120px] max-w-[220px] tabular-nums",
-                                          densityClass,
-                                          isSelected && "ring-1 ring-primary bg-primary/5",
-                                          highlight.match && (HIGHLIGHT_COLOR_CLASSES[highlight.color] || HIGHLIGHT_COLOR_CLASSES.green),
-                                          isOverdue && "bg-red-100 dark:bg-red-900/30"
-                                        )}
-                                        onClick={(e) => { e.stopPropagation(); setSelectedCell({ rowIndex: index, fieldId }); }}
-                                      >
-                                        <div className="max-w-[200px] truncate flex items-center gap-1" title={formatFieldValue(field, value)}>
-                                          {formatFieldValue(field, value)}
-                                          {isOverdue && (
-                                            <Badge variant="destructive" className="text-[10px] px-1 py-0 shrink-0">
-                                              Overdue
-                                            </Badge>
-                                          )}
-                                        </div>
-                          </TableCell>
-                                    );
-                                  })}
-                                  {showMetadataColumns && (
-                                    <>
-                          <TableCell className={cn("text-muted-foreground", densityClass)}>
-                            {entry.updated_at
-                              ? format(parseUTCDate(entry.updated_at), "MMM d, yyyy HH:mm")
-                                          : entry.created_at
-                                          ? format(parseUTCDate(entry.created_at), "MMM d, yyyy HH:mm")
-                              : "—"}
-                          </TableCell>
-                                      <TableCell className={cn("text-muted-foreground", densityClass)}>
-                                        {getUserName(entry.updated_by_user_id || entry.submitted_by_user_id) || "—"}
-                                      </TableCell>
-                                    </>
-                                  )}
                           {(tracker?.tracker_config?.use_stages !== false && (tracker?.tracker_config?.stage_mapping?.length > 0 || tracker?.tracker_config?.is_patient_referral)) && (
                             <TableCell
                               className={cn(
@@ -2886,6 +2807,124 @@ const TrackersPage = () => {
                               </div>
                             </TableCell>
                           )}
+                          <TableCell
+                            className={cn(
+                              "border-r",
+                              densityClass,
+                              index % 2 === 0 ? "bg-background hover:bg-muted/40" : "bg-muted/20 hover:bg-muted/50"
+                            )}
+                            onClick={(e) => { e.stopPropagation(); setSelectedCell({ rowIndex: index, fieldId: "_status" }); }}
+                          >
+                            {canUpdateEntry && availableStatuses.length > 0 ? (
+                              (() => {
+                                // Use full tracker detail for stage_mapping when this tab is selected (list API may return minimal config)
+                                const stageMapping = (selectedTracker === tracker.id.toString() && selectedTrackerDetail?.tracker_config?.stage_mapping)
+                                  ? selectedTrackerDetail.tracker_config.stage_mapping
+                                  : (tracker?.tracker_config?.stage_mapping ?? []);
+                                const isStageStyled = stageMapping.length > 0;
+                                let entryStage = (entry.formatted_data?.derived_stage ?? "").toString().trim();
+                                // If list API didn't include derived_stage, infer from entry.status (which stage contains this status)
+                                if (isStageStyled && !entryStage && entry.status) {
+                                  const stageItem = stageMapping.find((s) => {
+                                    const statuses = (s?.statuses ?? s?.status_list ?? []).filter(Boolean);
+                                    return statuses.includes(entry.status);
+                                  });
+                                  if (stageItem) entryStage = (stageItem?.stage ?? stageItem?.name ?? "").toString().trim();
+                                }
+                                let statusOptions = availableStatuses;
+                                if (isStageStyled && entryStage) {
+                                  const stageItem = stageMapping.find((s) => (s?.stage ?? s?.name ?? "").toString().trim() === entryStage);
+                                  const stageStatuses = (stageItem?.statuses ?? stageItem?.status_list ?? []).filter(Boolean);
+                                  if (stageStatuses.length > 0) statusOptions = stageStatuses;
+                                }
+                                return (
+                                  <Select
+                                    value={entry.status || ""}
+                                    onValueChange={(newStatus) => {
+                                      if (newStatus && newStatus !== (entry.status || "")) {
+                                        handleStatusChange(entry, newStatus, undefined, entry.formatted_data?.derived_stage);
+                                      }
+                                    }}
+                                    disabled={updateEntryMutation.isPending}
+                                  >
+                                    <SelectTrigger
+                                      className="h-8 min-w-[120px] font-normal"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      <SelectValue placeholder="Status" />
+                                    </SelectTrigger>
+                                    <SelectContent onClick={(e) => e.stopPropagation()}>
+                                      {statusOptions.map((status) => (
+                                        <SelectItem key={status} value={status}>
+                                          {humanizeStatusForDisplay(status)}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                );
+                              })()
+                            ) : (
+                              <Badge variant="outline" className="font-normal">{humanizeStatusForDisplay(entry.status || "open")}</Badge>
+                            )}
+                          </TableCell>
+                                  {/* Dynamic field values - only visible columns */}
+                                  {visibleFields.map((field) => {
+                                    const fieldId = field.id || field.field_id || field.name;
+                                    const value = displayValues[fieldId];
+                                    const isSelected = selectedCell?.rowIndex === index && selectedCell?.fieldId === fieldId;
+                                    const highlight = cellMatchesHighlightRule(fieldId, value, highlightRules, displayValues);
+                                    const isChaseDue = fieldId === "chase_due";
+                                    const isOverdue =
+                                      isChaseDue &&
+                                      tracker?.tracker_config?.is_patient_referral &&
+                                      value != null &&
+                                      String(value).trim() !== "" &&
+                                      !String(entry.status || "").startsWith("Closed") &&
+                                      (() => {
+                                        try {
+                                          const d = new Date(String(value).split("T")[0]);
+                                          return !Number.isNaN(d.getTime()) && d < startOfDay(new Date());
+                                        } catch {
+                                          return false;
+                                        }
+                                      })();
+                                    return (
+                                      <TableCell
+                                        key={fieldId}
+                                        className={cn(
+                                          "border-r min-w-[120px] max-w-[220px] tabular-nums",
+                                          densityClass,
+                                          isSelected && "ring-1 ring-primary bg-primary/5",
+                                          highlight.match && (HIGHLIGHT_COLOR_CLASSES[highlight.color] || HIGHLIGHT_COLOR_CLASSES.green),
+                                          isOverdue && "bg-red-100 dark:bg-red-900/30"
+                                        )}
+                                        onClick={(e) => { e.stopPropagation(); setSelectedCell({ rowIndex: index, fieldId }); }}
+                                      >
+                                        <div className="max-w-[200px] truncate flex items-center gap-1" title={formatFieldValue(field, value)}>
+                                          {formatFieldValue(field, value)}
+                                          {isOverdue && (
+                                            <Badge variant="destructive" className="text-[10px] px-1 py-0 shrink-0">
+                                              Overdue
+                                            </Badge>
+                                          )}
+                                        </div>
+                          </TableCell>
+                                    );
+                                  })}
+                                  {showMetadataColumns && (
+                                    <>
+                          <TableCell className={cn("text-muted-foreground", densityClass)}>
+                            {entry.updated_at
+                              ? format(parseUTCDate(entry.updated_at), "MMM d, yyyy HH:mm")
+                                          : entry.created_at
+                                          ? format(parseUTCDate(entry.created_at), "MMM d, yyyy HH:mm")
+                              : "—"}
+                          </TableCell>
+                                      <TableCell className={cn("text-muted-foreground", densityClass)}>
+                                        {getUserName(entry.updated_by_user_id || entry.submitted_by_user_id) || "—"}
+                                      </TableCell>
+                                    </>
+                                  )}
                           <TableCell onClick={(e) => e.stopPropagation()} className="bg-muted/30">
                             <div className="flex items-center gap-2">
                                         {canReadEntries && (
@@ -2914,7 +2953,7 @@ const TrackersPage = () => {
                     {Object.keys(effectiveAggregates).length > 0 && (
                       <TableRow className="border-t-2 border-border bg-muted font-medium hover:bg-muted">
                         <TableCell
-                          className="sticky left-0 z-[5] bg-muted border-r text-muted-foreground text-xs uppercase tracking-wide"
+                          className="bg-muted border-r text-muted-foreground text-xs uppercase tracking-wide"
                           title={
                             hasBackendAggregates
                               ? backendAggregatesData.truncated
@@ -2927,7 +2966,10 @@ const TrackersPage = () => {
                         >
                           {totalsLabel}
                         </TableCell>
-                        <TableCell className="sticky left-[72px] z-[5] bg-muted border-r" />
+                        {(tracker?.tracker_config?.use_stages !== false && (tracker?.tracker_config?.stage_mapping?.length > 0 || tracker?.tracker_config?.is_patient_referral)) && (
+                          <TableCell className="bg-muted border-r" />
+                        )}
+                        <TableCell className="bg-muted border-r" />
                         {visibleFields.map((field) => {
                           const fieldId = field.id || field.field_id || field.name;
                           const agg = effectiveAggregates[fieldId];
@@ -2954,9 +2996,6 @@ const TrackersPage = () => {
                             <TableCell className="bg-muted" />
                             <TableCell className="bg-muted" />
                           </>
-                        )}
-                        {(tracker?.tracker_config?.use_stages !== false && (tracker?.tracker_config?.stage_mapping?.length > 0 || tracker?.tracker_config?.is_patient_referral)) && (
-                          <TableCell className="bg-muted border-r" />
                         )}
                         <TableCell className="bg-muted" />
                       </TableRow>

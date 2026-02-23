@@ -247,6 +247,13 @@ const TrackerEditPage = () => {
             stage_mapping: (tracker.tracker_config?.stage_mapping && Array.isArray(tracker.tracker_config.stage_mapping))
               ? JSON.parse(JSON.stringify(tracker.tracker_config.stage_mapping))
               : [...DEFAULT_STAGE_MAPPING],
+            notification_settings: {
+              notify_on_new_entry: tracker.tracker_config?.notification_settings?.notify_on_new_entry ?? true,
+              notify_on_status_change: tracker.tracker_config?.notification_settings?.notify_on_status_change ?? true,
+              send_email: tracker.tracker_config?.notification_settings?.send_email ?? true,
+              send_push: tracker.tracker_config?.notification_settings?.send_push ?? true,
+              send_sms: tracker.tracker_config?.notification_settings?.send_sms ?? false,
+            },
           },
         tracker_fields: tracker.tracker_fields || {
           fields: [],
@@ -399,12 +406,22 @@ const TrackerEditPage = () => {
       fields: editingField.fields || [],
     };
 
+    // Sync section.fields from field.section so backend/template representation stays in sync
+    const sectionsSource = formData.tracker_fields?.sections?.length ? formData.tracker_fields.sections : formData.tracker_config?.sections;
+    const currentSections = sectionsSource || [];
+    const syncedSections = currentSections.map((sec) => ({
+      ...sec,
+      fields: newFields.filter((f) => (f.section || getSectionIdForField(f, currentSections)) === sec.id).map((f) => f.id || f.name || f.field_id).filter(Boolean),
+    }));
+
     const updatedFormData = {
       ...formData,
       tracker_fields: {
         ...formData.tracker_fields,
         fields: newFields,
+        ...(formData.tracker_fields?.sections?.length ? { sections: syncedSections } : {}),
       },
+      ...(formData.tracker_config?.sections?.length && !formData.tracker_fields?.sections?.length ? { tracker_config: { ...formData.tracker_config, sections: syncedSections } } : {}),
     };
 
     setFormData(updatedFormData);
@@ -776,10 +793,21 @@ const TrackerEditPage = () => {
     );
   }
 
-  const sections = formData.tracker_config?.sections || [];
+  // Sections can live in tracker_fields (from backend/template) or tracker_config (edited in UI). Prefer tracker_fields so template-created trackers show their sections.
+  const sections = (formData.tracker_fields?.sections?.length ? formData.tracker_fields.sections : formData.tracker_config?.sections) || [];
   const fields = formData.tracker_fields?.fields || [];
   const statuses = formData.tracker_config?.statuses || [];
   const stageMapping = formData.tracker_config?.stage_mapping || [];
+
+  // Derive section for a field: template uses section.fields (array of ids), UI uses field.section (section id)
+  const getSectionIdForField = (field, sectionList) => {
+    if (!field || !sectionList?.length) return null;
+    if (field.section) return field.section;
+    const fid = String(field.id ?? field.name ?? field.field_id ?? "").trim();
+    if (!fid) return null;
+    const sec = sectionList.find((s) => (s.fields || []).some((id) => String(id).trim() === fid));
+    return sec?.id ?? null;
+  };
 
   const handleAddStage = () => {
     setFormData((prev) => {
@@ -866,6 +894,7 @@ const TrackerEditPage = () => {
               <TabsTrigger value="stages">Stages ({stageMapping.length})</TabsTrigger>
             )}
             <TabsTrigger value="permissions">Permissions</TabsTrigger>
+            <TabsTrigger value="notifications">Notifications</TabsTrigger>
             <TabsTrigger value="audit">Audit Logs</TabsTrigger>
           </TabsList>
         </div>
@@ -1365,9 +1394,12 @@ const TrackerEditPage = () => {
                           </Select>
                         </div>
                         <div>
-                          <Label htmlFor="edit-field-section">Section (Optional)</Label>
+                          <Label htmlFor="edit-field-section">Stage (Optional)</Label>
+                          {formData.tracker_config?.use_stages && stageMapping.length > 0 && (
+                            <p className="text-xs text-muted-foreground mb-1">Assigning a field to a stage puts it on that step. Sections group fields; each section is linked to a stage by position.</p>
+                          )}
                           <Select
-                            value={editingField.section || "none"}
+                            value={getSectionIdForField(editingField, sections) || editingField.section || "none"}
                             onValueChange={(value) =>
                               setEditingField((prev) => ({
                                 ...prev,
@@ -1376,15 +1408,19 @@ const TrackerEditPage = () => {
                             }
                           >
                             <SelectTrigger>
-                              <SelectValue placeholder="No section" />
+                              <SelectValue placeholder="No stage" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="none">No section</SelectItem>
-                              {sections.map((section) => (
-                                <SelectItem key={section.id} value={section.id}>
-                                  {section.label}
-                                </SelectItem>
-                              ))}
+                              <SelectItem value="none">No stage</SelectItem>
+                              {sections.map((section, secIndex) => {
+                                const stageName = formData.tracker_config?.use_stages && stageMapping[secIndex] ? (stageMapping[secIndex].stage ?? stageMapping[secIndex].name) : null;
+                                const displayLabel = stageName ? `Stage: ${stageName}` : (section.label || section.title || section.id);
+                                return (
+                                  <SelectItem key={section.id} value={section.id}>
+                                    {displayLabel}
+                                  </SelectItem>
+                                );
+                              })}
                             </SelectContent>
                           </Select>
                         </div>
@@ -2030,11 +2066,17 @@ const TrackerEditPage = () => {
                               </Badge>
                             )}
                             <Badge variant="outline">{field.type}</Badge>
-                            {field.section && (
-                              <Badge variant="secondary" className="text-xs">
-                                Section: {sections.find((s) => s.id === field.section)?.label || field.section}
-                              </Badge>
-                            )}
+                            {(() => {
+                              const secId = getSectionIdForField(field, sections) || field.section;
+                              if (!secId) return null;
+                              const secIndex = sections.findIndex((s) => s.id === secId);
+                              const stageName = stageMapping[secIndex] ? (stageMapping[secIndex].stage ?? stageMapping[secIndex].name) : null;
+                              return (
+                                <Badge variant="secondary" className="text-xs">
+                                  Stage: {stageName || sections.find((s) => s.id === secId)?.label || sections.find((s) => s.id === secId)?.title || secId}
+                                </Badge>
+                              );
+                            })()}
                           </div>
                           <p className="text-sm text-muted-foreground">
                             ID: {field.id || field.name}
@@ -2139,7 +2181,10 @@ const TrackerEditPage = () => {
                       </Select>
                     </div>
                     <div>
-                      <Label htmlFor="field-section">Section (Optional)</Label>
+                      <Label htmlFor="field-section">Stage (Optional)</Label>
+                      {formData.tracker_config?.use_stages && stageMapping.length > 0 && (
+                        <p className="text-xs text-muted-foreground mb-1">Assigning a field to a stage puts it on that step. Sections group fields; each section is linked to a stage by position.</p>
+                      )}
                       <Select
                         value={newField.section || "none"}
                         onValueChange={(value) =>
@@ -2147,15 +2192,19 @@ const TrackerEditPage = () => {
                         }
                       >
                         <SelectTrigger>
-                          <SelectValue placeholder="No section" />
+                          <SelectValue placeholder="No stage" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="none">No section</SelectItem>
-                          {sections.map((section) => (
-                            <SelectItem key={section.id} value={section.id}>
-                              {section.label}
-                            </SelectItem>
-                          ))}
+                          <SelectItem value="none">No stage</SelectItem>
+                          {sections.map((section, secIndex) => {
+                            const stageName = formData.tracker_config?.use_stages && stageMapping[secIndex] ? (stageMapping[secIndex].stage ?? stageMapping[secIndex].name) : null;
+                            const displayLabel = stageName ? `Stage: ${stageName}` : (section.label || section.title || section.id);
+                            return (
+                              <SelectItem key={section.id} value={section.id}>
+                                {displayLabel}
+                              </SelectItem>
+                            );
+                          })}
                         </SelectContent>
                       </Select>
                     </div>
@@ -2748,6 +2797,9 @@ const TrackerEditPage = () => {
           <Card>
             <CardHeader>
               <CardTitle>Tracker Sections</CardTitle>
+              <p className="text-sm text-muted-foreground mt-1">
+                <strong>Sections</strong> are groups of form fields. They are <strong>separate from Stages</strong>: <strong>Stages</strong> (Stages tab) are workflow steps with names and statuses; <strong>Sections</strong> define which fields appear at each step. When using stages, <strong>order is linked by position</strong>: section 1 → stage 1, section 2 → stage 2, etc. Sections may come from your tracker template (if you see them here) or you can add them below. Reorder by dragging; keep section count in sync with stage count.
+              </p>
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Existing Sections */}
@@ -2755,7 +2807,11 @@ const TrackerEditPage = () => {
                 <div className="space-y-2">
                   <Label>Existing Sections</Label>
                   {sections.map((section, index) => {
-                    const sectionFields = fields.filter((f) => f.section === section.id);
+                    // Backend/template sections use section.fields (array of field ids); edit UI may use field.section
+                    const sectionFieldIds = (section.fields || []).length > 0 ? (section.fields || []) : null;
+                    const sectionFields = sectionFieldIds ? fields.filter((f) => sectionFieldIds.includes(f.id || f.name || f.field_id)) : fields.filter((f) => f.section === section.id);
+                    const linkedStage = stageMapping[index];
+                    const linkedStageName = linkedStage?.stage ?? linkedStage?.name ?? null;
                     return editingSectionIndex === index ? (
                       // Edit Section Form
                       <div key={section.id || index} className="p-4 border rounded-md space-y-4 bg-card">
@@ -2839,13 +2895,21 @@ const TrackerEditPage = () => {
                         </div>
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-1">
-                            <span className="font-medium">{section.label}</span>
+                            <span className="font-medium">{section.label || section.title || section.id}</span>
                             <Badge variant="outline" className="text-xs">
                               {sectionFields.length} field{sectionFields.length !== 1 ? "s" : ""}
                             </Badge>
+                            {formData.tracker_config?.use_stages && (
+                              <Badge variant="secondary" className="text-xs">
+                                Stage: {linkedStageName ?? "—"}
+                              </Badge>
+                            )}
                           </div>
                           <p className="text-sm text-muted-foreground">
                             ID: {section.id}
+                            {formData.tracker_config?.use_stages && linkedStageName && (
+                              <span className="ml-2">· Used for stage &quot;{linkedStageName}&quot;</span>
+                            )}
                           </p>
                         </div>
                         <div className="flex items-center gap-2">
@@ -2870,6 +2934,11 @@ const TrackerEditPage = () => {
                     );
                   })}
                 </div>
+              )}
+              {formData.tracker_config?.use_stages && sections.length > 0 && stageMapping.length > 0 && sections.length !== stageMapping.length && (
+                <p className="text-sm text-amber-600 dark:text-amber-500 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 rounded-md">
+                  Section count ({sections.length}) does not match stage count ({stageMapping.length}). Entry and create wizards link by position: section 1 → stage 1. Add or remove sections or stages so they match.
+                </p>
               )}
 
               {/* Add New Section */}
@@ -3057,7 +3126,7 @@ const TrackerEditPage = () => {
             <CardHeader>
               <CardTitle>Stages</CardTitle>
               <p className="text-sm text-muted-foreground mt-1">
-                Stages and their statuses are fully configurable. Define the <strong>default status list</strong> in the <strong>Statuses</strong> tab. Here, add stages and optionally assign a specific set of statuses to each stage; if a stage has no statuses assigned, it uses the tracker&apos;s default status list.
+                <strong>Stages</strong> are workflow steps (e.g. Case Creation, Triage) with names and statuses. They are <strong>separate from Sections</strong>: Sections (Sections tab) define which form fields appear at each step. Define the <strong>default status list</strong> in the <strong>Statuses</strong> tab. Here, add stages and assign statuses per stage; if a stage has no statuses, it uses the tracker default. <strong>Order is linked by position</strong>: stage 1 uses section 1&apos;s fields, stage 2 uses section 2&apos;s, etc.
               </p>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -3081,6 +3150,8 @@ const TrackerEditPage = () => {
                   const availableToAdd = statuses.filter((s) => !assigned.includes(s));
                   const allowPublicSubmit = item.allow_public_submit === true;
                   const stageColor = item.color || STAGE_COLOR_PALETTE[index % STAGE_COLOR_PALETTE.length].value;
+                  const linkedSection = sections[index];
+                  const linkedSectionFieldsCount = linkedSection ? fields.filter((f) => f.section === linkedSection.id).length : 0;
                   return (
                     <div key={index} className="flex flex-wrap gap-2 items-center p-3 rounded-md border bg-background mb-2">
                       <div className="flex items-center gap-1.5">
@@ -3108,6 +3179,11 @@ const TrackerEditPage = () => {
                         onChange={(e) => handleUpdateStage(index, "stage", e.target.value)}
                         className="w-40"
                       />
+                      {sections.length > 0 && (
+                        <span className="text-xs text-muted-foreground whitespace-nowrap" title="Section at same position provides the fields for this stage">
+                          Section: {linkedSection?.label ?? "—"} ({linkedSectionFieldsCount} field{linkedSectionFieldsCount !== 1 ? "s" : ""})
+                        </span>
+                      )}
                       <span className="text-muted-foreground text-sm">←</span>
                       <div className="flex flex-wrap gap-1 items-center">
                         {assigned.length > 0 ? (
@@ -3160,6 +3236,58 @@ const TrackerEditPage = () => {
                           External can fill
                         </Label>
                       </div>
+                      {/* Auto-advance to next stage when date + N days has passed */}
+                      {(() => {
+                        const autoAdv = item.auto_advance || {};
+                        const dateTimeFields = (formData.tracker_fields?.fields || []).filter(
+                          (f) => (f.type || f.field_type || "").toLowerCase() === "date" || (f.type || f.field_type || "").toLowerCase() === "datetime"
+                        );
+                        const nextStageName = stageMapping[index + 1] ? (stageMapping[index + 1].stage ?? stageMapping[index + 1].name) : null;
+                        return (
+                          <div className="flex flex-wrap items-center gap-2 p-2 rounded border bg-muted/30 shrink-0">
+                            <input
+                              type="checkbox"
+                              id={`stage-auto-advance-${index}`}
+                              checked={!!autoAdv.enabled}
+                              onChange={(e) => handleUpdateStage(index, "auto_advance", { ...autoAdv, enabled: e.target.checked, target_stage: "next" })}
+                              className="rounded"
+                            />
+                            <Label htmlFor={`stage-auto-advance-${index}`} className="text-xs text-muted-foreground cursor-pointer whitespace-nowrap">
+                              Auto-advance to next stage when date passes
+                            </Label>
+                            {autoAdv.enabled && (
+                              <>
+                                <Select
+                                  value={(autoAdv.date_field_id || "").trim() || "__none__"}
+                                  onValueChange={(val) => handleUpdateStage(index, "auto_advance", { ...autoAdv, date_field_id: val === "__none__" ? "" : val })}
+                                >
+                                  <SelectTrigger className="w-44 h-8 text-xs">
+                                    <SelectValue placeholder="Date field" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="__none__">Select date field</SelectItem>
+                                    {dateTimeFields.map((f) => (
+                                      <SelectItem key={f.id || f.name} value={f.id || f.field_id || f.name}>
+                                        {f.label || f.field_label || f.name || f.id}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <span className="text-xs text-muted-foreground">+</span>
+                                <Input
+                                  type="number"
+                                  min={0}
+                                  className="w-16 h-8 text-xs"
+                                  placeholder="0"
+                                  value={autoAdv.days_after ?? ""}
+                                  onChange={(e) => handleUpdateStage(index, "auto_advance", { ...autoAdv, days_after: e.target.value === "" ? 0 : parseInt(e.target.value, 10) || 0 })}
+                                />
+                                <span className="text-xs text-muted-foreground">day(s) → {nextStageName ? nextStageName : "next stage"}</span>
+                              </>
+                            )}
+                          </div>
+                        );
+                      })()}
                       <Button variant="ghost" size="sm" onClick={() => handleRemoveStage(index)} aria-label="Remove stage">
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -3255,6 +3383,135 @@ const TrackerEditPage = () => {
                       </div>
                     );
                   })}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Notifications Tab */}
+        <TabsContent value="notifications" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Notification settings</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Choose when to send notifications for this tracker and which channels to use.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="space-y-4">
+                <p className="text-sm font-medium">When to notify</p>
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="notify_on_new_entry"
+                      checked={formData.tracker_config?.notification_settings?.notify_on_new_entry ?? true}
+                      onCheckedChange={(checked) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          tracker_config: {
+                            ...prev.tracker_config,
+                            notification_settings: {
+                              ...(prev.tracker_config?.notification_settings || {}),
+                              notify_on_new_entry: checked !== false,
+                            },
+                          },
+                        }))
+                      }
+                    />
+                    <Label htmlFor="notify_on_new_entry" className="font-normal cursor-pointer">
+                      When a new entry is created
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="notify_on_status_change"
+                      checked={formData.tracker_config?.notification_settings?.notify_on_status_change ?? true}
+                      onCheckedChange={(checked) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          tracker_config: {
+                            ...prev.tracker_config,
+                            notification_settings: {
+                              ...(prev.tracker_config?.notification_settings || {}),
+                              notify_on_status_change: checked !== false,
+                            },
+                          },
+                        }))
+                      }
+                    />
+                    <Label htmlFor="notify_on_status_change" className="font-normal cursor-pointer">
+                      When an entry&apos;s status or stage changes
+                    </Label>
+                  </div>
+                </div>
+              </div>
+              <div className="space-y-4">
+                <p className="text-sm font-medium">Channels</p>
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="send_email"
+                      checked={formData.tracker_config?.notification_settings?.send_email ?? true}
+                      onCheckedChange={(checked) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          tracker_config: {
+                            ...prev.tracker_config,
+                            notification_settings: {
+                              ...(prev.tracker_config?.notification_settings || {}),
+                              send_email: checked !== false,
+                            },
+                          },
+                        }))
+                      }
+                    />
+                    <Label htmlFor="send_email" className="font-normal cursor-pointer">
+                      Email
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="send_push"
+                      checked={formData.tracker_config?.notification_settings?.send_push ?? true}
+                      onCheckedChange={(checked) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          tracker_config: {
+                            ...prev.tracker_config,
+                            notification_settings: {
+                              ...(prev.tracker_config?.notification_settings || {}),
+                              send_push: checked !== false,
+                            },
+                          },
+                        }))
+                      }
+                    />
+                    <Label htmlFor="send_push" className="font-normal cursor-pointer">
+                      In-app notification
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="send_sms"
+                      checked={formData.tracker_config?.notification_settings?.send_sms ?? false}
+                      onCheckedChange={(checked) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          tracker_config: {
+                            ...prev.tracker_config,
+                            notification_settings: {
+                              ...(prev.tracker_config?.notification_settings || {}),
+                              send_sms: checked === true,
+                            },
+                          },
+                        }))
+                      }
+                    />
+                    <Label htmlFor="send_sms" className="font-normal cursor-pointer">
+                      SMS
+                    </Label>
+                  </div>
                 </div>
               </div>
             </CardContent>
