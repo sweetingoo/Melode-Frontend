@@ -384,25 +384,33 @@ const TrackerEntryDetailPage = () => {
 
   // Stage mapping and statuses for target stage (must be before any early return to satisfy Rules of Hooks)
   const stageMappingForMemo = tracker?.tracker_config?.stage_mapping || [];
+  const allTrackerStatuses = useMemo(
+    () => (Array.isArray(tracker?.tracker_config?.statuses) ? tracker.tracker_config.statuses : []),
+    [tracker?.tracker_config?.statuses]
+  );
+
   const statusesForTargetStage = useMemo(() => {
     if (!stageChangePending?.stageName || !stageMappingForMemo?.length) return [];
     const item = stageMappingForMemo.find((s) => (s?.stage ?? s?.name ?? "").toString().trim() === stageChangePending.stageName);
-    return (item?.statuses ?? item?.status_list ?? []).filter(Boolean);
-  }, [stageChangePending?.stageName, stageMappingForMemo]);
+    const stageStatuses = (item?.statuses ?? item?.status_list ?? []).filter(Boolean);
+    return stageStatuses.length > 0 ? stageStatuses : allTrackerStatuses;
+  }, [stageChangePending?.stageName, stageMappingForMemo, allTrackerStatuses]);
 
   // Statuses for the stage selected in the "Change status" dialog (Stage → Status flow)
   const statusesForChangeStatusStage = useMemo(() => {
     if (!changeStatusStage || !stageMappingForMemo?.length) return [];
     const item = stageMappingForMemo.find((s) => (s?.stage ?? s?.name ?? "").toString().trim() === changeStatusStage);
-    return (item?.statuses ?? item?.status_list ?? []).filter(Boolean);
-  }, [changeStatusStage, stageMappingForMemo]);
+    const stageStatuses = (item?.statuses ?? item?.status_list ?? []).filter(Boolean);
+    return stageStatuses.length > 0 ? stageStatuses : allTrackerStatuses;
+  }, [changeStatusStage, stageMappingForMemo, allTrackerStatuses]);
 
-  // Statuses for the stage selected in edit mode header (Stage → Status)
+  // Statuses for the stage selected in edit mode header (Stage → Status); when stage has no statuses, show all tracker statuses
   const statusesForEditModeStage = useMemo(() => {
     if (!editModeStage || !stageMappingForMemo?.length) return [];
     const item = stageMappingForMemo.find((s) => (s?.stage ?? s?.name ?? "").toString().trim() === editModeStage);
-    return (item?.statuses ?? item?.status_list ?? []).filter(Boolean);
-  }, [editModeStage, stageMappingForMemo]);
+    const stageStatuses = (item?.statuses ?? item?.status_list ?? []).filter(Boolean);
+    return stageStatuses.length > 0 ? stageStatuses : allTrackerStatuses;
+  }, [editModeStage, stageMappingForMemo, allTrackerStatuses]);
 
   // Initialize form data when entry loads
   useEffect(() => {
@@ -1165,17 +1173,6 @@ const TrackerEntryDetailPage = () => {
           </Button>
           {tracker?.tracker_config?.use_stages !== false && stageMapping.length > 0 && (
             <>
-              {hasNextStage && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleNextStage}
-                  disabled={updateEntryMutation.isPending}
-                >
-                  <ChevronRight className="mr-2 h-4 w-4" />
-                  Next stage
-                </Button>
-              )}
               <Select
                 value={currentStage || ""}
                 onValueChange={(value) => value && handleStageChange(value)}

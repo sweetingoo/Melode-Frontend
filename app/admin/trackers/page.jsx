@@ -1307,7 +1307,10 @@ const TrackersPage = () => {
                     // Statuses for the current wizard stage (so status field only shows options for this stage)
                     const currentCreateStepIndex = wizardSteps.length > 0 ? Math.min(createEntryStageIndex, wizardSteps.length - 1) : -1;
                     const currentCreateStageConfig = currentCreateStepIndex >= 0 ? wizardSteps[currentCreateStepIndex] : null;
-                    const statusesForCurrentCreateStage = (currentCreateStageConfig?.statuses ?? currentCreateStageConfig?.status_list ?? []).filter(Boolean);
+                    const stageStatuses = (currentCreateStageConfig?.statuses ?? currentCreateStageConfig?.status_list ?? []).filter(Boolean);
+                    const allTrackerStatuses = Array.isArray(trackerDetails.tracker_config?.statuses) ? trackerDetails.tracker_config.statuses : [];
+                    // When a stage has no statuses configured, show all tracker statuses (default list)
+                    const statusesForCurrentCreateStage = stageStatuses.length > 0 ? stageStatuses : allTrackerStatuses;
                     const statusFieldId = trackerDetails.tracker_config?.status_field_id;
 
                     const renderField = (field) => {
@@ -1424,49 +1427,6 @@ const TrackersPage = () => {
                       disabled={createEntryMutation.isPending}
                     >
                       Previous
-                    </Button>
-                  )}
-                  {(() => {
-                    const useStages = trackerDetails?.tracker_config?.use_stages !== false;
-                    const sm = trackerDetails?.tracker_config?.stage_mapping || [];
-                    const sec = trackerDetails?.tracker_fields?.sections || [];
-                    const wizardStepCount = useStages ? (sm.length > 0 ? sm.length : sec.length) : 0;
-                    return wizardStepCount > 0 && createEntryStageIndex < wizardStepCount - 1;
-                  })() && (
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        const sections = trackerDetails.tracker_fields.sections || [];
-                        const section = sections[createEntryStageIndex];
-                        const sectionFieldIds = section?.fields || [];
-                        const allFields = trackerDetails.tracker_fields?.fields || [];
-                        const createViewFields = trackerDetails.tracker_config?.create_view_fields;
-                        const errors = {};
-                        sectionFieldIds.forEach((fid) => {
-                          const field = allFields.find((f) => (f.id || f.field_id || f.name) === fid);
-                          if (!field || !(field.required || field.is_required)) return;
-                          if (createViewFields?.length && !createViewFields.includes(fid)) return;
-                          if (!entryFormData[fid]) {
-                            errors[fid] = `${field.label || field.field_label || "This field"} is required`;
-                          }
-                        });
-                        if (Object.keys(errors).length > 0) {
-                          setEntryFieldErrors(errors);
-                          toast.error("Please fill in all required fields for this stage");
-                          return;
-                        }
-                        setEntryFieldErrors({});
-                        const useStages = trackerDetails?.tracker_config?.use_stages !== false;
-                        const wizardStepCount = useStages
-                          ? ((trackerDetails.tracker_config?.stage_mapping?.length || 0) > 0
-                            ? (trackerDetails.tracker_config.stage_mapping?.length || 0)
-                            : sections.length)
-                          : 0;
-                        setCreateEntryStageIndex((i) => Math.min(wizardStepCount - 1, i + 1));
-                      }}
-                      disabled={createEntryMutation.isPending}
-                    >
-                      Next stage
                     </Button>
                   )}
                   <Button
@@ -2770,33 +2730,6 @@ const TrackersPage = () => {
                                         })}
                                       </SelectContent>
                                     </Select>
-                                    {(() => {
-                                      const isSelected = selectedTracker === tracker.id.toString();
-                                      const stageMapping = (isSelected && selectedTrackerDetail?.tracker_config?.stage_mapping)
-                                        ? selectedTrackerDetail.tracker_config.stage_mapping
-                                        : (tracker?.tracker_config?.stage_mapping || []);
-                                      const currentStage = entry?.formatted_data?.derived_stage ?? "";
-                                      const idx = stageMapping.findIndex((s) => (s?.stage ?? s?.name) === currentStage);
-                                      const hasNext = idx >= 0 && idx < stageMapping.length - 1;
-                                      if (!hasNext) return null;
-                                      return (
-                                        <Button
-                                          type="button"
-                                          variant="ghost"
-                                          size="sm"
-                                          className="h-8 w-8 p-0 shrink-0"
-                                          title="Next stage"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            e.preventDefault();
-                                            handleNextStage(entry, stageMapping);
-                                          }}
-                                          disabled={updateEntryMutation.isPending}
-                                        >
-                                          <ChevronRight className="h-4 w-4" />
-                                        </Button>
-                                      );
-                                    })()}
                                   </>
                                 ) : (
                                   <span>{entry.formatted_data?.derived_stage ?? "—"}</span>
