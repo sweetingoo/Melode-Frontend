@@ -13,6 +13,7 @@ import { useCurrentUser } from "@/hooks/useAuth";
 import { apiUtils } from "@/services/api-client";
 import CustomFieldRenderer from "@/components/CustomFieldRenderer";
 import { shouldShowTimeForDateField } from "@/utils/dateFieldUtils";
+import { humanizeStatusForDisplay } from "@/utils/slug";
 import { toast } from "sonner";
 
 const FormSubmitPage = () => {
@@ -807,6 +808,21 @@ const FormSubmitPage = () => {
                     const value = isDisplayOnly ? undefined : submissionData[fieldId];
                     const error = isDisplayOnly ? undefined : fieldErrors[fieldId];
 
+                    // For trackers with stages: filter status field options by the stage that contains this field
+                    const statusFieldId = form?.form_config?.status_field_id ? String(form.form_config.status_field_id).trim() : "";
+                    const isStatusField = statusFieldId && String(fieldId).trim() === statusFieldId;
+                    let optionsForField = field.options || field.field_options?.options || [];
+                    if (isStatusField && form?.is_tracker && form?.form_config?.stage_mapping?.length && form?.form_fields?.sections?.length) {
+                      const sections = form.form_fields.sections || [];
+                      const stageMapping = form.form_config.stage_mapping || [];
+                      const sectionIndex = sections.findIndex((sec) => (sec?.fields || []).includes(fieldId));
+                      const stageConfig = sectionIndex >= 0 && sectionIndex < stageMapping.length ? stageMapping[sectionIndex] : null;
+                      const stageStatuses = (stageConfig?.statuses ?? stageConfig?.status_list ?? []).filter(Boolean);
+                      const allTrackerStatuses = Array.isArray(form.form_config?.statuses) ? form.form_config.statuses : [];
+                      const statusList = stageStatuses.length > 0 ? stageStatuses : allTrackerStatuses;
+                      optionsForField = statusList.map((s) => ({ value: s, label: humanizeStatusForDisplay(s) }));
+                    }
+
                     // Map field structure for CustomFieldRenderer (support both id/name/type and field_id/field_name/field_type)
                     const mappedField = {
                       ...field,
@@ -830,7 +846,7 @@ const FormSubmitPage = () => {
                       validation: field.validation,
                       field_options: {
                         ...(field.field_options || {}), // Preserve all original field_options
-                        options: field.options || [],
+                        options: optionsForField,
                         // For file fields, also map validation to field_options for backward compatibility
                         accept: field.field_options?.accept || (field.validation?.allowed_types
                           ? Array.isArray(field.validation.allowed_types)
@@ -843,6 +859,7 @@ const FormSubmitPage = () => {
                         // File expiry date support
                         requireExpiryDate: field.file_expiry_date || false,
                       },
+                      ...(optionsForField.length > 0 ? { options: optionsForField } : {}),
                     };
 
                     return (
