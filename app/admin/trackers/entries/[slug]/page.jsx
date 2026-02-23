@@ -1178,7 +1178,6 @@ const TrackerEntryDetailPage = () => {
                   <SelectValue placeholder="Stage" />
                 </SelectTrigger>
                 <SelectContent>
-                  {!currentStage && <SelectItem value="">—</SelectItem>}
                   {(tracker.tracker_config.stage_mapping || []).map((item) => {
                     const stageName = item?.stage ?? item?.name ?? "";
                     if (!stageName) return null;
