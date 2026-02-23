@@ -39,7 +39,7 @@ export const useCreateLeaveRequest = () => {
       return response.data || response;
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: attendanceKeys.leaveRequests() });
+      queryClient.invalidateQueries({ queryKey: [...attendanceKeys.all, "leave-requests"] });
       queryClient.invalidateQueries({ queryKey: [...attendanceKeys.all, "leave-requests", "pending"] });
       if (data?.user_id && data?.job_role_id) {
         queryClient.invalidateQueries({
@@ -72,7 +72,7 @@ export const useUpdateLeaveRequest = () => {
     },
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: attendanceKeys.leaveRequest(variables.slug) });
-      queryClient.invalidateQueries({ queryKey: attendanceKeys.leaveRequests() });
+      queryClient.invalidateQueries({ queryKey: [...attendanceKeys.all, "leave-requests"] });
       toast.success("Leave request updated successfully");
     },
     onError: (error) => {
@@ -97,7 +97,7 @@ export const useCancelLeaveRequest = () => {
     },
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: attendanceKeys.leaveRequest(variables.slug) });
-      queryClient.invalidateQueries({ queryKey: attendanceKeys.leaveRequests() });
+      queryClient.invalidateQueries({ queryKey: [...attendanceKeys.all, "leave-requests"] });
       queryClient.invalidateQueries({ queryKey: [...attendanceKeys.all, "leave-requests", "pending"] });
       if (data?.user_id && data?.job_role_id) {
         queryClient.invalidateQueries({
@@ -128,8 +128,7 @@ export const useApproveLeaveRequest = () => {
     },
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: attendanceKeys.leaveRequest(variables.slug) });
-      queryClient.invalidateQueries({ queryKey: attendanceKeys.leaveRequests() });
-      // Use prefix so all pending list queries (any page/per_page) refresh
+      queryClient.invalidateQueries({ queryKey: [...attendanceKeys.all, "leave-requests"] });
       queryClient.invalidateQueries({ queryKey: [...attendanceKeys.all, "leave-requests", "pending"] });
       queryClient.invalidateQueries({ queryKey: attendanceKeys.shiftRecords() });
       if (data?.user_id && data?.job_role_id) {

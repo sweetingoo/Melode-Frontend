@@ -23,7 +23,7 @@ import { cn } from "@/lib/utils";
 import { formatDateForAPI } from "@/utils/time";
 import { getUserDisplayName } from "@/utils/user";
 import { useCreateShiftRecord, useUpdateShiftRecord } from "@/hooks/useShiftRecords";
-import { useShiftLeaveTypes, useAttendanceEmployeeSuggest } from "@/hooks/useAttendance";
+import { useShiftLeaveTypes, useAttendanceEmployeeSuggest, useAttendanceDepartments } from "@/hooks/useAttendance";
 import { useAssignments, useEmployeeAssignments } from "@/hooks/useAssignments";
 import { useAuth } from "@/hooks/useAuth";
 import { ATTENDANCE_CATEGORY_OPTIONS, getCategoryDescription } from "@/lib/attendanceLabels";
@@ -77,14 +77,19 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
 
   const getAssignmentRoleId = (a) => a?.role_id ?? a?.job_role_id ?? a?.roleId;
 
+  const { data: attendanceDepartmentsList = [] } = useAttendanceDepartments({
+    enabled: allowUserSelect && open,
+  });
+  const attendanceDepartments = Array.isArray(attendanceDepartmentsList) ? attendanceDepartmentsList : [];
+
   const { data: suggestEmployees = [], isLoading: usersSearchLoading } = useAttendanceEmployeeSuggest(
     {
       q: debouncedUserSearch.trim() || undefined,
-      department_id: undefined,
+      department_id: allowUserSelect && departmentId ? parseInt(departmentId, 10) : undefined,
       limit: 20,
     },
     {
-      enabled: allowUserSelect && open && userComboboxOpen,
+      enabled: allowUserSelect && open && userComboboxOpen && (!!departmentId || !!debouncedUserSearch.trim()),
     }
   );
   const employeesSorted = useMemo(
@@ -199,10 +204,16 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
     if (prevDepartmentIdRef.current !== departmentId) {
       prevDepartmentIdRef.current = departmentId;
       setJobRoleId("");
+      if (allowUserSelect) {
+        setSelectedUserId("");
+        setSelectedUserForDisplay(null);
+        setUserSearch("");
+        setDebouncedUserSearch("");
+      }
     } else {
       prevDepartmentIdRef.current = departmentId;
     }
-  }, [departmentId]);
+  }, [departmentId, allowUserSelect]);
 
   // Auto-select department when adding and user has only one department
   useEffect(() => {
@@ -310,8 +321,36 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
           <div className="overflow-y-auto px-6 pb-4 space-y-4 flex-1 min-h-0">
           {allowUserSelect && (
-            <div className="space-y-2">
-              <Label>User</Label>
+            <>
+              <div className="space-y-2">
+                <Label>Department</Label>
+                <Select
+                  value={departmentId || ""}
+                  onValueChange={(v) => {
+                    setDepartmentId(v);
+                    setJobRoleId("");
+                  }}
+                  required
+                >
+                  <SelectTrigger>
+                    <SelectValue
+                      placeholder={
+                        attendanceDepartments.length === 0 ? "Loading…" : "Select department"
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {attendanceDepartments.map((d) => (
+                      <SelectItem key={d.id} value={String(d.id)}>
+                        {d.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">Select department first, then choose the user.</p>
+              </div>
+              <div className="space-y-2">
+                <Label>User</Label>
                 <Popover open={userComboboxOpen} onOpenChange={(open) => { setUserComboboxOpen(open); if (!open) { setUserSearch(""); setDebouncedUserSearch(""); } }}>
                   <PopoverTrigger asChild>
                     <Button
@@ -319,9 +358,14 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
                       variant="outline"
                       role="combobox"
                       aria-expanded={userComboboxOpen}
+                      disabled={!departmentId}
                       className={cn("w-full justify-between font-normal", !selectedUserId && "text-muted-foreground")}
                     >
-                      {selectedUser ? getUserDisplayName(selectedUser) : "Type to search users..."}
+                      {!departmentId
+                        ? "Select department first"
+                        : selectedUser
+                          ? getUserDisplayName(selectedUser)
+                          : "Type to search users in this department"}
                       <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
                   </PopoverTrigger>
@@ -340,7 +384,7 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
                         <p className="py-6 text-center text-sm text-muted-foreground">Loading…</p>
                       ) : employeesSorted.length === 0 ? (
                         <p className="py-6 text-center text-sm text-muted-foreground">
-                          {debouncedUserSearch.trim() ? "No one found. Try another name." : "Type to search users."}
+                          {debouncedUserSearch.trim() ? "No one found. Try another name." : "Type to search users in this department."}
                         </p>
                       ) : (
                         <ul className="p-1">
@@ -369,10 +413,11 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
                     </ScrollArea>
                   </PopoverContent>
                 </Popover>
-            </div>
+              </div>
+            </>
           )}
 
-          {(allowUserSelect || effectiveUserIdForAssignments) && (
+          {!allowUserSelect && (effectiveUserIdForAssignments) && (
             <div className="space-y-2">
               <Label>Department</Label>
               <Select

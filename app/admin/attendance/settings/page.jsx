@@ -30,6 +30,7 @@ import {
   useUpdateShiftLeaveType,
   useDeleteShiftLeaveType,
   useHolidayYears,
+  useUpdateHolidayYear,
   useRolloverHolidayYear,
   useAttendanceSettings,
   useUpdateAttendanceSettings,
@@ -73,6 +74,7 @@ export default function AttendanceSettingsPage() {
 
   const { data: typesData, isLoading: typesLoading } = useShiftLeaveTypes({});
   const rolloverYear = useRolloverHolidayYear();
+  const updateHolidayYear = useUpdateHolidayYear();
   const { data: yearsData, isLoading: yearsLoading } = useHolidayYears({});
   const { data: settings, isLoading: settingsLoading } = useAttendanceSettings();
   const updateSettings = useUpdateAttendanceSettings();
@@ -320,16 +322,36 @@ export default function AttendanceSettingsPage() {
           ) : (
             <div className="space-y-2">
               {years.map((year) => (
-                <div key={year.id} className="flex items-center justify-between rounded-lg border p-4">
+                <div key={year.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4">
                   <div>
                     <p className="font-medium">{year.year_name}</p>
                     <p className="text-sm text-muted-foreground">
                       {year.start_date} to {year.end_date}
                     </p>
                   </div>
-                  <Badge variant={year.is_active ? "default" : "secondary"}>
-                    {year.is_active ? "Active" : "Inactive"}
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge variant={year.is_active ? "default" : "secondary"}>
+                      {year.is_active ? "Active" : "Inactive"}
+                    </Badge>
+                    {!year.is_active && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={updateHolidayYear.isPending}
+                        onClick={async () => {
+                          try {
+                            const slug = year.slug ?? String(year.id);
+                            await updateHolidayYear.mutateAsync({ slug, yearData: { is_active: true } });
+                            toast.success(`${year.year_name} is now the active holiday year`);
+                          } catch (err) {
+                            toast.error(err?.response?.data?.detail || "Failed to set active");
+                          }
+                        }}
+                      >
+                        {updateHolidayYear.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Set as active"}
+                      </Button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>

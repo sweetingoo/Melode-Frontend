@@ -24,6 +24,7 @@ export const attendanceKeys = {
   leaveRequests: (params) => [...attendanceKeys.all, "leave-requests", params],
   pendingLeaveRequests: (params) => [...attendanceKeys.all, "leave-requests", "pending", params],
   pendingLeaveRequestDepartments: () => [...attendanceKeys.all, "leave-requests", "pending", "departments"],
+  leaveApproverDepartments: (userId) => [...attendanceKeys.all, "leave-approver-departments", userId],
   leaveRequest: (slug) => [...attendanceKeys.all, "leave-request", slug],
   coverage: (params) => [...attendanceKeys.all, "coverage", params],
   gaps: (params) => [...attendanceKeys.all, "gaps", params],
@@ -474,6 +475,39 @@ export const useRecalculateHolidayEntitlementHours = () => {
       toast.error("Recalculate failed", {
         description: Array.isArray(errorMessage) ? errorMessage.map((e) => e.msg || e).join(", ") : errorMessage,
       });
+    },
+  });
+};
+
+// Leave approver departments (admin config: which departments a user can approve leave for)
+export const useLeaveApproverDepartments = (userId, options = {}) => {
+  return useQuery({
+    queryKey: attendanceKeys.leaveApproverDepartments(userId),
+    queryFn: async () => {
+      const res = await attendanceService.getLeaveApproverDepartments(userId);
+      return Array.isArray(res) ? res : [];
+    },
+    enabled: !!userId,
+    staleTime: 2 * 60 * 1000,
+    ...options,
+  });
+};
+
+export const useSetLeaveApproverDepartments = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ userId, department_ids }) => {
+      const res = await attendanceService.setLeaveApproverDepartments(userId, { department_ids: department_ids ?? [] });
+      return res;
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: attendanceKeys.leaveApproverDepartments(variables.userId) });
+      queryClient.invalidateQueries({ queryKey: attendanceKeys.pendingLeaveRequestDepartments() });
+      toast.success("Leave approval departments updated");
+    },
+    onError: (error) => {
+      const msg = error?.response?.data?.detail || "Failed to update leave approval departments";
+      toast.error(msg);
     },
   });
 };

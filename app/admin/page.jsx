@@ -57,8 +57,6 @@ import {
   DashboardChartHoursWeek,
   DashboardChartTasksSummary,
   DashboardChartLeaveBalance,
-  DashboardChartOverview,
-  DashboardChartAssets,
 } from "@/components/dashboard";
 
 const Dashboard = () => {
@@ -502,15 +500,10 @@ const Dashboard = () => {
               </section>
 
               {/* Needs attention: only when there is something */}
-              {dashboardData?.needs_attention && ((dashboardData.needs_attention.pending_invitations ?? 0) + (dashboardData.needs_attention.overdue_tasks ?? 0) + (dashboardData.needs_attention.submissions_pending_review ?? 0)) > 0 && (
+              {dashboardData?.needs_attention && ((dashboardData.needs_attention.overdue_tasks ?? 0) + (dashboardData.needs_attention.submissions_pending_review ?? 0)) > 0 && (
                 <section className="mb-10">
                   <div className="rounded-2xl border border-amber-200 dark:border-amber-900/50 bg-amber-50/30 dark:bg-amber-950/20 px-5 py-4 flex flex-wrap items-center gap-3">
                     <span className="text-xs font-semibold text-amber-800 dark:text-amber-200 uppercase tracking-wider">Needs attention</span>
-                    {(dashboardData.needs_attention.pending_invitations ?? 0) > 0 && (
-                      <Link href="/admin/people-management?tab=invitations" className="text-sm font-medium text-amber-800 dark:text-amber-200 hover:underline">
-                        {dashboardData.needs_attention.pending_invitations} pending invitation{dashboardData.needs_attention.pending_invitations !== 1 ? "s" : ""}
-                      </Link>
-                    )}
                     {(dashboardData.needs_attention.overdue_tasks ?? 0) > 0 && (
                       <Link href="/admin/tasks?status=overdue" className="text-sm font-medium text-red-700 dark:text-red-300 hover:underline">
                         {dashboardData.needs_attention.overdue_tasks} overdue task{dashboardData.needs_attention.overdue_tasks !== 1 ? "s" : ""}
@@ -525,17 +518,6 @@ const Dashboard = () => {
                 </section>
               )}
 
-              {/* Charts: only those that add insight (Overview = at-a-glance; Assets = proportion) */}
-              {dashboardData && (
-                <section className="mb-10">
-                  <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">At a glance</h2>
-                  <div className="grid gap-5 sm:grid-cols-2">
-                    <DashboardChartOverview dashboardData={dashboardData} />
-                    <DashboardChartAssets dashboardData={dashboardData} />
-                  </div>
-                </section>
-              )}
-
               {/* Main content: shortcuts + activity */}
               <section className="mb-10 grid grid-cols-1 lg:grid-cols-3 gap-8">
                 {/* Shortcuts - compact list */}
@@ -546,9 +528,6 @@ const Dashboard = () => {
                       <Link href="/admin/people-management" className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm hover:bg-muted/50 transition-colors">
                         <Users className="h-4 w-4 text-muted-foreground" />
                         <span>People</span>
-                        {(dashboardData?.needs_attention?.pending_invitations ?? 0) > 0 && (
-                          <Badge variant="secondary" className="ml-auto text-xs">{dashboardData.needs_attention.pending_invitations}</Badge>
-                        )}
                       </Link>
                     )}
                     {canManageRoles && (

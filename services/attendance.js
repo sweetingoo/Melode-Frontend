@@ -257,6 +257,28 @@ export const attendanceService = {
     }
   },
 
+  /** Get departments this user can approve leave for (admin config). */
+  getLeaveApproverDepartments: async (userId) => {
+    try {
+      const res = await api.get(`/attendance/users/${userId}/leave-approver-departments`);
+      return Array.isArray(res?.data) ? res.data : (res?.data ?? res ?? []);
+    } catch (error) {
+      console.error("Get leave approver departments failed:", error);
+      throw error;
+    }
+  },
+
+  /** Set departments this user can approve leave for. Empty list = all departments. */
+  setLeaveApproverDepartments: async (userId, { department_ids = [] }) => {
+    try {
+      const res = await api.put(`/attendance/users/${userId}/leave-approver-departments`, { department_ids });
+      return Array.isArray(res?.data) ? res.data : (res?.data ?? res ?? []);
+    } catch (error) {
+      console.error("Set leave approver departments failed:", error);
+      throw error;
+    }
+  },
+
   /**
    * Get pending leave requests for approval list with filters.
    * @param {Object} filters - { status, department_id, sort_by, sort_order, page, per_page }

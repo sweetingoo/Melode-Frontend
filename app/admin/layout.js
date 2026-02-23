@@ -125,7 +125,7 @@ const mainMenuItems = [
   },
   {
     title: "My Time",
-    description: "View your clock in/out history",
+    description: "View your shifts and sessions in one list",
     icon: History,
     url: "/admin/clock/history",
     permission: "clock:view", // Permission to view clock records
@@ -1410,9 +1410,10 @@ export default function AdminLayout({ children }) {
 
   // Helper function to filter items based on permissions
   const filterItemsByPermission = (items) => {
-    // During SSR or while loading, show all items to prevent hydration mismatch
+    // During SSR or while loading: only show items with no permission requirement (visible to all).
+    // Hide permission-gated items (e.g. Time & Attendance, Monitoring & Reports) until we know the user's permissions.
     if (!isClient || currentUserLoading || !currentUserData) {
-      return items;
+      return items.filter((item) => item.permission == null || item.permission === undefined);
     }
 
     // If user is a superuser (by flag), show all items
@@ -1483,16 +1484,19 @@ export default function AdminLayout({ children }) {
         // Otherwise check for permission
       }
 
-      // Special case: Time & Attendance - show if user has any attendance-related permission
-      // (attendance:view, attendance:manage_own, or attendance:reports); backend enforces per-endpoint
+      // Special case: Time & Attendance - show only if user has an attendance/leave permission
+      // (attendance:view, attendance:manage_own, attendance:reports, leave:approve, attendance:manage_all); backend enforces per-endpoint
       if (item.permission === "attendance:view") {
         const hasAnyAttendance = userPermissionNames.some(
           (perm) =>
             perm === "attendance:view" ||
             perm === "attendance:manage_own" ||
-            perm === "attendance:reports"
+            perm === "attendance:reports" ||
+            perm === "leave:approve" ||
+            perm === "attendance:manage_all"
         );
         if (hasAnyAttendance) return true;
+        return false; // explicit: do not show Time & Attendance without one of the above
       }
 
       // If user has wildcard permissions, show all

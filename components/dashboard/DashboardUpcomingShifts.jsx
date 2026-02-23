@@ -45,7 +45,7 @@ export function DashboardUpcomingShifts() {
           <div className="h-9 w-9 rounded-lg bg-blue-500/10 flex items-center justify-center">
             <CalendarDays className="h-4 w-4 text-blue-600 dark:text-blue-400" />
           </div>
-          Upcoming Shifts
+          My Shifts
         </CardTitle>
       </CardHeader>
       <CardContent className="pt-0 px-5 pb-5">

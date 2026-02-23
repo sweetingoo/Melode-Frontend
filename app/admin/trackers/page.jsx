@@ -187,6 +187,9 @@ const TrackersPage = () => {
   const [entryFieldErrors, setEntryFieldErrors] = useState({});
   // Create entry wizard: current stage index when tracker has sections (0 = first stage)
   const [createEntryStageIndex, setCreateEntryStageIndex] = useState(0);
+  // Explicit stage + status for create entry (when tracker has stage_mapping)
+  const [createEntrySelectedStage, setCreateEntrySelectedStage] = useState("");
+  const [createEntrySelectedStatus, setCreateEntrySelectedStatus] = useState("");
   const [showMetadataColumns, setShowMetadataColumns] = useState(false);
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   // Sheet-like: selected cell for formula bar (rowIndex, fieldId)
@@ -470,6 +473,24 @@ const TrackersPage = () => {
     enabled: !!selectedTrackerObj?.slug,
   });
   const updateTrackerMutation = useUpdateTracker();
+
+  // When create-entry dialog opens with a stage-based tracker, set initial stage and status
+  useEffect(() => {
+    if (!isCreateEntryDialogOpen || !trackerDetails?.tracker_config?.stage_mapping?.length) return;
+    const sm = trackerDetails.tracker_config.stage_mapping;
+    const firstStage = sm[0];
+    const firstStageName = (firstStage?.stage ?? firstStage?.name ?? "").toString().trim();
+    if (!firstStageName) return;
+    const stageStatuses = (firstStage?.statuses ?? firstStage?.status_list ?? []).filter(Boolean);
+    const allStatuses = Array.isArray(trackerDetails.tracker_config?.statuses) ? trackerDetails.tracker_config.statuses : [];
+    const statusList = stageStatuses.length > 0 ? stageStatuses : allStatuses;
+    const defaultStatus = trackerDetails.tracker_config?.default_status || "open";
+    const initialStatus = statusList.length > 0 && statusList.includes(defaultStatus)
+      ? defaultStatus
+      : (statusList[0] ?? defaultStatus);
+    setCreateEntrySelectedStage(firstStageName);
+    setCreateEntrySelectedStatus(initialStatus);
+  }, [isCreateEntryDialogOpen, trackerDetails?.id, trackerDetails?.tracker_config?.stage_mapping, trackerDetails?.tracker_config?.statuses, trackerDetails?.tracker_config?.default_status]);
 
   const saveFormulaColumn = useCallback(async () => {
     const tracker = trackerDetailForFormula || selectedTrackerObj;
@@ -1254,6 +1275,8 @@ const TrackersPage = () => {
                   setEntryFormData({});
                   setEntryFieldErrors({});
                   setCreateEntryStageIndex(0);
+                  setCreateEntrySelectedStage("");
+                  setCreateEntrySelectedStatus("");
                 }
               }}
             >
@@ -1313,9 +1336,18 @@ const TrackersPage = () => {
                     const statusesForCurrentCreateStage = stageStatuses.length > 0 ? stageStatuses : allTrackerStatuses;
                     const statusFieldId = trackerDetails.tracker_config?.status_field_id;
 
+                    // Status options for the explicitly selected stage (create-entry Stage dropdown)
+                    const selectedStageConfig = createEntrySelectedStage
+                      ? stageMapping.find((s) => (s?.stage ?? s?.name ?? "").toString().trim() === createEntrySelectedStage.toString().trim())
+                      : null;
+                    const statusesForSelectedStage = selectedStageConfig
+                      ? (selectedStageConfig?.statuses ?? selectedStageConfig?.status_list ?? []).filter(Boolean)
+                      : [];
+                    const createEntryStatusOptions = statusesForSelectedStage.length > 0 ? statusesForSelectedStage : allTrackerStatuses;
+
                     const renderField = (field) => {
-                      const fieldId = field.id || field.field_id;
-                      const fieldValue = entryFormData[fieldId] || "";
+                      const fieldId = field.id || field.field_id || field.name;
+                      const fieldValue = entryFormData[fieldId] ?? "";
                       const baseField = {
                         ...field,
                         id: fieldId,
@@ -1323,15 +1355,10 @@ const TrackersPage = () => {
                         field_type: field.type || field.field_type,
                         is_required: field.required || field.is_required,
                       };
-                      // For stage-styled trackers, restrict status field to current stage's statuses only (use empty list if stage has none)
+                      // When we show Stage & Status section, hide the status form field to avoid duplication
                       const isStatusField = statusFieldId && (String((field.id ?? field.field_id ?? field.name) || "").trim() === String(statusFieldId).trim());
-                      const fieldToRender = (isStatusField && wizardSteps.length > 0)
-                        ? {
-                            ...baseField,
-                            field_options: { ...(baseField.field_options || {}), options: statusesForCurrentCreateStage.map((s) => ({ value: s, label: humanizeStatusForDisplay(s) })) },
-                            options: statusesForCurrentCreateStage.map((s) => ({ value: s, label: humanizeStatusForDisplay(s) })),
-                          }
-                        : baseField;
+                      if (isStatusField && wizardSteps.length > 0) return null;
+                      const fieldToRender = baseField;
                       return (
                         <CustomFieldRenderer
                           key={fieldId}
@@ -1399,6 +1426,65 @@ const TrackersPage = () => {
                             </div>
                           </>
                         )}
+                        {/* Stage and Status after the form (for stage-based trackers) */}
+                        {wizardSteps.length > 0 && (
+                          <Card>
+                            <CardHeader className="py-3">
+                              <CardTitle className="text-base">Stage &amp; Status</CardTitle>
+                              <p className="text-sm text-muted-foreground font-normal">
+                                Set the stage and status for this new entry.
+                              </p>
+                            </CardHeader>
+                            <CardContent className="pt-0 grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div className="space-y-2">
+                                <Label htmlFor="create-entry-stage">Stage</Label>
+                                <Select
+                                  value={createEntrySelectedStage || (stageMapping[0] && (stageMapping[0].stage ?? stageMapping[0].name)) || ""}
+                                  onValueChange={(val) => {
+                                    setCreateEntrySelectedStage(val);
+                                    const cfg = stageMapping.find((s) => (s?.stage ?? s?.name ?? "").toString().trim() === val);
+                                    const st = (cfg?.statuses ?? cfg?.status_list ?? []).filter(Boolean);
+                                    const list = st.length > 0 ? st : allTrackerStatuses;
+                                    setCreateEntrySelectedStatus(list[0] ?? trackerDetails.tracker_config?.default_status ?? "open");
+                                  }}
+                                >
+                                  <SelectTrigger id="create-entry-stage">
+                                    <SelectValue placeholder="Select stage" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {stageMapping.map((s) => {
+                                      const name = (s?.stage ?? s?.name ?? "").toString().trim();
+                                      if (!name) return null;
+                                      return (
+                                        <SelectItem key={name} value={name}>
+                                          {name}
+                                        </SelectItem>
+                                      );
+                                    })}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="space-y-2">
+                                <Label htmlFor="create-entry-status">Status</Label>
+                                <Select
+                                  value={createEntrySelectedStatus}
+                                  onValueChange={setCreateEntrySelectedStatus}
+                                >
+                                  <SelectTrigger id="create-entry-status">
+                                    <SelectValue placeholder="Select status" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {createEntryStatusOptions.map((s) => (
+                                      <SelectItem key={s} value={s}>
+                                        {humanizeStatusForDisplay(s)}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        )}
                       </div>
                     );
                   })()}
@@ -1447,10 +1533,19 @@ const TrackersPage = () => {
                             return createViewFields.includes(fieldId);
                           })
                         : allFields;
+                      const stageMapping = trackerDetails.tracker_config?.stage_mapping || [];
+                      const wizardStepCount = stageMapping.length > 0 ? stageMapping.length : (trackerDetails.tracker_fields?.sections?.length || 0);
+                      const statusFieldId = trackerDetails.tracker_config?.status_field_id;
+                      const isValueEmpty = (v) => v === undefined || v === null || (typeof v === "string" && String(v).trim() === "");
                       fieldsToValidate.forEach((field) => {
                         const fieldId = field.id || field.field_id || field.name;
                         const isRequired = field.required || field.is_required;
-                        if (isRequired && !entryFormData[fieldId]) {
+                        if (!isRequired) return;
+                        // Status is set via Stage & Status UI when using wizard; don't require it in entryFormData
+                        const value = (statusFieldId && String(fieldId || "").trim() === String(statusFieldId || "").trim() && wizardStepCount > 0)
+                          ? (createEntrySelectedStatus ?? entryFormData[fieldId])
+                          : entryFormData[fieldId];
+                        if (isValueEmpty(value)) {
                           errors[fieldId] = `${field.label || field.field_label || "This field"} is required`;
                         }
                       });
@@ -1521,15 +1616,25 @@ const TrackersPage = () => {
                             }
                           }
                         }
+                        const stageMapping = trackerDetails.tracker_config?.stage_mapping || [];
+                        const statusToSend = stageMapping.length > 0
+                          ? (createEntrySelectedStatus || trackerDetails.tracker_config?.default_status || "open")
+                          : (trackerDetails.tracker_config?.default_status || "open");
+                        const statusFieldId = trackerDetails.tracker_config?.status_field_id;
+                        if (statusFieldId && statusToSend) {
+                          submission_data[statusFieldId] = statusToSend;
+                        }
                         const result = await createEntryMutation.mutateAsync({
                           form_id: trackerDetails.id,
                           submission_data,
-                          status: trackerDetails.tracker_config?.default_status || "open",
+                          status: statusToSend,
                         });
                         setIsCreateEntryDialogOpen(false);
                         setEntryFormData({});
                         setEntryFieldErrors({});
                         setCreateEntryStageIndex(0);
+                        setCreateEntrySelectedStage("");
+                        setCreateEntrySelectedStatus("");
                         const entryIdentifier = result?.slug ?? result?.id;
                         if (entryIdentifier) {
                           router.push(`/admin/trackers/entries/${entryIdentifier}`);

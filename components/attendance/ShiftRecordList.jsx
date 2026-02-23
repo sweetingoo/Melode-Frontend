@@ -35,7 +35,7 @@ import {
 } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
-import { Plus, Pencil, Trash2, Loader2, CalendarIcon, ChevronDown } from "lucide-react";
+import { Plus, Pencil, Trash2, Loader2, CalendarIcon, ChevronDown, Clock, UserPen } from "lucide-react";
 import { format } from "date-fns";
 import { formatDateForAPI } from "@/utils/time";
 import { getUserDisplayName } from "@/utils/user";
@@ -566,6 +566,7 @@ export const ShiftRecordList = ({
                 {allowUserSelect && <TableHead>User</TableHead>}
                 <TableHead>Date</TableHead>
                 <TableHead>Category</TableHead>
+                <TableHead className="whitespace-nowrap">How logged</TableHead>
                 <TableHead>Type</TableHead>
                 <TableHead>Hours</TableHead>
                 <TableHead>Time</TableHead>
@@ -588,6 +589,19 @@ export const ShiftRecordList = ({
                       : "—"}
                   </TableCell>
                   <TableCell>{getCategoryBadge(record.category)}</TableCell>
+                  <TableCell>
+                    {record.clock_record_id != null || record.clock_record_slug ? (
+                      <span className="inline-flex items-center gap-1.5 text-muted-foreground" title="Recorded by clocking in/out">
+                        <Clock className="h-4 w-4 shrink-0 text-primary" />
+                        <span className="text-xs">Clocked in/out</span>
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 text-muted-foreground" title="Manually added">
+                        <UserPen className="h-4 w-4 shrink-0" />
+                        <span className="text-xs">Manual</span>
+                      </span>
+                    )}
+                  </TableCell>
                   <TableCell>
                     {record.shift_leave_type?.name || record.shift_leave_type_id || "—"}
                   </TableCell>

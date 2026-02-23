@@ -43,6 +43,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import Link from "next/link";
 import {
@@ -123,6 +124,8 @@ import {
   useHolidayEntitlements,
   useHolidayYears,
   useRecalculateHolidayEntitlementHours,
+  useLeaveApproverDepartments,
+  useSetLeaveApproverDepartments,
 } from "@/hooks/useAttendance";
 import { filesService } from "@/services/files";
 
@@ -213,6 +216,7 @@ const UserEditPage = () => {
   const [selectedEntitlement, setSelectedEntitlement] = useState(null);
   const [isEntitlementFormOpen, setIsEntitlementFormOpen] = useState(false);
   const [entitlementFilterYearId, setEntitlementFilterYearId] = useState("all");
+  const [leaveApproverSelectedIds, setLeaveApproverSelectedIds] = useState([]);
 
   const {
     data: userData,
@@ -286,6 +290,13 @@ const UserEditPage = () => {
   });
   const entitlementsList = Array.isArray(entitlementsData) ? entitlementsData : (entitlementsData ?? []);
   const recalculateHoursMutation = useRecalculateHolidayEntitlementHours();
+  const { data: leaveApproverDeptsData } = useLeaveApproverDepartments(userData?.id ?? null, { enabled: !!userData?.id });
+  const leaveApproverDepartmentsList = Array.isArray(leaveApproverDeptsData) ? leaveApproverDeptsData : [];
+  const setLeaveApproverDepartmentsMutation = useSetLeaveApproverDepartments();
+
+  useEffect(() => {
+    setLeaveApproverSelectedIds(leaveApproverDepartmentsList.map((d) => d.id));
+  }, [leaveApproverDepartmentsList]);
 
   // Get available roles from API (needed for Superuser role lookup and Assign Department modal)
   const { data: rolesData, isLoading: rolesLoading } = useRolesAll();
@@ -2464,6 +2475,61 @@ const UserEditPage = () => {
                   )}
                 </CardContent>
               </Card>
+
+              {canManageAttendanceSettings && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Leave approval</CardTitle>
+                    <CardDescription>
+                      Departments this person can approve annual leave for. Empty = all departments. Only applies when they have the Leave Approve permission.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <p className="text-sm text-muted-foreground">
+                      {leaveApproverSelectedIds.length === 0
+                        ? "All departments (no restriction)"
+                        : `${leaveApproverSelectedIds.length} department(s) selected`}
+                    </p>
+                    <div className="max-h-[200px] overflow-y-auto rounded-md border p-3 space-y-2">
+                      {(departments || []).filter((d) => d.is_active !== false).map((dept) => (
+                        <div key={dept.id} className="flex items-center gap-2">
+                          <Checkbox
+                            id={`leave-approver-dept-${dept.id}`}
+                            checked={leaveApproverSelectedIds.includes(dept.id)}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                setLeaveApproverSelectedIds((prev) => (prev.includes(dept.id) ? prev : [...prev, dept.id]));
+                              } else {
+                                setLeaveApproverSelectedIds((prev) => prev.filter((id) => id !== dept.id));
+                              }
+                            }}
+                          />
+                          <label htmlFor={`leave-approver-dept-${dept.id}`} className="text-sm cursor-pointer">
+                            {dept.name ?? `Department ${dept.id}`}
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                    <Button
+                      size="sm"
+                      disabled={setLeaveApproverDepartmentsMutation.isPending}
+                      onClick={async () => {
+                        try {
+                          await setLeaveApproverDepartmentsMutation.mutateAsync({
+                            userId: userData.id,
+                            department_ids: leaveApproverSelectedIds,
+                          });
+                        } catch (_) {
+                          // toast handled in hook
+                        }
+                      }}
+                    >
+                      {setLeaveApproverDepartmentsMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                      Save
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
 
               <Card>
                 <CardHeader>

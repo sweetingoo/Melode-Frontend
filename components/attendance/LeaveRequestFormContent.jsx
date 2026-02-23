@@ -13,7 +13,7 @@ import { format, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
 import { formatDateForAPI } from "@/utils/time";
 import { useCreateLeaveRequest, useUpdateLeaveRequest } from "@/hooks/useLeaveRequests";
-import { useShiftLeaveTypes, useHolidayBalance, useAttendanceSettings } from "@/hooks/useAttendance";
+import { useShiftLeaveTypes, useHolidayBalance, useAttendanceSettings, useEmployeeSettings } from "@/hooks/useAttendance";
 import { useAssignments } from "@/hooks/useAssignments";
 import { useAuth } from "@/hooks/useAuth";
 import {
@@ -27,8 +27,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-const FULL_DAY_HOURS = 8;
-const PART_DAY_HOURS = 4;
+const DEFAULT_FULL_DAY_HOURS = 8;
+const DEFAULT_PART_DAY_HOURS = 4;
 
 function datesInRange(from, to) {
   if (!from || !to || to < from) return [];
@@ -156,6 +156,23 @@ export const LeaveRequestFormContent = ({
     { user_id: targetUserId, job_role_id: effectiveJobRoleId },
     { enabled: !!targetUserId && !!effectiveJobRoleId }
   );
+  const { data: employeeSettingsData } = useEmployeeSettings(
+    targetUserId,
+    { job_role_id: effectiveJobRoleId },
+    { enabled: isReady && !!targetUserId && !!effectiveJobRoleId }
+  );
+  const employeeSettingsList = Array.isArray(employeeSettingsData)
+    ? employeeSettingsData
+    : (employeeSettingsData?.settings ?? []);
+  const contractedHoursPerDay =
+    employeeSettingsList.length > 0 && employeeSettingsList[0]?.hours_per_day != null
+      ? Number(employeeSettingsList[0].hours_per_day)
+      : null;
+  const fullDayHours = contractedHoursPerDay ?? DEFAULT_FULL_DAY_HOURS;
+  const partDayHours = contractedHoursPerDay != null
+    ? Math.round((contractedHoursPerDay / 2) * 100) / 100
+    : DEFAULT_PART_DAY_HOURS;
+
   const { data: attendanceSettings } = useAttendanceSettings();
   const allowNegative = attendanceSettings?.allow_negative_holiday_balance === true;
   const remainingHours = balance?.remaining_hours != null ? Number(balance.remaining_hours) : null;
@@ -318,10 +335,11 @@ export const LeaveRequestFormContent = ({
   const endDate = dateRange?.to ?? dateRange?.from;
   const hasIncludedDay = dayEntries.some((d) => d.included);
   const totalHoursFromBreakdown = useMemo(() => {
-    return dayEntries
+    const total = dayEntries
       .filter((d) => d.included)
-      .reduce((sum, d) => sum + (d.part_day === "full" ? FULL_DAY_HOURS : PART_DAY_HOURS), 0);
-  }, [dayEntries]);
+      .reduce((sum, d) => sum + (d.part_day === "full" ? fullDayHours : partDayHours), 0);
+    return Math.round(total * 100) / 100;
+  }, [dayEntries, fullDayHours, partDayHours]);
   const canSubmit =
     shiftLeaveTypeId &&
     effectiveJobRoleId &&
@@ -511,7 +529,7 @@ export const LeaveRequestFormContent = ({
           <div className="space-y-2">
             <Label>Days in range</Label>
             <p className="text-xs text-muted-foreground">
-              Uncheck days to exclude (e.g. weekends). Full day = {FULL_DAY_HOURS}h, morning/afternoon = {PART_DAY_HOURS}h each.
+              Uncheck days to exclude (e.g. weekends). Full day = {fullDayHours}h, morning/afternoon = {partDayHours}h each.
             </p>
             {hasIncludedDay && (
               <p className="text-sm font-medium">
