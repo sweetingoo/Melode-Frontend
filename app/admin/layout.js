@@ -128,7 +128,7 @@ const mainMenuItems = [
     description: "View your shifts and sessions in one list",
     icon: History,
     url: "/admin/clock/history",
-    permission: "clock:view", // Permission to view clock records
+    permission: null, // Always visible so everyone can view their own shifts/leave; backend restricts data to own
   },
   {
     title: "Time & Attendance",
