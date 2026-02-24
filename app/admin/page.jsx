@@ -39,10 +39,8 @@ import { useDashboardStats } from "@/hooks/useDashboard";
 import { useCurrentUser } from "@/hooks/useAuth";
 import { useMyStats } from "@/hooks/useProfile";
 import { useClockStatus } from "@/hooks/useClock";
-import { useMyTasks, useTasks } from "@/hooks/useTasks";
+import { useMyTasks, useTasksByUser } from "@/hooks/useTasks";
 import { useClockRecords } from "@/hooks/useClock";
-import { useAssets } from "@/hooks/useAssets";
-import { useForms } from "@/hooks/useForms";
 import { toast } from "sonner";
 import Link from "next/link";
 import {
@@ -80,7 +78,10 @@ const Dashboard = () => {
     limit: 5,
     status: "pending"
   });
-  const { data: recentClockRecords } = useClockRecords({ page: 1, per_page: 5 });
+  const { data: recentClockRecords } = useClockRecords(
+    { page: 1, per_page: 5, user_id: currentUserData?.id },
+    { enabled: !!currentUserData?.id }
+  );
 
   // Get current user's permissions
   const currentUserPermissions = currentUserData?.permissions || [];
@@ -122,19 +123,13 @@ const Dashboard = () => {
     { enabled: shouldFetchDashboard }
   );
 
-  // Get recent activities for dashboard (admin view) - after shouldFetchDashboard is defined
-  const { data: recentTasksData } = useTasks(
-    { limit: 5, sort_by: "created_at", order: "desc" },
-    { enabled: shouldFetchDashboard }
-  );
-  const { data: recentAssetsData } = useAssets(
-    { limit: 5 },
-    { enabled: shouldFetchDashboard }
-  );
-  const { data: recentFormsData } = useForms(
-    { limit: 5 },
-    { enabled: shouldFetchDashboard }
-  );
+  // Recent activity: always scope to current user (dashboard shows own activity only, not everyone's)
+  const currentUserSlug = currentUserData?.slug ?? currentUserData?.id?.toString?.();
+  const { data: recentTasksData } = useTasksByUser(currentUserSlug ?? "", {
+    limit: 5,
+    sort_by: "created_at",
+    order: "desc",
+  });
 
   // Helper to extract items from different API response formats
   const extractItems = (data) => {
@@ -150,62 +145,26 @@ const Dashboard = () => {
     return [];
   };
 
-  // Combine and sort recent activities
+  // Combine and sort recent activities (own activity only: my tasks + my clock records)
   const recentActivities = React.useMemo(() => {
     const activities = [];
 
-    // Add recent tasks (for admins)
-    if (shouldFetchDashboard) {
-      const tasks = extractItems(recentTasksData);
-      tasks.slice(0, 5).forEach((task) => {
-        activities.push({
-          id: `task-${task.id}`,
-          type: "task",
-          title: task.title || task.name || "Untitled Task",
-          description: task.description || `Task #${task.id}`,
-          timestamp: task.created_at || task.createdAt,
-          link: `/admin/tasks/${task.slug || task.id}`,
-          icon: CheckSquare,
-          color: "blue",
-        });
+    // Add current user's recent tasks
+    const tasks = extractItems(recentTasksData);
+    tasks.slice(0, 5).forEach((task) => {
+      activities.push({
+        id: `task-${task.id}`,
+        type: "task",
+        title: task.title || task.name || "Untitled Task",
+        description: task.description || `Task #${task.id}`,
+        timestamp: task.created_at || task.createdAt,
+        link: `/admin/tasks/${task.slug || task.id}`,
+        icon: CheckSquare,
+        color: "blue",
       });
-    }
+    });
 
-    // Add recent assets (for admins)
-    if (shouldFetchDashboard) {
-      const assets = extractItems(recentAssetsData);
-      assets.slice(0, 5).forEach((asset) => {
-        activities.push({
-          id: `asset-${asset.id}`,
-          type: "asset",
-          title: asset.name || asset.asset_name || `Asset #${asset.asset_number || asset.id}`,
-          description: asset.asset_number || `Asset ID: ${asset.id}`,
-          timestamp: asset.created_at || asset.createdAt,
-          link: `/admin/assets`,
-          icon: Images,
-          color: "green",
-        });
-      });
-    }
-
-    // Add recent forms (for admins)
-    if (shouldFetchDashboard) {
-      const forms = extractItems(recentFormsData);
-      forms.slice(0, 5).forEach((form) => {
-        activities.push({
-          id: `form-${form.id}`,
-          type: "form",
-          title: form.form_title || form.name || "Untitled Form",
-          description: form.description || `Form #${form.id}`,
-          timestamp: form.created_at || form.createdAt,
-          link: `/admin/forms/${form.slug || form.id}`,
-          icon: FileText,
-          color: "purple",
-        });
-      });
-    }
-
-    // Add recent clock records (for all users)
+    // Add current user's recent clock records
     const clockRecords = extractItems(recentClockRecords);
     clockRecords.slice(0, 5).forEach((record) => {
       activities.push({
@@ -228,7 +187,7 @@ const Dashboard = () => {
         return (timeB || 0) - (timeA || 0);
       })
       .slice(0, 10); // Keep only 10 most recent
-  }, [shouldFetchDashboard, recentTasksData, recentAssetsData, recentFormsData, recentClockRecords]);
+  }, [recentTasksData, recentClockRecords]);
 
   // Get all permission names/slugs that the user has
   const userPermissionNames = React.useMemo(() => {
