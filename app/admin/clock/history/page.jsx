@@ -40,15 +40,12 @@ function ClockHistoryPageContent() {
   const assignments = assignmentsData?.assignments || assignmentsData || [];
   const activeAssignment = assignments?.[0];
   const jobRoleId = activeAssignment?.role_id ?? activeAssignment?.job_role_id;
-  // If user has a role that has shifts (job/shift role assignment, not only system roles), show only their own shifts in My Time
+  // If user has any department-role assignment (job/shift role), show only their own shifts in My Time; admins with no such assignment see all
   const hasRoleWithShifts =
     Array.isArray(assignments) &&
-    assignments.some((a) => {
-      const roleId = a.role_id ?? a.job_role_id ?? a.roleId ?? a.jobRoleId;
-      if (roleId == null) return false;
-      const roleType = a.role?.role_type ?? a.role?.roleType;
-      return roleType !== "system";
-    });
+    assignments.some(
+      (a) => (a.role_id ?? a.job_role_id ?? a.roleId ?? a.jobRoleId) != null
+    );
   // Only show all users' shifts if admin has no shift role; while assignments load, show only own (safe default)
   const showAllShiftsInMyTime =
     canManageAllShiftRecords && !hasRoleWithShifts && !assignmentsLoading;
