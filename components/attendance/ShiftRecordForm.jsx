@@ -190,10 +190,11 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
 
   const prevSelectedUserIdRef = useRef(selectedUserId);
   useEffect(() => {
-    if (allowUserSelect && prevSelectedUserIdRef.current !== selectedUserId) {
+    if (prevSelectedUserIdRef.current !== selectedUserId) {
       prevSelectedUserIdRef.current = selectedUserId;
       setJobRoleId("");
-      setDepartmentId("");
+      // When allowUserSelect, flow is Department first then User — do not clear department when user changes
+      if (!allowUserSelect) setDepartmentId("");
     } else {
       prevSelectedUserIdRef.current = selectedUserId;
     }
