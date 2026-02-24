@@ -35,7 +35,7 @@ export function DashboardChartLeaveBalance() {
         </CardHeader>
         <CardContent className="pt-0 px-5 pb-5">
           <p className="text-sm text-muted-foreground py-4">No balance data</p>
-          <Link href="/admin/attendance" className="text-sm font-medium text-primary hover:underline">
+          <Link href="/admin/clock/history" className="text-sm font-medium text-primary hover:underline">
             View attendance
           </Link>
         </CardContent>
@@ -83,7 +83,7 @@ export function DashboardChartLeaveBalance() {
         <p className="text-sm text-muted-foreground mt-2">
           <span className="font-semibold text-foreground">{remaining.toFixed(1)}h</span> remaining of {allowance ? `${allowance.toFixed(1)}h` : "—"} allowance
         </p>
-        <Link href="/admin/attendance" className="text-sm font-medium text-primary hover:underline mt-1 inline-block">
+        <Link href="/admin/clock/history" className="text-sm font-medium text-primary hover:underline mt-1 inline-block">
           View attendance
         </Link>
       </CardContent>

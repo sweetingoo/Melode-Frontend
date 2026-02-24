@@ -64,7 +64,7 @@ export function DashboardUpcomingShifts() {
               return (
                 <li key={r.id ?? r.slug ?? i}>
                   <Link
-                    href="/admin/attendance"
+                    href="/admin/clock/history"
                     className="text-sm font-medium text-foreground hover:text-primary flex items-center gap-2 py-2 rounded-lg hover:bg-muted/50 transition-colors -mx-1 px-1"
                   >
                     <span className="truncate min-w-0 flex-1">{display}</span>
@@ -75,7 +75,7 @@ export function DashboardUpcomingShifts() {
             })}
           </ul>
         )}
-        <Link href="/admin/attendance" className="text-sm font-medium text-primary hover:underline mt-3 inline-block">
+        <Link href="/admin/clock/history" className="text-sm font-medium text-primary hover:underline mt-3 inline-block">
           View all
         </Link>
       </CardContent>

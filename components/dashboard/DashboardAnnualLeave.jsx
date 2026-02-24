@@ -43,7 +43,7 @@ export function DashboardAnnualLeave() {
               {upcoming.slice(0, 3).map((r) => (
                 <li key={r.id}>
                   <Link
-                    href="/admin/attendance"
+                    href="/admin/clock/history"
                     className="text-sm font-medium text-foreground hover:text-primary flex items-center gap-2 py-2 rounded-lg hover:bg-muted/50 transition-colors -mx-1 px-1"
                   >
                     <span>
@@ -57,7 +57,7 @@ export function DashboardAnnualLeave() {
             </ul>
           )}
         </div>
-        <Link href="/admin/attendance" className="text-sm font-medium text-primary hover:underline mt-3 inline-block">
+        <Link href="/admin/clock/history" className="text-sm font-medium text-primary hover:underline mt-3 inline-block">
           View all
         </Link>
       </CardContent>
