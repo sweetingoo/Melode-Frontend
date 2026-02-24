@@ -281,17 +281,25 @@ const UserEditPage = () => {
   const employeeSettingsList = Array.isArray(employeeSettingsData) ? employeeSettingsData : (employeeSettingsData ?? []);
   const { data: yearsData } = useHolidayYears({});
   const years = Array.isArray(yearsData) ? yearsData : (yearsData?.years ?? yearsData ?? []);
-  const entitlementParams = {
-    user_id: userData?.id,
-    ...(entitlementFilterYearId && entitlementFilterYearId !== "all" ? { holiday_year_id: parseInt(entitlementFilterYearId, 10) } : {}),
-  };
+  const entitlementParams = React.useMemo(
+    () => ({
+      user_id: userData?.id,
+      ...(entitlementFilterYearId && entitlementFilterYearId !== "all"
+        ? { holiday_year_id: parseInt(entitlementFilterYearId, 10) }
+        : {}),
+    }),
+    [userData?.id, entitlementFilterYearId]
+  );
   const { data: entitlementsData, isLoading: entitlementsLoading } = useHolidayEntitlements(entitlementParams, {
     enabled: !!userData?.id,
   });
   const entitlementsList = Array.isArray(entitlementsData) ? entitlementsData : (entitlementsData ?? []);
   const recalculateHoursMutation = useRecalculateHolidayEntitlementHours();
   const { data: leaveApproverDeptsData } = useLeaveApproverDepartments(userData?.id ?? null, { enabled: !!userData?.id });
-  const leaveApproverDepartmentsList = Array.isArray(leaveApproverDeptsData) ? leaveApproverDeptsData : [];
+  const leaveApproverDepartmentsList = React.useMemo(
+    () => (Array.isArray(leaveApproverDeptsData) ? leaveApproverDeptsData : []),
+    [leaveApproverDeptsData]
+  );
   const setLeaveApproverDepartmentsMutation = useSetLeaveApproverDepartments();
 
   useEffect(() => {
@@ -2398,7 +2406,15 @@ const UserEditPage = () => {
                     <div className="flex flex-wrap items-end gap-4">
                       <div className="space-y-2">
                         <Label>Filter by holiday year</Label>
-                        <Select value={entitlementFilterYearId} onValueChange={setEntitlementFilterYearId}>
+                        <Select
+                          value={
+                            entitlementFilterYearId === "all" ||
+                            years.some((y) => String(y.id) === entitlementFilterYearId)
+                              ? entitlementFilterYearId
+                              : "all"
+                          }
+                          onValueChange={setEntitlementFilterYearId}
+                        >
                           <SelectTrigger className="w-[200px]">
                             <SelectValue placeholder="All years" />
                           </SelectTrigger>

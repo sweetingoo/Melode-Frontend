@@ -30,33 +30,17 @@ export const complianceKeys = {
 // Get compliance status for an entity
 export const useEntityCompliance = (entityType, entitySlug, roleSlug = null, assetTypeSlug = null) => {
   const isEnabled = !!entityType && !!entitySlug;
-  
-  console.log("useEntityCompliance hook called:", {
-    entityType,
-    entitySlug,
-    roleSlug,
-    assetTypeSlug,
-    isEnabled,
-  });
 
   return useQuery({
     queryKey: complianceKeys.entity(entityType, entitySlug, roleSlug, assetTypeSlug),
     queryFn: async () => {
-      console.log("useEntityCompliance queryFn executing with:", {
-        entityType,
-        entitySlug,
-        roleSlug,
-        assetTypeSlug,
-      });
       if (!entityType || !entitySlug) {
         throw new Error("Entity type and slug are required");
       }
-      const response = await complianceService.getEntityCompliance(entityType, entitySlug, roleSlug, assetTypeSlug);
-      console.log("useEntityCompliance response:", response);
-      return response;
+      return complianceService.getEntityCompliance(entityType, entitySlug, roleSlug, assetTypeSlug);
     },
     enabled: isEnabled,
-    staleTime: 0, // Always fetch fresh data
+    staleTime: 2 * 60 * 1000, // 2 minutes
     refetchOnMount: true,
   });
 };

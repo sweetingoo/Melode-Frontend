@@ -33,13 +33,25 @@ function ClockHistoryPageContent() {
   const { hasPermission } = usePermissionsCheck();
   const canManageAllShiftRecords =
     hasPermission(PERM_MANAGE_ALL) || hasPermission(PERM_MANAGE_ALL_SHIFT_RECORDS);
-  const { data: assignmentsData } = useAssignments({ user_id: user?.id, is_active: true });
+  const { data: assignmentsData, isLoading: assignmentsLoading } = useAssignments(
+    { user_id: user?.id, is_active: true },
+    { enabled: !!user?.id }
+  );
   const assignments = assignmentsData?.assignments || assignmentsData || [];
   const activeAssignment = assignments?.[0];
   const jobRoleId = activeAssignment?.role_id ?? activeAssignment?.job_role_id;
-  // If user has a role that has shifts (any assignment), show only their own shifts in My Time
-  const hasRoleWithShifts = Array.isArray(assignments) && assignments.length > 0;
-  const showAllShiftsInMyTime = canManageAllShiftRecords && !hasRoleWithShifts;
+  // If user has a role that has shifts (job/shift role assignment, not only system roles), show only their own shifts in My Time
+  const hasRoleWithShifts =
+    Array.isArray(assignments) &&
+    assignments.some((a) => {
+      const roleId = a.role_id ?? a.job_role_id ?? a.roleId ?? a.jobRoleId;
+      if (roleId == null) return false;
+      const roleType = a.role?.role_type ?? a.role?.roleType;
+      return roleType !== "system";
+    });
+  // Only show all users' shifts if admin has no shift role; while assignments load, show only own (safe default)
+  const showAllShiftsInMyTime =
+    canManageAllShiftRecords && !hasRoleWithShifts && !assignmentsLoading;
   const [activeTab, setActiveTab] = useState("my-time");
 
   useEffect(() => {
