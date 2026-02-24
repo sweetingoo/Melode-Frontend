@@ -1484,19 +1484,19 @@ export default function AdminLayout({ children }) {
         // Otherwise check for permission
       }
 
-      // Special case: Time & Attendance - show only if user has an attendance/leave permission
-      // (attendance:view, attendance:manage_own, attendance:reports, leave:approve, attendance:manage_all); backend enforces per-endpoint
+      // Special case: Time & Attendance - show only if user has a permission that needs the full area
+      // (leave:approve, attendance:manage_all, attendance:reports, attendance:settings). Do NOT show for
+      // attendance:view or attendance:manage_own only — those users see their own data via My Time and don't need this nav.
       if (item.permission === "attendance:view") {
-        const hasAnyAttendance = userPermissionNames.some(
+        const needsTimeAndAttendanceNav = userPermissionNames.some(
           (perm) =>
-            perm === "attendance:view" ||
-            perm === "attendance:manage_own" ||
-            perm === "attendance:reports" ||
             perm === "leave:approve" ||
-            perm === "attendance:manage_all"
+            perm === "attendance:manage_all" ||
+            perm === "attendance:reports" ||
+            perm === "attendance:settings"
         );
-        if (hasAnyAttendance) return true;
-        return false; // explicit: do not show Time & Attendance without one of the above
+        if (needsTimeAndAttendanceNav) return true;
+        return false; // do not show Time & Attendance for view-only or manage-own-only users
       }
 
       // If user has wildcard permissions, show all
