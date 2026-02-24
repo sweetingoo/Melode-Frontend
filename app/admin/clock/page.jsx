@@ -370,7 +370,7 @@ export default function ManagerClockPage() {
                     <TableHead className="font-semibold">Shift Role</TableHead>
                     <TableHead className="font-semibold">Location</TableHead>
                     <TableHead className="font-semibold">Department</TableHead>
-                    <TableHead className="font-semibold">Check In Time</TableHead>
+                    <TableHead className="font-semibold">Logged in at</TableHead>
                     <TableHead className="font-semibold">Elapsed</TableHead>
                     <TableHead className="font-semibold">Status</TableHead>
                     <TableHead className="font-semibold">Actions</TableHead>
@@ -454,16 +454,18 @@ export default function ManagerClockPage() {
                           )}
                         </TableCell>
                         <TableCell>
-                          <div className="flex flex-col">
-                            <span className="text-sm font-medium">
-                              {record.clock_in_time
-                                ? format(new Date(record.clock_in_time), "dd MMM yyyy")
-                                : "N/A"}
-                            </span>
-                            {record.clock_in_time && (
-                              <span className="text-xs text-muted-foreground">
-                                {format(new Date(record.clock_in_time), "HH:mm")}
-                              </span>
+                          <div className="flex flex-col whitespace-nowrap">
+                            {record.clock_in_time ? (
+                              <>
+                                <span className="text-sm font-medium">
+                                  {format(new Date(record.clock_in_time), "dd MMM yyyy")}
+                                </span>
+                                <span className="text-xs text-muted-foreground">
+                                  {format(new Date(record.clock_in_time), "HH:mm")} (logged in)
+                                </span>
+                              </>
+                            ) : (
+                              <span className="text-sm text-muted-foreground">—</span>
                             )}
                           </div>
                         </TableCell>
