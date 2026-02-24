@@ -9,7 +9,6 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/useAuth";
-import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
 import { useAssignments } from "@/hooks/useAssignments";
 import { LeaveRequestList } from "@/components/attendance/LeaveRequestList";
 import { HolidayBalanceCard } from "@/components/attendance/HolidayBalanceCard";
@@ -23,32 +22,19 @@ import { Suspense } from "react";
 
 const MY_TIME_TAB_VALUES = ["my-time", "my-leave", "my-rota", "my-contract"];
 
-const PERM_MANAGE_ALL = "attendance:manage_all";
-const PERM_MANAGE_ALL_SHIFT_RECORDS = "attendance:manage_all_shift_records";
-
 function ClockHistoryPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user } = useAuth();
-  const { hasPermission } = usePermissionsCheck();
-  const canManageAllShiftRecords =
-    hasPermission(PERM_MANAGE_ALL) || hasPermission(PERM_MANAGE_ALL_SHIFT_RECORDS);
-  const { data: assignmentsData, isLoading: assignmentsLoading } = useAssignments(
+  const { data: assignmentsData } = useAssignments(
     { user_id: user?.id, is_active: true },
     { enabled: !!user?.id }
   );
   const assignments = assignmentsData?.assignments || assignmentsData || [];
   const activeAssignment = assignments?.[0];
   const jobRoleId = activeAssignment?.role_id ?? activeAssignment?.job_role_id;
-  // If user has any department-role assignment (job/shift role), show only their own shifts in My Time; admins with no such assignment see all
-  const hasRoleWithShifts =
-    Array.isArray(assignments) &&
-    assignments.some(
-      (a) => (a.role_id ?? a.job_role_id ?? a.roleId ?? a.jobRoleId) != null
-    );
-  // Only show all users' shifts if admin has no shift role; while assignments load, show only own (safe default)
-  const showAllShiftsInMyTime =
-    canManageAllShiftRecords && !hasRoleWithShifts && !assignmentsLoading;
+  // My Time always shows only the current user's shifts (own records); never "all users"
+  const showAllShiftsInMyTime = false;
   const [activeTab, setActiveTab] = useState("my-time");
 
   useEffect(() => {
@@ -146,7 +132,7 @@ function ClockHistoryPageContent() {
       <Card className="overflow-hidden">
         <CardHeader className="space-y-1.5 p-4 sm:p-6">
           <CardTitle className="text-lg sm:text-xl">
-            {showAllShiftsInMyTime ? "My Shifts (All Users)" : "My Shifts"}
+            My Shifts
           </CardTitle>
           <CardDescription className="text-sm">
             {showAllShiftsInMyTime
@@ -156,9 +142,9 @@ function ClockHistoryPageContent() {
         </CardHeader>
         <CardContent className="p-4 sm:p-6 pt-0">
           <ShiftRecordList
-            userId={showAllShiftsInMyTime ? undefined : user?.id}
+            userId={user?.id}
             showCreateButton={true}
-            allowUserSelect={showAllShiftsInMyTime}
+            allowUserSelect={false}
             defaultCategory="all"
             compactHeader
           />
