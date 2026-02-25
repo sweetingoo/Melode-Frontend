@@ -716,15 +716,43 @@ const TrackersPage = () => {
     };
   }, [entriesData, itemsPerPage]);
 
-  // Get available statuses from selected tracker (prefer detail API for full config)
+  // Stage selected in filters: from queue preset (stage-based) or from column filter on derived_stage
+  const selectedStageFromFilters = useMemo(() => {
+    const stageMapping = selectedTrackerDetail?.tracker_config?.stage_mapping;
+    if (!stageMapping?.length) return null;
+    const fromColumn = columnFilters?.derived_stage;
+    const colVal = typeof fromColumn === "object" && fromColumn?.value != null ? fromColumn.value : fromColumn;
+    if (colVal != null && String(colVal).trim() !== "") return String(colVal).trim();
+    if (activeQueue && activeQueue !== "all") {
+      const presets = queueCountsData?.queue_presets ?? [];
+      const preset = presets.find((p) => p.id === activeQueue);
+      const label = preset?.label;
+      if (label && typeof label === "string" && label.trim() !== "") return label.trim();
+    }
+    return null;
+  }, [selectedTrackerDetail?.tracker_config?.stage_mapping, columnFilters?.derived_stage, activeQueue, queueCountsData?.queue_presets]);
+
+  // Get available statuses: when a stage is selected in filters, only statuses for that stage; otherwise all
   const availableStatuses = useMemo(() => {
     if (!selectedTracker) return [];
-    const fromDetail = selectedTrackerDetail?.tracker_config?.statuses;
-    if (fromDetail && Array.isArray(fromDetail) && fromDetail.length > 0) return fromDetail;
-    const tracker = trackers.find((t) => t.id === parseInt(selectedTracker));
-    if (!tracker?.tracker_config?.statuses) return [];
-    return tracker.tracker_config.statuses;
-  }, [selectedTracker, trackers, selectedTrackerDetail]);
+    const allStatuses = selectedTrackerDetail?.tracker_config?.statuses ?? trackers.find((t) => t.id === parseInt(selectedTracker))?.tracker_config?.statuses ?? [];
+    const list = Array.isArray(allStatuses) ? allStatuses : [];
+    const stageMapping = selectedTrackerDetail?.tracker_config?.stage_mapping;
+    if (!selectedStageFromFilters || !stageMapping?.length) return list;
+    const stageItem = stageMapping.find(
+      (s) => String(s?.stage ?? s?.name ?? "").trim() === String(selectedStageFromFilters).trim()
+    );
+    const stageStatuses = (stageItem?.statuses ?? stageItem?.status_list ?? []).filter(Boolean);
+    return stageStatuses.length > 0 ? stageStatuses : list;
+  }, [selectedTracker, selectedTrackerDetail, trackers, selectedStageFromFilters]);
+
+  // When stage filter narrows statuses, clear status filter if current value is no longer in the list
+  useEffect(() => {
+    if (statusFilter !== "all" && availableStatuses.length > 0 && !availableStatuses.includes(statusFilter)) {
+      setStatusFilter("all");
+      setStatusesFilter(null);
+    }
+  }, [selectedStageFromFilters, availableStatuses, statusFilter]);
 
   // Get displayable fields for the selected tracker (for table columns)
   // Uses list_view_fields from tracker_config if specified, otherwise shows first 4 fields
