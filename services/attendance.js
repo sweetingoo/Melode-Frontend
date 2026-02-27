@@ -48,6 +48,56 @@ export const attendanceService = {
     }
   },
 
+  // Contract Types (for employee job role settings / payroll)
+  getContractTypes: async (params = {}) => {
+    try {
+      const response = await api.get("/attendance/contract-types", { params });
+      return response.data ?? response;
+    } catch (error) {
+      console.error("Get contract types failed:", error);
+      throw error;
+    }
+  },
+
+  getContractType: async (idOrSlug) => {
+    try {
+      const response = await api.get(`/attendance/contract-types/${idOrSlug}`);
+      return response.data ?? response;
+    } catch (error) {
+      console.error(`Get contract type ${idOrSlug} failed:`, error);
+      throw error;
+    }
+  },
+
+  createContractType: async (data) => {
+    try {
+      const response = await api.post("/attendance/contract-types", data);
+      return response.data ?? response;
+    } catch (error) {
+      console.error("Create contract type failed:", error);
+      throw error;
+    }
+  },
+
+  updateContractType: async (idOrSlug, data) => {
+    try {
+      const response = await api.put(`/attendance/contract-types/${idOrSlug}`, data);
+      return response.data ?? response;
+    } catch (error) {
+      console.error(`Update contract type ${idOrSlug} failed:`, error);
+      throw error;
+    }
+  },
+
+  deleteContractType: async (idOrSlug) => {
+    try {
+      await api.delete(`/attendance/contract-types/${idOrSlug}`);
+    } catch (error) {
+      console.error(`Delete contract type ${idOrSlug} failed:`, error);
+      throw error;
+    }
+  },
+
   // Employee Job Role Settings
   getEmployeeSettings: async (userId, params = {}) => {
     try {

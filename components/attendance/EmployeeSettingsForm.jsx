@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2 } from "lucide-react";
-import { useCreateEmployeeSettings, useUpdateEmployeeSettings } from "@/hooks/useAttendance";
+import { useCreateEmployeeSettings, useUpdateEmployeeSettings, useContractTypes } from "@/hooks/useAttendance";
 import { useUsers } from "@/hooks/useUsers";
 import { useAssignments } from "@/hooks/useAssignments";
 import { formatDateForAPI } from "@/utils/time";
@@ -30,11 +30,15 @@ export const EmployeeSettingsForm = ({ open, onOpenChange, setting = null, prese
   const [endDate, setEndDate] = useState("");
   const [hoursPerDay, setHoursPerDay] = useState("7.5");
   const [payRate, setPayRate] = useState("");
+  const [monthlyContractedHours, setMonthlyContractedHours] = useState("");
+  const [contractTypeId, setContractTypeId] = useState("");
   const [workingDays, setWorkingDays] = useState(["monday", "tuesday", "wednesday", "thursday", "friday"]);
   const [isActive, setIsActive] = useState(true);
 
   const createSettings = useCreateEmployeeSettings();
   const updateSettings = useUpdateEmployeeSettings();
+  const { data: contractTypesData } = useContractTypes({});
+  const contractTypes = Array.isArray(contractTypesData) ? contractTypesData : contractTypesData?.data ?? [];
 
   const { data: usersData } = useUsers({ per_page: 100 });
   const users = usersData?.users ?? usersData?.data ?? [];
@@ -53,6 +57,8 @@ export const EmployeeSettingsForm = ({ open, onOpenChange, setting = null, prese
       setEndDate(setting.end_date ? String(setting.end_date).slice(0, 10) : "");
       setHoursPerDay(String(setting.hours_per_day ?? 7.5));
       setPayRate(setting.pay_rate != null ? String(setting.pay_rate) : "");
+      setMonthlyContractedHours(setting.monthly_contracted_hours != null ? String(setting.monthly_contracted_hours) : "");
+      setContractTypeId(setting.contract_type_id != null ? String(setting.contract_type_id) : "");
       setWorkingDays(Array.isArray(setting.normal_working_days) ? [...setting.normal_working_days] : []);
       setIsActive(setting.is_active !== false);
     } else {
@@ -63,6 +69,8 @@ export const EmployeeSettingsForm = ({ open, onOpenChange, setting = null, prese
       setEndDate("");
       setHoursPerDay("7.5");
       setPayRate("");
+      setMonthlyContractedHours("");
+      setContractTypeId("");
       setWorkingDays(["monday", "tuesday", "wednesday", "thursday", "friday"]);
       setIsActive(true);
     }
@@ -102,6 +110,8 @@ export const EmployeeSettingsForm = ({ open, onOpenChange, setting = null, prese
             end_date: endDate || null,
             hours_per_day: numHours,
             pay_rate: payRate ? parseFloat(payRate) : null,
+            monthly_contracted_hours: monthlyContractedHours ? parseFloat(monthlyContractedHours) : null,
+            contract_type_id: contractTypeId ? parseInt(contractTypeId, 10) : null,
             normal_working_days: workingDays,
             is_active: isActive,
           },
@@ -115,6 +125,8 @@ export const EmployeeSettingsForm = ({ open, onOpenChange, setting = null, prese
           end_date: endDate || null,
           hours_per_day: numHours,
           pay_rate: payRate ? parseFloat(payRate) : null,
+          monthly_contracted_hours: monthlyContractedHours ? parseFloat(monthlyContractedHours) : null,
+          contract_type_id: contractTypeId ? parseInt(contractTypeId, 10) : null,
           normal_working_days: workingDays,
           is_active: isActive,
         });
@@ -206,6 +218,33 @@ export const EmployeeSettingsForm = ({ open, onOpenChange, setting = null, prese
               onChange={(e) => setPayRate(e.target.value)}
               placeholder="e.g. 12.50"
             />
+          </div>
+          <div className="space-y-2">
+            <Label>Monthly contracted hours (optional)</Label>
+            <Input
+              type="number"
+              step="0.25"
+              min="0"
+              value={monthlyContractedHours}
+              onChange={(e) => setMonthlyContractedHours(e.target.value)}
+              placeholder="e.g. 150"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Contract type (optional)</Label>
+            <Select value={contractTypeId || "none"} onValueChange={(v) => setContractTypeId(v === "none" ? "" : v)}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select contract type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None</SelectItem>
+                {contractTypes.filter((ct) => ct.is_active !== false).map((ct) => (
+                  <SelectItem key={ct.id} value={String(ct.id)}>
+                    {ct.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="space-y-2">
             <Label>Normal working days</Label>

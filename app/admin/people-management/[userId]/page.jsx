@@ -88,7 +88,7 @@ import {
   userUtils,
 } from "@/hooks/useUsers";
 import { useRolesAll } from "@/hooks/useRoles";
-import { usePermissions } from "@/hooks/usePermissions";
+import { usePermissionsAll } from "@/hooks/usePermissions";
 import { useCurrentUser } from "@/hooks/useAuth";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
 import {
@@ -121,6 +121,7 @@ import { EmployeeSettingsForm } from "@/components/attendance/EmployeeSettingsFo
 import { HolidayEntitlementForm } from "@/components/attendance/HolidayEntitlementForm";
 import {
   useEmployeeSettings,
+  useContractTypes,
   useHolidayEntitlements,
   useHolidayYears,
   useRecalculateHolidayEntitlementHours,
@@ -830,8 +831,9 @@ const UserEditPage = () => {
           (typeof a.role === "object" && (a.role.slug === "superuser" || a.role.name === "superuser"))
       );
 
-      // Find superuser role from rolesData if available
-      const superuserRole = rolesData?.find(
+      // Find superuser role from roles data (support array or wrapped { roles: [...] })
+      const rolesList = Array.isArray(rolesData) ? rolesData : rolesData?.roles ?? rolesData?.items ?? [];
+      const superuserRole = rolesList.find(
         (r) =>
           r.slug === "superuser" ||
           r.name === "superuser" ||
@@ -905,19 +907,46 @@ const UserEditPage = () => {
     }
   }, [transformedUser]);
 
-  const availableRoles = React.useMemo(() => {
+  // Normalize roles: API may return array or wrapped { roles: [...] }
+  const rolesArray = React.useMemo(() => {
     if (!rolesData) return [];
+    if (Array.isArray(rolesData)) return rolesData;
+    return rolesData?.roles ?? rolesData?.items ?? rolesData?.data ?? [];
+  }, [rolesData]);
+
+  const availableRoles = React.useMemo(() => {
+    if (!rolesArray.length) return [];
     // All job roles (including those with a parent, e.g. Service lead in Gastro) can be assigned to a department
-    return rolesData.filter(
+    return rolesArray.filter(
       (role) =>
         role.role_type !== "shift_role" &&
         role.roleType !== "shift_role"
     );
-  }, [rolesData]);
+  }, [rolesArray]);
 
-  // Get all permissions from API
+  // Lookup maps to resolve job role and department names by ID (for Employee job role settings / entitlements)
+  const departmentById = React.useMemo(() => {
+    const map = new Map();
+    departments.forEach((d) => map.set(Number(d.id), d));
+    return map;
+  }, [departments]);
+  const roleById = React.useMemo(() => {
+    const map = new Map();
+    rolesArray.forEach((r) => map.set(Number(r.id), r));
+    return map;
+  }, [rolesArray]);
+
+  const { data: contractTypesData } = useContractTypes({});
+  const contractTypesList = Array.isArray(contractTypesData) ? contractTypesData : contractTypesData?.data ?? [];
+  const contractTypeById = React.useMemo(() => {
+    const map = new Map();
+    contractTypesList.forEach((ct) => map.set(Number(ct.id), ct));
+    return map;
+  }, [contractTypesList]);
+
+  // Get all permissions from API (all pages so "Available to Assign" shows full list)
   const { data: allPermissionsData, isLoading: permissionsLoading } =
-    usePermissions();
+    usePermissionsAll();
 
   // Handle new paginated response structure: { permissions: [], total: 96, ... }
   const allPermissionsArray = allPermissionsData?.permissions || (Array.isArray(allPermissionsData) ? allPermissionsData : []);
@@ -1193,17 +1222,21 @@ const UserEditPage = () => {
     }
 
     try {
+      const userDataPayload = {
+        first_name: formData.firstName,
+        last_name: formData.lastName,
+        username: formData.username,
+        title: formData.title,
+        phone_number: formData.phoneNumber,
+        avatar_url: formData.avatarUrl,
+        bio: formData.bio,
+      };
+      if (canUpdateUser && formData.email !== undefined) {
+        userDataPayload.email = formData.email?.trim() || null;
+      }
       await updateUserMutation.mutateAsync({
         slug: actualUserSlug,
-        userData: {
-          first_name: formData.firstName,
-          last_name: formData.lastName,
-          username: formData.username,
-          title: formData.title,
-          phone_number: formData.phoneNumber,
-          avatar_url: formData.avatarUrl,
-          bio: formData.bio,
-        },
+        userData: userDataPayload,
       });
       // Success toast is handled by the mutation hook
     } catch (error) {
@@ -1403,10 +1436,10 @@ const UserEditPage = () => {
   // Roles available in the Assign Department modal: only roles that belong to the selected department (or system roles with no department)
   const rolesForAssignDepartmentModal = React.useMemo(() => {
     if (!selectedDepartmentId || !availableRoles.length) return [];
-    const deptId = parseInt(selectedDepartmentId, 10);
+    const deptIdNum = Number(selectedDepartmentId);
     return availableRoles.filter((role) => {
       const roleDeptId = role.department_id ?? role.departmentId ?? role.department?.id;
-      return roleDeptId === deptId || roleDeptId == null;
+      return roleDeptId == null || roleDeptId === undefined || Number(roleDeptId) === deptIdNum;
     });
   }, [selectedDepartmentId, availableRoles]);
 
@@ -1441,19 +1474,12 @@ const UserEditPage = () => {
       });
     }
 
-    // Filter to roles that belong to this department (or system roles), exclude shift roles and already assigned
-    const deptIdNum = typeof departmentId === "string" ? parseInt(departmentId, 10) : departmentId;
+    // Show all non-shift roles not already assigned in this department (do not filter by role's department)
     return availableRoles.filter(
-      (role) => {
-        const roleDeptId = role.department_id ?? role.departmentId ?? role.department?.id;
-        const belongsToDepartment = roleDeptId === deptIdNum || roleDeptId == null;
-        return (
-          belongsToDepartment &&
-          !assignedRoleIds.has(role.id) &&
-          role.role_type !== "shift_role" &&
-          role.roleType !== "shift_role"
-        );
-      }
+      (role) =>
+        !assignedRoleIds.has(role.id) &&
+        role.role_type !== "shift_role" &&
+        role.roleType !== "shift_role"
     );
   };
 
@@ -1632,10 +1658,16 @@ const UserEditPage = () => {
                     <Label htmlFor="email">Email</Label>
                     <Input
                       id="email"
-                      value={formData.email}
-                      disabled
-                      className="bg-muted"
+                      type="email"
+                      value={formData.email ?? ""}
+                      onChange={(e) => canUpdateUser && handleInputChange("email", e.target.value)}
+                      disabled={!canUpdateUser}
+                      className={!canUpdateUser ? "bg-muted" : ""}
+                      placeholder={!canUpdateUser ? "" : "user@example.com"}
                     />
+                    {!canUpdateUser && (
+                      <p className="text-xs text-muted-foreground">Only users with update permission can change the login email.</p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="title">Title</Label>
@@ -2330,6 +2362,8 @@ const UserEditPage = () => {
                             <TableHead>Start</TableHead>
                             <TableHead>End</TableHead>
                             <TableHead>Hours/day</TableHead>
+                            <TableHead>Monthly contracted</TableHead>
+                            <TableHead>Contract type</TableHead>
                             <TableHead>Working days</TableHead>
                             {canManageAttendanceSettings && <TableHead>Actions</TableHead>}
                           </TableRow>
@@ -2337,11 +2371,13 @@ const UserEditPage = () => {
                         <TableBody>
                           {employeeSettingsList.map((s) => (
                             <TableRow key={s.id}>
-                              <TableCell>{s.job_role?.display_name || s.job_role?.name || s.role?.display_name || s.role?.name || s.job_role_id}</TableCell>
-                              <TableCell>{s.department?.name || s.department_id}</TableCell>
+                              <TableCell>{s.job_role?.display_name || s.job_role?.name || s.role?.display_name || s.role?.name || roleById.get(Number(s.job_role_id))?.display_name || roleById.get(Number(s.job_role_id))?.name || s.job_role_id}</TableCell>
+                              <TableCell>{s.department?.name || departmentById.get(Number(s.department_id))?.name || s.department_id}</TableCell>
                               <TableCell>{s.start_date ? String(s.start_date).slice(0, 10) : "—"}</TableCell>
                               <TableCell>{s.end_date ? String(s.end_date).slice(0, 10) : "—"}</TableCell>
                               <TableCell>{s.hours_per_day ?? "—"}</TableCell>
+                              <TableCell>{s.monthly_contracted_hours != null ? Number(s.monthly_contracted_hours) : "—"}</TableCell>
+                              <TableCell>{s.contract_type?.name || (s.contract_type_id != null ? contractTypeById.get(Number(s.contract_type_id))?.name : null) || "—"}</TableCell>
                               <TableCell className="max-w-[200px] truncate">
                                 {Array.isArray(s.normal_working_days) ? s.normal_working_days.map((d) => d.slice(0, 2)).join(", ") : "—"}
                               </TableCell>
@@ -2463,7 +2499,7 @@ const UserEditPage = () => {
                         <TableBody>
                           {entitlementsList.map((ent) => (
                             <TableRow key={ent.id}>
-                              <TableCell>{ent.job_role?.display_name || ent.job_role?.name || ent.role?.display_name || ent.role?.name || ent.job_role_id}</TableCell>
+                              <TableCell>{ent.job_role?.display_name || ent.job_role?.name || ent.role?.display_name || ent.role?.name || roleById.get(Number(ent.job_role_id))?.display_name || roleById.get(Number(ent.job_role_id))?.name || ent.job_role_id}</TableCell>
                               <TableCell>{ent.holiday_year?.year_name || ent.holiday_year_id}</TableCell>
                               <TableCell>{ent.annual_allowance_hours ?? "—"}</TableCell>
                               <TableCell>{ent.carried_forward_hours ?? "0"}</TableCell>
@@ -3751,7 +3787,7 @@ const UserEditPage = () => {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              Add Role to {selectedDepartmentForRole?.department.name}
+              Add Role to {transformedUser?.name}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">

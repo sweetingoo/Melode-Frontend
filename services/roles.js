@@ -22,7 +22,16 @@ export const rolesService = {
         params: { page, per_page: perPage, ...params },
       });
       const data = response.data ?? response;
-      const chunk = Array.isArray(data) ? data : [];
+      // Support both raw array and wrapped responses (e.g. { roles: [...] }, { items: [...] })
+      const chunk = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.roles)
+          ? data.roles
+          : Array.isArray(data?.items)
+            ? data.items
+            : Array.isArray(data?.data)
+              ? data.data
+              : [];
       all.push(...chunk);
       hasMore = chunk.length >= perPage;
       page += 1;

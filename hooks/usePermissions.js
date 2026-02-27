@@ -10,6 +10,7 @@ export const permissionKeys = {
   all: ["permissions"],
   lists: () => [...permissionKeys.all, "list"],
   list: (params) => [...permissionKeys.lists(), params],
+  listAll: () => [...permissionKeys.lists(), "all-pages"],
   details: () => [...permissionKeys.all, "detail"],
   detail: (id) => [...permissionKeys.details(), id],
   resources: () => [...permissionKeys.all, "resources"],
@@ -54,6 +55,46 @@ export const usePermissions = (params = {}) => {
       if (error?.response?.status === 422) {
         return false;
       }
+      return failureCount < 3;
+    },
+  });
+};
+
+// Get all permissions by fetching every page (for assign-permission UIs that need the full list)
+export const usePermissionsAll = (params = {}) => {
+  const perPage = params.per_page ?? 50;
+  return useQuery({
+    queryKey: permissionKeys.listAll(),
+    queryFn: async () => {
+      try {
+        const first = await permissionsService.getPermissions({ ...params, page: 1, per_page: perPage });
+        const isPaginated = first && typeof first === "object" && "permissions" in first;
+        const firstList = isPaginated ? (first.permissions || []) : (Array.isArray(first) ? first : first?.data || []);
+        const totalPages = isPaginated && first.total_pages != null ? first.total_pages : 1;
+        const total = isPaginated && first.total != null ? first.total : firstList.length;
+
+        if (totalPages <= 1) {
+          return { permissions: firstList, total: total || firstList.length };
+        }
+
+        const all = [...firstList];
+        for (let page = 2; page <= totalPages; page++) {
+          const next = await permissionsService.getPermissions({ ...params, page, per_page: perPage });
+          const nextList = next?.permissions || (Array.isArray(next) ? next : next?.data || []);
+          all.push(...nextList);
+        }
+        return { permissions: all, total: all.length };
+      } catch (error) {
+        if (error?.response?.status === 422) {
+          console.warn("Permissions endpoint returned validation error, returning empty result:", error.response?.data);
+          return { permissions: [], total: 0 };
+        }
+        throw error;
+      }
+    },
+    staleTime: 5 * 60 * 1000,
+    retry: (failureCount, error) => {
+      if (error?.response?.status === 422) return false;
       return failureCount < 3;
     },
   });

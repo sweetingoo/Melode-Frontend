@@ -26,9 +26,20 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Plus, Loader2, Edit, Trash2, RotateCw, ArrowLeft } from "lucide-react";
 import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   useShiftLeaveTypes,
   useUpdateShiftLeaveType,
   useDeleteShiftLeaveType,
+  useContractTypes,
+  useCreateContractType,
+  useUpdateContractType,
+  useDeleteContractType,
   useHolidayYears,
   useUpdateHolidayYear,
   useRolloverHolidayYear,
@@ -71,8 +82,18 @@ export default function AttendanceSettingsPage() {
   const [systemDefaultHours, setSystemDefaultHours] = useState(7.5);
   const [systemAllowNegative, setSystemAllowNegative] = useState(false);
   const [provisionalShiftLinkWindowHours, setProvisionalShiftLinkWindowHours] = useState(2);
+  const [isContractTypeFormOpen, setIsContractTypeFormOpen] = useState(false);
+  const [selectedContractType, setSelectedContractType] = useState(null);
+  const [contractTypeName, setContractTypeName] = useState("");
+  const [contractTypeActive, setContractTypeActive] = useState(true);
+  const [deleteContractTypeId, setDeleteContractTypeId] = useState(null);
 
   const { data: typesData, isLoading: typesLoading } = useShiftLeaveTypes({});
+  const { data: contractTypesData, isLoading: contractTypesLoading } = useContractTypes({});
+  const contractTypesList = Array.isArray(contractTypesData) ? contractTypesData : contractTypesData?.data ?? [];
+  const createContractType = useCreateContractType();
+  const updateContractType = useUpdateContractType();
+  const deleteContractType = useDeleteContractType();
   const rolloverYear = useRolloverHolidayYear();
   const updateHolidayYear = useUpdateHolidayYear();
   const { data: yearsData, isLoading: yearsLoading } = useHolidayYears({});
@@ -285,6 +306,188 @@ export default function AttendanceSettingsPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Contract Types */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Contract Types</CardTitle>
+              <CardDescription>Options for Contract Type in Employee job role settings (e.g. Full-time, Part-time). Used for payroll reporting.</CardDescription>
+            </div>
+            {canManageSettings && (
+              <Button
+                onClick={() => {
+                  setSelectedContractType(null);
+                  setContractTypeName("");
+                  setContractTypeActive(true);
+                  setIsContractTypeFormOpen(true);
+                }}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Add Contract Type
+              </Button>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          {contractTypesLoading ? (
+            <div className="flex justify-center p-8">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : contractTypesList.length === 0 ? (
+            <div className="rounded-lg border border-dashed p-8 text-center">
+              <p className="text-sm text-muted-foreground">No contract types. Add one to use in Employee job role settings.</p>
+              {canManageSettings && (
+                <Button
+                  className="mt-4"
+                  variant="outline"
+                  onClick={() => {
+                    setSelectedContractType(null);
+                    setContractTypeName("");
+                    setContractTypeActive(true);
+                    setIsContractTypeFormOpen(true);
+                  }}
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Contract Type
+                </Button>
+              )}
+            </div>
+          ) : (
+            <div className="rounded-lg border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Status</TableHead>
+                    {canManageSettings && <TableHead>Actions</TableHead>}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {contractTypesList.map((ct) => (
+                    <TableRow key={ct.id}>
+                      <TableCell className="font-medium">{ct.name}</TableCell>
+                      <TableCell>
+                        <Badge variant={ct.is_active !== false ? "default" : "secondary"}>
+                          {ct.is_active !== false ? "Active" : "Inactive"}
+                        </Badge>
+                      </TableCell>
+                      {canManageSettings && (
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedContractType(ct);
+                                setContractTypeName(ct.name || "");
+                                setContractTypeActive(ct.is_active !== false);
+                                setIsContractTypeFormOpen(true);
+                              }}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-destructive hover:text-destructive"
+                              onClick={() => setDeleteContractTypeId(ct.id)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      )}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Contract Type Add/Edit Dialog */}
+      <Dialog open={isContractTypeFormOpen} onOpenChange={setIsContractTypeFormOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{selectedContractType ? "Edit Contract Type" : "Add Contract Type"}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Name</Label>
+              <Input
+                value={contractTypeName}
+                onChange={(e) => setContractTypeName(e.target.value)}
+                placeholder="e.g. Full-time, Part-time"
+              />
+            </div>
+            {selectedContractType && (
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="ct-active"
+                  checked={contractTypeActive}
+                  onCheckedChange={(v) => setContractTypeActive(!!v)}
+                />
+                <Label htmlFor="ct-active">Active</Label>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsContractTypeFormOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={!contractTypeName.trim() || createContractType.isPending || updateContractType.isPending}
+              onClick={async () => {
+                const name = contractTypeName.trim();
+                if (!name) return;
+                try {
+                  if (selectedContractType) {
+                    await updateContractType.mutateAsync({
+                      idOrSlug: String(selectedContractType.id),
+                      data: { name, is_active: contractTypeActive },
+                    });
+                  } else {
+                    await createContractType.mutateAsync({ name, is_active: true });
+                  }
+                  setIsContractTypeFormOpen(false);
+                } catch (_) {}
+              }}
+            >
+              {(createContractType.isPending || updateContractType.isPending) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {selectedContractType ? "Update" : "Create"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Contract Type confirmation */}
+      <AlertDialog open={!!deleteContractTypeId} onOpenChange={(open) => !open && setDeleteContractTypeId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete contract type?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will remove the contract type from the list. Employee settings that use it will have contract type cleared.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeleteContractTypeId(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={async () => {
+                if (deleteContractTypeId) {
+                  await deleteContractType.mutateAsync(String(deleteContractTypeId));
+                  setDeleteContractTypeId(null);
+                }
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Holiday Years */}
       <Card>

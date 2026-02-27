@@ -11,6 +11,8 @@ export const attendanceKeys = {
   shiftLeaveTypes: (params) => [...attendanceKeys.all, "shift-leave-types", params],
   shiftLeaveType: (slug) => [...attendanceKeys.all, "shift-leave-type", slug],
   employeeSettings: (userId, params) => [...attendanceKeys.all, "employee-settings", userId, params],
+  contractTypes: (params) => [...attendanceKeys.all, "contract-types", params],
+  contractType: (idOrSlug) => [...attendanceKeys.all, "contract-type", idOrSlug],
   holidayYears: (params) => [...attendanceKeys.all, "holiday-years", params],
   holidayYear: (slug) => [...attendanceKeys.all, "holiday-year", slug],
   currentHolidayYear: () => [...attendanceKeys.all, "holiday-year", "current"],
@@ -243,6 +245,70 @@ export const useUpdateEmployeeSettings = () => {
       toast.error("Failed to update employee settings", {
         description: Array.isArray(errorMessage) ? errorMessage.map((e) => e.msg || e).join(", ") : errorMessage,
       });
+    },
+  });
+};
+
+// Contract Types
+export const useContractTypes = (params = {}, options = {}) => {
+  return useQuery({
+    queryKey: attendanceKeys.contractTypes(params),
+    queryFn: async () => {
+      const response = await attendanceService.getContractTypes(params);
+      return Array.isArray(response) ? response : response?.data ?? response ?? [];
+    },
+    staleTime: 5 * 60 * 1000,
+    ...options,
+  });
+};
+
+export const useCreateContractType = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data) => {
+      const response = await attendanceService.createContractType(data);
+      return response?.data ?? response;
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: [...attendanceKeys.all, "contract-types"] });
+      toast.success("Contract type created");
+    },
+    onError: (error) => {
+      const msg = error?.response?.data?.detail || error?.response?.data?.message || "Failed to create contract type";
+      toast.error(Array.isArray(msg) ? msg.map((e) => e.msg || e).join(", ") : msg);
+    },
+  });
+};
+
+export const useUpdateContractType = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ idOrSlug, data }) => {
+      const response = await attendanceService.updateContractType(idOrSlug, data);
+      return response?.data ?? response;
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: [...attendanceKeys.all, "contract-types"] });
+      toast.success("Contract type updated");
+    },
+    onError: (error) => {
+      const msg = error?.response?.data?.detail || error?.response?.data?.message || "Failed to update contract type";
+      toast.error(Array.isArray(msg) ? msg.map((e) => e.msg || e).join(", ") : msg);
+    },
+  });
+};
+
+export const useDeleteContractType = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (idOrSlug) => attendanceService.deleteContractType(idOrSlug),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: [...attendanceKeys.all, "contract-types"] });
+      toast.success("Contract type deleted");
+    },
+    onError: (error) => {
+      const msg = error?.response?.data?.detail || error?.response?.data?.message || "Failed to delete contract type";
+      toast.error(Array.isArray(msg) ? msg.map((e) => e.msg || e).join(", ") : msg);
     },
   });
 };
