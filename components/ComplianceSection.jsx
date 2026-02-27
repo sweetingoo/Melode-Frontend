@@ -273,6 +273,11 @@ export const ComplianceSection = ({
                     • {complianceData.pending_approval_count} pending approval
                   </span>
                 )}
+                {complianceData.required_missing_count > 0 && (
+                  <span className="ml-2 text-amber-600">
+                    • {complianceData.required_missing_count} outstanding
+                  </span>
+                )}
               </CardDescription>
             </div>
             <Button variant="outline" size="sm" onClick={() => refetch()}>
@@ -284,17 +289,15 @@ export const ComplianceSection = ({
         <CardContent>
           <div className="space-y-4">
             {fields.map((fieldValue) => {
+              // API returns both submitted (have id) and outstanding (no id) in the same list
+              const isSubmitted = fieldValue.id != null && fieldValue.id !== 0;
               // Get sub_field_definitions from multiple sources
               let subFieldDefinitions = fieldValue.sub_field_definitions || null;
-              
-              // Fallback: If sub_field_definitions is not available, try getting from compliance_config
               if (!subFieldDefinitions && fieldValue.compliance_config) {
                 if (fieldValue.compliance_config.has_sub_fields && fieldValue.compliance_config.sub_fields) {
                   subFieldDefinitions = fieldValue.compliance_config.sub_fields;
                 }
               }
-              
-              // Field information is included in the response
               const field = {
                 id: fieldValue.custom_field_id,
                 slug: fieldValue.field_slug || fieldValue.slug,
@@ -302,16 +305,14 @@ export const ComplianceSection = ({
                 field_label: fieldValue.field_label || fieldValue.field_name || "Unknown Field",
                 field_description: fieldValue.field_description,
                 requires_approval: fieldValue.requires_approval,
-                // Include compliance_config and sub_field_definitions for proper rendering
                 compliance_config: fieldValue.compliance_config || null,
                 sub_field_definitions: subFieldDefinitions,
               };
-
               return (
                 <ComplianceFieldCard
-                  key={fieldValue.id || fieldValue.custom_field_id}
+                  key={fieldValue.id != null ? fieldValue.id : `outstanding-${fieldValue.custom_field_id}`}
                   field={field}
-                  value={fieldValue}
+                  value={isSubmitted ? fieldValue : null}
                   onUpload={handleUpload}
                   onRenew={handleRenew}
                   onViewHistory={handleViewHistory}
