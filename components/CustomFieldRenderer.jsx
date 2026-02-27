@@ -880,6 +880,8 @@ const CustomFieldRenderer = ({
             onChange={(e) => handleChange(e.target.value)}
             placeholder={field.field_description || `Enter ${field.field_label || field.name}`}
             className={error ? 'border-red-500' : ''}
+            disabled={readOnly}
+            readOnly={readOnly}
           />
         );
     }

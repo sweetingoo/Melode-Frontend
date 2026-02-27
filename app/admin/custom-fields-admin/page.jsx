@@ -219,7 +219,7 @@ const FieldVisibilityLinksSection = ({ field, entityType, roles }) => {
       </div>
       
       <p className="text-xs text-muted-foreground">
-        Control which entities can see and edit this field. By default, fields are visible and editable to all entities.
+        Applies to both compliance and normal fields. Control which entities can see and edit this field. By default, fields are visible and editable to all entities.
         Use links to show/hide fields for specific roles, users, or entity instances. For visible fields, you can also control editability.
       </p>
       
@@ -5103,7 +5103,7 @@ const CustomFieldsAdminPage = () => {
                 </div>
               </div>
 
-              {/* Field Visibility Links - Show for both create and edit */}
+              {/* Field Visibility (CustomFieldLink) - for both compliance and normal fields */}
               {(() => {
                 // For edit mode, use the editingField
                 // For create mode, create a temporary field object

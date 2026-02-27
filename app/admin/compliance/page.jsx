@@ -17,6 +17,8 @@ import { useCustomFieldLinks } from "@/hooks/useCustomFieldLinks";
 import { Shield, Loader2, User, Save, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
+import { Label } from "@/components/ui/label";
 
 export default function CompliancePage() {
   const { data: currentUserData, isLoading: currentUserLoading } = useCurrentUser();
@@ -214,6 +216,8 @@ export default function CompliancePage() {
   }, []);
 
   const handleCustomFieldChange = (fieldId, value) => {
+    const fieldIdInt = typeof fieldId === 'number' ? fieldId : parseInt(fieldId, 10);
+    if (readOnlyFieldIds.has(fieldIdInt)) return; // API says field is not editable
     // Debug logging for file fields
     const field = customFieldsHierarchy?.sections
       ?.flatMap(section => section.fields || [])
@@ -273,6 +277,22 @@ export default function CompliancePage() {
     }
     return map;
   }, [customFieldsHierarchy, complianceFieldsMap]);
+
+  // Set of field IDs that are read-only (API is_editable === false) – do not update state for these
+  const readOnlyFieldIds = useMemo(() => {
+    const ids = new Set();
+    const collectReadOnly = (sections) => {
+      if (!Array.isArray(sections)) return;
+      sections.filter(s => s.is_active !== false).forEach(section => {
+        (section.fields || []).forEach(f => {
+          if (f.is_editable === false || f.isEditable === false) ids.add(f.id);
+        });
+        collectReadOnly(section.subsections);
+      });
+    };
+    collectReadOnly(customFieldsHierarchy?.sections);
+    return ids;
+  }, [customFieldsHierarchy]);
 
   // Get current user's role IDs for visibility filtering
   const currentUserRoleIds = useMemo(() => {
@@ -505,6 +525,10 @@ export default function CompliancePage() {
           const fieldIdInt = parseInt(fieldId);
           // Only include fields that are in the hierarchy and have slugs
           if (!fieldIdToSlugMap.has(fieldIdInt)) {
+            return false;
+          }
+          // Exclude read-only fields (Field Visibility: not editable)
+          if (readOnlyFieldIds.has(fieldIdInt)) {
             return false;
           }
           
@@ -919,15 +943,25 @@ export default function CompliancePage() {
                               {/* Standalone Fields */}
                               {standaloneFields.length > 0 && (
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                  {standaloneFields.map((field) => (
-                                    <CustomFieldRenderer
-                                      key={field.id}
-                                      field={field}
-                                      value={customFieldsData[field.id] !== undefined ? customFieldsData[field.id] : (field.field_type?.toLowerCase() === 'file' ? null : '')}
-                                      onChange={handleCustomFieldChange}
-                                      error={customFieldsErrors[field.id]}
-                                    />
-                                  ))}
+                                  {standaloneFields.map((field) => {
+                                    const isReadOnly = field.is_editable === false || field.isEditable === false;
+                                    return (
+                                    <div key={field.id} className={cn("space-y-2", isReadOnly && "opacity-90 pointer-events-none select-none")}>
+                                      <div className="flex items-center gap-2">
+                                        <Label className="text-sm font-medium">{field.field_label || field.field_name || field.name}</Label>
+                                        {isReadOnly && <span className="text-xs text-muted-foreground">(read-only)</span>}
+                                      </div>
+                                      <CustomFieldRenderer
+                                        field={field}
+                                        value={customFieldsData[field.id] !== undefined ? customFieldsData[field.id] : (field.field_type?.toLowerCase() === 'file' ? null : '')}
+                                        onChange={handleCustomFieldChange}
+                                        error={customFieldsErrors[field.id]}
+                                        readOnly={isReadOnly}
+                                        hideLabel={true}
+                                      />
+                                    </div>
+                                    );
+                                  })}
                                 </div>
                               )}
 
@@ -964,15 +998,25 @@ export default function CompliancePage() {
                                       </h4>
                                     </div>
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                      {allGroupFields.map((field) => (
-                                        <CustomFieldRenderer
-                                          key={field.id}
-                                          field={field}
-                                          value={customFieldsData[field.id] !== undefined ? customFieldsData[field.id] : (field.field_type?.toLowerCase() === 'file' ? null : '')}
-                                          onChange={handleCustomFieldChange}
-                                          error={customFieldsErrors[field.id]}
-                                        />
-                                      ))}
+                                      {allGroupFields.map((field) => {
+                                        const isReadOnly = field.is_editable === false || field.isEditable === false;
+                                        return (
+                                        <div key={field.id} className={cn("space-y-2", isReadOnly && "opacity-90 pointer-events-none select-none")}>
+                                          <div className="flex items-center gap-2">
+                                            <Label className="text-sm font-medium">{field.field_label || field.field_name || field.name}</Label>
+                                            {isReadOnly && <span className="text-xs text-muted-foreground">(read-only)</span>}
+                                          </div>
+                                          <CustomFieldRenderer
+                                            field={field}
+                                            value={customFieldsData[field.id] !== undefined ? customFieldsData[field.id] : (field.field_type?.toLowerCase() === 'file' ? null : '')}
+                                            onChange={handleCustomFieldChange}
+                                            error={customFieldsErrors[field.id]}
+                                            readOnly={isReadOnly}
+                                            hideLabel={true}
+                                          />
+                                        </div>
+                                        );
+                                      })}
                                     </div>
                                   </div>
                                 );
@@ -1125,15 +1169,25 @@ export default function CompliancePage() {
                               <div className="space-y-4">
                                 {standaloneFields.length > 0 && (
                                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    {standaloneFields.map((field) => (
-                                      <CustomFieldRenderer
-                                        key={field.id}
-                                        field={field}
-                                        value={customFieldsData[field.id] !== undefined ? customFieldsData[field.id] : (field.field_type?.toLowerCase() === 'file' ? null : '')}
-                                        onChange={handleCustomFieldChange}
-                                        error={customFieldsErrors[field.id]}
-                                      />
-                                    ))}
+                                    {standaloneFields.map((field) => {
+                                      const isReadOnly = field.is_editable === false || field.isEditable === false;
+                                      return (
+                                      <div key={field.id} className={cn("space-y-2", isReadOnly && "opacity-90 pointer-events-none select-none")}>
+                                        <div className="flex items-center gap-2">
+                                          <Label className="text-sm font-medium">{field.field_label || field.field_name || field.name}</Label>
+                                          {isReadOnly && <span className="text-xs text-muted-foreground">(read-only)</span>}
+                                        </div>
+                                        <CustomFieldRenderer
+                                          field={field}
+                                          value={customFieldsData[field.id] !== undefined ? customFieldsData[field.id] : (field.field_type?.toLowerCase() === 'file' ? null : '')}
+                                          onChange={handleCustomFieldChange}
+                                          error={customFieldsErrors[field.id]}
+                                          readOnly={isReadOnly}
+                                          hideLabel={true}
+                                        />
+                                      </div>
+                                      );
+                                    })}
                                   </div>
                                 )}
 
@@ -1169,15 +1223,25 @@ export default function CompliancePage() {
                                         </h4>
                                       </div>
                                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                        {allGroupFields.map((field) => (
-                                          <CustomFieldRenderer
-                                            key={field.id}
-                                            field={field}
-                                            value={customFieldsData[field.id] !== undefined ? customFieldsData[field.id] : (field.field_type?.toLowerCase() === 'file' ? null : '')}
-                                            onChange={handleCustomFieldChange}
-                                            error={customFieldsErrors[field.id]}
-                                          />
-                                        ))}
+                                        {allGroupFields.map((field) => {
+                                          const isReadOnly = field.is_editable === false || field.isEditable === false;
+                                          return (
+                                          <div key={field.id} className={cn("space-y-2", isReadOnly && "opacity-90 pointer-events-none select-none")}>
+                                            <div className="flex items-center gap-2">
+                                              <Label className="text-sm font-medium">{field.field_label || field.field_name || field.name}</Label>
+                                              {isReadOnly && <span className="text-xs text-muted-foreground">(read-only)</span>}
+                                            </div>
+                                            <CustomFieldRenderer
+                                              field={field}
+                                              value={customFieldsData[field.id] !== undefined ? customFieldsData[field.id] : (field.field_type?.toLowerCase() === 'file' ? null : '')}
+                                              onChange={handleCustomFieldChange}
+                                              error={customFieldsErrors[field.id]}
+                                              readOnly={isReadOnly}
+                                              hideLabel={true}
+                                            />
+                                          </div>
+                                          );
+                                        })}
                                       </div>
                                     </div>
                                   );

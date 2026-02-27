@@ -452,7 +452,24 @@ const UserEditPage = () => {
     return map;
   }, [customFieldsHierarchy, complianceFieldsMap]);
 
+  // Set of field IDs that are read-only (API is_editable === false) – do not update state for these
+  const readOnlyFieldIds = React.useMemo(() => {
+    const ids = new Set();
+    const collectReadOnly = (sections) => {
+      if (!Array.isArray(sections)) return;
+      sections.filter(s => s.is_active !== false).forEach(section => {
+        (section.fields || []).forEach(f => {
+          if (f.is_editable === false || f.isEditable === false) ids.add(f.id);
+        });
+        collectReadOnly(section.subsections);
+      });
+    };
+    collectReadOnly(customFieldsHierarchy?.sections);
+    return ids;
+  }, [customFieldsHierarchy]);
+
   const handleCustomFieldChange = (fieldId, value) => {
+    if (readOnlyFieldIds.has(fieldId)) return; // API says field is not editable
     setCustomFieldsData((prev) => ({
       ...prev,
       [fieldId]: value,
@@ -612,12 +629,23 @@ const UserEditPage = () => {
           });
       }
 
-      // Prepare updates array - only include fields that have actually changed
+      // Helper: get field from hierarchy (for is_editable check)
+      const getFieldFromHierarchy = (fieldIdInt) =>
+        customFieldsHierarchy?.sections
+          ?.flatMap(section => section.fields || [])
+          ?.find(f => f.id === fieldIdInt);
+
+      // Prepare updates array - only include fields that have actually changed and are editable
       const updates = Object.entries(customFieldsData)
         .filter(([fieldId, currentValue]) => {
           const fieldIdInt = parseInt(fieldId);
           // Only include fields that are in the hierarchy and have slugs
           if (!fieldIdToSlugMap.has(fieldIdInt)) {
+            return false;
+          }
+          // Exclude read-only fields (Field Visibility: not editable)
+          const field = getFieldFromHierarchy(fieldIdInt);
+          if (field?.is_editable === false) {
             return false;
           }
           
@@ -3015,13 +3043,16 @@ const UserEditPage = () => {
                                   
                                   {standaloneFields.length > 0 && (
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                      {standaloneFields.map((field) => (
-                                        <div key={field.id} className="space-y-2">
+                                      {standaloneFields.map((field) => {
+                                        const isReadOnly = field.is_editable === false || field.isEditable === false;
+                                        return (
+                                        <div key={field.id} className={cn("space-y-2", isReadOnly && "opacity-90 pointer-events-none select-none")}>
                                           <div className="flex items-center gap-2">
                                             <Label className="text-sm font-medium">
                                               {field.field_label || field.field_name || field.name}
                                               {field.is_required && <span className="text-red-500 ml-1">*</span>}
                                             </Label>
+                                            {isReadOnly && <span className="text-xs text-muted-foreground">(read-only)</span>}
                                             {field.slug && (
                                               <Button
                                                 variant="ghost"
@@ -3040,9 +3071,11 @@ const UserEditPage = () => {
                                             onChange={handleCustomFieldChange}
                                             error={customFieldsErrors[field.id]}
                                             hideLabel={true}
+                                            readOnly={isReadOnly}
                                           />
                                         </div>
-                                      ))}
+                                        );
+                                      })}
                                     </div>
                                   )}
 
@@ -3077,44 +3110,49 @@ const UserEditPage = () => {
                                             )}
                                           </h4>
                                         </div>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                          {allGroupFields.map((field) => (
-                                            <div key={field.id} className="space-y-2">
-                                              <div className="flex items-center gap-2">
-                                                <Label className="text-sm font-medium">
-                                                  {field.field_label || field.field_name || field.name}
-                                                  {field.is_required && <span className="text-red-500 ml-1">*</span>}
-                                                </Label>
-                                                {field.slug && (
-                                                  <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    className="h-6 w-6 p-0 cursor-pointer"
-                                                    onClick={() => handleViewHistory(field)}
-                                                    title="View history"
-                                                  >
-                                                    <Clock className="h-4 w-4 text-muted-foreground hover:text-foreground" />
-                                                  </Button>
-                                                )}
+                                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                            {allGroupFields.map((field) => {
+                                              const isReadOnly = field.is_editable === false || field.isEditable === false;
+                                              return (
+                                              <div key={field.id} className={cn("space-y-2", isReadOnly && "opacity-90 pointer-events-none select-none")}>
+                                                <div className="flex items-center gap-2">
+                                                  <Label className="text-sm font-medium">
+                                                    {field.field_label || field.field_name || field.name}
+                                                    {field.is_required && <span className="text-red-500 ml-1">*</span>}
+                                                  </Label>
+                                                  {isReadOnly && <span className="text-xs text-muted-foreground">(read-only)</span>}
+                                                  {field.slug && (
+                                                    <Button
+                                                      variant="ghost"
+                                                      size="sm"
+                                                      className="h-6 w-6 p-0 cursor-pointer"
+                                                      onClick={() => handleViewHistory(field)}
+                                                      title="View history"
+                                                    >
+                                                      <Clock className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+                                                    </Button>
+                                                  )}
+                                                </div>
+                                                <CustomFieldRenderer
+                                                  field={field}
+                                                  value={customFieldsData[field.id] !== undefined ? customFieldsData[field.id] : (field.field_type?.toLowerCase() === 'file' ? null : '')}
+                                                  onChange={handleCustomFieldChange}
+                                                  error={customFieldsErrors[field.id]}
+                                                  hideLabel={true}
+                                                  readOnly={isReadOnly}
+                                                />
                                               </div>
-                                              <CustomFieldRenderer
-                                                field={field}
-                                                value={customFieldsData[field.id] !== undefined ? customFieldsData[field.id] : (field.field_type?.toLowerCase() === 'file' ? null : '')}
-                                                onChange={handleCustomFieldChange}
-                                                error={customFieldsErrors[field.id]}
-                                                hideLabel={true}
-                                              />
-                                            </div>
-                                          ))}
+                                              );
+                                            })}
+                                          </div>
                                         </div>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              );
-                            })()}
-                          </div>
-                        );
+                                      );
+                                    })}
+                                  </div>
+                                );
+                              })()}
+                            </div>
+                          );
                       }
                       
                       // Multiple sections - show ribbon navigation
@@ -3256,13 +3294,16 @@ const UserEditPage = () => {
                                   <div className="space-y-4">
                                     {standaloneFields.length > 0 && (
                                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                        {standaloneFields.map((field) => (
-                                          <div key={field.id} className="space-y-2">
+                                        {standaloneFields.map((field) => {
+                                          const isReadOnly = field.is_editable === false || field.isEditable === false;
+                                          return (
+                                          <div key={field.id} className={cn("space-y-2", isReadOnly && "opacity-90 pointer-events-none select-none")}>
                                             <div className="flex items-center gap-2">
                                               <Label className="text-sm font-medium">
                                                 {field.field_label || field.field_name || field.name}
                                                 {field.is_required && <span className="text-red-500 ml-1">*</span>}
                                               </Label>
+                                              {isReadOnly && <span className="text-xs text-muted-foreground">(read-only)</span>}
                                               {field.slug && (
                                                 <Button
                                                   variant="ghost"
@@ -3281,9 +3322,11 @@ const UserEditPage = () => {
                                               onChange={handleCustomFieldChange}
                                               error={customFieldsErrors[field.id]}
                                               hideLabel={true}
+                                              readOnly={isReadOnly}
                                             />
                                           </div>
-                                        ))}
+                                          );
+                                        })}
                                       </div>
                                     )}
 
@@ -3319,13 +3362,16 @@ const UserEditPage = () => {
                                             </h4>
                                           </div>
                                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                            {allGroupFields.map((field) => (
-                                              <div key={field.id} className="space-y-2">
+                                            {allGroupFields.map((field) => {
+                                              const isReadOnly = field.is_editable === false || field.isEditable === false;
+                                              return (
+                                              <div key={field.id} className={cn("space-y-2", isReadOnly && "opacity-90 pointer-events-none select-none")}>
                                                 <div className="flex items-center gap-2">
                                                   <Label className="text-sm font-medium">
                                                     {field.field_label || field.field_name || field.name}
                                                     {field.is_required && <span className="text-red-500 ml-1">*</span>}
                                                   </Label>
+                                                  {isReadOnly && <span className="text-xs text-muted-foreground">(read-only)</span>}
                                                   {field.slug && (
                                                     <Button
                                                       variant="ghost"
@@ -3344,9 +3390,11 @@ const UserEditPage = () => {
                                                   onChange={handleCustomFieldChange}
                                                   error={customFieldsErrors[field.id]}
                                                   hideLabel={true}
+                                                  readOnly={isReadOnly}
                                                 />
                                               </div>
-                                            ))}
+                                              );
+                                            })}
                                           </div>
                                         </div>
                                       );
