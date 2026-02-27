@@ -35,6 +35,19 @@ export const clockService = {
     }
   },
 
+  // Manager clock out another user
+  managerClockOut: async (userId, notes) => {
+    try {
+      return await api.post("/clock/out/manager", {
+        user_id: userId,
+        notes,
+      });
+    } catch (error) {
+      console.error("Manager clock out failed:", error);
+      throw error;
+    }
+  },
+
   // Get clock status
   getClockStatus: async () => {
     try {

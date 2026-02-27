@@ -34,6 +34,7 @@ import {
 import {
   useActiveClocks,
   useUpdateClockRecord,
+  useManagerClockOut,
 } from "@/hooks/useClock";
 import { useLocations } from "@/hooks/useLocations";
 import { useDepartments } from "@/hooks/useDepartments";
@@ -67,6 +68,8 @@ export default function ManagerClockPage() {
   const [editClockInTime, setEditClockInTime] = useState("");
   const [editClockOutTime, setEditClockOutTime] = useState("");
   const [editNotes, setEditNotes] = useState("");
+  const [clockOutRecord, setClockOutRecord] = useState(null);
+  const [clockOutNotes, setClockOutNotes] = useState("");
 
   // Get configuration for warning thresholds
   const { data: settingsData } = useSettings({ category: "clock" });
@@ -119,6 +122,7 @@ export default function ManagerClockPage() {
 
   // Update clock record mutation
   const updateClockRecordMutation = useUpdateClockRecord();
+  const managerClockOutMutation = useManagerClockOut();
 
   // Normalize active clocks data - API returns array directly
   const activeClocks = React.useMemo(() => {
@@ -174,6 +178,25 @@ export default function ManagerClockPage() {
       setEditClockInTime("");
       setEditClockOutTime("");
       setEditNotes("");
+    } catch (error) {
+      // Error handled by mutation
+    }
+  };
+
+  const handleOpenManagerClockOut = (record) => {
+    setClockOutRecord(record);
+    setClockOutNotes("");
+  };
+
+  const handleConfirmManagerClockOut = async () => {
+    if (!clockOutRecord) return;
+    try {
+      await managerClockOutMutation.mutateAsync({
+        userId: clockOutRecord.user_id,
+        notes: clockOutNotes.trim() || undefined,
+      });
+      setClockOutRecord(null);
+      setClockOutNotes("");
     } catch (error) {
       // Error handled by mutation
     }
@@ -484,14 +507,24 @@ export default function ManagerClockPage() {
                           {getStatusBadge(record)}
                         </TableCell>
                         <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleEditRecord(record)}
-                            className="h-8 w-8"
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleEditRecord(record)}
+                              className="h-8 w-8"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleOpenManagerClockOut(record)}
+                              className="h-8"
+                            >
+                              Clock out
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     );
@@ -567,6 +600,58 @@ export default function ManagerClockPage() {
                 </>
               ) : (
                 "Save Changes"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Manager Clock Out Dialog */}
+      <Dialog open={!!clockOutRecord} onOpenChange={(open) => !open && setClockOutRecord(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Clock out user</DialogTitle>
+            <DialogDescription>
+              Clock this person out on their behalf. You can optionally add a note explaining why.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {clockOutRecord && (
+              <div className="text-sm">
+                <p>
+                  User: <span className="font-semibold">{clockOutRecord.user_name || "N/A"}</span>
+                </p>
+              </div>
+            )}
+            <div className="space-y-2">
+              <Label htmlFor="clockOutNotes">Notes (optional)</Label>
+              <Textarea
+                id="clockOutNotes"
+                value={clockOutNotes}
+                onChange={(e) => setClockOutNotes(e.target.value)}
+                placeholder="e.g. Forgot to log out at end of shift"
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setClockOutRecord(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleConfirmManagerClockOut}
+              disabled={managerClockOutMutation.isPending}
+            >
+              {managerClockOutMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Clocking out...
+                </>
+              ) : (
+                "Clock out user"
               )}
             </Button>
           </DialogFooter>

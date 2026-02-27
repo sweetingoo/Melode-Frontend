@@ -86,8 +86,9 @@ export const useClockIn = () => {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: clockKeys.status() });
-      queryClient.invalidateQueries({ queryKey: clockKeys.records() });
-      queryClient.invalidateQueries({ queryKey: clockKeys.active() });
+      // Invalidate all records/active queries (any params)
+      queryClient.invalidateQueries({ queryKey: ["clock", "records"] });
+      queryClient.invalidateQueries({ queryKey: ["clock", "active"] });
       toast.success("Checked in successfully", {
         description: "You have been checked in.",
       });
@@ -118,8 +119,8 @@ export const useLinkClockToProvisionalShift = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: clockKeys.status() });
-      queryClient.invalidateQueries({ queryKey: clockKeys.records() });
-      queryClient.invalidateQueries({ queryKey: clockKeys.active() });
+      queryClient.invalidateQueries({ queryKey: ["clock", "records"] });
+      queryClient.invalidateQueries({ queryKey: ["clock", "active"] });
       queryClient.invalidateQueries({ queryKey: attendanceKeys.shiftRecords() });
       queryClient.invalidateQueries({ queryKey: attendanceKeys.provisionalShifts() });
       toast.success("Shift linked", {
@@ -151,8 +152,8 @@ export const useClockOut = () => {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: clockKeys.status() });
-      queryClient.invalidateQueries({ queryKey: clockKeys.records() });
-      queryClient.invalidateQueries({ queryKey: clockKeys.active() });
+      queryClient.invalidateQueries({ queryKey: ["clock", "records"] });
+      queryClient.invalidateQueries({ queryKey: ["clock", "active"] });
       toast.success("Checked out successfully", {
         description: "You have been checked out.",
       });
@@ -172,6 +173,38 @@ export const useClockOut = () => {
   });
 };
 
+// Manager clock out another user mutation
+export const useManagerClockOut = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ userId, notes }) => {
+      const response = await clockService.managerClockOut(userId, notes);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: clockKeys.status() });
+      queryClient.invalidateQueries({ queryKey: ["clock", "records"] });
+      queryClient.invalidateQueries({ queryKey: ["clock", "active"] });
+      toast.success("User clocked out", {
+        description: "The user has been clocked out by a manager.",
+      });
+    },
+    onError: (error) => {
+      console.error("Manager clock out error:", error);
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.response?.data?.detail ||
+        "Failed to clock out user";
+      toast.error("Failed to clock out user", {
+        description: Array.isArray(errorMessage)
+          ? errorMessage.map((e) => e.msg || e).join(", ")
+          : errorMessage,
+      });
+    },
+  });
+};
+
 // Update clock record mutation (manager)
 export const useUpdateClockRecord = () => {
   const queryClient = useQueryClient();
@@ -182,8 +215,8 @@ export const useUpdateClockRecord = () => {
       return response.data;
     },
     onSuccess: (data, variables) => {
-      queryClient.invalidateQueries({ queryKey: clockKeys.records() });
-      queryClient.invalidateQueries({ queryKey: clockKeys.active() });
+      queryClient.invalidateQueries({ queryKey: ["clock", "records"] });
+      queryClient.invalidateQueries({ queryKey: ["clock", "active"] });
       toast.success("Session record updated successfully", {
         description: "The session record has been updated.",
       });
@@ -214,8 +247,8 @@ export const useChangeShiftRole = () => {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: clockKeys.status() });
-      queryClient.invalidateQueries({ queryKey: clockKeys.records() });
-      queryClient.invalidateQueries({ queryKey: clockKeys.active() });
+      queryClient.invalidateQueries({ queryKey: ["clock", "records"] });
+      queryClient.invalidateQueries({ queryKey: ["clock", "active"] });
       toast.success("Shift role changed successfully", {
         description: "Your shift role has been updated.",
       });
@@ -246,7 +279,7 @@ export const useStartBreak = () => {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: clockKeys.status() });
-      queryClient.invalidateQueries({ queryKey: clockKeys.active() });
+      queryClient.invalidateQueries({ queryKey: ["clock", "active"] });
       toast.success("Break started", {
         description: "Your break has been started.",
       });
@@ -277,7 +310,7 @@ export const useEndBreak = () => {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: clockKeys.status() });
-      queryClient.invalidateQueries({ queryKey: clockKeys.active() });
+      queryClient.invalidateQueries({ queryKey: ["clock", "active"] });
       toast.success("Break ended", {
         description: "Your break has been ended.",
       });

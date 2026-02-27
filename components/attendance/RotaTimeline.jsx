@@ -5,7 +5,7 @@ import Link from "next/link";
 import { format, addDays, startOfWeek, startOfMonth, endOfMonth, addMonths, subMonths, differenceInDays } from "date-fns";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Calendar as CalendarIcon, ChevronDown, ChevronRight, Clock, FileText, HelpCircle, Loader2, Pencil, Plus, Trash2, User } from "lucide-react";
+import { Building2, Calendar as CalendarIcon, ChevronDown, ChevronRight, Clock, FileText, Filter, HelpCircle, Loader2, Pencil, Plus, Trash2, User } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -18,15 +18,18 @@ import { Separator } from "@/components/ui/separator";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { useCoverage } from "@/hooks/useAttendance";
+import { useCoverage, useAttendanceEmployeeSuggest } from "@/hooks/useAttendance";
 import { useDeleteProvisionalShift, useShiftRecordsAllPages } from "@/hooks/useShiftRecords";
+import { useDepartments } from "@/hooks/useDepartments";
 import { formatDateForAPI } from "@/utils/time";
 import { getUserDisplayName } from "@/utils/user";
 import { ProvisionalShiftForm } from "./ProvisionalShiftForm";
 import { cn } from "@/lib/utils";
 import { CATEGORY_LABELS } from "@/lib/attendanceLabels";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Filter } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 /** Categories that can appear as blocks on the rota (excludes mapped = required slots from coverage). */
 const ROTA_CATEGORY_OPTIONS = [
@@ -87,12 +90,25 @@ const defaultWeekRange = () => {
   return { from: mon, to: addDays(mon, 6) };
 };
 
-export function RotaTimeline({ departmentId = null, initialRange = null }) {
+export function RotaTimeline({ departmentId: departmentIdProp = null, initialRange = null }) {
   const defaultRange = useMemo(defaultWeekRange, []);
   const [customRange, setCustomRange] = useState(defaultRange);
   const [committedRange, setCommittedRange] = useState(defaultRange);
   const [rangeSource, setRangeSource] = useState("thisWeek");
   const [rangeCalendarOpen, setRangeCalendarOpen] = useState(false);
+  const [departmentFilter, setDepartmentFilter] = useState(departmentIdProp != null ? String(departmentIdProp) : "all");
+  const [userFilter, setUserFilter] = useState("all");
+  const [departmentComboboxOpen, setDepartmentComboboxOpen] = useState(false);
+  const [departmentSearch, setDepartmentSearch] = useState("");
+  const [userComboboxOpen, setUserComboboxOpen] = useState(false);
+  const [userSearch, setUserSearch] = useState("");
+  const [debouncedUserSearch, setDebouncedUserSearch] = useState("");
+  const [selectedUserForFilter, setSelectedUserForFilter] = useState(null);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedUserSearch(userSearch), 300);
+    return () => clearTimeout(t);
+  }, [userSearch]);
 
   useEffect(() => {
     if (initialRange?.from && initialRange?.to) {
@@ -101,6 +117,40 @@ export function RotaTimeline({ departmentId = null, initialRange = null }) {
       setRangeSource(differenceInDays(initialRange.to, initialRange.from) === 0 ? "today" : "custom");
     }
   }, [initialRange?.from?.getTime?.(), initialRange?.to?.getTime?.()]);
+
+  useEffect(() => {
+    if (departmentIdProp != null) setDepartmentFilter(String(departmentIdProp));
+  }, [departmentIdProp]);
+
+  const departmentIdNum = departmentFilter === "all" ? null : (parseInt(departmentFilter, 10) || null);
+  const userIdNum = userFilter === "all" ? null : (parseInt(userFilter, 10) || null);
+
+  const { data: departmentsData } = useDepartments({ per_page: 50 });
+  const departments = useMemo(() => {
+    if (!departmentsData) return [];
+    if (Array.isArray(departmentsData)) return departmentsData;
+    if (Array.isArray(departmentsData.departments)) return departmentsData.departments;
+    if (Array.isArray(departmentsData.data)) return departmentsData.data;
+    return [];
+  }, [departmentsData]);
+
+  const { data: employeeSuggestList, isLoading: userSuggestLoading } = useAttendanceEmployeeSuggest(
+    {
+      q: debouncedUserSearch.trim() || undefined,
+      department_id: departmentIdNum ?? undefined,
+      limit: 20,
+      enabled: userComboboxOpen,
+    }
+  );
+  const userOptions = useMemo(() => Array.isArray(employeeSuggestList) ? employeeSuggestList : [], [employeeSuggestList]);
+
+  const departmentsFiltered = useMemo(() => {
+    if (!departmentSearch.trim()) return departments;
+    const q = departmentSearch.trim().toLowerCase();
+    return departments.filter(
+      (d) => (d.name || "").toLowerCase().includes(q) || String(d.id).includes(q)
+    );
+  }, [departments, departmentSearch]);
 
   const { effectiveRangeStart, rangeEnd, days, rangeLabel, isSingleDay } = useMemo(() => {
     const range = committedRange?.from && committedRange?.to ? committedRange : defaultRange;
@@ -121,17 +171,25 @@ export function RotaTimeline({ departmentId = null, initialRange = null }) {
     };
   }, [committedRange, defaultRange]);
 
-  const params = useMemo(
+  const coverageParams = useMemo(
     () => ({
       start_date: effectiveRangeStart,
       end_date: rangeEnd,
-      ...(departmentId != null ? { department_id: departmentId } : {}),
+      ...(departmentIdNum != null ? { department_id: departmentIdNum } : {}),
     }),
-    [effectiveRangeStart, rangeEnd, departmentId]
+    [effectiveRangeStart, rangeEnd, departmentIdNum]
   );
 
-  const { data: coverageData, isLoading: coverageLoading } = useCoverage(params);
-  const { data: shiftData, isLoading: shiftsLoading } = useShiftRecordsAllPages(params);
+  const shiftParams = useMemo(
+    () => ({
+      ...coverageParams,
+      ...(userIdNum != null ? { user_id: userIdNum } : {}),
+    }),
+    [coverageParams, userIdNum]
+  );
+
+  const { data: coverageData, isLoading: coverageLoading } = useCoverage(coverageParams);
+  const { data: shiftData, isLoading: shiftsLoading } = useShiftRecordsAllPages(shiftParams);
 
   const [visibleCategories, setVisibleCategories] = useState(() => new Set(DEFAULT_VISIBLE_CATEGORIES));
 
@@ -277,7 +335,7 @@ export function RotaTimeline({ departmentId = null, initialRange = null }) {
       shiftDate: dateStr,
       jobRoleId: jobRoleMatch ? jobRoleMatch[1] : null,
       shiftRoleId: shiftRoleMatch ? shiftRoleMatch[1] : null,
-      departmentId: departmentId != null ? String(departmentId) : null,
+      departmentId: departmentIdNum != null ? String(departmentIdNum) : null,
     });
     setAddShiftOpen(true);
   };
@@ -303,6 +361,179 @@ export function RotaTimeline({ departmentId = null, initialRange = null }) {
             </CardDescription>
           </div>
           <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-2">
+                <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <Label className="sr-only">Department</Label>
+                <Popover open={departmentComboboxOpen} onOpenChange={(open) => { setDepartmentComboboxOpen(open); if (!open) setDepartmentSearch(""); }}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={departmentComboboxOpen}
+                      className="h-9 min-w-[160px] max-w-[220px] justify-between font-normal"
+                    >
+                      <span className="truncate">
+                        {departmentFilter === "all"
+                          ? "All departments"
+                          : departments.find((d) => String(d.id) === departmentFilter)?.name || `Department #${departmentFilter}`}
+                      </span>
+                      <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                    <div className="p-2 border-b">
+                      <Input
+                        placeholder="Search departments..."
+                        value={departmentSearch}
+                        onChange={(e) => setDepartmentSearch(e.target.value)}
+                        className="h-9"
+                        autoFocus
+                      />
+                    </div>
+                    <ScrollArea className="max-h-64">
+                      <ul className="p-1">
+                        <li>
+                          <button
+                            type="button"
+                            className={cn(
+                              "w-full rounded-sm px-2 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground",
+                              departmentFilter === "all" && "bg-accent"
+                            )}
+                            onClick={() => {
+                              setDepartmentFilter("all");
+                              setDepartmentComboboxOpen(false);
+                              setDepartmentSearch("");
+                              setUserFilter("all");
+                              setSelectedUserForFilter(null);
+                            }}
+                          >
+                            All departments
+                          </button>
+                        </li>
+                        {departmentsFiltered.map((d) => (
+                          <li key={d.id}>
+                            <button
+                              type="button"
+                              className={cn(
+                                "w-full rounded-sm px-2 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground",
+                                String(d.id) === departmentFilter && "bg-accent"
+                              )}
+                              onClick={() => {
+                                setDepartmentFilter(String(d.id));
+                                setDepartmentComboboxOpen(false);
+                                setDepartmentSearch("");
+                                setUserFilter("all");
+                                setSelectedUserForFilter(null);
+                              }}
+                            >
+                              {d.name || `Department #${d.id}`}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </ScrollArea>
+                    {departmentsFiltered.length === 0 && departmentSearch.trim() && (
+                      <p className="py-4 text-center text-sm text-muted-foreground">No department found.</p>
+                    )}
+                  </PopoverContent>
+                </Popover>
+              </div>
+              <div className="flex items-center gap-2">
+                <User className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <Label className="sr-only">User</Label>
+                <Popover
+                  open={userComboboxOpen}
+                  onOpenChange={(open) => {
+                    setUserComboboxOpen(open);
+                    if (!open) {
+                      setUserSearch("");
+                      setDebouncedUserSearch("");
+                    }
+                  }}
+                >
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={userComboboxOpen}
+                      className="h-9 min-w-[160px] max-w-[240px] justify-between font-normal"
+                    >
+                      <span className="truncate">
+                        {userFilter === "all"
+                          ? "All users"
+                          : selectedUserForFilter?.display_name || `User #${userFilter}`}
+                      </span>
+                      <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                    <div className="p-2 border-b">
+                      <Input
+                        placeholder="Search by name..."
+                        value={userSearch}
+                        onChange={(e) => setUserSearch(e.target.value)}
+                        className="h-9"
+                        autoFocus
+                      />
+                    </div>
+                    <ScrollArea className="max-h-64">
+                      {userSuggestLoading ? (
+                        <p className="py-6 text-center text-sm text-muted-foreground">Loading…</p>
+                      ) : (
+                        <ul className="p-1">
+                          <li>
+                            <button
+                              type="button"
+                              className={cn(
+                                "w-full rounded-sm px-2 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground",
+                                userFilter === "all" && "bg-accent"
+                              )}
+                              onClick={() => {
+                                setUserFilter("all");
+                                setSelectedUserForFilter(null);
+                                setUserComboboxOpen(false);
+                                setUserSearch("");
+                                setDebouncedUserSearch("");
+                              }}
+                            >
+                              All users
+                            </button>
+                          </li>
+                          {userOptions.map((u) => (
+                            <li key={u.id}>
+                              <button
+                                type="button"
+                                className={cn(
+                                  "w-full rounded-sm px-2 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground",
+                                  String(u.id) === userFilter && "bg-accent"
+                                )}
+                                onClick={() => {
+                                  setUserFilter(String(u.id));
+                                  setSelectedUserForFilter({ id: u.id, display_name: u.display_name || `User ${u.id}` });
+                                  setUserComboboxOpen(false);
+                                  setUserSearch("");
+                                  setDebouncedUserSearch("");
+                                }}
+                              >
+                                {u.department_name ? `${u.display_name || u.id} — ${u.department_name}` : (u.display_name || `User ${u.id}`)}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </ScrollArea>
+                    {!userSuggestLoading && userOptions.length === 0 && (
+                      <p className="py-4 text-center text-sm text-muted-foreground">
+                        {debouncedUserSearch.trim() ? "No one found. Try another name or department." : "Type to search."}
+                      </p>
+                    )}
+                  </PopoverContent>
+                </Popover>
+              </div>
+            </div>
             <Button
               onClick={() => {
                 setAddShiftInitial(null);

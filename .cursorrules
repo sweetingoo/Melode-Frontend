@@ -41,10 +41,11 @@ This is a Next.js frontend application for the Melode project. The codebase uses
 - Ensure code is properly formatted and linted
 
 ## Lists & Pagination
-- **Never use large fixed page sizes** (e.g. per_page: 200) to load "all" records for dropdowns or filters
-- Use **lazy loading** for large lists: search-as-you-type APIs, pagination, or virtualisation
-- Prefer server-side search/suggest endpoints (e.g. `/employees/suggest?q=...&limit=20`) over loading hundreds of records and filtering client-side
-- Keep default page sizes modest (e.g. 20–50); use "load more" or infinite scroll if the user needs more
+- **Do not use large page sizes**: keep `per_page`, `limit`, and `page_size` modest (e.g. 20–50). Do not use values like 100, 200, or 500 unless the product explicitly requires it.
+- **Never use large fixed page sizes** to load "all" records for dropdowns or filters (e.g. avoid per_page: 200).
+- Use **lazy loading** for large lists: search-as-you-type APIs, pagination, or virtualisation.
+- Prefer server-side search/suggest endpoints (e.g. `/employees/suggest?q=...&limit=20`) over loading hundreds of records and filtering client-side.
+- Use "load more" or infinite scroll if the user needs more than one page.
 
 ## API Integration
 - Use the existing API client patterns in `/services`
