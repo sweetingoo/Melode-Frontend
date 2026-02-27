@@ -1488,6 +1488,7 @@ export default function AdminLayout({ children }) {
       // (leave:approve, attendance:manage_all, attendance:reports, attendance:settings). Do NOT show for
       // attendance:view or attendance:manage_own only — those users see their own data via My Time and don't need this nav.
       if (item.permission === "attendance:view") {
+        if (isCurrentRoleSuperuser || currentUserData.is_superuser || userPermissionNames.includes("*")) return true;
         const needsTimeAndAttendanceNav = userPermissionNames.some(
           (perm) =>
             perm === "leave:approve" ||
