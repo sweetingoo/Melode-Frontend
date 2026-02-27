@@ -99,8 +99,8 @@ import { useUsers } from "@/hooks/useUsers";
 import { customFieldsFieldsService } from "@/services/customFieldsFields";
 import { customFieldsKeys } from "@/hooks/useCustomFieldsFields";
 import { complianceService } from "@/services/compliance";
-import { useForms } from "@/hooks/useForms";
-import { useTrackers } from "@/hooks/useTrackers";
+import { useForms, useFormsAllPages } from "@/hooks/useForms";
+import { useTrackers, useTrackersAllPages } from "@/hooks/useTrackers";
 
 // Field Visibility Links Component
 const FieldVisibilityLinksSection = ({ field, entityType, roles }) => {
@@ -1120,9 +1120,9 @@ const CustomFieldsAdminPage = () => {
   const roles = rolesData?.roles || rolesData || [];
   const assetTypes = assetTypesData?.asset_types || assetTypesData || [];
 
-  // Fetch forms and trackers for usage tracking
-  const { data: formsData, isLoading: formsLoading } = useForms({ per_page: 1000, is_active: true }, { enabled: usageDialogOpen });
-  const { data: trackersData, isLoading: trackersLoading } = useTrackers({ per_page: 1000, is_active: true }, { enabled: usageDialogOpen });
+  // Fetch forms and trackers for usage tracking (page-by-page to avoid large per_page)
+  const { data: formsData, isLoading: formsLoading } = useFormsAllPages({ is_active: true }, { enabled: usageDialogOpen });
+  const { data: trackersData, isLoading: trackersLoading } = useTrackersAllPages({ is_active: true }, { enabled: usageDialogOpen });
   const forms = formsData?.forms || [];
   const trackers = trackersData?.forms || trackersData?.trackers || [];
 

@@ -7,6 +7,7 @@ export const trackerKeys = {
   all: ["trackers"],
   lists: () => [...trackerKeys.all, "list"],
   list: (params) => [...trackerKeys.lists(), params],
+  listAllPages: (params) => [...trackerKeys.lists(), "allPages", params],
   details: () => [...trackerKeys.all, "detail"],
   detail: (slug) => [...trackerKeys.details(), slug],
   search: (params) => [...trackerKeys.all, "search", params],
@@ -19,6 +20,8 @@ export const trackerKeys = {
   queueCounts: (slug) => [...trackerKeys.details(), slug, "queue-counts"],
 };
 
+const PAGE_SIZE = 50;
+
 // Get all trackers query
 export const useTrackers = (params = {}, options = {}) => {
   return useQuery({
@@ -28,6 +31,43 @@ export const useTrackers = (params = {}, options = {}) => {
       return response.data;
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
+    ...options,
+  });
+};
+
+/**
+ * Fetch trackers page by page and merge results (lazy loading). Use when you need the full list
+ * without requesting a large per_page. Returns same shape as useTrackers.
+ */
+export const useTrackersAllPages = (params = {}, options = {}) => {
+  const { per_page: _ignored, page: _ignoredPage, ...restParams } = params;
+  const baseParams = { ...restParams, per_page: PAGE_SIZE, page: 1 };
+  return useQuery({
+    queryKey: trackerKeys.listAllPages(baseParams),
+    queryFn: async () => {
+      const allForms = [];
+      let page = 1;
+      let total = 0;
+      do {
+        const response = await trackersService.getTrackers({ ...baseParams, page, per_page: PAGE_SIZE });
+        const data = response.data;
+        const forms = data?.forms ?? (Array.isArray(data) ? data : []);
+        const totalFromApi = data?.total ?? forms.length;
+        total = totalFromApi;
+        allForms.push(...forms);
+        if (forms.length < PAGE_SIZE || allForms.length >= total) break;
+        page += 1;
+      } while (true);
+      return {
+        forms: allForms,
+        trackers: allForms,
+        total: allForms.length,
+        page: 1,
+        per_page: allForms.length,
+        total_pages: 1,
+      };
+    },
+    staleTime: 5 * 60 * 1000,
     ...options,
   });
 };

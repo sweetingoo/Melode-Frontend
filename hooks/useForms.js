@@ -7,6 +7,7 @@ export const formKeys = {
   all: ["forms"],
   lists: () => [...formKeys.all, "list"],
   list: (params) => [...formKeys.lists(), params],
+  listAllPages: (params) => [...formKeys.lists(), "allPages", params],
   details: () => [...formKeys.all, "detail"],
   detail: (id) => [...formKeys.details(), id],
   search: (params) => [...formKeys.all, "search", params],
@@ -15,6 +16,8 @@ export const formKeys = {
   submissionDetail: (id) => [...formKeys.submissions(), "detail", id],
   submissionSearch: (params) => [...formKeys.submissions(), "search", params],
 };
+
+const PAGE_SIZE = 50;
 
 // Get all forms query
 export const useForms = (params = {}, options = {}) => {
@@ -25,6 +28,42 @@ export const useForms = (params = {}, options = {}) => {
       return response.data;
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
+    ...options,
+  });
+};
+
+/**
+ * Fetch forms page by page and merge results (lazy loading). Use when you need the full list
+ * without requesting a large per_page. Returns same shape as useForms.
+ */
+export const useFormsAllPages = (params = {}, options = {}) => {
+  const { per_page: _ignored, page: _ignoredPage, ...restParams } = params;
+  const baseParams = { ...restParams, per_page: PAGE_SIZE, page: 1 };
+  return useQuery({
+    queryKey: formKeys.listAllPages(baseParams),
+    queryFn: async () => {
+      const allForms = [];
+      let page = 1;
+      let total = 0;
+      do {
+        const response = await formsService.getForms({ ...baseParams, page, per_page: PAGE_SIZE });
+        const data = response.data;
+        const forms = data?.forms ?? (Array.isArray(data) ? data : []);
+        const totalFromApi = data?.total ?? forms.length;
+        total = totalFromApi;
+        allForms.push(...forms);
+        if (forms.length < PAGE_SIZE || allForms.length >= total) break;
+        page += 1;
+      } while (true);
+      return {
+        forms: allForms,
+        total: allForms.length,
+        page: 1,
+        per_page: allForms.length,
+        total_pages: 1,
+      };
+    },
+    staleTime: 5 * 60 * 1000,
     ...options,
   });
 };

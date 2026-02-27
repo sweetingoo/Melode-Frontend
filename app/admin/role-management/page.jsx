@@ -506,18 +506,37 @@ const RoleManagementPage = () => {
       .replace(/^_|_$/g, ""); // Remove leading/trailing underscores
   };
 
-  // Build role name key: DEPT_CODE_ROLE_TYPE_ROLE_NAME (backend expects ^[a-z_]+$)
-  const buildRoleNameKey = (deptCode, roleType, roleNamePart) => {
+  // Generate a short unique suffix (lowercase alphanumeric) for role key uniqueness
+  const generateUniqueKeySuffix = () => {
+    const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+    let result = "";
+    if (typeof crypto !== "undefined" && crypto.getRandomValues) {
+      const bytes = new Uint8Array(6);
+      crypto.getRandomValues(bytes);
+      for (let i = 0; i < 6; i++) result += chars[bytes[i] % chars.length];
+    } else {
+      for (let i = 0; i < 6; i++) result += chars[Math.floor(Math.random() * chars.length)];
+    }
+    return result;
+  };
+
+  // Build role name key: DEPT_CODE_ROLE_TYPE_ROLE_NAME or ..._NAME_{unique} (backend expects ^[a-z0-9_]+$)
+  const buildRoleNameKey = (deptCode, roleType, roleNamePart, appendUnique = false) => {
     const sanitize = (s) =>
       (s || "")
         .toLowerCase()
-        .replace(/[^a-z]/g, "_")
+        .replace(/[^a-z0-9]/g, "_")
         .replace(/_+/g, "_")
         .replace(/^_|_$/g, "");
-    const a = sanitize(deptCode) || "dept";
+    const a = sanitize(String(deptCode)) || "dept";
     const b = roleType === "shift_role" ? "shift_role" : "job_role";
     const c = sanitize(roleNamePart) || "role";
-    return `${a}_${b}_${c}`.slice(0, 50);
+    const base = `${a}_${b}_${c}`.slice(0, 70);
+    if (appendUnique) {
+      const prefix = base.slice(0, 63); // leave room for _ + 6-char unique suffix
+      return `${prefix}_${generateUniqueKeySuffix()}`;
+    }
+    return base;
   };
 
   // Preview key for create modal (DEPT_CODE_ROLE_TYPE_ROLE_NAME)
@@ -594,7 +613,7 @@ const RoleManagementPage = () => {
 
       const roleData = {
         display_name: formData.displayName,
-        name: editingRole ? formData.roleName : buildRoleNameKey(deptCode, formData.roleType, formData.roleName),
+        name: editingRole ? formData.roleName : buildRoleNameKey(deptCode, formData.roleType, formData.roleName, true),
         description: formData.description,
         priority: formData.priority,
         role_type: formData.roleType,
@@ -723,7 +742,7 @@ const RoleManagementPage = () => {
       const deptCode = dept?.code || dept?.name || "";
       const roleData = {
         display_name: quickCreateRoleData.displayName,
-        name: buildRoleNameKey(deptCode, "job_role", quickCreateRoleData.roleName),
+        name: buildRoleNameKey(deptCode, "job_role", quickCreateRoleData.roleName, true),
         description: quickCreateRoleData.description || "",
         priority: quickCreateRoleData.priority,
         role_type: "job_role",
@@ -1701,6 +1720,8 @@ const RoleManagementPage = () => {
               {!editingRole && createRoleKeyPreview && (
                 <p className="text-xs text-muted-foreground rounded bg-muted/50 px-2 py-1.5 font-mono">
                   Key (stored): <span className="font-medium text-foreground">{createRoleKeyPreview}</span>
+                  <span className="text-muted-foreground">_&#123;unique&#125;</span>
+                  <span className="block mt-1 text-muted-foreground font-sans font-normal">A unique suffix (e.g. x7k2m9) will be appended when you create the role.</span>
                 </p>
               )}
             </div>
