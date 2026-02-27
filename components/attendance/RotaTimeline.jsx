@@ -5,7 +5,7 @@ import Link from "next/link";
 import { format, addDays, startOfWeek, startOfMonth, endOfMonth, addMonths, subMonths, differenceInDays } from "date-fns";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Building2, Calendar as CalendarIcon, ChevronDown, ChevronRight, Clock, FileText, Filter, HelpCircle, Loader2, Pencil, Plus, Trash2, User } from "lucide-react";
+import { Building2, Calendar as CalendarIcon, ChevronDown, ChevronRight, Clock, FileText, Filter, Loader2, Pencil, Plus, Trash2, User } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -15,7 +15,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { useCoverage, useAttendanceEmployeeSuggest } from "@/hooks/useAttendance";
@@ -249,8 +248,6 @@ export function RotaTimeline({ departmentId: departmentIdProp = null, initialRan
 
   const [selectedBlock, setSelectedBlock] = useState(null);
   const [editShiftRecord, setEditShiftRecord] = useState(null); // when set, open ProvisionalShiftForm in edit mode
-  const [helpOpen, setHelpOpen] = useState(false);
-
   const deleteProvisionalShift = useDeleteProvisionalShift();
 
   const handleDeleteShift = async () => {
@@ -265,19 +262,6 @@ export function RotaTimeline({ departmentId: departmentIdProp = null, initialRan
       console.error("Delete shift failed:", err);
     }
   };
-
-  const weekSummary = useMemo(() => {
-    let requiredTotal = 0;
-    let allocatedTotal = 0;
-    (coverageData?.by_date ?? []).forEach((day) => {
-      Object.values(day.by_role ?? {}).forEach((role) => {
-        (role.required ?? []).forEach((s) => { requiredTotal += s.headcount ?? 0; });
-        (role.allocated ?? []).forEach((s) => { allocatedTotal += s.headcount ?? 0; });
-      });
-    });
-    const provisionalCount = Array.isArray(shiftData?.records) ? shiftData.records.length : 0;
-    return { requiredTotal, allocatedTotal, provisionalCount };
-  }, [coverageData, shiftData]);
 
   const applyRangePreset = (presetId) => {
     const today = new Date();
@@ -673,35 +657,6 @@ export function RotaTimeline({ departmentId: departmentIdProp = null, initialRan
             </Popover>
           </div>
         </div>
-        <Collapsible open={helpOpen} onOpenChange={setHelpOpen} className="mt-1">
-          <CollapsibleTrigger asChild>
-            <Button variant="ghost" size="sm" className="h-auto gap-1.5 px-0 text-muted-foreground hover:text-foreground">
-              {helpOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-              <HelpCircle className="h-4 w-4" />
-              How this is calculated
-            </Button>
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <div className="mt-2 rounded-lg border bg-muted/30 p-4 text-left text-sm">
-              <p className="font-medium text-foreground">Data sources</p>
-              <ul className="mt-1.5 list-inside list-disc space-y-1 text-muted-foreground">
-                <li>
-                  <strong className="text-foreground">Req: X</strong> — From <strong>Required Templates</strong> (Mapped Shift Templates). When you &quot;Generate from template&quot; for a week, those created records (category <code className="rounded bg-muted px-1">mapped</code>) are the &quot;required&quot; slots per date/role/time.
-                </li>
-                <li>
-                  <strong className="text-foreground">Blocks (names)</strong> — Shift records for the selected types (Allocated, Authorised Leave, Unauthorised Leave, Attended). Use the &quot;Shift types&quot; filter to show or hide each category in one view.
-                </li>
-                <li>
-                  <strong className="text-foreground">Rows</strong> — One row per role that has at least one required, allocated, or attended slot in the selected week.
-                </li>
-              </ul>
-              <p className="mt-2 font-medium text-foreground">Verify</p>
-              <p className="mt-1 text-muted-foreground">
-                This week: <strong className="text-foreground">{weekSummary.requiredTotal}</strong> required slots (from coverage), <strong className="text-foreground">{weekSummary.provisionalCount}</strong> allocated shift records. Match these against the &quot;Required Templates&quot; and &quot;Allocated&quot; tabs for the same week and department filter.
-              </p>
-            </div>
-          </CollapsibleContent>
-        </Collapsible>
       </CardHeader>
       <CardContent className="overflow-x-auto p-0 sm:p-0">
         {isLoading ? (

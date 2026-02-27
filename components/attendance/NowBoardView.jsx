@@ -6,7 +6,7 @@ import { useQueries } from "@tanstack/react-query";
 import { format, startOfWeek, addDays } from "date-fns";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Radio, Loader2, UserCheck, UserX, Megaphone, Phone, MessageSquare, Building2, Clock, Users } from "lucide-react";
+import { Radio, Loader2, UserCheck, UserX, Megaphone, Phone, MessageSquare, Building2, Clock, Users, MapPin } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -15,6 +15,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useNowBoard, useAttendanceDepartments, attendanceKeys } from "@/hooks/useAttendance";
+import { useLocations } from "@/hooks/useLocations";
 import { attendanceService } from "@/services/attendance";
 import { useCreateMessage } from "@/hooks/useMessages";
 import { useUsers } from "@/hooks/useUsers";
@@ -49,6 +50,7 @@ export function NowBoardView({ departmentId: initialDepartmentId = null }) {
 
   const [viewMode, setViewMode] = useState("today"); // "today" | "week"
   const [departmentId, setDepartmentId] = useState(initialDepartmentId ?? null);
+  const [locationId, setLocationId] = useState(null);
 
   const weekDays = useMemo(() => {
     const mon = startOfWeek(today, { weekStartsOn: 1 });
@@ -59,23 +61,32 @@ export function NowBoardView({ departmentId: initialDepartmentId = null }) {
     () => ({
       date: dateStr,
       ...(departmentId != null ? { department_id: departmentId } : {}),
+      ...(locationId != null ? { location_id: locationId } : {}),
     }),
-    [dateStr, departmentId]
+    [dateStr, departmentId, locationId]
   );
 
   const { data, isLoading } = useNowBoard(params);
   const { data: departmentsList = [] } = useAttendanceDepartments({ enabled: true });
+  const { data: locationsData } = useLocations();
+  const locationsList = useMemo(() => {
+    if (!locationsData) return [];
+    if (Array.isArray(locationsData)) return locationsData;
+    return locationsData?.locations ?? locationsData?.data ?? [];
+  }, [locationsData]);
 
   const weekQueries = useQueries({
     queries: weekDays.map((day) => ({
       queryKey: attendanceKeys.nowBoard({
         date: formatDateForAPI(day),
         ...(departmentId != null ? { department_id: departmentId } : {}),
+        ...(locationId != null ? { location_id: locationId } : {}),
       }),
       queryFn: async () => {
         const res = await attendanceService.getNowBoard({
           date: formatDateForAPI(day),
           ...(departmentId != null ? { department_id: departmentId } : {}),
+          ...(locationId != null ? { location_id: locationId } : {}),
         });
         return res.data ?? res;
       },
@@ -188,25 +199,40 @@ export function NowBoardView({ departmentId: initialDepartmentId = null }) {
             </CardDescription>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {viewMode === "today" && (
-              <Select
-                value={departmentId != null ? String(departmentId) : "all"}
-                onValueChange={(v) => setDepartmentId(v === "all" ? null : parseInt(v, 10))}
-              >
-                <SelectTrigger className="w-[200px] h-9 border bg-background">
-                  <Building2 className="h-4 w-4 shrink-0 text-muted-foreground mr-2" />
-                  <SelectValue placeholder="Department" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All departments</SelectItem>
-                  {(departmentsList || []).map((d) => (
-                    <SelectItem key={d.id} value={String(d.id)}>
-                      {d.name ?? `Department ${d.id}`}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
+            <Select
+              value={departmentId != null ? String(departmentId) : "all"}
+              onValueChange={(v) => setDepartmentId(v === "all" ? null : parseInt(v, 10))}
+            >
+              <SelectTrigger className="w-[200px] h-9 border bg-background">
+                <Building2 className="h-4 w-4 shrink-0 text-muted-foreground mr-2" />
+                <SelectValue placeholder="Department" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All departments</SelectItem>
+                {(departmentsList || []).map((d) => (
+                  <SelectItem key={d.id} value={String(d.id)}>
+                    {d.name ?? `Department ${d.id}`}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select
+              value={locationId != null ? String(locationId) : "all"}
+              onValueChange={(v) => setLocationId(v === "all" ? null : parseInt(v, 10))}
+            >
+              <SelectTrigger className="w-[200px] h-9 border bg-background">
+                <MapPin className="h-4 w-4 shrink-0 text-muted-foreground mr-2" />
+                <SelectValue placeholder="Location" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All locations</SelectItem>
+                {locationsList.map((loc) => (
+                  <SelectItem key={loc.id} value={String(loc.id)}>
+                    {loc.name ?? `Location ${loc.id}`}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <div className="flex rounded-lg border bg-background p-0.5">
               <Button
                 variant={viewMode === "today" ? "secondary" : "ghost"}
@@ -363,7 +389,8 @@ export function NowBoardView({ departmentId: initialDepartmentId = null }) {
                     <TableHeader>
                       <TableRow className="bg-muted/30 hover:bg-muted/30 border-b">
                         <TableHead className="font-semibold w-[min(200px,40%)]">User</TableHead>
-                        <TableHead className="font-semibold text-muted-foreground hidden sm:table-cell">Department</TableHead>
+                        <TableHead className="font-semibold text-muted-foreground">Department</TableHead>
+                        <TableHead className="font-semibold text-muted-foreground">Location</TableHead>
                         <TableHead className="font-semibold text-muted-foreground">Role</TableHead>
                         <TableHead className="font-semibold text-muted-foreground whitespace-nowrap text-right">Logged in at</TableHead>
                       </TableRow>
@@ -390,11 +417,21 @@ export function NowBoardView({ departmentId: initialDepartmentId = null }) {
                                 <span className="font-medium truncate">{name}</span>
                               </div>
                             </TableCell>
-                            <TableCell className="text-muted-foreground hidden sm:table-cell">
+                            <TableCell className="text-muted-foreground">
                               {u.department_name ? (
                                 <span className="inline-flex items-center gap-1.5 truncate">
                                   <Building2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                                   {u.department_name}
+                                </span>
+                              ) : (
+                                "—"
+                              )}
+                            </TableCell>
+                            <TableCell className="text-muted-foreground">
+                              {u.location_name ? (
+                                <span className="inline-flex items-center gap-1.5 truncate">
+                                  <MapPin className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                                  {u.location_name}
                                 </span>
                               ) : (
                                 "—"
