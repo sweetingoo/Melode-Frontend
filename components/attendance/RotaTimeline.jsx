@@ -89,20 +89,23 @@ const defaultWeekRange = () => {
   return { from: mon, to: addDays(mon, 6) };
 };
 
-export function RotaTimeline({ departmentId: departmentIdProp = null, initialRange = null }) {
+export function RotaTimeline({ departmentId: departmentIdProp = null, initialRange = null, userId: lockedUserId = null, userDisplayName: lockedUserDisplayName = null }) {
   const defaultRange = useMemo(defaultWeekRange, []);
   const [customRange, setCustomRange] = useState(defaultRange);
   const [committedRange, setCommittedRange] = useState(defaultRange);
   const [rangeSource, setRangeSource] = useState("thisWeek");
   const [rangeCalendarOpen, setRangeCalendarOpen] = useState(false);
   const [departmentFilter, setDepartmentFilter] = useState(departmentIdProp != null ? String(departmentIdProp) : "all");
-  const [userFilter, setUserFilter] = useState("all");
+  const [userFilter, setUserFilter] = useState(lockedUserId != null ? String(lockedUserId) : "all");
+  const [selectedUserForFilter, setSelectedUserForFilter] = useState(
+    lockedUserId != null ? { id: lockedUserId, display_name: lockedUserDisplayName || "You" } : null
+  );
+  const isMyRota = lockedUserId != null;
   const [departmentComboboxOpen, setDepartmentComboboxOpen] = useState(false);
   const [departmentSearch, setDepartmentSearch] = useState("");
   const [userComboboxOpen, setUserComboboxOpen] = useState(false);
   const [userSearch, setUserSearch] = useState("");
   const [debouncedUserSearch, setDebouncedUserSearch] = useState("");
-  const [selectedUserForFilter, setSelectedUserForFilter] = useState(null);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedUserSearch(userSearch), 300);
@@ -120,6 +123,13 @@ export function RotaTimeline({ departmentId: departmentIdProp = null, initialRan
   useEffect(() => {
     if (departmentIdProp != null) setDepartmentFilter(String(departmentIdProp));
   }, [departmentIdProp]);
+
+  useEffect(() => {
+    if (lockedUserId != null) {
+      setUserFilter(String(lockedUserId));
+      setSelectedUserForFilter({ id: lockedUserId, display_name: lockedUserDisplayName || "You" });
+    }
+  }, [lockedUserId, lockedUserDisplayName]);
 
   const departmentIdNum = departmentFilter === "all" ? null : (parseInt(departmentFilter, 10) || null);
   const userIdNum = userFilter === "all" ? null : (parseInt(userFilter, 10) || null);
@@ -331,14 +341,23 @@ export function RotaTimeline({ departmentId: departmentIdProp = null, initialRan
       <CardHeader className="space-y-3 border-b bg-muted/20 px-4 py-5 sm:px-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="space-y-1">
-            <CardTitle className="text-xl font-semibold tracking-tight">Rota</CardTitle>
+            <CardTitle className="text-xl font-semibold tracking-tight">{isMyRota ? "My Rota" : "Rota"}</CardTitle>
             <CardDescription className="text-sm text-muted-foreground">
-              Required vs allocated and leave by role. Use &quot;Shift types&quot; to show or hide Allocated, Authorised Leave, Attended, etc. Click a shift for details, or use + to add one.
-              {isSingleDay && (
+              {isMyRota
+                ? "Your allocated shifts and leave by role. Same layout as Time & Attendance → Rota."
+                : "Required vs allocated and leave by role. Use \"Shift types\" to show or hide Allocated, Authorised Leave, Attended, etc. Click a shift for details, or use + to add one."}
+              {!isMyRota && isSingleDay && (
                 <span className="mt-2 block">
                   See who&apos;s checked in today →{" "}
                   <Link href="/admin/attendance?tab=now" className="font-medium text-primary underline hover:no-underline">
                     Now tab
+                  </Link>
+                </span>
+              )}
+              {isMyRota && (
+                <span className="mt-2 block">
+                  <Link href="/admin/attendance?tab=rota" className="font-medium text-primary underline hover:no-underline">
+                    View full rota →
                   </Link>
                 </span>
               )}
@@ -389,8 +408,10 @@ export function RotaTimeline({ departmentId: departmentIdProp = null, initialRan
                               setDepartmentFilter("all");
                               setDepartmentComboboxOpen(false);
                               setDepartmentSearch("");
-                              setUserFilter("all");
-                              setSelectedUserForFilter(null);
+                              if (!isMyRota) {
+                                setUserFilter("all");
+                                setSelectedUserForFilter(null);
+                              }
                             }}
                           >
                             All departments
@@ -408,8 +429,10 @@ export function RotaTimeline({ departmentId: departmentIdProp = null, initialRan
                                 setDepartmentFilter(String(d.id));
                                 setDepartmentComboboxOpen(false);
                                 setDepartmentSearch("");
-                                setUserFilter("all");
-                                setSelectedUserForFilter(null);
+                                if (!isMyRota) {
+                                  setUserFilter("all");
+                                  setSelectedUserForFilter(null);
+                                }
                               }}
                             >
                               {d.name || `Department #${d.id}`}
@@ -424,110 +447,114 @@ export function RotaTimeline({ departmentId: departmentIdProp = null, initialRan
                   </PopoverContent>
                 </Popover>
               </div>
-              <div className="flex items-center gap-2">
-                <User className="h-4 w-4 shrink-0 text-muted-foreground" />
-                <Label className="sr-only">User</Label>
-                <Popover
-                  open={userComboboxOpen}
-                  onOpenChange={(open) => {
-                    setUserComboboxOpen(open);
-                    if (!open) {
-                      setUserSearch("");
-                      setDebouncedUserSearch("");
-                    }
-                  }}
-                >
-                  <PopoverTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      role="combobox"
-                      aria-expanded={userComboboxOpen}
-                      className="h-9 min-w-[160px] max-w-[240px] justify-between font-normal"
-                    >
-                      <span className="truncate">
-                        {userFilter === "all"
-                          ? "All users"
-                          : selectedUserForFilter?.display_name || `User #${userFilter}`}
-                      </span>
-                      <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-                    <div className="p-2 border-b">
-                      <Input
-                        placeholder="Search by name..."
-                        value={userSearch}
-                        onChange={(e) => setUserSearch(e.target.value)}
-                        className="h-9"
-                        autoFocus
-                      />
-                    </div>
-                    <ScrollArea className="max-h-64">
-                      {userSuggestLoading ? (
-                        <p className="py-6 text-center text-sm text-muted-foreground">Loading…</p>
-                      ) : (
-                        <ul className="p-1">
-                          <li>
-                            <button
-                              type="button"
-                              className={cn(
-                                "w-full rounded-sm px-2 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground",
-                                userFilter === "all" && "bg-accent"
-                              )}
-                              onClick={() => {
-                                setUserFilter("all");
-                                setSelectedUserForFilter(null);
-                                setUserComboboxOpen(false);
-                                setUserSearch("");
-                                setDebouncedUserSearch("");
-                              }}
-                            >
-                              All users
-                            </button>
-                          </li>
-                          {userOptions.map((u) => (
-                            <li key={u.id}>
+              {!isMyRota && (
+                <div className="flex items-center gap-2">
+                  <User className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <Label className="sr-only">User</Label>
+                  <Popover
+                    open={userComboboxOpen}
+                    onOpenChange={(open) => {
+                      setUserComboboxOpen(open);
+                      if (!open) {
+                        setUserSearch("");
+                        setDebouncedUserSearch("");
+                      }
+                    }}
+                  >
+                    <PopoverTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={userComboboxOpen}
+                        className="h-9 min-w-[160px] max-w-[240px] justify-between font-normal"
+                      >
+                        <span className="truncate">
+                          {userFilter === "all"
+                            ? "All users"
+                            : selectedUserForFilter?.display_name || `User #${userFilter}`}
+                        </span>
+                        <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                      <div className="p-2 border-b">
+                        <Input
+                          placeholder="Search by name..."
+                          value={userSearch}
+                          onChange={(e) => setUserSearch(e.target.value)}
+                          className="h-9"
+                          autoFocus
+                        />
+                      </div>
+                      <ScrollArea className="max-h-64">
+                        {userSuggestLoading ? (
+                          <p className="py-6 text-center text-sm text-muted-foreground">Loading…</p>
+                        ) : (
+                          <ul className="p-1">
+                            <li>
                               <button
                                 type="button"
                                 className={cn(
                                   "w-full rounded-sm px-2 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground",
-                                  String(u.id) === userFilter && "bg-accent"
+                                  userFilter === "all" && "bg-accent"
                                 )}
                                 onClick={() => {
-                                  setUserFilter(String(u.id));
-                                  setSelectedUserForFilter({ id: u.id, display_name: u.display_name || `User ${u.id}` });
+                                  setUserFilter("all");
+                                  setSelectedUserForFilter(null);
                                   setUserComboboxOpen(false);
                                   setUserSearch("");
                                   setDebouncedUserSearch("");
                                 }}
                               >
-                                {u.department_name ? `${u.display_name || u.id} — ${u.department_name}` : (u.display_name || `User ${u.id}`)}
+                                All users
                               </button>
                             </li>
-                          ))}
-                        </ul>
+                            {userOptions.map((u) => (
+                              <li key={u.id}>
+                                <button
+                                  type="button"
+                                  className={cn(
+                                    "w-full rounded-sm px-2 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground",
+                                    String(u.id) === userFilter && "bg-accent"
+                                  )}
+                                  onClick={() => {
+                                    setUserFilter(String(u.id));
+                                    setSelectedUserForFilter({ id: u.id, display_name: u.display_name || `User ${u.id}` });
+                                    setUserComboboxOpen(false);
+                                    setUserSearch("");
+                                    setDebouncedUserSearch("");
+                                  }}
+                                >
+                                  {u.department_name ? `${u.display_name || u.id} — ${u.department_name}` : (u.display_name || `User ${u.id}`)}
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </ScrollArea>
+                      {!userSuggestLoading && userOptions.length === 0 && (
+                        <p className="py-4 text-center text-sm text-muted-foreground">
+                          {debouncedUserSearch.trim() ? "No one found. Try another name or department." : "Type to search."}
+                        </p>
                       )}
-                    </ScrollArea>
-                    {!userSuggestLoading && userOptions.length === 0 && (
-                      <p className="py-4 text-center text-sm text-muted-foreground">
-                        {debouncedUserSearch.trim() ? "No one found. Try another name or department." : "Type to search."}
-                      </p>
-                    )}
-                  </PopoverContent>
-                </Popover>
-              </div>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              )}
             </div>
-            <Button
-              onClick={() => {
-                setAddShiftInitial(null);
-                setAddShiftOpen(true);
-              }}
-              className="h-9 gap-2"
-            >
-              <Plus className="h-4 w-4 shrink-0" />
-              Add Allocated shift
-            </Button>
+            {!isMyRota && (
+              <Button
+                onClick={() => {
+                  setAddShiftInitial(null);
+                  setAddShiftOpen(true);
+                }}
+                className="h-9 gap-2"
+              >
+                <Plus className="h-4 w-4 shrink-0" />
+                Add Allocated shift
+              </Button>
+            )}
             <Popover open={rangeCalendarOpen} onOpenChange={setRangeCalendarOpen}>
               <PopoverTrigger asChild>
                 <Button

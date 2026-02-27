@@ -12,7 +12,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useAssignments } from "@/hooks/useAssignments";
 import { LeaveRequestList } from "@/components/attendance/LeaveRequestList";
 import { HolidayBalanceCard } from "@/components/attendance/HolidayBalanceCard";
-import { MyRotaView } from "@/components/attendance/MyRotaView";
+import { RotaTimeline } from "@/components/attendance/RotaTimeline";
 import { MyContractView } from "@/components/attendance/MyContractView";
 import { ShiftRecordList } from "@/components/attendance/ShiftRecordList";
 import { History, ChevronLeft, ChevronRight, Calendar, LayoutGrid, FileText } from "lucide-react";
@@ -154,7 +154,18 @@ function ClockHistoryPageContent() {
         </TabsContent>
 
         <TabsContent value="my-rota" className="mt-0 focus-visible:outline-none space-y-6">
-          <MyRotaView />
+          {user?.id ? (
+            <RotaTimeline
+              userId={user.id}
+              userDisplayName={user?.display_name ?? user?.full_name ?? "You"}
+            />
+          ) : (
+            <Card>
+              <CardContent className="py-8 text-center text-sm text-muted-foreground">
+                Sign in to see your rota.
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         <TabsContent value="my-contract" className="mt-0 focus-visible:outline-none space-y-6">
