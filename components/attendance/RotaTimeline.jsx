@@ -597,11 +597,7 @@ export function RotaTimeline({ departmentId: departmentIdProp = null, initialRan
                         ? new Date(range.to.getFullYear(), range.to.getMonth(), range.to.getDate(), 12, 0, 0)
                         : undefined;
                       setCustomRange({ from: from ?? to, to });
-                      if (from && to) {
-                        setCommittedRange({ from, to });
-                        setRangeSource("custom");
-                        setRangeCalendarOpen(false);
-                      }
+                      // Range is applied only when user clicks "Apply range"
                     }}
                     numberOfMonths={2}
                     classNames={{
@@ -609,6 +605,26 @@ export function RotaTimeline({ departmentId: departmentIdProp = null, initialRan
                       month: "space-y-4",
                     }}
                   />
+                  {customRange?.from && (
+                    <div className="flex justify-end border-t pt-3 mt-3">
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          const from = customRange.from;
+                          const to = customRange.to ?? from;
+                          const fromTime = from.getTime();
+                          const toTime = to.getTime();
+                          const orderedFrom = fromTime <= toTime ? from : to;
+                          const orderedTo = fromTime <= toTime ? to : from;
+                          setCommittedRange({ from: orderedFrom, to: orderedTo });
+                          setRangeSource("custom");
+                          setRangeCalendarOpen(false);
+                        }}
+                      >
+                        Apply range
+                      </Button>
+                    </div>
+                  )}
                 </div>
                   </PopoverContent>
             </Popover>
