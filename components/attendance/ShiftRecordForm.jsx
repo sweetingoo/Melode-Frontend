@@ -206,20 +206,28 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
   const { data: shiftLeaveTypesData } = useShiftLeaveTypes({ category, is_active: true });
   const shiftLeaveTypes = shiftLeaveTypesData?.types || shiftLeaveTypesData || [];
 
+  const prevSelectedUserIdRef = useRef(selectedUserId);
+  const prevDepartmentIdRef = useRef(departmentId);
+
   useEffect(() => {
     if (shiftRecord) {
+      const uid = shiftRecord.user_id?.toString() || "";
+      const deptId = shiftRecord.department_id?.toString() || "";
       setShiftDate(shiftRecord.shift_date ? new Date(shiftRecord.shift_date) : null);
       setCategory(shiftRecord.category || "attendance");
       setShiftLeaveTypeId(shiftRecord.shift_leave_type_id?.toString() || "");
-      setSelectedUserId(shiftRecord.user_id?.toString() || "");
+      setSelectedUserId(uid);
       setSelectedUserForDisplay(shiftRecord.user ?? null);
       setJobRoleId(shiftRecord.job_role_id?.toString() || "");
       setShiftRoleId(shiftRecord.shift_role_id?.toString() || "");
-      setDepartmentId(shiftRecord.department_id?.toString() || "");
+      setDepartmentId(deptId);
       setHours(shiftRecord.hours?.toString() || "7.5");
       setStartTime(shiftRecord.start_time ? String(shiftRecord.start_time).slice(0, 5) : "09:00");
       setEndTime(shiftRecord.end_time ? String(shiftRecord.end_time).slice(0, 5) : "17:00");
       setNotes(shiftRecord.notes || "");
+      // Keep "on change" effects from clearing user/job role when opening edit
+      prevSelectedUserIdRef.current = uid;
+      prevDepartmentIdRef.current = deptId;
     } else {
       setShiftDate(null);
       setCategory("attendance");
@@ -239,7 +247,6 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
     }
   }, [shiftRecord, open, userId, user?.id]);
 
-  const prevSelectedUserIdRef = useRef(selectedUserId);
   useEffect(() => {
     if (prevSelectedUserIdRef.current !== selectedUserId) {
       prevSelectedUserIdRef.current = selectedUserId;
@@ -251,7 +258,6 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
     }
   }, [selectedUserId, allowUserSelect]);
 
-  const prevDepartmentIdRef = useRef(departmentId);
   useEffect(() => {
     if (prevDepartmentIdRef.current !== departmentId) {
       prevDepartmentIdRef.current = departmentId;

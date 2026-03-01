@@ -2835,15 +2835,15 @@ function ConfigurationPageContent() {
   );
 }
 
-// Default Role Permissions Section Component
+// Default Role Permissions Section Component (uses permission slugs = permission names e.g. "attendance:view")
 function DefaultRolePermissionsSection() {
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedPermissionIds, setSelectedPermissionIds] = useState(new Set());
+  const [selectedPermissionSlugs, setSelectedPermissionSlugs] = useState(new Set());
   const [isInitialized, setIsInitialized] = useState(false);
   const [allPermissionsList, setAllPermissionsList] = useState([]);
   const [isLoadingAllPermissions, setIsLoadingAllPermissions] = useState(true);
 
-  const { data: defaultPermissionIds = [], isLoading: isLoadingDefaults } = useDefaultRolePermissions();
+  const { data: defaultPermissionSlugs = [], isLoading: isLoadingDefaults } = useDefaultRolePermissions();
   const { data: permissionsData, isLoading: isLoadingPermissions } = usePermissions({ page: 1, per_page: 50 });
   const updateDefaultPermissionsMutation = useUpdateDefaultRolePermissions();
 
@@ -2862,6 +2862,7 @@ function DefaultRolePermissionsSection() {
           const permissionsArray = permissionsData.permissions || (Array.isArray(permissionsData) ? permissionsData : []);
           setAllPermissionsList(permissionsArray.map((p) => ({
             id: p.id,
+            slug: p.name || (p.resource && p.action ? `${p.resource}:${p.action}` : String(p.id)),
             name: p.display_name || p.name,
             resource: p.resource,
             action: p.action,
@@ -2884,19 +2885,20 @@ function DefaultRolePermissionsSection() {
           allPermissions.push(...pagePermissions);
         }
 
-        // Transform and set all permissions
+        // Transform and set all permissions (slug = permission name for API)
         setAllPermissionsList(allPermissions.map((p) => ({
           id: p.id,
+          slug: p.name || (p.resource && p.action ? `${p.resource}:${p.action}` : String(p.id)),
           name: p.display_name || p.name,
           resource: p.resource,
           action: p.action,
         })));
       } catch (error) {
         console.error("Error fetching all permissions:", error);
-        // Fallback to first page data
         const permissionsArray = permissionsData.permissions || (Array.isArray(permissionsData) ? permissionsData : []);
         setAllPermissionsList(permissionsArray.map((p) => ({
           id: p.id,
+          slug: p.name || (p.resource && p.action ? `${p.resource}:${p.action}` : String(p.id)),
           name: p.display_name || p.name,
           resource: p.resource,
           action: p.action,
@@ -2913,16 +2915,16 @@ function DefaultRolePermissionsSection() {
 
   const allPermissions = allPermissionsList;
 
-  // Initialize selected permissions from API
+  // Initialize selected permissions from API (defaultPermissionSlugs from GET)
   useEffect(() => {
-    if (!isLoadingDefaults && defaultPermissionIds.length > 0 && !isInitialized) {
-      setSelectedPermissionIds(new Set(defaultPermissionIds));
+    if (!isLoadingDefaults && defaultPermissionSlugs.length > 0 && !isInitialized) {
+      setSelectedPermissionSlugs(new Set(defaultPermissionSlugs));
       setIsInitialized(true);
-    } else if (!isLoadingDefaults && defaultPermissionIds.length === 0 && !isInitialized) {
-      setSelectedPermissionIds(new Set());
+    } else if (!isLoadingDefaults && defaultPermissionSlugs.length === 0 && !isInitialized) {
+      setSelectedPermissionSlugs(new Set());
       setIsInitialized(true);
     }
-  }, [defaultPermissionIds, isLoadingDefaults, isInitialized]);
+  }, [defaultPermissionSlugs, isLoadingDefaults, isInitialized]);
 
   // Filter permissions based on search
   const filteredPermissions = allPermissions.filter((permission) =>
@@ -2931,30 +2933,30 @@ function DefaultRolePermissionsSection() {
     permission.action.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const handleTogglePermission = (permissionId) => {
-    setSelectedPermissionIds((prev) => {
+  const handleTogglePermission = (permissionSlug) => {
+    setSelectedPermissionSlugs((prev) => {
       const newSet = new Set(prev);
-      if (newSet.has(permissionId)) {
-        newSet.delete(permissionId);
+      if (newSet.has(permissionSlug)) {
+        newSet.delete(permissionSlug);
       } else {
-        newSet.add(permissionId);
+        newSet.add(permissionSlug);
       }
       return newSet;
     });
   };
 
   const handleSelectAll = () => {
-    setSelectedPermissionIds(new Set(filteredPermissions.map((p) => p.id)));
+    setSelectedPermissionSlugs(new Set(filteredPermissions.map((p) => p.slug)));
   };
 
   const handleDeselectAll = () => {
-    setSelectedPermissionIds(new Set());
+    setSelectedPermissionSlugs(new Set());
   };
 
   const handleSave = async () => {
-    const permissionIds = Array.from(selectedPermissionIds);
+    const permissionSlugs = Array.from(selectedPermissionSlugs);
     try {
-      await updateDefaultPermissionsMutation.mutateAsync(permissionIds);
+      await updateDefaultPermissionsMutation.mutateAsync(permissionSlugs);
     } catch (error) {
       // Error handled by mutation
     }
@@ -2962,10 +2964,10 @@ function DefaultRolePermissionsSection() {
 
   const hasChanges = useMemo(() => {
     if (!isInitialized) return false;
-    const currentIds = Array.from(selectedPermissionIds).sort();
-    const defaultIds = Array.from(defaultPermissionIds).sort();
-    return JSON.stringify(currentIds) !== JSON.stringify(defaultIds);
-  }, [selectedPermissionIds, defaultPermissionIds, isInitialized]);
+    const current = Array.from(selectedPermissionSlugs).sort();
+    const defaultSlugs = Array.from(defaultPermissionSlugs).sort();
+    return JSON.stringify(current) !== JSON.stringify(defaultSlugs);
+  }, [selectedPermissionSlugs, defaultPermissionSlugs, isInitialized]);
 
   return (
     <Card>
@@ -3011,7 +3013,7 @@ function DefaultRolePermissionsSection() {
               {/* Selected Count */}
               <div className="flex items-center justify-between">
                 <div className="text-sm text-muted-foreground">
-                  {selectedPermissionIds.size} of {allPermissions.length} permissions selected
+                  {selectedPermissionSlugs.size} of {allPermissions.length} permissions selected
                 </div>
                 {hasChanges && (
                   <Badge variant="outline" className="text-orange-600 border-orange-600">
@@ -3030,12 +3032,12 @@ function DefaultRolePermissionsSection() {
                 ) : (
                   <div className="divide-y">
                     {filteredPermissions.map((permission) => {
-                      const isSelected = selectedPermissionIds.has(permission.id);
+                      const isSelected = selectedPermissionSlugs.has(permission.slug);
                       return (
                         <div
                           key={permission.id}
                           className="flex items-center gap-3 p-3 hover:bg-muted/50 transition-colors cursor-pointer"
-                          onClick={() => handleTogglePermission(permission.id)}
+                          onClick={() => handleTogglePermission(permission.slug)}
                         >
                           <div className="flex items-center justify-center h-5 w-5 rounded border-2 border-primary">
                             {isSelected && (

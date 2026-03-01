@@ -779,7 +779,7 @@ export function RotaTimeline({ departmentId: departmentIdProp = null, initialRan
                                   >
                                     <span className="truncate text-xs font-medium">{b.displayName}</span>
                                     {shiftRoleName && (
-                                      <span className="text-[10px] text-muted-foreground truncate w-full">
+                                      <span className="inline-flex items-center rounded bg-muted/80 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground truncate max-w-full" title="Shift role">
                                         {shiftRoleName}
                                       </span>
                                     )}

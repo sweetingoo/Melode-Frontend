@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useRef, useCallback, Suspense } from "react";
-import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useRouter } from "next/navigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -22,7 +21,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
-import { BarChart3, Settings, ClipboardList, UserCheck, MapPin, LayoutGrid, Radio, ChevronLeft, ChevronRight, Info } from "lucide-react";
+import { ClipboardList, UserCheck, MapPin, LayoutGrid, Radio, ChevronLeft, ChevronRight, Info } from "lucide-react";
 import {
   Popover,
   PopoverContent,
@@ -47,13 +46,9 @@ import { CATEGORY_LABELS, CATEGORY_DESCRIPTIONS } from "@/lib/attendanceLabels";
  * - "Your Shift Records" (own only): default for users with attendance:view
  * - "Shift Records (All Users)": requires attendance:manage_all OR attendance:manage_all_shift_records
  *
- * Header buttons: Reports=attendance:reports, Settings=attendance:settings.
- * Actions are enforced by the API.
  */
 const PERM = {
   LEAVE_APPROVE: "leave:approve",
-  REPORTS: "attendance:reports",
-  SETTINGS: "attendance:settings",
   MANAGE_ALL: "attendance:manage_all",
   MANAGE_ALL_SHIFT_RECORDS: "attendance:manage_all_shift_records",
 };
@@ -67,8 +62,6 @@ function AttendancePageContent() {
   const { hasPermission } = usePermissionsCheck();
 
   const canApprove = hasPermission(PERM.LEAVE_APPROVE);
-  const canViewReports = hasPermission(PERM.REPORTS);
-  const canManageSettings = hasPermission(PERM.SETTINGS);
   const canManageAll = hasPermission(PERM.MANAGE_ALL);
   const canManageAllShiftRecords =
     canManageAll || hasPermission(PERM.MANAGE_ALL_SHIFT_RECORDS);
@@ -217,26 +210,6 @@ function AttendancePageContent() {
                 )}
               </div>
             </div>
-            {(canViewReports || canManageSettings) && (
-              <div className="flex w-full shrink-0 flex-wrap items-center gap-2 md:w-auto">
-                {canViewReports && (
-                  <Button variant="outline" size="sm" asChild className="min-h-[2.75rem] flex-1 touch-manipulation sm:min-h-0 sm:flex-none">
-                    <Link href="/admin/attendance/reports">
-                      <BarChart3 className="mr-2 h-4 w-4 shrink-0" />
-                      Reports
-                    </Link>
-                  </Button>
-                )}
-                {canManageSettings && (
-                  <Button variant="outline" size="sm" asChild className="min-h-[2.75rem] flex-1 touch-manipulation sm:min-h-0 sm:flex-none">
-                    <Link href="/admin/attendance/settings">
-                      <Settings className="mr-2 h-4 w-4 shrink-0" />
-                      Settings
-                    </Link>
-                  </Button>
-                )}
-              </div>
-            )}
           </div>
         </div>
 

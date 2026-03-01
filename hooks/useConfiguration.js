@@ -392,13 +392,14 @@ export const useDefaultRolePermissions = (options = {}) => {
     queryFn: async () => {
       try {
         const response = await configurationService.getDefaultRolePermissions();
-        // Handle different response formats
         const data = response.data || response;
-        // Return array of permission IDs
+        // API returns { permission_slugs: string[] }
+        if (data?.permission_slugs && Array.isArray(data.permission_slugs)) {
+          return data.permission_slugs;
+        }
         if (Array.isArray(data)) {
           return data;
         }
-        // Handle object with permission_ids or permissions key
         return data?.permission_ids || data?.permissions || [];
       } catch (error) {
         if (error?.response?.status === 403) {
@@ -421,13 +422,12 @@ export const useUpdateDefaultRolePermissions = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (permissionIds) => {
+    mutationFn: async (permissionSlugs) => {
       const response = await configurationService.updateDefaultRolePermissions(
-        permissionIds
+        permissionSlugs
       );
-      // Handle different response formats
       const data = response.data || response;
-      return data?.permission_ids || data?.permissions || permissionIds;
+      return data?.permission_slugs || data?.permissions || permissionSlugs;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({

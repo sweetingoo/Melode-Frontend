@@ -166,11 +166,11 @@ export const configurationService = {
     }
   },
 
-  // Update default role permissions
-  updateDefaultRolePermissions: async (permissionIds) => {
+  // Update default role permissions (permission_slugs = permission names e.g. "attendance:view")
+  updateDefaultRolePermissions: async (permissionSlugs) => {
     try {
       return await api.put("/configuration/default-role-permissions", {
-        permission_ids: permissionIds,
+        permission_slugs: permissionSlugs,
       });
     } catch (error) {
       console.error("Update default role permissions failed:", error);
