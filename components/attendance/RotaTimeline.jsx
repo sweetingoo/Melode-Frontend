@@ -223,6 +223,7 @@ export function RotaTimeline({ departmentId: departmentIdProp = null, initialRan
       const d = dayEntry.date;
       if (!byDateRoleOut[d]) byDateRoleOut[d] = {};
       Object.entries(dayEntry.by_role || {}).forEach(([roleKey, roleData]) => {
+        if (!roleKey.startsWith("job_role_")) return;
         const name = roleData.role_name || roleKey;
         if (!roleMap.has(roleKey)) roleMap.set(roleKey, { id: roleKey, name, key: roleKey });
         byDateRoleOut[d][roleKey] = roleData;
@@ -239,19 +240,21 @@ export function RotaTimeline({ departmentId: departmentIdProp = null, initialRan
       if (!visibleCategories.has(r?.category)) return;
       const d = typeof r.shift_date === "string" ? r.shift_date : r.shift_date?.slice(0, 10);
       if (!d) return;
-      const roleKey = r.shift_role_id ? `shift_role_${r.shift_role_id}` : `job_role_${r.job_role_id}`;
-      if (!out[d]) out[d] = {};
-      if (!out[d][roleKey]) out[d][roleKey] = [];
-      const start = r.start_time ? (typeof r.start_time === "string" ? r.start_time.slice(0, 5) : "") : "";
-      const end = r.end_time ? (typeof r.end_time === "string" ? r.end_time.slice(0, 5) : "") : "";
-      out[d][roleKey].push({
-        id: r.id,
-        user: r.user,
-        displayName: getUserDisplayName(r.user) || `User ${r.user_id}`,
-        start_time: start,
-        end_time: end,
-        record: r,
-      });
+      const roleKey = `job_role_${r.job_role_id ?? r.job_role?.id ?? ""}`;
+      if (!roleKey.endsWith("_")) {
+        if (!out[d]) out[d] = {};
+        if (!out[d][roleKey]) out[d][roleKey] = [];
+        const start = r.start_time ? (typeof r.start_time === "string" ? r.start_time.slice(0, 5) : "") : "";
+        const end = r.end_time ? (typeof r.end_time === "string" ? r.end_time.slice(0, 5) : "") : "";
+        out[d][roleKey].push({
+          id: r.id,
+          user: r.user,
+          displayName: getUserDisplayName(r.user) || `User ${r.user_id}`,
+          start_time: start,
+          end_time: end,
+          record: r,
+        });
+      }
     });
     return out;
   }, [shiftData, visibleCategories]);
@@ -763,6 +766,9 @@ export function RotaTimeline({ departmentId: departmentIdProp = null, initialRan
                                 const colors = getBlockColors(b.record);
                                 const categoryLabel = b.record?.category ? (CATEGORY_LABELS[b.record.category] ?? b.record.category) : null;
                                 const typeName = b.record?.shift_leave_type?.name;
+                                const shiftRoleName = b.record?.shift_role_id != null
+                                  ? (b.record.shift_role?.display_name ?? b.record.shift_role?.name ?? null)
+                                  : null;
                                 return (
                                   <button
                                     type="button"
@@ -772,6 +778,11 @@ export function RotaTimeline({ departmentId: departmentIdProp = null, initialRan
                                     title={typeName ? `${categoryLabel ?? ""} – ${typeName}` : categoryLabel}
                                   >
                                     <span className="truncate text-xs font-medium">{b.displayName}</span>
+                                    {shiftRoleName && (
+                                      <span className="text-[10px] text-muted-foreground truncate w-full">
+                                        {shiftRoleName}
+                                      </span>
+                                    )}
                                     {(categoryLabel || typeName) && (
                                       <span className="text-[10px] text-muted-foreground truncate w-full">
                                         {typeName ?? categoryLabel}
@@ -834,7 +845,7 @@ export function RotaTimeline({ departmentId: departmentIdProp = null, initialRan
                     {selectedBlock.record.shift_role_id != null && (
                       <div className="flex justify-between gap-4">
                         <dt className="text-muted-foreground">Shift role</dt>
-                        <dd>{roleRows.find((r) => r.key === `shift_role_${selectedBlock.record.shift_role_id}`)?.name ?? `Role ${selectedBlock.record.shift_role_id}`}</dd>
+                        <dd>{selectedBlock.record.shift_role?.display_name ?? selectedBlock.record.shift_role?.name ?? roleRows.find((r) => r.key === `shift_role_${selectedBlock.record.shift_role_id}`)?.name ?? `Role ${selectedBlock.record.shift_role_id}`}</dd>
                       </div>
                     )}
                   </dl>

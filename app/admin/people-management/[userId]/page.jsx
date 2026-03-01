@@ -2331,7 +2331,7 @@ const UserEditPage = () => {
                   <CardDescription>Holiday entitlement and usage for this person</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <HolidayBalanceCard userId={userData?.id} />
+                  <HolidayBalanceCard userId={userData?.id} showYearSelector />
                 </CardContent>
               </Card>
 

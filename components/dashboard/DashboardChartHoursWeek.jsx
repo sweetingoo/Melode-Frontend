@@ -63,7 +63,7 @@ export function DashboardChartHoursWeek() {
       <CardContent className="pt-0 px-5 pb-5">
         <div className="h-[200px] w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
+            <BarChart data={chartData} margin={{ top: 8, right: 8, left: 4, bottom: 0 }}>
               <defs>
                 <linearGradient id="hoursBar" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="#0ea5e9" stopOpacity={1} />
@@ -71,7 +71,13 @@ export function DashboardChartHoursWeek() {
                 </linearGradient>
               </defs>
               <XAxis dataKey="label" tick={{ fontSize: 12, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} width={28} tickFormatter={(v) => `${v}h`} axisLine={false} tickLine={false} />
+              <YAxis
+                tick={{ fontSize: 13, fill: "var(--foreground)", fontWeight: 500 }}
+                width={40}
+                tickFormatter={(v) => `${v}h`}
+                axisLine={false}
+                tickLine={false}
+              />
               <Tooltip
                 contentStyle={{
                   borderRadius: 12,

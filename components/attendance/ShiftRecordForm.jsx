@@ -57,6 +57,7 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
   const [debouncedUserSearch, setDebouncedUserSearch] = useState("");
   const [userComboboxOpen, setUserComboboxOpen] = useState(false);
   const [jobRoleId, setJobRoleId] = useState("");
+  const [shiftRoleId, setShiftRoleId] = useState("");
   const [departmentId, setDepartmentId] = useState("");
   const [hours, setHours] = useState("7.5");
   const [startTime, setStartTime] = useState("09:00");
@@ -75,7 +76,9 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
   const createShiftRecord = useCreateShiftRecord();
   const updateShiftRecord = useUpdateShiftRecord();
 
-  const getAssignmentRoleId = (a) => a?.role_id ?? a?.job_role_id ?? a?.roleId;
+  const getAssignmentRoleId = (a) => a?.role_id ?? a?.job_role_id ?? a?.role?.id ?? a?.roleId;
+  const getRoleType = (a) => a?.role?.role_type ?? a?.role?.roleType ?? "job_role";
+  const getParentRoleId = (a) => a?.role?.parent_role_id ?? a?.role?.parentRoleId ?? a?.role?.parent_role?.id;
 
   const { data: attendanceDepartmentsList = [] } = useAttendanceDepartments({
     enabled: allowUserSelect && open,
@@ -146,13 +149,59 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
       .filter((d) => d != null && !seen.has(d.id) && (seen.add(d.id), true));
   }, [assignmentsWithRole]);
 
-  // Job roles filtered by selected department (User -> Department -> Role)
+  // Assignments in selected department (User -> Department -> Role)
   const assignmentsInSelectedDept = useMemo(() => {
     if (!departmentId) return [];
     const deptIdNum = parseInt(departmentId, 10);
     if (Number.isNaN(deptIdNum)) return [];
     return assignmentsWithRole.filter((a) => getAssignmentDepartmentId(a) === deptIdNum);
   }, [assignmentsWithRole, departmentId]);
+
+  // Job roles only (for first dropdown) — role_type is job_role or legacy/unspecified
+  const jobRoleOptions = useMemo(() => {
+    return assignmentsInSelectedDept.filter((a) => {
+      const rt = getRoleType(a);
+      return rt === "job_role" || !rt;
+    });
+  }, [assignmentsInSelectedDept]);
+
+  // Shift roles under the selected job role (for second dropdown).
+  // Include (1) user's assignments that are shift roles with this parent, and
+  // (2) shift roles from the job role's role.shift_roles so all defined shift roles show even without a separate assignment.
+  const shiftRoleOptions = useMemo(() => {
+    if (!jobRoleId) return [];
+    const jid = String(jobRoleId);
+    const fromAssignments = assignmentsInSelectedDept.filter((a) => {
+      const rt = getRoleType(a);
+      const parentId = getParentRoleId(a);
+      return rt === "shift_role" && parentId != null && String(parentId) === jid;
+    });
+    const selectedJobAssignment = jobRoleOptions.find((a) => String(getAssignmentRoleId(a)) === jid);
+    const fromRoleData = selectedJobAssignment?.role?.shift_roles ?? selectedJobAssignment?.role?.shiftRoles ?? [];
+    const seen = new Set();
+    const merged = [];
+    fromAssignments.forEach((a) => {
+      const roleId = getAssignmentRoleId(a);
+      if (roleId != null && !seen.has(roleId)) {
+        seen.add(roleId);
+        merged.push({
+          id: roleId,
+          display_name: a.role?.display_name || a.role?.name || a.job_role?.display_name || a.job_role?.name || `Role ${roleId}`,
+        });
+      }
+    });
+    (Array.isArray(fromRoleData) ? fromRoleData : []).forEach((sr) => {
+      const id = sr.id ?? sr.role_id;
+      if (id != null && !seen.has(id)) {
+        seen.add(id);
+        merged.push({
+          id,
+          display_name: sr.display_name ?? sr.name ?? `Role ${id}`,
+        });
+      }
+    });
+    return merged;
+  }, [assignmentsInSelectedDept, jobRoleId, jobRoleOptions]);
 
   const { data: shiftLeaveTypesData } = useShiftLeaveTypes({ category, is_active: true });
   const shiftLeaveTypes = shiftLeaveTypesData?.types || shiftLeaveTypesData || [];
@@ -165,6 +214,7 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
       setSelectedUserId(shiftRecord.user_id?.toString() || "");
       setSelectedUserForDisplay(shiftRecord.user ?? null);
       setJobRoleId(shiftRecord.job_role_id?.toString() || "");
+      setShiftRoleId(shiftRecord.shift_role_id?.toString() || "");
       setDepartmentId(shiftRecord.department_id?.toString() || "");
       setHours(shiftRecord.hours?.toString() || "7.5");
       setStartTime(shiftRecord.start_time ? String(shiftRecord.start_time).slice(0, 5) : "09:00");
@@ -180,6 +230,7 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
       setDebouncedUserSearch("");
       setUserComboboxOpen(false);
       setJobRoleId("");
+      setShiftRoleId("");
       setDepartmentId("");
       setHours("7.5");
       setStartTime("09:00");
@@ -223,15 +274,15 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
     }
   }, [shiftRecord, departmentId, departmentsForUser]);
 
-  // Auto-select first job role when adding and selected department has only one role
+  // Auto-select first job role when adding and selected department has only one job role
   useEffect(() => {
-    if (!shiftRecord && !jobRoleId && assignmentsInSelectedDept?.length === 1) {
-      const roleId = getAssignmentRoleId(assignmentsInSelectedDept[0]);
+    if (!shiftRecord && !jobRoleId && jobRoleOptions?.length === 1) {
+      const roleId = getAssignmentRoleId(jobRoleOptions[0]);
       if (roleId != null) {
         setJobRoleId(String(roleId));
       }
     }
-  }, [shiftRecord, jobRoleId, assignmentsInSelectedDept]);
+  }, [shiftRecord, jobRoleId, jobRoleOptions]);
 
   // When job role is set (e.g. from edit), ensure department is set from assignment
   useEffect(() => {
@@ -242,12 +293,15 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
     }
   }, [jobRoleId, assignments, departmentId]);
 
-  // Clear job role if it is not in the selected department (e.g. after switching department)
+  // Clear job role (and shift role) if not in the selected department
   useEffect(() => {
-    if (!departmentId || !jobRoleId || assignmentsInSelectedDept.length === 0) return;
-    const isInDept = assignmentsInSelectedDept.some((a) => String(getAssignmentRoleId(a)) === jobRoleId);
-    if (!isInDept) setJobRoleId("");
-  }, [departmentId, jobRoleId, assignmentsInSelectedDept]);
+    if (!departmentId || !jobRoleId || jobRoleOptions.length === 0) return;
+    const isInDept = jobRoleOptions.some((a) => String(getAssignmentRoleId(a)) === jobRoleId);
+    if (!isInDept) {
+      setJobRoleId("");
+      setShiftRoleId("");
+    }
+  }, [departmentId, jobRoleId, jobRoleOptions]);
 
   // Auto-calculate hours when both start and end time are set; clear to 0 when end time is removed (start-only)
   useEffect(() => {
@@ -269,6 +323,7 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
       const payload = {
         user_id: parseInt(targetUserId, 10),
         job_role_id: parseInt(jobRoleId, 10),
+        shift_role_id: shiftRoleId ? parseInt(shiftRoleId, 10) : null,
         shift_leave_type_id: parseInt(shiftLeaveTypeId, 10),
         category,
         shift_date: formatDateForAPI(shiftDate),
@@ -330,6 +385,7 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
                   onValueChange={(v) => {
                     setDepartmentId(v);
                     setJobRoleId("");
+                    setShiftRoleId("");
                   }}
                   required
                 >
@@ -426,6 +482,7 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
                 onValueChange={(v) => {
                   setDepartmentId(v);
                   setJobRoleId("");
+                  setShiftRoleId("");
                 }}
                 required
                 disabled={!effectiveUserIdForAssignments || assignmentsLoading}
@@ -504,7 +561,10 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
             <Select
               key={departmentId || "no-dept"}
               value={jobRoleId}
-              onValueChange={setJobRoleId}
+              onValueChange={(v) => {
+                setJobRoleId(v);
+                setShiftRoleId("");
+              }}
               required
               disabled={!departmentId || assignmentsLoading}
             >
@@ -517,23 +577,48 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
                         ? "Select department first"
                         : assignmentsLoading
                           ? "Loading…"
-                          : assignmentsInSelectedDept.length === 0
+                          : jobRoleOptions.length === 0
                             ? "No job roles in this department"
                             : "Select job role"
                   }
                 />
               </SelectTrigger>
               <SelectContent>
-                {assignmentsInSelectedDept.map((a) => {
+                {jobRoleOptions.map((a) => {
                   const roleId = getAssignmentRoleId(a);
                   return (
-                    <SelectItem key={a.id} value={String(roleId)}>
+                    <SelectItem key={a.id ?? roleId} value={String(roleId)}>
                       {a.role?.display_name || a.role?.name || a.job_role?.display_name || a.job_role?.name || `Role ${roleId}`}
                     </SelectItem>
                   );
                 })}
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Shift Role (optional)</Label>
+            <Select
+              key={jobRoleId || "no-job"}
+              value={shiftRoleId || "__none__"}
+              onValueChange={(v) => setShiftRoleId(v === "__none__" ? "" : v)}
+              disabled={!jobRoleId || assignmentsLoading}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select shift role (or leave as job role only)" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">None (use job role only)</SelectItem>
+                {shiftRoleOptions.map((item) => (
+                  <SelectItem key={item.id} value={String(item.id)}>
+                    {item.display_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {jobRoleId && shiftRoleOptions.length === 0 && (
+              <p className="text-xs text-muted-foreground">No shift roles for this job role.</p>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-4">

@@ -216,9 +216,9 @@ export const LeaveRequestList = ({ userId = null, showCreateButton = true, compa
                   <TableHead className="h-11 bg-muted/50 font-semibold">Start Date</TableHead>
                   <TableHead className="h-11 bg-muted/50 font-semibold">End Date</TableHead>
                   <TableHead className="h-11 bg-muted/50 font-semibold">Hours</TableHead>
-                  <TableHead className="h-11 bg-muted/50 font-semibold">Status</TableHead>
                   <TableHead className="h-11 bg-muted/50 font-semibold">Submitted</TableHead>
                   <TableHead className="h-11 w-[120px] bg-muted/50 font-semibold text-right">Actions</TableHead>
+                  <TableHead className="h-11 bg-muted/50 font-semibold text-right">Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -242,12 +242,14 @@ export const LeaveRequestList = ({ userId = null, showCreateButton = true, compa
                       {request.end_date ? format(new Date(request.end_date), "dd MMM yyyy") : "—"}
                     </TableCell>
                     <TableCell className="tabular-nums">{request.total_hours ?? 0}h</TableCell>
-                    <TableCell>{getStatusBadge(request.status)}</TableCell>
                     <TableCell className="text-muted-foreground text-sm">
                       {request.submitted_at ? format(new Date(request.submitted_at), "dd MMM, HH:mm") : "—"}
                     </TableCell>
                     <TableCell className="text-right">
                       <RequestRowActions request={request} />
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {getStatusBadge(request.status)}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -289,6 +291,10 @@ export const LeaveRequestList = ({ userId = null, showCreateButton = true, compa
                 {request.status === "declined" && request.declined_reason && (
                   <p className="mt-2 text-xs text-muted-foreground">{request.declined_reason}</p>
                 )}
+                <div className="mt-3 pt-3 border-t flex items-center justify-end gap-2">
+                  <span className="text-xs font-medium text-muted-foreground">Status</span>
+                  {getStatusBadge(request.status)}
+                </div>
               </div>
             ))}
           </div>

@@ -443,7 +443,7 @@ export const useHolidayEntitlements = (params = {}, options = {}) => {
 
 export const useHolidayBalance = (params = {}, options = {}) => {
   return useQuery({
-    queryKey: attendanceKeys.holidayBalance(params.user_id, params.job_role_id, params.holiday_year_id),
+    queryKey: attendanceKeys.holidayBalance(params),
     queryFn: async () => {
       const response = await attendanceService.getHolidayBalance(params);
       return response.data || response;

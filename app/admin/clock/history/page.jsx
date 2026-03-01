@@ -173,15 +173,17 @@ function ClockHistoryPageContent() {
         </TabsContent>
 
         <TabsContent value="my-leave" className="mt-0 focus-visible:outline-none space-y-6">
-          {/* Holiday balance at top so users see remaining leave whilst selecting leave */}
+          {/* Holiday balance at top so users see remaining leave whilst selecting leave.
+              Do not pass jobRoleId: backend resolves the user's first assignment that has an entitlement
+              (same as admin view), so balance is shown correctly when user has multiple roles. */}
           <Card className="overflow-hidden">
             <CardHeader className="space-y-1.5 p-4 sm:p-6">
               <CardTitle className="text-lg sm:text-xl">Holiday Balance</CardTitle>
               <CardDescription className="text-sm">Your current holiday balance.</CardDescription>
             </CardHeader>
             <CardContent className="p-4 sm:p-6 pt-0">
-              {user?.id && jobRoleId ? (
-                <HolidayBalanceCard userId={user.id} jobRoleId={jobRoleId} />
+              {user?.id ? (
+                <HolidayBalanceCard userId={user.id} showYearSelector />
               ) : (
                 <p className="text-sm text-muted-foreground">
                   No active job role found. Please contact your administrator to assign a role.

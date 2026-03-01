@@ -6,6 +6,24 @@ import { useHolidayBalance } from "@/hooks/useAttendance";
 import { useLeaveRequests } from "@/hooks/useLeaveRequests";
 import { Palmtree, ArrowRight } from "lucide-react";
 import Link from "next/link";
+import { format, isSameDay, parseISO } from "date-fns";
+
+/** Format a leave date range for display (e.g. "15 Mar 2025" or "15 – 20 Mar 2025"). */
+function formatLeavePeriod(startDate, endDate) {
+  if (!startDate || !endDate) return "—";
+  const start = typeof startDate === "string" ? parseISO(startDate) : new Date(startDate);
+  const end = typeof endDate === "string" ? parseISO(endDate) : new Date(endDate);
+  if (isSameDay(start, end)) {
+    return format(start, "EEE d MMM yyyy");
+  }
+  if (start.getFullYear() === end.getFullYear() && start.getMonth() === end.getMonth()) {
+    return `${format(start, "d")} – ${format(end, "d MMM yyyy")}`;
+  }
+  if (start.getFullYear() === end.getFullYear()) {
+    return `${format(start, "d MMM")} – ${format(end, "d MMM yyyy")}`;
+  }
+  return `${format(start, "d MMM yyyy")} – ${format(end, "d MMM yyyy")}`;
+}
 
 /** Annual leave: balance + upcoming requests. Uses existing leave and holiday balance APIs. */
 export function DashboardAnnualLeave() {
@@ -47,7 +65,7 @@ export function DashboardAnnualLeave() {
                     className="text-sm font-medium text-foreground hover:text-primary flex items-center gap-2 py-2 rounded-lg hover:bg-muted/50 transition-colors -mx-1 px-1"
                   >
                     <span>
-                      {r.start_date} – {r.end_date}
+                      {formatLeavePeriod(r.start_date, r.end_date)}
                       {r.status === "pending" && " (pending)"}
                     </span>
                     <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />

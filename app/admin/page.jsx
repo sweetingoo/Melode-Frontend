@@ -555,12 +555,9 @@ const Dashboard = () => {
                 </div>
               </section>
 
-              {/* Secondary stats: forms, assets - one compact row */}
+              {/* Secondary stats: assets */}
               {dashboardData?.operational && (
                 <section className="pb-2 flex flex-wrap gap-4 text-sm text-muted-foreground">
-                  <Link href="/admin/forms" className="hover:text-foreground">
-                    {dashboardData.operational.form_submissions_this_period ?? 0} form submission{(dashboardData.operational.form_submissions_this_period ?? 0) !== 1 ? "s" : ""} this {period}
-                  </Link>
                   <Link href="/admin/assets" className="hover:text-foreground">
                     {dashboardData.operational.assets_total ?? 0} assets
                     {(dashboardData.operational.assets_maintenance_due ?? 0) > 0 && (
