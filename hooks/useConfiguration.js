@@ -8,6 +8,8 @@ import { toast } from "sonner";
 export const configurationKeys = {
   all: ["configuration"],
   settings: (params) => [...configurationKeys.all, "settings", params],
+  /** Prefix for all settings list queries (use when invalidating after create/update/delete) */
+  settingsListPrefix: () => [...configurationKeys.all, "settings"],
   setting: (key) => [...configurationKeys.all, "setting", key],
   categories: () => [...configurationKeys.all, "categories"],
   categoryGroups: (category) => [
@@ -104,7 +106,9 @@ export const useCreateSetting = () => {
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: configurationKeys.all });
+      queryClient.invalidateQueries({ queryKey: configurationKeys.settingsListPrefix() });
+      queryClient.invalidateQueries({ queryKey: configurationKeys.categories() });
+      queryClient.invalidateQueries({ queryKey: [...configurationKeys.all, "category-groups"] });
       toast.success("Setting created successfully", {
         description: "The setting has been created.",
       });
@@ -146,7 +150,7 @@ export const useUpdateSetting = () => {
       queryClient.invalidateQueries({
         queryKey: configurationKeys.setting(variables.settingKey),
       });
-      queryClient.invalidateQueries({ queryKey: configurationKeys.settings() });
+      queryClient.invalidateQueries({ queryKey: configurationKeys.settingsListPrefix() });
       toast.success("Setting updated successfully", {
         description: "The setting has been updated.",
       });
@@ -184,7 +188,7 @@ export const useBulkUpdateSettings = () => {
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: configurationKeys.all });
+      queryClient.invalidateQueries({ queryKey: configurationKeys.settingsListPrefix() });
       toast.success("Settings updated successfully", {
         description: "The settings have been updated.",
       });
@@ -223,7 +227,9 @@ export const useDeleteSetting = () => {
       queryClient.removeQueries({
         queryKey: configurationKeys.setting(settingKey),
       });
-      queryClient.invalidateQueries({ queryKey: configurationKeys.settings() });
+      queryClient.invalidateQueries({ queryKey: configurationKeys.settingsListPrefix() });
+      queryClient.invalidateQueries({ queryKey: configurationKeys.categories() });
+      queryClient.invalidateQueries({ queryKey: [...configurationKeys.all, "category-groups"] });
       toast.success("Setting deleted successfully", {
         description: "The setting has been deleted.",
       });

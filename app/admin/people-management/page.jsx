@@ -120,7 +120,7 @@ const UserManagementPage = () => {
     role_id: "",
   });
   const [validationErrors, setValidationErrors] = useState({});
-  const itemsPerPage = 10;
+  const itemsPerPage = 20;
 
   // API hooks - pass page, per_page, search, role_id, department_id for server-side filtering and pagination
   const usersParams = React.useMemo(
@@ -138,6 +138,14 @@ const UserManagementPage = () => {
   const departments = departmentsData?.departments || departmentsData?.data || departmentsData || [];
   const { data: rolesData, isLoading: rolesLoading } = useRolesAll();
   const roles = rolesData?.roles ?? rolesData ?? [];
+  const jobRoles = React.useMemo(
+    () =>
+      roles.filter((r) => {
+        const rt = r.role_type ?? r.roleType ?? "job_role";
+        return rt === "job_role" || !rt;
+      }),
+    [roles]
+  );
   const { data: invitations = [], isLoading: invitationsLoading } = useInvitations();
   const deleteUserMutation = useDeleteUser();
   const deactivateUserMutation = useDeactivateUser();
@@ -716,7 +724,7 @@ const UserManagementPage = () => {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value={ALL_FILTER_VALUE}>All roles</SelectItem>
-              {roles.map((r) => (
+              {jobRoles.map((r) => (
                 <SelectItem key={r.id} value={String(r.id)}>
                   {r.display_name || r.name || r.slug || `Role #${r.id}`}
                 </SelectItem>
@@ -756,7 +764,10 @@ const UserManagementPage = () => {
               <TableHeader>
                 <TableRow>
                   <TableHead>Person</TableHead>
-                  <TableHead>Role</TableHead>
+                  <TableHead>First Name</TableHead>
+                  <TableHead>Last Name</TableHead>
+                  <TableHead>Department</TableHead>
+                  <TableHead className="min-w-[140px]">Role</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Invitation</TableHead>
                   <TableHead>Last Login</TableHead>
@@ -789,14 +800,24 @@ const UserManagementPage = () => {
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {user.firstName ?? "—"}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {user.lastName ?? "—"}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {user.primaryDepartment?.name ?? user.roles?.find((r) => r.department?.name)?.department?.name ?? "—"}
+                    </TableCell>
+                    <TableCell className="min-w-[140px]">
                       <span
-                        className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${getRoleColor(
+                        title={userUtils.getRole(user)}
+                        className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium whitespace-normal break-words max-w-[200px] ${getRoleColor(
                           userUtils.getRole(user)
                         )}`}
                       >
                         {userUtils.getRole(user)}
-                        {user.isSuperuser && <span className="ml-1">*</span>}
+                        {user.isSuperuser && <span className="ml-1 shrink-0">*</span>}
                       </span>
                     </TableCell>
                     <TableCell>

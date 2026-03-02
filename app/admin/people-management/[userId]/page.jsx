@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -72,6 +72,7 @@ import {
   Clock,
   ClipboardList,
   Edit,
+  Camera,
 } from "lucide-react";
 import {
   useUser,
@@ -101,6 +102,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { userKeys } from "@/hooks/useUsers";
 import UserAuditLogs from "@/components/UserAuditLogs";
 import { ComplianceSection } from "@/components/ComplianceSection";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { AvatarWithUrl } from "@/components/AvatarWithUrl";
 import EntityCustomFieldsForm from "@/components/EntityCustomFieldsForm";
 import CustomFieldRenderer from "@/components/CustomFieldRenderer";
@@ -129,6 +131,7 @@ import {
   useSetLeaveApproverDepartments,
 } from "@/hooks/useAttendance";
 import { filesService } from "@/services/files";
+import { api } from "@/services/api-client";
 
 const UserEditPage = () => {
   const params = useParams();
@@ -911,6 +914,11 @@ const UserEditPage = () => {
     bio: "",
   });
 
+  const [avatarPreview, setAvatarPreview] = useState(null);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const avatarFileInputRef = useRef(null);
+
   // Update form data when user data loads
   React.useEffect(() => {
     if (transformedUser) {
@@ -1241,6 +1249,116 @@ const UserEditPage = () => {
       ...prev,
       [field]: value,
     }));
+  };
+
+  const compressImage = (file, maxWidth = 800, maxHeight = 800, quality = 0.8) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target.result;
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          let width = img.width;
+          let height = img.height;
+          if (width > height) {
+            if (width > maxWidth) {
+              height = Math.round((height * maxWidth) / width);
+              width = maxWidth;
+            }
+          } else {
+            if (height > maxHeight) {
+              width = Math.round((width * maxHeight) / height);
+              height = maxHeight;
+            }
+          }
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0, width, height);
+          canvas.toBlob(
+            (blob) => {
+              if (blob) {
+                resolve(new File([blob], file.name, { type: "image/jpeg", lastModified: Date.now() }));
+              } else {
+                reject(new Error("Failed to compress image"));
+              }
+            },
+            "image/jpeg",
+            quality
+          );
+        };
+        img.onerror = reject;
+      };
+      reader.onerror = reject;
+    });
+  };
+
+  const processAvatarFile = async (file) => {
+    const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp"];
+    if (!allowedTypes.includes(file.type)) {
+      toast.error("Invalid file type", { description: "Please select a JPG, PNG, GIF, or WebP image." });
+      return;
+    }
+    const maxSize = 10 * 1024 * 1024;
+    if (file.size > maxSize) {
+      toast.error("File too large", { description: "Please select an image smaller than 10MB." });
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => setAvatarPreview(e.target.result);
+    reader.readAsDataURL(file);
+    try {
+      const compressedFile = await compressImage(file, 800, 800, 0.85);
+      setAvatarUploading(true);
+      const formDataUpload = new FormData();
+      formDataUpload.append("file", compressedFile);
+      const uploadResponse = await api.post("/settings/files/upload", formDataUpload);
+      const uploadData = uploadResponse?.data ?? uploadResponse;
+      const fileId = uploadData?.id ?? uploadData?.file_id ?? uploadData?.file_reference_id;
+      if (!fileId) {
+        toast.error("Upload failed", { description: "No file ID received." });
+        return;
+      }
+      await updateUserMutation.mutateAsync({
+        slug: actualUserSlug,
+        userData: { avatar_url: String(fileId) },
+      });
+      setFormData((prev) => ({ ...prev, avatarUrl: String(fileId) }));
+      setAvatarPreview(null);
+      toast.success("Photo updated", { description: "Profile photo has been updated." });
+      queryClient.invalidateQueries({ queryKey: userKeys.detail(actualUserSlug) });
+    } catch (err) {
+      console.error("Avatar upload failed:", err);
+      toast.error("Failed to update photo", { description: err?.response?.data?.detail || err?.message || "Please try again." });
+      setAvatarPreview(null);
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
+
+  const handleAvatarUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (file) processAvatarFile(file);
+    e.target.value = "";
+  };
+
+  const handleAvatarDragOver = (e) => {
+    e.preventDefault();
+    setIsDragOver(true);
+  };
+
+  const handleAvatarDragLeave = (e) => {
+    e.preventDefault();
+    setIsDragOver(false);
+  };
+
+  const handleAvatarDrop = (e) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    const files = e.dataTransfer.files;
+    if (files.length > 0) processAvatarFile(files[0]);
   };
 
   const handleSave = async () => {
@@ -1678,9 +1796,69 @@ const UserEditPage = () => {
             <CardHeader>
               <CardTitle>Person Information</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-8">
+              {/* Large avatar + upload (main field) */}
+              <div className="flex flex-col sm:flex-row items-start gap-6 sm:gap-8">
+                <div className="shrink-0">
+                  {avatarPreview ? (
+                    <Avatar className="h-32 w-32 sm:h-40 sm:w-40">
+                      <AvatarImage src={avatarPreview} alt="Preview" />
+                      <AvatarFallback className="text-3xl">
+                        {transformedUser?.name?.split(" ").map((n) => n[0]).join("").toUpperCase() || "?"}
+                      </AvatarFallback>
+                    </Avatar>
+                  ) : (
+                    <AvatarWithUrl
+                      avatarValue={formData.avatarUrl || transformedUser?.avatarUrl}
+                      alt={transformedUser?.name || "User"}
+                      fallback={
+                        transformedUser?.name
+                          ?.split(" ")
+                          .map((n) => n[0])
+                          .join("")
+                          .toUpperCase() || "?"
+                      }
+                      className="h-32 w-32 sm:h-40 sm:w-40"
+                      fallbackProps={{ className: "text-3xl" }}
+                    />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0 w-full sm:max-w-sm">
+                  <Label className="text-sm font-medium">Profile photo</Label>
+                  <p className="text-xs text-muted-foreground mb-3">Upload a photo so it’s easy to recognise this person. No link needed.</p>
+                  <div
+                    className={cn(
+                      "relative border-2 border-dashed rounded-lg p-6 text-center transition-colors cursor-pointer",
+                      isDragOver ? "border-primary bg-primary/5" : "border-muted-foreground/25 hover:border-muted-foreground/50"
+                    )}
+                    onDragOver={handleAvatarDragOver}
+                    onDragLeave={handleAvatarDragLeave}
+                    onDrop={handleAvatarDrop}
+                    onClick={() => !avatarUploading && avatarFileInputRef.current?.click()}
+                  >
+                    <input
+                      ref={avatarFileInputRef}
+                      type="file"
+                      accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                      onChange={handleAvatarUpload}
+                      className="hidden"
+                      disabled={avatarUploading || !canUpdateUser}
+                    />
+                    <div className="flex flex-col items-center gap-2">
+                      <div className="p-2 rounded-full bg-muted">
+                        <Camera className="h-5 w-5 text-muted-foreground" />
+                      </div>
+                      <p className="text-sm font-medium">
+                        {avatarUploading ? "Uploading…" : isDragOver ? "Drop image here" : "Click to upload or drag and drop"}
+                      </p>
+                      <p className="text-xs text-muted-foreground">JPG, PNG, GIF or WebP · Max 10MB</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Left Column */}
+                {/* Left column: Email, Title, First Name, Last Name, Bio (mobile: First Name above Last Name) */}
                 <div className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="email">Email</Label>
@@ -1715,22 +1893,22 @@ const UserEditPage = () => {
                     </select>
                   </div>
                   <div className="space-y-2">
+                    <Label htmlFor="firstName">First Name</Label>
+                    <Input
+                      id="firstName"
+                      value={formData.firstName}
+                      onChange={(e) =>
+                        handleInputChange("firstName", e.target.value)
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
                     <Label htmlFor="lastName">Last Name</Label>
                     <Input
                       id="lastName"
                       value={formData.lastName}
                       onChange={(e) =>
                         handleInputChange("lastName", e.target.value)
-                      }
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="avatarUrl">Avatar URL</Label>
-                    <Input
-                      id="avatarUrl"
-                      value={formData.avatarUrl}
-                      onChange={(e) =>
-                        handleInputChange("avatarUrl", e.target.value)
                       }
                     />
                   </div>
@@ -1746,7 +1924,7 @@ const UserEditPage = () => {
                   </div>
                 </div>
 
-                {/* Right Column */}
+                {/* Right column: Username, Phone */}
                 <div className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="username">Username</Label>
@@ -1755,16 +1933,6 @@ const UserEditPage = () => {
                       value={formData.username}
                       onChange={(e) =>
                         handleInputChange("username", e.target.value)
-                      }
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="firstName">First Name</Label>
-                    <Input
-                      id="firstName"
-                      value={formData.firstName}
-                      onChange={(e) =>
-                        handleInputChange("firstName", e.target.value)
                       }
                     />
                   </div>

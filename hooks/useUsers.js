@@ -65,77 +65,6 @@ export const useUsers = (params = {}, options = {}) => {
         return finalData;
       } catch (error) {
         console.error("Failed to fetch users:", error);
-
-        // If it's a network error, return demo data for development
-        if (
-          error.code === "NETWORK_ERROR" ||
-          error.message?.includes("Network Error")
-        ) {
-          console.warn("Network error detected, returning demo data");
-
-          // Return demo data in the same format as the API
-          return {
-            page: 1,
-            per_page: 20,
-            total: 3,
-            total_pages: 1,
-            users: [
-              {
-                id: 1,
-                email: "alex.brown@company.com",
-                username: "alex.brown",
-                first_name: "John",
-                last_name: "Doe",
-                title: "Mr",
-                phone_number: "+44 20 7946 0958",
-                avatar_url: null,
-                bio: "",
-                is_active: true,
-                is_verified: true,
-                is_superuser: false,
-                last_login: "2024-01-20T10:30:00Z",
-                created_at: "2024-01-15T09:00:00Z",
-                updated_at: "2024-01-20T10:30:00Z",
-              },
-              {
-                id: 2,
-                email: "sarah.williams@company.com",
-                username: "sarah.williams",
-                first_name: "Jane",
-                last_name: "Smith",
-                title: "Ms",
-                phone_number: "+44 20 7946 0959",
-                avatar_url: null,
-                bio: "",
-                is_active: true,
-                is_verified: true,
-                is_superuser: false,
-                last_login: "2024-01-20T09:15:00Z",
-                created_at: "2024-01-16T10:00:00Z",
-                updated_at: "2024-01-20T09:15:00Z",
-              },
-              {
-                id: 3,
-                email: "james.taylor@company.com",
-                username: "james.taylor",
-                first_name: "Mike",
-                last_name: "Wilson",
-                title: "Mr",
-                phone_number: "+44 20 7946 0960",
-                avatar_url: null,
-                bio: "",
-                is_active: false,
-                is_verified: true,
-                is_superuser: false,
-                last_login: "2024-01-15T14:22:00Z",
-                created_at: "2024-01-17T11:00:00Z",
-                updated_at: "2024-01-15T14:22:00Z",
-              },
-            ],
-          };
-        }
-
-        // Re-throw other errors
         throw error;
       }
     },
@@ -703,6 +632,7 @@ export const userUtils = {
         : null,
       isProfileAccepted: apiUser.is_profile_accepted,
       displayName: apiUser.display_name,
+      primaryDepartment: apiUser.primary_department || null,
     };
   },
 

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -47,6 +47,12 @@ export const EmployeeSettingsForm = ({ open, onOpenChange, setting = null, prese
     is_active: true,
   });
   const assignments = assignmentsData?.assignments ?? assignmentsData ?? [];
+  const jobRoleAssignments = useMemo(() => {
+    return assignments.filter((a) => {
+      const rt = a.role?.role_type ?? a.role?.roleType ?? "job_role";
+      return rt === "job_role" || !rt;
+    });
+  }, [assignments]);
 
   useEffect(() => {
     if (setting) {
@@ -85,11 +91,11 @@ export const EmployeeSettingsForm = ({ open, onOpenChange, setting = null, prese
   }, [userId, setting]);
 
   useEffect(() => {
-    if (jobRoleId && assignments?.length) {
-      const assignment = assignments.find((a) => String(a.role_id || a.job_role_id) === jobRoleId);
+    if (jobRoleId && jobRoleAssignments?.length) {
+      const assignment = jobRoleAssignments.find((a) => String(a.role_id || a.job_role_id) === jobRoleId);
       if (assignment?.department_id) setDepartmentId(String(assignment.department_id));
     }
-  }, [jobRoleId, assignments]);
+  }, [jobRoleId, jobRoleAssignments]);
 
   const toggleDay = (day) => {
     setWorkingDays((prev) =>
@@ -178,7 +184,7 @@ export const EmployeeSettingsForm = ({ open, onOpenChange, setting = null, prese
                 <SelectValue placeholder="Select job role" />
               </SelectTrigger>
               <SelectContent>
-                {assignments.map((a) => (
+                {jobRoleAssignments.map((a) => (
                   <SelectItem key={a.id || a.role_id} value={String(a.role_id || a.job_role_id)}>
                     {a.role?.display_name || a.role?.name || `Role ${a.role_id}`} — {a.department?.name || ""}
                   </SelectItem>

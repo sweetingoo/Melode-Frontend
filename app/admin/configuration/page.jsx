@@ -233,23 +233,23 @@ function ConfigurationPageContent() {
   if (searchTerm) settingsParams.search = searchTerm;
 
   const { data: settingsData, isLoading } = useSettings(settingsParams);
-  // Ensure settings is always an array
+  // Exclude settings managed elsewhere: Role defaults (Default Role Permissions), Attendance (Time & Attendance → Settings)
+  const SETTINGS_HIDDEN_PREFIXES = ["role.defaults.", "attendance."];
   const settings = useMemo(() => {
     if (!settingsData) return [];
-    // Handle paginated response with settings array (new format)
+    let list = [];
     if (Array.isArray(settingsData.settings)) {
-      return settingsData.settings;
+      list = settingsData.settings;
+    } else if (Array.isArray(settingsData.items)) {
+      list = settingsData.items;
+    } else if (Array.isArray(settingsData)) {
+      list = settingsData;
     }
-    // Handle paginated response with items array (legacy format)
-    if (Array.isArray(settingsData.items)) {
-      return settingsData.items;
-    }
-    // Handle direct array response
-    if (Array.isArray(settingsData)) {
-      return settingsData;
-    }
-    // Fallback: return empty array if not an array
-    return [];
+    return list.filter(
+      (s) =>
+        s.setting_key &&
+        !SETTINGS_HIDDEN_PREFIXES.some((prefix) => s.setting_key.startsWith(prefix))
+    );
   }, [settingsData]);
 
   // Get organisation data with refetch function
