@@ -73,6 +73,9 @@ import {
   ClipboardList,
   Edit,
   Camera,
+  MessageSquare,
+  FileText,
+  CheckCircle,
 } from "lucide-react";
 import {
   useUser,
@@ -106,6 +109,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { AvatarWithUrl } from "@/components/AvatarWithUrl";
 import EntityCustomFieldsForm from "@/components/EntityCustomFieldsForm";
 import CustomFieldRenderer from "@/components/CustomFieldRenderer";
+import RichTextEditor from "@/components/RichTextEditor";
 import { 
   useUserCustomFieldsHierarchy, 
   useUserCustomFields, 
@@ -131,7 +135,173 @@ import {
   useSetLeaveApproverDepartments,
 } from "@/hooks/useAttendance";
 import { filesService } from "@/services/files";
+import { useDocuments, useCreateDocument } from "@/hooks/useDocuments";
+import { useDocumentCategories } from "@/hooks/useDocumentCategories";
+import { useTasksByUser } from "@/hooks/useTasks";
+import { Calendar } from "@/components/ui/calendar";
+import CommentThread from "@/components/CommentThread";
 import { api } from "@/services/api-client";
+
+const TasksForUser = ({ userSlug }) => {
+  const [statusFilter, setStatusFilter] = React.useState("pending");
+  const [selectedDate, setSelectedDate] = React.useState(null);
+
+  const { data, isLoading, error } = useTasksByUser(userSlug, {
+    status: statusFilter !== "all" ? statusFilter : undefined,
+    limit: 200,
+  });
+
+  const tasks = React.useMemo(() => {
+    const raw = data?.tasks ?? data?.items ?? data?.data ?? data ?? [];
+    const list = Array.isArray(raw) ? raw : [];
+    if (!selectedDate) return list;
+    const y = selectedDate.getFullYear();
+    const m = selectedDate.getMonth();
+    const d = selectedDate.getDate();
+    return list.filter((t) => {
+      if (!t.due_date) return false;
+      const dt = new Date(t.due_date);
+      return dt.getFullYear() === y && dt.getMonth() === m && dt.getDate() === d;
+    });
+  }, [data, selectedDate]);
+
+  const hasError = !!error;
+
+  const getStatusBadgeClass = (status) => {
+    const value = (status || "").toLowerCase();
+    if (value === "completed") return "bg-green-500/10 text-green-700";
+    if (value === "overdue") return "bg-red-500/10 text-red-700";
+    if (value === "in_progress" || value === "in-progress") return "bg-blue-500/10 text-blue-700";
+    if (value === "cancelled") return "bg-gray-500/10 text-gray-700";
+    return "bg-amber-500/10 text-amber-700";
+  };
+
+  const tasksByDate = React.useMemo(() => {
+    const map = new Map();
+    const raw = data?.tasks ?? data?.items ?? data?.data ?? data ?? [];
+    const list = Array.isArray(raw) ? raw : [];
+    list.forEach((t) => {
+      if (!t.due_date) return;
+      const dt = new Date(t.due_date);
+      if (isNaN(dt.getTime())) return;
+      const key = dt.toISOString().slice(0, 10);
+      map.set(key, (map.get(key) || 0) + 1);
+    });
+    return map;
+  }, [data]);
+
+  return (
+    <div className="grid gap-6 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center gap-3 justify-between">
+          <div className="flex items-center gap-2">
+            <Label className="text-xs font-medium text-muted-foreground">Status</Label>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="h-8 w-[150px]">
+                <SelectValue placeholder="All" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="in_progress">In progress</SelectItem>
+                <SelectItem value="completed">Completed</SelectItem>
+                <SelectItem value="all">All</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {selectedDate && (
+            <button
+              type="button"
+              className="text-xs text-muted-foreground hover:underline"
+              onClick={() => setSelectedDate(null)}
+            >
+              Clear date filter
+            </button>
+          )}
+        </div>
+
+        {isLoading ? (
+          <p className="text-sm text-muted-foreground py-4">Loading tasks…</p>
+        ) : hasError ? (
+          <p className="text-sm text-destructive py-4">
+            Failed to load tasks. Please try again.
+          </p>
+        ) : tasks.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-4">
+            No tasks found for this person{selectedDate ? " on this date" : ""}.
+          </p>
+        ) : (
+          <div className="border rounded-md overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Title</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Due date</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Open</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {tasks.map((t) => (
+                  <TableRow key={t.id}>
+                    <TableCell className="font-medium">
+                      {t.title || t.name || `Task #${t.id}`}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {t.task_type_display_name || t.task_type || "—"}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {t.due_date
+                        ? new Date(t.due_date).toLocaleDateString()
+                        : "No due date"}
+                    </TableCell>
+                    <TableCell>
+                      <span
+                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${getStatusBadgeClass(
+                          t.status
+                        )}`}
+                      >
+                        {t.status || "pending"}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        asChild
+                        size="sm"
+                        variant="outline"
+                      >
+                        <Link href={`/admin/my-tasks${t.slug ? `?task=${t.slug}` : ""}`}>
+                          View
+                        </Link>
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </div>
+
+      <div className="space-y-3">
+        <Label className="text-xs font-medium text-muted-foreground">
+          Calendar view
+        </Label>
+        <div className="border rounded-md p-2">
+          <Calendar
+            mode="single"
+            selected={selectedDate}
+            onSelect={setSelectedDate}
+            className="w-full"
+          />
+          <p className="mt-2 text-xs text-muted-foreground">
+            Click a day to filter the list by due date.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const UserEditPage = () => {
   const params = useParams();
@@ -221,6 +391,10 @@ const UserEditPage = () => {
   const [isEntitlementFormOpen, setIsEntitlementFormOpen] = useState(false);
   const [entitlementFilterYearId, setEntitlementFilterYearId] = useState("all");
   const [leaveApproverSelectedIds, setLeaveApproverSelectedIds] = useState([]);
+  const [isPersonnelDocDialogOpen, setIsPersonnelDocDialogOpen] = useState(false);
+  const [personnelCategoryId, setPersonnelCategoryId] = useState(null);
+  const [personnelTitle, setPersonnelTitle] = useState("");
+  const [personnelDescription, setPersonnelDescription] = useState("");
 
   const {
     data: userData,
@@ -1037,6 +1211,96 @@ const UserEditPage = () => {
   const canManageAttendanceSettings = currentUserHasPermission("attendance:settings") || currentUserIsSuperuser;
   const isViewingSelf = currentUserData?.id === userData?.id;
 
+  // Personnel file / document permissions for current user
+  const canManagePersonnelDocuments = hasPermission("document:create");
+  const canEditPersonnelDocuments = hasPermission("document:update");
+  const canDeletePersonnelDocuments = hasPermission("document:delete");
+
+  // Personnel File: shared documents for this user
+  const personnelUserId = userData?.id ?? null;
+
+  const { data: personnelCategoriesData } = useDocumentCategories();
+
+  const personnelFlatCategories = React.useMemo(() => {
+    const categories = personnelCategoriesData?.categories || [];
+    const result = [];
+
+    const flatten = (cats, depth = 0) => {
+      cats.forEach((cat) => {
+        result.push({
+          id: cat.id,
+          name: cat.name,
+          displayName: `${"  ".repeat(depth)}${cat.name}`,
+        });
+        if (cat.children && cat.children.length > 0) {
+          flatten(cat.children, depth + 1);
+        }
+      });
+    };
+
+    flatten(categories);
+    return result;
+  }, [personnelCategoriesData]);
+
+  const personnelCategoryNameById = React.useMemo(() => {
+    const map = new Map();
+    personnelFlatCategories.forEach((cat) => {
+      map.set(cat.id, cat.name);
+    });
+    return map;
+  }, [personnelFlatCategories]);
+
+  const personnelDocumentsParams = React.useMemo(
+    () => ({
+      page: 1,
+      per_page: 100,
+    }),
+    []
+  );
+
+  const {
+    data: personnelDocumentsResponse,
+    isLoading: personnelDocsLoading,
+  } = useDocuments(personnelDocumentsParams, {
+    enabled: !!personnelUserId && activeTab === "compliance",
+  });
+
+  const personnelDocuments = React.useMemo(() => {
+    const docs = personnelDocumentsResponse?.documents || [];
+    if (!personnelUserId) return [];
+    return docs.filter(
+      (doc) =>
+        Array.isArray(doc.shared_with_user_ids) &&
+        doc.shared_with_user_ids.includes(personnelUserId)
+    );
+  }, [personnelDocumentsResponse, personnelUserId]);
+
+  const createPersonnelDocument = useCreateDocument();
+
+  const handleCreatePersonnelDocument = async (e) => {
+    e.preventDefault();
+    if (!personnelUserId || !personnelCategoryId || !personnelTitle.trim()) {
+      return;
+    }
+    try {
+      await createPersonnelDocument.mutateAsync({
+        title: personnelTitle.trim(),
+        content: personnelDescription || "",
+        category_id: Number(personnelCategoryId),
+        status: "published",
+        is_public: false,
+        shared_with_user_ids: [personnelUserId],
+        youtube_videos: [],
+      });
+      setIsPersonnelDocDialogOpen(false);
+      setPersonnelTitle("");
+      setPersonnelDescription("");
+      setPersonnelCategoryId(null);
+    } catch (error) {
+      // Errors are handled by the mutation's toast
+    }
+  };
+
   // Check if current user has wildcard permissions
   const currentUserHasWildcardPermissions = React.useMemo(() => {
     const rolePermissions = currentUserPermissions.some(
@@ -1769,6 +2033,16 @@ const UserEditPage = () => {
               <FileCheck className="h-4 w-4" />
               <span className="hidden sm:inline">Information</span>
               <span className="sm:hidden">Information</span>
+            </TabsTrigger>
+            <TabsTrigger value="tasks" className="flex items-center gap-2 whitespace-nowrap">
+              <CheckCircle className="h-4 w-4" />
+              <span className="hidden sm:inline">Tasks</span>
+              <span className="sm:hidden">Tasks</span>
+            </TabsTrigger>
+            <TabsTrigger value="notes" className="flex items-center gap-2 whitespace-nowrap">
+              <MessageSquare className="h-4 w-4" />
+              <span className="hidden sm:inline">Notes</span>
+              <span className="sm:hidden">Notes</span>
             </TabsTrigger>
             {canViewAttendance && (
               <TabsTrigger value="attendance" className="flex items-center gap-2 whitespace-nowrap">
@@ -3086,6 +3360,7 @@ const UserEditPage = () => {
             <TabsList>
               <TabsTrigger value="additional">My Information</TabsTrigger>
               <TabsTrigger value="compliance">My Compliance</TabsTrigger>
+              <TabsTrigger value="personnel">Personnel File</TabsTrigger>
             </TabsList>
 
             <TabsContent value="compliance" className="space-y-6">
@@ -3615,7 +3890,246 @@ const UserEditPage = () => {
                 </Card>
               )}
             </TabsContent>
+
+            <TabsContent value="personnel" className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <CardTitle className="flex items-center gap-2">
+                        <FileText className="h-5 w-5" />
+                        Personnel File
+                      </CardTitle>
+                      <CardDescription>
+                        Store HR documents for this person, such as reviews, grievances, and disciplinary records.
+                      </CardDescription>
+                    </div>
+                    {canManagePersonnelDocuments && (
+                      <Button size="sm" onClick={() => setIsPersonnelDocDialogOpen(true)}>
+                        <Plus className="mr-2 h-4 w-4" />
+                        Add Document
+                      </Button>
+                    )}
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {personnelDocsLoading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : personnelDocuments.length === 0 ? (
+                    <div className="text-center py-10 text-muted-foreground space-y-3">
+                      <FileText className="h-10 w-10 mx-auto opacity-50" />
+                      <p className="text-sm">
+                        No documents have been added to this person&apos;s personnel file yet.
+                      </p>
+                      {canManagePersonnelDocuments && (
+                        <Button size="sm" onClick={() => setIsPersonnelDocDialogOpen(true)}>
+                          <Plus className="mr-2 h-4 w-4" />
+                          Add first document
+                        </Button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="border rounded-md overflow-hidden">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Title</TableHead>
+                              <TableHead>Category</TableHead>
+                              <TableHead>Status</TableHead>
+                              <TableHead>Views</TableHead>
+                              <TableHead>Last Updated</TableHead>
+                              <TableHead className="text-right">Actions</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {personnelDocuments.map((doc) => (
+                              <TableRow key={doc.id}>
+                                <TableCell className="font-medium">
+                                  <div className="flex items-center gap-2">
+                                    <FileText className="h-4 w-4 text-muted-foreground" />
+                                    {doc.title}
+                                  </div>
+                                </TableCell>
+                                <TableCell>
+                                  <Badge variant="secondary">
+                                    {personnelCategoryNameById.get(doc.category_id) ||
+                                      (doc.category_id ? `Category ${doc.category_id}` : "N/A")}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell>
+                                  <Badge variant="outline" className="text-xs">
+                                    {doc.status || "published"}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="text-sm text-muted-foreground">
+                                  {doc.access_count || 0}
+                                </TableCell>
+                                <TableCell className="text-sm text-muted-foreground">
+                                  {doc.updated_at
+                                    ? formatDistanceToNow(parseUTCDate(doc.updated_at), {
+                                        addSuffix: true,
+                                      })
+                                    : "N/A"}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <div className="flex items-center justify-end gap-2">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => router.push(`/documents/${doc.slug || doc.id}`)}
+                                    >
+                                      <Eye className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Open a document to upload files and view detailed access history. All actions are audited.
+                      </p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Dialog open={isPersonnelDocDialogOpen} onOpenChange={setIsPersonnelDocDialogOpen}>
+                <DialogContent className="max-w-lg">
+                  <DialogHeader>
+                    <DialogTitle>Add document to personnel file</DialogTitle>
+                    <DialogDescription>
+                      Create a private HR document for this person. Files can be attached after saving the document.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <form className="space-y-4" onSubmit={handleCreatePersonnelDocument}>
+                    <div className="space-y-2">
+                      <Label htmlFor="personnel-category">Category</Label>
+                      <div className="flex items-center gap-2">
+                        <Select
+                          value={personnelCategoryId ? String(personnelCategoryId) : ""}
+                          onValueChange={(value) => setPersonnelCategoryId(Number(value))}
+                        >
+                          <SelectTrigger id="personnel-category">
+                            <SelectValue placeholder="Select category" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {personnelFlatCategories.length === 0 ? (
+                              <SelectItem value="none" disabled>
+                                No categories available
+                              </SelectItem>
+                            ) : (
+                              personnelFlatCategories.map((cat) => (
+                                <SelectItem key={cat.id} value={String(cat.id)}>
+                                  {cat.displayName}
+                                </SelectItem>
+                              ))
+                            )}
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          className="shrink-0"
+                          onClick={() => router.push("/admin/documents")}
+                          title="Create or manage categories"
+                        >
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="personnel-title">Title</Label>
+                      <Input
+                        id="personnel-title"
+                        value={personnelTitle}
+                        onChange={(e) => setPersonnelTitle(e.target.value)}
+                        placeholder="e.g. Performance Review 2024"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="personnel-description">Content / notes (optional)</Label>
+                      <RichTextEditor
+                        value={personnelDescription}
+                        onChange={(html) => setPersonnelDescription(html)}
+                        placeholder="Enter the details for this document..."
+                      />
+                    </div>
+                    <DialogFooter>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          setIsPersonnelDocDialogOpen(false);
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        type="submit"
+                        disabled={
+                          !personnelUserId ||
+                          !personnelCategoryId ||
+                          !personnelTitle.trim() ||
+                          createPersonnelDocument.isPending
+                        }
+                      >
+                        {createPersonnelDocument.isPending ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Saving...
+                          </>
+                        ) : (
+                          "Save"
+                        )}
+                      </Button>
+                    </DialogFooter>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            </TabsContent>
           </Tabs>
+        </TabsContent>
+
+        {/* Tasks Tab - tasks assigned to this person */}
+        <TabsContent value="tasks" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Tasks for this person</CardTitle>
+              <p className="text-sm text-muted-foreground mt-1">
+                View all tasks assigned to this person, with due dates and quick access to task details.
+              </p>
+            </CardHeader>
+            <CardContent>
+              <TasksForUser userSlug={actualUserSlug} />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Notes Tab - person-specific notes, comments & files (separate from Personnel File) */}
+        <TabsContent value="notes" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Notes, Comments & Files</CardTitle>
+              <p className="text-sm text-muted-foreground mt-1">
+                Use this space for general notes and discussions about this person. Files here are attached to the note thread,
+                not to the personnel file.
+              </p>
+            </CardHeader>
+            <CardContent>
+              <CommentThread
+                entityType="user"
+                entitySlug={actualUserSlug}
+                className="max-w-3xl"
+                noteCategories={[]}
+              />
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* Activity History Tab */}
