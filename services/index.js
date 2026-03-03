@@ -13,6 +13,7 @@ export { clockService } from "./clock";
 export { configurationService } from "./configuration";
 export { setupService } from "./setup";
 export { messagesService } from "./messages";
+export { broadcastsService } from "./broadcasts";
 export { notificationsService } from "./notifications";
 export { documentsService } from "./documents";
 export { documentCategoriesService } from "./documentCategories";

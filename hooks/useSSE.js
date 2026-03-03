@@ -45,26 +45,33 @@ export const useSSE = () => {
         case "message:created": {
           // event.data contains the message object
           const messageData = event.data;
-          
+          const isNotificationType = messageData?.message_type && ["notification", "alert", "task"].includes(messageData.message_type);
+
           console.log("SSE: Processing message:created event", messageData);
-          
+
+          // Notification/alert/task types go only to Notifications, not to Messages
+          if (isNotificationType) {
+            queryClient.invalidateQueries({ queryKey: notificationKeys.lists() });
+            queryClient.invalidateQueries({ queryKey: notificationKeys.unreadCount() });
+            console.log("SSE: Notification-type message – invalidated notifications only");
+            break;
+          }
+
           if (messageData && messageData.id) {
             // Update message detail cache
             queryClient.setQueryData(messageKeys.detail(messageData.id), messageData);
             console.log("SSE: Updated message detail cache for ID:", messageData.id);
-            
+
             // If message has conversation_id, update conversation messages cache
             if (messageData.conversation_id) {
               queryClient.setQueryData(
                 messageKeys.conversationMessages(messageData.conversation_id, { page: 1, per_page: 20 }),
                 (oldData) => {
                   if (!oldData) return oldData;
-                  
-                  // Check if message already exists in cache
+
                   const existingIndex = oldData.messages?.findIndex((m) => m.id === messageData.id);
-                  
+
                   if (existingIndex >= 0) {
-                    // Update existing message
                     const updatedMessages = [...oldData.messages];
                     updatedMessages[existingIndex] = messageData;
                     return {
@@ -73,7 +80,6 @@ export const useSSE = () => {
                       total: oldData.total || 0,
                     };
                   } else {
-                    // Add new message to the end (messages are in chronological order, newest at end)
                     return {
                       ...oldData,
                       messages: [...(oldData.messages || []), messageData],
@@ -84,21 +90,18 @@ export const useSSE = () => {
               );
               console.log("SSE: Updated conversation messages cache for conversation:", messageData.conversation_id);
             }
-            
-            // Dispatch custom event to notify components about new message
+
             if (typeof window !== "undefined") {
               window.dispatchEvent(new CustomEvent("sse-message-created", {
                 detail: { type: "message:created", data: messageData }
               }));
             }
           }
-          
-          // Invalidate and refetch ALL message queries (including lists with different params) to ensure immediate UI update
+
+          // Invalidate and refetch message queries only for non-notification messages
           queryClient.invalidateQueries({ queryKey: messageKeys.all, exact: false });
           queryClient.invalidateQueries({ queryKey: messageKeys.conversations(), exact: false });
-          // Invalidate unread count to update sidebar badge when new message arrives
           queryClient.invalidateQueries({ queryKey: [...messageKeys.all, "unread-count"] });
-          // Invalidate notifications to update notification panel
           queryClient.invalidateQueries({ queryKey: notificationKeys.lists() });
           queryClient.invalidateQueries({ queryKey: notificationKeys.unreadCount() });
           queryClient.refetchQueries({ queryKey: messageKeys.all, exact: false, type: 'active' });

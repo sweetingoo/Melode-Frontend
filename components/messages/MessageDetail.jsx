@@ -305,15 +305,17 @@ const MessageDetail = ({ message, isMobile, onBack, messages, usersData, rolesDa
         continue;
       }
       
-      // Found the latest unread message - mark it as read
-      const messageSlug = msg.slug || msg.id;
+      // Found the latest unread message - mark it as read (API requires slug, not id)
+      if (!msg.slug) {
+        markedAsReadRef.current.add(msg.id);
+        break;
+      }
       markedAsReadRef.current.add(msg.id);
       
       console.log(`✅ Marking latest unread message ${msg.id} as read (from conversation with ${sortedThread.length} messages)`);
       
-      // Mark as read via web (only for messages received from others)
       markAsReadMutation.mutate({ 
-        slug: messageSlug, 
+        slug: msg.slug, 
         readVia: "web" 
       }, {
         onError: (error) => {
@@ -485,7 +487,8 @@ const MessageDetail = ({ message, isMobile, onBack, messages, usersData, rolesDa
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem
-                onClick={() => router.push(`/admin/messages/${message.slug || message.id}`)}
+                onClick={() => message.slug && router.push(`/admin/messages/${message.slug}`)}
+                disabled={!message.slug}
               >
                 <Eye className="h-4 w-4 mr-2" />
                 View Full Details
@@ -593,7 +596,8 @@ const MessageDetail = ({ message, isMobile, onBack, messages, usersData, rolesDa
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => router.push(`/admin/messages/${message.slug || message.id}`)}
+              onClick={() => message.slug && router.push(`/admin/messages/${message.slug}`)}
+              disabled={!message.slug}
               className="text-xs h-7"
             >
               <Eye className="h-3 w-3 mr-1" />

@@ -612,8 +612,11 @@ const MessagesList = ({
                     <DropdownMenuItem
                       onClick={(e) => {
                         e.stopPropagation();
-                        window.open(`/admin/messages/${latestMessage.slug || latestMessage.id}`, "_blank");
+                        if (latestMessage.slug) {
+                          window.open(`/admin/messages/${latestMessage.slug}`, "_blank");
+                        }
                       }}
+                      disabled={!latestMessage.slug}
                     >
                       <Eye className="h-4 w-4 mr-2" />
                       View Full Details

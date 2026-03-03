@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { messagesService } from "@/services/messages";
+import { broadcastsService } from "@/services/broadcasts";
 import { toast } from "sonner";
 
 // Message query keys
@@ -47,12 +48,12 @@ export const useMessage = (slug, options = {}) => {
   });
 };
 
-// Get single broadcast query
+// Get single broadcast query (uses Broadcasts API only)
 export const useBroadcast = (slug, options = {}) => {
   return useQuery({
     queryKey: [...messageKeys.broadcasts(), "detail", slug],
     queryFn: async () => {
-      const response = await messagesService.getBroadcast(slug);
+      const response = await broadcastsService.getBroadcast(slug);
       return response.data;
     },
     enabled: !!slug,
@@ -100,7 +101,7 @@ export const useCreateMessage = () => {
         }
         // Remove conversation_id from broadcast data (not needed for broadcast endpoint)
         const { conversation_id, ...broadcastData } = messageData;
-        const response = await messagesService.createBroadcast(broadcastData);
+        const response = await broadcastsService.createBroadcast(broadcastData);
         // Handle both direct data and wrapped response.data
         return response.data || response;
       }
@@ -299,9 +300,8 @@ export const useMarkMessageAsRead = () => {
 
   return useMutation({
     mutationFn: async ({ slug, readVia = "web", isBroadcast = false }) => {
-      // Use broadcast endpoint if it's a broadcast
       if (isBroadcast) {
-        const response = await messagesService.markBroadcastAsRead(slug, readVia);
+        const response = await broadcastsService.markBroadcastAsRead(slug, readVia);
         return response.data;
       }
       const response = await messagesService.markAsRead(slug, readVia);
@@ -406,9 +406,8 @@ export const useAcknowledgeMessageWithStatus = () => {
 
   return useMutation({
     mutationFn: async ({ slug, acknowledgementStatus, acknowledgementNote = "", isBroadcast = false }) => {
-      // Use broadcast endpoint if it's a broadcast
       if (isBroadcast) {
-        const response = await messagesService.acknowledgeBroadcast(
+        const response = await broadcastsService.acknowledgeBroadcast(
           slug,
           acknowledgementStatus,
           acknowledgementNote
@@ -465,12 +464,12 @@ export const useAcknowledgeMessageWithStatus = () => {
   });
 };
 
-// Get broadcast inbox query
+// Get broadcast inbox query (uses Broadcasts API only)
 export const useBroadcastInbox = (params = {}, options = {}) => {
   return useQuery({
     queryKey: messageKeys.broadcastInbox(params),
     queryFn: async () => {
-      const response = await messagesService.getBroadcastInbox(params);
+      const response = await broadcastsService.getBroadcastInbox(params);
       return response.data;
     },
     staleTime: 0, // Always consider stale so SSE updates trigger refetch
@@ -486,7 +485,7 @@ export const useAllBroadcasts = (params = {}, options = {}) => {
     queryKey: [...messageKeys.broadcasts(), "outbox", params],
     queryFn: async () => {
       // Set my_broadcasts=true to get broadcasts created by current user
-      const response = await messagesService.getBroadcasts({ ...params, my_broadcasts: true });
+      const response = await broadcastsService.getBroadcasts({ ...params, my_broadcasts: true });
       return response.data;
     },
     staleTime: 0, // Always consider stale so SSE updates trigger refetch

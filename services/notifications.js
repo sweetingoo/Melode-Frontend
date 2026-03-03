@@ -1,6 +1,14 @@
 import { api } from "./api-client";
 
-// Notifications API service
+/**
+ * Notifications API service – system notifications (bell/list) only.
+ * Separate from Messages (conversations) and Broadcasts.
+ *
+ * Three separate endpoint groups:
+ * - Notifications (this module): /notifications – list and unread count for notification/alert/task + broadcasts in bell.
+ * - Messages: /messages, /conversations – two-way conversation messages only.
+ * - Broadcasts: use broadcastsService from ./broadcasts for /broadcasts (inbox, create, read, acknowledge).
+ */
 export const notificationsService = {
   // Get user's notifications
   getNotifications: async (params = {}) => {

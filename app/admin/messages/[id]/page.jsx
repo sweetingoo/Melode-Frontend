@@ -68,24 +68,23 @@ const MessageDetailPage = () => {
   const [acknowledgementNote, setAcknowledgementNote] = useState("");
   const [isAcknowledging, setIsAcknowledging] = useState(false);
 
-  // Auto-mark as read when message is opened
+  // Auto-mark as read when message is opened (use message.slug for API, not route param)
   useEffect(() => {
-    if (message && currentUser) {
+    if (message?.slug && currentUser) {
       const receipt = message.receipts?.find((r) => r.user_id === currentUser.id);
       if (!receipt?.is_read) {
-        // Mark as read via web
-        markAsReadMutation.mutate({ slug: messageSlug, readVia: "web" });
+        markAsReadMutation.mutate({ slug: message.slug, readVia: "web" });
       }
     }
-  }, [message, currentUser, messageSlug]);
+  }, [message?.slug, message?.receipts, currentUser]);
 
   const handleAcknowledge = async () => {
-    if (!message?.requires_acknowledgement) return;
+    if (!message?.requires_acknowledgement || !message?.slug) return;
     
     setIsAcknowledging(true);
     try {
       await acknowledgeMutation.mutateAsync({
-        slug: messageSlug,
+        slug: message.slug,
         acknowledgementNote: acknowledgementNote,
       });
       setAcknowledgementNote("");

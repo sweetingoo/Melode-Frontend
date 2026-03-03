@@ -1104,7 +1104,7 @@ export default function ProfilePage() {
 
       <Tabs defaultValue="profile" className="space-y-6">
         <div className="overflow-x-auto scrollbar-hide">
-          <TabsList className="inline-flex w-auto flex-nowrap gap-1 sm:gap-0 lg:grid lg:w-full lg:grid-cols-5">
+          <TabsList className="inline-flex w-auto flex-nowrap gap-1 sm:gap-0 lg:grid lg:w-full lg:grid-cols-4">
             <TabsTrigger value="profile" className="whitespace-nowrap">
               <span className="hidden sm:inline">Profile Information</span>
               <span className="sm:hidden">Profile</span>
@@ -1121,7 +1121,6 @@ export default function ProfilePage() {
               <span className="hidden sm:inline">Settings</span>
               <span className="sm:hidden">Settings</span>
             </TabsTrigger>
-            <TabsTrigger value="files" className="whitespace-nowrap">Files</TabsTrigger>
           </TabsList>
         </div>
 
@@ -1250,118 +1249,6 @@ export default function ProfilePage() {
                     </>
                   )}
                 </Button>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Read-Only Account Information */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Shield className="h-5 w-5" />
-                Account Information
-                <Badge variant="secondary" className="ml-2">
-                  Read Only
-                </Badge>
-              </CardTitle>
-              <CardDescription>
-                System-managed account details (cannot be changed)
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium text-muted-foreground">
-                    Email Address
-                  </Label>
-                  <div className="p-3 bg-muted/50 rounded-md border">
-                    <div className="flex items-center gap-2">
-                      <Mail className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm">
-                        {profileData?.email || "N/A"}
-                      </span>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Email address cannot be changed
-                    </p>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium text-muted-foreground">
-                    Username
-                  </Label>
-                  <div className="p-3 bg-muted/50 rounded-md border">
-                    <div className="flex items-center gap-2">
-                      <User className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm font-mono">
-                        {profileData?.username || "admin"}
-                      </span>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Username cannot be changed
-                    </p>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium text-muted-foreground">
-                    First Name
-                  </Label>
-                  <div className="p-3 bg-muted/50 rounded-md border">
-                    <span className="text-sm">
-                      {profileData?.firstName || "System"}
-                    </span>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      First name cannot be changed
-                    </p>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium text-muted-foreground">
-                    Last Name
-                  </Label>
-                  <div className="p-3 bg-muted/50 rounded-md border">
-                    <span className="text-sm">
-                      {profileData?.lastName || "Administrator"}
-                    </span>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Last name cannot be changed
-                    </p>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium text-muted-foreground">
-                    Title
-                  </Label>
-                  <div className="p-3 bg-muted/50 rounded-md border">
-                    <span className="text-sm">
-                      {profileData?.jobTitle || "System"}
-                    </span>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Title cannot be changed
-                    </p>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium text-muted-foreground">
-                    Phone Number
-                  </Label>
-                  <div className="p-3 bg-muted/50 rounded-md border">
-                    <div className="flex items-center gap-2">
-                      <Phone className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm">
-                        {profileData?.phone || "Not provided"}
-                      </span>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Phone number cannot be changed
-                    </p>
-                  </div>
-                </div>
               </div>
             </CardContent>
           </Card>
@@ -1954,107 +1841,7 @@ export default function ProfilePage() {
             </Card>
           </div>
 
-          {/* Account Information - Read Only */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Calendar className="h-5 w-5" />
-                Account Information
-                <Badge variant="secondary" className="ml-2">
-                  Read Only
-                </Badge>
-              </CardTitle>
-              <CardDescription>
-                System-generated account details (cannot be modified)
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <div className="text-center p-4 border rounded-lg bg-muted/30">
-                  <Calendar className="h-8 w-8 mx-auto mb-2 text-primary" />
-                  <h3 className="font-medium">Member Since</h3>
-                  <p className="text-sm text-muted-foreground">
-                    {profileData?.joinDate || "N/A"}
-                  </p>
-                </div>
-                <div className="text-center p-4 border rounded-lg bg-muted/30">
-                  <Shield className="h-8 w-8 mx-auto mb-2 text-green-600" />
-                  <h3 className="font-medium">Account Status</h3>
-                  <Badge
-                    variant="outline"
-                    className={`mt-1 ${profileData?.isActive ? "text-green-600" : "text-red-600"
-                      }`}
-                  >
-                    {profileData?.isActive ? "Active" : "Inactive"}
-                  </Badge>
-                </div>
-                <div className="text-center p-4 border rounded-lg bg-muted/30">
-                  <User className="h-8 w-8 mx-auto mb-2 text-blue-600" />
-                  <h3 className="font-medium">Role</h3>
-                  <p className="text-sm text-muted-foreground">Administrator</p>
-                </div>
-                <div className="text-center p-4 border rounded-lg bg-muted/30">
-                  <Key className="h-8 w-8 mx-auto mb-2 text-purple-600" />
-                  <h3 className="font-medium">User ID</h3>
-                  <p className="text-sm text-muted-foreground font-mono">
-                    {profileData?.id || "N/A"}
-                  </p>
-                </div>
-              </div>
-
-              {/* Additional Read-Only Information */}
-              <div className="mt-6 pt-6 border-t">
-                <h4 className="font-medium mb-4 flex items-center gap-2">
-                  <Settings className="h-4 w-4" />
-                  System Information
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium text-muted-foreground">
-                      Account Created
-                    </Label>
-                    <p className="text-sm">
-                      {profileData?.createdAt
-                        ? new Date(profileData.createdAt).toLocaleDateString()
-                        : "N/A"}
-                    </p>
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium text-muted-foreground">
-                      Last Updated
-                    </Label>
-                    <p className="text-sm">
-                      {profileData?.updatedAt
-                        ? new Date(profileData.updatedAt).toLocaleDateString()
-                        : "N/A"}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Files Tab */}
-        <TabsContent value="files" className="space-y-6">
-          {profileData?.id && (
-            <div className="space-y-4">
-              <FileAttachmentList
-                entityType="user"
-                entityId={profileData.id}
-                showTitle={true}
-              />
-              <MultiFileUpload
-                entityType="user"
-                entityId={profileData.id}
-                maxFiles={10}
-                maxSizeMB={10}
-                onUploadComplete={() => {
-                  // Files will be refreshed automatically via query invalidation
-                }}
-              />
-            </div>
-          )}
+        {/* (Account Information section removed as requested) */}
         </TabsContent>
 
       </Tabs>

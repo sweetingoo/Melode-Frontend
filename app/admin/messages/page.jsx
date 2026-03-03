@@ -280,13 +280,13 @@ const MessagesPageContent = () => {
     };
   }, []);
 
-  // Mark message as seen when clicked
+  // Mark message as seen when clicked (use slug only for message API routes)
   const handleMessageClick = (message) => {
-    // message can be an object with slug or just an id
-    const messageSlug = message?.slug || message?.id || message;
+    const messageSlug = message?.slug;
     const messageId = typeof message === 'object' ? message.id : message;
 
-    // Remove from new messages when clicked
+    if (!messageSlug) return;
+
     newMessageIdsRef.current.delete(messageId);
     setNewMessageIds(new Set(newMessageIdsRef.current));
 
@@ -360,7 +360,7 @@ const MessagesPageContent = () => {
   }, [conversations]);
 
   return (
-    <div className="h-[calc(100vh-4rem)] flex flex-col overflow-hidden">
+    <div className="h-full min-h-0 flex flex-col overflow-hidden flex-1">
       <div className="flex-1 flex overflow-hidden min-h-0">
         {/* Conversation List Sidebar */}
         <div

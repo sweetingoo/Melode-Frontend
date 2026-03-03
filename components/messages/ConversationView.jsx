@@ -373,12 +373,15 @@ const ConversationView = ({
         continue;
       }
 
-      // Found unread message - mark it as read
-      const messageSlug = msg.slug || msg.id;
+      // Found unread message - mark it as read (API requires slug, not id)
+      if (!msg.slug) {
+        markedAsReadRef.current.add(msg.id);
+        break;
+      }
       markedAsReadRef.current.add(msg.id);
 
       markAsReadMutation.mutate({
-        slug: messageSlug,
+        slug: msg.slug,
         readVia: "web"
       }, {
         onError: (error) => {

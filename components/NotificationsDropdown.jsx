@@ -98,8 +98,8 @@ const NotificationsDropdown = () => {
       router.push(`/admin/broadcasts/${notification.slug || notification.id}`);
     } else if (notification.conversation_id) {
       router.push(`/admin/messages?conversation=${notification.conversation_id}`);
-    } else {
-      router.push(`/admin/messages/${notification.slug || notification.id}`);
+    } else if (notification.slug) {
+      router.push(`/admin/messages/${notification.slug}`);
     }
     setIsOpen(false);
   };

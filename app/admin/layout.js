@@ -1739,8 +1739,8 @@ export default function AdminLayout({ children }) {
             </header>
 
             <main className={cn(
-              "flex-1 overflow-x-hidden min-w-0",
-              pathname === "/admin/messages" ? "p-0" : 
+              "flex-1 overflow-x-hidden min-w-0 flex flex-col",
+              pathname === "/admin/messages" ? "p-0 overflow-hidden min-h-0" : 
               pathname === "/admin/tasks" ? "p-2" : 
               pathname === "/admin/directory" ? "p-0" : 
               pathname?.startsWith("/admin/trackers") ? "pt-0 px-4 pb-4" : "p-4"
