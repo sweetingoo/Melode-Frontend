@@ -1379,7 +1379,12 @@ const TrackersPage = () => {
                     const statusesForSelectedStage = selectedStageConfig
                       ? (selectedStageConfig?.statuses ?? selectedStageConfig?.status_list ?? []).filter(Boolean)
                       : [];
-                    const createEntryStatusOptions = statusesForSelectedStage.length > 0 ? statusesForSelectedStage : allTrackerStatuses;
+                    let createEntryStatusOptions = statusesForSelectedStage.length > 0 ? statusesForSelectedStage : allTrackerStatuses;
+                    // When current step has allowed_next_statuses (e.g. Stage 1 → only Awaiting Triage), restrict options
+                    const allowedFromStep = currentCreateStageConfig?.allowed_next_statuses;
+                    if (allowedFromStep && Array.isArray(allowedFromStep) && allowedFromStep.length > 0) {
+                      createEntryStatusOptions = createEntryStatusOptions.filter((s) => allowedFromStep.includes(s));
+                    }
 
                     const renderField = (field) => {
                       const fieldId = field.id || field.field_id || field.name;
@@ -1577,8 +1582,11 @@ const TrackersPage = () => {
                       : stageMapping;
                     const defaultStageName = stagesForSubmit[0] && (stagesForSubmit[0].stage ?? stagesForSubmit[0].name);
                     const defaultStageConfig = defaultStageName ? stageMapping.find((s) => (s?.stage ?? s?.name ?? "").toString().trim() === defaultStageName.toString().trim()) : null;
-                    const defaultStatusList = (defaultStageConfig?.statuses ?? defaultStageConfig?.status_list ?? []).filter(Boolean);
-                    const allTrackerStatuses = Array.isArray(trackerDetails?.tracker_config?.statuses) ? trackerDetails.tracker_config.statuses : [];
+                    let defaultStatusList = (defaultStageConfig?.statuses ?? defaultStageConfig?.status_list ?? []).filter(Boolean);
+                    const allowedFromStep = currentStepConfig?.allowed_next_statuses;
+                    if (allowedFromStep && Array.isArray(allowedFromStep) && allowedFromStep.length > 0) {
+                      defaultStatusList = defaultStatusList.filter((s) => allowedFromStep.includes(s));
+                    }
                     const defaultStatusForSubmit = defaultStatusList.length > 0 ? defaultStatusList[0] : (trackerDetails?.tracker_config?.default_status || "open");
                     const runCreate = async (useSelectedStageStatus) => {
                       if (!selectedTrackerObj || !trackerDetails) {
@@ -2894,41 +2902,59 @@ const TrackersPage = () => {
                                   return (
                                     <div className="flex items-center gap-1.5 min-w-0 flex-1" style={stageColor ? { borderLeft: `3px solid ${stageColor}`, paddingLeft: 6 } : undefined}>
                                 {canUpdateEntry && tracker?.tracker_config?.stage_mapping?.length > 0 ? (
-                                  <>
-                                    <Select
-                                      key={`stage-${entry.id}-${entry.formatted_data?.derived_stage ?? ""}`}
-                                      value={entry.formatted_data?.derived_stage ?? ""}
-                                      onValueChange={(stageName) => {
-                                        const isSelected = selectedTracker === tracker.id.toString();
-                                        const mapping = (isSelected && selectedTrackerDetail?.tracker_config?.stage_mapping)
-                                          ? selectedTrackerDetail.tracker_config.stage_mapping
-                                          : (tracker?.tracker_config?.stage_mapping ?? []);
-                                        if (stageName && mapping.length > 0) {
-                                          handleStageChange(entry, stageName, mapping);
-                                        }
-                                      }}
-                                      disabled={updateEntryMutation.isPending}
-                                    >
-                                      <SelectTrigger
-                                        className="h-8 min-w-[100px] font-normal text-xs"
-                                        onClick={(e) => e.stopPropagation()}
-                                        onPointerDown={(e) => e.stopPropagation()}
-                                      >
-                                        <SelectValue placeholder="Stage" />
-                                      </SelectTrigger>
-                                      <SelectContent onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
-                                        {(tracker.tracker_config.stage_mapping || []).map((item) => {
-                                          const stageName = item?.stage ?? item?.name ?? "";
-                                          if (!stageName) return null;
-                                          return (
-                                            <SelectItem key={stageName} value={stageName}>
-                                              {stageName}
-                                            </SelectItem>
-                                          );
-                                        })}
-                                      </SelectContent>
-                                    </Select>
-                                  </>
+                                  (() => {
+                                    const currentStageName = (entry?.formatted_data?.derived_stage ?? "").toString().trim();
+                                    const currentConfig = stageMapping.find((s) => (s?.stage ?? s?.name ?? "").toString().trim() === currentStageName);
+                                    const allowedNext = currentConfig?.allowed_next_stages;
+                                    let stagesForListDropdown;
+                                    if (Array.isArray(allowedNext)) {
+                                      const allowedSet = new Set(allowedNext.map((a) => (typeof a === "string" ? a : (a?.stage ?? a?.name ?? "")).toString().trim()).filter(Boolean));
+                                      if (currentStageName) allowedSet.add(currentStageName);
+                                      stagesForListDropdown = stageMapping.filter((s) => {
+                                        const name = (s?.stage ?? s?.name ?? "").toString().trim();
+                                        return name && allowedSet.has(name);
+                                      });
+                                    } else {
+                                      stagesForListDropdown = stageMapping;
+                                    }
+                                    return (
+                                      <>
+                                        <Select
+                                          key={`stage-${entry.id}-${entry.formatted_data?.derived_stage ?? ""}`}
+                                          value={entry.formatted_data?.derived_stage ?? ""}
+                                          onValueChange={(stageName) => {
+                                            const isSelected = selectedTracker === tracker.id.toString();
+                                            const mapping = (isSelected && selectedTrackerDetail?.tracker_config?.stage_mapping)
+                                              ? selectedTrackerDetail.tracker_config.stage_mapping
+                                              : (tracker?.tracker_config?.stage_mapping ?? []);
+                                            if (stageName && mapping.length > 0) {
+                                              handleStageChange(entry, stageName, mapping);
+                                            }
+                                          }}
+                                          disabled={updateEntryMutation.isPending}
+                                        >
+                                          <SelectTrigger
+                                            className="h-8 min-w-[100px] font-normal text-xs"
+                                            onClick={(e) => e.stopPropagation()}
+                                            onPointerDown={(e) => e.stopPropagation()}
+                                          >
+                                            <SelectValue placeholder="Stage" />
+                                          </SelectTrigger>
+                                          <SelectContent onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+                                            {stagesForListDropdown.map((item) => {
+                                              const stageName = item?.stage ?? item?.name ?? "";
+                                              if (!stageName) return null;
+                                              return (
+                                                <SelectItem key={stageName} value={stageName}>
+                                                  {stageName}
+                                                </SelectItem>
+                                              );
+                                            })}
+                                          </SelectContent>
+                                        </Select>
+                                      </>
+                                    );
+                                  })()
                                 ) : (
                                   <span>{entry.formatted_data?.derived_stage ?? "—"}</span>
                                 )}

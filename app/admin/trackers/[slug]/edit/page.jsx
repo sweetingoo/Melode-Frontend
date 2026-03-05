@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -114,6 +114,7 @@ const TrackerEditPage = () => {
   const { data: tracker, isLoading: trackerLoading } = useTracker(slug);
   const updateMutation = useUpdateTracker();
   const { data: rolesData } = useRoles();
+  const { data: rolesAllData } = useRolesAll(100);
   const { data: usersResponse } = useUsers();
   const { data: trackerCategories = [] } = useActiveTrackerCategories();
   const { hasPermission } = usePermissionsCheck();
@@ -151,7 +152,28 @@ const TrackerEditPage = () => {
   }, [auditLogsResponse]);
 
   const roles = rolesData || [];
+  const rolesForPermissions = useMemo(
+    () => (Array.isArray(rolesAllData) ? rolesAllData : rolesAllData?.data) ?? roles,
+    [rolesAllData, roles]
+  );
   const users = usersResponse?.users || usersResponse || [];
+
+  // Group roles for Permissions tab: job roles as parents, shift roles as children; standalone roles (no children) on their own
+  const { standaloneRoles, jobRoleGroups } = useMemo(() => {
+    const all = Array.isArray(rolesForPermissions) ? rolesForPermissions : [];
+    const jobRolesWithShifts = all.filter(
+      (r) =>
+        (r.role_type || r.roleType) === "job_role" &&
+        ((r.shift_roles || r.shiftRoles || []).length > 0)
+    );
+    const standalone = all.filter((r) => {
+      const rt = r.role_type || r.roleType;
+      if (rt === "shift_role") return false;
+      if (rt === "job_role" && ((r.shift_roles || r.shiftRoles || []).length > 0)) return false;
+      return true;
+    });
+    return { standaloneRoles: standalone, jobRoleGroups: jobRolesWithShifts };
+  }, [rolesForPermissions]);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -180,6 +202,19 @@ const TrackerEditPage = () => {
       create_permissions: [],
     },
   });
+
+  const jobRoleCheckboxRefs = useRef({});
+  useEffect(() => {
+    jobRoleGroups.forEach((jobRole) => {
+      const el = jobRoleCheckboxRefs.current[jobRole.id];
+      if (!el) return;
+      const shiftRoles = jobRole.shift_roles || jobRole.shiftRoles || [];
+      const allNames = [jobRole.name, ...shiftRoles.map((s) => s.name)];
+      const allowed = formData.access_config?.allowed_roles || [];
+      const selectedCount = allNames.filter((n) => allowed.includes(n)).length;
+      el.indeterminate = selectedCount > 0 && selectedCount < allNames.length;
+    });
+  }, [jobRoleGroups, formData.access_config?.allowed_roles]);
 
   const [newField, setNewField] = useState({
     id: "",
@@ -560,12 +595,14 @@ const TrackerEditPage = () => {
   };
 
   const handleEditSection = (index) => {
-    const section = formData.tracker_config?.sections[index];
+    const sectionsSource = formData.tracker_fields?.sections?.length ? formData.tracker_fields.sections : formData.tracker_config?.sections;
+    const section = (sectionsSource || [])[index];
     if (!section) return;
-    
+
     setEditingSectionIndex(index);
     setEditingSection({
       ...section,
+      groups: section.groups && Array.isArray(section.groups) ? [...section.groups] : [],
     });
   };
 
@@ -582,16 +619,16 @@ const TrackerEditPage = () => {
       return;
     }
 
-    const newSections = [...(formData.tracker_config?.sections || [])];
-    newSections[editingSectionIndex] = {
-      ...editingSection,
-    };
+    const sectionsSource = formData.tracker_fields?.sections?.length ? formData.tracker_fields.sections : formData.tracker_config?.sections;
+    const currentSections = [...(sectionsSource || [])];
+    currentSections[editingSectionIndex] = { ...editingSection };
 
     const updatedFormData = {
       ...formData,
+      ...(formData.tracker_fields?.sections?.length ? { tracker_fields: { ...formData.tracker_fields, sections: currentSections } } : {}),
       tracker_config: {
         ...formData.tracker_config,
-        sections: newSections,
+        sections: currentSections,
       },
     };
 
@@ -817,7 +854,7 @@ const TrackerEditPage = () => {
         ...prev,
         tracker_config: {
           ...prev.tracker_config,
-          stage_mapping: [...list, { stage: "New Stage", statuses: [], allow_public_submit: false, color: defaultColor }],
+          stage_mapping: [...list, { stage: "New Stage", statuses: [], allow_public_submit: false, color: defaultColor, allowed_next_stages: [], allowed_next_statuses: [] }],
         },
       };
     });
@@ -1441,6 +1478,95 @@ const TrackerEditPage = () => {
                             Required
                           </Label>
                         </div>
+
+                        {/* Conditional visibility */}
+                        {!["text_block", "image_block", "line_break", "page_break", "youtube_video_embed", "download_link"].includes((editingField.type || editingField.field_type || "").toLowerCase()) && (
+                          <div className="space-y-2 pt-2 border-t">
+                            <Label className="text-sm font-medium">Conditional visibility (optional)</Label>
+                            <p className="text-xs text-muted-foreground">Show this field only when another field meets a condition.</p>
+                            <div className="space-y-3">
+                              <div>
+                                <Label htmlFor="cond-depends-on" className="text-xs">Show when</Label>
+                                <Select
+                                  value={editingField.conditional_visibility?.depends_on_field || "__none__"}
+                                  onValueChange={(value) =>
+                                    setEditingField((prev) => ({
+                                      ...prev,
+                                      conditional_visibility: value && value !== "__none__"
+                                        ? { ...(prev.conditional_visibility || {}), depends_on_field: value }
+                                        : null,
+                                    }))
+                                  }
+                                >
+                                  <SelectTrigger id="cond-depends-on">
+                                    <SelectValue placeholder="Select a field..." />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="__none__">None (always show)</SelectItem>
+                                    {fields
+                                      .filter((f) => (f.id || f.name || f.field_id) !== (editingField.id || editingField.name || editingField.field_id))
+                                      .filter((f) => !["text_block", "image_block", "line_break", "page_break", "download_link"].includes((f.type || f.field_type || "").toLowerCase()))
+                                      .filter((f) => !!(f.id || f.name || f.field_id))
+                                      .map((f) => (
+                                        <SelectItem key={f.id || f.name || f.field_id} value={String(f.id || f.name || f.field_id)}>
+                                          {f.label || f.field_label || f.name || f.id}
+                                        </SelectItem>
+                                      ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              {editingField.conditional_visibility?.depends_on_field && (
+                                <>
+                                  <div>
+                                    <Label htmlFor="cond-show-when" className="text-xs">Condition</Label>
+                                    <Select
+                                      value={editingField.conditional_visibility?.show_when || ""}
+                                      onValueChange={(value) =>
+                                        setEditingField((prev) => ({
+                                          ...prev,
+                                          conditional_visibility: {
+                                            ...(prev.conditional_visibility || {}),
+                                            show_when: value || null,
+                                          },
+                                        }))
+                                      }
+                                    >
+                                      <SelectTrigger id="cond-show-when">
+                                        <SelectValue placeholder="Select condition..." />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="equals">Equals</SelectItem>
+                                        <SelectItem value="not_equals">Not equals</SelectItem>
+                                        <SelectItem value="contains">Contains</SelectItem>
+                                        <SelectItem value="is_empty">Is empty</SelectItem>
+                                        <SelectItem value="is_not_empty">Is not empty</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                  {editingField.conditional_visibility?.show_when && ["equals", "not_equals", "contains"].includes(editingField.conditional_visibility.show_when) && (
+                                    <div>
+                                      <Label htmlFor="cond-value" className="text-xs">Value</Label>
+                                      <Input
+                                        id="cond-value"
+                                        value={editingField.conditional_visibility?.value ?? ""}
+                                        onChange={(e) =>
+                                          setEditingField((prev) => ({
+                                            ...prev,
+                                            conditional_visibility: {
+                                              ...(prev.conditional_visibility || {}),
+                                              value: e.target.value || null,
+                                            },
+                                          }))
+                                        }
+                                        placeholder="Value to match"
+                                      />
+                                    </div>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        )}
 
                         {/* Configuration for People field */}
                         {editingField.type === "people" && (
@@ -2842,6 +2968,87 @@ const TrackerEditPage = () => {
                             Section ID cannot be changed
                           </p>
                         </div>
+                        {/* Field groups: optional sub-headings within this section */}
+                        <div className="space-y-2 pt-2 border-t">
+                          <Label className="text-sm font-medium">Field groups (optional)</Label>
+                          <p className="text-xs text-muted-foreground">
+                            Group fields under sub-headings in the form. Order of groups is the order they appear.
+                          </p>
+                          {(editingSection.groups || []).map((group, groupIdx) => (
+                            <div key={group.id || groupIdx} className="p-3 rounded border bg-muted/30 space-y-2">
+                              <div className="flex items-center gap-2">
+                                <Input
+                                  placeholder="Group label"
+                                  value={group.label || ""}
+                                  onChange={(e) => {
+                                    const next = [...(editingSection.groups || [])];
+                                    next[groupIdx] = { ...group, label: e.target.value, id: group.id || generateSlug(e.target.value) || `group-${groupIdx}` };
+                                    setEditingSection((prev) => ({ ...prev, groups: next }));
+                                  }}
+                                  className="flex-1"
+                                />
+                                <Button type="button" variant="ghost" size="sm" onClick={() => setEditingSection((prev) => ({ ...prev, groups: (prev.groups || []).filter((_, i) => i !== groupIdx) }))}>
+                                  <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
+                              </div>
+                              <div className="flex flex-wrap gap-1 items-center">
+                                {(group.fields || []).map((fid) => {
+                                  const f = sectionFields.find((x) => (x.id || x.name || x.field_id) === fid);
+                                  return (
+                                    <Badge key={fid} variant="secondary" className="text-xs">
+                                      {f?.label || f?.name || fid}
+                                      <button
+                                        type="button"
+                                        className="ml-1 hover:text-destructive"
+                                        onClick={() => {
+                                          const next = [...(editingSection.groups || [])];
+                                          next[groupIdx] = { ...group, fields: (group.fields || []).filter((id) => id !== fid) };
+                                          setEditingSection((prev) => ({ ...prev, groups: next }));
+                                        }}
+                                      >
+                                        <X className="h-3 w-3" />
+                                      </button>
+                                    </Badge>
+                                  );
+                                })}
+                                <Select
+                                  value="__add__"
+                                  onValueChange={(val) => {
+                                    if (val && val !== "__add__") {
+                                      const next = [...(editingSection.groups || [])];
+                                      next[groupIdx] = { ...group, fields: [...(group.fields || []), val] };
+                                      setEditingSection((prev) => ({ ...prev, groups: next }));
+                                    }
+                                  }}
+                                >
+                                  <SelectTrigger className="w-40 h-8 text-xs">
+                                    <SelectValue placeholder="+ Add field" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="__add__">+ Add field</SelectItem>
+                                    {sectionFields
+                                      .map((f) => f.id || f.name || f.field_id)
+                                      .filter(Boolean)
+                                      .filter((id) => !(group.fields || []).includes(id))
+                                      .map((id) => {
+                                        const f = sectionFields.find((x) => (x.id || x.name || x.field_id) === id);
+                                        return <SelectItem key={id} value={id}>{f?.label || f?.name || id}</SelectItem>;
+                                      })}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
+                          ))}
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setEditingSection((prev) => ({ ...prev, groups: [...(prev.groups || []), { id: `group_${Date.now()}`, label: "New group", fields: [] }] }))}
+                          >
+                            <Plus className="h-4 w-4 mr-2" />
+                            Add group
+                          </Button>
+                        </div>
                         <div className="flex gap-2">
                           <Button 
                             onClick={handleUpdateSection} 
@@ -3124,9 +3331,9 @@ const TrackerEditPage = () => {
         <TabsContent value="stages" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Stages</CardTitle>
+              <CardTitle>Stages &amp; workflow</CardTitle>
               <p className="text-sm text-muted-foreground mt-1">
-                <strong>Stages</strong> are workflow steps (e.g. Case Creation, Triage) with names and statuses. They are <strong>separate from Sections</strong>: Sections (Sections tab) define which form fields appear at each step. Define the <strong>default status list</strong> in the <strong>Statuses</strong> tab. Here, add stages and assign statuses per stage; if a stage has no statuses, it uses the tracker default. <strong>Order is linked by position</strong>: stage 1 uses section 1&apos;s fields, stage 2 uses section 2&apos;s, etc.
+                <strong>Stages</strong> are workflow steps (e.g. Case Creation, Triage). Add stages and assign statuses per stage; if a stage has no statuses, it uses the tracker default from the <strong>Statuses</strong> tab. Use <strong>Allowed next stages</strong> to restrict which stages users can move to from this stage (e.g. Case Creation → Triage only). Use <strong>Allowed next statuses</strong> to restrict which statuses are valid when moving to the next stage (e.g. from Case Creation only &quot;Awaiting Triage&quot;). Sections (Sections tab) define which form fields appear at each step; order is linked by position.
               </p>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -3236,6 +3443,88 @@ const TrackerEditPage = () => {
                           External can fill
                         </Label>
                       </div>
+                      {/* Workflow: allowed next stages and statuses (configurable per stage) */}
+                      <div className="w-full flex flex-wrap gap-4 py-2 px-3 rounded border bg-muted/20">
+                        <div className="space-y-1">
+                          <Label className="text-xs text-muted-foreground">Allowed next stages</Label>
+                          <div className="flex flex-wrap gap-1 items-center">
+                            {(item.allowed_next_stages || []).map((stageName) => (
+                              <Badge key={stageName} variant="secondary" className="text-xs">
+                                {stageName}
+                                <button
+                                  type="button"
+                                  className="ml-1 hover:text-destructive"
+                                  onClick={() => handleUpdateStage(index, "allowed_next_stages", (item.allowed_next_stages || []).filter((x) => x !== stageName))}
+                                  aria-label={`Remove ${stageName}`}
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </Badge>
+                            ))}
+                            <Select
+                              value="__add_stage__"
+                              onValueChange={(val) => {
+                                if (val && val !== "__add_stage__") {
+                                  handleUpdateStage(index, "allowed_next_stages", [...(item.allowed_next_stages || []), val]);
+                                }
+                              }}
+                            >
+                              <SelectTrigger className="w-36 h-8 text-xs">
+                                <SelectValue placeholder="+ Add stage" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="__add_stage__">+ Add stage</SelectItem>
+                                {stageMapping
+                                  .map((s) => (s?.stage ?? s?.name ?? "").toString().trim())
+                                  .filter(Boolean)
+                                  .filter((name) => !(item.allowed_next_stages || []).includes(name))
+                                  .map((name) => (
+                                    <SelectItem key={name} value={name}>{name}</SelectItem>
+                                  ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs text-muted-foreground">Allowed next statuses (when moving to next stage)</Label>
+                          <div className="flex flex-wrap gap-1 items-center">
+                            {(item.allowed_next_statuses || []).map((statusVal) => (
+                              <Badge key={statusVal} variant="outline" className="text-xs">
+                                {humanizeStatusForDisplay(statusVal)}
+                                <button
+                                  type="button"
+                                  className="ml-1 hover:text-destructive"
+                                  onClick={() => handleUpdateStage(index, "allowed_next_statuses", (item.allowed_next_statuses || []).filter((x) => x !== statusVal))}
+                                  aria-label={`Remove ${statusVal}`}
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </Badge>
+                            ))}
+                            <Select
+                              value="__add_status__"
+                              onValueChange={(val) => {
+                                if (val && val !== "__add_status__") {
+                                  handleUpdateStage(index, "allowed_next_statuses", [...(item.allowed_next_statuses || []), val]);
+                                }
+                              }}
+                            >
+                              <SelectTrigger className="w-40 h-8 text-xs">
+                                <SelectValue placeholder="+ Add status" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="__add_status__">+ Add status</SelectItem>
+                                {statuses
+                                  .filter((s) => !(item.allowed_next_statuses || []).includes(s))
+                                  .map((s) => (
+                                    <SelectItem key={s} value={s}>{humanizeStatusForDisplay(s)}</SelectItem>
+                                  ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <p className="text-xs text-muted-foreground">Leave empty to allow all statuses of the target stage.</p>
+                        </div>
+                      </div>
                       {/* Auto-advance to next stage when date + N days has passed */}
                       {(() => {
                         const autoAdv = item.auto_advance || {};
@@ -3314,20 +3603,19 @@ const TrackerEditPage = () => {
               <div>
                 <Label>Allowed Roles</Label>
                 <p className="text-sm text-muted-foreground mb-2">
-                  Roles that can access this tracker
+                  Roles that can access this tracker. Job roles expand to shift roles; selecting a job role selects all its shift roles (you can clear individual shift roles if needed).
                 </p>
-                <div className="space-y-2">
-                  {roles.map((role) => {
+                <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+                  {standaloneRoles.map((role) => {
                     const isSelected = formData.access_config?.allowed_roles?.includes(role.name) || false;
                     return (
                       <div key={role.id} className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          id={`role-${role.id}`}
+                        <Checkbox
+                          id={`role-standalone-${role.id}`}
                           checked={isSelected}
-                          onChange={(e) => {
+                          onCheckedChange={(checked) => {
                             const currentRoles = formData.access_config?.allowed_roles || [];
-                            const newRoles = e.target.checked
+                            const newRoles = checked
                               ? [...currentRoles, role.name]
                               : currentRoles.filter((r) => r !== role.name);
                             setFormData((prev) => ({
@@ -3338,11 +3626,82 @@ const TrackerEditPage = () => {
                               },
                             }));
                           }}
-                          className="rounded"
                         />
-                        <Label htmlFor={`role-${role.id}`} className="cursor-pointer">
+                        <Label htmlFor={`role-standalone-${role.id}`} className="cursor-pointer font-normal">
                           {role.display_name || role.name}
                         </Label>
+                      </div>
+                    );
+                  })}
+                  {jobRoleGroups.map((jobRole) => {
+                    const shiftRoles = jobRole.shift_roles || jobRole.shiftRoles || [];
+                    const jobName = jobRole.name;
+                    const shiftNames = shiftRoles.map((s) => s.name);
+                    const allNames = [jobName, ...shiftNames];
+                    const allowed = formData.access_config?.allowed_roles || [];
+                    const selectedCount = allNames.filter((n) => allowed.includes(n)).length;
+                    const allSelected = selectedCount === allNames.length;
+                    const someSelected = selectedCount > 0;
+                    return (
+                      <div key={jobRole.id} className="space-y-1.5 pl-0">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            id={`role-job-${jobRole.id}`}
+                            ref={(el) => {
+                              if (el) jobRoleCheckboxRefs.current[jobRole.id] = el;
+                              else delete jobRoleCheckboxRefs.current[jobRole.id];
+                            }}
+                            checked={allSelected}
+                            onChange={(e) => {
+                              const checked = e.target.checked;
+                              const currentRoles = formData.access_config?.allowed_roles || [];
+                              let newRoles = currentRoles.filter((r) => !allNames.includes(r));
+                              if (checked) newRoles = [...newRoles, ...allNames];
+                              setFormData((prev) => ({
+                                ...prev,
+                                access_config: {
+                                  ...prev.access_config,
+                                  allowed_roles: newRoles,
+                                },
+                              }));
+                            }}
+                            className="h-4 w-4 rounded border border-primary"
+                          />
+                          <Label htmlFor={`role-job-${jobRole.id}`} className="cursor-pointer font-medium">
+                            {jobRole.display_name || jobRole.name}
+                            {jobRole.department?.name ? ` (${jobRole.department.name})` : ""}
+                          </Label>
+                        </div>
+                        <div className="pl-6 space-y-1">
+                          {shiftRoles.map((shift) => {
+                            const shiftSelected = allowed.includes(shift.name);
+                            return (
+                              <div key={shift.id} className="flex items-center gap-2">
+                                <Checkbox
+                                  id={`role-shift-${shift.id}`}
+                                  checked={shiftSelected}
+                                  onCheckedChange={(checked) => {
+                                    const currentRoles = formData.access_config?.allowed_roles || [];
+                                    const newRoles = checked
+                                      ? [...currentRoles, shift.name]
+                                      : currentRoles.filter((r) => r !== shift.name);
+                                    setFormData((prev) => ({
+                                      ...prev,
+                                      access_config: {
+                                        ...prev.access_config,
+                                        allowed_roles: newRoles,
+                                      },
+                                    }));
+                                  }}
+                                />
+                                <Label htmlFor={`role-shift-${shift.id}`} className="cursor-pointer font-normal text-muted-foreground">
+                                  {shift.display_name || shift.name}
+                                </Label>
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
                     );
                   })}

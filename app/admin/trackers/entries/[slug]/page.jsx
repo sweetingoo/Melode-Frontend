@@ -404,6 +404,16 @@ const TrackerEntryDetailPage = () => {
     return stageStatuses.length > 0 ? stageStatuses : allTrackerStatuses;
   }, [changeStatusStage, stageMappingForMemo, allTrackerStatuses]);
 
+  // In Change status dialog, restrict statuses by current stage's allowed_next_statuses when set
+  const statusesForChangeStatusStageFiltered = useMemo(() => {
+    const currentStageName = (entry?.formatted_data?.derived_stage ?? "").toString().trim();
+    if (!currentStageName || !stageMappingForMemo?.length) return statusesForChangeStatusStage;
+    const currentConfig = stageMappingForMemo.find((s) => (s?.stage ?? s?.name ?? "").toString().trim() === currentStageName);
+    const allowed = currentConfig?.allowed_next_statuses;
+    if (!allowed || !Array.isArray(allowed) || allowed.length === 0) return statusesForChangeStatusStage;
+    return statusesForChangeStatusStage.filter((s) => allowed.includes(s));
+  }, [statusesForChangeStatusStage, stageMappingForMemo, entry?.formatted_data?.derived_stage]);
+
   // Statuses for the stage selected in edit mode header (Stage → Status); when stage has no statuses, show all tracker statuses
   const statusesForEditModeStage = useMemo(() => {
     if (!editModeStage || !stageMappingForMemo?.length) return [];
@@ -412,14 +422,25 @@ const TrackerEntryDetailPage = () => {
     return stageStatuses.length > 0 ? stageStatuses : allTrackerStatuses;
   }, [editModeStage, stageMappingForMemo, allTrackerStatuses]);
 
-  // Stages allowed from current entry stage (for edit header and section dropdowns); when not set, show all
+  // When current entry stage has allowed_next_statuses, restrict status dropdown to those only (for move to next stage)
+  const statusesForEditModeStageFiltered = useMemo(() => {
+    const currentStageName = (entry?.formatted_data?.derived_stage ?? "").toString().trim();
+    if (!currentStageName || !stageMappingForMemo?.length) return statusesForEditModeStage;
+    const currentConfig = stageMappingForMemo.find((s) => (s?.stage ?? s?.name ?? "").toString().trim() === currentStageName);
+    const allowed = currentConfig?.allowed_next_statuses;
+    if (!allowed || !Array.isArray(allowed) || allowed.length === 0) return statusesForEditModeStage;
+    return statusesForEditModeStage.filter((s) => allowed.includes(s));
+  }, [statusesForEditModeStage, stageMappingForMemo, entry?.formatted_data?.derived_stage]);
+
+  // Stages the entry can move to from current stage (only allowed_next_stages). Never show stages that are not allowed.
   const stagesForEditModeDropdown = useMemo(() => {
     if (!stageMappingForMemo?.length) return [];
     const currentStageName = (entry?.formatted_data?.derived_stage ?? "").toString().trim();
     if (!currentStageName) return stageMappingForMemo;
     const currentConfig = stageMappingForMemo.find((s) => (s?.stage ?? s?.name ?? "").toString().trim() === currentStageName);
     const allowedNext = currentConfig?.allowed_next_stages;
-    if (!allowedNext || !Array.isArray(allowedNext) || allowedNext.length === 0) return stageMappingForMemo;
+    if (!Array.isArray(allowedNext)) return stageMappingForMemo;
+    if (allowedNext.length === 0) return [];
     return stageMappingForMemo.filter((s) => {
       const name = (s?.stage ?? s?.name ?? "").toString().trim();
       return name && allowedNext.some((a) => (typeof a === "string" ? a : (a?.stage ?? a?.name ?? "")).toString().trim() === name);
@@ -682,7 +703,7 @@ const TrackerEntryDetailPage = () => {
     return String(value);
   };
 
-  // Group fields by section: use section.fields (list of field ids) when present, else field.section
+  // Group fields by section: use section.fields (list of field ids) when present, else field.section. Attach section.groups when present.
   const fieldsBySection = sections.reduce((acc, section, index) => {
     const sectionKey = section.id ?? section.title ?? section.label ?? `section-${index}`;
     const sectionFields = (section.fields?.length)
@@ -692,6 +713,7 @@ const TrackerEntryDetailPage = () => {
       ...section,
       id: section.id ?? sectionKey,
       fields: sectionFields,
+      groups: section.groups && Array.isArray(section.groups) ? section.groups : null,
     };
     return acc;
   }, {});
@@ -915,7 +937,7 @@ const TrackerEntryDetailPage = () => {
 
   const confirmChangeStatus = async () => {
     const stageName = (changeStatusStage ?? "").toString().trim();
-    const statuses = statusesForChangeStatusStage;
+    const statuses = statusesForChangeStatusStageFiltered;
     if (statuses.length > 0 && !stageChangeStatus) {
       toast.error("Please select a status.");
       return;
@@ -1009,7 +1031,7 @@ const TrackerEntryDetailPage = () => {
                       <SelectValue placeholder="Stage" />
                     </SelectTrigger>
                     <SelectContent>
-                      {(stagesForEditModeDropdown.length > 0 ? stagesForEditModeDropdown : (tracker?.tracker_config?.stage_mapping || [])).map((item) => {
+                      {stagesForEditModeDropdown.map((item) => {
                         const stageName = item?.stage ?? item?.name ?? "";
                         if (!stageName) return null;
                         return (
@@ -1021,14 +1043,14 @@ const TrackerEntryDetailPage = () => {
                     </SelectContent>
                   </Select>
                   <Select
-                    value={statusesForEditModeStage.includes(entryStatus) ? entryStatus : (statusesForEditModeStage[0] ?? "")}
+                    value={statusesForEditModeStageFiltered.includes(entryStatus) ? entryStatus : (statusesForEditModeStageFiltered[0] ?? "")}
                     onValueChange={setEntryStatus}
                   >
                     <SelectTrigger className="w-[180px]">
                       <SelectValue placeholder="Status" />
                     </SelectTrigger>
                     <SelectContent>
-                      {statusesForEditModeStage.map((status) => (
+                      {statusesForEditModeStageFiltered.map((status) => (
                         <SelectItem key={status} value={status}>
                           {humanizeStatusForDisplay(status)}
                         </SelectItem>
@@ -1518,7 +1540,7 @@ const TrackerEntryDetailPage = () => {
                                 <Label htmlFor="section-status-select" className="text-xs">Status</Label>
                                 <Select
                                   id="section-status-select"
-                                  value={statusesForEditModeStage.includes(entryStatus) ? entryStatus : (statusesForEditModeStage[0] ?? "")}
+                                  value={statusesForEditModeStageFiltered.includes(entryStatus) ? entryStatus : (statusesForEditModeStageFiltered[0] ?? "")}
                                   onValueChange={(v) => {
                                     setEntryStatus(v ?? "");
                                     handleFieldChange(tracker?.tracker_config?.status_field_id || "current_status", v);
@@ -1528,7 +1550,7 @@ const TrackerEntryDetailPage = () => {
                                     <SelectValue placeholder="Status" />
                                   </SelectTrigger>
                                   <SelectContent>
-                                    {statusesForEditModeStage.map((status) => (
+                                    {statusesForEditModeStageFiltered.map((status) => (
                                       <SelectItem key={status} value={status}>
                                         {humanizeStatusForDisplay(status)}
                                       </SelectItem>
@@ -1540,21 +1562,55 @@ const TrackerEntryDetailPage = () => {
                           </div>
                             );
                           })()}
-                          {sectionFields.map((field) => {
-                            const fieldId = field.id || field.name || field.field_id;
-                            const value = entryData[fieldId];
-                            const baseField = { ...field, type: field.type || field.field_type, field_label: field.label || field.field_label || field.name, field_name: field.name || field.id };
-                            return (
-                              <CustomFieldRenderer
-                                key={fieldId}
-                                field={getFieldWithStageFilteredStatusOptions(baseField, statusesForEditModeStage)}
-                                value={value}
-                                onChange={handleFieldChange}
-                                error={fieldErrors[fieldId]}
-                                readOnly={false}
-                              />
-                            );
-                          })}
+                          {(() => {
+                            const sectionGroups = fieldsBySection[sectionKey]?.groups;
+                            const sectionFieldIds = new Set(sectionFields.map((f) => (f.id || f.name || f.field_id)));
+                            if (sectionGroups?.length > 0) {
+                              return sectionGroups.map((group) => {
+                                const groupFields = (group.fields || [])
+                                  .map((fid) => sectionFields.find((f) => (f.id || f.name || f.field_id) === fid))
+                                  .filter(Boolean);
+                                if (groupFields.length === 0) return null;
+                                return (
+                                  <div key={group.id || group.label} className="space-y-3">
+                                    <h4 className="text-sm font-semibold text-muted-foreground border-b pb-1.5">{group.label || group.id}</h4>
+                                    <div className="space-y-3 pl-0">
+                                      {groupFields.map((field) => {
+                                        const fieldId = field.id || field.name || field.field_id;
+                                        const value = entryData[fieldId];
+                                        const baseField = { ...field, type: field.type || field.field_type, field_label: field.label || field.field_label || field.name, field_name: field.name || field.id };
+                                        return (
+                                          <CustomFieldRenderer
+                                            key={fieldId}
+                                            field={getFieldWithStageFilteredStatusOptions(baseField, statusesForEditModeStageFiltered)}
+                                            value={value}
+                                            onChange={handleFieldChange}
+                                            error={fieldErrors[fieldId]}
+                                            readOnly={false}
+                                          />
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                );
+                              });
+                            }
+                            return sectionFields.map((field) => {
+                              const fieldId = field.id || field.name || field.field_id;
+                              const value = entryData[fieldId];
+                              const baseField = { ...field, type: field.type || field.field_type, field_label: field.label || field.field_label || field.name, field_name: field.name || field.id };
+                              return (
+                                <CustomFieldRenderer
+                                  key={fieldId}
+                                  field={getFieldWithStageFilteredStatusOptions(baseField, statusesForEditModeStageFiltered)}
+                                  value={value}
+                                  onChange={handleFieldChange}
+                                  error={fieldErrors[fieldId]}
+                                  readOnly={false}
+                                />
+                              );
+                            });
+                          })()}
                         </CardContent>
                       </Card>
                     );
@@ -2727,7 +2783,7 @@ const TrackerEntryDetailPage = () => {
                   <SelectValue placeholder="Select stage" />
                 </SelectTrigger>
                 <SelectContent>
-                  {(stagesForEditModeDropdown.length > 0 ? stagesForEditModeDropdown : (tracker?.tracker_config?.stage_mapping || [])).map((item) => {
+                  {stagesForEditModeDropdown.map((item) => {
                     const stageName = item?.stage ?? item?.name ?? "";
                     if (!stageName) return null;
                     const isCurrent = (entry?.formatted_data?.derived_stage ?? "") === stageName;
@@ -2740,7 +2796,7 @@ const TrackerEntryDetailPage = () => {
                 </SelectContent>
               </Select>
             </div>
-            {statusesForChangeStatusStage.length > 0 && (
+            {statusesForChangeStatusStageFiltered.length > 0 && (
               <div className="space-y-2">
                 <Label htmlFor="change-status-status">Status</Label>
                 <Select
@@ -2751,7 +2807,7 @@ const TrackerEntryDetailPage = () => {
                     <SelectValue placeholder="Select status" />
                   </SelectTrigger>
                   <SelectContent>
-                    {statusesForChangeStatusStage.map((s) => (
+                    {statusesForChangeStatusStageFiltered.map((s) => (
                       <SelectItem key={s} value={s}>
                         {humanizeStatusForDisplay(s)}
                       </SelectItem>
@@ -2760,7 +2816,7 @@ const TrackerEntryDetailPage = () => {
                 </Select>
               </div>
             )}
-            {statusesForChangeStatusStage.length === 0 && changeStatusStage && (
+            {statusesForChangeStatusStageFiltered.length === 0 && changeStatusStage && (
               <p className="text-sm text-amber-600">This stage has no statuses configured.</p>
             )}
             <div className="space-y-2">
@@ -2780,7 +2836,7 @@ const TrackerEntryDetailPage = () => {
             </Button>
             <Button
               onClick={confirmChangeStatus}
-              disabled={updateEntryMutation.isPending || (statusesForChangeStatusStage.length > 0 && !stageChangeStatus)}
+              disabled={updateEntryMutation.isPending || (statusesForChangeStatusStageFiltered.length > 0 && !stageChangeStatus)}
             >
               {updateEntryMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               Update status
