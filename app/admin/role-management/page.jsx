@@ -53,6 +53,8 @@ import {
   X,
   Loader2,
   Filter,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -93,6 +95,7 @@ const RoleManagementPage = () => {
   const [searchPermissionTerm, setSearchPermissionTerm] = useState("");
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [selectedPermissions, setSelectedPermissions] = useState(new Set());
+  const [expandedShiftRoles, setExpandedShiftRoles] = useState(() => new Set());
   const [loadedPermissionsPages, setLoadedPermissionsPages] = useState([1]);
   const [isLoadingMorePermissions, setIsLoadingMorePermissions] = useState(false);
   const [accumulatedPermissions, setAccumulatedPermissions] = useState([]);
@@ -228,6 +231,10 @@ const RoleManagementPage = () => {
     }
   }, [isPermissionsModalOpen, permissionsData, accumulatedPermissions.length, debouncedSearchTerm]);
   const departments = departmentsData?.departments || departmentsData?.data || departmentsData || [];
+  const departmentsSorted = React.useMemo(
+    () => [...departments].sort((a, b) => (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" })),
+    [departments]
+  );
 
   // Filter roles based on selected filters
   const roles = React.useMemo(() => {
@@ -315,13 +322,13 @@ const RoleManagementPage = () => {
     return { grouped, systemRoles };
   }, [roles, allRoles]);
 
-  // Get filtered departments based on filters
+  // Get filtered departments based on filters (alphabetical)
   const filteredDepartments = React.useMemo(() => {
     if (selectedDepartmentFilter) {
       return departments.filter((dept) => dept.id === selectedDepartmentFilter);
     }
-    return departments;
-  }, [departments, selectedDepartmentFilter]);
+    return departmentsSorted;
+  }, [departments, departmentsSorted, selectedDepartmentFilter]);
 
   // Filter job roles for parent role selection (only job roles can be parents)
   // Include roles with roleType === "job_role" or roles without roleType (legacy roles default to job_role)
@@ -869,7 +876,7 @@ const RoleManagementPage = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All departments</SelectItem>
-                  {departments.map((dept) => (
+                  {departmentsSorted.map((dept) => (
                     <SelectItem key={dept.id} value={dept.id.toString()}>
                       {dept.name} {dept.code && `(${dept.code})`}
                     </SelectItem>
@@ -998,7 +1005,15 @@ const RoleManagementPage = () => {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {Object.values(rolesByDepartment.systemRoles || {}).map((group) => {
+                  {[...Object.values(rolesByDepartment.systemRoles || {})]
+                    .sort((a, b) =>
+                      (a.jobRole?.display_name || a.jobRole?.name || "").localeCompare(
+                        b.jobRole?.display_name || b.jobRole?.name || "",
+                        undefined,
+                        { sensitivity: "base" }
+                      )
+                    )
+                    .map((group) => {
                     const role = group.jobRole;
                     
                     // Apply role type filter if selected
@@ -1121,15 +1136,34 @@ const RoleManagementPage = () => {
                           </span>
                         </div>
 
-                        {/* Shift Roles */}
-                        {group.shiftRoles.length > 0 && (
+                        {/* Shift Roles (collapsed by default) */}
+                        {group.shiftRoles.length > 0 && (() => {
+                          const isExpanded = expandedShiftRoles.has(role.id);
+                          const sortedShiftRoles = [...group.shiftRoles].sort((a, b) =>
+                            (a.display_name || a.name || "").localeCompare(b.display_name || b.name || "", undefined, { sensitivity: "base" })
+                          );
+                          return (
                           <div className="space-y-2 pt-2 border-t">
-                            <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setExpandedShiftRoles((prev) => {
+                                  const next = new Set(prev);
+                                  if (next.has(role.id)) next.delete(role.id);
+                                  else next.add(role.id);
+                                  return next;
+                                });
+                              }}
+                              className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground w-full text-left rounded px-1 py-0.5 hover:bg-muted/50"
+                              aria-expanded={isExpanded}
+                            >
+                              {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                               <Network className="h-4 w-4" />
                               <span>Shift Roles ({group.shiftRoles.length})</span>
-                            </div>
+                            </button>
+                            {isExpanded && (
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                              {group.shiftRoles.map((shiftRole) => {
+                              {sortedShiftRoles.map((shiftRole) => {
                                 const shiftIconClasses = getRoleIconClasses(
                                   roleUtils.getRoleColor(shiftRole)
                                 );
@@ -1163,8 +1197,10 @@ const RoleManagementPage = () => {
                                 );
                               })}
                             </div>
+                            )}
                           </div>
-                        )}
+                          );
+                        })()}
                       </div>
                     );
                   })}
@@ -1191,17 +1227,24 @@ const RoleManagementPage = () => {
             filteredDepartments.map((department) => {
               const departmentRoles = rolesByDepartment.grouped?.[department.id] || {};
               const jobRolesList = Object.values(departmentRoles);
+              const sortGroupByRoleName = (a, b) =>
+                (a.jobRole?.display_name || a.jobRole?.name || "").localeCompare(
+                  b.jobRole?.display_name || b.jobRole?.name || "",
+                  undefined,
+                  { sensitivity: "base" }
+                );
+              const sortedJobRolesList = [...jobRolesList].sort(sortGroupByRoleName);
 
               // Apply role type filter if selected
               const filteredJobRolesList = selectedRoleTypeFilter
-                ? jobRolesList.filter((group) => {
+                ? sortedJobRolesList.filter((group) => {
                   if (selectedRoleTypeFilter === "job_role") return true;
                   if (selectedRoleTypeFilter === "shift_role") {
                     return group.shiftRoles.length > 0;
                   }
                   return true;
                 })
-                : jobRolesList;
+                : sortedJobRolesList;
 
               if (filteredJobRolesList.length === 0 && selectedDepartmentFilter) {
                 return null; // Don't show empty departments when filtered
@@ -1424,16 +1467,38 @@ const RoleManagementPage = () => {
                                 </div>
                               )}
 
-                              {/* Shift Roles */}
-                              {group.shiftRoles.length > 0 && (
+                              {/* Shift Roles (collapsed by default, expand to see) */}
+                              {group.shiftRoles.length > 0 && (() => {
+                                const isExpanded = expandedShiftRoles.has(role.id);
+                                const sortedShiftRoles = [...group.shiftRoles].sort((a, b) =>
+                                  (a.display_name || a.name || "").localeCompare(b.display_name || b.name || "", undefined, { sensitivity: "base" })
+                                );
+                                return (
                                 <div className="ml-0 sm:ml-4 mt-3 space-y-2 border-l-0 sm:border-l-2 border-muted pl-0 sm:pl-4">
-                                  <div className="flex items-center gap-2 mb-2">
-                                    <Network className="h-3 w-3 text-muted-foreground flex-shrink-0" />
-                                    <span className="text-xs font-medium text-muted-foreground">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setExpandedShiftRoles((prev) => {
+                                        const next = new Set(prev);
+                                        if (next.has(role.id)) next.delete(role.id);
+                                        else next.add(role.id);
+                                        return next;
+                                      });
+                                    }}
+                                    className="flex items-center gap-2 mb-2 text-left w-full rounded px-1 py-0.5 hover:bg-muted/50 text-muted-foreground hover:text-foreground"
+                                    aria-expanded={isExpanded}
+                                  >
+                                    {isExpanded ? (
+                                      <ChevronDown className="h-3 w-3 flex-shrink-0" />
+                                    ) : (
+                                      <ChevronRight className="h-3 w-3 flex-shrink-0" />
+                                    )}
+                                    <Network className="h-3 w-3 flex-shrink-0" />
+                                    <span className="text-xs font-medium">
                                       Shift Roles ({group.shiftRoles.length})
                                     </span>
-                                  </div>
-                                  {group.shiftRoles.map((shiftRole) => {
+                                  </button>
+                                  {isExpanded && sortedShiftRoles.map((shiftRole) => {
                                     const shiftIconClasses = getRoleIconClasses(
                                       roleUtils.getRoleColor(shiftRole)
                                     );
@@ -1603,7 +1668,8 @@ const RoleManagementPage = () => {
                                     );
                                   })}
                                 </div>
-                              )}
+                                );
+                              })()}
 
                               {group.shiftRoles.length === 0 && (
                                 <div className="ml-0 sm:ml-4 mt-2">
@@ -1748,7 +1814,7 @@ const RoleManagementPage = () => {
                           No options available
                         </SelectItem>
                       ) : (
-                        departments.map((dept) => (
+                        departmentsSorted.map((dept) => (
                           <SelectItem key={dept.id} value={dept.id.toString()}>
                             {dept.name} {dept.code && `(${dept.code})`}
                           </SelectItem>
@@ -1984,7 +2050,7 @@ const RoleManagementPage = () => {
                           No options available
                         </SelectItem>
                       ) : (
-                        departments.map((dept) => (
+                        departmentsSorted.map((dept) => (
                           <SelectItem key={dept.id} value={dept.id.toString()}>
                             {dept.name} {dept.code && `(${dept.code})`}
                           </SelectItem>
@@ -2585,7 +2651,7 @@ const RoleManagementPage = () => {
                       No options available
                     </SelectItem>
                   ) : (
-                    departments.map((dept) => (
+                    departmentsSorted.map((dept) => (
                       <SelectItem key={dept.id} value={dept.id.toString()}>
                         {dept.name} {dept.code && `(${dept.code})`}
                       </SelectItem>

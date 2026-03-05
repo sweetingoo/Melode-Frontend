@@ -500,7 +500,14 @@ export const ShiftRecordList = ({
                   <ChevronDown className="ml-auto h-4 w-4 opacity-50" />
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-[calc(100vw-2rem)] max-w-[340px] p-0 sm:w-auto sm:min-w-[580px] sm:max-w-none" align="start">
+              <PopoverContent
+                className="w-[calc(100vw-2rem)] max-w-[min(580px,calc(100vw-2rem))] p-0 sm:min-w-[280px]"
+                align="start"
+                side="bottom"
+                sideOffset={12}
+                avoidCollisions={true}
+                collisionPadding={16}
+              >
                 <div className="max-h-[85vh] min-h-0 flex flex-col overflow-hidden">
                   <div className="p-3 border-b shrink-0">
                     <div className="grid grid-cols-2 gap-2">
@@ -536,8 +543,8 @@ export const ShiftRecordList = ({
                       onSelect={setDateRange}
                       numberOfMonths={2}
                       classNames={{
-                        months: "flex flex-col gap-4 sm:flex-row",
-                        month: "space-y-4",
+                        months: "flex flex-col gap-4 sm:flex-row sm:gap-4",
+                        month: "space-y-4 min-w-0",
                       }}
                     />
                   </div>

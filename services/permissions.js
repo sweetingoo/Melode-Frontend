@@ -137,9 +137,36 @@ export const permissionsService = {
   // Get roles with specific permission
   getRolesWithPermission: async (permissionSlug) => {
     try {
-      return await api.get(`/permissions/${permissionSlug}/roles`);
+      const response = await api.get(`/permissions/${encodeURIComponent(permissionSlug)}/roles`);
+      return response.data ?? response;
     } catch (error) {
       console.error(`Get roles with permission ${permissionSlug} failed:`, error);
+      throw error;
+    }
+  },
+
+  // Add permission to multiple roles (bulk)
+  addPermissionToRoles: async (permissionSlug, roleIds) => {
+    try {
+      const response = await api.post(`/permissions/${encodeURIComponent(permissionSlug)}/roles`, {
+        role_ids: roleIds,
+      });
+      return response.data ?? response;
+    } catch (error) {
+      console.error(`Add permission ${permissionSlug} to roles failed:`, error);
+      throw error;
+    }
+  },
+
+  // Remove permission from multiple roles (bulk)
+  removePermissionFromRoles: async (permissionSlug, roleIds) => {
+    try {
+      const response = await api.delete(`/permissions/${encodeURIComponent(permissionSlug)}/roles`, {
+        data: { role_ids: roleIds },
+      });
+      return response.data ?? response;
+    } catch (error) {
+      console.error(`Remove permission ${permissionSlug} from roles failed:`, error);
       throw error;
     }
   },

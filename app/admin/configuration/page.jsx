@@ -57,7 +57,9 @@ import {
   useDefaultRolePermissions,
   useUpdateDefaultRolePermissions,
 } from "@/hooks/useConfiguration";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useRolesAll } from "@/hooks/useRoles";
 import { useCurrentUser } from "@/hooks/useAuth";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
 import { permissionsService } from "@/services/permissions";
@@ -84,6 +86,9 @@ import {
   ChevronDown,
   ChevronUp,
   Plug,
+  UserPlus,
+  UserMinus,
+  Users,
 } from "lucide-react";
 import { toast } from "sonner";
 import RichTextEditor from "@/components/RichTextEditor";
@@ -2637,6 +2642,7 @@ function ConfigurationPageContent() {
         {/* Role Defaults Tab */}
         <TabsContent value="role-defaults" className="space-y-4">
           <DefaultRolePermissionsSection />
+          <PermissionByRoleSection />
         </TabsContent>
       </Tabs>
 
@@ -2832,6 +2838,318 @@ function ConfigurationPageContent() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+// Permission by role: see which roles have a permission, bulk add/remove
+function PermissionByRoleSection() {
+  const queryClient = useQueryClient();
+  const [selectedPermission, setSelectedPermission] = useState(null);
+  const [searchPermission, setSearchPermission] = useState("");
+  const [rolesToRemove, setRolesToRemove] = useState(new Set());
+  const [rolesToAdd, setRolesToAdd] = useState(new Set());
+
+  const { data: permissionsData } = usePermissions({ page: 1, per_page: 100 });
+  const [allPermissionsList, setAllPermissionsList] = useState([]);
+  const [loadingAllPermissions, setLoadingAllPermissions] = useState(true);
+
+  const { data: allRoles = [] } = useRolesAll(50);
+  const permissionSlug = selectedPermission?.slug ?? selectedPermission?.name;
+  const { data: rolesWithPermission = [], isLoading: loadingRolesWithPerm } = useQuery({
+    queryKey: ["permission-roles", permissionSlug],
+    queryFn: () => permissionsService.getRolesWithPermission(permissionSlug),
+    enabled: !!permissionSlug,
+  });
+
+  useEffect(() => {
+    const fetchAll = async () => {
+      if (!permissionsData) return;
+      setLoadingAllPermissions(true);
+      try {
+        const totalPages = permissionsData.total_pages || 1;
+        const perPage = 100;
+        const all = [...(permissionsData.permissions || [])];
+        for (let page = 2; page <= totalPages; page++) {
+          const res = await permissionsService.getPermissions({ page, per_page: perPage });
+          const list = res?.permissions || [];
+          all.push(...list);
+        }
+        setAllPermissionsList(
+          all.map((p) => ({
+            id: p.id,
+            slug: p.name || (p.resource && p.action ? `${p.resource}:${p.action}` : String(p.id)),
+            name: p.display_name || p.name,
+            resource: p.resource,
+            action: p.action,
+          }))
+        );
+      } catch (e) {
+        const arr = permissionsData.permissions || [];
+        setAllPermissionsList(
+          arr.map((p) => ({
+            id: p.id,
+            slug: p.name || (p.resource && p.action ? `${p.resource}:${p.action}` : String(p.id)),
+            name: p.display_name || p.name,
+            resource: p.resource,
+            action: p.action,
+          }))
+        );
+      } finally {
+        setLoadingAllPermissions(false);
+      }
+    };
+    if (permissionsData) fetchAll();
+  }, [permissionsData]);
+
+  const filteredPermissions = allPermissionsList.filter(
+    (p) =>
+      (p.name || "").toLowerCase().includes((searchPermission || "").toLowerCase()) ||
+      (p.resource || "").toLowerCase().includes((searchPermission || "").toLowerCase()) ||
+      (p.action || "").toLowerCase().includes((searchPermission || "").toLowerCase())
+  );
+  const roleIdsWithPermission = useMemo(
+    () => new Set((rolesWithPermission || []).map((r) => r.role_id)),
+    [rolesWithPermission]
+  );
+  const rolesWithoutPermission = useMemo(
+    () => allRoles.filter((r) => !roleIdsWithPermission.has(r.id) && !r.is_system),
+    [allRoles, roleIdsWithPermission]
+  );
+  const rolesWithPermissionList = useMemo(
+    () => (rolesWithPermission || []).filter((r) => !r.is_system),
+    [rolesWithPermission]
+  );
+
+  const addMutation = useMutation({
+    mutationFn: ({ slug, roleIds }) => permissionsService.addPermissionToRoles(slug, roleIds),
+    onSuccess: (data, { slug }) => {
+      queryClient.invalidateQueries({ queryKey: ["permission-roles", slug] });
+      queryClient.invalidateQueries({ queryKey: ["roles"] });
+      setRolesToAdd(new Set());
+      toast.success(
+        data?.updated
+          ? `Permission added to ${data.updated} role(s).${data.skipped ? ` ${data.skipped} skipped.` : ""}`
+          : "No roles updated.",
+        data?.errors?.length ? { description: data.errors.join(", ") } : undefined
+      );
+    },
+    onError: (err) => {
+      toast.error("Failed to add permission to roles", {
+        description: err?.response?.data?.detail || err?.message,
+      });
+    },
+  });
+  const removeMutation = useMutation({
+    mutationFn: ({ slug, roleIds }) => permissionsService.removePermissionFromRoles(slug, roleIds),
+    onSuccess: (data, { slug }) => {
+      queryClient.invalidateQueries({ queryKey: ["permission-roles", slug] });
+      queryClient.invalidateQueries({ queryKey: ["roles"] });
+      setRolesToRemove(new Set());
+      toast.success(
+        data?.updated
+          ? `Permission removed from ${data.updated} role(s).${data.skipped ? ` ${data.skipped} skipped.` : ""}`
+          : "No roles updated.",
+        data?.errors?.length ? { description: data.errors.join(", ") } : undefined
+      );
+    },
+    onError: (err) => {
+      toast.error("Failed to remove permission from roles", {
+        description: err?.response?.data?.detail || err?.message,
+      });
+    },
+  });
+
+  const handleAddToSelected = () => {
+    if (!permissionSlug || rolesToAdd.size === 0) return;
+    addMutation.mutate({ slug: permissionSlug, roleIds: Array.from(rolesToAdd) });
+  };
+  const handleAddToAll = () => {
+    if (!permissionSlug || rolesWithoutPermission.length === 0) return;
+    addMutation.mutate({
+      slug: permissionSlug,
+      roleIds: rolesWithoutPermission.map((r) => r.id),
+    });
+  };
+  const handleRemoveFromSelected = () => {
+    if (!permissionSlug || rolesToRemove.size === 0) return;
+    removeMutation.mutate({ slug: permissionSlug, roleIds: Array.from(rolesToRemove) });
+  };
+
+  const toggleRoleToAdd = (roleId) => {
+    setRolesToAdd((prev) => {
+      const next = new Set(prev);
+      if (next.has(roleId)) next.delete(roleId);
+      else next.add(roleId);
+      return next;
+    });
+  };
+  const toggleRoleToRemove = (roleId) => {
+    setRolesToRemove((prev) => {
+      const next = new Set(prev);
+      if (next.has(roleId)) next.delete(roleId);
+      else next.add(roleId);
+      return next;
+    });
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Users className="h-5 w-5" />
+          Permission by role
+        </CardTitle>
+        <CardDescription>
+          Select a permission to see which roles have it, and to add or remove it from roles in bulk.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="space-y-2">
+          <Label>Select permission</Label>
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search permissions..."
+                value={searchPermission}
+                onChange={(e) => setSearchPermission(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+          </div>
+          <Select
+            value={selectedPermission ? String(selectedPermission.id) : ""}
+            onValueChange={(val) => {
+              const p = allPermissionsList.find((x) => String(x.id) === val);
+              setSelectedPermission(p || null);
+              setRolesToRemove(new Set());
+              setRolesToAdd(new Set());
+            }}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Choose a permission..." />
+            </SelectTrigger>
+            <SelectContent>
+              {filteredPermissions.map((p) => (
+                <SelectItem key={p.id} value={String(p.id)}>
+                  {p.name} ({p.resource}:{p.action})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {!selectedPermission && (
+          <p className="text-sm text-muted-foreground">
+            Select a permission above to see which roles have it and to add or remove it in bulk.
+          </p>
+        )}
+
+        {selectedPermission && (
+          <div className="space-y-6">
+            {loadingRolesWithPerm ? (
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading roles...
+              </div>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="flex items-center gap-2">
+                      <UserMinus className="h-4 w-4" />
+                      Roles with this permission ({rolesWithPermissionList.length})
+                    </Label>
+                    {rolesToRemove.size > 0 && (
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={handleRemoveFromSelected}
+                        disabled={removeMutation.isPending}
+                      >
+                        {removeMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                        Remove from selected ({rolesToRemove.size})
+                      </Button>
+                    )}
+                  </div>
+                  <div className="border rounded-lg max-h-[220px] overflow-y-auto">
+                    {rolesWithPermissionList.length === 0 ? (
+                      <p className="p-4 text-sm text-muted-foreground">No roles have this permission.</p>
+                    ) : (
+                      <div className="divide-y">
+                        {rolesWithPermissionList.map((r) => (
+                          <div
+                            key={r.role_id}
+                            className="flex items-center gap-3 p-2 hover:bg-muted/50"
+                            onClick={() => toggleRoleToRemove(r.role_id)}
+                          >
+                            <div className="flex items-center justify-center h-5 w-5 rounded border-2 border-primary flex-shrink-0">
+                              {rolesToRemove.has(r.role_id) && (
+                                <CheckSquare className="h-4 w-4 text-primary fill-primary" />
+                              )}
+                            </div>
+                            <span className="font-medium">{r.display_name || r.role_name}</span>
+                            <span className="text-xs text-muted-foreground">({r.role_name})</span>
+                            {r.user_count != null && (
+                              <span className="text-xs text-muted-foreground ml-auto">{r.user_count} user(s)</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <Label className="flex items-center gap-2">
+                      <UserPlus className="h-4 w-4" />
+                      Add permission to more roles ({rolesWithoutPermission.length} without it)
+                    </Label>
+                    <div className="flex gap-2">
+                      {rolesToAdd.size > 0 && (
+                        <Button size="sm" onClick={handleAddToSelected} disabled={addMutation.isPending}>
+                          {addMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                          Add to selected ({rolesToAdd.size})
+                        </Button>
+                      )}
+                      {rolesWithoutPermission.length > 0 && (
+                        <Button size="sm" variant="secondary" onClick={handleAddToAll} disabled={addMutation.isPending}>
+                          Add to all ({rolesWithoutPermission.length})
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  <div className="border rounded-lg max-h-[220px] overflow-y-auto">
+                    {rolesWithoutPermission.length === 0 ? (
+                      <p className="p-4 text-sm text-muted-foreground">All non-system roles already have this permission.</p>
+                    ) : (
+                      <div className="divide-y">
+                        {rolesWithoutPermission.map((r) => (
+                          <div
+                            key={r.id}
+                            className="flex items-center gap-3 p-2 hover:bg-muted/50 cursor-pointer"
+                            onClick={() => toggleRoleToAdd(r.id)}
+                          >
+                            <div className="flex items-center justify-center h-5 w-5 rounded border-2 border-primary flex-shrink-0">
+                              {rolesToAdd.has(r.id) && (
+                                <CheckSquare className="h-4 w-4 text-primary fill-primary" />
+                              )}
+                            </div>
+                            <span className="font-medium">{r.display_name || r.name}</span>
+                            <span className="text-xs text-muted-foreground">({r.name})</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

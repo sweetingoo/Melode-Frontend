@@ -81,7 +81,7 @@ import {
   customFieldsUtils,
 } from "@/hooks/useCustomFieldsFields";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
-import { useRoles } from "@/hooks/useRoles";
+import { useRoles, useRolesAll } from "@/hooks/useRoles";
 import { useActiveAssetTypes } from "@/hooks/useAssetTypes";
 import { useLinkComplianceToRole, useLinkComplianceToAssetType } from "@/hooks/useCompliance";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -106,13 +106,28 @@ import { useTrackers, useTrackersAllPages } from "@/hooks/useTrackers";
 const FieldVisibilityLinksSection = ({ field, entityType, roles }) => {
   const queryClient = useQueryClient();
   const [isAddingLink, setIsAddingLink] = useState(false);
-  const [newLinkType, setNewLinkType] = useState("role"); // "role", "user", "entity"
-  const [selectedRoleId, setSelectedRoleId] = useState(null);
+  const [newLinkType, setNewLinkType] = useState("role"); // "role", "user", "entity", "all"
+  const [selectedJobRoleId, setSelectedJobRoleId] = useState(null);
+  const [selectedShiftRoleId, setSelectedShiftRoleId] = useState(null);
   const [selectedUserId, setSelectedUserId] = useState(null);
   const [selectedEntityId, setSelectedEntityId] = useState("");
   const [linkMode, setLinkMode] = useState("include");
   const [checkViewerRole, setCheckViewerRole] = useState(false);
   const [isEditable, setIsEditable] = useState(true);
+  const jobRoles = (roles || []).filter((r) => (r.role_type || r.roleType) === "job_role");
+  const selectedJobRole = selectedJobRoleId != null ? jobRoles.find((r) => r.id === selectedJobRoleId) : null;
+  const shiftRolesFromParent = selectedJobRole?.shift_roles ?? selectedJobRole?.shiftRoles ?? [];
+  const shiftRolesForJob =
+    shiftRolesFromParent.length > 0
+      ? shiftRolesFromParent
+      : (roles || []).filter(
+          (r) => (r.role_type || r.roleType) === "shift_role" && (r.parent_role_id ?? r.parentRoleId) === selectedJobRoleId
+        );
+  const jobRoleLabel = (role) => {
+    const dept = role.department;
+    const deptName = dept?.name ?? dept?.display_name ?? dept?.code;
+    return deptName ? `${role.display_name || role.name} (${deptName})` : (role.display_name || role.name);
+  };
   
   // Only fetch links if field has an ID (existing field)
   const { data: fieldLinks = [], isLoading: linksLoading, refetch: refetchLinks } = useFieldLinks(
@@ -143,8 +158,10 @@ const FieldVisibilityLinksSection = ({ field, entityType, roles }) => {
       is_editable: linkMode === "include" ? isEditable : true, // Only applies to include links
     };
     
-    if (newLinkType === "role" && selectedRoleId) {
-      linkData.role_id = selectedRoleId;
+    if (newLinkType === "all") {
+      // No role_id, user_id, entity_id = applies to all entities of this type
+    } else if (newLinkType === "role" && selectedJobRoleId) {
+      linkData.role_id = selectedShiftRoleId ?? selectedJobRoleId;
       linkData.check_viewer_role = checkViewerRole;
     } else if (newLinkType === "user" && selectedUserId) {
       linkData.user_id = selectedUserId;
@@ -158,7 +175,8 @@ const FieldVisibilityLinksSection = ({ field, entityType, roles }) => {
     try {
       await createLinkMutation.mutateAsync(linkData);
       setIsAddingLink(false);
-      setSelectedRoleId(null);
+      setSelectedJobRoleId(null);
+      setSelectedShiftRoleId(null);
       setSelectedUserId(null);
       setSelectedEntityId("");
       setLinkMode("include");
@@ -185,11 +203,11 @@ const FieldVisibilityLinksSection = ({ field, entityType, roles }) => {
   
   const getLinkDisplayName = (link) => {
     if (link.role_id) {
-      const role = roles.find(r => r.id === link.role_id);
+      const role = (roles || []).find((r) => r.id === link.role_id);
       const viewerNote = link.check_viewer_role ? " (viewer's role)" : "";
       return `Role: ${role?.display_name || role?.name || `ID ${link.role_id}`}${viewerNote}`;
     } else if (link.user_id) {
-      const user = users.find(u => u.id === link.user_id);
+      const user = users.find((u) => u.id === link.user_id);
       return `User: ${user?.display_name || user?.email || `ID ${link.user_id}`}`;
     } else if (link.entity_id) {
       return `Entity ID: ${link.entity_id}`;
@@ -197,7 +215,7 @@ const FieldVisibilityLinksSection = ({ field, entityType, roles }) => {
       return "All entities";
     }
   };
-  
+
   return (
     <div className="space-y-3 border-t pt-4 mt-4">
       <div className="flex items-center justify-between">
@@ -220,7 +238,7 @@ const FieldVisibilityLinksSection = ({ field, entityType, roles }) => {
       
       <p className="text-xs text-muted-foreground">
         Applies to both compliance and normal fields. Control which entities can see and edit this field. By default, fields are visible and editable to all entities.
-        Use links to show/hide fields for specific roles, users, or entity instances. For visible fields, you can also control editability.
+        Use links to show/hide fields for specific job roles (optionally narrow by shift role), users, or entity instances. For visible fields, you can also control editability.
       </p>
       
       {isNewField ? (
@@ -311,9 +329,10 @@ const FieldVisibilityLinksSection = ({ field, entityType, roles }) => {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="all">All entities (everyone)</SelectItem>
                 {entityType === "user" && (
                   <>
-                    <SelectItem value="role">Role (all users with this role)</SelectItem>
+                    <SelectItem value="role">Job role (all users with this role)</SelectItem>
                     <SelectItem value="user">Specific User</SelectItem>
                   </>
                 )}
@@ -325,23 +344,47 @@ const FieldVisibilityLinksSection = ({ field, entityType, roles }) => {
           {newLinkType === "role" && entityType === "user" && (
             <>
               <div className="space-y-2">
-                <Label>Select Role</Label>
+                <Label>Job role</Label>
                 <Select
-                  value={selectedRoleId?.toString() || ""}
-                  onValueChange={(value) => setSelectedRoleId(parseInt(value))}
+                  value={selectedJobRoleId?.toString() || ""}
+                  onValueChange={(value) => {
+                    setSelectedJobRoleId(value ? parseInt(value) : null);
+                    setSelectedShiftRoleId(null);
+                  }}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select a role" />
+                    <SelectValue placeholder="Select a job role" />
                   </SelectTrigger>
                   <SelectContent>
-                    {roles.map((role) => (
+                    {jobRoles.map((role) => (
                       <SelectItem key={role.id} value={role.id.toString()}>
-                        {role.display_name || role.name}
+                        {jobRoleLabel(role)}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
+              {selectedJobRoleId && (
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">Shift role (optional)</Label>
+                  <Select
+                    value={selectedShiftRoleId != null ? selectedShiftRoleId.toString() : "__none__"}
+                    onValueChange={(value) => setSelectedShiftRoleId(value === "__none__" ? null : parseInt(value))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a shift role (optional)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">None (all users with job role)</SelectItem>
+                      {shiftRolesForJob.map((role) => (
+                        <SelectItem key={role.id} value={role.id.toString()}>
+                          {role.display_name ?? role.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div className="flex items-center space-x-2">
                 <Checkbox
                   id="checkViewerRole"
@@ -431,7 +474,8 @@ const FieldVisibilityLinksSection = ({ field, entityType, roles }) => {
               size="sm"
               onClick={() => {
                 setIsAddingLink(false);
-                setSelectedRoleId(null);
+                setSelectedJobRoleId(null);
+                setSelectedShiftRoleId(null);
                 setSelectedUserId(null);
                 setSelectedEntityId("");
                 setLinkMode("include");
@@ -472,12 +516,27 @@ const FieldVisibilityLinksSection = ({ field, entityType, roles }) => {
 const SectionVisibilityLinksSection = ({ section, entityType, roles }) => {
   const queryClient = useQueryClient();
   const [isAddingLink, setIsAddingLink] = useState(false);
-  const [newLinkType, setNewLinkType] = useState("role"); // "role", "user", "entity"
-  const [selectedRoleId, setSelectedRoleId] = useState(null);
+  const [newLinkType, setNewLinkType] = useState("role"); // "role", "user", "entity", "all"
+  const [selectedJobRoleId, setSelectedJobRoleId] = useState(null);
+  const [selectedShiftRoleId, setSelectedShiftRoleId] = useState(null);
   const [selectedUserId, setSelectedUserId] = useState(null);
   const [selectedEntityId, setSelectedEntityId] = useState("");
   const [linkMode, setLinkMode] = useState("include");
   const [checkViewerRole, setCheckViewerRole] = useState(false);
+  const jobRoles = (roles || []).filter((r) => (r.role_type || r.roleType) === "job_role");
+  const selectedJobRole = selectedJobRoleId != null ? jobRoles.find((r) => r.id === selectedJobRoleId) : null;
+  const shiftRolesFromParent = selectedJobRole?.shift_roles ?? selectedJobRole?.shiftRoles ?? [];
+  const shiftRolesForJob =
+    shiftRolesFromParent.length > 0
+      ? shiftRolesFromParent
+      : (roles || []).filter(
+          (r) => (r.role_type || r.roleType) === "shift_role" && (r.parent_role_id ?? r.parentRoleId) === selectedJobRoleId
+        );
+  const jobRoleLabel = (role) => {
+    const dept = role.department;
+    const deptName = dept?.name ?? dept?.display_name ?? dept?.code;
+    return deptName ? `${role.display_name || role.name} (${deptName})` : (role.display_name || role.name);
+  };
   
   const { data: sectionLinks = [], isLoading: linksLoading, refetch: refetchLinks } = useSectionLinks(
     section.id,
@@ -500,8 +559,10 @@ const SectionVisibilityLinksSection = ({ section, entityType, roles }) => {
       link_mode: linkMode,
     };
     
-    if (newLinkType === "role" && selectedRoleId) {
-      linkData.role_id = selectedRoleId;
+    if (newLinkType === "all") {
+      // No role_id, user_id, entity_id = applies to all entities of this type
+    } else if (newLinkType === "role" && selectedJobRoleId) {
+      linkData.role_id = selectedShiftRoleId ?? selectedJobRoleId;
       linkData.check_viewer_role = checkViewerRole;
     } else if (newLinkType === "user" && selectedUserId) {
       linkData.user_id = selectedUserId;
@@ -515,7 +576,8 @@ const SectionVisibilityLinksSection = ({ section, entityType, roles }) => {
     try {
       await createLinkMutation.mutateAsync(linkData);
       setIsAddingLink(false);
-      setSelectedRoleId(null);
+      setSelectedJobRoleId(null);
+      setSelectedShiftRoleId(null);
       setSelectedUserId(null);
       setSelectedEntityId("");
       setLinkMode("include");
@@ -541,11 +603,11 @@ const SectionVisibilityLinksSection = ({ section, entityType, roles }) => {
   
   const getLinkDisplayName = (link) => {
     if (link.role_id) {
-      const role = roles.find(r => r.id === link.role_id);
+      const role = (roles || []).find((r) => r.id === link.role_id);
       const viewerNote = link.check_viewer_role ? " (viewer's role)" : "";
       return `Role: ${role?.display_name || role?.name || `ID ${link.role_id}`}${viewerNote}`;
     } else if (link.user_id) {
-      const user = users.find(u => u.id === link.user_id);
+      const user = users.find((u) => u.id === link.user_id);
       return `User: ${user?.display_name || user?.email || `ID ${link.user_id}`}`;
     } else if (link.entity_id) {
       return `Entity ID: ${link.entity_id}`;
@@ -553,7 +615,7 @@ const SectionVisibilityLinksSection = ({ section, entityType, roles }) => {
       return "All entities";
     }
   };
-  
+
   return (
     <div className="space-y-3 border-t pt-4 mt-4">
       <div className="flex items-center justify-between">
@@ -576,7 +638,7 @@ const SectionVisibilityLinksSection = ({ section, entityType, roles }) => {
       
       <p className="text-xs text-muted-foreground">
         Control which entities can see this section. By default, sections are visible to all entities.
-        Use links to show/hide sections for specific roles, users, or entity instances.
+        Use links to show/hide sections for specific job roles (optionally narrow by shift role), users, or entity instances.
       </p>
       
       {linksLoading ? (
@@ -636,7 +698,8 @@ const SectionVisibilityLinksSection = ({ section, entityType, roles }) => {
               size="sm"
               onClick={() => {
                 setIsAddingLink(false);
-                setSelectedRoleId(null);
+                setSelectedJobRoleId(null);
+                setSelectedShiftRoleId(null);
                 setSelectedUserId(null);
                 setSelectedEntityId("");
                 setLinkMode("include");
@@ -653,9 +716,10 @@ const SectionVisibilityLinksSection = ({ section, entityType, roles }) => {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="all">All entities (everyone)</SelectItem>
                 {entityType === "user" && (
                   <>
-                    <SelectItem value="role">Role (all users with this role)</SelectItem>
+                    <SelectItem value="role">Job role (all users with this role)</SelectItem>
                     <SelectItem value="user">Specific User</SelectItem>
                   </>
                 )}
@@ -664,24 +728,54 @@ const SectionVisibilityLinksSection = ({ section, entityType, roles }) => {
             </Select>
           </div>
           
+          {newLinkType === "all" && (
+            <p className="text-xs text-muted-foreground">
+              Applies to all {entityType} entities. Use <strong>Exclude</strong> below to hide this section from everyone (e.g. Joining documents).
+            </p>
+          )}
+          
           {newLinkType === "role" && entityType === "user" && (
             <div className="space-y-2">
-              <Label>Select Role</Label>
+              <Label>Job role</Label>
               <Select
-                value={selectedRoleId?.toString() || ""}
-                onValueChange={(value) => setSelectedRoleId(parseInt(value))}
+                value={selectedJobRoleId?.toString() || ""}
+                onValueChange={(value) => {
+                  setSelectedJobRoleId(value ? parseInt(value) : null);
+                  setSelectedShiftRoleId(null);
+                }}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select a role" />
+                  <SelectValue placeholder="Select a job role" />
                 </SelectTrigger>
                 <SelectContent>
-                  {roles.map((role) => (
+                  {jobRoles.map((role) => (
                     <SelectItem key={role.id} value={role.id.toString()}>
-                      {role.display_name || role.name}
+                      {jobRoleLabel(role)}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              {selectedJobRoleId && (
+                <>
+                  <Label className="text-muted-foreground">Shift role (optional)</Label>
+                  <Select
+                    value={selectedShiftRoleId != null ? selectedShiftRoleId.toString() : "__none__"}
+                    onValueChange={(value) => setSelectedShiftRoleId(value === "__none__" ? null : parseInt(value))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a shift role (optional)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">None (all users with job role)</SelectItem>
+                      {shiftRolesForJob.map((role) => (
+                        <SelectItem key={role.id} value={role.id.toString()}>
+                          {role.display_name ?? role.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </>
+              )}
               <div className="flex items-center gap-2 pt-2">
                 <input
                   type="checkbox"
@@ -1114,10 +1208,10 @@ const CustomFieldsAdminPage = () => {
   const updateFieldMutation = useUpdateCustomField();
   const deleteFieldMutation = useHardDeleteCustomField();
 
-  // Get roles and asset types for linking
-  const { data: rolesData } = useRoles({ is_active: true });
+  // Get all roles (all pages) so job roles include nested shift_roles and we have full list for visibility
+  const { data: rolesAllData } = useRolesAll(100, { enabled: true });
   const { data: assetTypesData } = useActiveAssetTypes();
-  const roles = rolesData?.roles || rolesData || [];
+  const roles = Array.isArray(rolesAllData) ? rolesAllData : rolesAllData?.roles || rolesAllData?.data || [];
   const assetTypes = assetTypesData?.asset_types || assetTypesData || [];
 
   // Fetch forms and trackers for usage tracking (page-by-page to avoid large per_page)

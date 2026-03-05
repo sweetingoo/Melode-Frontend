@@ -214,24 +214,38 @@ export function RotaTimeline({ departmentId: departmentIdProp = null, initialRan
   const isLoading = coverageLoading || shiftsLoading;
 
   const { roleRows, byDateRole } = useMemo(() => {
-    if (!coverageData?.by_date?.length) {
-      return { roleRows: [], byDateRole: {} };
-    }
     const roleMap = new Map();
     const byDateRoleOut = {};
-    coverageData.by_date.forEach((dayEntry) => {
-      const d = dayEntry.date;
-      if (!byDateRoleOut[d]) byDateRoleOut[d] = {};
-      Object.entries(dayEntry.by_role || {}).forEach(([roleKey, roleData]) => {
-        if (!roleKey.startsWith("job_role_")) return;
-        const name = roleData.role_name || roleKey;
-        if (!roleMap.has(roleKey)) roleMap.set(roleKey, { id: roleKey, name, key: roleKey });
-        byDateRoleOut[d][roleKey] = roleData;
+    if (coverageData?.by_date?.length) {
+      coverageData.by_date.forEach((dayEntry) => {
+        const d = dayEntry.date;
+        if (!byDateRoleOut[d]) byDateRoleOut[d] = {};
+        Object.entries(dayEntry.by_role || {}).forEach(([roleKey, roleData]) => {
+          if (!roleKey.startsWith("job_role_")) return;
+          const name = roleData.role_name || roleKey;
+          if (!roleMap.has(roleKey)) roleMap.set(roleKey, { id: roleKey, name, key: roleKey });
+          byDateRoleOut[d][roleKey] = roleData;
+        });
       });
-    });
+    }
+    const records = shiftData?.records ?? shiftData ?? [];
+    if (Array.isArray(records)) {
+      records.forEach((r) => {
+        if (!visibleCategories.has(r?.category)) return;
+        const roleId = r.job_role_id ?? r.job_role?.id;
+        const roleKey = roleId != null && roleId !== "" ? `job_role_${roleId}` : "job_role_unspecified";
+        const name = r.job_role?.display_name ?? r.job_role?.name ?? (roleKey === "job_role_unspecified" ? "Other" : `Role ${roleId}`);
+        if (!roleMap.has(roleKey)) roleMap.set(roleKey, { id: roleKey, name, key: roleKey });
+        const d = typeof r.shift_date === "string" ? r.shift_date : r.shift_date?.slice(0, 10);
+        if (d && !byDateRoleOut[d]?.[roleKey]) {
+          if (!byDateRoleOut[d]) byDateRoleOut[d] = {};
+          byDateRoleOut[d][roleKey] = { role_name: name, required: [], allocated: [] };
+        }
+      });
+    }
     const roleRowsOut = Array.from(roleMap.values()).sort((a, b) => a.name.localeCompare(b.name));
     return { roleRows: roleRowsOut, byDateRole: byDateRoleOut };
-  }, [coverageData]);
+  }, [coverageData, shiftData, visibleCategories]);
 
   const provisionalByDateRole = useMemo(() => {
     const records = shiftData?.records ?? shiftData ?? [];
@@ -240,21 +254,20 @@ export function RotaTimeline({ departmentId: departmentIdProp = null, initialRan
       if (!visibleCategories.has(r?.category)) return;
       const d = typeof r.shift_date === "string" ? r.shift_date : r.shift_date?.slice(0, 10);
       if (!d) return;
-      const roleKey = `job_role_${r.job_role_id ?? r.job_role?.id ?? ""}`;
-      if (!roleKey.endsWith("_")) {
-        if (!out[d]) out[d] = {};
-        if (!out[d][roleKey]) out[d][roleKey] = [];
-        const start = r.start_time ? (typeof r.start_time === "string" ? r.start_time.slice(0, 5) : "") : "";
-        const end = r.end_time ? (typeof r.end_time === "string" ? r.end_time.slice(0, 5) : "") : "";
-        out[d][roleKey].push({
-          id: r.id,
-          user: r.user,
-          displayName: getUserDisplayName(r.user) || `User ${r.user_id}`,
-          start_time: start,
-          end_time: end,
-          record: r,
-        });
-      }
+      const roleId = r.job_role_id ?? r.job_role?.id;
+      const roleKey = roleId != null && roleId !== "" ? `job_role_${roleId}` : "job_role_unspecified";
+      if (!out[d]) out[d] = {};
+      if (!out[d][roleKey]) out[d][roleKey] = [];
+      const start = r.start_time ? (typeof r.start_time === "string" ? r.start_time.slice(0, 5) : "") : "";
+      const end = r.end_time ? (typeof r.end_time === "string" ? r.end_time.slice(0, 5) : "") : "";
+      out[d][roleKey].push({
+        id: r.id,
+        user: r.user,
+        displayName: getUserDisplayName(r.user) || `User ${r.user_id}`,
+        start_time: start,
+        end_time: end,
+        record: r,
+      });
     });
     return out;
   }, [shiftData, visibleCategories]);
@@ -576,7 +589,14 @@ export function RotaTimeline({ departmentId: departmentIdProp = null, initialRan
                   <ChevronDown className="ml-auto h-4 w-4 shrink-0 opacity-50" />
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-auto overflow-hidden rounded-xl border bg-card p-0 shadow-lg" align="end" sideOffset={8}>
+              <PopoverContent
+                className="w-[calc(100vw-2rem)] max-w-[min(560px,calc(100vw-2rem))] overflow-hidden rounded-xl border bg-card p-0 shadow-lg sm:min-w-[280px]"
+                align="end"
+                side="bottom"
+                sideOffset={14}
+                avoidCollisions={true}
+                collisionPadding={16}
+              >
                 <div className="border-b bg-muted/30 px-4 py-3">
                   <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Quick range</p>
                   <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-3">
@@ -593,7 +613,7 @@ export function RotaTimeline({ departmentId: departmentIdProp = null, initialRan
                     ))}
                   </div>
                 </div>
-                <div className="p-3">
+                <div className="p-3 overflow-hidden">
                   <p className="mb-2 text-xs font-medium text-muted-foreground">Or pick dates</p>
                   <Calendar
                     mode="range"
@@ -615,8 +635,8 @@ export function RotaTimeline({ departmentId: departmentIdProp = null, initialRan
                     }}
                     numberOfMonths={2}
                     classNames={{
-                      months: "flex flex-col gap-6 sm:flex-row sm:gap-8",
-                      month: "space-y-4",
+                      months: "flex flex-col gap-4 sm:flex-row sm:gap-4",
+                      month: "space-y-4 min-w-0",
                     }}
                   />
                   {customRange?.from && (
