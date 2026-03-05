@@ -475,20 +475,28 @@ const TrackersPage = () => {
   const updateTrackerMutation = useUpdateTracker();
 
   // When create-entry dialog opens with a stage-based tracker, set initial stage and status
+  // For Stage 1 (Case Creation), use first allowed_next_stages if set (e.g. Triage), else first stage
   useEffect(() => {
     if (!isCreateEntryDialogOpen || !trackerDetails?.tracker_config?.stage_mapping?.length) return;
     const sm = trackerDetails.tracker_config.stage_mapping;
-    const firstStage = sm[0];
-    const firstStageName = (firstStage?.stage ?? firstStage?.name ?? "").toString().trim();
-    if (!firstStageName) return;
-    const stageStatuses = (firstStage?.statuses ?? firstStage?.status_list ?? []).filter(Boolean);
+    const firstStepConfig = sm[0];
+    const allowedNext = firstStepConfig?.allowed_next_stages;
     const allStatuses = Array.isArray(trackerDetails.tracker_config?.statuses) ? trackerDetails.tracker_config.statuses : [];
-    const statusList = stageStatuses.length > 0 ? stageStatuses : allStatuses;
     const defaultStatus = trackerDetails.tracker_config?.default_status || "open";
+    let initialStageName = (firstStepConfig?.stage ?? firstStepConfig?.name ?? "").toString().trim();
+    if (allowedNext && Array.isArray(allowedNext) && allowedNext.length > 0) {
+      const firstAllowed = allowedNext[0];
+      const name = typeof firstAllowed === "string" ? firstAllowed : (firstAllowed?.stage ?? firstAllowed?.name ?? "");
+      if (name) initialStageName = name.toString().trim();
+    }
+    if (!initialStageName) return;
+    const targetStageConfig = sm.find((s) => (s?.stage ?? s?.name ?? "").toString().trim() === initialStageName);
+    const stageStatuses = (targetStageConfig?.statuses ?? targetStageConfig?.status_list ?? []).filter(Boolean);
+    const statusList = stageStatuses.length > 0 ? stageStatuses : allStatuses;
     const initialStatus = statusList.length > 0 && statusList.includes(defaultStatus)
       ? defaultStatus
       : (statusList[0] ?? defaultStatus);
-    setCreateEntrySelectedStage(firstStageName);
+    setCreateEntrySelectedStage(initialStageName);
     setCreateEntrySelectedStatus(initialStatus);
   }, [isCreateEntryDialogOpen, trackerDetails?.id, trackerDetails?.tracker_config?.stage_mapping, trackerDetails?.tracker_config?.statuses, trackerDetails?.tracker_config?.default_status]);
 
@@ -1455,7 +1463,18 @@ const TrackersPage = () => {
                           </>
                         )}
                         {/* Stage and Status after the form (for stage-based trackers) */}
-                        {wizardSteps.length > 0 && (
+                        {wizardSteps.length > 0 && (() => {
+                          const currentStepIndex = Math.min(createEntryStageIndex, wizardSteps.length - 1);
+                          const currentStepConfig = wizardSteps[currentStepIndex];
+                          const allowedNext = currentStepConfig?.allowed_next_stages;
+                          const stagesForDropdown = (allowedNext && Array.isArray(allowedNext) && allowedNext.length > 0)
+                            ? stageMapping.filter((s) => {
+                                const name = (s?.stage ?? s?.name ?? "").toString().trim();
+                                return name && allowedNext.some((a) => (typeof a === "string" ? a : (a?.stage ?? a?.name ?? "")).toString().trim() === name);
+                              })
+                            : stageMapping;
+                          const defaultStageForDropdown = stagesForDropdown[0] && (stagesForDropdown[0].stage ?? stagesForDropdown[0].name);
+                          return (
                           <Card>
                             <CardHeader className="py-3">
                               <CardTitle className="text-base">Stage &amp; Status</CardTitle>
@@ -1467,7 +1486,7 @@ const TrackersPage = () => {
                               <div className="space-y-2">
                                 <Label htmlFor="create-entry-stage">Stage</Label>
                                 <Select
-                                  value={createEntrySelectedStage || (stageMapping[0] && (stageMapping[0].stage ?? stageMapping[0].name)) || ""}
+                                  value={createEntrySelectedStage || defaultStageForDropdown || ""}
                                   onValueChange={(val) => {
                                     setCreateEntrySelectedStage(val);
                                     const cfg = stageMapping.find((s) => (s?.stage ?? s?.name ?? "").toString().trim() === val);
@@ -1480,7 +1499,7 @@ const TrackersPage = () => {
                                     <SelectValue placeholder="Select stage" />
                                   </SelectTrigger>
                                   <SelectContent>
-                                    {stageMapping.map((s) => {
+                                    {stagesForDropdown.map((s) => {
                                       const name = (s?.stage ?? s?.name ?? "").toString().trim();
                                       if (!name) return null;
                                       return (
@@ -1512,7 +1531,8 @@ const TrackersPage = () => {
                               </div>
                             </CardContent>
                           </Card>
-                        )}
+                          );
+                        })()}
                       </div>
                     );
                   })()}
@@ -1543,8 +1563,24 @@ const TrackersPage = () => {
                       Previous
                     </Button>
                   )}
-                  <Button
-                    onClick={async () => {
+                  {(() => {
+                    const stageMapping = trackerDetails?.tracker_config?.stage_mapping || [];
+                    const wizardSteps = stageMapping.length > 0 ? stageMapping : (trackerDetails?.tracker_fields?.sections || []).map((sec, i) => ({ stage: sec?.label ?? sec?.title ?? sec?.id ?? `Stage ${i + 1}`, statuses: [] }));
+                    const currentStepIndex = Math.min(createEntryStageIndex, wizardSteps.length - 1);
+                    const currentStepConfig = wizardSteps[currentStepIndex];
+                    const allowedNext = currentStepConfig?.allowed_next_stages;
+                    const stagesForSubmit = (allowedNext && Array.isArray(allowedNext) && allowedNext.length > 0)
+                      ? stageMapping.filter((s) => {
+                          const name = (s?.stage ?? s?.name ?? "").toString().trim();
+                          return name && allowedNext.some((a) => (typeof a === "string" ? a : (a?.stage ?? a?.name ?? "")).toString().trim() === name);
+                        })
+                      : stageMapping;
+                    const defaultStageName = stagesForSubmit[0] && (stagesForSubmit[0].stage ?? stagesForSubmit[0].name);
+                    const defaultStageConfig = defaultStageName ? stageMapping.find((s) => (s?.stage ?? s?.name ?? "").toString().trim() === defaultStageName.toString().trim()) : null;
+                    const defaultStatusList = (defaultStageConfig?.statuses ?? defaultStageConfig?.status_list ?? []).filter(Boolean);
+                    const allTrackerStatuses = Array.isArray(trackerDetails?.tracker_config?.statuses) ? trackerDetails.tracker_config.statuses : [];
+                    const defaultStatusForSubmit = defaultStatusList.length > 0 ? defaultStatusList[0] : (trackerDetails?.tracker_config?.default_status || "open");
+                    const runCreate = async (useSelectedStageStatus) => {
                       if (!selectedTrackerObj || !trackerDetails) {
                         toast.error("Please select a tracker");
                         return;
@@ -1561,17 +1597,19 @@ const TrackersPage = () => {
                             return createViewFields.includes(fieldId);
                           })
                         : allFields;
-                      const stageMapping = trackerDetails.tracker_config?.stage_mapping || [];
-                      const wizardStepCount = stageMapping.length > 0 ? stageMapping.length : (trackerDetails.tracker_fields?.sections?.length || 0);
+                      const sm = trackerDetails.tracker_config?.stage_mapping || [];
+                      const wizardStepCount = sm.length > 0 ? sm.length : (trackerDetails.tracker_fields?.sections?.length || 0);
                       const statusFieldId = trackerDetails.tracker_config?.status_field_id;
                       const isValueEmpty = (v) => v === undefined || v === null || (typeof v === "string" && String(v).trim() === "");
+                      const statusToUse = useSelectedStageStatus
+                        ? (createEntrySelectedStatus || defaultStatusForSubmit)
+                        : defaultStatusForSubmit;
                       fieldsToValidate.forEach((field) => {
                         const fieldId = field.id || field.field_id || field.name;
                         const isRequired = field.required || field.is_required;
                         if (!isRequired) return;
-                        // Status is set via Stage & Status UI when using wizard; don't require it in entryFormData
                         const value = (statusFieldId && String(fieldId || "").trim() === String(statusFieldId || "").trim() && wizardStepCount > 0)
-                          ? (createEntrySelectedStatus ?? entryFormData[fieldId])
+                          ? (statusToUse ?? entryFormData[fieldId])
                           : entryFormData[fieldId];
                         if (isValueEmpty(value)) {
                           errors[fieldId] = `${field.label || field.field_label || "This field"} is required`;
@@ -1583,11 +1621,10 @@ const TrackersPage = () => {
                         return;
                       }
                       try {
-                        // Build submission_data: upload file fields first and store file_id(s); copy other fields as-is (no File objects – API expects file_id)
-                        const allFields = trackerDetails.tracker_fields?.fields || [];
+                        const allFieldsList = trackerDetails.tracker_fields?.fields || [];
                         const submission_data = {};
                         Object.entries(entryFormData).forEach(([k, v]) => {
-                          if (v instanceof File || (v && typeof v === "object" && v.file instanceof File)) return; // skip raw files; file fields filled below
+                          if (v instanceof File || (v && typeof v === "object" && v.file instanceof File)) return;
                           submission_data[k] = v;
                         });
                         const getFileFromValue = (val) => {
@@ -1595,7 +1632,6 @@ const TrackersPage = () => {
                           if (val && typeof val === "object" && val.file) return val;
                           return null;
                         };
-                        // Upload file fields via settings endpoint (returns file_reference_id; prefer over id)
                         const uploadFileToSettings = async (file, formId, fieldId) => {
                           const formData = new FormData();
                           formData.append("file", file);
@@ -1605,13 +1641,12 @@ const TrackersPage = () => {
                           const data = res?.data ?? res;
                           return data?.file_reference_id ?? data?.id ?? data?.file_id ?? null;
                         };
-                        for (const field of allFields) {
+                        for (const field of allFieldsList) {
                           const fieldType = (field.type || field.field_type || "").toLowerCase();
                           if (fieldType !== "file") continue;
                           const fieldId = field.id || field.field_id || field.name;
                           const value = entryFormData[fieldId];
                           if (value == null) continue;
-                          // Single file (File or { file, expiryDate })
                           if (value instanceof File || (value && typeof value === "object" && value.file && !Array.isArray(value))) {
                             const fileData = getFileFromValue(value);
                             const file = fileData?.file || value;
@@ -1623,7 +1658,6 @@ const TrackersPage = () => {
                             }
                             continue;
                           }
-                          // Multiple files (array)
                           if (Array.isArray(value) && value.length > 0) {
                             const first = value[0];
                             if (first instanceof File || (first && typeof first === "object" && first.file)) {
@@ -1633,29 +1667,22 @@ const TrackersPage = () => {
                                 const file = fileData?.file || value[i];
                                 const fileRef = await uploadFileToSettings(file, trackerDetails.id, fieldId);
                                 if (fileRef != null) {
-                                  if (field.file_expiry_date && fileData?.expiryDate) {
-                                    fileRefs.push({ file_reference_id: fileRef, expiry_date: fileData.expiryDate });
-                                  } else {
-                                    fileRefs.push(fileRef);
-                                  }
+                                  fileRefs.push(field.file_expiry_date && fileData?.expiryDate
+                                    ? { file_reference_id: fileRef, expiry_date: fileData.expiryDate }
+                                    : fileRef);
                                 }
                               }
                               submission_data[fieldId] = fileRefs;
                             }
                           }
                         }
-                        const stageMapping = trackerDetails.tracker_config?.stage_mapping || [];
-                        const statusToSend = stageMapping.length > 0
-                          ? (createEntrySelectedStatus || trackerDetails.tracker_config?.default_status || "open")
-                          : (trackerDetails.tracker_config?.default_status || "open");
-                        const statusFieldId = trackerDetails.tracker_config?.status_field_id;
-                        if (statusFieldId && statusToSend) {
-                          submission_data[statusFieldId] = statusToSend;
+                        if (statusFieldId && statusToUse) {
+                          submission_data[statusFieldId] = statusToUse;
                         }
-                        const result = await createEntryMutation.mutateAsync({
+                        await createEntryMutation.mutateAsync({
                           form_id: trackerDetails.id,
                           submission_data,
-                          status: statusToSend,
+                          status: statusToUse,
                         });
                         setIsCreateEntryDialogOpen(false);
                         setEntryFormData({});
@@ -1663,25 +1690,63 @@ const TrackersPage = () => {
                         setCreateEntryStageIndex(0);
                         setCreateEntrySelectedStage("");
                         setCreateEntrySelectedStatus("");
-                        const entryIdentifier = result?.slug ?? result?.id;
-                        if (entryIdentifier) {
-                          router.push(`/admin/trackers/entries/${entryIdentifier}`);
-                        }
+                        toast.success("Entry created");
+                        // Stay on list (do not navigate to entry)
                       } catch (error) {
                         // Error handled by mutation or upload
                       }
-                    }}
-                    disabled={!selectedTrackerObj || !trackerDetails || createEntryMutation.isPending}
-                  >
-                    {createEntryMutation.isPending ? (
+                    };
+                    const hasStages = (trackerDetails?.tracker_config?.stage_mapping?.length || 0) > 0;
+                    return (
                       <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Saving...
+                        {hasStages ? (
+                          <>
+                            <Button
+                              variant="outline"
+                              onClick={() => runCreate(false)}
+                              disabled={!selectedTrackerObj || !trackerDetails || createEntryMutation.isPending}
+                            >
+                              {createEntryMutation.isPending ? (
+                                <>
+                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                  Saving...
+                                </>
+                              ) : (
+                                "Submit"
+                              )}
+                            </Button>
+                            <Button
+                              onClick={() => runCreate(true)}
+                              disabled={!selectedTrackerObj || !trackerDetails || createEntryMutation.isPending}
+                            >
+                              {createEntryMutation.isPending ? (
+                                <>
+                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                  Saving...
+                                </>
+                              ) : (
+                                "Next Stage"
+                              )}
+                            </Button>
+                          </>
+                        ) : (
+                          <Button
+                            onClick={() => runCreate(true)}
+                            disabled={!selectedTrackerObj || !trackerDetails || createEntryMutation.isPending}
+                          >
+                            {createEntryMutation.isPending ? (
+                              <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Saving...
+                              </>
+                            ) : (
+                              "Save"
+                            )}
+                          </Button>
+                        )}
                       </>
-                    ) : (
-                      "Save"
-                    )}
-                  </Button>
+                    );
+                  })()}
                 </DialogFooter>
               </DialogContent>
             </Dialog>

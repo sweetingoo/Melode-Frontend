@@ -412,6 +412,20 @@ const TrackerEntryDetailPage = () => {
     return stageStatuses.length > 0 ? stageStatuses : allTrackerStatuses;
   }, [editModeStage, stageMappingForMemo, allTrackerStatuses]);
 
+  // Stages allowed from current entry stage (for edit header and section dropdowns); when not set, show all
+  const stagesForEditModeDropdown = useMemo(() => {
+    if (!stageMappingForMemo?.length) return [];
+    const currentStageName = (entry?.formatted_data?.derived_stage ?? "").toString().trim();
+    if (!currentStageName) return stageMappingForMemo;
+    const currentConfig = stageMappingForMemo.find((s) => (s?.stage ?? s?.name ?? "").toString().trim() === currentStageName);
+    const allowedNext = currentConfig?.allowed_next_stages;
+    if (!allowedNext || !Array.isArray(allowedNext) || allowedNext.length === 0) return stageMappingForMemo;
+    return stageMappingForMemo.filter((s) => {
+      const name = (s?.stage ?? s?.name ?? "").toString().trim();
+      return name && allowedNext.some((a) => (typeof a === "string" ? a : (a?.stage ?? a?.name ?? "")).toString().trim() === name);
+    });
+  }, [stageMappingForMemo, entry?.formatted_data?.derived_stage]);
+
   // Initialize form data when entry loads
   useEffect(() => {
     if (entry) {
@@ -693,6 +707,11 @@ const TrackerEntryDetailPage = () => {
       ...prev,
       [fieldId]: value,
     }));
+    // Keep header Stage/Status in sync when user changes status (or stage) in the form
+    const statusFieldId = tracker?.tracker_config?.status_field_id;
+    if (statusFieldId && (fieldId === statusFieldId || String(fieldId) === String(statusFieldId))) {
+      setEntryStatus(value ?? "");
+    }
     // Clear error for this field
     if (fieldErrors[fieldId]) {
       setFieldErrors((prev) => {
@@ -853,6 +872,23 @@ const TrackerEntryDetailPage = () => {
     };
   };
 
+  // Conditional visibility for tracker fields (e.g. Stage 2 triage: hide prep when refer back / diabetic / bloods)
+  const checkFieldVisibility = (field, data) => {
+    if (!field?.conditional_visibility?.depends_on_field) return true;
+    const { depends_on_field, show_when, value: expectedValue } = field.conditional_visibility;
+    const dependentValue = data?.[depends_on_field];
+    const normalize = (v) => {
+      if (v === true || v === "true" || v === "True") return true;
+      if (v === false || v === "false" || v === "False") return false;
+      return v;
+    };
+    if (show_when === "equals") return normalize(dependentValue) === normalize(expectedValue);
+    if (show_when === "not_equals") return normalize(dependentValue) !== normalize(expectedValue);
+    if (show_when === "is_empty") return !dependentValue || dependentValue === "" || dependentValue === false;
+    if (show_when === "is_not_empty") return dependentValue != null && dependentValue !== "" && dependentValue !== false;
+    return true;
+  };
+
   // For stage-styled trackers with stage tabs: which section to show in Details (section index matches stage index)
   const activeStageSectionIndex =
     isStageStyledTracker && activeStageTab && stageMapping.length && sections.length
@@ -973,7 +1009,7 @@ const TrackerEntryDetailPage = () => {
                       <SelectValue placeholder="Stage" />
                     </SelectTrigger>
                     <SelectContent>
-                      {(tracker?.tracker_config?.stage_mapping || []).map((item) => {
+                      {(stagesForEditModeDropdown.length > 0 ? stagesForEditModeDropdown : (tracker?.tracker_config?.stage_mapping || [])).map((item) => {
                         const stageName = item?.stage ?? item?.name ?? "";
                         if (!stageName) return null;
                         return (
@@ -1417,14 +1453,93 @@ const TrackerEntryDetailPage = () => {
                   {/* Current stage section only (no Entry data at top; use Entry data tab for that) */}
                   {activeStageSection && (() => {
                     const sectionKey = activeStageSection.id ?? activeStageSection.title ?? activeStageSection.label ?? `section-${activeStageSectionIndex}`;
-                    const sectionFields = fieldsBySection[sectionKey]?.fields || [];
-                    if (sectionFields.length === 0) return null;
+                    const statusFieldId = tracker?.tracker_config?.status_field_id;
+                    const sectionFields = (fieldsBySection[sectionKey]?.fields || [])
+                      .filter((field) => checkFieldVisibility(field, entryData))
+                      .filter((field) => {
+                        const fid = field.id ?? field.name ?? field.field_id;
+                        return !statusFieldId || String(fid) !== String(statusFieldId);
+                      });
+                    if (sectionFields.length === 0 && !statusFieldId) return null;
                     return (
                       <Card key={sectionKey}>
                         <CardHeader>
                           <CardTitle>{activeStageSection.label || activeStageSection.id}</CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-4">
+                          {/* Stage & Status at top of section so consultants can set next stage/status without leaving the form */}
+                          {(() => {
+                            const currentStageConfig = activeStageSectionIndex >= 0 && stageMapping[activeStageSectionIndex]
+                              ? stageMapping[activeStageSectionIndex]
+                              : null;
+                            const allowedNext = currentStageConfig?.allowed_next_stages;
+                            const stagesForDropdown = (allowedNext && Array.isArray(allowedNext) && allowedNext.length > 0)
+                              ? stageMapping.filter((s) => {
+                                  const name = (s?.stage ?? s?.name ?? "").toString().trim();
+                                  return name && allowedNext.some((a) => (typeof a === "string" ? a : (a?.stage ?? a?.name ?? "")).toString().trim() === name);
+                                })
+                              : (tracker?.tracker_config?.stage_mapping || []);
+                            return (
+                          <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
+                            <p className="text-sm font-medium text-muted-foreground">Set the next stage and status for this entry</p>
+                            <div className="flex flex-wrap items-end gap-3">
+                              <div className="space-y-2">
+                                <Label htmlFor="section-stage-select" className="text-xs">Stage</Label>
+                                <Select
+                                  id="section-stage-select"
+                                  value={editModeStage || ""}
+                                  onValueChange={(stageName) => {
+                                    const name = (stageName ?? "").toString().trim();
+                                    if (!name) return;
+                                    setEditModeStage(name);
+                                    const stageItem = stageMapping.find((s) => (s?.stage ?? s?.name ?? "").toString().trim() === name);
+                                    const statuses = (stageItem?.statuses ?? stageItem?.status_list ?? []).filter(Boolean);
+                                    const cur = entry?.status ?? "";
+                                    setEntryStatus(statuses.includes(cur) ? cur : (statuses[0] ?? ""));
+                                  }}
+                                >
+                                  <SelectTrigger className="w-[180px]">
+                                    <SelectValue placeholder="Stage" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {stagesForDropdown.map((item) => {
+                                      const stageName = item?.stage ?? item?.name ?? "";
+                                      if (!stageName) return null;
+                                      return (
+                                        <SelectItem key={stageName} value={stageName}>
+                                          {stageName}
+                                        </SelectItem>
+                                      );
+                                    })}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="space-y-2">
+                                <Label htmlFor="section-status-select" className="text-xs">Status</Label>
+                                <Select
+                                  id="section-status-select"
+                                  value={statusesForEditModeStage.includes(entryStatus) ? entryStatus : (statusesForEditModeStage[0] ?? "")}
+                                  onValueChange={(v) => {
+                                    setEntryStatus(v ?? "");
+                                    handleFieldChange(tracker?.tracker_config?.status_field_id || "current_status", v);
+                                  }}
+                                >
+                                  <SelectTrigger className="w-[200px]">
+                                    <SelectValue placeholder="Status" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {statusesForEditModeStage.map((status) => (
+                                      <SelectItem key={status} value={status}>
+                                        {humanizeStatusForDisplay(status)}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
+                          </div>
+                            );
+                          })()}
                           {sectionFields.map((field) => {
                             const fieldId = field.id || field.name || field.field_id;
                             const value = entryData[fieldId];
@@ -1456,7 +1571,9 @@ const TrackerEntryDetailPage = () => {
                           {sections.map((section, sectionIndex) => {
                             if (sectionIndex === activeStageSectionIndex) return null;
                             const sectionKey = section.id ?? section.title ?? section.label ?? `section-${sectionIndex}`;
-                            const sectionFields = fieldsBySection[sectionKey]?.fields || [];
+                            const sectionFields = (fieldsBySection[sectionKey]?.fields || []).filter((field) =>
+                              checkFieldVisibility(field, entryData)
+                            );
                             if (sectionFields.length === 0) return null;
                             const stageName = stageMapping[sectionIndex]?.stage ?? stageMapping[sectionIndex]?.name ?? section.label ?? sectionKey;
                             return (
@@ -1526,7 +1643,9 @@ const TrackerEntryDetailPage = () => {
                   {sections.length > 0 && (
                     sections.map((section, sectionIndex) => {
                       const sectionKey = section.id ?? section.title ?? section.label ?? `section-${sectionIndex}`;
-                      const sectionFields = fieldsBySection[sectionKey]?.fields || [];
+                      const sectionFields = (fieldsBySection[sectionKey]?.fields || []).filter((field) =>
+                        checkFieldVisibility(field, entryData)
+                      );
                       if (sectionFields.length === 0) return null;
 
                       return (
@@ -1652,7 +1771,9 @@ const TrackerEntryDetailPage = () => {
                   {activeStageSection && (() => {
                     const displayData = entry.formatted_data || entry.submission_data || entry.entry_data || {};
                     const sectionKey = activeStageSection.id ?? activeStageSection.title ?? activeStageSection.label ?? `section-${activeStageSectionIndex}`;
-                    const sectionFields = fieldsBySection[sectionKey]?.fields || [];
+                    const sectionFields = (fieldsBySection[sectionKey]?.fields || []).filter((field) =>
+                      checkFieldVisibility(field, displayData)
+                    );
                     if (sectionFields.length === 0) return null;
                     return (
                       <Card key={sectionKey}>
@@ -1687,7 +1808,9 @@ const TrackerEntryDetailPage = () => {
                             if (sectionIndex === activeStageSectionIndex) return null;
                             const displayData = entry.formatted_data || entry.submission_data || entry.entry_data || {};
                             const sectionKey = section.id ?? section.title ?? section.label ?? `section-${sectionIndex}`;
-                            const sectionFields = fieldsBySection[sectionKey]?.fields || [];
+                            const sectionFields = (fieldsBySection[sectionKey]?.fields || []).filter((field) =>
+                              checkFieldVisibility(field, displayData)
+                            );
                             if (sectionFields.length === 0) return null;
                             const stageName = stageMapping[sectionIndex]?.stage ?? stageMapping[sectionIndex]?.name ?? section.label ?? sectionKey;
                             return (
@@ -1747,7 +1870,9 @@ const TrackerEntryDetailPage = () => {
                     sections.map((section, sectionIndex) => {
                       const displayData = entry.formatted_data || entry.submission_data || entry.entry_data || {};
                       const sectionKey = section.id ?? section.title ?? section.label ?? `section-${sectionIndex}`;
-                      const sectionFields = fieldsBySection[sectionKey]?.fields || [];
+                      const sectionFields = (fieldsBySection[sectionKey]?.fields || []).filter((field) =>
+                        checkFieldVisibility(field, displayData)
+                      );
                       if (sectionFields.length === 0) return null;
 
                       return (
@@ -2602,7 +2727,7 @@ const TrackerEntryDetailPage = () => {
                   <SelectValue placeholder="Select stage" />
                 </SelectTrigger>
                 <SelectContent>
-                  {(tracker?.tracker_config?.stage_mapping || []).map((item) => {
+                  {(stagesForEditModeDropdown.length > 0 ? stagesForEditModeDropdown : (tracker?.tracker_config?.stage_mapping || [])).map((item) => {
                     const stageName = item?.stage ?? item?.name ?? "";
                     if (!stageName) return null;
                     const isCurrent = (entry?.formatted_data?.derived_stage ?? "") === stageName;

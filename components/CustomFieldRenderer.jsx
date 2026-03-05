@@ -795,6 +795,7 @@ const CustomFieldRenderer = ({
       case 'repeatable_group': {
         const rows = Array.isArray(value) ? value : [];
         const childFields = field.fields || [];
+        const isInline = field.layout === 'inline' || (childFields.length <= 4 && childFields.length >= 2);
         const updateRow = (rowIndex, childId, childValue) => {
           const newRows = [...rows];
           const row = newRows[rowIndex] != null && typeof newRows[rowIndex] === 'object' ? { ...newRows[rowIndex] } : {};
@@ -809,15 +810,15 @@ const CustomFieldRenderer = ({
             <div className="space-y-3">
               {rows.length === 0 && <p className="text-sm text-muted-foreground">—</p>}
               {rows.map((row, rowIndex) => (
-                <div key={rowIndex} className="rounded-md border p-3 space-y-2 bg-muted/30">
-                  <div className="text-xs font-medium text-muted-foreground">Row {rowIndex + 1}</div>
-                  <div className="grid gap-2">
+                <div key={rowIndex} className={cn("rounded-md border p-3 bg-muted/30", isInline && "flex flex-wrap items-end gap-3")}>
+                  {!isInline && <div className="text-xs font-medium text-muted-foreground mb-2">Row {rowIndex + 1}</div>}
+                  <div className={cn(isInline ? "flex flex-wrap items-end gap-3 flex-1 min-w-0" : "grid gap-2")}>
                     {childFields.map((child) => {
                       const cid = child.id || child.name || child.field_id;
                       const cval = row[cid];
                       return (
-                        <div key={cid}>
-                          <span className="text-xs text-muted-foreground">{child.label || child.field_label || cid}: </span>
+                        <div key={cid} className={isInline ? "flex items-center gap-2 min-w-0" : ""}>
+                          <span className="text-xs text-muted-foreground shrink-0">{child.label || child.field_label || cid}: </span>
                           <span className="text-sm">{cval != null && cval !== '' ? String(cval) : '—'}</span>
                         </div>
                       );
@@ -825,6 +826,48 @@ const CustomFieldRenderer = ({
                   </div>
                 </div>
               ))}
+            </div>
+          );
+        }
+        if (isInline) {
+          return (
+            <div className="space-y-2">
+              {!hideLabel && (field.label || field.field_label) && (
+                <Label className="text-sm font-medium">{(field.label || field.field_label)}</Label>
+              )}
+              {rows.map((row, rowIndex) => (
+                <div key={rowIndex} className="flex flex-wrap items-end gap-2">
+                  {childFields.map((child) => {
+                    const cid = child.id || child.name || child.field_id;
+                    if (!cid) return null;
+                    return (
+                      <div key={cid} className="flex flex-col gap-1 min-w-0 flex-1 basis-0 max-w-[200px]">
+                        <CustomFieldRenderer
+                          field={{
+                            ...child,
+                            id: cid,
+                            field_type: child.type || child.field_type,
+                            type: child.type || child.field_type,
+                            field_label: child.label || child.field_label || child.name,
+                            field_name: child.name || child.id,
+                          }}
+                          value={row[cid]}
+                          onChange={(id, v) => updateRow(rowIndex, id, v)}
+                          readOnly={readOnly}
+                          hideLabel={false}
+                        />
+                      </div>
+                    );
+                  })}
+                  <Button type="button" variant="ghost" size="sm" onClick={() => removeRow(rowIndex)} className="h-9 shrink-0 text-destructive hover:text-destructive">
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+              <Button type="button" variant="outline" size="sm" onClick={addRow} className="gap-1">
+                <Plus className="h-4 w-4" />
+                Add row
+              </Button>
             </div>
           );
         }
