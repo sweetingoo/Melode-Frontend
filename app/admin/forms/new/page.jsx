@@ -1652,6 +1652,26 @@ const NewFormPage = () => {
                         newField.field_type === "radio" ||
                         newField.field_type === "multiselect") && (
                           <div className="space-y-2 pt-2 border-t">
+                            {newField.field_type === "radio" && (
+                              <div className="space-y-1">
+                                <Label className="text-xs">Options layout</Label>
+                                <Select
+                                  value={newField.field_options?.options_layout || "vertical"}
+                                  onValueChange={(v) =>
+                                    setNewField((prev) => ({
+                                      ...prev,
+                                      field_options: { ...(prev.field_options || {}), options_layout: v },
+                                    }))
+                                  }
+                                >
+                                  <SelectTrigger className="h-8 w-36"><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="vertical">Vertical (one per row)</SelectItem>
+                                    <SelectItem value="horizontal">Horizontal (3 per row)</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            )}
                             <Label>Options *</Label>
                             <div className="grid grid-cols-2 gap-2">
                               <Input

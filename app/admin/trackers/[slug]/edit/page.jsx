@@ -33,6 +33,7 @@ import {
   GripVertical,
   X,
   ChevronDown,
+  ChevronUp,
   Copy,
   Link2,
 } from "lucide-react";
@@ -115,39 +116,33 @@ const generateUniqueId = (label) => {
 };
 
 const COLUMNS = ["left", "center", "right"];
+const columnLabels = { left: "Left", center: "Center (full width)", right: "Right" };
 
-function GridColumnsEditor({ group, groupIdx, sectionFields, editingSection, setEditingSection }) {
-  const grid = group.grid_columns || { left: [], center: [], right: [] };
-  const left = grid.left || [];
-  const center = grid.center || [];
-  const right = grid.right || [];
-  const allIds = [...left, ...center, ...right];
-  // When layout is grid but columns empty and group has fields, init left column from fields (e.g. after load from API)
-  React.useEffect(() => {
-    if ((group.layout || "") !== "grid") return;
-    if (allIds.length > 0) return;
-    const fromFields = group.fields || [];
-    if (fromFields.length === 0) return;
-    const next = [...(editingSection.groups || [])];
-    next[groupIdx] = { ...group, grid_columns: { left: [...fromFields], center: [], right: [] } };
-    setEditingSection((prev) => ({ ...prev, groups: next }));
-  }, []);
+function OneRowEditor({ row, rowIndex, sectionFields, allIdsInAnyGroup, onUpdateRow, onRemoveRow, canRemoveRow }) {
+  const grid = row || { left: [], center: [], right: [] };
+  const hasLeftOrRight = ((grid.left || []).length + (grid.right || []).length) > 0;
+  const hasCenter = (grid.center || []).length > 0;
+  const centerDisabled = hasLeftOrRight;
+  const leftRightDisabled = hasCenter;
+  const isColDisabled = (col) => (col === "center" && centerDisabled) || (col !== "center" && leftRightDisabled);
 
-  const updateColumns = (newGrid) => {
-    const next = [...(editingSection.groups || [])];
-    const updated = { ...group, grid_columns: newGrid, fields: [...(newGrid.left || []), ...(newGrid.center || []), ...(newGrid.right || [])] };
-    next[groupIdx] = updated;
-    setEditingSection((prev) => ({ ...prev, groups: next }));
+  const availableToAdd = sectionFields
+    .map((f) => f.id || f.name || f.field_id)
+    .filter(Boolean)
+    .filter((id) => !allIdsInAnyGroup.includes(id));
+
+  const updateRow = (newGrid) => {
+    onUpdateRow(rowIndex, newGrid);
   };
 
   const moveField = (fieldId, fromCol, toCol) => {
     if (fromCol === toCol) return;
+    if (isColDisabled(toCol)) return;
     const left = [...(grid.left || [])];
     const center = [...(grid.center || [])];
     const right = [...(grid.right || [])];
     [left, center, right].forEach((arr, i) => {
-      const col = COLUMNS[i];
-      if (col === fromCol) {
+      if (COLUMNS[i] === fromCol) {
         const idx = arr.indexOf(fieldId);
         if (idx !== -1) arr.splice(idx, 1);
       }
@@ -156,100 +151,153 @@ function GridColumnsEditor({ group, groupIdx, sectionFields, editingSection, set
     if (toCol === "left") addTo(left);
     else if (toCol === "center") addTo(center);
     else addTo(right);
-    updateColumns({ left, center, right });
+    updateRow({ left, center, right });
   };
 
   const removeFromColumn = (fieldId, col) => {
     const nextGrid = { ...grid };
     nextGrid[col] = (nextGrid[col] || []).filter((id) => id !== fieldId);
-    updateColumns(nextGrid);
+    updateRow(nextGrid);
   };
 
   const addToColumn = (fieldId, col) => {
+    if (isColDisabled(col)) return;
     const nextGrid = { ...grid };
     nextGrid[col] = [...(nextGrid[col] || []), fieldId];
-    updateColumns(nextGrid);
+    updateRow(nextGrid);
   };
 
   const onDragStart = (e, fieldId, col) => {
     e.dataTransfer.setData("fieldId", fieldId);
     e.dataTransfer.setData("fromColumn", col);
+    e.dataTransfer.setData("fromRowIndex", String(rowIndex));
     e.dataTransfer.effectAllowed = "move";
   };
 
-  const onDragOver = (e) => {
+  const onDragOver = (e, col) => {
     e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
+    if (isColDisabled(col)) e.dataTransfer.dropEffect = "none";
+    else e.dataTransfer.dropEffect = "move";
   };
-
   const onDrop = (e, toCol) => {
     e.preventDefault();
+    if (isColDisabled(toCol)) return;
     const fieldId = e.dataTransfer.getData("fieldId");
     const fromCol = e.dataTransfer.getData("fromColumn");
-    if (fieldId && fromCol) moveField(fieldId, fromCol, toCol);
+    const fromRowIdx = e.dataTransfer.getData("fromRowIndex");
+    if (fieldId && fromCol && String(fromRowIdx) === String(rowIndex)) moveField(fieldId, fromCol, toCol);
   };
 
-  const availableToAdd = sectionFields
-    .map((f) => f.id || f.name || f.field_id)
-    .filter(Boolean)
-    .filter((id) => !allIds.includes(id));
+  return (
+    <div className="relative p-3 rounded border border-border bg-muted/20 space-y-2">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-medium text-muted-foreground">Row {rowIndex + 1}</span>
+        {canRemoveRow && (
+          <Button type="button" variant="ghost" size="sm" className="h-6 text-xs text-destructive" onClick={() => onRemoveRow(rowIndex)}>
+            <Trash2 className="h-3 w-3 mr-1" /> Remove row
+          </Button>
+        )}
+      </div>
+      <div className="grid grid-cols-3 gap-3">
+        {COLUMNS.map((col) => {
+          const disabled = isColDisabled(col);
+          return (
+            <div
+              key={col}
+              onDragOver={(e) => onDragOver(e, col)}
+              onDrop={(e) => onDrop(e, col)}
+              className={`min-h-[72px] rounded border border-dashed p-2 flex flex-col ${disabled ? "border-muted-foreground/20 bg-muted/10 opacity-80" : "border-muted-foreground/40"}`}
+            >
+              <div className="text-xs font-medium text-muted-foreground mb-1">
+                {columnLabels[col]}
+                {disabled && <span className="block text-muted-foreground/70 font-normal">({col === "center" ? "use left/right" : "use center"} in this row)</span>}
+              </div>
+              <div className="flex flex-wrap gap-1 flex-1">
+                {(grid[col] || []).map((fid) => {
+                  const f = sectionFields.find((x) => (x.id || x.name || x.field_id) === fid);
+                  return (
+                    <Badge key={fid} variant="secondary" className="text-xs cursor-grab active:cursor-grabbing" draggable onDragStart={(e) => onDragStart(e, fid, col)}>
+                      {f?.label || f?.name || fid}
+                      <button type="button" className="ml-1 hover:text-destructive" onClick={() => removeFromColumn(fid, col)}><X className="h-3 w-3" /></button>
+                    </Badge>
+                  );
+                })}
+              </div>
+              {!disabled && availableToAdd.length > 0 && (
+                <Select value="__add__" onValueChange={(val) => { if (val && val !== "__add__") addToColumn(val, col); }}>
+                  <SelectTrigger className="h-7 text-xs mt-1"><SelectValue placeholder="+ Add field" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__add__">+ Add field</SelectItem>
+                    {availableToAdd.map((id) => {
+                      const f = sectionFields.find((x) => (x.id || x.name || x.field_id) === id);
+                      return <SelectItem key={id} value={id}>{f?.label || f?.name || id}</SelectItem>;
+                    })}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
-  const columnLabels = { left: "Left", center: "Center (full width)", right: "Right" };
+function GridColumnsEditor({ group, groupIdx, sectionFields, editingSection, setEditingSection }) {
+  const gridRows = group.grid_rows && group.grid_rows.length > 0
+    ? group.grid_rows
+    : (group.grid_columns ? [{ ...group.grid_columns }] : [{ left: [], center: [], right: [] }]);
+  const allIdsInGroup = gridRows.flatMap((r) => [...(r.left || []), ...(r.center || []), ...(r.right || [])]);
+  const allIdsInAnyGroup = (editingSection.groups || []).flatMap((g) => g.fields || []);
+
+  React.useEffect(() => {
+    if ((group.layout || "") !== "grid") return;
+    if (gridRows.length > 0 && allIdsInGroup.length > 0) return;
+    const fromFields = group.fields || [];
+    if (fromFields.length === 0) return;
+    const next = [...(editingSection.groups || [])];
+    next[groupIdx] = { ...group, grid_rows: [{ left: [...fromFields], center: [], right: [] }], fields: [...fromFields] };
+    setEditingSection((prev) => ({ ...prev, groups: next }));
+  }, []);
+
+  const updateRows = (newRows) => {
+    const flat = newRows.flatMap((r) => [...(r.left || []), ...(r.center || []), ...(r.right || [])]);
+    const next = [...(editingSection.groups || [])];
+    next[groupIdx] = { ...group, grid_rows: newRows, fields: flat };
+    setEditingSection((prev) => ({ ...prev, groups: next }));
+  };
+
+  const updateRowAt = (rowIndex, newGrid) => {
+    const newRows = gridRows.map((r, i) => (i === rowIndex ? newGrid : r));
+    updateRows(newRows);
+  };
+
+  const addRow = () => {
+    updateRows([...gridRows, { left: [], center: [], right: [] }]);
+  };
+
+  const removeRow = (rowIndex) => {
+    updateRows(gridRows.filter((_, i) => i !== rowIndex));
+  };
 
   return (
-    <div className="grid grid-cols-3 gap-3 mt-2 p-2 border rounded-md bg-muted/30">
-      {COLUMNS.map((col) => (
-        <div
-          key={col}
-          onDragOver={onDragOver}
-          onDrop={(e) => onDrop(e, col)}
-          className="min-h-[80px] rounded border border-dashed border-muted-foreground/40 p-2 flex flex-col"
-        >
-          <div className="text-xs font-medium text-muted-foreground mb-1">{columnLabels[col]}</div>
-          <div className="flex flex-wrap gap-1 flex-1">
-            {(grid[col] || []).map((fid) => {
-              const f = sectionFields.find((x) => (x.id || x.name || x.field_id) === fid);
-              return (
-                <Badge
-                  key={fid}
-                  variant="secondary"
-                  className="text-xs cursor-grab active:cursor-grabbing"
-                  draggable
-                  onDragStart={(e) => onDragStart(e, fid, col)}
-                >
-                  {f?.label || f?.name || fid}
-                  <button
-                    type="button"
-                    className="ml-1 hover:text-destructive"
-                    onClick={() => removeFromColumn(fid, col)}
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </Badge>
-              );
-            })}
-          </div>
-          {availableToAdd.length > 0 && (
-            <Select
-              value="__add__"
-              onValueChange={(val) => {
-                if (val && val !== "__add__") addToColumn(val, col);
-              }}
-            >
-              <SelectTrigger className="h-7 text-xs mt-1">
-                <SelectValue placeholder="+ Add" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__add__">+ Add field</SelectItem>
-                {availableToAdd.map((id) => {
-                  const f = sectionFields.find((x) => (x.id || x.name || x.field_id) === id);
-                  return <SelectItem key={id} value={id}>{f?.label || f?.name || id}</SelectItem>;
-                })}
-              </SelectContent>
-            </Select>
-          )}
-        </div>
+    <div className="space-y-3 mt-2">
+      {gridRows.map((row, rowIndex) => (
+        <OneRowEditor
+          key={rowIndex}
+          row={row}
+          rowIndex={rowIndex}
+          sectionFields={sectionFields}
+          allIdsInAnyGroup={allIdsInAnyGroup}
+          onUpdateRow={updateRowAt}
+          onRemoveRow={removeRow}
+          canRemoveRow={gridRows.length > 1}
+        />
       ))}
+      <Button type="button" variant="outline" size="sm" onClick={addRow} className="w-full">
+        <Plus className="h-4 w-4 mr-2" />
+        Add row
+      </Button>
     </div>
   );
 }
@@ -705,7 +753,7 @@ const TrackerEditPage = () => {
     setDragOverIndex(null);
   };
 
-  // Section Management
+  // Section Management – update the same source we display (tracker_fields.sections if it has length, else tracker_config.sections)
   const handleAddSection = () => {
     if (!newSection.label) {
       toast.error("Section label is required");
@@ -724,13 +772,17 @@ const TrackerEditPage = () => {
       fields: [],
     };
 
-    setFormData((prev) => ({
-      ...prev,
-      tracker_config: {
-        ...prev.tracker_config,
-        sections: [...(prev.tracker_config?.sections || []), section],
-      },
-    }));
+    setFormData((prev) => {
+      const useTrackerFields = (prev.tracker_fields?.sections?.length ?? 0) > 0;
+      const currentSections = useTrackerFields ? (prev.tracker_fields?.sections || []) : (prev.tracker_config?.sections || []);
+      const newSections = [...currentSections, section];
+      return {
+        ...prev,
+        ...(useTrackerFields
+          ? { tracker_fields: { ...prev.tracker_fields, sections: newSections } }
+          : { tracker_config: { ...prev.tracker_config, sections: newSections } }),
+      };
+    });
 
     setNewSection({ id: "", label: "" });
     setSectionIdManuallyEdited(false);
@@ -738,14 +790,14 @@ const TrackerEditPage = () => {
   };
 
   const handleRemoveSection = (index) => {
-    const newSections = [...(formData.tracker_config?.sections || [])];
-    newSections.splice(index, 1);
+    const useTrackerFields = (formData.tracker_fields?.sections?.length ?? 0) > 0;
+    const currentSections = useTrackerFields ? (formData.tracker_fields?.sections || []) : (formData.tracker_config?.sections || []);
+    const newSections = currentSections.filter((_, i) => i !== index);
     setFormData((prev) => ({
       ...prev,
-      tracker_config: {
-        ...prev.tracker_config,
-        sections: newSections,
-      },
+      ...(useTrackerFields
+        ? { tracker_fields: { ...prev.tracker_fields, sections: newSections } }
+        : { tracker_config: { ...prev.tracker_config, sections: newSections } }),
     }));
     toast.success("Section removed");
   };
@@ -829,16 +881,17 @@ const TrackerEditPage = () => {
       return;
     }
 
-    const newSections = [...(formData.tracker_config?.sections || [])];
+    const useTrackerFields = (formData.tracker_fields?.sections?.length ?? 0) > 0;
+    const currentSections = useTrackerFields ? (formData.tracker_fields?.sections || []) : (formData.tracker_config?.sections || []);
+    const newSections = [...currentSections];
     const [draggedSection] = newSections.splice(draggedSectionIndex, 1);
     newSections.splice(dropIndex, 0, draggedSection);
 
     setFormData((prev) => ({
       ...prev,
-      tracker_config: {
-        ...prev.tracker_config,
-        sections: newSections,
-      },
+      ...(useTrackerFields
+        ? { tracker_fields: { ...prev.tracker_fields, sections: newSections } }
+        : { tracker_config: { ...prev.tracker_config, sections: newSections } }),
     }));
 
     setDraggedSectionIndex(null);
@@ -3133,6 +3186,24 @@ const TrackerEditPage = () => {
                           {(editingSection.groups || []).map((group, groupIdx) => (
                             <div key={group.id || groupIdx} className="p-3 rounded border bg-muted/30 space-y-2">
                               <div className="flex items-center gap-2">
+                                <div className="flex flex-col gap-0">
+                                  <Button type="button" variant="ghost" size="icon" className="h-6 w-6" disabled={groupIdx === 0} onClick={() => {
+                                    const next = [...(editingSection.groups || [])];
+                                    if (groupIdx <= 0) return;
+                                    [next[groupIdx - 1], next[groupIdx]] = [next[groupIdx], next[groupIdx - 1]];
+                                    setEditingSection((prev) => ({ ...prev, groups: next }));
+                                  }}>
+                                    <ChevronUp className="h-4 w-4" />
+                                  </Button>
+                                  <Button type="button" variant="ghost" size="icon" className="h-6 w-6" disabled={groupIdx >= (editingSection.groups || []).length - 1} onClick={() => {
+                                    const next = [...(editingSection.groups || [])];
+                                    if (groupIdx >= next.length - 1) return;
+                                    [next[groupIdx], next[groupIdx + 1]] = [next[groupIdx + 1], next[groupIdx]];
+                                    setEditingSection((prev) => ({ ...prev, groups: next }));
+                                  }}>
+                                    <ChevronDown className="h-4 w-4" />
+                                  </Button>
+                                </div>
                                 <Input
                                   placeholder="Group label"
                                   value={group.label || ""}
@@ -3156,12 +3227,18 @@ const TrackerEditPage = () => {
                                     const next = [...(editingSection.groups || [])];
                                     const newGroup = { ...group, layout: val };
                                     if (val === "grid") {
+                                      const hasRows = Array.isArray(group.grid_rows) && group.grid_rows.length > 0;
                                       const hasGrid = (group.grid_columns?.left ?? []).length > 0 || (group.grid_columns?.center ?? []).length > 0 || (group.grid_columns?.right ?? []).length > 0;
-                                      const left = hasGrid ? (group.grid_columns?.left ?? []) : [...(group.fields || [])];
-                                      const center = group.grid_columns?.center ?? [];
-                                      const right = group.grid_columns?.right ?? [];
-                                      newGroup.grid_columns = { left, center, right };
-                                      newGroup.fields = [...left, ...center, ...right];
+                                      if (hasRows) {
+                                        newGroup.grid_rows = group.grid_rows;
+                                        newGroup.fields = group.grid_rows.flatMap((r) => [...(r.left || []), ...(r.center || []), ...(r.right || [])]);
+                                      } else if (hasGrid) {
+                                        newGroup.grid_rows = [{ left: group.grid_columns?.left ?? [], center: group.grid_columns?.center ?? [], right: group.grid_columns?.right ?? [] }];
+                                        newGroup.fields = [...(newGroup.grid_rows[0].left || []), ...(newGroup.grid_rows[0].center || []), ...(newGroup.grid_rows[0].right || [])];
+                                      } else {
+                                        newGroup.grid_rows = [{ left: [...(group.fields || [])], center: [], right: [] }];
+                                        newGroup.fields = group.fields || [];
+                                      }
                                     }
                                     next[groupIdx] = newGroup;
                                     setEditingSection((prev) => ({ ...prev, groups: next }));
@@ -3223,7 +3300,7 @@ const TrackerEditPage = () => {
                                     {sectionFields
                                       .map((f) => f.id || f.name || f.field_id)
                                       .filter(Boolean)
-                                      .filter((id) => !(group.fields || []).includes(id))
+                                      .filter((id) => !(editingSection.groups || []).flatMap((g) => g.fields || []).includes(id))
                                       .map((id) => {
                                         const f = sectionFields.find((x) => (x.id || x.name || x.field_id) === id);
                                         return <SelectItem key={id} value={id}>{f?.label || f?.name || id}</SelectItem>;

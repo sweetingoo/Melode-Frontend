@@ -1475,13 +1475,7 @@ const TrackersPage = () => {
                                       <p className="text-sm text-muted-foreground">No fields for this stage.</p>
                                     ) : (
                                       <>
-                                        {/* Ungrouped fields only in the main grid (when section has groups, only these; when no groups, ungroupedFields = all section fields) */}
-                                        {ungroupedFields.length > 0 && (
-                                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            {ungroupedFields.map((field) => renderField(field))}
-                                          </div>
-                                        )}
-                                        {/* Grouped fields: each group with its label, respect group visibility */}
+                                        {/* Grouped fields first: each group with its label, respect group visibility */}
                                         {sectionGroups?.length > 0 && sectionGroups.map((group) => {
                                           if (!checkGroupVisibility(group, entryFormData)) return null;
                                           const groupFieldIds = group.fields || [];
@@ -1489,27 +1483,35 @@ const TrackersPage = () => {
                                             .map((fid) => sectionFields.find((f) => (f.id || f.field_id || f.name) === fid))
                                             .filter(Boolean);
                                           if (groupFields.length === 0) return null;
-                                          const isGrid = (group.layout || "") === "grid" && group.grid_columns;
-                                          const gridCols = group.grid_columns || {};
-                                          const leftFields = (gridCols.left || []).map((fid) => sectionFields.find((f) => (f.id || f.field_id || f.name) === fid)).filter(Boolean);
-                                          const centerFields = (gridCols.center || []).map((fid) => sectionFields.find((f) => (f.id || f.field_id || f.name) === fid)).filter(Boolean);
-                                          const rightFields = (gridCols.right || []).map((fid) => sectionFields.find((f) => (f.id || f.field_id || f.name) === fid)).filter(Boolean);
+                                          const isGrid = (group.layout || "") === "grid" && (group.grid_rows?.length > 0 || group.grid_columns);
+                                          const rows = (group.grid_rows && group.grid_rows.length > 0)
+                                            ? group.grid_rows
+                                            : (group.grid_columns ? [group.grid_columns] : []);
                                           return (
                                             <div key={group.id || group.label || groupFieldIds.join("-")} className="space-y-3">
-                                              <h4 className="text-sm font-semibold text-muted-foreground border-b pb-1.5">{group.label || group.id}</h4>
-                                              {isGrid ? (
+                                              {group.label && <h4 className="text-sm font-semibold text-muted-foreground border-b pb-1.5">{group.label}</h4>}
+                                              {isGrid && rows.length > 0 ? (
                                                 <div className="space-y-4">
-                                                  {Array.from({ length: Math.max(leftFields.length, rightFields.length) }, (_, i) => (
-                                                    <div key={`lr-${i}`} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                      <div>{leftFields[i] ? renderField(leftFields[i]) : null}</div>
-                                                      <div>{rightFields[i] ? renderField(rightFields[i]) : null}</div>
-                                                    </div>
-                                                  ))}
-                                                  {centerFields.map((field) => (
-                                                    <div key={field.id || field.field_id || field.name} className="w-full">
-                                                      {renderField(field)}
-                                                    </div>
-                                                  ))}
+                                                  {rows.map((gridRow, rowIdx) => {
+                                                    const leftFields = (gridRow.left || []).map((fid) => sectionFields.find((f) => (f.id || f.field_id || f.name) === fid)).filter(Boolean);
+                                                    const centerFields = (gridRow.center || []).map((fid) => sectionFields.find((f) => (f.id || f.field_id || f.name) === fid)).filter(Boolean);
+                                                    const rightFields = (gridRow.right || []).map((fid) => sectionFields.find((f) => (f.id || f.field_id || f.name) === fid)).filter(Boolean);
+                                                    return (
+                                                      <div key={`row-${rowIdx}`} className="space-y-4">
+                                                        {Array.from({ length: Math.max(leftFields.length, rightFields.length) }, (_, i) => (
+                                                          <div key={`lr-${i}`} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                            <div>{leftFields[i] ? renderField(leftFields[i]) : null}</div>
+                                                            <div>{rightFields[i] ? renderField(rightFields[i]) : null}</div>
+                                                          </div>
+                                                        ))}
+                                                        {centerFields.map((field) => (
+                                                          <div key={field.id || field.field_id || field.name} className="w-full">
+                                                            {renderField(field)}
+                                                          </div>
+                                                        ))}
+                                                      </div>
+                                                    );
+                                                  })}
                                                 </div>
                                               ) : (
                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1519,6 +1521,12 @@ const TrackersPage = () => {
                                             </div>
                                           );
                                         })}
+                                        {/* Ungrouped fields at bottom (when section has groups) */}
+                                        {ungroupedFields.length > 0 && (
+                                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            {ungroupedFields.map((field) => renderField(field))}
+                                          </div>
+                                        )}
                                       </>
                                     )}
                                   </CardContent>

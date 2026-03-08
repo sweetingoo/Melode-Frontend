@@ -234,25 +234,28 @@ const CustomFieldRenderer = ({
       }
 
       case 'radio':
-      case 'radio_group':
+      case 'radio_group': {
         const radioOptions = sortOptionsByValue(field.field_options?.options || field.options || []);
+        const radioLayout = field.field_options?.options_layout || field.field_options?.layout || 'vertical';
+        const isHorizontal = radioLayout === 'horizontal';
         return (
           <RadioGroup
             value={value || ''}
             onValueChange={handleChange}
-            className={error ? 'border-red-500' : ''}
+            className={cn(error ? 'border-red-500' : '', isHorizontal && 'grid grid-cols-3 gap-2')}
             disabled={readOnly}
           >
             {radioOptions.map((option, index) => (
               <div key={index} className="flex items-center space-x-2">
                 <RadioGroupItem value={option.value || option} id={`${fieldId}-${index}`} disabled={readOnly} />
-                <Label htmlFor={`${fieldId}-${index}`} className="text-sm font-normal">
+                <Label htmlFor={`${fieldId}-${index}`} className="text-sm font-normal cursor-pointer">
                   {option.label || option}
                 </Label>
               </div>
             ))}
           </RadioGroup>
         );
+      }
 
       case 'date': {
         // Date field: Calendar only (no time selection); support RAG { value, rag }

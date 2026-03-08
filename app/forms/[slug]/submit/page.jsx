@@ -872,13 +872,13 @@ const FormSubmitPage = () => {
         )}
 
         <form onSubmit={handleSubmit}>
-          <Card>
-            <CardHeader>
-              <CardTitle>
-                {totalPages > 1 ? `Step ${currentPage + 1} of ${totalPages}` : "Form Submission"}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
+          <Card className={currentPageLayout?.sectionsWithContent?.length ? "bg-transparent border-0 shadow-none" : undefined}>
+            {totalPages > 1 && (
+              <CardHeader>
+                <CardTitle>Step {currentPage + 1} of {totalPages}</CardTitle>
+              </CardHeader>
+            )}
+            <CardContent className={totalPages > 1 ? "space-y-6" : "space-y-6 pt-6"}>
               {currentPage === 0 && form.form_description && (
                 <div className="p-4 bg-muted rounded-md">
                   <p className="text-sm">{form.form_description}</p>
@@ -952,53 +952,77 @@ const FormSubmitPage = () => {
                   const { fieldsNotInAnySection, sectionsWithContent } = currentPageLayout;
                   return (
                     <div className="space-y-6">
-                      {fieldsNotInAnySection.length > 0 && (
-                        <div className="space-y-4">
-                          {fieldsNotInAnySection.map((field) => renderOneField(field))}
-                        </div>
-                      )}
-                      {sectionsWithContent.map(({ sectionLabel, ungrouped, groupsWithFields }) => (
-                        <div key={sectionLabel ?? "groups"} className="space-y-4">
-                          {sectionLabel && <h3 className="text-sm font-semibold text-muted-foreground border-b pb-1.5">{sectionLabel}</h3>}
-                          {ungrouped.length > 0 && (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              {ungrouped.map((field) => renderOneField(field))}
-                            </div>
-                          )}
-                          {groupsWithFields.map(({ group, fields: groupFields }) => {
-                            if (!checkGroupVisibility(group, submissionData)) return null;
-                            const isGrid = (group.layout || "") === "grid" && group.grid_columns;
-                            const gridCols = group.grid_columns || {};
-                            const leftFields = (gridCols.left || []).map((fid) => groupFields.find((f) => (f.id || f.field_id || f.name) === fid)).filter(Boolean);
-                            const centerFields = (gridCols.center || []).map((fid) => groupFields.find((f) => (f.id || f.field_id || f.name) === fid)).filter(Boolean);
-                            const rightFields = (gridCols.right || []).map((fid) => groupFields.find((f) => (f.id || f.field_id || f.name) === fid)).filter(Boolean);
-                            return (
-                              <div key={group.id || group.label} className="space-y-3">
-                                <h4 className="text-sm font-medium text-muted-foreground">{group.label || group.id}</h4>
-                                {isGrid ? (
+                      {sectionsWithContent.flatMap(({ sectionLabel, ungrouped, groupsWithFields }, sectionIdx) => [
+                        sectionLabel ? (
+                          <div key={`section-${sectionIdx}`} className="border-b pb-1.5">
+                            <h3 className="text-sm font-semibold text-muted-foreground">{sectionLabel}</h3>
+                          </div>
+                        ) : null,
+                        ...groupsWithFields.map(({ group, fields: groupFields }) => {
+                          if (!checkGroupVisibility(group, submissionData)) return null;
+                          const isGrid = (group.layout || "") === "grid" && (group.grid_rows?.length > 0 || group.grid_columns);
+                          const rows = (group.grid_rows && group.grid_rows.length > 0)
+                            ? group.grid_rows
+                            : (group.grid_columns ? [group.grid_columns] : []);
+                          return (
+                            <Card key={group.id || group.label}>
+                              {group.label && (
+                                <CardHeader className="py-3">
+                                  <CardTitle className="text-sm font-medium">{group.label}</CardTitle>
+                                </CardHeader>
+                              )}
+                              <CardContent className={group.label ? "pt-0 space-y-4" : "space-y-4"}>
+                                {isGrid && rows.length > 0 ? (
                                   <div className="space-y-4">
-                                    {Array.from({ length: Math.max(leftFields.length, rightFields.length) }, (_, i) => (
-                                      <div key={`lr-${i}`} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <div>{leftFields[i] ? renderOneField(leftFields[i]) : null}</div>
-                                        <div>{rightFields[i] ? renderOneField(rightFields[i]) : null}</div>
-                                      </div>
-                                    ))}
-                                    {centerFields.map((field) => (
-                                      <div key={field.id || field.field_id || field.name} className="w-full">
-                                        {renderOneField(field)}
-                                      </div>
-                                    ))}
+                                    {rows.map((gridRow, rowIdx) => {
+                                      const leftFields = (gridRow.left || []).map((fid) => groupFields.find((f) => (f.id || f.field_id || f.name) === fid)).filter(Boolean);
+                                      const centerFields = (gridRow.center || []).map((fid) => groupFields.find((f) => (f.id || f.field_id || f.name) === fid)).filter(Boolean);
+                                      const rightFields = (gridRow.right || []).map((fid) => groupFields.find((f) => (f.id || f.field_id || f.name) === fid)).filter(Boolean);
+                                      return (
+                                        <div key={`row-${rowIdx}`} className="space-y-4">
+                                          {Array.from({ length: Math.max(leftFields.length, rightFields.length) }, (_, i) => (
+                                            <div key={`lr-${i}`} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                              <div>{leftFields[i] ? renderOneField(leftFields[i]) : null}</div>
+                                              <div>{rightFields[i] ? renderOneField(rightFields[i]) : null}</div>
+                                            </div>
+                                          ))}
+                                          {centerFields.map((field) => (
+                                            <div key={field.id || field.field_id || field.name} className="w-full">
+                                              {renderOneField(field)}
+                                            </div>
+                                          ))}
+                                        </div>
+                                      );
+                                    })}
                                   </div>
                                 ) : (
                                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     {groupFields.map((field) => renderOneField(field))}
                                   </div>
                                 )}
+                              </CardContent>
+                            </Card>
+                          );
+                        }).filter(Boolean),
+                        ungrouped.length > 0 ? (
+                          <Card key={`ungrouped-${sectionIdx}`}>
+                            <CardContent className="pt-6">
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {ungrouped.map((field) => renderOneField(field))}
                               </div>
-                            );
-                          })}
-                        </div>
-                      ))}
+                            </CardContent>
+                          </Card>
+                        ) : null,
+                      ].filter(Boolean))}
+                      {fieldsNotInAnySection.length > 0 && (
+                        <Card>
+                          <CardContent className="pt-6">
+                            <div className="space-y-4">
+                              {fieldsNotInAnySection.map((field) => renderOneField(field))}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      )}
                     </div>
                   );
                 }

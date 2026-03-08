@@ -34,6 +34,8 @@ import {
   Edit2,
   Type,
   GripVertical,
+  ChevronUp,
+  ChevronDown,
   Mail,
   Phone,
   Calendar,
@@ -290,12 +292,130 @@ function FormGridColumnsEditor({ formData, setFormData, secIdx, gIdx, section, g
   );
 }
 
-// Top-level groups only (no sections): same grid UI but updates form_fields.groups
-function FormGroupGridColumnsEditor({ formData, setFormData, gIdx, group }) {
-  const grid = group.grid_columns || { left: [], center: [], right: [] };
-  const allIds = [...(grid.left || []), ...(grid.center || []), ...(grid.right || [])];
-  const fieldsList = formData?.form_fields?.fields || [];
+const FORM_GRID_COLS = ["left", "center", "right"];
+const formGridColumnLabels = { left: "Left", center: "Center (full width)", right: "Right" };
+
+function FormOneRowEditor({ row, rowIndex, fieldsList, allIdsInAnyGroup, onUpdateRow, onRemoveRow, canRemoveRow }) {
+  const grid = row || { left: [], center: [], right: [] };
+  const hasLeftOrRight = ((grid.left || []).length + (grid.right || []).length) > 0;
+  const hasCenter = (grid.center || []).length > 0;
+  const centerDisabled = hasLeftOrRight;
+  const leftRightDisabled = hasCenter;
+  const isColDisabled = (col) => (col === "center" && centerDisabled) || (col !== "center" && leftRightDisabled);
+
   const sectionFieldIds = (fieldsList || []).map((f) => String(f.field_id || f.id || f.name));
+  const availableToAdd = sectionFieldIds.filter((id) => !allIdsInAnyGroup.includes(id));
+
+  const updateRow = (newGrid) => { onUpdateRow(rowIndex, newGrid); };
+
+  const moveField = (fieldId, fromCol, toCol) => {
+    if (fromCol === toCol) return;
+    if (isColDisabled(toCol)) return;
+    const left = [...(grid.left || [])];
+    const center = [...(grid.center || [])];
+    const right = [...(grid.right || [])];
+    FORM_GRID_COLS.forEach((col, i) => {
+      if (col === fromCol) { const idx = [left, center, right][i].indexOf(fieldId); if (idx !== -1) [left, center, right][i].splice(idx, 1); }
+    });
+    const addTo = (arr) => { if (!arr.includes(fieldId)) arr.push(fieldId); };
+    if (toCol === "left") addTo(left); else if (toCol === "center") addTo(center); else addTo(right);
+    updateRow({ left, center, right });
+  };
+
+  const removeFromColumn = (fieldId, col) => {
+    const nextGrid = { ...grid };
+    nextGrid[col] = (nextGrid[col] || []).filter((id) => id !== fieldId);
+    updateRow(nextGrid);
+  };
+
+  const addToColumn = (fieldId, col) => {
+    if (isColDisabled(col)) return;
+    const nextGrid = { ...grid };
+    nextGrid[col] = [...(nextGrid[col] || []), fieldId];
+    updateRow(nextGrid);
+  };
+
+  const onDragStart = (e, fieldId, col) => {
+    e.dataTransfer.setData("fieldId", fieldId);
+    e.dataTransfer.setData("fromColumn", col);
+    e.dataTransfer.setData("fromRowIndex", String(rowIndex));
+    e.dataTransfer.effectAllowed = "move";
+  };
+  const onDragOver = (e, col) => {
+    e.preventDefault();
+    if (isColDisabled(col)) e.dataTransfer.dropEffect = "none";
+    else e.dataTransfer.dropEffect = "move";
+  };
+  const onDrop = (e, toCol) => {
+    e.preventDefault();
+    if (isColDisabled(toCol)) return;
+    const fieldId = e.dataTransfer.getData("fieldId");
+    const fromCol = e.dataTransfer.getData("fromColumn");
+    if (fieldId && fromCol && e.dataTransfer.getData("fromRowIndex") === String(rowIndex)) moveField(fieldId, fromCol, toCol);
+  };
+
+  return (
+    <div className="relative p-3 rounded border border-border bg-muted/20 space-y-2">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-medium text-muted-foreground">Row {rowIndex + 1}</span>
+        {canRemoveRow && (
+          <Button type="button" variant="ghost" size="sm" className="h-6 text-xs text-destructive" onClick={() => onRemoveRow(rowIndex)}>
+            <Trash2 className="h-3 w-3 mr-1" /> Remove row
+          </Button>
+        )}
+      </div>
+      <div className="grid grid-cols-3 gap-3">
+        {FORM_GRID_COLS.map((col) => {
+          const disabled = isColDisabled(col);
+          return (
+            <div
+              key={col}
+              onDragOver={(e) => onDragOver(e, col)}
+              onDrop={(e) => onDrop(e, col)}
+              className={`min-h-[72px] rounded border border-dashed p-2 flex flex-col ${disabled ? "border-muted-foreground/20 bg-muted/10 opacity-80" : "border-muted-foreground/40"}`}
+            >
+              <div className="text-xs font-medium text-muted-foreground mb-1">
+                {formGridColumnLabels[col]}
+                {disabled && <span className="block text-muted-foreground/70 font-normal">({col === "center" ? "use left/right" : "use center"} in this row)</span>}
+              </div>
+              <div className="flex flex-wrap gap-1 flex-1">
+                {(grid[col] || []).map((fid) => {
+                  const f = fieldsList.find((x) => String(x.field_id || x.id || x.name) === String(fid));
+                  return (
+                    <Badge key={fid} variant="outline" className="text-xs cursor-grab active:cursor-grabbing" draggable onDragStart={(e) => onDragStart(e, fid, col)}>
+                      {f?.label || fid}
+                      <button type="button" className="ml-1" onClick={() => removeFromColumn(fid, col)}><X className="h-3 w-3" /></button>
+                    </Badge>
+                  );
+                })}
+              </div>
+              {!disabled && availableToAdd.length > 0 && (
+                <Select value="__add__" onValueChange={(v) => { if (v && v !== "__add__") addToColumn(v, col); }}>
+                  <SelectTrigger className="h-7 text-xs mt-1"><SelectValue placeholder="+ Add field" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__add__">+ Add field</SelectItem>
+                    {availableToAdd.map((fid) => {
+                      const f = fieldsList.find((x) => String(x.field_id || x.id || x.name) === String(fid));
+                      return <SelectItem key={fid} value={fid}>{f?.label || fid}</SelectItem>;
+                    })}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// Top-level groups only: grid with multiple rows, updates form_fields.groups
+function FormGroupGridColumnsEditor({ formData, setFormData, gIdx, group }) {
+  const fieldsList = formData?.form_fields?.fields || [];
+  const gridRows = group.grid_rows && group.grid_rows.length > 0
+    ? group.grid_rows
+    : (group.grid_columns ? [{ ...group.grid_columns }] : [{ left: [], center: [], right: [] }]);
+  const allIdsInAnyGroup = (formData?.form_fields?.groups || []).flatMap((g) => g.fields || []);
 
   const updateGroup = (updated) => {
     const next = [...(formData.form_fields.groups || [])];
@@ -303,86 +423,41 @@ function FormGroupGridColumnsEditor({ formData, setFormData, gIdx, group }) {
     setFormData({ ...formData, form_fields: { ...formData.form_fields, groups: next } });
   };
 
-  const updateColumns = (newGrid) => {
-    updateGroup({ ...group, grid_columns: newGrid, fields: [...(newGrid.left || []), ...(newGrid.center || []), ...(newGrid.right || [])] });
+  const updateRows = (newRows) => {
+    const flat = newRows.flatMap((r) => [...(r.left || []), ...(r.center || []), ...(r.right || [])]);
+    updateGroup({ ...group, grid_rows: newRows, fields: flat });
   };
 
-  const moveField = (fieldId, fromCol, toCol) => {
-    if (fromCol === toCol) return;
-    const left = [...(grid.left || [])];
-    const center = [...(grid.center || [])];
-    const right = [...(grid.right || [])];
-    [left, center, right].forEach((arr, i) => {
-      if (["left", "center", "right"][i] === fromCol) {
-        const idx = arr.indexOf(fieldId);
-        if (idx !== -1) arr.splice(idx, 1);
-      }
-    });
-    const addTo = (arr) => { if (!arr.includes(fieldId)) arr.push(fieldId); };
-    if (toCol === "left") addTo(left);
-    else if (toCol === "center") addTo(center);
-    else addTo(right);
-    updateColumns({ left, center, right });
+  const updateRowAt = (rowIndex, newGrid) => {
+    updateRows(gridRows.map((r, i) => (i === rowIndex ? newGrid : r)));
   };
 
-  const removeFromColumn = (fieldId, col) => {
-    const nextGrid = { ...grid };
-    nextGrid[col] = (nextGrid[col] || []).filter((id) => id !== fieldId);
-    updateColumns(nextGrid);
+  const addRow = () => {
+    updateRows([...gridRows, { left: [], center: [], right: [] }]);
   };
 
-  const addToColumn = (fieldId, col) => {
-    const nextGrid = { ...grid };
-    nextGrid[col] = [...(nextGrid[col] || []), fieldId];
-    updateColumns(nextGrid);
+  const removeRow = (rowIndex) => {
+    updateRows(gridRows.filter((_, i) => i !== rowIndex));
   };
-
-  const onDragStart = (e, fieldId, col) => {
-    e.dataTransfer.setData("fieldId", fieldId);
-    e.dataTransfer.setData("fromColumn", col);
-    e.dataTransfer.effectAllowed = "move";
-  };
-  const onDragOver = (e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; };
-  const onDrop = (e, toCol) => {
-    e.preventDefault();
-    const fieldId = e.dataTransfer.getData("fieldId");
-    const fromCol = e.dataTransfer.getData("fromColumn");
-    if (fieldId && fromCol) moveField(fieldId, fromCol, toCol);
-  };
-
-  const availableToAdd = sectionFieldIds.filter((id) => !allIds.includes(id));
-  const columnLabels = { left: "Left", center: "Center (full width)", right: "Right" };
 
   return (
-    <div className="grid grid-cols-3 gap-3 mt-2 p-2 border rounded-md bg-muted/30">
-      {["left", "center", "right"].map((col) => (
-        <div key={col} onDragOver={onDragOver} onDrop={(e) => onDrop(e, col)} className="min-h-[80px] rounded border border-dashed border-muted-foreground/40 p-2 flex flex-col">
-          <div className="text-xs font-medium text-muted-foreground mb-1">{columnLabels[col]}</div>
-          <div className="flex flex-wrap gap-1 flex-1">
-            {(grid[col] || []).map((fid) => {
-              const f = fieldsList.find((x) => String(x.field_id || x.id || x.name) === String(fid));
-              return (
-                <Badge key={fid} variant="outline" className="text-xs cursor-grab active:cursor-grabbing" draggable onDragStart={(e) => onDragStart(e, fid, col)}>
-                  {f?.label || fid}
-                  <button type="button" className="ml-1" onClick={() => removeFromColumn(fid, col)}><X className="h-3 w-3" /></button>
-                </Badge>
-              );
-            })}
-          </div>
-          {availableToAdd.length > 0 && (
-            <Select value="__add__" onValueChange={(v) => { if (v && v !== "__add__") addToColumn(v, col); }}>
-              <SelectTrigger className="h-7 text-xs mt-1"><SelectValue placeholder="+ Add" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__add__">+ Add field</SelectItem>
-                {availableToAdd.map((fid) => {
-                  const f = fieldsList.find((x) => String(x.field_id || x.id || x.name) === String(fid));
-                  return <SelectItem key={fid} value={fid}>{f?.label || fid}</SelectItem>;
-                })}
-              </SelectContent>
-            </Select>
-          )}
-        </div>
+    <div className="space-y-3 mt-2">
+      {gridRows.map((row, rowIndex) => (
+        <FormOneRowEditor
+          key={rowIndex}
+          row={row}
+          rowIndex={rowIndex}
+          fieldsList={fieldsList}
+          allIdsInAnyGroup={allIdsInAnyGroup}
+          onUpdateRow={updateRowAt}
+          onRemoveRow={removeRow}
+          canRemoveRow={gridRows.length > 1}
+        />
       ))}
+      <Button type="button" variant="outline" size="sm" onClick={addRow} className="w-full">
+        <Plus className="h-4 w-4 mr-2" />
+        Add row
+      </Button>
     </div>
   );
 }
@@ -1636,6 +1711,26 @@ const EditFormPage = () => {
                     newField.field_type === "radio" ||
                     newField.field_type === "multiselect") && (
                       <div className="space-y-2 pt-2 border-t">
+                        {newField.field_type === "radio" && (
+                          <div className="space-y-1">
+                            <Label className="text-xs">Options layout</Label>
+                            <Select
+                              value={newField.field_options?.options_layout || "vertical"}
+                              onValueChange={(v) =>
+                                setNewField((prev) => ({
+                                  ...prev,
+                                  field_options: { ...(prev.field_options || {}), options_layout: v },
+                                }))
+                              }
+                            >
+                              <SelectTrigger className="h-8 w-36"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="vertical">Vertical (one per row)</SelectItem>
+                                <SelectItem value="horizontal">Horizontal (3 per row)</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
                         <Label>Options *</Label>
                         <div className="grid grid-cols-2 gap-2">
                           <Input
@@ -2411,7 +2506,25 @@ const EditFormPage = () => {
                 <CardContent className="space-y-4">
                   {(formData.form_fields.groups || []).map((group, gIdx) => (
                     <div key={group.id || gIdx} className="p-4 border rounded-lg space-y-3 bg-muted/30">
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 items-center">
+                        <div className="flex flex-col gap-0">
+                          <Button type="button" variant="ghost" size="icon" className="h-6 w-6" disabled={gIdx === 0} onClick={() => {
+                            const next = [...(formData.form_fields.groups || [])];
+                            if (gIdx <= 0) return;
+                            [next[gIdx - 1], next[gIdx]] = [next[gIdx], next[gIdx - 1]];
+                            setFormData({ ...formData, form_fields: { ...formData.form_fields, groups: next } });
+                          }}>
+                            <ChevronUp className="h-4 w-4" />
+                          </Button>
+                          <Button type="button" variant="ghost" size="icon" className="h-6 w-6" disabled={gIdx >= (formData.form_fields.groups || []).length - 1} onClick={() => {
+                            const next = [...(formData.form_fields.groups || [])];
+                            if (gIdx >= next.length - 1) return;
+                            [next[gIdx], next[gIdx + 1]] = [next[gIdx + 1], next[gIdx]];
+                            setFormData({ ...formData, form_fields: { ...formData.form_fields, groups: next } });
+                          }}>
+                            <ChevronDown className="h-4 w-4" />
+                          </Button>
+                        </div>
                         <Input
                           placeholder="Group label"
                           value={group.label || ""}
@@ -2436,8 +2549,18 @@ const EditFormPage = () => {
                           const newGroup = { ...group, layout: v };
                           if (v === "grid") {
                             const fromFields = group.fields || [];
-                            newGroup.grid_columns = { left: fromFields.length ? [...fromFields] : [], center: [], right: [] };
-                            newGroup.fields = fromFields.length ? [...fromFields] : [];
+                            const hasRows = Array.isArray(group.grid_rows) && group.grid_rows.length > 0;
+                            const hasGrid = group.grid_columns && ((group.grid_columns.left?.length || 0) + (group.grid_columns.center?.length || 0) + (group.grid_columns.right?.length || 0)) > 0;
+                            if (hasRows) {
+                              newGroup.grid_rows = group.grid_rows;
+                              newGroup.fields = group.grid_rows.flatMap((r) => [...(r.left || []), ...(r.center || []), ...(r.right || [])]);
+                            } else if (hasGrid) {
+                              newGroup.grid_rows = [{ left: group.grid_columns?.left ?? [], center: group.grid_columns?.center ?? [], right: group.grid_columns?.right ?? [] }];
+                              newGroup.fields = [...(newGroup.grid_rows[0].left || []), ...(newGroup.grid_rows[0].center || []), ...(newGroup.grid_rows[0].right || [])];
+                            } else {
+                              newGroup.grid_rows = [{ left: fromFields.length ? [...fromFields] : [], center: [], right: [] }];
+                              newGroup.fields = fromFields.length ? [...fromFields] : [];
+                            }
                           }
                           next[gIdx] = newGroup;
                           setFormData({ ...formData, form_fields: { ...formData.form_fields, groups: next } });
@@ -2475,7 +2598,7 @@ const EditFormPage = () => {
                             <SelectTrigger className="w-32 h-7 text-xs"><SelectValue placeholder="+ Field" /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="__add__">+ Field</SelectItem>
-                              {(formData.form_fields.fields || []).filter((f) => !(group.fields || []).includes(String(f.field_id || f.id || f.name))).map((f) => (
+                              {(formData.form_fields.fields || []).filter((f) => !(formData.form_fields.groups || []).flatMap((g) => g.fields || []).includes(String(f.field_id || f.id || f.name))).map((f) => (
                                 <SelectItem key={f.field_id || f.id || f.name} value={String(f.field_id || f.id || f.name)}>{f.label || f.field_id || f.id}</SelectItem>
                               ))}
                             </SelectContent>

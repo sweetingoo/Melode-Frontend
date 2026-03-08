@@ -1598,58 +1598,93 @@ const TrackerEntryDetailPage = () => {
                           {(() => {
                             const sectionGroups = fieldsBySection[sectionKey]?.groups;
                             const sectionFieldIds = new Set(sectionFields.map((f) => (f.id || f.name || f.field_id)));
+                            const fieldIdsInGroups = new Set((sectionGroups || []).flatMap((g) => g.fields || []));
+                            const ungroupedSectionFields = sectionGroups?.length
+                              ? sectionFields.filter((f) => !fieldIdsInGroups.has(f.id || f.name || f.field_id))
+                              : [];
                             if (sectionGroups?.length > 0) {
-                              return sectionGroups.map((group) => {
-                                if (!checkGroupVisibility(group, entryData)) return null;
-                                const groupFields = (group.fields || [])
-                                  .map((fid) => sectionFields.find((f) => (f.id || f.name || f.field_id) === fid))
-                                  .filter(Boolean);
-                                if (groupFields.length === 0) return null;
-                                const isGrid = (group.layout || "") === "grid" && group.grid_columns;
-                                const gridCols = group.grid_columns || {};
-                                const leftFields = (gridCols.left || []).map((fid) => sectionFields.find((f) => (f.id || f.name || f.field_id) === fid)).filter(Boolean);
-                                const centerFields = (gridCols.center || []).map((fid) => sectionFields.find((f) => (f.id || f.name || f.field_id) === fid)).filter(Boolean);
-                                const rightFields = (gridCols.right || []).map((fid) => sectionFields.find((f) => (f.id || f.name || f.field_id) === fid)).filter(Boolean);
-                                const renderGroupField = (field) => {
-                                  const fieldId = field.id || field.name || field.field_id;
-                                  const value = entryData[fieldId];
-                                  const baseField = { ...field, type: field.type || field.field_type, field_label: field.label || field.field_label || field.name, field_name: field.name || field.id };
-                                  return (
-                                    <CustomFieldRenderer
-                                      key={fieldId}
-                                      field={getFieldWithStageFilteredStatusOptions(baseField, statusesForEditModeStageFiltered)}
-                                      value={value}
-                                      onChange={handleFieldChange}
-                                      error={fieldErrors[fieldId]}
-                                      readOnly={false}
-                                    />
-                                  );
-                                };
+                              const renderGroupField = (field) => {
+                                const fieldId = field.id || field.name || field.field_id;
+                                const value = entryData[fieldId];
+                                const baseField = { ...field, type: field.type || field.field_type, field_label: field.label || field.field_label || field.name, field_name: field.name || field.id };
                                 return (
-                                  <div key={group.id || group.label} className="space-y-3">
-                                    <h4 className="text-sm font-semibold text-muted-foreground border-b pb-1.5">{group.label || group.id}</h4>
-                                    {isGrid ? (
-                                      <div className="space-y-4">
-                                        {Array.from({ length: Math.max(leftFields.length, rightFields.length) }, (_, i) => (
-                                          <div key={`lr-${i}`} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <div className="space-y-3">{leftFields[i] ? renderGroupField(leftFields[i]) : null}</div>
-                                            <div className="space-y-3">{rightFields[i] ? renderGroupField(rightFields[i]) : null}</div>
-                                          </div>
-                                        ))}
-                                        {centerFields.map((field) => (
-                                          <div key={field.id || field.name || field.field_id} className="w-full">
-                                            {renderGroupField(field)}
-                                          </div>
-                                        ))}
-                                      </div>
-                                    ) : (
-                                      <div className="space-y-3 pl-0">
-                                        {groupFields.map(renderGroupField)}
-                                      </div>
-                                    )}
-                                  </div>
+                                  <CustomFieldRenderer
+                                    key={fieldId}
+                                    field={getFieldWithStageFilteredStatusOptions(baseField, statusesForEditModeStageFiltered)}
+                                    value={value}
+                                    onChange={handleFieldChange}
+                                    error={fieldErrors[fieldId]}
+                                    readOnly={false}
+                                  />
                                 );
-                              });
+                              };
+                              return (
+                                <>
+                                  {sectionGroups.map((group) => {
+                                    if (!checkGroupVisibility(group, entryData)) return null;
+                                    const groupFields = (group.fields || [])
+                                      .map((fid) => sectionFields.find((f) => (f.id || f.name || f.field_id) === fid))
+                                      .filter(Boolean);
+                                    if (groupFields.length === 0) return null;
+                                    const isGrid = (group.layout || "") === "grid" && (group.grid_rows?.length > 0 || group.grid_columns);
+                                    const rows = (group.grid_rows && group.grid_rows.length > 0)
+                                      ? group.grid_rows
+                                      : (group.grid_columns ? [group.grid_columns] : []);
+                                    return (
+                                      <div key={group.id || group.label} className="space-y-3">
+                                        {group.label && <h4 className="text-sm font-semibold text-muted-foreground border-b pb-1.5">{group.label}</h4>}
+                                        {isGrid && rows.length > 0 ? (
+                                          <div className="space-y-4">
+                                            {rows.map((gridRow, rowIdx) => {
+                                              const leftFields = (gridRow.left || []).map((fid) => sectionFields.find((f) => (f.id || f.name || f.field_id) === fid)).filter(Boolean);
+                                              const centerFields = (gridRow.center || []).map((fid) => sectionFields.find((f) => (f.id || f.name || f.field_id) === fid)).filter(Boolean);
+                                              const rightFields = (gridRow.right || []).map((fid) => sectionFields.find((f) => (f.id || f.name || f.field_id) === fid)).filter(Boolean);
+                                              return (
+                                                <div key={`row-${rowIdx}`} className="space-y-4">
+                                                  {Array.from({ length: Math.max(leftFields.length, rightFields.length) }, (_, i) => (
+                                                    <div key={`lr-${i}`} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                      <div className="space-y-3">{leftFields[i] ? renderGroupField(leftFields[i]) : null}</div>
+                                                      <div className="space-y-3">{rightFields[i] ? renderGroupField(rightFields[i]) : null}</div>
+                                                    </div>
+                                                  ))}
+                                                  {centerFields.map((field) => (
+                                                    <div key={field.id || field.name || field.field_id} className="w-full">
+                                                      {renderGroupField(field)}
+                                                    </div>
+                                                  ))}
+                                                </div>
+                                              );
+                                            })}
+                                          </div>
+                                        ) : (
+                                          <div className="space-y-3 pl-0">
+                                            {groupFields.map(renderGroupField)}
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                  {ungroupedSectionFields.length > 0 && (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 space-y-3">
+                                      {ungroupedSectionFields.map((field) => {
+                                        const fieldId = field.id || field.name || field.field_id;
+                                        const value = entryData[fieldId];
+                                        const baseField = { ...field, type: field.type || field.field_type, field_label: field.label || field.field_label || field.name, field_name: field.name || field.id };
+                                        return (
+                                          <CustomFieldRenderer
+                                            key={fieldId}
+                                            field={getFieldWithStageFilteredStatusOptions(baseField, statusesForEditModeStageFiltered)}
+                                            value={value}
+                                            onChange={handleFieldChange}
+                                            error={fieldErrors[fieldId]}
+                                            readOnly={false}
+                                          />
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                                </>
+                              );
                             }
                             return sectionFields.map((field) => {
                               const fieldId = field.id || field.name || field.field_id;
