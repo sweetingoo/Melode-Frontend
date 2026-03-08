@@ -17,6 +17,16 @@ import { useDownloadFile } from "@/hooks/useProfile";
 import { useFileReferences } from "@/hooks/useFileReferences";
 import { usersService } from "@/services/users";
 
+// Sort options by value for consistent display order (select, radio, multiselect)
+const sortOptionsByValue = (options) => {
+  if (!Array.isArray(options) || options.length === 0) return options;
+  return [...options].sort((a, b) => {
+    const valA = typeof a === 'object' && a !== null ? String(a?.value ?? '') : String(a ?? '');
+    const valB = typeof b === 'object' && b !== null ? String(b?.value ?? '') : String(b ?? '');
+    return valA.localeCompare(valB, undefined, { sensitivity: 'base' });
+  });
+};
+
 const CustomFieldRenderer = ({ 
   field, 
   value, 
@@ -169,7 +179,7 @@ const CustomFieldRenderer = ({
 
       case 'select':
       case 'dropdown': {
-        const options = field.field_options?.options || field.options || [];
+        const options = sortOptionsByValue(field.field_options?.options || field.options || []);
         const selectObj = value && typeof value === 'object' && 'rag' in value ? value : { value, rag: null };
         const ragColor = selectObj.rag?.toLowerCase();
         const selectVal = selectObj.value != null && selectObj.value !== '' ? selectObj.value : undefined;
@@ -225,7 +235,7 @@ const CustomFieldRenderer = ({
 
       case 'radio':
       case 'radio_group':
-        const radioOptions = field.field_options?.options || field.options || [];
+        const radioOptions = sortOptionsByValue(field.field_options?.options || field.options || []);
         return (
           <RadioGroup
             value={value || ''}
@@ -367,7 +377,7 @@ const CustomFieldRenderer = ({
         );
 
       case 'multiselect': {
-        const multiOptions = field.field_options?.options || field.options || [];
+        const multiOptions = sortOptionsByValue(field.field_options?.options || field.options || []);
         const multiObj = value && typeof value === 'object' && 'rag' in value ? value : { value, rag: null };
         const selectedValues = Array.isArray(multiObj.value) ? multiObj.value : (multiObj.value ? [multiObj.value] : []);
         const multiRag = multiObj.rag?.toLowerCase();

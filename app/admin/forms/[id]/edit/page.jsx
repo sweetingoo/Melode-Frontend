@@ -143,6 +143,16 @@ const generateDisplayFieldId = (fieldType) => {
   return `${prefix}_${timestamp}_${random}`;
 };
 
+// Sort options by value (for select, radio, multiselect) so they display in a consistent order
+const sortOptionsByValue = (options) => {
+  if (!Array.isArray(options) || options.length === 0) return options;
+  return [...options].sort((a, b) => {
+    const valA = typeof a === 'object' && a !== null ? String(a?.value ?? '') : String(a ?? '');
+    const valB = typeof b === 'object' && b !== null ? String(b?.value ?? '') : String(b ?? '');
+    return valA.localeCompare(valB, undefined, { sensitivity: 'base' });
+  });
+};
+
 const fieldTypes = [
   { value: "text", label: "Text" },
   { value: "textarea", label: "Textarea" },
@@ -153,6 +163,7 @@ const fieldTypes = [
   { value: "datetime", label: "Date & Time" },
   { value: "boolean", label: "Boolean/Checkbox" },
   { value: "select", label: "Select (Single)" },
+  { value: "radio", label: "Radio (Single choice)" },
   { value: "multiselect", label: "Multi-Select" },
   { value: "people", label: "People (User Selection)" },
   { value: "file", label: "File Upload" },
@@ -499,13 +510,13 @@ const EditFormPage = () => {
     }
     setNewField({
       ...newField,
-      options: [
+      options: sortOptionsByValue([
         ...newField.options,
         {
           value: newOption.value.trim(),
           label: newOption.label.trim() || newOption.value.trim(),
         },
-      ],
+      ]),
     });
     setNewOption({ value: "", label: "" });
   };
@@ -660,7 +671,7 @@ const EditFormPage = () => {
         newField.field_type === "multiselect") &&
       newField.options.length > 0
     ) {
-      field.options = newField.options;
+      field.options = sortOptionsByValue(newField.options);
     }
 
     // Add configuration for people field
@@ -1545,9 +1556,12 @@ const EditFormPage = () => {
                         </Button>
                         {newField.options.length > 0 && (
                           <div className="space-y-1">
-                            {newField.options.map((option, index) => (
+                            {sortOptionsByValue(newField.options).map((option) => {
+                              const indexInOriginal = newField.options.findIndex((o) => (o.value === option.value && (o.label || '') === (option.label || '')));
+                              const idx = indexInOriginal >= 0 ? indexInOriginal : newField.options.findIndex((o) => o.value === option.value);
+                              return (
                               <div
-                                key={index}
+                                key={option.value ?? idx}
                                 className="flex items-center justify-between p-2 bg-muted rounded-md"
                               >
                                 <span className="text-sm">
@@ -1557,13 +1571,14 @@ const EditFormPage = () => {
                                   type="button"
                                   variant="ghost"
                                   size="icon"
-                                  onClick={() => handleRemoveOption(index)}
+                                  onClick={() => handleRemoveOption(idx)}
                                   className="h-6 w-6"
                                 >
                                   <Trash2 className="h-3 w-3" />
                                 </Button>
                               </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         )}
                       </div>
@@ -2211,7 +2226,7 @@ const EditFormPage = () => {
                                   required: fieldToEdit.required || false,
                                   placeholder: fieldToEdit.placeholder || '',
                                   help_text: fieldToEdit.help_text || '',
-                                  options: fieldToEdit.options || [],
+                                  options: sortOptionsByValue(fieldToEdit.options || []),
                                   validation: fieldToEdit.validation || {},
                                   field_options: fieldToEdit.field_options || {},
                                   content: fieldToEdit.content || '',
