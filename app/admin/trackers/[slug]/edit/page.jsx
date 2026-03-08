@@ -566,6 +566,7 @@ const TrackerEditPage = () => {
       section: newField.section || null,
       ...(newField.options.length > 0 && { options: newField.options }),
       ...(newField.type === "repeatable_group" && { fields: newField.fields || [] }),
+      ...(newField.field_options && Object.keys(newField.field_options).length > 0 && { field_options: newField.field_options }),
     };
 
     setFormData((prev) => ({
@@ -614,6 +615,7 @@ const TrackerEditPage = () => {
       ...field,
       options: field.options || [],
       fields: field.fields || [],
+      field_options: field.field_options || {},
     });
     setEditingOption({ value: "", label: "" });
   };
@@ -1688,6 +1690,27 @@ const TrackerEditPage = () => {
                           </Label>
                         </div>
 
+                        {/* Show label */}
+                        {!["text_block", "image_block", "line_break", "page_break", "youtube_video_embed", "download_link"].includes((editingField.type || editingField.field_type || "").toLowerCase()) && (
+                          <div className="flex items-center space-x-2">
+                            <input
+                              type="checkbox"
+                              id="edit-field-show-label"
+                              checked={editingField.field_options?.show_label !== false}
+                              onChange={(e) =>
+                                setEditingField((prev) => ({
+                                  ...prev,
+                                  field_options: { ...(prev.field_options || {}), show_label: e.target.checked },
+                                }))
+                              }
+                              className="rounded"
+                            />
+                            <Label htmlFor="edit-field-show-label" className="cursor-pointer">
+                              Show label
+                            </Label>
+                          </div>
+                        )}
+
                         {/* Conditional visibility */}
                         {!["text_block", "image_block", "line_break", "page_break", "youtube_video_embed", "download_link"].includes((editingField.type || editingField.field_type || "").toLowerCase()) && (
                           <div className="space-y-2 pt-2 border-t">
@@ -1702,7 +1725,7 @@ const TrackerEditPage = () => {
                                     setEditingField((prev) => ({
                                       ...prev,
                                       conditional_visibility: value && value !== "__none__"
-                                        ? { ...(prev.conditional_visibility || {}), depends_on_field: value }
+                                        ? { depends_on_field: value, show_when: null, value: null }
                                         : null,
                                     }))
                                   }
@@ -1724,55 +1747,131 @@ const TrackerEditPage = () => {
                                   </SelectContent>
                                 </Select>
                               </div>
-                              {editingField.conditional_visibility?.depends_on_field && (
-                                <>
-                                  <div>
-                                    <Label htmlFor="cond-show-when" className="text-xs">Condition</Label>
-                                    <Select
-                                      value={editingField.conditional_visibility?.show_when || ""}
-                                      onValueChange={(value) =>
-                                        setEditingField((prev) => ({
-                                          ...prev,
-                                          conditional_visibility: {
-                                            ...(prev.conditional_visibility || {}),
-                                            show_when: value || null,
-                                          },
-                                        }))
-                                      }
-                                    >
-                                      <SelectTrigger id="cond-show-when">
-                                        <SelectValue placeholder="Select condition..." />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="equals">Equals</SelectItem>
-                                        <SelectItem value="not_equals">Not equals</SelectItem>
-                                        <SelectItem value="contains">Contains</SelectItem>
-                                        <SelectItem value="is_empty">Is empty</SelectItem>
-                                        <SelectItem value="is_not_empty">Is not empty</SelectItem>
-                                      </SelectContent>
-                                    </Select>
-                                  </div>
-                                  {editingField.conditional_visibility?.show_when && ["equals", "not_equals", "contains"].includes(editingField.conditional_visibility.show_when) && (
+                              {editingField.conditional_visibility?.depends_on_field && (() => {
+                                const depFieldId = editingField.conditional_visibility?.depends_on_field;
+                                const depField = fields.find((f) => String(f.id || f.name || f.field_id) === String(depFieldId));
+                                const depType = (depField?.type || depField?.field_type || "").toLowerCase();
+                                const needsValue = ["equals", "not_equals", "contains"].includes(editingField.conditional_visibility?.show_when || "");
+                                const isBoolean = depType === "boolean" || depType === "checkbox";
+                                const isSelectLike = ["select", "dropdown", "radio", "radio_group"].includes(depType);
+                                const isMultiselect = depType === "multiselect";
+                                const isNumber = depType === "number" || depType === "integer";
+                                const depOptions = depField ? (depField.field_options?.options || depField.options || []) : [];
+                                const opts = Array.isArray(depOptions) ? depOptions : [];
+                                return (
+                                  <>
                                     <div>
-                                      <Label htmlFor="cond-value" className="text-xs">Value</Label>
-                                      <Input
-                                        id="cond-value"
-                                        value={editingField.conditional_visibility?.value ?? ""}
-                                        onChange={(e) =>
+                                      <Label htmlFor="cond-show-when" className="text-xs">Condition</Label>
+                                      <Select
+                                        value={editingField.conditional_visibility?.show_when || ""}
+                                        onValueChange={(value) =>
                                           setEditingField((prev) => ({
                                             ...prev,
                                             conditional_visibility: {
                                               ...(prev.conditional_visibility || {}),
-                                              value: e.target.value || null,
+                                              show_when: value || null,
+                                              value: ["equals", "not_equals", "contains"].includes(value) ? (prev.conditional_visibility?.value ?? null) : null,
                                             },
                                           }))
                                         }
-                                        placeholder="Value to match"
-                                      />
+                                      >
+                                        <SelectTrigger id="cond-show-when">
+                                          <SelectValue placeholder="Select condition..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="equals">Equals</SelectItem>
+                                          <SelectItem value="not_equals">Not equals</SelectItem>
+                                          <SelectItem value="contains">Contains</SelectItem>
+                                          <SelectItem value="is_empty">Is empty</SelectItem>
+                                          <SelectItem value="is_not_empty">Is not empty</SelectItem>
+                                        </SelectContent>
+                                      </Select>
                                     </div>
-                                  )}
-                                </>
-                              )}
+                                    {needsValue && (
+                                      <div>
+                                        <Label htmlFor="cond-value" className="text-xs">Value</Label>
+                                        {isBoolean ? (
+                                          <Select
+                                            value={editingField.conditional_visibility?.value ?? ""}
+                                            onValueChange={(v) =>
+                                              setEditingField((prev) => ({
+                                                ...prev,
+                                                conditional_visibility: {
+                                                  ...(prev.conditional_visibility || {}),
+                                                  value: v || null,
+                                                },
+                                              }))
+                                            }
+                                          >
+                                            <SelectTrigger id="cond-value">
+                                              <SelectValue placeholder="Select..." />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                              <SelectItem value="yes">Yes</SelectItem>
+                                              <SelectItem value="no">No</SelectItem>
+                                            </SelectContent>
+                                          </Select>
+                                        ) : isSelectLike || isMultiselect ? (
+                                          <Select
+                                            value={editingField.conditional_visibility?.value ?? ""}
+                                            onValueChange={(v) =>
+                                              setEditingField((prev) => ({
+                                                ...prev,
+                                                conditional_visibility: {
+                                                  ...(prev.conditional_visibility || {}),
+                                                  value: v || null,
+                                                },
+                                              }))
+                                            }
+                                          >
+                                            <SelectTrigger id="cond-value">
+                                              <SelectValue placeholder="Select option..." />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                              {opts.map((opt, i) => {
+                                                const val = typeof opt === "object" && opt !== null ? (opt.value ?? opt.label ?? "") : opt;
+                                                const label = typeof opt === "object" && opt !== null ? (opt.label ?? opt.value ?? String(val)) : String(opt);
+                                                return <SelectItem key={i} value={String(val)}>{label}</SelectItem>;
+                                              })}
+                                            </SelectContent>
+                                          </Select>
+                                        ) : isNumber ? (
+                                          <Input
+                                            id="cond-value"
+                                            type="number"
+                                            value={editingField.conditional_visibility?.value ?? ""}
+                                            onChange={(e) =>
+                                              setEditingField((prev) => ({
+                                                ...prev,
+                                                conditional_visibility: {
+                                                  ...(prev.conditional_visibility || {}),
+                                                  value: e.target.value !== "" ? e.target.value : null,
+                                                },
+                                              }))
+                                            }
+                                            placeholder="Number"
+                                          />
+                                        ) : (
+                                          <Input
+                                            id="cond-value"
+                                            value={editingField.conditional_visibility?.value ?? ""}
+                                            onChange={(e) =>
+                                              setEditingField((prev) => ({
+                                                ...prev,
+                                                conditional_visibility: {
+                                                  ...(prev.conditional_visibility || {}),
+                                                  value: e.target.value || null,
+                                                },
+                                              }))
+                                            }
+                                            placeholder="Value to match"
+                                          />
+                                        )}
+                                      </div>
+                                    )}
+                                  </>
+                                );
+                              })()}
                             </div>
                           </div>
                         )}
@@ -1815,6 +1914,29 @@ const TrackerEditPage = () => {
                                 When enabled, only shows users from the current organisation
                               </p>
                             </div>
+                          </div>
+                        )}
+
+                        {/* Boolean display: checkbox or Yes/No radios */}
+                        {(editingField.type === "boolean" || editingField.type === "checkbox") && (
+                          <div className="space-y-1">
+                            <Label className="text-xs">Display as</Label>
+                            <Select
+                              value={editingField.field_options?.boolean_display || "checkbox"}
+                              onValueChange={(v) =>
+                                setEditingField((prev) => ({
+                                  ...prev,
+                                  field_options: { ...(prev.field_options || {}), boolean_display: v },
+                                }))
+                              }
+                            >
+                              <SelectTrigger className="h-8 w-40"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="checkbox">Checkbox (single)</SelectItem>
+                                <SelectItem value="radio">Yes / No radios</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <p className="text-xs text-muted-foreground">Use Yes/No radios for explicit true/false choice.</p>
                           </div>
                         )}
 
@@ -2561,6 +2683,27 @@ const TrackerEditPage = () => {
                       </Label>
                     </div>
 
+                    {/* Show label */}
+                    {!["text_block", "image_block", "line_break", "page_break", "youtube_video_embed", "download_link"].includes((newField.type || "").toLowerCase()) && (
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          id="field-show-label"
+                          checked={newField.field_options?.show_label !== false}
+                          onChange={(e) =>
+                            setNewField((prev) => ({
+                              ...prev,
+                              field_options: { ...(prev.field_options || {}), show_label: e.target.checked },
+                            }))
+                          }
+                          className="rounded"
+                        />
+                        <Label htmlFor="field-show-label" className="cursor-pointer">
+                          Show label
+                        </Label>
+                      </div>
+                    )}
+
                     {/* Configuration for People field */}
                     {newField.type === "people" && (
                       <div className="space-y-4">
@@ -2599,6 +2742,29 @@ const TrackerEditPage = () => {
                             When enabled, only shows users from the current organization
                           </p>
                         </div>
+                      </div>
+                    )}
+
+                    {/* Boolean display: checkbox or Yes/No radios */}
+                    {(newField.type === "boolean" || newField.type === "checkbox") && (
+                      <div className="space-y-1">
+                        <Label className="text-xs">Display as</Label>
+                        <Select
+                          value={newField.field_options?.boolean_display || "checkbox"}
+                          onValueChange={(v) =>
+                            setNewField((prev) => ({
+                              ...prev,
+                              field_options: { ...(prev.field_options || {}), boolean_display: v },
+                            }))
+                          }
+                        >
+                          <SelectTrigger className="h-8 w-40"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="checkbox">Checkbox (single)</SelectItem>
+                            <SelectItem value="radio">Yes / No radios</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">Use Yes/No radios for explicit true/false choice.</p>
                       </div>
                     )}
 
@@ -3320,7 +3486,7 @@ const TrackerEditPage = () => {
                                       next[groupIdx] = {
                                         ...group,
                                         conditional_visibility: value && value !== "__none__"
-                                          ? { ...(group.conditional_visibility || {}), depends_on_field: value }
+                                          ? { depends_on_field: value, show_when: null, value: null }
                                           : null,
                                       };
                                       setEditingSection((prev) => ({ ...prev, groups: next }));
@@ -3340,47 +3506,107 @@ const TrackerEditPage = () => {
                                         ))}
                                     </SelectContent>
                                   </Select>
-                                  {group.conditional_visibility?.depends_on_field && (
-                                    <>
-                                      <Select
-                                        value={group.conditional_visibility?.show_when || ""}
-                                        onValueChange={(value) => {
-                                          const next = [...(editingSection.groups || [])];
-                                          next[groupIdx] = {
-                                            ...group,
-                                            conditional_visibility: { ...(group.conditional_visibility || {}), show_when: value || null },
-                                          };
-                                          setEditingSection((prev) => ({ ...prev, groups: next }));
-                                        }}
-                                      >
-                                        <SelectTrigger className="h-8 text-xs">
-                                          <SelectValue placeholder="Condition" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          <SelectItem value="equals">Equals</SelectItem>
-                                          <SelectItem value="not_equals">Not equals</SelectItem>
-                                          <SelectItem value="contains">Contains</SelectItem>
-                                          <SelectItem value="is_empty">Is empty</SelectItem>
-                                          <SelectItem value="is_not_empty">Is not empty</SelectItem>
-                                        </SelectContent>
-                                      </Select>
-                                      {group.conditional_visibility?.show_when && ["equals", "not_equals", "contains"].includes(group.conditional_visibility.show_when) && (
-                                        <Input
-                                          className="h-8 text-xs"
-                                          placeholder="Value"
-                                          value={group.conditional_visibility?.value ?? ""}
-                                          onChange={(e) => {
+                                  {group.conditional_visibility?.depends_on_field && (() => {
+                                    const depFieldId = group.conditional_visibility?.depends_on_field;
+                                    const depField = sectionFields.find((f) => String(f.id || f.name || f.field_id) === String(depFieldId));
+                                    const depType = (depField?.type || depField?.field_type || "").toLowerCase();
+                                    const needsValue = ["equals", "not_equals", "contains"].includes(group.conditional_visibility?.show_when || "");
+                                    const isBoolean = depType === "boolean" || depType === "checkbox";
+                                    const isSelectLike = ["select", "dropdown", "radio", "radio_group"].includes(depType);
+                                    const isMultiselect = depType === "multiselect";
+                                    const isNumber = depType === "number" || depType === "integer";
+                                    const depOptions = depField ? (depField.field_options?.options || depField.options || []) : [];
+                                    const opts = Array.isArray(depOptions) ? depOptions : [];
+                                    return (
+                                      <>
+                                        <Select
+                                          value={group.conditional_visibility?.show_when || ""}
+                                          onValueChange={(value) => {
                                             const next = [...(editingSection.groups || [])];
                                             next[groupIdx] = {
                                               ...group,
-                                              conditional_visibility: { ...(group.conditional_visibility || {}), value: e.target.value || null },
+                                              conditional_visibility: { ...(group.conditional_visibility || {}), show_when: value || null, value: ["equals", "not_equals", "contains"].includes(value) ? (group.conditional_visibility?.value ?? null) : null },
                                             };
                                             setEditingSection((prev) => ({ ...prev, groups: next }));
                                           }}
-                                        />
-                                      )}
-                                    </>
-                                  )}
+                                        >
+                                          <SelectTrigger className="h-8 text-xs">
+                                            <SelectValue placeholder="Condition" />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            <SelectItem value="equals">Equals</SelectItem>
+                                            <SelectItem value="not_equals">Not equals</SelectItem>
+                                            <SelectItem value="contains">Contains</SelectItem>
+                                            <SelectItem value="is_empty">Is empty</SelectItem>
+                                            <SelectItem value="is_not_empty">Is not empty</SelectItem>
+                                          </SelectContent>
+                                        </Select>
+                                        {needsValue && (
+                                          isBoolean ? (
+                                            <Select
+                                              value={group.conditional_visibility?.value ?? ""}
+                                              onValueChange={(v) => {
+                                                const next = [...(editingSection.groups || [])];
+                                                next[groupIdx] = { ...group, conditional_visibility: { ...(group.conditional_visibility || {}), value: v || null } };
+                                                setEditingSection((prev) => ({ ...prev, groups: next }));
+                                              }}
+                                            >
+                                              <SelectTrigger className="h-8 text-xs">
+                                                <SelectValue placeholder="Yes/No" />
+                                              </SelectTrigger>
+                                              <SelectContent>
+                                                <SelectItem value="yes">Yes</SelectItem>
+                                                <SelectItem value="no">No</SelectItem>
+                                              </SelectContent>
+                                            </Select>
+                                          ) : isSelectLike || isMultiselect ? (
+                                            <Select
+                                              value={group.conditional_visibility?.value ?? ""}
+                                              onValueChange={(v) => {
+                                                const next = [...(editingSection.groups || [])];
+                                                next[groupIdx] = { ...group, conditional_visibility: { ...(group.conditional_visibility || {}), value: v || null } };
+                                                setEditingSection((prev) => ({ ...prev, groups: next }));
+                                              }}
+                                            >
+                                              <SelectTrigger className="h-8 text-xs">
+                                                <SelectValue placeholder="Option" />
+                                              </SelectTrigger>
+                                              <SelectContent>
+                                                {opts.map((opt, i) => {
+                                                  const val = typeof opt === "object" && opt !== null ? (opt.value ?? opt.label ?? "") : opt;
+                                                  const label = typeof opt === "object" && opt !== null ? (opt.label ?? opt.value ?? String(val)) : String(opt);
+                                                  return <SelectItem key={i} value={String(val)}>{label}</SelectItem>;
+                                                })}
+                                              </SelectContent>
+                                            </Select>
+                                          ) : isNumber ? (
+                                            <Input
+                                              type="number"
+                                              className="h-8 text-xs w-32"
+                                              placeholder="Number"
+                                              value={group.conditional_visibility?.value ?? ""}
+                                              onChange={(e) => {
+                                                const next = [...(editingSection.groups || [])];
+                                                next[groupIdx] = { ...group, conditional_visibility: { ...(group.conditional_visibility || {}), value: e.target.value !== "" ? e.target.value : null } };
+                                                setEditingSection((prev) => ({ ...prev, groups: next }));
+                                              }}
+                                            />
+                                          ) : (
+                                            <Input
+                                              className="h-8 text-xs w-32"
+                                              placeholder="Value"
+                                              value={group.conditional_visibility?.value ?? ""}
+                                              onChange={(e) => {
+                                                const next = [...(editingSection.groups || [])];
+                                                next[groupIdx] = { ...group, conditional_visibility: { ...(group.conditional_visibility || {}), value: e.target.value || null } };
+                                                setEditingSection((prev) => ({ ...prev, groups: next }));
+                                              }}
+                                            />
+                                          )
+                                        )}
+                                      </>
+                                    );
+                                  })()}
                                 </div>
                               </div>
                             </div>

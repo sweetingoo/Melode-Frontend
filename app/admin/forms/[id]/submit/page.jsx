@@ -226,10 +226,12 @@ const FormSubmitPage = () => {
       const dependentValue = data[depends_on_field];
       const expectedValue = field.conditional_visibility.value;
       
-      // Normalize boolean values for comparison (handle both boolean and string representations)
+      // Normalize boolean values for comparison (handle boolean, true/false strings, and yes/no from condition UI)
       const normalizeValue = (val) => {
         if (val === true || val === 'true' || val === 'True' || val === 'TRUE') return true;
         if (val === false || val === 'false' || val === 'False' || val === 'FALSE') return false;
+        if (val === 'yes' || val === 'Yes' || val === 'YES') return true;
+        if (val === 'no' || val === 'No' || val === 'NO') return false;
         return val;
       };
       

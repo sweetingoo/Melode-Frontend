@@ -14,6 +14,7 @@ import { apiUtils } from "@/services/api-client";
 import CustomFieldRenderer from "@/components/CustomFieldRenderer";
 import { shouldShowTimeForDateField } from "@/utils/dateFieldUtils";
 import { humanizeStatusForDisplay } from "@/utils/slug";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 const FormSubmitPage = () => {
@@ -41,6 +42,7 @@ const FormSubmitPage = () => {
   const [currentPage, setCurrentPage] = useState(0);
   const [draftSubmissionId, setDraftSubmissionId] = useState(null);
   const [submissionSuccess, setSubmissionSuccess] = useState(false);
+  const [activeTabByGroup, setActiveTabByGroup] = useState({});
 
   // Update storage key when form is loaded
   useEffect(() => {
@@ -241,10 +243,12 @@ const FormSubmitPage = () => {
       const dependentValue = data[depends_on_field];
       const expectedValue = field.conditional_visibility.value;
       
-      // Normalize boolean values for comparison (handle both boolean and string representations)
+      // Normalize boolean values for comparison (handle boolean, true/false strings, and yes/no from condition UI)
       const normalizeValue = (val) => {
         if (val === true || val === 'true' || val === 'True' || val === 'TRUE') return true;
         if (val === false || val === 'false' || val === 'False' || val === 'FALSE') return false;
+        if (val === 'yes' || val === 'Yes' || val === 'YES') return true;
+        if (val === 'no' || val === 'No' || val === 'NO') return false;
         return val;
       };
       
@@ -283,6 +287,8 @@ const FormSubmitPage = () => {
     const normalize = (v) => {
       if (v === true || v === 'true' || v === 'True' || v === 'TRUE') return true;
       if (v === false || v === 'false' || v === 'False' || v === 'FALSE') return false;
+      if (v === 'yes' || v === 'Yes' || v === 'YES') return true;
+      if (v === 'no' || v === 'No' || v === 'NO') return false;
       return v;
     };
     if (show_when === 'equals') return normalize(dependentValue) === normalize(expectedValue);
@@ -475,6 +481,39 @@ const FormSubmitPage = () => {
   const totalPages = pages.length;
   const currentPageFields = pages[currentPage] || [];
 
+  // Default select/dropdown/multiselect to "none" when value is not set (not radio or other option types)
+  useEffect(() => {
+    if (!form || !currentPageFields.length) return;
+    setSubmissionData((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      const opts = (f) => f.field_options?.options || f.options || [];
+      const getNoneValue = (field) => {
+        const options = opts(field);
+        const o = options.find(
+          (opt) =>
+            String(opt?.value ?? "").toLowerCase().trim() === "none" ||
+            String(opt?.label ?? "").toLowerCase().trim() === "none"
+        );
+        return o && (o.value != null && o.value !== "") ? o.value : "none";
+      };
+      currentPageFields.forEach((field) => {
+        const fieldId = field.id || field.field_id || field.field_name || field.name;
+        const type = (field.type || field.field_type || "").toLowerCase();
+        const isSelectOrDropdown = type === "select" || type === "dropdown";
+        const isMultiselect = type === "multiselect";
+        if (isSelectOrDropdown && (prev[fieldId] === undefined || prev[fieldId] === null || prev[fieldId] === "")) {
+          next[fieldId] = getNoneValue(field);
+          changed = true;
+        } else if (isMultiselect && (!Array.isArray(prev[fieldId]) || prev[fieldId].length === 0)) {
+          next[fieldId] = [getNoneValue(field)];
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
+    });
+  }, [form?.id, form?.form_fields?.fields, currentPage]);
+
   // When form has groups (or legacy sections), build layout for current page: ungrouped fields first, then each group
   const formGroups = form?.form_fields?.groups || [];
   const formSections = form?.form_fields?.sections || [];
@@ -482,20 +521,23 @@ const FormSubmitPage = () => {
   const hasFormSections = formSections.length > 0 && !form?.is_tracker && !hasFormGroups;
   const currentPageLayout = useMemo(() => {
     if (hasFormGroups) {
-      // Groups only: fields not in any group, then each group with its fields
+      // Groups only: fields not in any group, then each group with its fields (for tabs: union of tab fields)
       if (currentPageFields.length === 0) return null;
-      const fieldIdsInGroups = new Set(formGroups.flatMap((g) => g.fields || []));
+      const fieldIdsInGroups = new Set(formGroups.flatMap((g) =>
+        (g.layout === "tabs" && g.tabs?.length) ? (g.tabs || []).flatMap((t) => t.fields || []) : (g.fields || [])
+      ));
       const fieldsNotInAnyGroup = currentPageFields.filter(
         (f) => !fieldIdsInGroups.has(f.id || f.field_id || f.name)
       );
       const groupsWithFields = formGroups
-        .map((g) => ({
-          group: g,
-          fields: currentPageFields.filter((f) =>
-            (g.fields || []).includes(f.id || f.field_id || f.name)
-          ),
-        }))
-        .filter((g) => g.fields.length > 0);
+        .map((g) => {
+          const fieldIds = (g.layout === "tabs" && g.tabs?.length)
+            ? new Set((g.tabs || []).flatMap((t) => t.fields || []))
+            : new Set(g.fields || []);
+          const fields = currentPageFields.filter((f) => fieldIds.has(f.id || f.field_id || f.name));
+          return { group: g, fields };
+        })
+        .filter((g) => (g.group.layout === "tabs" && g.group.tabs?.length) || g.fields.length > 0);
       return { fieldsNotInAnySection: fieldsNotInAnyGroup, sectionsWithContent: groupsWithFields.length > 0 || fieldsNotInAnyGroup.length > 0 ? [{ sectionLabel: null, ungrouped: fieldsNotInAnyGroup, groupsWithFields }] : null };
     }
     if (hasFormSections && currentPageFields.length > 0) {
@@ -951,7 +993,7 @@ const FormSubmitPage = () => {
                 if (currentPageLayout) {
                   const { fieldsNotInAnySection, sectionsWithContent } = currentPageLayout;
                   return (
-                    <div className="space-y-6">
+                    <div className="space-y-6 p-4">
                       {sectionsWithContent.flatMap(({ sectionLabel, ungrouped, groupsWithFields }, sectionIdx) => [
                         sectionLabel ? (
                           <div key={`section-${sectionIdx}`} className="border-b pb-1.5">
@@ -960,6 +1002,52 @@ const FormSubmitPage = () => {
                         ) : null,
                         ...groupsWithFields.map(({ group, fields: groupFields }) => {
                           if (!checkGroupVisibility(group, submissionData)) return null;
+                          const isTabs = (group.layout || "") === "tabs" && (group.tabs || []).length > 0;
+                          const groupKey = group.id || group.label || "tabs";
+                          const activeTabId = activeTabByGroup[groupKey] ?? group.tabs?.[0]?.id;
+                          if (isTabs) {
+                            return (
+                              <Card key={group.id || group.label}>
+                                {group.label && (
+                                  <CardHeader className="py-3">
+                                    <CardTitle className="text-lg font-bold">{group.label}</CardTitle>
+                                  </CardHeader>
+                                )}
+                                <CardContent className={group.label ? "pt-4 space-y-4" : "space-y-4"}>
+                                  <nav className="flex gap-4 border-b border-border mb-4 -mb-px">
+                                    {(group.tabs || []).map((tab) => (
+                                      <button
+                                        key={tab.id || tab.label}
+                                        type="button"
+                                        onClick={() => setActiveTabByGroup((prev) => ({ ...prev, [groupKey]: tab.id || tab.label }))}
+                                        className={cn(
+                                          "py-2 px-1 border-b-2 text-sm font-medium transition-colors",
+                                          (activeTabId === (tab.id || tab.label))
+                                            ? "border-primary text-primary"
+                                            : "border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground"
+                                        )}
+                                      >
+                                        {tab.label || tab.id || "Tab"}
+                                      </button>
+                                    ))}
+                                  </nav>
+                                  <div className="space-y-4">
+                                    {(group.tabs || []).map((tab) => {
+                                      const tabFieldIds = new Set(tab.fields || []);
+                                      const tabFields = groupFields.filter((f) => tabFieldIds.has(f.id || f.field_id || f.name));
+                                      const isActive = (activeTabId === (tab.id || tab.label));
+                                      if (!isActive) return null;
+                                      return (
+                                        <div key={tab.id || tab.label} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                          {tabFields.map((field) => renderOneField(field))}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            );
+                          }
                           const isGrid = (group.layout || "") === "grid" && (group.grid_rows?.length > 0 || group.grid_columns);
                           const rows = (group.grid_rows && group.grid_rows.length > 0)
                             ? group.grid_rows
@@ -968,10 +1056,10 @@ const FormSubmitPage = () => {
                             <Card key={group.id || group.label}>
                               {group.label && (
                                 <CardHeader className="py-3">
-                                  <CardTitle className="text-sm font-medium">{group.label}</CardTitle>
+                                  <CardTitle className="text-lg font-bold">{group.label}</CardTitle>
                                 </CardHeader>
                               )}
-                              <CardContent className={group.label ? "pt-0 space-y-4" : "space-y-4"}>
+                              <CardContent className={group.label ? "pt-4 space-y-4" : "space-y-4"}>
                                 {isGrid && rows.length > 0 ? (
                                   <div className="space-y-4">
                                     {rows.map((gridRow, rowIdx) => {

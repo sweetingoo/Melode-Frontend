@@ -27,6 +27,56 @@ const sortOptionsByValue = (options) => {
   });
 };
 
+// Order options: put "other"/"others" at end only (no None). Use for radio and other types that don't need None.
+const orderOptionsOtherAtEnd = (options) => {
+  if (!Array.isArray(options) || options.length === 0) return [];
+  const normalized = options.map((o) =>
+    typeof o === 'object' && o !== null ? { value: o.value ?? '', label: o.label ?? o.value ?? '' } : { value: String(o), label: String(o) }
+  );
+  const isOther = (v, l) => {
+    const vv = String(v || '').toLowerCase().trim();
+    const ll = String(l || '').toLowerCase().trim();
+    return vv === 'other' || vv === 'others' || ll === 'other' || ll === 'others';
+  };
+  const otherOptions = normalized.filter((o) => isOther(o.value, o.label));
+  const rest = normalized.filter((o) => !isOther(o.value, o.label));
+  const sortedRest = sortOptionsByValue(rest);
+  return [...sortedRest, ...otherOptions];
+};
+
+// Normalize options: ensure "None" option exists (first), put "other"/"others" at end, return { options, noneValue }. Use only for Select and Multiselect.
+const normalizeOptionsWithNoneAndOther = (options) => {
+  if (!Array.isArray(options) || options.length === 0) {
+    const noneOption = { value: 'none', label: 'None' };
+    return { options: [noneOption], noneValue: 'none' };
+  }
+  const normalized = options.map((o) =>
+    typeof o === 'object' && o !== null ? { value: o.value ?? '', label: o.label ?? o.value ?? '' } : { value: String(o), label: String(o) }
+  );
+  const isNone = (v, l) => {
+    const vv = String(v || '').toLowerCase().trim();
+    const ll = String(l || '').toLowerCase().trim();
+    return vv === 'none' || ll === 'none';
+  };
+  const isOther = (v, l) => {
+    const vv = String(v || '').toLowerCase().trim();
+    const ll = String(l || '').toLowerCase().trim();
+    return vv === 'other' || vv === 'others' || ll === 'other' || ll === 'others';
+  };
+  const hasNone = normalized.some((o) => isNone(o.value, o.label));
+  const noneOption = hasNone ? normalized.find((o) => isNone(o.value, o.label)) : { value: 'none', label: 'None' };
+  const noneValue = noneOption?.value ?? 'none';
+  if (!hasNone) {
+    normalized.unshift({ value: noneValue, label: 'None' });
+  }
+  const rest = normalized.filter((o) => !isNone(o.value, o.label));
+  const otherOptions = rest.filter((o) => isOther(o.value, o.label));
+  const middleOptions = rest.filter((o) => !isOther(o.value, o.label));
+  const sortedMiddle = sortOptionsByValue(middleOptions);
+  const ordered = [normalized.find((o) => isNone(o.value, o.label)) || { value: noneValue, label: 'None' }, ...sortedMiddle, ...otherOptions];
+  return { options: ordered, noneValue };
+};
+
 const CustomFieldRenderer = ({ 
   field, 
   value, 
@@ -38,9 +88,39 @@ const CustomFieldRenderer = ({
   const fieldId = `custom-field-${field.id}`;
   const isRequired = field.is_required || field.required;
   const fieldType = field.field_type || field.type;
+  // Field config can hide the label (show_label: false); prop hideLabel overrides for special layouts
+  const effectiveHideLabel = hideLabel || field.field_options?.show_label === false;
+  // When None is selected, other options are hidden until user expands (radio/select)
+  const [expandedOptionFields, setExpandedOptionFields] = useState({});
+
+  // Set default to "none" when value is empty for select/dropdown/multiselect only (not radio)
+  const fieldTypeLower = fieldType?.toLowerCase();
+  const isSelectOrDropdown = ['select', 'dropdown'].includes(fieldTypeLower);
+  const isMultiselect = fieldTypeLower === 'multiselect';
+  const optionsLength = (field.field_options?.options || field.options)?.length ?? 0;
+  useEffect(() => {
+    if ((!isSelectOrDropdown && !isMultiselect) || onChange == null) return;
+    const opts = field.field_options?.options || field.options || [];
+    if (!Array.isArray(opts) || opts.length === 0) return;
+    const emptySingle = value === undefined || value === null || value === '';
+    const emptyMulti = !Array.isArray(value) || value.length === 0;
+    const empty = isMultiselect ? emptyMulti : emptySingle;
+    if (!empty) return;
+    const noneOpt = opts.find((o) => String(o?.value ?? '').toLowerCase().trim() === 'none' || String(o?.label ?? '').toLowerCase().trim() === 'none');
+    const noneVal = noneOpt?.value != null && noneOpt?.value !== '' ? noneOpt.value : 'none';
+    onChange(field.id, isMultiselect ? [noneVal] : noneVal);
+  }, [field.id, value, isSelectOrDropdown, isMultiselect, onChange, optionsLength]);
 
   const handleChange = (newValue) => {
     onChange(field.id, newValue);
+    if (newValue === undefined || newValue === null) return;
+    // When user selects "none", collapse the options list again
+    const opts = field.field_options?.options || field.options || [];
+    const noneOpt = opts.find((o) => String(o?.value ?? '').toLowerCase() === 'none' || String(o?.label ?? '').toLowerCase() === 'none');
+    const noneVal = noneOpt?.value ?? 'none';
+    if (String(newValue) === String(noneVal)) {
+      setExpandedOptionFields((prev) => ({ ...prev, [fieldId]: false }));
+    }
   };
 
   const renderField = () => {
@@ -162,7 +242,29 @@ const CustomFieldRenderer = ({
         );
 
       case 'boolean':
-      case 'checkbox':
+      case 'checkbox': {
+        const booleanDisplay = field.field_options?.boolean_display || field.field_options?.display || 'checkbox';
+        const isYesNoRadios = booleanDisplay === 'radio' || booleanDisplay === 'yes_no';
+        if (isYesNoRadios) {
+          const boolVal = value === true || value === 'true';
+          return (
+            <RadioGroup
+              value={boolVal ? 'true' : 'false'}
+              onValueChange={(v) => handleChange(v === 'true')}
+              className="flex flex-wrap gap-4"
+              disabled={readOnly}
+            >
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="true" id={`${fieldId}-yes`} disabled={readOnly} />
+                <Label htmlFor={`${fieldId}-yes`} className="text-sm font-normal cursor-pointer">Yes</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="false" id={`${fieldId}-no`} disabled={readOnly} />
+                <Label htmlFor={`${fieldId}-no`} className="text-sm font-normal cursor-pointer">No</Label>
+              </div>
+            </RadioGroup>
+          );
+        }
         return (
           <div className="flex items-center space-x-2">
             <Checkbox
@@ -176,13 +278,16 @@ const CustomFieldRenderer = ({
             </Label>
           </div>
         );
+      }
 
       case 'select':
       case 'dropdown': {
-        const options = sortOptionsByValue(field.field_options?.options || field.options || []);
+        const { options: orderedOptions, noneValue } = normalizeOptionsWithNoneAndOther(field.field_options?.options || field.options || []);
+        const options = orderedOptions;
         const selectObj = value && typeof value === 'object' && 'rag' in value ? value : { value, rag: null };
         const ragColor = selectObj.rag?.toLowerCase();
-        const selectVal = selectObj.value != null && selectObj.value !== '' ? selectObj.value : undefined;
+        const rawVal = selectObj.value != null && selectObj.value !== '' ? selectObj.value : undefined;
+        const selectVal = rawVal !== undefined && rawVal !== '' ? rawVal : noneValue;
         if (readOnly && ragColor) {
           const displayVal = options.find(o => (o.value ?? o) === selectVal);
           const displayLabel = displayVal?.label ?? displayVal ?? selectVal ?? '—';
@@ -200,7 +305,7 @@ const CustomFieldRenderer = ({
         }
         return (
           <Select
-            value={selectVal || undefined}
+            value={selectVal ?? noneValue}
             onValueChange={handleChange}
             disabled={readOnly}
           >
@@ -235,25 +340,27 @@ const CustomFieldRenderer = ({
 
       case 'radio':
       case 'radio_group': {
-        const radioOptions = sortOptionsByValue(field.field_options?.options || field.options || []);
+        const radioOptions = orderOptionsOtherAtEnd(field.field_options?.options || field.options || []);
         const radioLayout = field.field_options?.options_layout || field.field_options?.layout || 'vertical';
         const isHorizontal = radioLayout === 'horizontal';
         return (
-          <RadioGroup
-            value={value || ''}
-            onValueChange={handleChange}
-            className={cn(error ? 'border-red-500' : '', isHorizontal && 'grid grid-cols-3 gap-2')}
-            disabled={readOnly}
-          >
-            {radioOptions.map((option, index) => (
-              <div key={index} className="flex items-center space-x-2">
-                <RadioGroupItem value={option.value || option} id={`${fieldId}-${index}`} disabled={readOnly} />
-                <Label htmlFor={`${fieldId}-${index}`} className="text-sm font-normal cursor-pointer">
-                  {option.label || option}
-                </Label>
-              </div>
-            ))}
-          </RadioGroup>
+          <div className="space-y-2">
+            <RadioGroup
+              value={value !== undefined && value !== null && value !== '' ? String(value) : undefined}
+              onValueChange={handleChange}
+              className={cn(error ? 'border-red-500' : '', isHorizontal && radioOptions.length > 1 && 'grid grid-cols-3 gap-2')}
+              disabled={readOnly}
+            >
+              {radioOptions.map((option, index) => (
+                <div key={index} className="flex items-center space-x-2">
+                  <RadioGroupItem value={String(option.value ?? option)} id={`${fieldId}-${index}`} disabled={readOnly} />
+                  <Label htmlFor={`${fieldId}-${index}`} className="text-sm font-normal cursor-pointer">
+                    {option.label || option}
+                  </Label>
+                </div>
+              ))}
+            </RadioGroup>
+          </div>
         );
       }
 
@@ -380,10 +487,14 @@ const CustomFieldRenderer = ({
         );
 
       case 'multiselect': {
-        const multiOptions = sortOptionsByValue(field.field_options?.options || field.options || []);
+        const { options: multiOptionsOrdered, noneValue: multiNoneValue } = normalizeOptionsWithNoneAndOther(field.field_options?.options || field.options || []);
+        const multiOptions = multiOptionsOrdered;
         const multiObj = value && typeof value === 'object' && 'rag' in value ? value : { value, rag: null };
         const selectedValues = Array.isArray(multiObj.value) ? multiObj.value : (multiObj.value ? [multiObj.value] : []);
         const multiRag = multiObj.rag?.toLowerCase();
+        const isOnlyNoneSelected = selectedValues.length === 0 || (selectedValues.length === 1 && String(selectedValues[0]) === String(multiNoneValue));
+        const multiExpanded = expandedOptionFields[fieldId] === true || !isOnlyNoneSelected;
+        const multiOptionsToShow = multiExpanded ? multiOptions : (multiOptions.length > 0 ? [multiOptions[0]] : []);
         if (readOnly && multiRag) {
           const labels = selectedValues.map((v) => {
             const o = multiOptions.find((opt) => (opt.value ?? opt) === v);
@@ -402,32 +513,54 @@ const CustomFieldRenderer = ({
             </div>
           );
         }
+        const setMultiValue = (next) => {
+          const isOnlyNone = next.length === 0 || (next.length === 1 && String(next[0]) === String(multiNoneValue));
+          if (isOnlyNone) setExpandedOptionFields((prev) => ({ ...prev, [fieldId]: false }));
+          handleChange(next.length ? next : [multiNoneValue]);
+        };
         return (
           <div className="space-y-2">
-            <div className="flex flex-wrap gap-2">
-              {multiOptions.map((option, index) => {
-                const optionValue = option.value || option;
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-4">
+              {multiOptionsToShow.map((option, index) => {
+                const optionValue = option.value ?? option;
                 const isSelected = selectedValues.includes(optionValue);
+                const isNoneOption = String(optionValue) === String(multiNoneValue);
                 return (
-                  <div key={index} className="flex items-center space-x-2">
+                  <div key={index} className="flex items-center space-x-2 py-1.5 pr-2">
                     <Checkbox
                       id={`${fieldId}-${index}`}
                       checked={isSelected}
                       onCheckedChange={(checked) => {
                         if (checked) {
-                          handleChange([...selectedValues, optionValue]);
+                          if (isNoneOption) {
+                            setMultiValue([multiNoneValue]);
+                          } else {
+                            handleChange([...selectedValues.filter(v => String(v) !== String(multiNoneValue)), optionValue]);
+                          }
                         } else {
-                          handleChange(selectedValues.filter(v => v !== optionValue));
+                          const next = selectedValues.filter(v => v !== optionValue);
+                          setMultiValue(next.length ? next : [multiNoneValue]);
                         }
                       }}
                     />
-                    <Label htmlFor={`${fieldId}-${index}`} className="text-sm font-normal">
+                    <Label htmlFor={`${fieldId}-${index}`} className="text-sm font-normal cursor-pointer flex-1 min-w-0">
                       {option.label || option}
                     </Label>
                   </div>
                 );
               })}
             </div>
+            {!readOnly && isOnlyNoneSelected && !multiExpanded && multiOptions.length > 1 && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground h-8 text-xs"
+                onClick={() => setExpandedOptionFields((prev) => ({ ...prev, [fieldId]: true }))}
+              >
+                Choose options
+              </Button>
+            )}
             {selectedValues.length > 0 && (
               <div className="text-sm text-muted-foreground">
                 Selected: {selectedValues.join(', ')}
@@ -953,7 +1086,7 @@ const CustomFieldRenderer = ({
 
   return (
     <div className="space-y-2">
-      {!hideLabel && (
+      {!effectiveHideLabel && (
         <Label htmlFor={fieldId} className="text-sm font-medium">
           {field.field_label || field.name}
           {isRequired && <span className="text-red-500 ml-1">*</span>}

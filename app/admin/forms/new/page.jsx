@@ -387,8 +387,12 @@ const NewFormPage = () => {
   };
 
   const handleAddOption = () => {
-    if (!newOption.value.trim()) {
-      toast.error("Option value is required");
+    const labelTrimmed = newOption.label.trim();
+    const valueTrimmed = newOption.value.trim();
+    const optionValue = valueTrimmed || generateFieldIdFromLabel(labelTrimmed);
+    const optionLabel = labelTrimmed || valueTrimmed || optionValue;
+    if (!optionValue && !optionLabel) {
+      toast.error("Option label or value is required");
       return;
     }
     setNewField({
@@ -396,8 +400,8 @@ const NewFormPage = () => {
       options: sortOptionsByValue([
         ...newField.options,
         {
-          value: newOption.value.trim(),
-          label: newOption.label.trim() || newOption.value.trim(),
+          value: optionValue || optionLabel,
+          label: optionLabel || optionValue,
         },
       ]),
     });
@@ -606,6 +610,11 @@ const NewFormPage = () => {
         toast.error("Invalid JSON schema. Please check the format.");
         return;
       }
+    }
+
+    // Save field_options for any field that uses it (boolean display, radio layout, file allowMultiple, etc.)
+    if (newField.field_options && Object.keys(newField.field_options).length > 0) {
+      field.field_options = { ...(field.field_options || {}), ...newField.field_options };
     }
 
     setFormData({
@@ -1298,6 +1307,23 @@ const NewFormPage = () => {
                         </div>
                       )}
 
+                      {/* Show label - hidden for display-only fields */}
+                      {!['text_block', 'image_block', 'line_break', 'page_break', 'download_link'].includes(newField.field_type) && (
+                        <div className="flex items-center space-x-2">
+                          <Checkbox
+                            id="field_show_label"
+                            checked={newField.field_options?.show_label !== false}
+                            onCheckedChange={(checked) =>
+                              setNewField((prev) => ({
+                                ...prev,
+                                field_options: { ...(prev.field_options || {}), show_label: checked !== false },
+                              }))
+                            }
+                          />
+                          <Label htmlFor="field_show_label">Show label</Label>
+                        </div>
+                      )}
+
                       {/* Basic Field Settings - Collapsible */}
                       {!['line_break', 'page_break'].includes(newField.field_type) && (
                         <Collapsible defaultOpen>
@@ -1349,6 +1375,29 @@ const NewFormPage = () => {
                             )}
                           </CollapsibleContent>
                         </Collapsible>
+                      )}
+
+                      {/* Boolean display: checkbox or Yes/No radios */}
+                      {(newField.field_type === "boolean" || newField.field_type === "checkbox") && (
+                        <div className="space-y-1 pt-2 border-t">
+                          <Label className="text-xs">Display as</Label>
+                          <Select
+                            value={newField.field_options?.boolean_display || "checkbox"}
+                            onValueChange={(v) =>
+                              setNewField((prev) => ({
+                                ...prev,
+                                field_options: { ...(prev.field_options || {}), boolean_display: v },
+                              }))
+                            }
+                          >
+                            <SelectTrigger className="h-8 w-40"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="checkbox">Checkbox (single)</SelectItem>
+                              <SelectItem value="radio">Yes / No radios</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <p className="text-xs text-muted-foreground">Use Yes/No radios for explicit true/false choice.</p>
+                        </div>
                       )}
 
                       {/* Text Block Configuration */}
@@ -1675,11 +1724,16 @@ const NewFormPage = () => {
                             <Label>Options *</Label>
                             <div className="grid grid-cols-2 gap-2">
                               <Input
-                                value={newOption.value}
-                                onChange={(e) =>
-                                  setNewOption({ ...newOption, value: e.target.value })
-                                }
-                                placeholder="Option value"
+                                value={newOption.label}
+                                onChange={(e) => {
+                                  const label = e.target.value;
+                                  setNewOption((prev) => ({
+                                    ...prev,
+                                    label,
+                                    value: prev.value || generateFieldIdFromLabel(label),
+                                  }));
+                                }}
+                                placeholder="Option label *"
                                 onKeyDown={(e) => {
                                   if (e.key === "Enter") {
                                     e.preventDefault();
@@ -1688,11 +1742,11 @@ const NewFormPage = () => {
                                 }}
                               />
                               <Input
-                                value={newOption.label}
+                                value={newOption.value}
                                 onChange={(e) =>
-                                  setNewOption({ ...newOption, label: e.target.value })
+                                  setNewOption({ ...newOption, value: e.target.value })
                                 }
-                                placeholder="Option label (optional)"
+                                placeholder="Value (auto from label)"
                                 onKeyDown={(e) => {
                                   if (e.key === "Enter") {
                                     e.preventDefault();
@@ -1701,6 +1755,7 @@ const NewFormPage = () => {
                                 }}
                               />
                             </div>
+                            <p className="text-xs text-muted-foreground">Value is auto-generated from label if left empty.</p>
                             <Button
                               type="button"
                               onClick={handleAddOption}
@@ -2198,10 +2253,9 @@ const NewFormPage = () => {
                                   onValueChange={(value) =>
                                     setNewField({
                                       ...newField,
-                                      conditional_visibility: {
-                                        ...newField.conditional_visibility,
-                                        depends_on_field: value || null,
-                                      },
+                                      conditional_visibility: value
+                                        ? { depends_on_field: value, show_when: null, value: null }
+                                        : null,
                                     })
                                   }
                                 >
@@ -2220,60 +2274,125 @@ const NewFormPage = () => {
                                   </SelectContent>
                                 </Select>
                               </div>
-                              {newField.conditional_visibility?.depends_on_field && (
-                                <>
-                                  <div>
-                                    <Label htmlFor="show_when" className="text-xs">
-                                      Condition
-                                    </Label>
-                                    <Select
-                                      value={newField.conditional_visibility?.show_when || ''}
-                                      onValueChange={(value) =>
-                                        setNewField({
-                                          ...newField,
-                                          conditional_visibility: {
-                                            ...newField.conditional_visibility,
-                                            show_when: value || null,
-                                          },
-                                        })
-                                      }
-                                    >
-                                      <SelectTrigger>
-                                        <SelectValue placeholder="Select condition..." />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="equals">Equals</SelectItem>
-                                        <SelectItem value="not_equals">Not Equals</SelectItem>
-                                        <SelectItem value="contains">Contains</SelectItem>
-                                        <SelectItem value="is_empty">Is Empty</SelectItem>
-                                        <SelectItem value="is_not_empty">Is Not Empty</SelectItem>
-                                      </SelectContent>
-                                    </Select>
-                                  </div>
-                                  {newField.conditional_visibility?.show_when &&
-                                    ['equals', 'not_equals', 'contains'].includes(newField.conditional_visibility.show_when) && (
+                              {newField.conditional_visibility?.depends_on_field && (() => {
+                                const formFields = formData.form_fields?.fields || [];
+                                const depField = formFields.find((f) => (f.field_id || f.field_name) === newField.conditional_visibility?.depends_on_field);
+                                const depType = (depField?.field_type || depField?.type || "").toLowerCase();
+                                const needsValue = ["equals", "not_equals", "contains"].includes(newField.conditional_visibility?.show_when || "");
+                                const isBoolean = depType === "boolean" || depType === "checkbox";
+                                const isSelectLike = ["select", "dropdown", "radio", "radio_group"].includes(depType);
+                                const isMultiselect = depType === "multiselect";
+                                const isNumber = depType === "number" || depType === "integer";
+                                const depOptions = depField ? (depField.field_options?.options || depField.options || []) : [];
+                                const opts = Array.isArray(depOptions) ? depOptions : [];
+                                return (
+                                  <>
+                                    <div>
+                                      <Label htmlFor="show_when" className="text-xs">Condition</Label>
+                                      <Select
+                                        value={newField.conditional_visibility?.show_when || ''}
+                                        onValueChange={(value) =>
+                                          setNewField({
+                                            ...newField,
+                                            conditional_visibility: {
+                                              ...newField.conditional_visibility,
+                                              show_when: value || null,
+                                              value: ["equals", "not_equals", "contains"].includes(value) ? (newField.conditional_visibility?.value ?? null) : null,
+                                            },
+                                          })
+                                        }
+                                      >
+                                        <SelectTrigger>
+                                          <SelectValue placeholder="Select condition..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="equals">Equals</SelectItem>
+                                          <SelectItem value="not_equals">Not Equals</SelectItem>
+                                          <SelectItem value="contains">Contains</SelectItem>
+                                          <SelectItem value="is_empty">Is Empty</SelectItem>
+                                          <SelectItem value="is_not_empty">Is Not Empty</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                    {needsValue && (
                                       <div>
-                                        <Label htmlFor="conditional_value" className="text-xs">
-                                          Value
-                                        </Label>
-                                        <Input
-                                          id="conditional_value"
-                                          value={newField.conditional_visibility?.value || ''}
-                                          onChange={(e) =>
-                                            setNewField({
-                                              ...newField,
-                                              conditional_visibility: {
-                                                ...newField.conditional_visibility,
-                                                value: e.target.value || null,
-                                              },
-                                            })
-                                          }
-                                          placeholder="Enter value to match"
-                                        />
+                                        <Label htmlFor="conditional_value" className="text-xs">Value</Label>
+                                        {isBoolean ? (
+                                          <Select
+                                            value={newField.conditional_visibility?.value || ''}
+                                            onValueChange={(v) =>
+                                              setNewField({
+                                                ...newField,
+                                                conditional_visibility: { ...newField.conditional_visibility, value: v || null },
+                                              })
+                                            }
+                                          >
+                                            <SelectTrigger>
+                                              <SelectValue placeholder="Select..." />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                              <SelectItem value="yes">Yes</SelectItem>
+                                              <SelectItem value="no">No</SelectItem>
+                                            </SelectContent>
+                                          </Select>
+                                        ) : isSelectLike || isMultiselect ? (
+                                          <Select
+                                            value={newField.conditional_visibility?.value || ''}
+                                            onValueChange={(v) =>
+                                              setNewField({
+                                                ...newField,
+                                                conditional_visibility: { ...newField.conditional_visibility, value: v || null },
+                                              })
+                                            }
+                                          >
+                                            <SelectTrigger>
+                                              <SelectValue placeholder="Select option..." />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                              {opts.map((opt, i) => {
+                                                const val = typeof opt === "object" && opt !== null ? (opt.value ?? opt.label ?? "") : opt;
+                                                const label = typeof opt === "object" && opt !== null ? (opt.label ?? opt.value ?? String(val)) : String(opt);
+                                                return <SelectItem key={i} value={String(val)}>{label}</SelectItem>;
+                                              })}
+                                            </SelectContent>
+                                          </Select>
+                                        ) : isNumber ? (
+                                          <Input
+                                            id="conditional_value"
+                                            type="number"
+                                            value={newField.conditional_visibility?.value || ''}
+                                            onChange={(e) =>
+                                              setNewField({
+                                                ...newField,
+                                                conditional_visibility: {
+                                                  ...newField.conditional_visibility,
+                                                  value: e.target.value !== "" ? e.target.value : null,
+                                                },
+                                              })
+                                            }
+                                            placeholder="Number"
+                                          />
+                                        ) : (
+                                          <Input
+                                            id="conditional_value"
+                                            value={newField.conditional_visibility?.value || ''}
+                                            onChange={(e) =>
+                                              setNewField({
+                                                ...newField,
+                                                conditional_visibility: {
+                                                  ...newField.conditional_visibility,
+                                                  value: e.target.value || null,
+                                                },
+                                              })
+                                            }
+                                            placeholder="Value to match"
+                                          />
+                                        )}
                                       </div>
                                     )}
-                                </>
-                              )}
+                                  </>
+                                );
+                              })()}
                               <p className="text-xs text-muted-foreground">
                                 This field will only be visible when the condition is met
                               </p>

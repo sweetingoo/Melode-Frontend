@@ -111,8 +111,10 @@ export default function PublicEntrySubmitPage() {
     const { depends_on_field, show_when, value: expectedValue } = field.conditional_visibility;
     const dependentValue = data[depends_on_field];
     const normalize = (v) => {
-      if (v === true || v === "true" || v === "True") return true;
-      if (v === false || v === "false" || v === "False") return false;
+      if (v === true || v === "true" || v === "True" || v === "TRUE") return true;
+      if (v === false || v === "false" || v === "False" || v === "FALSE") return false;
+      if (v === "yes" || v === "Yes" || v === "YES") return true;
+      if (v === "no" || v === "No" || v === "NO") return false;
       return v;
     };
     if (show_when === "equals") return normalize(dependentValue) === normalize(expectedValue);

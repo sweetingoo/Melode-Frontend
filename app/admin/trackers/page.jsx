@@ -1393,8 +1393,10 @@ const TrackersPage = () => {
                       const { depends_on_field, show_when, value: expectedValue } = group.conditional_visibility;
                       const dependentValue = data?.[depends_on_field];
                       const normalize = (v) => {
-                        if (v === true || v === "true" || v === "True") return true;
-                        if (v === false || v === "false" || v === "False") return false;
+                        if (v === true || v === "true" || v === "True" || v === "TRUE") return true;
+                        if (v === false || v === "false" || v === "False" || v === "FALSE") return false;
+                        if (v === "yes" || v === "Yes" || v === "YES") return true;
+                        if (v === "no" || v === "No" || v === "NO") return false;
                         return v;
                       };
                       if (show_when === "equals") return normalize(dependentValue) === normalize(expectedValue);
@@ -1489,7 +1491,7 @@ const TrackersPage = () => {
                                             : (group.grid_columns ? [group.grid_columns] : []);
                                           return (
                                             <div key={group.id || group.label || groupFieldIds.join("-")} className="space-y-3">
-                                              {group.label && <h4 className="text-sm font-semibold text-muted-foreground border-b pb-1.5">{group.label}</h4>}
+                                              {group.label && <h4 className="text-lg font-bold text-muted-foreground border-b pb-1.5">{group.label}</h4>}
                                               {isGrid && rows.length > 0 ? (
                                                 <div className="space-y-4">
                                                   {rows.map((gridRow, rowIdx) => {

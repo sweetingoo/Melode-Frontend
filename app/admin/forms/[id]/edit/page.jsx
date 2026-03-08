@@ -699,8 +699,12 @@ const EditFormPage = () => {
   };
 
   const handleAddOption = () => {
-    if (!newOption.value.trim()) {
-      toast.error("Option value is required");
+    const labelTrimmed = newOption.label.trim();
+    const valueTrimmed = newOption.value.trim();
+    const optionValue = valueTrimmed || generateFieldIdFromLabel(labelTrimmed);
+    const optionLabel = labelTrimmed || valueTrimmed || optionValue;
+    if (!optionValue && !optionLabel) {
+      toast.error("Option label or value is required");
       return;
     }
     setNewField({
@@ -708,8 +712,8 @@ const EditFormPage = () => {
       options: sortOptionsByValue([
         ...newField.options,
         {
-          value: newOption.value.trim(),
-          label: newOption.label.trim() || newOption.value.trim(),
+          value: optionValue || optionLabel,
+          label: optionLabel || optionValue,
         },
       ]),
     });
@@ -918,6 +922,11 @@ const EditFormPage = () => {
         toast.error("Invalid JSON schema. Please check the format.");
         return;
       }
+    }
+
+    // Save field_options for any field that uses it (boolean display, radio layout, file allowMultiple, etc.)
+    if (newField.field_options && Object.keys(newField.field_options).length > 0) {
+      field.field_options = { ...(field.field_options || {}), ...newField.field_options };
     }
 
     setFormData({
@@ -1374,6 +1383,23 @@ const EditFormPage = () => {
                     </div>
                   )}
 
+                  {/* Show label - hidden for display-only fields */}
+                  {!['text_block', 'image_block', 'line_break', 'page_break', 'download_link'].includes(newField.field_type) && (
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="field_show_label"
+                        checked={newField.field_options?.show_label !== false}
+                        onCheckedChange={(checked) =>
+                          setNewField((prev) => ({
+                            ...prev,
+                            field_options: { ...(prev.field_options || {}), show_label: checked !== false },
+                          }))
+                        }
+                      />
+                      <Label htmlFor="field_show_label">Show label</Label>
+                    </div>
+                  )}
+
                   {/* Placeholder - hidden for display-only fields */}
                   {!['text_block', 'image_block', 'line_break', 'page_break'].includes(newField.field_type) && (
                     <div>
@@ -1411,6 +1437,29 @@ const EditFormPage = () => {
                           ? "This text will be displayed as the checkbox label"
                           : "This text appears as placeholder text or helper text below the field"}
                       </p>
+                    </div>
+                  )}
+
+                  {/* Boolean display: checkbox or Yes/No radios */}
+                  {(newField.field_type === "boolean" || newField.field_type === "checkbox") && (
+                    <div className="space-y-1 pt-2 border-t">
+                      <Label className="text-xs">Display as</Label>
+                      <Select
+                        value={newField.field_options?.boolean_display || "checkbox"}
+                        onValueChange={(v) =>
+                          setNewField((prev) => ({
+                            ...prev,
+                            field_options: { ...(prev.field_options || {}), boolean_display: v },
+                          }))
+                        }
+                      >
+                        <SelectTrigger className="h-8 w-40"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="checkbox">Checkbox (single)</SelectItem>
+                          <SelectItem value="radio">Yes / No radios</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">Use Yes/No radios for explicit true/false choice.</p>
                     </div>
                   )}
 
@@ -1734,11 +1783,16 @@ const EditFormPage = () => {
                         <Label>Options *</Label>
                         <div className="grid grid-cols-2 gap-2">
                           <Input
-                            value={newOption.value}
-                            onChange={(e) =>
-                              setNewOption({ ...newOption, value: e.target.value })
-                            }
-                            placeholder="Option value"
+                            value={newOption.label}
+                            onChange={(e) => {
+                              const label = e.target.value;
+                              setNewOption((prev) => ({
+                                ...prev,
+                                label,
+                                value: prev.value || generateFieldIdFromLabel(label),
+                              }));
+                            }}
+                            placeholder="Option label *"
                             onKeyDown={(e) => {
                               if (e.key === "Enter") {
                                 e.preventDefault();
@@ -1747,11 +1801,11 @@ const EditFormPage = () => {
                             }}
                           />
                           <Input
-                            value={newOption.label}
+                            value={newOption.value}
                             onChange={(e) =>
-                              setNewOption({ ...newOption, label: e.target.value })
+                              setNewOption({ ...newOption, value: e.target.value })
                             }
-                            placeholder="Option label (optional)"
+                            placeholder="Value (auto from label)"
                             onKeyDown={(e) => {
                               if (e.key === "Enter") {
                                 e.preventDefault();
@@ -1760,6 +1814,7 @@ const EditFormPage = () => {
                             }}
                           />
                         </div>
+                        <p className="text-xs text-muted-foreground">Value is auto-generated from label if left empty.</p>
                         <Button
                           type="button"
                           onClick={handleAddOption}
@@ -2229,10 +2284,9 @@ const EditFormPage = () => {
                             onValueChange={(value) =>
                               setNewField({
                                 ...newField,
-                                conditional_visibility: {
-                                  ...newField.conditional_visibility,
-                                  depends_on_field: value || null,
-                                },
+                                conditional_visibility: value
+                                  ? { depends_on_field: value, show_when: null, value: null }
+                                  : null,
                               })
                             }
                           >
@@ -2241,7 +2295,7 @@ const EditFormPage = () => {
                             </SelectTrigger>
                             <SelectContent>
                               {formData.form_fields.fields
-                                .filter(f => f.field_id !== newField.field_id && 
+                                .filter(f => f.field_id !== newField.field_id &&
                                   !['text_block', 'image_block', 'line_break', 'page_break', 'download_link'].includes(f.field_type?.toLowerCase()))
                                 .map((f) => (
                                   <SelectItem key={f.field_id || f.field_name} value={f.field_id || f.field_name}>
@@ -2251,60 +2305,125 @@ const EditFormPage = () => {
                             </SelectContent>
                           </Select>
                         </div>
-                        {newField.conditional_visibility?.depends_on_field && (
-                          <>
-                            <div>
-                              <Label htmlFor="show_when" className="text-xs">
-                                Condition
-                              </Label>
-                              <Select
-                                value={newField.conditional_visibility?.show_when || ''}
-                                onValueChange={(value) =>
-                                  setNewField({
-                                    ...newField,
-                                    conditional_visibility: {
-                                      ...newField.conditional_visibility,
-                                      show_when: value || null,
-                                    },
-                                  })
-                                }
-                              >
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select condition..." />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="equals">Equals</SelectItem>
-                                  <SelectItem value="not_equals">Not Equals</SelectItem>
-                                  <SelectItem value="contains">Contains</SelectItem>
-                                  <SelectItem value="is_empty">Is Empty</SelectItem>
-                                  <SelectItem value="is_not_empty">Is Not Empty</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            {newField.conditional_visibility?.show_when && 
-                             ['equals', 'not_equals', 'contains'].includes(newField.conditional_visibility.show_when) && (
+                        {newField.conditional_visibility?.depends_on_field && (() => {
+                          const formFields = formData.form_fields?.fields || [];
+                          const depField = formFields.find((f) => (f.field_id || f.field_name) === newField.conditional_visibility?.depends_on_field);
+                          const depType = (depField?.field_type || depField?.type || "").toLowerCase();
+                          const needsValue = ["equals", "not_equals", "contains"].includes(newField.conditional_visibility?.show_when || "");
+                          const isBoolean = depType === "boolean" || depType === "checkbox";
+                          const isSelectLike = ["select", "dropdown", "radio", "radio_group"].includes(depType);
+                          const isMultiselect = depType === "multiselect";
+                          const isNumber = depType === "number" || depType === "integer";
+                          const depOptions = depField ? (depField.field_options?.options || depField.options || []) : [];
+                          const opts = Array.isArray(depOptions) ? depOptions : [];
+                          return (
+                            <>
                               <div>
-                                <Label htmlFor="conditional_value" className="text-xs">
-                                  Value
-                                </Label>
-                                <Input
-                                  id="conditional_value"
-                                  value={newField.conditional_visibility?.value || ''}
-                                  onChange={(e) =>
+                                <Label htmlFor="show_when" className="text-xs">Condition</Label>
+                                <Select
+                                  value={newField.conditional_visibility?.show_when || ''}
+                                  onValueChange={(value) =>
                                     setNewField({
                                       ...newField,
                                       conditional_visibility: {
                                         ...newField.conditional_visibility,
-                                        value: e.target.value || null,
+                                        show_when: value || null,
+                                        value: ["equals", "not_equals", "contains"].includes(value) ? (newField.conditional_visibility?.value ?? null) : null,
                                       },
                                     })
                                   }
-                                  placeholder="Enter value to match"
-                                />
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Select condition..." />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="equals">Equals</SelectItem>
+                                    <SelectItem value="not_equals">Not Equals</SelectItem>
+                                    <SelectItem value="contains">Contains</SelectItem>
+                                    <SelectItem value="is_empty">Is Empty</SelectItem>
+                                    <SelectItem value="is_not_empty">Is Not Empty</SelectItem>
+                                  </SelectContent>
+                                </Select>
                               </div>
-                            )}
-                          </>
-                        )}
+                              {needsValue && (
+                                <div>
+                                  <Label htmlFor="conditional_value" className="text-xs">Value</Label>
+                                  {isBoolean ? (
+                                    <Select
+                                      value={newField.conditional_visibility?.value || ''}
+                                      onValueChange={(v) =>
+                                        setNewField({
+                                          ...newField,
+                                          conditional_visibility: { ...newField.conditional_visibility, value: v || null },
+                                        })
+                                      }
+                                    >
+                                      <SelectTrigger>
+                                        <SelectValue placeholder="Select..." />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="yes">Yes</SelectItem>
+                                        <SelectItem value="no">No</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  ) : isSelectLike || isMultiselect ? (
+                                    <Select
+                                      value={newField.conditional_visibility?.value || ''}
+                                      onValueChange={(v) =>
+                                        setNewField({
+                                          ...newField,
+                                          conditional_visibility: { ...newField.conditional_visibility, value: v || null },
+                                        })
+                                      }
+                                    >
+                                      <SelectTrigger>
+                                        <SelectValue placeholder="Select option..." />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {opts.map((opt, i) => {
+                                          const val = typeof opt === "object" && opt !== null ? (opt.value ?? opt.label ?? "") : opt;
+                                          const label = typeof opt === "object" && opt !== null ? (opt.label ?? opt.value ?? String(val)) : String(opt);
+                                          return <SelectItem key={i} value={String(val)}>{label}</SelectItem>;
+                                        })}
+                                      </SelectContent>
+                                    </Select>
+                                  ) : isNumber ? (
+                                    <Input
+                                      id="conditional_value"
+                                      type="number"
+                                      value={newField.conditional_visibility?.value || ''}
+                                      onChange={(e) =>
+                                        setNewField({
+                                          ...newField,
+                                          conditional_visibility: {
+                                            ...newField.conditional_visibility,
+                                            value: e.target.value !== "" ? e.target.value : null,
+                                          },
+                                        })
+                                      }
+                                      placeholder="Number"
+                                    />
+                                  ) : (
+                                    <Input
+                                      id="conditional_value"
+                                      value={newField.conditional_visibility?.value || ''}
+                                      onChange={(e) =>
+                                        setNewField({
+                                          ...newField,
+                                          conditional_visibility: {
+                                            ...newField.conditional_visibility,
+                                            value: e.target.value || null,
+                                          },
+                                        })
+                                      }
+                                      placeholder="Value to match"
+                                    />
+                                  )}
+                                </div>
+                              )}
+                            </>
+                          );
+                        })()}
                       </div>
                       <p className="text-xs text-muted-foreground">
                         This field will only be visible when the condition is met
@@ -2561,6 +2680,11 @@ const EditFormPage = () => {
                               newGroup.grid_rows = [{ left: fromFields.length ? [...fromFields] : [], center: [], right: [] }];
                               newGroup.fields = fromFields.length ? [...fromFields] : [];
                             }
+                          } else if (v === "tabs") {
+                            newGroup.tabs = Array.isArray(group.tabs) && group.tabs.length > 0
+                              ? group.tabs
+                              : [{ id: `tab_${Date.now()}`, label: "Tab 1", fields: [] }];
+                            newGroup.fields = newGroup.tabs.flatMap((t) => t.fields || []);
                           }
                           next[gIdx] = newGroup;
                           setFormData({ ...formData, form_fields: { ...formData.form_fields, groups: next } });
@@ -2569,11 +2693,109 @@ const EditFormPage = () => {
                           <SelectContent>
                             <SelectItem value="stack">Stack (default)</SelectItem>
                             <SelectItem value="grid">Grid (3 columns)</SelectItem>
+                            <SelectItem value="tabs">Tabs</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
                       {(group.layout || "") === "grid" ? (
                         <FormGroupGridColumnsEditor formData={formData} setFormData={setFormData} gIdx={gIdx} group={group} />
+                      ) : (group.layout || "") === "tabs" ? (
+                        <div className="space-y-3">
+                          <Label className="text-xs">Tabs (each tab shows its own fields, e.g. Ear / Nose / Throat)</Label>
+                          {(group.tabs || []).map((tab, tIdx) => (
+                            <div key={tab.id || tIdx} className="p-2 border rounded bg-background space-y-2">
+                              <div className="flex items-center gap-2">
+                                <Input
+                                  placeholder="Tab label (e.g. Ear)"
+                                  value={tab.label || ""}
+                                  className="h-7 text-xs flex-1"
+                                  onChange={(e) => {
+                                    const next = [...(formData.form_fields.groups || [])];
+                                    const nextTabs = [...(group.tabs || [])];
+                                    nextTabs[tIdx] = { ...tab, label: e.target.value, id: tab.id || `tab_${tIdx}` };
+                                    next[gIdx] = { ...group, tabs: nextTabs };
+                                    setFormData({ ...formData, form_fields: { ...formData.form_fields, groups: next } });
+                                  }}
+                                />
+                                <div className="flex gap-0">
+                                  <Button type="button" variant="ghost" size="icon" className="h-6 w-6" disabled={tIdx === 0} onClick={() => {
+                                    const next = [...(formData.form_fields.groups || [])];
+                                    const nextTabs = [...(group.tabs || [])];
+                                    if (tIdx <= 0) return;
+                                    [nextTabs[tIdx - 1], nextTabs[tIdx]] = [nextTabs[tIdx], nextTabs[tIdx - 1]];
+                                    const newGroup = { ...group, tabs: nextTabs, fields: nextTabs.flatMap((t) => t.fields || []) };
+                                    next[gIdx] = newGroup;
+                                    setFormData({ ...formData, form_fields: { ...formData.form_fields, groups: next } });
+                                  }}><ChevronUp className="h-3 w-3" /></Button>
+                                  <Button type="button" variant="ghost" size="icon" className="h-6 w-6" disabled={tIdx >= (group.tabs || []).length - 1} onClick={() => {
+                                    const next = [...(formData.form_fields.groups || [])];
+                                    const nextTabs = [...(group.tabs || [])];
+                                    if (tIdx >= nextTabs.length - 1) return;
+                                    [nextTabs[tIdx], nextTabs[tIdx + 1]] = [nextTabs[tIdx + 1], nextTabs[tIdx]];
+                                    const newGroup = { ...group, tabs: nextTabs, fields: nextTabs.flatMap((t) => t.fields || []) };
+                                    next[gIdx] = newGroup;
+                                    setFormData({ ...formData, form_fields: { ...formData.form_fields, groups: next } });
+                                  }}><ChevronDown className="h-3 w-3" /></Button>
+                                </div>
+                                <Button type="button" variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => {
+                                  const next = [...(formData.form_fields.groups || [])];
+                                  const nextTabs = (group.tabs || []).filter((_, i) => i !== tIdx);
+                                  const newGroup = { ...group, tabs: nextTabs.length > 0 ? nextTabs : [{ id: `tab_${Date.now()}`, label: "Tab 1", fields: [] }], fields: nextTabs.flatMap((t) => t.fields || []) };
+                                  next[gIdx] = newGroup;
+                                  setFormData({ ...formData, form_fields: { ...formData.form_fields, groups: next } });
+                                }}><Trash2 className="h-3 w-3" /></Button>
+                              </div>
+                              <div className="flex flex-wrap gap-1">
+                                {(tab.fields || []).map((fid) => {
+                                  const f = formData.form_fields.fields.find((x) => (x.field_id || x.id || x.name) === fid);
+                                  return (
+                                    <Badge key={fid} variant="outline" className="text-xs">
+                                      {f?.label || fid}
+                                      <button type="button" className="ml-1" onClick={() => {
+                                        const next = [...(formData.form_fields.groups || [])];
+                                        const nextTabs = [...(group.tabs || [])];
+                                        nextTabs[tIdx] = { ...tab, fields: (tab.fields || []).filter((id) => id !== fid) };
+                                        const newGroup = { ...group, tabs: nextTabs, fields: nextTabs.flatMap((t) => t.fields || []) };
+                                        next[gIdx] = newGroup;
+                                        setFormData({ ...formData, form_fields: { ...formData.form_fields, groups: next } });
+                                      }}><X className="h-3 w-3" /></button>
+                                    </Badge>
+                                  );
+                                })}
+                                <Select value="__add__" onValueChange={(v) => {
+                                  if (!v || v === "__add__") return;
+                                  const next = [...(formData.form_fields.groups || [])];
+                                  const allIdsInAnyGroup = (formData.form_fields.groups || []).flatMap((g) =>
+                                    (g.layout === "tabs" && g.tabs?.length) ? (g.tabs || []).flatMap((t) => t.fields || []) : (g.fields || [])
+                                  );
+                                  const nextTabs = [...(group.tabs || [])];
+                                  nextTabs[tIdx] = { ...tab, fields: [...(tab.fields || []), v] };
+                                  const newGroup = { ...group, tabs: nextTabs, fields: nextTabs.flatMap((t) => t.fields || []) };
+                                  next[gIdx] = newGroup;
+                                  setFormData({ ...formData, form_fields: { ...formData.form_fields, groups: next } });
+                                }}>
+                                  <SelectTrigger className="w-28 h-6 text-xs"><SelectValue placeholder="+ Field" /></SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="__add__">+ Field</SelectItem>
+                                    {(formData.form_fields.fields || []).filter((f) => !(formData.form_fields.groups || []).flatMap((g) =>
+                                      (g.layout === "tabs" && g.tabs?.length) ? (g.tabs || []).flatMap((t) => t.fields || []) : (g.fields || [])
+                                    ).includes(String(f.field_id || f.id || f.name))).map((f) => (
+                                      <SelectItem key={f.field_id || f.id || f.name} value={String(f.field_id || f.id || f.name)}>{f.label || f.field_id || f.id}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
+                          ))}
+                          <Button type="button" variant="outline" size="sm" className="text-xs" onClick={() => {
+                            const next = [...(formData.form_fields.groups || [])];
+                            const nextTabs = [...(group.tabs || []), { id: `tab_${Date.now()}`, label: `Tab ${(group.tabs || []).length + 1}`, fields: [] }];
+                            next[gIdx] = { ...group, tabs: nextTabs, fields: nextTabs.flatMap((t) => t.fields || []) };
+                            setFormData({ ...formData, form_fields: { ...formData.form_fields, groups: next } });
+                          }}>
+                            <Plus className="h-3 w-3 mr-1" /> Add tab
+                          </Button>
+                        </div>
                       ) : (
                         <div className="flex flex-wrap gap-1">
                           {(group.fields || []).map((fid) => {
@@ -2598,7 +2820,9 @@ const EditFormPage = () => {
                             <SelectTrigger className="w-32 h-7 text-xs"><SelectValue placeholder="+ Field" /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="__add__">+ Field</SelectItem>
-                              {(formData.form_fields.fields || []).filter((f) => !(formData.form_fields.groups || []).flatMap((g) => g.fields || []).includes(String(f.field_id || f.id || f.name))).map((f) => (
+                              {(formData.form_fields.fields || []).filter((f) => !(formData.form_fields.groups || []).flatMap((g) =>
+                                (g.layout === "tabs" && g.tabs?.length) ? (g.tabs || []).flatMap((t) => t.fields || []) : (g.fields || [])
+                              ).includes(String(f.field_id || f.id || f.name))).map((f) => (
                                 <SelectItem key={f.field_id || f.id || f.name} value={String(f.field_id || f.id || f.name)}>{f.label || f.field_id || f.id}</SelectItem>
                               ))}
                             </SelectContent>
