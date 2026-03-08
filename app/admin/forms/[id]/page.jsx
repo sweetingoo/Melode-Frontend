@@ -283,7 +283,10 @@ const FormDetailPage = () => {
                   <label className="text-sm font-medium text-muted-foreground">Template</label>
                   <div className="mt-1">
                     {form.is_template ? (
-                      <Badge variant="outline">Yes</Badge>
+                      <>
+                        <Badge variant="outline">Template</Badge>
+                        <p className="text-xs text-muted-foreground mt-1">This form is saved as a template and can be reused.</p>
+                      </>
                     ) : (
                       <span className="text-sm text-muted-foreground">No</span>
                     )}

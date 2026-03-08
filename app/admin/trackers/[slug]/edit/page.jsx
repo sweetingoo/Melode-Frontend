@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -72,9 +72,18 @@ const fieldTypes = [
   { value: "select", label: "Select (Dropdown)" },
   { value: "multiselect", label: "Multi-Select" },
   { value: "people", label: "People (User Selection)" },
+  { value: "file", label: "File Upload" },
+  { value: "json", label: "JSON" },
+  { value: "signature", label: "Signature" },
   { value: "rag", label: "RAG (Red / Amber / Green)" },
   { value: "calculated", label: "Calculated (Sum / Percentage)" },
   { value: "repeatable_group", label: "Repeatable group (linked rows)" },
+  // Display-only (no page_break – Trackers use Stages for flow)
+  { value: "text_block", label: "Text Block (Display Only)" },
+  { value: "image_block", label: "Image Block (Display Only)" },
+  { value: "youtube_video_embed", label: "YouTube Video Embed (Display Only)" },
+  { value: "line_break", label: "Line Break (Display Only)" },
+  { value: "download_link", label: "Download Link (Display Only)" },
 ];
 
 // No fixed default stages – each tracker/service defines its own. Used when tracker has no stage_mapping set.
@@ -105,11 +114,158 @@ const generateUniqueId = (label) => {
   return `${baseId}-${timestamp}-${random}`;
 };
 
+const COLUMNS = ["left", "center", "right"];
+
+function GridColumnsEditor({ group, groupIdx, sectionFields, editingSection, setEditingSection }) {
+  const grid = group.grid_columns || { left: [], center: [], right: [] };
+  const left = grid.left || [];
+  const center = grid.center || [];
+  const right = grid.right || [];
+  const allIds = [...left, ...center, ...right];
+  // When layout is grid but columns empty and group has fields, init left column from fields (e.g. after load from API)
+  React.useEffect(() => {
+    if ((group.layout || "") !== "grid") return;
+    if (allIds.length > 0) return;
+    const fromFields = group.fields || [];
+    if (fromFields.length === 0) return;
+    const next = [...(editingSection.groups || [])];
+    next[groupIdx] = { ...group, grid_columns: { left: [...fromFields], center: [], right: [] } };
+    setEditingSection((prev) => ({ ...prev, groups: next }));
+  }, []);
+
+  const updateColumns = (newGrid) => {
+    const next = [...(editingSection.groups || [])];
+    const updated = { ...group, grid_columns: newGrid, fields: [...(newGrid.left || []), ...(newGrid.center || []), ...(newGrid.right || [])] };
+    next[groupIdx] = updated;
+    setEditingSection((prev) => ({ ...prev, groups: next }));
+  };
+
+  const moveField = (fieldId, fromCol, toCol) => {
+    if (fromCol === toCol) return;
+    const left = [...(grid.left || [])];
+    const center = [...(grid.center || [])];
+    const right = [...(grid.right || [])];
+    [left, center, right].forEach((arr, i) => {
+      const col = COLUMNS[i];
+      if (col === fromCol) {
+        const idx = arr.indexOf(fieldId);
+        if (idx !== -1) arr.splice(idx, 1);
+      }
+    });
+    const addTo = (arr) => { if (!arr.includes(fieldId)) arr.push(fieldId); };
+    if (toCol === "left") addTo(left);
+    else if (toCol === "center") addTo(center);
+    else addTo(right);
+    updateColumns({ left, center, right });
+  };
+
+  const removeFromColumn = (fieldId, col) => {
+    const nextGrid = { ...grid };
+    nextGrid[col] = (nextGrid[col] || []).filter((id) => id !== fieldId);
+    updateColumns(nextGrid);
+  };
+
+  const addToColumn = (fieldId, col) => {
+    const nextGrid = { ...grid };
+    nextGrid[col] = [...(nextGrid[col] || []), fieldId];
+    updateColumns(nextGrid);
+  };
+
+  const onDragStart = (e, fieldId, col) => {
+    e.dataTransfer.setData("fieldId", fieldId);
+    e.dataTransfer.setData("fromColumn", col);
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const onDragOver = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  };
+
+  const onDrop = (e, toCol) => {
+    e.preventDefault();
+    const fieldId = e.dataTransfer.getData("fieldId");
+    const fromCol = e.dataTransfer.getData("fromColumn");
+    if (fieldId && fromCol) moveField(fieldId, fromCol, toCol);
+  };
+
+  const availableToAdd = sectionFields
+    .map((f) => f.id || f.name || f.field_id)
+    .filter(Boolean)
+    .filter((id) => !allIds.includes(id));
+
+  const columnLabels = { left: "Left", center: "Center (full width)", right: "Right" };
+
+  return (
+    <div className="grid grid-cols-3 gap-3 mt-2 p-2 border rounded-md bg-muted/30">
+      {COLUMNS.map((col) => (
+        <div
+          key={col}
+          onDragOver={onDragOver}
+          onDrop={(e) => onDrop(e, col)}
+          className="min-h-[80px] rounded border border-dashed border-muted-foreground/40 p-2 flex flex-col"
+        >
+          <div className="text-xs font-medium text-muted-foreground mb-1">{columnLabels[col]}</div>
+          <div className="flex flex-wrap gap-1 flex-1">
+            {(grid[col] || []).map((fid) => {
+              const f = sectionFields.find((x) => (x.id || x.name || x.field_id) === fid);
+              return (
+                <Badge
+                  key={fid}
+                  variant="secondary"
+                  className="text-xs cursor-grab active:cursor-grabbing"
+                  draggable
+                  onDragStart={(e) => onDragStart(e, fid, col)}
+                >
+                  {f?.label || f?.name || fid}
+                  <button
+                    type="button"
+                    className="ml-1 hover:text-destructive"
+                    onClick={() => removeFromColumn(fid, col)}
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              );
+            })}
+          </div>
+          {availableToAdd.length > 0 && (
+            <Select
+              value="__add__"
+              onValueChange={(val) => {
+                if (val && val !== "__add__") addToColumn(val, col);
+              }}
+            >
+              <SelectTrigger className="h-7 text-xs mt-1">
+                <SelectValue placeholder="+ Add" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__add__">+ Add field</SelectItem>
+                {availableToAdd.map((id) => {
+                  const f = sectionFields.find((x) => (x.id || x.name || x.field_id) === id);
+                  return <SelectItem key={id} value={id}>{f?.label || f?.name || id}</SelectItem>;
+                })}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 const TrackerEditPage = () => {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const slug = params.slug;
+  const tabFromUrl = searchParams?.get("tab");
   const [activeTab, setActiveTab] = useState("basic");
+  useEffect(() => {
+    if (tabFromUrl && ["sections", "fields", "stages", "basic", "statuses", "permissions", "notifications", "audit"].includes(tabFromUrl)) {
+      setActiveTab(tabFromUrl);
+    }
+  }, [tabFromUrl]);
 
   const { data: tracker, isLoading: trackerLoading } = useTracker(slug);
   const updateMutation = useUpdateTracker();
@@ -925,7 +1081,7 @@ const TrackerEditPage = () => {
           <TabsList className="inline-flex w-auto min-w-max sm:w-auto">
             <TabsTrigger value="basic">Basic Info</TabsTrigger>
             <TabsTrigger value="fields">Fields ({fields.length})</TabsTrigger>
-            <TabsTrigger value="sections">Sections ({sections.length})</TabsTrigger>
+            <TabsTrigger value="sections">Fields per stage ({sections.length})</TabsTrigger>
             <TabsTrigger value="statuses">Statuses ({statuses.length})</TabsTrigger>
             {formData.tracker_config?.use_stages && (
               <TabsTrigger value="stages">Stages ({stageMapping.length})</TabsTrigger>
@@ -1433,7 +1589,7 @@ const TrackerEditPage = () => {
                         <div>
                           <Label htmlFor="edit-field-section">Stage (Optional)</Label>
                           {formData.tracker_config?.use_stages && stageMapping.length > 0 && (
-                            <p className="text-xs text-muted-foreground mb-1">Assigning a field to a stage puts it on that step. Sections group fields; each section is linked to a stage by position.</p>
+                            <p className="text-xs text-muted-foreground mb-1">Assigning a field to a stage puts it in that stage's set of fields (see Fields per stage tab).</p>
                           )}
                           <Select
                             value={getSectionIdForField(editingField, sections) || editingField.section || "none"}
@@ -2309,7 +2465,7 @@ const TrackerEditPage = () => {
                     <div>
                       <Label htmlFor="field-section">Stage (Optional)</Label>
                       {formData.tracker_config?.use_stages && stageMapping.length > 0 && (
-                        <p className="text-xs text-muted-foreground mb-1">Assigning a field to a stage puts it on that step. Sections group fields; each section is linked to a stage by position.</p>
+                        <p className="text-xs text-muted-foreground mb-1">Assigning a field to a stage puts it in that stage's set of fields (see Fields per stage tab).</p>
                       )}
                       <Select
                         value={newField.section || "none"}
@@ -2918,20 +3074,20 @@ const TrackerEditPage = () => {
           </Card>
         </TabsContent>
 
-        {/* Sections Tab */}
+        {/* Fields per stage (sections) – one section per stage, order matches */}
         <TabsContent value="sections" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Tracker Sections</CardTitle>
+              <CardTitle>Fields per stage</CardTitle>
               <p className="text-sm text-muted-foreground mt-1">
-                <strong>Sections</strong> are groups of form fields. They are <strong>separate from Stages</strong>: <strong>Stages</strong> (Stages tab) are workflow steps with names and statuses; <strong>Sections</strong> define which fields appear at each step. When using stages, <strong>order is linked by position</strong>: section 1 → stage 1, section 2 → stage 2, etc. Sections may come from your tracker template (if you see them here) or you can add them below. Reorder by dragging; keep section count in sync with stage count.
+                Each stage has one set of fields; that set is edited here. Order matches stage order (section 1 → stage 1, section 2 → stage 2). Add or reorder sections below; keep the same number as stages so each stage has its fields.
               </p>
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Existing Sections */}
               {sections.length > 0 && (
                 <div className="space-y-2">
-                  <Label>Existing Sections</Label>
+                  <Label>Fields for each stage</Label>
                   {sections.map((section, index) => {
                     // Backend/template sections use section.fields (array of field ids); edit UI may use field.section
                     const sectionFieldIds = (section.fields || []).length > 0 ? (section.fields || []) : null;
@@ -2991,6 +3147,44 @@ const TrackerEditPage = () => {
                                   <Trash2 className="h-4 w-4 text-destructive" />
                                 </Button>
                               </div>
+                              {/* Layout: Stack (default) or Grid (3 columns: left, center full width, right) */}
+                              <div className="space-y-2">
+                                <Label className="text-xs font-medium">Layout</Label>
+                                <Select
+                                  value={group.layout || "stack"}
+                                  onValueChange={(val) => {
+                                    const next = [...(editingSection.groups || [])];
+                                    const newGroup = { ...group, layout: val };
+                                    if (val === "grid") {
+                                      const hasGrid = (group.grid_columns?.left ?? []).length > 0 || (group.grid_columns?.center ?? []).length > 0 || (group.grid_columns?.right ?? []).length > 0;
+                                      const left = hasGrid ? (group.grid_columns?.left ?? []) : [...(group.fields || [])];
+                                      const center = group.grid_columns?.center ?? [];
+                                      const right = group.grid_columns?.right ?? [];
+                                      newGroup.grid_columns = { left, center, right };
+                                      newGroup.fields = [...left, ...center, ...right];
+                                    }
+                                    next[groupIdx] = newGroup;
+                                    setEditingSection((prev) => ({ ...prev, groups: next }));
+                                  }}
+                                >
+                                  <SelectTrigger className="h-8 text-xs w-36">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="stack">Stack (default)</SelectItem>
+                                    <SelectItem value="grid">Grid (3 columns)</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              {(group.layout || "") === "grid" ? (
+                                <GridColumnsEditor
+                                  group={group}
+                                  groupIdx={groupIdx}
+                                  sectionFields={sectionFields}
+                                  editingSection={editingSection}
+                                  setEditingSection={setEditingSection}
+                                />
+                              ) : (
                               <div className="flex flex-wrap gap-1 items-center">
                                 {(group.fields || []).map((fid) => {
                                   const f = sectionFields.find((x) => (x.id || x.name || x.field_id) === fid);
@@ -3036,6 +3230,81 @@ const TrackerEditPage = () => {
                                       })}
                                   </SelectContent>
                                 </Select>
+                              </div>
+                              )}
+                              {/* Group conditional visibility: show whole group when another field meets a condition */}
+                              <div className="space-y-2 pt-2 border-t border-muted">
+                                <Label className="text-xs font-medium">Show group when (optional)</Label>
+                                <div className="space-y-2">
+                                  <Select
+                                    value={group.conditional_visibility?.depends_on_field || "__none__"}
+                                    onValueChange={(value) => {
+                                      const next = [...(editingSection.groups || [])];
+                                      next[groupIdx] = {
+                                        ...group,
+                                        conditional_visibility: value && value !== "__none__"
+                                          ? { ...(group.conditional_visibility || {}), depends_on_field: value }
+                                          : null,
+                                      };
+                                      setEditingSection((prev) => ({ ...prev, groups: next }));
+                                    }}
+                                  >
+                                    <SelectTrigger className="h-8 text-xs">
+                                      <SelectValue placeholder="Select field..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="__none__">None (always show)</SelectItem>
+                                      {sectionFields
+                                        .filter((f) => !["text_block", "image_block", "line_break", "page_break", "download_link"].includes((f.type || f.field_type || "").toLowerCase()))
+                                        .map((f) => (
+                                          <SelectItem key={f.id || f.name || f.field_id} value={String(f.id || f.name || f.field_id)}>
+                                            {f.label || f.name || f.id}
+                                          </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                  </Select>
+                                  {group.conditional_visibility?.depends_on_field && (
+                                    <>
+                                      <Select
+                                        value={group.conditional_visibility?.show_when || ""}
+                                        onValueChange={(value) => {
+                                          const next = [...(editingSection.groups || [])];
+                                          next[groupIdx] = {
+                                            ...group,
+                                            conditional_visibility: { ...(group.conditional_visibility || {}), show_when: value || null },
+                                          };
+                                          setEditingSection((prev) => ({ ...prev, groups: next }));
+                                        }}
+                                      >
+                                        <SelectTrigger className="h-8 text-xs">
+                                          <SelectValue placeholder="Condition" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="equals">Equals</SelectItem>
+                                          <SelectItem value="not_equals">Not equals</SelectItem>
+                                          <SelectItem value="contains">Contains</SelectItem>
+                                          <SelectItem value="is_empty">Is empty</SelectItem>
+                                          <SelectItem value="is_not_empty">Is not empty</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                      {group.conditional_visibility?.show_when && ["equals", "not_equals", "contains"].includes(group.conditional_visibility.show_when) && (
+                                        <Input
+                                          className="h-8 text-xs"
+                                          placeholder="Value"
+                                          value={group.conditional_visibility?.value ?? ""}
+                                          onChange={(e) => {
+                                            const next = [...(editingSection.groups || [])];
+                                            next[groupIdx] = {
+                                              ...group,
+                                              conditional_visibility: { ...(group.conditional_visibility || {}), value: e.target.value || null },
+                                            };
+                                            setEditingSection((prev) => ({ ...prev, groups: next }));
+                                          }}
+                                        />
+                                      )}
+                                    </>
+                                  )}
+                                </div>
                               </div>
                             </div>
                           ))}
@@ -3333,7 +3602,7 @@ const TrackerEditPage = () => {
             <CardHeader>
               <CardTitle>Stages &amp; workflow</CardTitle>
               <p className="text-sm text-muted-foreground mt-1">
-                <strong>Stages</strong> are workflow steps (e.g. Case Creation, Triage). Add stages and assign statuses per stage; if a stage has no statuses, it uses the tracker default from the <strong>Statuses</strong> tab. Use <strong>Allowed next stages</strong> to restrict which stages users can move to from this stage (e.g. Case Creation → Triage only). Use <strong>Allowed next statuses</strong> to restrict which statuses are valid when moving to the next stage (e.g. from Case Creation only &quot;Awaiting Triage&quot;). Sections (Sections tab) define which form fields appear at each step; order is linked by position.
+                <strong>Stages</strong> are workflow steps (e.g. Case Creation, Triage). Add stages and assign statuses per stage; if a stage has no statuses, it uses the tracker default from the <strong>Statuses</strong> tab. Use <strong>Allowed next stages</strong> and <strong>Allowed next statuses</strong> to control progression. Which fields appear at each step is set in the <strong>Fields per stage</strong> tab; order matches (section 1 = stage 1, etc.).
               </p>
             </CardHeader>
             <CardContent className="space-y-4">

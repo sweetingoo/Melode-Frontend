@@ -169,6 +169,116 @@ const fieldTypes = [
 
 // Form types are now loaded dynamically from API
 
+const FORM_COLUMNS = ["left", "center", "right"];
+function FormGridColumnsEditor({ formData, setFormData, secIdx, gIdx, section, group }) {
+  const grid = group.grid_columns || { left: [], center: [], right: [] };
+  const left = grid.left || [];
+  const center = grid.center || [];
+  const right = grid.right || [];
+  const allIds = [...left, ...center, ...right];
+  const sectionFieldIds = section.fields || [];
+  const fieldsList = formData?.form_fields?.fields || [];
+  const sectionFields = fieldsList.filter((f) => sectionFieldIds.includes(String(f.field_id || f.id || f.name)));
+
+  const updateGroup = (updated) => {
+    const next = [...(formData.form_fields.sections || [])];
+    const gs = [...(next[secIdx].groups || [])];
+    gs[gIdx] = updated;
+    next[secIdx] = { ...next[secIdx], groups: gs };
+    setFormData({ ...formData, form_fields: { ...formData.form_fields, sections: next } });
+  };
+
+  React.useEffect(() => {
+    if ((group.layout || "") !== "grid" || allIds.length > 0) return;
+    const fromFields = group.fields || [];
+    if (fromFields.length === 0) return;
+    updateGroup({ ...group, grid_columns: { left: [...fromFields], center: [], right: [] } });
+  }, []);
+
+  const updateColumns = (newGrid) => {
+    updateGroup({ ...group, grid_columns: newGrid, fields: [...(newGrid.left || []), ...(newGrid.center || []), ...(newGrid.right || [])] });
+  };
+
+  const moveField = (fieldId, fromCol, toCol) => {
+    if (fromCol === toCol) return;
+    const leftArr = [...(grid.left || [])];
+    const centerArr = [...(grid.center || [])];
+    const rightArr = [...(grid.right || [])];
+    [leftArr, centerArr, rightArr].forEach((arr, i) => {
+      if (FORM_COLUMNS[i] === fromCol) {
+        const idx = arr.indexOf(fieldId);
+        if (idx !== -1) arr.splice(idx, 1);
+      }
+    });
+    const addTo = (arr) => { if (!arr.includes(fieldId)) arr.push(fieldId); };
+    if (toCol === "left") addTo(leftArr);
+    else if (toCol === "center") addTo(centerArr);
+    else addTo(rightArr);
+    updateColumns({ left: leftArr, center: centerArr, right: rightArr });
+  };
+
+  const removeFromColumn = (fieldId, col) => {
+    const nextGrid = { ...grid };
+    nextGrid[col] = (nextGrid[col] || []).filter((id) => id !== fieldId);
+    updateColumns(nextGrid);
+  };
+
+  const addToColumn = (fieldId, col) => {
+    const nextGrid = { ...grid };
+    nextGrid[col] = [...(nextGrid[col] || []), fieldId];
+    updateColumns(nextGrid);
+  };
+
+  const onDragStart = (e, fieldId, col) => {
+    e.dataTransfer.setData("fieldId", fieldId);
+    e.dataTransfer.setData("fromColumn", col);
+    e.dataTransfer.effectAllowed = "move";
+  };
+  const onDragOver = (e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; };
+  const onDrop = (e, toCol) => {
+    e.preventDefault();
+    const fieldId = e.dataTransfer.getData("fieldId");
+    const fromCol = e.dataTransfer.getData("fromColumn");
+    if (fieldId && fromCol) moveField(fieldId, fromCol, toCol);
+  };
+
+  const availableToAdd = sectionFieldIds.filter((id) => !allIds.includes(id));
+  const columnLabels = { left: "Left", center: "Center (full width)", right: "Right" };
+
+  return (
+    <div className="grid grid-cols-3 gap-3 mt-2 p-2 border rounded-md bg-muted/30">
+      {FORM_COLUMNS.map((col) => (
+        <div key={col} onDragOver={onDragOver} onDrop={(e) => onDrop(e, col)} className="min-h-[80px] rounded border border-dashed border-muted-foreground/40 p-2 flex flex-col">
+          <div className="text-xs font-medium text-muted-foreground mb-1">{columnLabels[col]}</div>
+          <div className="flex flex-wrap gap-1 flex-1">
+            {(grid[col] || []).map((fid) => {
+              const f = fieldsList.find((x) => String(x.field_id || x.id || x.name) === String(fid));
+              return (
+                <Badge key={fid} variant="outline" className="text-xs cursor-grab active:cursor-grabbing" draggable onDragStart={(e) => onDragStart(e, fid, col)}>
+                  {f?.label || fid}
+                  <button type="button" className="ml-1" onClick={() => removeFromColumn(fid, col)}><X className="h-3 w-3" /></button>
+                </Badge>
+              );
+            })}
+          </div>
+          {availableToAdd.length > 0 && (
+            <Select value="__add__" onValueChange={(v) => { if (v && v !== "__add__") addToColumn(v, col); }}>
+              <SelectTrigger className="h-7 text-xs mt-1"><SelectValue placeholder="+ Add" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__add__">+ Add field</SelectItem>
+                {availableToAdd.map((fid) => {
+                  const f = fieldsList.find((x) => String(x.field_id || x.id || x.name) === String(fid));
+                  return <SelectItem key={fid} value={fid}>{f?.label || fid}</SelectItem>;
+                })}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 const EditFormPage = () => {
   const params = useParams();
   const router = useRouter();
@@ -2153,6 +2263,230 @@ const EditFormPage = () => {
                 )}
               </CardContent>
             </Card>
+
+            {/* Sections & groups: optional layout for form submit (section headings, group headings, group visibility) */}
+            {formData.form_fields.fields.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Sections &amp; groups</CardTitle>
+                  <p className="text-sm text-muted-foreground font-normal">
+                    Optionally group fields into sections and sub-groups. On submit, sections appear as headings; groups can have conditional visibility (show when another field has a value).
+                  </p>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {(formData.form_fields.sections || []).map((section, secIdx) => (
+                    <div key={section.id || secIdx} className="p-4 border rounded-lg space-y-3 bg-muted/30">
+                      <div className="flex items-center gap-2">
+                        <Input
+                          placeholder="Section title"
+                          value={section.title || section.label || ""}
+                          onChange={(e) => {
+                            const next = [...(formData.form_fields.sections || [])];
+                            next[secIdx] = { ...section, title: e.target.value, label: e.target.value, id: section.id || `sec_${secIdx}` };
+                            setFormData({ ...formData, form_fields: { ...formData.form_fields, sections: next } });
+                          }}
+                          className="flex-1"
+                        />
+                        <Button type="button" variant="ghost" size="sm" onClick={() => {
+                          const next = (formData.form_fields.sections || []).filter((_, i) => i !== secIdx);
+                          setFormData({ ...formData, form_fields: { ...formData.form_fields, sections: next } });
+                        }}>
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </div>
+                      <div>
+                        <Label className="text-xs">Fields in this section (order)</Label>
+                        <Select
+                          value="__add__"
+                          onValueChange={(v) => {
+                            if (!v || v === "__add__") return;
+                            const next = [...(formData.form_fields.sections || [])];
+                            next[secIdx] = { ...section, fields: [...(section.fields || []), v] };
+                            setFormData({ ...formData, form_fields: { ...formData.form_fields, sections: next } });
+                          }}
+                        >
+                          <SelectTrigger className="mt-1"><SelectValue placeholder="+ Add field" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__add__">+ Add field</SelectItem>
+                            {(formData.form_fields.fields || [])
+                              .filter((f) => !(section.fields || []).includes(f.field_id || f.id || f.name))
+                              .map((f) => (
+                                <SelectItem key={f.field_id || f.id || f.name} value={String(f.field_id || f.id || f.name)}>
+                                  {f.label || f.field_id || f.id}
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {(section.fields || []).map((fid) => {
+                            const f = formData.form_fields.fields.find((x) => (x.field_id || x.id || x.name) === fid);
+                            return (
+                              <Badge key={fid} variant="secondary" className="text-xs">
+                                {f?.label || fid}
+                                <button type="button" className="ml-1 hover:text-destructive" onClick={() => {
+                                  const next = [...(formData.form_fields.sections || [])];
+                                  next[secIdx] = { ...section, fields: (section.fields || []).filter((id) => id !== fid) };
+                                  setFormData({ ...formData, form_fields: { ...formData.form_fields, sections: next } });
+                                }}><X className="h-3 w-3" /></button>
+                              </Badge>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <div className="pt-2 border-t">
+                        <Label className="text-xs">Groups (optional)</Label>
+                        {(section.groups || []).map((group, gIdx) => (
+                          <div key={group.id || gIdx} className="mt-2 p-2 rounded border bg-background space-y-2">
+                            <div className="flex gap-2">
+                              <Input placeholder="Group label" value={group.label || ""} className="flex-1 h-8 text-sm"
+                                onChange={(e) => {
+                                  const next = [...(formData.form_fields.sections || [])];
+                                  const gs = [...(next[secIdx].groups || [])];
+                                  gs[gIdx] = { ...group, label: e.target.value };
+                                  next[secIdx] = { ...next[secIdx], groups: gs };
+                                  setFormData({ ...formData, form_fields: { ...formData.form_fields, sections: next } });
+                                }} />
+                              <Button type="button" variant="ghost" size="sm" onClick={() => {
+                                const next = [...(formData.form_fields.sections || [])];
+                                next[secIdx] = { ...next[secIdx], groups: (next[secIdx].groups || []).filter((_, i) => i !== gIdx) };
+                                setFormData({ ...formData, form_fields: { ...formData.form_fields, sections: next } });
+                              }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-xs">Layout</Label>
+                              <Select value={group.layout || "stack"} onValueChange={(v) => {
+                                const next = [...(formData.form_fields.sections || [])];
+                                const gs = [...(next[secIdx].groups || [])];
+                                const newGroup = { ...group, layout: v };
+                                if (v === "grid") {
+                                  const fromFields = group.fields || [];
+                                  newGroup.grid_columns = { left: fromFields.length ? [...fromFields] : [], center: [], right: [] };
+                                  newGroup.fields = fromFields.length ? [...fromFields] : [];
+                                }
+                                gs[gIdx] = newGroup;
+                                next[secIdx] = { ...next[secIdx], groups: gs };
+                                setFormData({ ...formData, form_fields: { ...formData.form_fields, sections: next } });
+                              }}>
+                                <SelectTrigger className="h-7 text-xs w-36"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="stack">Stack (default)</SelectItem>
+                                  <SelectItem value="grid">Grid (3 columns)</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            {(group.layout || "") === "grid" ? (
+                              <FormGridColumnsEditor formData={formData} setFormData={setFormData} secIdx={secIdx} gIdx={gIdx} section={section} group={group} />
+                            ) : (
+                            <div className="flex flex-wrap gap-1">
+                              {(group.fields || []).map((fid) => {
+                                const f = formData.form_fields.fields.find((x) => (x.field_id || x.id || x.name) === fid);
+                                return (
+                                  <Badge key={fid} variant="outline" className="text-xs">
+                                    {f?.label || fid}
+                                    <button type="button" className="ml-1" onClick={() => {
+                                      const next = [...(formData.form_fields.sections || [])];
+                                      const gs = [...(next[secIdx].groups || [])];
+                                      gs[gIdx] = { ...group, fields: (group.fields || []).filter((id) => id !== fid) };
+                                      next[secIdx] = { ...next[secIdx], groups: gs };
+                                      setFormData({ ...formData, form_fields: { ...formData.form_fields, sections: next } });
+                                    }}><X className="h-3 w-3" /></button>
+                                  </Badge>
+                                );
+                              })}
+                              <Select value="__add__" onValueChange={(v) => {
+                                if (!v || v === "__add__") return;
+                                const next = [...(formData.form_fields.sections || [])];
+                                const gs = [...(next[secIdx].groups || [])];
+                                gs[gIdx] = { ...group, fields: [...(group.fields || []), v] };
+                                next[secIdx] = { ...next[secIdx], groups: gs };
+                                setFormData({ ...formData, form_fields: { ...formData.form_fields, sections: next } });
+                              }}>
+                                <SelectTrigger className="w-32 h-7 text-xs"><SelectValue placeholder="+ Field" /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="__add__">+ Field</SelectItem>
+                                  {(section.fields || []).filter((id) => !(group.fields || []).includes(id)).map((fid) => {
+                                    const f = formData.form_fields.fields.find((x) => (x.field_id || x.id || x.name) === fid);
+                                    return <SelectItem key={fid} value={fid}>{f?.label || fid}</SelectItem>;
+                                  })}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            )}
+                            <div className="text-xs space-y-1">
+                              <Label className="text-xs">Show group when</Label>
+                              <div className="flex flex-wrap gap-2">
+                                <Select value={group.conditional_visibility?.depends_on_field || "__none__"} onValueChange={(v) => {
+                                  const next = [...(formData.form_fields.sections || [])];
+                                  const gs = [...(next[secIdx].groups || [])];
+                                  gs[gIdx] = { ...group, conditional_visibility: v && v !== "__none__" ? { ...(group.conditional_visibility || {}), depends_on_field: v } : null };
+                                  next[secIdx] = { ...next[secIdx], groups: gs };
+                                  setFormData({ ...formData, form_fields: { ...formData.form_fields, sections: next } });
+                                }}>
+                                  <SelectTrigger className="h-7 text-xs w-40"><SelectValue placeholder="Field" /></SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="__none__">Always show</SelectItem>
+                                    {formData.form_fields.fields.filter((x) => !["text_block", "image_block", "line_break", "page_break", "download_link"].includes((x.field_type || x.type || "").toLowerCase())).map((f) => (
+                                      <SelectItem key={f.field_id || f.id} value={String(f.field_id || f.id || f.name)}>{f.label || f.field_id}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                {group.conditional_visibility?.depends_on_field && (
+                                  <>
+                                    <Select value={group.conditional_visibility?.show_when || ""} onValueChange={(v) => {
+                                      const next = [...(formData.form_fields.sections || [])];
+                                      const gs = [...(next[secIdx].groups || [])];
+                                      gs[gIdx] = { ...group, conditional_visibility: { ...(group.conditional_visibility || {}), show_when: v } };
+                                      next[secIdx] = { ...next[secIdx], groups: gs };
+                                      setFormData({ ...formData, form_fields: { ...formData.form_fields, sections: next } });
+                                    }}>
+                                      <SelectTrigger className="h-7 text-xs w-28"><SelectValue placeholder="is" /></SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="equals">Equals</SelectItem>
+                                        <SelectItem value="not_equals">Not equals</SelectItem>
+                                        <SelectItem value="contains">Contains</SelectItem>
+                                        <SelectItem value="is_empty">Is empty</SelectItem>
+                                        <SelectItem value="is_not_empty">Is not empty</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                    {["equals", "not_equals", "contains"].includes(group.conditional_visibility?.show_when) && (
+                                      <Input placeholder="Value" className="h-7 text-xs w-32" value={group.conditional_visibility?.value ?? ""} onChange={(e) => {
+                                        const next = [...(formData.form_fields.sections || [])];
+                                        const gs = [...(next[secIdx].groups || [])];
+                                        gs[gIdx] = { ...group, conditional_visibility: { ...(group.conditional_visibility || {}), value: e.target.value } };
+                                        next[secIdx] = { ...next[secIdx], groups: gs };
+                                        setFormData({ ...formData, form_fields: { ...formData.form_fields, sections: next } });
+                                      }} />
+                                    )}
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                        <Button type="button" variant="outline" size="sm" className="mt-2" onClick={() => {
+                          const next = [...(formData.form_fields.sections || [])];
+                          next[secIdx] = { ...next[secIdx], groups: [...(next[secIdx].groups || []), { id: `g_${Date.now()}`, label: "New group", fields: [] }] };
+                          setFormData({ ...formData, form_fields: { ...formData.form_fields, sections: next } });
+                        }}>
+                          <Plus className="h-4 w-4 mr-2" /> Add group
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                  <Button type="button" variant="outline" size="sm" onClick={() => {
+                    setFormData({
+                      ...formData,
+                      form_fields: {
+                        ...formData.form_fields,
+                        sections: [...(formData.form_fields.sections || []), { id: `sec_${Date.now()}`, title: "New section", label: "New section", fields: [], groups: [] }],
+                      },
+                    };
+                  }}>
+                    <Plus className="h-4 w-4 mr-2" /> Add section
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
           </div>
 
           {/* Sidebar - Configuration */}

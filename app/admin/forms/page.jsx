@@ -84,6 +84,7 @@ const FormsPage = () => {
   const [formTypeFilter, setFormTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("active"); // Default to active forms
   const [assignmentFilter, setAssignmentFilter] = useState("all"); // "all", "role", "users", "none"
+  const [templateFilter, setTemplateFilter] = useState("all"); // "all", "templates_only"
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
 
   const { data: rolesData } = useRoles();
@@ -148,7 +149,10 @@ const FormsPage = () => {
       (assignmentFilter === "users" && form.assigned_user_ids && form.assigned_user_ids.length > 0) ||
       (assignmentFilter === "none" && !form.assigned_to_role_id && (!form.assigned_user_ids || form.assigned_user_ids.length === 0));
 
-    return matchesSearch && matchesType && matchesStatus && matchesAssignment;
+    const matchesTemplate =
+      templateFilter === "all" || (templateFilter === "templates_only" && form.is_template);
+
+    return matchesSearch && matchesType && matchesStatus && matchesAssignment && matchesTemplate;
   });
 
   // Get form type info from active form types
@@ -271,6 +275,15 @@ const FormsPage = () => {
                   <SelectItem value="none">Not Assigned</SelectItem>
                 </SelectContent>
               </Select>
+              <Select value={templateFilter} onValueChange={setTemplateFilter}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="All forms" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All forms</SelectItem>
+                  <SelectItem value="templates_only">Templates only</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </CardContent>
         </Card>
@@ -287,11 +300,11 @@ const FormsPage = () => {
               <FileText className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
               <h3 className="text-lg font-semibold mb-2">No forms found</h3>
               <p className="text-muted-foreground mb-4">
-                {searchTerm || formTypeFilter !== "all" || statusFilter !== "all"
+                {searchTerm || formTypeFilter !== "all" || statusFilter !== "all" || templateFilter !== "all"
                   ? "Try adjusting your filters"
                   : "Create your first form to get started"}
               </p>
-              {!searchTerm && formTypeFilter === "all" && statusFilter === "all" && (
+              {!searchTerm && formTypeFilter === "all" && statusFilter === "all" && templateFilter === "all" && (
                 <Link href="/admin/forms/new">
                   <Button>
                     <Plus className="mr-2 h-4 w-4" />

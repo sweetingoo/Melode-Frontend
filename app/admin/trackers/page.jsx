@@ -1355,7 +1355,8 @@ const TrackersPage = () => {
                         const sectionFields = sectionFieldIds
                           .map((fid) => fieldsToShow.find((f) => (f.id || f.field_id || f.name) === fid))
                           .filter(Boolean);
-                        fieldsBySection[sectionKey] = { ...section, id: section.id ?? sectionKey, fields: sectionFields };
+                        const groups = section.groups && Array.isArray(section.groups) ? section.groups : null;
+                        fieldsBySection[sectionKey] = { ...section, id: section.id ?? sectionKey, fields: sectionFields, groups };
                       });
                       const assignedIds = new Set(sections.flatMap((s) => s.fields || []));
                       const unassignedFields = fieldsToShow.filter((f) => !assignedIds.has(f.id || f.field_id || f.name));
@@ -1385,6 +1386,23 @@ const TrackersPage = () => {
                     if (allowedFromStep && Array.isArray(allowedFromStep) && allowedFromStep.length > 0) {
                       createEntryStatusOptions = createEntryStatusOptions.filter((s) => allowedFromStep.includes(s));
                     }
+
+                    // Group visibility: show group only when condition on other fields' values is met
+                    const checkGroupVisibility = (group, data) => {
+                      if (!group?.conditional_visibility?.depends_on_field) return true;
+                      const { depends_on_field, show_when, value: expectedValue } = group.conditional_visibility;
+                      const dependentValue = data?.[depends_on_field];
+                      const normalize = (v) => {
+                        if (v === true || v === "true" || v === "True") return true;
+                        if (v === false || v === "false" || v === "False") return false;
+                        return v;
+                      };
+                      if (show_when === "equals") return normalize(dependentValue) === normalize(expectedValue);
+                      if (show_when === "not_equals") return normalize(dependentValue) !== normalize(expectedValue);
+                      if (show_when === "is_empty") return !dependentValue || dependentValue === "" || dependentValue === false;
+                      if (show_when === "is_not_empty") return dependentValue != null && dependentValue !== "" && dependentValue !== false;
+                      return true;
+                    };
 
                     const renderField = (field) => {
                       const fieldId = field.id || field.field_id || field.name;
@@ -1435,7 +1453,14 @@ const TrackersPage = () => {
                             // Fields for this step: use section at same index if available
                             const section = currentIndex < sections.length ? sections[currentIndex] : null;
                             const sectionKey = section ? (section.id ?? section.title ?? section.label ?? `section-${currentIndex}`) : null;
-                            const sectionFields = sectionKey ? (fieldsBySection[sectionKey]?.fields || []) : [];
+                            const sectionData = sectionKey ? fieldsBySection[sectionKey] : null;
+                            const sectionFields = sectionData?.fields || [];
+                            const sectionGroups = sectionData?.groups;
+                            // When section has groups: ungrouped = fields not in any group; grouped = under group headings
+                            const fieldIdsInGroups = new Set((sectionGroups || []).flatMap((g) => g.fields || []));
+                            const ungroupedFields = sectionGroups?.length
+                              ? sectionFields.filter((f) => !fieldIdsInGroups.has(f.id || f.field_id || f.name))
+                              : sectionFields;
                             return (
                               <div className="space-y-4">
                                 <p className="text-sm text-muted-foreground">
@@ -1445,13 +1470,48 @@ const TrackersPage = () => {
                                   <CardHeader className="py-3">
                                     <CardTitle className="text-base">{stepLabel}</CardTitle>
                                   </CardHeader>
-                                  <CardContent className="pt-0">
+                                  <CardContent className="pt-0 space-y-4">
                                     {sectionFields.length === 0 ? (
                                       <p className="text-sm text-muted-foreground">No fields for this stage.</p>
                                     ) : (
-                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        {sectionFields.map((field) => renderField(field))}
-                                      </div>
+                                      <>
+                                        {/* Ungrouped fields only in the main grid (when section has groups, only these; when no groups, ungroupedFields = all section fields) */}
+                                        {ungroupedFields.length > 0 && (
+                                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            {ungroupedFields.map((field) => renderField(field))}
+                                          </div>
+                                        )}
+                                        {/* Grouped fields: each group with its label, respect group visibility */}
+                                        {sectionGroups?.length > 0 && sectionGroups.map((group) => {
+                                          if (!checkGroupVisibility(group, entryFormData)) return null;
+                                          const groupFieldIds = group.fields || [];
+                                          const groupFields = groupFieldIds
+                                            .map((fid) => sectionFields.find((f) => (f.id || f.field_id || f.name) === fid))
+                                            .filter(Boolean);
+                                          if (groupFields.length === 0) return null;
+                                          const isGrid = (group.layout || "") === "grid" && group.grid_columns;
+                                          const gridCols = group.grid_columns || {};
+                                          const leftFields = (gridCols.left || []).map((fid) => sectionFields.find((f) => (f.id || f.field_id || f.name) === fid)).filter(Boolean);
+                                          const centerFields = (gridCols.center || []).map((fid) => sectionFields.find((f) => (f.id || f.field_id || f.name) === fid)).filter(Boolean);
+                                          const rightFields = (gridCols.right || []).map((fid) => sectionFields.find((f) => (f.id || f.field_id || f.name) === fid)).filter(Boolean);
+                                          return (
+                                            <div key={group.id || group.label || groupFieldIds.join("-")} className="space-y-3">
+                                              <h4 className="text-sm font-semibold text-muted-foreground border-b pb-1.5">{group.label || group.id}</h4>
+                                              {isGrid ? (
+                                                <div className="grid grid-cols-1 md:grid-cols-[1fr_2fr_1fr] gap-4">
+                                                  <div className="space-y-4">{leftFields.map((field) => renderField(field))}</div>
+                                                  <div className="space-y-4">{centerFields.map((field) => renderField(field))}</div>
+                                                  <div className="space-y-4">{rightFields.map((field) => renderField(field))}</div>
+                                                </div>
+                                              ) : (
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                  {groupFields.map((field) => renderField(field))}
+                                                </div>
+                                              )}
+                                            </div>
+                                          );
+                                        })}
+                                      </>
                                     )}
                                   </CardContent>
                                 </Card>

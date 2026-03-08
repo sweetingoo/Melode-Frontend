@@ -911,6 +911,39 @@ const TrackerEntryDetailPage = () => {
     return true;
   };
 
+  // Group-level conditional visibility: show/hide whole group based on other fields' values
+  const checkGroupVisibility = (group, data) => {
+    if (!group?.conditional_visibility?.depends_on_field) return true;
+    const { depends_on_field, show_when, value: expectedValue } = group.conditional_visibility;
+    const dependentValue = data?.[depends_on_field];
+    const normalize = (v) => {
+      if (v === true || v === "true" || v === "True") return true;
+      if (v === false || v === "false" || v === "False") return false;
+      return v;
+    };
+    if (show_when === "equals") return normalize(dependentValue) === normalize(expectedValue);
+    if (show_when === "not_equals") return normalize(dependentValue) !== normalize(expectedValue);
+    if (show_when === "is_empty") return !dependentValue || dependentValue === "" || dependentValue === false;
+    if (show_when === "is_not_empty") return dependentValue != null && dependentValue !== "" && dependentValue !== false;
+    return true;
+  };
+
+  // Section fields visible for display (respects group visibility when section has groups)
+  const getVisibleSectionFields = (sectionKey, data) => {
+    const sectionData = fieldsBySection[sectionKey];
+    if (!sectionData) return [];
+    const fields = sectionData.fields || [];
+    const groups = sectionData.groups;
+    if (groups?.length) {
+      const visibleIds = new Set();
+      groups.forEach((g) => {
+        if (checkGroupVisibility(g, data)) (g.fields || []).forEach((id) => visibleIds.add(id));
+      });
+      return fields.filter((f) => visibleIds.has(f.id || f.name || f.field_id));
+    }
+    return fields.filter((f) => checkFieldVisibility(f, data));
+  };
+
   // For stage-styled trackers with stage tabs: which section to show in Details (section index matches stage index)
   const activeStageSectionIndex =
     isStageStyledTracker && activeStageTab && stageMapping.length && sections.length
@@ -1567,30 +1600,45 @@ const TrackerEntryDetailPage = () => {
                             const sectionFieldIds = new Set(sectionFields.map((f) => (f.id || f.name || f.field_id)));
                             if (sectionGroups?.length > 0) {
                               return sectionGroups.map((group) => {
+                                if (!checkGroupVisibility(group, entryData)) return null;
                                 const groupFields = (group.fields || [])
                                   .map((fid) => sectionFields.find((f) => (f.id || f.name || f.field_id) === fid))
                                   .filter(Boolean);
                                 if (groupFields.length === 0) return null;
+                                const isGrid = (group.layout || "") === "grid" && group.grid_columns;
+                                const gridCols = group.grid_columns || {};
+                                const leftFields = (gridCols.left || []).map((fid) => sectionFields.find((f) => (f.id || f.name || f.field_id) === fid)).filter(Boolean);
+                                const centerFields = (gridCols.center || []).map((fid) => sectionFields.find((f) => (f.id || f.name || f.field_id) === fid)).filter(Boolean);
+                                const rightFields = (gridCols.right || []).map((fid) => sectionFields.find((f) => (f.id || f.name || f.field_id) === fid)).filter(Boolean);
+                                const renderGroupField = (field) => {
+                                  const fieldId = field.id || field.name || field.field_id;
+                                  const value = entryData[fieldId];
+                                  const baseField = { ...field, type: field.type || field.field_type, field_label: field.label || field.field_label || field.name, field_name: field.name || field.id };
+                                  return (
+                                    <CustomFieldRenderer
+                                      key={fieldId}
+                                      field={getFieldWithStageFilteredStatusOptions(baseField, statusesForEditModeStageFiltered)}
+                                      value={value}
+                                      onChange={handleFieldChange}
+                                      error={fieldErrors[fieldId]}
+                                      readOnly={false}
+                                    />
+                                  );
+                                };
                                 return (
                                   <div key={group.id || group.label} className="space-y-3">
                                     <h4 className="text-sm font-semibold text-muted-foreground border-b pb-1.5">{group.label || group.id}</h4>
-                                    <div className="space-y-3 pl-0">
-                                      {groupFields.map((field) => {
-                                        const fieldId = field.id || field.name || field.field_id;
-                                        const value = entryData[fieldId];
-                                        const baseField = { ...field, type: field.type || field.field_type, field_label: field.label || field.field_label || field.name, field_name: field.name || field.id };
-                                        return (
-                                          <CustomFieldRenderer
-                                            key={fieldId}
-                                            field={getFieldWithStageFilteredStatusOptions(baseField, statusesForEditModeStageFiltered)}
-                                            value={value}
-                                            onChange={handleFieldChange}
-                                            error={fieldErrors[fieldId]}
-                                            readOnly={false}
-                                          />
-                                        );
-                                      })}
-                                    </div>
+                                    {isGrid ? (
+                                      <div className="grid grid-cols-1 md:grid-cols-[1fr_2fr_1fr] gap-4">
+                                        <div className="space-y-3">{leftFields.map(renderGroupField)}</div>
+                                        <div className="space-y-3">{centerFields.map(renderGroupField)}</div>
+                                        <div className="space-y-3">{rightFields.map(renderGroupField)}</div>
+                                      </div>
+                                    ) : (
+                                      <div className="space-y-3 pl-0">
+                                        {groupFields.map(renderGroupField)}
+                                      </div>
+                                    )}
                                   </div>
                                 );
                               });
@@ -1627,9 +1675,7 @@ const TrackerEntryDetailPage = () => {
                           {sections.map((section, sectionIndex) => {
                             if (sectionIndex === activeStageSectionIndex) return null;
                             const sectionKey = section.id ?? section.title ?? section.label ?? `section-${sectionIndex}`;
-                            const sectionFields = (fieldsBySection[sectionKey]?.fields || []).filter((field) =>
-                              checkFieldVisibility(field, entryData)
-                            );
+                            const sectionFields = getVisibleSectionFields(sectionKey, entryData);
                             if (sectionFields.length === 0) return null;
                             const stageName = stageMapping[sectionIndex]?.stage ?? stageMapping[sectionIndex]?.name ?? section.label ?? sectionKey;
                             return (
@@ -1699,9 +1745,7 @@ const TrackerEntryDetailPage = () => {
                   {sections.length > 0 && (
                     sections.map((section, sectionIndex) => {
                       const sectionKey = section.id ?? section.title ?? section.label ?? `section-${sectionIndex}`;
-                      const sectionFields = (fieldsBySection[sectionKey]?.fields || []).filter((field) =>
-                        checkFieldVisibility(field, entryData)
-                      );
+                      const sectionFields = getVisibleSectionFields(sectionKey, entryData);
                       if (sectionFields.length === 0) return null;
 
                       return (
@@ -1827,9 +1871,7 @@ const TrackerEntryDetailPage = () => {
                   {activeStageSection && (() => {
                     const displayData = entry.formatted_data || entry.submission_data || entry.entry_data || {};
                     const sectionKey = activeStageSection.id ?? activeStageSection.title ?? activeStageSection.label ?? `section-${activeStageSectionIndex}`;
-                    const sectionFields = (fieldsBySection[sectionKey]?.fields || []).filter((field) =>
-                      checkFieldVisibility(field, displayData)
-                    );
+                    const sectionFields = getVisibleSectionFields(sectionKey, displayData);
                     if (sectionFields.length === 0) return null;
                     return (
                       <Card key={sectionKey}>
@@ -1864,9 +1906,7 @@ const TrackerEntryDetailPage = () => {
                             if (sectionIndex === activeStageSectionIndex) return null;
                             const displayData = entry.formatted_data || entry.submission_data || entry.entry_data || {};
                             const sectionKey = section.id ?? section.title ?? section.label ?? `section-${sectionIndex}`;
-                            const sectionFields = (fieldsBySection[sectionKey]?.fields || []).filter((field) =>
-                              checkFieldVisibility(field, displayData)
-                            );
+                            const sectionFields = getVisibleSectionFields(sectionKey, displayData);
                             if (sectionFields.length === 0) return null;
                             const stageName = stageMapping[sectionIndex]?.stage ?? stageMapping[sectionIndex]?.name ?? section.label ?? sectionKey;
                             return (
@@ -1926,9 +1966,7 @@ const TrackerEntryDetailPage = () => {
                     sections.map((section, sectionIndex) => {
                       const displayData = entry.formatted_data || entry.submission_data || entry.entry_data || {};
                       const sectionKey = section.id ?? section.title ?? section.label ?? `section-${sectionIndex}`;
-                      const sectionFields = (fieldsBySection[sectionKey]?.fields || []).filter((field) =>
-                        checkFieldVisibility(field, displayData)
-                      );
+                      const sectionFields = getVisibleSectionFields(sectionKey, displayData);
                       if (sectionFields.length === 0) return null;
 
                       return (

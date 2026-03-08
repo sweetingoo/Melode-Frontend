@@ -275,6 +275,38 @@ const FormSubmitPage = () => {
     return true; // Default: show field
   };
 
+  // Group-level conditional visibility: hide field if it belongs to a group that is hidden (based on other fields' values)
+  const checkGroupVisibility = (group, data) => {
+    if (!group?.conditional_visibility?.depends_on_field) return true;
+    const { depends_on_field, show_when, value: expectedValue } = group.conditional_visibility;
+    const dependentValue = data?.[depends_on_field];
+    const normalize = (v) => {
+      if (v === true || v === 'true' || v === 'True' || v === 'TRUE') return true;
+      if (v === false || v === 'false' || v === 'False' || v === 'FALSE') return false;
+      return v;
+    };
+    if (show_when === 'equals') return normalize(dependentValue) === normalize(expectedValue);
+    if (show_when === 'not_equals') return normalize(dependentValue) !== normalize(expectedValue);
+    if (show_when === 'contains') return Array.isArray(dependentValue) ? dependentValue.includes(expectedValue) : String(dependentValue || '').includes(String(expectedValue || ''));
+    if (show_when === 'is_empty') return !dependentValue || dependentValue === '' || dependentValue === false;
+    if (show_when === 'is_not_empty') return dependentValue != null && dependentValue !== '' && dependentValue !== false;
+    return true;
+  };
+
+  const isFieldInHiddenGroup = (fieldId, data) => {
+    const sections = form?.form_fields?.sections || [];
+    for (const section of sections) {
+      const groups = section?.groups || [];
+      for (const group of groups) {
+        if (!group?.conditional_visibility?.depends_on_field) continue;
+        const fieldIds = group.fields || [];
+        if (!fieldIds.includes(fieldId)) continue;
+        if (!checkGroupVisibility(group, data)) return true;
+      }
+    }
+    return false;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -297,12 +329,11 @@ const FormSubmitPage = () => {
           continue;
         }
 
-        // Check visibility before validating
-        if (!checkFieldVisibility(field, submissionData)) {
+        // Check visibility before validating (field and group)
+        const fieldId = field.id || field.field_id || field.field_name || field.name;
+        if (!checkFieldVisibility(field, submissionData) || isFieldInHiddenGroup(fieldId, submissionData)) {
           continue;
         }
-
-        const fieldId = field.id || field.field_id || field.field_name || field.name;
         const value = submissionData[fieldId];
 
         if (field.required || field.is_required) {
@@ -433,6 +464,44 @@ const FormSubmitPage = () => {
 
   const totalPages = pages.length;
   const currentPageFields = pages[currentPage] || [];
+
+  // When form has sections, build section/group layout for current page (so we can render ungrouped first, then groups)
+  const formSections = form?.form_fields?.sections || [];
+  const hasFormSections = formSections.length > 0 && !form?.is_tracker;
+  const currentPageLayout = useMemo(() => {
+    if (!hasFormSections || currentPageFields.length === 0) return null;
+    const fieldIdsInSections = new Set(formSections.flatMap((s) => s.fields || []));
+    const fieldsNotInAnySection = currentPageFields.filter(
+      (f) => !fieldIdsInSections.has(f.id || f.field_id || f.name)
+    );
+    const sectionsWithContent = formSections.map((section) => {
+      const sectionFieldIds = section.fields || [];
+      const sectionFieldsOnPage = currentPageFields.filter((f) =>
+        sectionFieldIds.includes(f.id || f.field_id || f.name)
+      );
+      if (sectionFieldsOnPage.length === 0) return null;
+      const fieldIdsInGroups = new Set((section.groups || []).flatMap((g) => g.fields || []));
+      const ungrouped = sectionFieldsOnPage.filter(
+        (f) => !fieldIdsInGroups.has(f.id || f.field_id || f.name)
+      );
+      const groupsWithFields = (section.groups || [])
+        .map((g) => ({
+          group: g,
+          fields: sectionFieldsOnPage.filter((f) =>
+            (g.fields || []).includes(f.id || f.field_id || f.name)
+          ),
+        }))
+        .filter((g) => g.fields.length > 0);
+      return {
+        section,
+        sectionLabel: section.title || section.label || section.id || "Section",
+        ungrouped,
+        groupsWithFields,
+      };
+    }).filter(Boolean);
+    return { fieldsNotInAnySection, sectionsWithContent };
+  }, [hasFormSections, formSections, currentPageFields]);
+
   // Calculate progress based on pages completed (not current page)
   const progressPercentage = totalPages > 1 
     ? (currentPage / totalPages) * 100 
@@ -790,90 +859,118 @@ const FormSubmitPage = () => {
                 <p className="text-muted-foreground text-center py-8">
                   This page has no fields defined.
                 </p>
-              ) : (
-                <div className="space-y-6">
-                  {currentPageFields.map((field) => {
-                    const fieldId = field.id || field.field_id || field.field_name || field.name;
-                    const fieldType = (field.type || field.field_type)?.toLowerCase();
-                    
-                    // Display-only fields don't need value, onChange, or error handling
-                    const isDisplayOnly = ['text_block', 'image_block', 'youtube_video_embed', 'line_break', 'page_break', 'download_link'].includes(fieldType);
-                    
-                    // Check conditional visibility
-                    const isVisible = checkFieldVisibility(field, submissionData);
-                    if (!isVisible) {
-                      return null;
-                    }
-                    
-                    const value = isDisplayOnly ? undefined : submissionData[fieldId];
-                    const error = isDisplayOnly ? undefined : fieldErrors[fieldId];
+              ) : (() => {
+                const statusFieldId = form?.form_config?.status_field_id ? String(form.form_config.status_field_id).trim() : "";
+                const renderOneField = (field) => {
+                  const fieldId = field.id || field.field_id || field.field_name || field.name;
+                  const fieldType = (field.type || field.field_type)?.toLowerCase();
+                  const isDisplayOnly = ['text_block', 'image_block', 'youtube_video_embed', 'line_break', 'page_break', 'download_link'].includes(fieldType);
+                  const isVisible = checkFieldVisibility(field, submissionData) && !isFieldInHiddenGroup(fieldId, submissionData);
+                  if (!isVisible) return null;
+                  const value = isDisplayOnly ? undefined : submissionData[fieldId];
+                  const error = isDisplayOnly ? undefined : fieldErrors[fieldId];
+                  const isStatusField = statusFieldId && String(fieldId).trim() === statusFieldId;
+                  let optionsForField = field.options || field.field_options?.options || [];
+                  if (isStatusField && form?.is_tracker && form?.form_config?.stage_mapping?.length && form?.form_fields?.sections?.length) {
+                    const sections = form.form_fields.sections || [];
+                    const stageMapping = form.form_config.stage_mapping || [];
+                    const sectionIndex = sections.findIndex((sec) => (sec?.fields || []).includes(fieldId));
+                    const stageConfig = sectionIndex >= 0 && sectionIndex < stageMapping.length ? stageMapping[sectionIndex] : null;
+                    const stageStatuses = (stageConfig?.statuses ?? stageConfig?.status_list ?? []).filter(Boolean);
+                    const allTrackerStatuses = Array.isArray(form.form_config?.statuses) ? form.form_config.statuses : [];
+                    optionsForField = (stageStatuses.length > 0 ? stageStatuses : allTrackerStatuses).map((s) => ({ value: s, label: humanizeStatusForDisplay(s) }));
+                  }
+                  const mappedField = {
+                    ...field,
+                    id: fieldId,
+                    field_label: field.label || field.field_label,
+                    label: field.label,
+                    name: field.name || field.field_name || fieldId,
+                    field_description: field.help_text,
+                    field_type: field.type || field.field_type,
+                    is_required: field.required ?? field.is_required,
+                    required: field.required ?? field.is_required,
+                    content: field.content,
+                    image_url: field.image_url,
+                    image_file_id: field.image_file_id,
+                    alt_text: field.alt_text,
+                    download_url: field.download_url,
+                    conditional_visibility: field.conditional_visibility,
+                    validation: field.validation,
+                    field_options: {
+                      ...(field.field_options || {}),
+                      options: optionsForField,
+                      accept: field.field_options?.accept || (field.validation?.allowed_types ? (Array.isArray(field.validation.allowed_types) ? field.validation.allowed_types.join(",") : field.validation.allowed_types) : undefined),
+                      maxSize: field.field_options?.maxSize || field.validation?.max_size_mb,
+                      allowMultiple: field.field_options?.allowMultiple || false,
+                      requireExpiryDate: field.file_expiry_date || false,
+                    },
+                    ...(optionsForField.length > 0 ? { options: optionsForField } : {}),
+                  };
+                  return (
+                    <CustomFieldRenderer
+                      key={fieldId}
+                      field={mappedField}
+                      value={value}
+                      onChange={isDisplayOnly ? undefined : handleFieldChange}
+                      error={error}
+                    />
+                  );
+                };
 
-                    // For trackers with stages: filter status field options by the stage that contains this field
-                    const statusFieldId = form?.form_config?.status_field_id ? String(form.form_config.status_field_id).trim() : "";
-                    const isStatusField = statusFieldId && String(fieldId).trim() === statusFieldId;
-                    let optionsForField = field.options || field.field_options?.options || [];
-                    if (isStatusField && form?.is_tracker && form?.form_config?.stage_mapping?.length && form?.form_fields?.sections?.length) {
-                      const sections = form.form_fields.sections || [];
-                      const stageMapping = form.form_config.stage_mapping || [];
-                      const sectionIndex = sections.findIndex((sec) => (sec?.fields || []).includes(fieldId));
-                      const stageConfig = sectionIndex >= 0 && sectionIndex < stageMapping.length ? stageMapping[sectionIndex] : null;
-                      const stageStatuses = (stageConfig?.statuses ?? stageConfig?.status_list ?? []).filter(Boolean);
-                      const allTrackerStatuses = Array.isArray(form.form_config?.statuses) ? form.form_config.statuses : [];
-                      const statusList = stageStatuses.length > 0 ? stageStatuses : allTrackerStatuses;
-                      optionsForField = statusList.map((s) => ({ value: s, label: humanizeStatusForDisplay(s) }));
-                    }
+                if (currentPageLayout) {
+                  const { fieldsNotInAnySection, sectionsWithContent } = currentPageLayout;
+                  return (
+                    <div className="space-y-6">
+                      {fieldsNotInAnySection.length > 0 && (
+                        <div className="space-y-4">
+                          {fieldsNotInAnySection.map((field) => renderOneField(field))}
+                        </div>
+                      )}
+                      {sectionsWithContent.map(({ sectionLabel, ungrouped, groupsWithFields }) => (
+                        <div key={sectionLabel} className="space-y-4">
+                          <h3 className="text-sm font-semibold text-muted-foreground border-b pb-1.5">{sectionLabel}</h3>
+                          {ungrouped.length > 0 && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              {ungrouped.map((field) => renderOneField(field))}
+                            </div>
+                          )}
+                          {groupsWithFields.map(({ group, fields: groupFields }) => {
+                            if (!checkGroupVisibility(group, submissionData)) return null;
+                            const isGrid = (group.layout || "") === "grid" && group.grid_columns;
+                            const gridCols = group.grid_columns || {};
+                            const leftFields = (gridCols.left || []).map((fid) => groupFields.find((f) => (f.id || f.field_id || f.name) === fid)).filter(Boolean);
+                            const centerFields = (gridCols.center || []).map((fid) => groupFields.find((f) => (f.id || f.field_id || f.name) === fid)).filter(Boolean);
+                            const rightFields = (gridCols.right || []).map((fid) => groupFields.find((f) => (f.id || f.field_id || f.name) === fid)).filter(Boolean);
+                            return (
+                              <div key={group.id || group.label} className="space-y-3">
+                                <h4 className="text-sm font-medium text-muted-foreground">{group.label || group.id}</h4>
+                                {isGrid ? (
+                                  <div className="grid grid-cols-1 md:grid-cols-[1fr_2fr_1fr] gap-4">
+                                    <div className="space-y-4">{leftFields.map((field) => renderOneField(field))}</div>
+                                    <div className="space-y-4">{centerFields.map((field) => renderOneField(field))}</div>
+                                    <div className="space-y-4">{rightFields.map((field) => renderOneField(field))}</div>
+                                  </div>
+                                ) : (
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {groupFields.map((field) => renderOneField(field))}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ))}
+                    </div>
+                  );
+                }
 
-                    // Map field structure for CustomFieldRenderer (support both id/name/type and field_id/field_name/field_type)
-                    const mappedField = {
-                      ...field,
-                      id: fieldId,
-                      field_label: field.label || field.field_label,
-                      label: field.label, // Preserve original label as well
-                      name: field.name || field.field_name || fieldId, // Preserve name
-                      field_description: field.help_text,
-                      field_type: field.type || field.field_type,
-                      is_required: field.required ?? field.is_required,
-                      required: field.required ?? field.is_required,
-                      // Preserve display-only field properties
-                      content: field.content,
-                      image_url: field.image_url,
-                      image_file_id: field.image_file_id,
-                      alt_text: field.alt_text,
-                      download_url: field.download_url,
-                      // Preserve conditional visibility
-                      conditional_visibility: field.conditional_visibility,
-                      // Preserve validation object for file fields
-                      validation: field.validation,
-                      field_options: {
-                        ...(field.field_options || {}), // Preserve all original field_options
-                        options: optionsForField,
-                        // For file fields, also map validation to field_options for backward compatibility
-                        accept: field.field_options?.accept || (field.validation?.allowed_types
-                          ? Array.isArray(field.validation.allowed_types)
-                            ? field.validation.allowed_types.join(",")
-                            : field.validation.allowed_types
-                          : undefined),
-                        maxSize: field.field_options?.maxSize || field.validation?.max_size_mb,
-                        // Preserve allowMultiple setting
-                        allowMultiple: field.field_options?.allowMultiple || false,
-                        // File expiry date support
-                        requireExpiryDate: field.file_expiry_date || false,
-                      },
-                      ...(optionsForField.length > 0 ? { options: optionsForField } : {}),
-                    };
-
-                    return (
-                      <CustomFieldRenderer
-                        key={fieldId}
-                        field={mappedField}
-                        value={value}
-                        onChange={isDisplayOnly ? undefined : handleFieldChange}
-                        error={error}
-                      />
-                    );
-                  })}
-                </div>
-              )}
+                return (
+                  <div className="space-y-6">
+                    {currentPageFields.map((field) => renderOneField(field))}
+                  </div>
+                );
+              })()}
 
               <div className="flex justify-between gap-2 pt-4 border-t">
                 <div className="flex gap-2">
