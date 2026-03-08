@@ -2465,7 +2465,8 @@ const EditFormPage = () => {
                         ))}
                         <Button type="button" variant="outline" size="sm" className="mt-2" onClick={() => {
                           const next = [...(formData.form_fields.sections || [])];
-                          next[secIdx] = { ...next[secIdx], groups: [...(next[secIdx].groups || []), { id: `g_${Date.now()}`, label: "New group", fields: [] }] };
+                          const newGroup = { id: `g_${Date.now()}`, label: "New group", fields: [] };
+                          next[secIdx] = { ...next[secIdx], groups: [...(next[secIdx].groups || []), newGroup] };
                           setFormData({ ...formData, form_fields: { ...formData.form_fields, sections: next } });
                         }}>
                           <Plus className="h-4 w-4 mr-2" /> Add group
@@ -2474,13 +2475,14 @@ const EditFormPage = () => {
                     </div>
                   ))}
                   <Button type="button" variant="outline" size="sm" onClick={() => {
+                    const newSection = { id: `sec_${Date.now()}`, title: "New section", label: "New section", fields: [], groups: [] };
                     setFormData({
                       ...formData,
                       form_fields: {
                         ...formData.form_fields,
-                        sections: [...(formData.form_fields.sections || []), { id: `sec_${Date.now()}`, title: "New section", label: "New section", fields: [], groups: [] }],
+                        sections: [...(formData.form_fields.sections || []), newSection],
                       },
-                    };
+                    });
                   }}>
                     <Plus className="h-4 w-4 mr-2" /> Add section
                   </Button>
