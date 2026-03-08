@@ -1498,10 +1498,18 @@ const TrackersPage = () => {
                                             <div key={group.id || group.label || groupFieldIds.join("-")} className="space-y-3">
                                               <h4 className="text-sm font-semibold text-muted-foreground border-b pb-1.5">{group.label || group.id}</h4>
                                               {isGrid ? (
-                                                <div className="grid grid-cols-1 md:grid-cols-[1fr_2fr_1fr] gap-4">
-                                                  <div className="space-y-4">{leftFields.map((field) => renderField(field))}</div>
-                                                  <div className="space-y-4">{centerFields.map((field) => renderField(field))}</div>
-                                                  <div className="space-y-4">{rightFields.map((field) => renderField(field))}</div>
+                                                <div className="space-y-4">
+                                                  {Array.from({ length: Math.max(leftFields.length, rightFields.length) }, (_, i) => (
+                                                    <div key={`lr-${i}`} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                      <div>{leftFields[i] ? renderField(leftFields[i]) : null}</div>
+                                                      <div>{rightFields[i] ? renderField(rightFields[i]) : null}</div>
+                                                    </div>
+                                                  ))}
+                                                  {centerFields.map((field) => (
+                                                    <div key={field.id || field.field_id || field.name} className="w-full">
+                                                      {renderField(field)}
+                                                    </div>
+                                                  ))}
                                                 </div>
                                               ) : (
                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

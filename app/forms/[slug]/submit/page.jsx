@@ -294,6 +294,16 @@ const FormSubmitPage = () => {
   };
 
   const isFieldInHiddenGroup = (fieldId, data) => {
+    const formGroups = form?.form_fields?.groups || [];
+    if (formGroups.length > 0) {
+      for (const group of formGroups) {
+        if (!group?.conditional_visibility?.depends_on_field) continue;
+        const fieldIds = group.fields || [];
+        if (!fieldIds.includes(fieldId)) continue;
+        if (!checkGroupVisibility(group, data)) return true;
+      }
+      return false;
+    }
     const sections = form?.form_fields?.sections || [];
     for (const section of sections) {
       const groups = section?.groups || [];
@@ -465,42 +475,62 @@ const FormSubmitPage = () => {
   const totalPages = pages.length;
   const currentPageFields = pages[currentPage] || [];
 
-  // When form has sections, build section/group layout for current page (so we can render ungrouped first, then groups)
+  // When form has groups (or legacy sections), build layout for current page: ungrouped fields first, then each group
+  const formGroups = form?.form_fields?.groups || [];
   const formSections = form?.form_fields?.sections || [];
-  const hasFormSections = formSections.length > 0 && !form?.is_tracker;
+  const hasFormGroups = formGroups.length > 0 && !form?.is_tracker;
+  const hasFormSections = formSections.length > 0 && !form?.is_tracker && !hasFormGroups;
   const currentPageLayout = useMemo(() => {
-    if (!hasFormSections || currentPageFields.length === 0) return null;
-    const fieldIdsInSections = new Set(formSections.flatMap((s) => s.fields || []));
-    const fieldsNotInAnySection = currentPageFields.filter(
-      (f) => !fieldIdsInSections.has(f.id || f.field_id || f.name)
-    );
-    const sectionsWithContent = formSections.map((section) => {
-      const sectionFieldIds = section.fields || [];
-      const sectionFieldsOnPage = currentPageFields.filter((f) =>
-        sectionFieldIds.includes(f.id || f.field_id || f.name)
-      );
-      if (sectionFieldsOnPage.length === 0) return null;
-      const fieldIdsInGroups = new Set((section.groups || []).flatMap((g) => g.fields || []));
-      const ungrouped = sectionFieldsOnPage.filter(
+    if (hasFormGroups) {
+      // Groups only: fields not in any group, then each group with its fields
+      if (currentPageFields.length === 0) return null;
+      const fieldIdsInGroups = new Set(formGroups.flatMap((g) => g.fields || []));
+      const fieldsNotInAnyGroup = currentPageFields.filter(
         (f) => !fieldIdsInGroups.has(f.id || f.field_id || f.name)
       );
-      const groupsWithFields = (section.groups || [])
+      const groupsWithFields = formGroups
         .map((g) => ({
           group: g,
-          fields: sectionFieldsOnPage.filter((f) =>
+          fields: currentPageFields.filter((f) =>
             (g.fields || []).includes(f.id || f.field_id || f.name)
           ),
         }))
         .filter((g) => g.fields.length > 0);
-      return {
-        section,
-        sectionLabel: section.title || section.label || section.id || "Section",
-        ungrouped,
-        groupsWithFields,
-      };
-    }).filter(Boolean);
-    return { fieldsNotInAnySection, sectionsWithContent };
-  }, [hasFormSections, formSections, currentPageFields]);
+      return { fieldsNotInAnySection: fieldsNotInAnyGroup, sectionsWithContent: groupsWithFields.length > 0 || fieldsNotInAnyGroup.length > 0 ? [{ sectionLabel: null, ungrouped: fieldsNotInAnyGroup, groupsWithFields }] : null };
+    }
+    if (hasFormSections && currentPageFields.length > 0) {
+      const fieldIdsInSections = new Set(formSections.flatMap((s) => s.fields || []));
+      const fieldsNotInAnySection = currentPageFields.filter(
+        (f) => !fieldIdsInSections.has(f.id || f.field_id || f.name)
+      );
+      const sectionsWithContent = formSections.map((section) => {
+        const sectionFieldIds = section.fields || [];
+        const sectionFieldsOnPage = currentPageFields.filter((f) =>
+          sectionFieldIds.includes(f.id || f.field_id || f.name)
+        );
+        if (sectionFieldsOnPage.length === 0) return null;
+        const fieldIdsInGroups = new Set((section.groups || []).flatMap((g) => g.fields || []));
+        const ungrouped = sectionFieldsOnPage.filter(
+          (f) => !fieldIdsInGroups.has(f.id || f.field_id || f.name)
+        );
+        const groupsWithFields = (section.groups || [])
+          .map((g) => ({
+            group: g,
+            fields: sectionFieldsOnPage.filter((f) =>
+              (g.fields || []).includes(f.id || f.field_id || f.name)
+            ),
+          }))
+          .filter((g) => g.fields.length > 0);
+        return {
+          sectionLabel: section.title || section.label || section.id || "Section",
+          ungrouped,
+          groupsWithFields,
+        };
+      }).filter(Boolean);
+      return { fieldsNotInAnySection, sectionsWithContent };
+    }
+    return null;
+  }, [hasFormGroups, hasFormSections, formGroups, formSections, currentPageFields]);
 
   // Calculate progress based on pages completed (not current page)
   const progressPercentage = totalPages > 1 
@@ -928,8 +958,8 @@ const FormSubmitPage = () => {
                         </div>
                       )}
                       {sectionsWithContent.map(({ sectionLabel, ungrouped, groupsWithFields }) => (
-                        <div key={sectionLabel} className="space-y-4">
-                          <h3 className="text-sm font-semibold text-muted-foreground border-b pb-1.5">{sectionLabel}</h3>
+                        <div key={sectionLabel ?? "groups"} className="space-y-4">
+                          {sectionLabel && <h3 className="text-sm font-semibold text-muted-foreground border-b pb-1.5">{sectionLabel}</h3>}
                           {ungrouped.length > 0 && (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                               {ungrouped.map((field) => renderOneField(field))}
@@ -946,10 +976,18 @@ const FormSubmitPage = () => {
                               <div key={group.id || group.label} className="space-y-3">
                                 <h4 className="text-sm font-medium text-muted-foreground">{group.label || group.id}</h4>
                                 {isGrid ? (
-                                  <div className="grid grid-cols-1 md:grid-cols-[1fr_2fr_1fr] gap-4">
-                                    <div className="space-y-4">{leftFields.map((field) => renderOneField(field))}</div>
-                                    <div className="space-y-4">{centerFields.map((field) => renderOneField(field))}</div>
-                                    <div className="space-y-4">{rightFields.map((field) => renderOneField(field))}</div>
+                                  <div className="space-y-4">
+                                    {Array.from({ length: Math.max(leftFields.length, rightFields.length) }, (_, i) => (
+                                      <div key={`lr-${i}`} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>{leftFields[i] ? renderOneField(leftFields[i]) : null}</div>
+                                        <div>{rightFields[i] ? renderOneField(rightFields[i]) : null}</div>
+                                      </div>
+                                    ))}
+                                    {centerFields.map((field) => (
+                                      <div key={field.id || field.field_id || field.name} className="w-full">
+                                        {renderOneField(field)}
+                                      </div>
+                                    ))}
                                   </div>
                                 ) : (
                                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
