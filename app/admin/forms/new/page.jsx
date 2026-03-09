@@ -15,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { SearchableFieldSelect } from "@/components/ui/searchable-field-select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -177,6 +178,15 @@ const generateFieldIdFromLabel = (label) => {
     .replace(/_+/g, '_') // Replace multiple underscores with single
     .replace(/^_+|_+$/g, '') // Remove leading/trailing underscores
     .substring(0, 100); // Limit length
+};
+
+// Ensure field_id is unique among existing form fields (avoids duplicate React keys)
+const ensureUniqueFieldId = (baseId, existingIds) => {
+  if (!baseId) return baseId;
+  const set = new Set((existingIds || []).filter(Boolean).map(String));
+  if (!set.has(String(baseId))) return baseId;
+  const suffix = Date.now().toString(36) + Math.random().toString(36).substring(2, 6);
+  return `${baseId}_${suffix}`;
 };
 
 // Helper function to generate random field ID for display-only fields
@@ -422,7 +432,8 @@ const NewFormPage = () => {
     const displayOnlyTypes = ['text_block', 'image_block', 'youtube_video_embed', 'line_break', 'page_break', 'download_link'];
     const isDisplayOnly = displayOnlyTypes.includes(newField.field_type);
 
-    // Auto-generate field_id if not provided
+    // Auto-generate field_id if not provided, and ensure uniqueness
+    const existingFieldIds = (formData.form_fields?.fields || []).map((f) => f.field_id || f.id || f.name);
     let fieldId = newField.field_id;
     if (!fieldId) {
       if (isDisplayOnly) {
@@ -441,6 +452,7 @@ const NewFormPage = () => {
         return;
       }
     }
+    fieldId = ensureUniqueFieldId(fieldId, existingFieldIds);
 
     // For regular fields, require label
     if (!isDisplayOnly && !newField.label) {
@@ -1379,7 +1391,7 @@ const NewFormPage = () => {
 
                       {/* Boolean display: checkbox or Yes/No radios */}
                       {(newField.field_type === "boolean" || newField.field_type === "checkbox") && (
-                        <div className="space-y-1 pt-2 border-t">
+                        <div className="space-y-2 pt-2 border-t">
                           <Label className="text-xs">Display as</Label>
                           <Select
                             value={newField.field_options?.boolean_display || "checkbox"}
@@ -1397,6 +1409,24 @@ const NewFormPage = () => {
                             </SelectContent>
                           </Select>
                           <p className="text-xs text-muted-foreground">Use Yes/No radios for explicit true/false choice.</p>
+                          <Label className="text-xs">Checkbox style</Label>
+                          <Select
+                            value={newField.field_options?.checkbox_display_style || newField.field_options?.display_style || "default"}
+                            onValueChange={(v) =>
+                              setNewField((prev) => ({
+                                ...prev,
+                                field_options: { ...(prev.field_options || {}), checkbox_display_style: v },
+                              }))
+                            }
+                          >
+                            <SelectTrigger className="h-8 w-40"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="default">Default</SelectItem>
+                              <SelectItem value="warning">Warning (amber box)</SelectItem>
+                              <SelectItem value="alert">Alert (yellow left border)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <p className="text-xs text-muted-foreground">Use Warning or Alert for confirmations (e.g. &quot;Mark as urgent&quot;, &quot;I have completed…&quot;).</p>
                         </div>
                       )}
 
@@ -1727,11 +1757,15 @@ const NewFormPage = () => {
                                 value={newOption.label}
                                 onChange={(e) => {
                                   const label = e.target.value;
-                                  setNewOption((prev) => ({
-                                    ...prev,
-                                    label,
-                                    value: prev.value || generateFieldIdFromLabel(label),
-                                  }));
+                                  setNewOption((prev) => {
+                                    const autoFromPrev = generateFieldIdFromLabel(prev.label);
+                                    const wasAuto = !prev.value || prev.value === autoFromPrev;
+                                    return {
+                                      ...prev,
+                                      label,
+                                      value: wasAuto ? generateFieldIdFromLabel(label) : prev.value,
+                                    };
+                                  });
                                 }}
                                 placeholder="Option label *"
                                 onKeyDown={(e) => {
@@ -2248,31 +2282,21 @@ const NewFormPage = () => {
                                 <Label htmlFor="depends_on_field" className="text-xs">
                                   Show this field when
                                 </Label>
-                                <Select
+                                <SearchableFieldSelect
+                                  fields={formData.form_fields?.fields ?? []}
                                   value={newField.conditional_visibility?.depends_on_field || ''}
                                   onValueChange={(value) =>
                                     setNewField({
                                       ...newField,
                                       conditional_visibility: value
-                                        ? { depends_on_field: value, show_when: null, value: null }
+                                        ? { depends_on_field: value, show_when: null, value: null, action: newField.conditional_visibility?.action || 'hide' }
                                         : null,
                                     })
                                   }
-                                >
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Select a field..." />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {formData.form_fields.fields
-                                      .filter(f => f.field_id !== newField.field_id &&
-                                        !['text_block', 'image_block', 'line_break', 'page_break', 'download_link'].includes(f.field_type?.toLowerCase()))
-                                      .map((f) => (
-                                        <SelectItem key={f.field_id || f.field_name} value={f.field_id || f.field_name}>
-                                          {f.label || f.field_id || f.field_name}
-                                        </SelectItem>
-                                      ))}
-                                  </SelectContent>
-                                </Select>
+                                  placeholder="Select a field..."
+                                  excludeFieldId={newField.field_id}
+                                  excludeTypes={['text_block', 'image_block', 'line_break', 'page_break', 'download_link']}
+                                />
                               </div>
                               {newField.conditional_visibility?.depends_on_field && (() => {
                                 const formFields = formData.form_fields?.fields || [];
@@ -2390,11 +2414,33 @@ const NewFormPage = () => {
                                         )}
                                       </div>
                                     )}
+                                    <div>
+                                      <Label htmlFor="conditional_action_new" className="text-xs">When condition is not met</Label>
+                                      <Select
+                                        value={newField.conditional_visibility?.action || 'hide'}
+                                        onValueChange={(v) =>
+                                          setNewField({
+                                            ...newField,
+                                            conditional_visibility: { ...newField.conditional_visibility, action: v || 'hide' },
+                                          })
+                                        }
+                                      >
+                                        <SelectTrigger id="conditional_action_new">
+                                          <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="hide">Hide field</SelectItem>
+                                          <SelectItem value="disable">Disable field</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
                                   </>
                                 );
                               })()}
                               <p className="text-xs text-muted-foreground">
-                                This field will only be visible when the condition is met
+                                {newField.conditional_visibility?.action === 'disable'
+                                  ? 'When condition is not met, the field will be shown but disabled (read-only).'
+                                  : 'When condition is not met, the field will be hidden.'}
                               </p>
                             </CollapsibleContent>
                           </div>

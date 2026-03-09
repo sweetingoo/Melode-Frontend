@@ -18,6 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { SearchableFieldSelect } from "@/components/ui/searchable-field-select";
 import {
   Collapsible,
   CollapsibleContent,
@@ -102,6 +103,15 @@ const generateFieldIdFromLabel = (label) => {
     .replace(/_+/g, "_")
     .replace(/^_+|_+$/g, "")
     .substring(0, 100);
+};
+
+// Ensure field ID is unique among existing ids by appending a short unique suffix if needed
+const ensureUniqueFieldId = (baseId, existingIds) => {
+  if (!baseId) return baseId;
+  const set = new Set(existingIds.filter(Boolean).map(String));
+  if (!set.has(baseId)) return baseId;
+  const suffix = Date.now().toString(36) + Math.random().toString(36).substring(2, 6);
+  return `${baseId}_${suffix}`;
 };
 
 // Generate unique ID from label with random suffix (for sections)
@@ -540,11 +550,13 @@ const TrackerEditPage = () => {
       return;
     }
 
-    const fieldId = newField.id || generateFieldIdFromLabel(newField.label);
+    const existingIds = (formData.tracker_fields?.fields || []).map((f) => f.id || f.name || f.field_id);
+    let fieldId = newField.id || generateFieldIdFromLabel(newField.label);
     if (!fieldId) {
       toast.error("Could not generate field ID from label");
       return;
     }
+    fieldId = ensureUniqueFieldId(fieldId, existingIds);
 
     // For select/multiselect, require options
     if ((newField.type === "select" || newField.type === "multiselect") && newField.options.length === 0) {
@@ -1719,7 +1731,8 @@ const TrackerEditPage = () => {
                             <div className="space-y-3">
                               <div>
                                 <Label htmlFor="cond-depends-on" className="text-xs">Show when</Label>
-                                <Select
+                                <SearchableFieldSelect
+                                  fields={fields}
                                   value={editingField.conditional_visibility?.depends_on_field || "__none__"}
                                   onValueChange={(value) =>
                                     setEditingField((prev) => ({
@@ -1729,23 +1742,12 @@ const TrackerEditPage = () => {
                                         : null,
                                     }))
                                   }
-                                >
-                                  <SelectTrigger id="cond-depends-on">
-                                    <SelectValue placeholder="Select a field..." />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="__none__">None (always show)</SelectItem>
-                                    {fields
-                                      .filter((f) => (f.id || f.name || f.field_id) !== (editingField.id || editingField.name || editingField.field_id))
-                                      .filter((f) => !["text_block", "image_block", "line_break", "page_break", "download_link"].includes((f.type || f.field_type || "").toLowerCase()))
-                                      .filter((f) => !!(f.id || f.name || f.field_id))
-                                      .map((f) => (
-                                        <SelectItem key={f.id || f.name || f.field_id} value={String(f.id || f.name || f.field_id)}>
-                                          {f.label || f.field_label || f.name || f.id}
-                                        </SelectItem>
-                                      ))}
-                                  </SelectContent>
-                                </Select>
+                                  placeholder="Select a field..."
+                                  noneOption
+                                  noneLabel="None (always show)"
+                                  excludeFieldId={editingField.id || editingField.name || editingField.field_id}
+                                  excludeTypes={["text_block", "image_block", "line_break", "page_break", "download_link"]}
+                                />
                               </div>
                               {editingField.conditional_visibility?.depends_on_field && (() => {
                                 const depFieldId = editingField.conditional_visibility?.depends_on_field;
@@ -3405,6 +3407,11 @@ const TrackerEditPage = () => {
                                         newGroup.grid_rows = [{ left: [...(group.fields || [])], center: [], right: [] }];
                                         newGroup.fields = group.fields || [];
                                       }
+                                    } else if (val === "table") {
+                                      const cols = Array.isArray(group.table_columns) && group.table_columns.length > 0 ? group.table_columns : [{ id: "col_1", label: "Column 1" }];
+                                      const rows = Array.isArray(group.table_rows) && group.table_rows.length > 0 ? group.table_rows : [{ cells: cols.map(() => ({ text: "", field_id: null })) }];
+                                      newGroup.table_columns = cols;
+                                      newGroup.table_rows = rows;
                                     }
                                     next[groupIdx] = newGroup;
                                     setEditingSection((prev) => ({ ...prev, groups: next }));
@@ -3416,6 +3423,7 @@ const TrackerEditPage = () => {
                                   <SelectContent>
                                     <SelectItem value="stack">Stack (default)</SelectItem>
                                     <SelectItem value="grid">Grid (3 columns)</SelectItem>
+                                    <SelectItem value="table">Table</SelectItem>
                                   </SelectContent>
                                 </Select>
                               </div>
@@ -3427,6 +3435,150 @@ const TrackerEditPage = () => {
                                   editingSection={editingSection}
                                   setEditingSection={setEditingSection}
                                 />
+                              ) : (group.layout || "") === "table" ? (
+                                (() => {
+                                  const cols = Array.isArray(group.table_columns) && group.table_columns.length > 0 ? group.table_columns : [{ id: "col_1", label: "Column 1" }];
+                                  const rows = Array.isArray(group.table_rows) ? group.table_rows : [];
+                                  const addColumn = () => {
+                                    const next = [...(editingSection.groups || [])];
+                                    const newId = "col_" + Date.now();
+                                    const nextCols = [...cols, { id: newId, label: "New column" }];
+                                    const nextRows = rows.length > 0 ? rows.map((r) => ({ ...r, cells: [...(r.cells || []), { text: "", field_id: null }] })) : [{ cells: nextCols.map(() => ({ text: "", field_id: null })) }];
+                                    next[groupIdx] = { ...group, table_columns: nextCols, table_rows: nextRows };
+                                    setEditingSection((prev) => ({ ...prev, groups: next }));
+                                  };
+                                  const removeColumn = (cIdx) => {
+                                    const next = [...(editingSection.groups || [])];
+                                    const nextCols = cols.filter((_, i) => i !== cIdx);
+                                    const nextRows = rows.map((r) => ({ ...r, cells: (r.cells || []).filter((_, i) => i !== cIdx) }));
+                                    next[groupIdx] = { ...group, table_columns: nextCols.length > 0 ? nextCols : [{ id: "col_1", label: "Column 1" }], table_rows: nextRows };
+                                    setEditingSection((prev) => ({ ...prev, groups: next }));
+                                  };
+                                  const addRow = () => {
+                                    const next = [...(editingSection.groups || [])];
+                                    next[groupIdx] = { ...group, table_rows: [...rows, { cells: cols.map(() => ({ text: "", field_id: null })) }] };
+                                    setEditingSection((prev) => ({ ...prev, groups: next }));
+                                  };
+                                  const removeRow = (rIdx) => {
+                                    const next = [...(editingSection.groups || [])];
+                                    next[groupIdx] = { ...group, table_rows: rows.filter((_, i) => i !== rIdx) };
+                                    setEditingSection((prev) => ({ ...prev, groups: next }));
+                                  };
+                                  const setCell = (rIdx, cIdx, key, value) => {
+                                    const next = [...(editingSection.groups || [])];
+                                    const nextRows = rows.map((r, i) => {
+                                      if (i !== rIdx) return r;
+                                      const cells = [...(r.cells || [])];
+                                      while (cells.length <= cIdx) cells.push({ text: "", field_id: null });
+                                      cells[cIdx] = { ...cells[cIdx], [key]: value };
+                                      return { ...r, cells };
+                                    });
+                                    next[groupIdx] = { ...group, table_rows: nextRows };
+                                    setEditingSection((prev) => ({ ...prev, groups: next }));
+                                  };
+                                  const setRowVisibility = (rIdx, cv) => {
+                                    const next = [...(editingSection.groups || [])];
+                                    const nextRows = rows.map((r, i) => (i !== rIdx ? r : { ...r, conditional_visibility: cv || undefined }));
+                                    next[groupIdx] = { ...group, table_rows: nextRows };
+                                    setEditingSection((prev) => ({ ...prev, groups: next }));
+                                  };
+                                  const setColLabel = (cIdx, label) => {
+                                    const next = [...(editingSection.groups || [])];
+                                    const nextCols = cols.map((c, i) => (i !== cIdx ? c : { ...c, label }));
+                                    next[groupIdx] = { ...group, table_columns: nextCols };
+                                    setEditingSection((prev) => ({ ...prev, groups: next }));
+                                  };
+                                  return (
+                                    <div className="space-y-2">
+                                      <p className="text-xs text-muted-foreground">Edit the table. Each cell can have text and/or a field.</p>
+                                      <div className="overflow-x-auto border rounded-md">
+                                        <table className="w-full border-collapse text-sm">
+                                          <thead>
+                                            <tr className="border-b bg-muted/50">
+                                              {cols.map((col, cIdx) => (
+                                                <th key={col.id} className="border-r p-1 last:border-r-0">
+                                                  <div className="flex items-center gap-1">
+                                                    <Input className="h-8 text-xs flex-1 min-w-[60px]" value={col.label ?? ""} onChange={(e) => setColLabel(cIdx, e.target.value)} placeholder="Header" />
+                                                    <Button type="button" variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-destructive" onClick={() => removeColumn(cIdx)} title="Remove column"><Trash2 className="h-3 w-3" /></Button>
+                                                  </div>
+                                                </th>
+                                              ))}
+                                            </tr>
+                                          </thead>
+                                          <tbody>
+                                            {rows.map((row, rIdx) => {
+                                              const cells = (row.cells || []).slice(0, cols.length);
+                                              while (cells.length < cols.length) cells.push({ text: "", field_id: null });
+                                              const cv = row.conditional_visibility;
+                                              const trackerVisibilityFields = sectionFields.filter((x) => !["text_block", "image_block", "line_break", "page_break", "download_link"].includes((x.type || x.field_type || "").toLowerCase()));
+                                              return (
+                                                <React.Fragment key={rIdx}>
+                                                <tr className="border-b">
+                                                  {cells.map((cell, cIdx) => (
+                                                    <td key={cIdx} className="border-r p-1 last:border-r-0 align-top">
+                                                      <div className="space-y-1 min-w-[100px]">
+                                                        <Input className="h-8 text-xs w-full" placeholder="Text" value={cell.text ?? ""} onChange={(e) => setCell(rIdx, cIdx, "text", e.target.value)} />
+                                                        <Select value={cell.field_id ?? "__none__"} onValueChange={(v) => setCell(rIdx, cIdx, "field_id", v === "__none__" || !v ? null : v)}>
+                                                          <SelectTrigger className="h-8 text-xs w-full"><SelectValue placeholder="Field (optional)" /></SelectTrigger>
+                                                          <SelectContent>
+                                                            <SelectItem value="__none__">— No field —</SelectItem>
+                                                            {sectionFields.map((f) => (
+                                                              <SelectItem key={f.id || f.name || f.field_id} value={String(f.id || f.name || f.field_id)}>{f.label || f.name || f.id}</SelectItem>
+                                                            ))}
+                                                          </SelectContent>
+                                                        </Select>
+                                                      </div>
+                                                    </td>
+                                                  ))}
+                                                  <td className="w-8 p-1 align-top">
+                                                    <Button type="button" variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => removeRow(rIdx)} title="Remove row"><Trash2 className="h-3 w-3" /></Button>
+                                                  </td>
+                                                </tr>
+                                                <tr className="border-b bg-muted/20">
+                                                  <td colSpan={cols.length + 1} className="p-1.5 text-xs">
+                                                    <span className="text-muted-foreground mr-1.5">Show row when:</span>
+                                                    <SearchableFieldSelect
+                                                      fields={trackerVisibilityFields}
+                                                      value={cv?.depends_on_field || "__none__"}
+                                                      onValueChange={(v) => setRowVisibility(rIdx, v && v !== "__none__" ? { ...(cv || {}), depends_on_field: v } : null)}
+                                                      placeholder="Always"
+                                                      noneOption
+                                                      noneLabel="Always"
+                                                      compact
+                                                      className="h-6 text-xs w-40 inline-flex"
+                                                    />
+                                                    {cv?.depends_on_field && (
+                                                      <>
+                                                        <Select value={cv.show_when || ""} onValueChange={(v) => setRowVisibility(rIdx, { ...cv, show_when: v })}>
+                                                          <SelectTrigger className="h-6 text-xs w-24 inline-flex ml-1"><SelectValue /></SelectTrigger>
+                                                          <SelectContent>
+                                                            <SelectItem value="equals">Equals</SelectItem>
+                                                            <SelectItem value="not_equals">Not equals</SelectItem>
+                                                            <SelectItem value="contains">Contains</SelectItem>
+                                                            <SelectItem value="is_empty">Is empty</SelectItem>
+                                                            <SelectItem value="is_not_empty">Is not empty</SelectItem>
+                                                          </SelectContent>
+                                                        </Select>
+                                                        {["equals", "not_equals", "contains"].includes(cv.show_when) && (
+                                                          <Input placeholder="Value" className="h-6 text-xs w-24 inline-flex ml-1" value={cv.value ?? ""} onChange={(e) => setRowVisibility(rIdx, { ...cv, value: e.target.value })} />
+                                                        )}
+                                                      </>
+                                                    )}
+                                                  </td>
+                                                </tr>
+                                                </React.Fragment>
+                                              );
+                                            })}
+                                          </tbody>
+                                        </table>
+                                      </div>
+                                      <div className="flex gap-2">
+                                        <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={addColumn}><Plus className="h-3 w-3 mr-1" /> Add column</Button>
+                                        <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={addRow}><Plus className="h-3 w-3 mr-1" /> Add row</Button>
+                                      </div>
+                                    </div>
+                                  );
+                                })()
                               ) : (
                               <div className="flex flex-wrap gap-1 items-center">
                                 {(group.fields || []).map((fid) => {
@@ -3479,7 +3631,8 @@ const TrackerEditPage = () => {
                               <div className="space-y-2 pt-2 border-t border-muted">
                                 <Label className="text-xs font-medium">Show group when (optional)</Label>
                                 <div className="space-y-2">
-                                  <Select
+                                  <SearchableFieldSelect
+                                    fields={sectionFields}
                                     value={group.conditional_visibility?.depends_on_field || "__none__"}
                                     onValueChange={(value) => {
                                       const next = [...(editingSection.groups || [])];
@@ -3491,21 +3644,13 @@ const TrackerEditPage = () => {
                                       };
                                       setEditingSection((prev) => ({ ...prev, groups: next }));
                                     }}
-                                  >
-                                    <SelectTrigger className="h-8 text-xs">
-                                      <SelectValue placeholder="Select field..." />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="__none__">None (always show)</SelectItem>
-                                      {sectionFields
-                                        .filter((f) => !["text_block", "image_block", "line_break", "page_break", "download_link"].includes((f.type || f.field_type || "").toLowerCase()))
-                                        .map((f) => (
-                                          <SelectItem key={f.id || f.name || f.field_id} value={String(f.id || f.name || f.field_id)}>
-                                            {f.label || f.name || f.id}
-                                          </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                  </Select>
+                                    placeholder="Select field..."
+                                    noneOption
+                                    noneLabel="None (always show)"
+                                    excludeTypes={["text_block", "image_block", "line_break", "page_break", "download_link"]}
+                                    compact
+                                    className="h-8 text-xs w-44"
+                                  />
                                   {group.conditional_visibility?.depends_on_field && (() => {
                                     const depFieldId = group.conditional_visibility?.depends_on_field;
                                     const depField = sectionFields.find((f) => String(f.id || f.name || f.field_id) === String(depFieldId));

@@ -927,6 +927,27 @@ const TrackerEntryDetailPage = () => {
     };
     if (show_when === "equals") return normalize(dependentValue) === normalize(expectedValue);
     if (show_when === "not_equals") return normalize(dependentValue) !== normalize(expectedValue);
+    if (show_when === "contains") return Array.isArray(dependentValue) ? dependentValue.includes(expectedValue) : String(dependentValue || "").includes(String(expectedValue || ""));
+    if (show_when === "is_empty") return !dependentValue || dependentValue === "" || dependentValue === false;
+    if (show_when === "is_not_empty") return dependentValue != null && dependentValue !== "" && dependentValue !== false;
+    return true;
+  };
+
+  // Table row conditional visibility (same logic as group)
+  const checkRowVisibility = (row, data) => {
+    if (!row?.conditional_visibility?.depends_on_field) return true;
+    const { depends_on_field, show_when, value: expectedValue } = row.conditional_visibility;
+    const dependentValue = data?.[depends_on_field];
+    const normalize = (v) => {
+      if (v === true || v === "true" || v === "True" || v === "TRUE") return true;
+      if (v === false || v === "false" || v === "False" || v === "FALSE") return false;
+      if (v === "yes" || v === "Yes" || v === "YES") return true;
+      if (v === "no" || v === "No" || v === "NO") return false;
+      return v;
+    };
+    if (show_when === "equals") return normalize(dependentValue) === normalize(expectedValue);
+    if (show_when === "not_equals") return normalize(dependentValue) !== normalize(expectedValue);
+    if (show_when === "contains") return Array.isArray(dependentValue) ? dependentValue.includes(expectedValue) : String(dependentValue || "").includes(String(expectedValue || ""));
     if (show_when === "is_empty") return !dependentValue || dependentValue === "" || dependentValue === false;
     if (show_when === "is_not_empty") return dependentValue != null && dependentValue !== "" && dependentValue !== false;
     return true;
@@ -1629,7 +1650,11 @@ const TrackerEntryDetailPage = () => {
                                     const groupFields = (group.fields || [])
                                       .map((fid) => sectionFields.find((f) => (f.id || f.name || f.field_id) === fid))
                                       .filter(Boolean);
-                                    if (groupFields.length === 0) return null;
+                                    const isTable = (group.layout || "") === "table";
+                                    const hasNewTableRows = isTable && Array.isArray(group.table_rows) && group.table_rows.length > 0;
+                                    const hasOldTableData = isTable && (Array.isArray(group.table_text_rows) && group.table_text_rows.length > 0 || groupFields.length > 0);
+                                    const hasTableRows = hasNewTableRows || hasOldTableData;
+                                    if (groupFields.length === 0 && !hasTableRows) return null;
                                     const isGrid = (group.layout || "") === "grid" && (group.grid_rows?.length > 0 || group.grid_columns);
                                     const rows = (group.grid_rows && group.grid_rows.length > 0)
                                       ? group.grid_rows
@@ -1637,7 +1662,110 @@ const TrackerEntryDetailPage = () => {
                                     return (
                                       <div key={group.id || group.label} className="space-y-3">
                                         {group.label && <h4 className="text-lg font-bold text-muted-foreground border-b pb-1.5">{group.label}</h4>}
-                                        {isGrid && rows.length > 0 ? (
+                                        {isTable ? (
+                                          (() => {
+                                            const tableCols = Array.isArray(group.table_columns) && group.table_columns.length > 0 ? group.table_columns : [{ id: "col_1", label: "Column 1" }];
+                                            const tableRows = Array.isArray(group.table_rows) ? group.table_rows : [];
+                                            const getFieldById = (fid) => sectionFields.find((f) => (f.id || f.name || f.field_id) === fid);
+                                            if (tableRows.length > 0) {
+                                              return (
+                                                <div className="overflow-x-auto">
+                                                  <table className="w-full border-collapse text-sm">
+                                                    <thead>
+                                                      <tr className="border-b border-border">
+                                                        {tableCols.map((col) => (
+                                                          <th key={col.id} className="text-left font-medium p-2 pr-4">{col.label || col.id}</th>
+                                                        ))}
+                                                      </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                      {tableRows.filter((row) => checkRowVisibility(row, entryData)).map((row, rIdx) => {
+                                                        const cells = (row.cells || []).slice(0, tableCols.length);
+                                                        while (cells.length < tableCols.length) cells.push({ text: "", field_id: null });
+                                                        return (
+                                                          <tr key={rIdx} className="border-b border-border">
+                                                            {cells.map((cell, cIdx) => (
+                                                              <td key={cIdx} className="p-2 pr-4 align-middle">
+                                                                <div className="space-y-1">
+                                                                  {(cell.text ?? "").trim() ? <span className="text-muted-foreground">{cell.text}</span> : null}
+                                                                  {cell.field_id ? (() => {
+                                                                    const f = getFieldById(cell.field_id);
+                                                                    if (!f) return null;
+                                                                    const baseField = { ...f, type: f.type || f.field_type, field_label: f.label || f.field_label || f.name, field_name: f.name || f.id };
+                                                                    const fieldId = f.id || f.name || f.field_id;
+                                                                    return (
+                                                                      <CustomFieldRenderer
+                                                                        field={getFieldWithStageFilteredStatusOptions(baseField, statusesForEditModeStageFiltered)}
+                                                                        value={entryData[fieldId]}
+                                                                        onChange={handleFieldChange}
+                                                                        hideLabel
+                                                                        error={fieldErrors[fieldId]}
+                                                                        readOnly={false}
+                                                                      />
+                                                                    );
+                                                                  })() : null}
+                                                                </div>
+                                                              </td>
+                                                            ))}
+                                                          </tr>
+                                                        );
+                                                      })}
+                                                    </tbody>
+                                                  </table>
+                                                </div>
+                                              );
+                                            }
+                                            const oldCols = tableCols.length >= 2 ? tableCols : [{ id: "label", label: "Label" }, { id: "value", label: "Value" }];
+                                            return (
+                                              <div className="overflow-x-auto">
+                                                <table className="w-full border-collapse text-sm">
+                                                  <thead>
+                                                    <tr className="border-b border-border">
+                                                      {oldCols.map((col) => (
+                                                        <th key={col.id} className="text-left font-medium p-2 pr-4">{col.label || col.id}</th>
+                                                      ))}
+                                                    </tr>
+                                                  </thead>
+                                                  <tbody>
+                                                    {(group.table_text_rows || []).map((row, rIdx) => (
+                                                      <tr key={`text-${rIdx}`} className="border-b border-border">
+                                                        {oldCols.map((col) => (
+                                                          <td key={col.id} className="p-2 pr-4 align-middle">{row[col.id] ?? (col.id === "label" ? row.col1 : col.id === "value" ? row.col2 : "") ?? ""}</td>
+                                                        ))}
+                                                      </tr>
+                                                    ))}
+                                                    {groupFields.map((field) => {
+                                                      const fieldId = field.id || field.name || field.field_id;
+                                                      const baseField = { ...field, type: field.type || field.field_type, field_label: field.label || field.field_label || field.name, field_name: field.name || field.id };
+                                                      return (
+                                                        <tr key={fieldId} className="border-b border-border">
+                                                          {oldCols.map((col) => (
+                                                            col.id === "value" ? (
+                                                              <td key={col.id} className="p-2 align-middle">
+                                                                <CustomFieldRenderer
+                                                                  field={getFieldWithStageFilteredStatusOptions(baseField, statusesForEditModeStageFiltered)}
+                                                                  value={entryData[fieldId]}
+                                                                  onChange={handleFieldChange}
+                                                                  hideLabel
+                                                                  error={fieldErrors[fieldId]}
+                                                                  readOnly={false}
+                                                                />
+                                                              </td>
+                                                            ) : (
+                                                              <td key={col.id} className="p-2 pr-4 align-middle">
+                                                                {col.id === "label" ? (baseField.label || fieldId) : (field.field_options?.[col.id] ?? "")}
+                                                              </td>
+                                                            )
+                                                          ))}
+                                                        </tr>
+                                                      );
+                                                    })}
+                                                  </tbody>
+                                                </table>
+                                              </div>
+                                            );
+                                          })()
+                                        ) : isGrid && rows.length > 0 ? (
                                           <div className="space-y-4">
                                             {rows.map((gridRow, rowIdx) => {
                                               const leftFields = (gridRow.left || []).map((fid) => sectionFields.find((f) => (f.id || f.name || f.field_id) === fid)).filter(Boolean);

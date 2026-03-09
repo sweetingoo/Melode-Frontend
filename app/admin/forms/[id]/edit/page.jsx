@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { SearchableFieldSelect } from "@/components/ui/searchable-field-select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -133,6 +134,15 @@ const generateFieldIdFromLabel = (label) => {
     .replace(/^_+|_+$/g, ''); // Remove leading/trailing underscores
 };
 
+// Ensure field_id is unique among existing form fields (avoids duplicate React keys)
+const ensureUniqueFieldId = (baseId, existingIds) => {
+  if (!baseId) return baseId;
+  const set = new Set((existingIds || []).filter(Boolean).map(String));
+  if (!set.has(String(baseId))) return baseId;
+  const suffix = Date.now().toString(36) + Math.random().toString(36).substring(2, 6);
+  return `${baseId}_${suffix}`;
+};
+
 // Helper function to generate random field ID for display-only fields
 const generateDisplayFieldId = (fieldType) => {
   const prefix = fieldType === 'text_block' ? 'txt' : 
@@ -167,6 +177,7 @@ const fieldTypes = [
   { value: "select", label: "Select (Single)" },
   { value: "radio", label: "Radio (Single choice)" },
   { value: "multiselect", label: "Multi-Select" },
+  { value: "repeatable_group", label: "Repeatable group (Add more rows)" },
   { value: "people", label: "People (User Selection)" },
   { value: "file", label: "File Upload" },
   { value: "json", label: "JSON" },
@@ -295,10 +306,247 @@ function FormGridColumnsEditor({ formData, setFormData, secIdx, gIdx, section, g
 const FORM_GRID_COLS = ["left", "center", "right"];
 const formGridColumnLabels = { left: "Left", center: "Center (full width)", right: "Right" };
 
-function FormOneRowEditor({ row, rowIndex, fieldsList, allIdsInAnyGroup, onUpdateRow, onRemoveRow, canRemoveRow }) {
+function GridCellTableEditor({ tableCols, tableRows, fieldsList, allIdsInAnyGroup, onUpdate, onRowVisibilityChange }) {
+  const cols = tableCols?.length > 0 ? tableCols : [{ id: "col_1", label: "Column 1" }];
+  const rows = Array.isArray(tableRows) ? tableRows : [];
+  const [rowVisOverride, setRowVisOverride] = useState({});
+  const setRowVisibility = (rIdx, cv) => {
+    setRowVisOverride((prev) => ({ ...prev, [rIdx]: cv || undefined }));
+    onRowVisibilityChange?.(rIdx, cv);
+    const nextRows = rows.map((r, i) => i !== rIdx ? r : { ...r, conditional_visibility: cv || undefined });
+    onUpdate(cols, nextRows);
+  };
+  useEffect(() => {
+    setRowVisOverride((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      rows.forEach((row, rIdx) => {
+        const cv = row.conditional_visibility;
+        const ov = prev[rIdx];
+        if (ov && cv && ov.depends_on_field === cv.depends_on_field) {
+          delete next[rIdx];
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
+    });
+  }, [rows]);
+  const addColumn = () => {
+    const newId = "col_" + Date.now();
+    const nextCols = [...cols, { id: newId, label: "New column" }];
+    const nextRows = rows.length > 0 ? rows.map((r) => ({ ...r, cells: [...(r.cells || []), { text: "", field_id: null }] })) : [{ cells: nextCols.map(() => ({ text: "", field_id: null })) }];
+    onUpdate(nextCols, nextRows);
+  };
+  const removeColumn = (cIdx) => {
+    const nextCols = cols.filter((_, i) => i !== cIdx);
+    const nextRows = rows.map((r) => ({ ...r, cells: (r.cells || []).filter((_, i) => i !== cIdx) }));
+    onUpdate(nextCols.length > 0 ? nextCols : [{ id: "col_1", label: "Column 1" }], nextRows);
+  };
+  const addRow = () => onUpdate(cols, [...rows, { cells: cols.map(() => ({ text: "", field_id: null })) }]);
+  const removeRow = (rIdx) => onUpdate(cols, rows.filter((_, i) => i !== rIdx));
+  const setCell = (rIdx, cIdx, key, value) => {
+    const nextRows = rows.map((r, i) => {
+      if (i !== rIdx) return r;
+      const cells = [...(r.cells || [])];
+      while (cells.length <= cIdx) cells.push({ text: "", field_id: null });
+      cells[cIdx] = { ...cells[cIdx], [key]: value };
+      return { ...r, cells };
+    });
+    onUpdate(cols, nextRows);
+  };
+  const setColLabel = (cIdx, label) => onUpdate(cols.map((c, i) => (i !== cIdx ? c : { ...c, label })), rows);
+  const visibilityFields = (fieldsList || []).filter((x) => !["text_block", "image_block", "line_break", "page_break", "download_link"].includes((x.field_type || x.type || "").toLowerCase()));
+  const availableFieldIds = (fieldsList || []).map((f) => String(f.field_id || f.id || f.name)).filter((id) => !allIdsInAnyGroup.includes(id));
+  const usedInThisTable = rows.flatMap((r) => (r.cells || []).map((c) => c.field_id).filter(Boolean));
+  const availableForSelect = (fieldsList || []).filter((f) => {
+    const id = String(f.field_id || f.id || f.name);
+    return availableFieldIds.includes(id) || usedInThisTable.includes(id);
+  });
+  return (
+    <div className="space-y-1 mt-1 min-w-0">
+      <div className="overflow-x-auto overflow-y-auto border rounded max-h-[220px] min-w-[420px]">
+        <table className="w-full min-w-[400px] border-collapse text-xs">
+          <thead>
+            <tr className="border-b bg-muted/50 sticky top-0">
+              {cols.map((col, cIdx) => (
+                <th key={col.id} className="border-r p-0.5 last:border-r-0 min-w-[100px]">
+                  <div className="flex items-center gap-0.5">
+                    <Input className="h-6 text-xs flex-1 min-w-[80px]" value={col.label ?? ""} onChange={(e) => setColLabel(cIdx, e.target.value)} placeholder="Header" />
+                    <Button type="button" variant="ghost" size="icon" className="h-5 w-5 shrink-0 text-destructive" onClick={() => removeColumn(cIdx)}><Trash2 className="h-2.5 w-2.5" /></Button>
+                  </div>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, rIdx) => {
+              const cells = (row.cells || []).slice(0, cols.length);
+              while (cells.length < cols.length) cells.push({ text: "", field_id: null });
+              const cvFromRow = row.conditional_visibility;
+              const cv = rowVisOverride[rIdx] ?? cvFromRow;
+              return (
+                <React.Fragment key={rIdx}>
+                <tr className="border-b">
+                  {cells.map((cell, cIdx) => (
+                    <td key={cIdx} className="border-r p-0.5 last:border-r-0 align-top min-w-[100px]">
+                      <div className="space-y-0.5 min-w-[90px]">
+                        <Input className="h-6 text-xs w-full" placeholder="Text" value={cell.text ?? ""} onChange={(e) => setCell(rIdx, cIdx, "text", e.target.value)} />
+                        <Select value={cell.field_id ?? "__none__"} onValueChange={(v) => setCell(rIdx, cIdx, "field_id", v === "__none__" || !v ? null : v)}>
+                          <SelectTrigger className="h-6 text-xs w-full"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">—</SelectItem>
+                            {availableForSelect.map((f) => (
+                              <SelectItem key={f.field_id || f.id || f.name} value={String(f.field_id || f.id || f.name)}>{f.label || f.field_id || f.id}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </td>
+                  ))}
+                  <td className="w-6 p-0.5">
+                    <Button type="button" variant="ghost" size="icon" className="h-5 w-5 text-destructive" onClick={() => removeRow(rIdx)}><Trash2 className="h-2.5 w-2.5" /></Button>
+                  </td>
+                </tr>
+                <tr className="border-b bg-muted/30">
+                  <td colSpan={cols.length + 1} className="p-1.5 text-xs align-middle">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium text-muted-foreground shrink-0">Show row when:</span>
+                      <SearchableFieldSelect
+                        fields={visibilityFields}
+                        value={cv?.depends_on_field ?? "__none__"}
+                        onValueChange={(v) => setRowVisibility(rIdx, v && v !== "__none__" ? { ...(cv || {}), depends_on_field: v } : null)}
+                        placeholder="Always show"
+                        noneOption
+                        noneLabel="Always show"
+                        compact
+                        className="h-7 text-xs w-40 inline-flex"
+                      />
+                    {cv?.depends_on_field && (
+                      <>
+                        <Select value={cv.show_when || ""} onValueChange={(v) => setRowVisibility(rIdx, { ...cv, show_when: v })}>
+                          <SelectTrigger className="h-7 text-xs w-24 inline-flex"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="equals">Equals</SelectItem>
+                            <SelectItem value="not_equals">Not equals</SelectItem>
+                            <SelectItem value="contains">Contains</SelectItem>
+                            <SelectItem value="is_empty">Is empty</SelectItem>
+                            <SelectItem value="is_not_empty">Not empty</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        {["equals", "not_equals", "contains"].includes(cv.show_when) && (
+                          <Input placeholder="Value" className="h-7 text-xs w-24" value={cv.value ?? ""} onChange={(e) => setRowVisibility(rIdx, { ...cv, value: e.target.value })} />
+                        )}
+                      </>
+                    )}
+                    </div>
+                  </td>
+                </tr>
+                </React.Fragment>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div className="flex gap-1">
+        <Button type="button" variant="outline" size="sm" className="h-6 text-xs" onClick={addColumn}><Plus className="h-2.5 w-2.5 mr-0.5" /> Col</Button>
+        <Button type="button" variant="outline" size="sm" className="h-6 text-xs" onClick={addRow}><Plus className="h-2.5 w-2.5 mr-0.5" /> Row</Button>
+      </div>
+    </div>
+  );
+}
+
+function GridCellTabsEditor({ tabs, fieldsList, allIdsInAnyGroup, onUpdate }) {
+  const tabList = Array.isArray(tabs) ? tabs : [];
+  const setTab = (tIdx, updater) => onUpdate(tabList.map((t, i) => (i !== tIdx ? t : (typeof updater === "function" ? updater(t) : updater))));
+  const addTab = () => onUpdate([...tabList, { id: `tab_${Date.now()}`, label: `Tab ${tabList.length + 1}`, fields: [] }]);
+  const removeTab = (tIdx) => onUpdate(tabList.filter((_, i) => i !== tIdx));
+  const tabFieldIds = tabList.flatMap((t) => (t.layout === "table" && t.table_rows) ? (t.table_rows || []).flatMap((r) => (r.cells || []).map((c) => c.field_id).filter(Boolean)) : (t.fields || []));
+  const availableToAdd = (fieldsList || []).map((f) => String(f.field_id || f.id || f.name)).filter((id) => !allIdsInAnyGroup.includes(id) || tabFieldIds.includes(id));
+  return (
+    <div className="space-y-1.5 mt-1 min-w-[320px] overflow-x-auto">
+      {tabList.map((tab, tIdx) => {
+        const isTable = (tab.layout || "fields") === "table";
+        const tabCols = isTable && tab.table_columns?.length > 0 ? tab.table_columns : [{ id: "col_1", label: "Column 1" }];
+        const tabRows = isTable ? (tab.table_rows || []) : [];
+        return (
+          <div key={tab.id || tIdx} className="rounded border bg-muted/20 p-1.5 space-y-1">
+            <div className="flex items-center gap-1 flex-wrap">
+              <Input className="h-6 text-xs w-28 min-w-[5rem] max-w-[8rem] shrink-0" placeholder="Tab label" value={tab.label || ""} onChange={(e) => setTab(tIdx, { ...tab, label: e.target.value })} />
+              <Select value={isTable ? "table" : "fields"} onValueChange={(v) => setTab(tIdx, v === "table" ? { ...tab, layout: "table", table_columns: tabCols, table_rows: tabRows.length > 0 ? tabRows : [{ cells: tabCols.map(() => ({ text: "", field_id: null })) }] } : { ...tab, layout: "fields", table_columns: undefined, table_rows: undefined })}>
+                <SelectTrigger className="h-6 text-xs w-24"><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="fields">Fields</SelectItem><SelectItem value="table">Table</SelectItem></SelectContent>
+              </Select>
+              <Button type="button" variant="ghost" size="icon" className="h-5 w-5 text-destructive" onClick={() => removeTab(tIdx)}><Trash2 className="h-2.5 w-2.5" /></Button>
+            </div>
+            {isTable ? (
+              <GridCellTableEditor tableCols={tabCols} tableRows={tabRows} fieldsList={fieldsList} allIdsInAnyGroup={allIdsInAnyGroup} onUpdate={(table_columns, table_rows) => setTab(tIdx, { ...tab, table_columns, table_rows })} />
+            ) : (
+              <div className="flex flex-wrap gap-0.5">
+                {(tab.fields || []).map((fid) => {
+                  const f = fieldsList.find((x) => String(x.field_id || x.id || x.name) === String(fid));
+                  return (
+                    <Badge key={fid} variant="outline" className="text-xs py-0">
+                      {f?.label || fid}
+                      <button type="button" className="ml-0.5" onClick={() => setTab(tIdx, { ...tab, fields: (tab.fields || []).filter((id) => id !== fid) })}><X className="h-2.5 w-2.5" /></button>
+                    </Badge>
+                  );
+                })}
+                <Select value="__add__" onValueChange={(v) => { if (v && v !== "__add__") setTab(tIdx, { ...tab, fields: [...(tab.fields || []), v] }); }}>
+                  <SelectTrigger className="h-5 text-xs w-[110px]"><SelectValue placeholder="+ Field" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__add__">+ Field</SelectItem>
+                    {availableToAdd.map((fid) => {
+                      const f = fieldsList.find((x) => String(x.field_id || x.id || x.name) === String(fid));
+                      return <SelectItem key={fid} value={fid}>{f?.label || fid}</SelectItem>;
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+        );
+      })}
+      <Button type="button" variant="outline" size="sm" className="h-6 text-xs w-full" onClick={addTab}><Plus className="h-2.5 w-2.5 mr-0.5" /> Add tab</Button>
+    </div>
+  );
+}
+
+function isGridSlotTable(slot) {
+  return slot && typeof slot === "object" && (slot.layout || "") === "table" && Array.isArray(slot.table_rows);
+}
+function isGridSlotTabs(slot) {
+  return slot && typeof slot === "object" && (slot.layout || "") === "tabs" && Array.isArray(slot.tabs);
+}
+function getGridSlotFieldIds(slot) {
+  if (Array.isArray(slot)) return slot;
+  if (isGridSlotTable(slot)) return (slot.table_rows || []).flatMap((r) => (r.cells || []).map((c) => c.field_id).filter(Boolean));
+  if (isGridSlotTabs(slot)) return (slot.tabs || []).flatMap((t) => (t.layout === "table" && t.table_rows) ? (t.table_rows || []).flatMap((r) => (r.cells || []).map((c) => c.field_id).filter(Boolean)) : (t.fields || []));
+  return [];
+}
+function flatMapGridRowsFieldIds(gridRows) {
+  return (gridRows || []).flatMap((r) => FORM_GRID_COLS.flatMap((col) => getGridSlotFieldIds(r[col])));
+}
+
+function FormOneRowEditor({ row, rowIndex, fieldsList, allIdsInAnyGroup, onUpdateRow, onRemoveRow, canRemoveRow, onRowVisibilityChange }) {
+  const [focusedCol, setFocusedCol] = useState(null);
+  const [rowVisOverride, setRowVisOverride] = useState(null);
   const grid = row || { left: [], center: [], right: [] };
-  const hasLeftOrRight = ((grid.left || []).length + (grid.right || []).length) > 0;
-  const hasCenter = (grid.center || []).length > 0;
+  const cvDisplay = rowVisOverride ?? grid.conditional_visibility;
+  const setRowVis = (upd) => {
+    setRowVisOverride(upd ?? undefined);
+    onRowVisibilityChange?.(rowIndex, upd);
+    onUpdateRow({ ...grid, conditional_visibility: upd });
+  };
+  useEffect(() => {
+    if (grid.conditional_visibility && rowVisOverride && grid.conditional_visibility.depends_on_field === rowVisOverride.depends_on_field) {
+      setRowVisOverride(null);
+    }
+  }, [grid.conditional_visibility?.depends_on_field]);
+  const slotValue = (col) => grid[col];
+  const isTableSlot = (col) => isGridSlotTable(slotValue(col));
+  const isTabsSlot = (col) => isGridSlotTabs(slotValue(col));
+  const hasLeftOrRight = FORM_GRID_COLS.filter((c) => c !== "center").some((c) => (Array.isArray(grid[c]) && (grid[c] || []).length > 0) || isTableSlot(c) || isTabsSlot(c));
+  const hasCenter = (Array.isArray(grid.center) && (grid.center || []).length > 0) || isTableSlot("center") || isTabsSlot("center");
   const centerDisabled = hasLeftOrRight;
   const leftRightDisabled = hasCenter;
   const isColDisabled = (col) => (col === "center" && centerDisabled) || (col !== "center" && leftRightDisabled);
@@ -306,16 +554,24 @@ function FormOneRowEditor({ row, rowIndex, fieldsList, allIdsInAnyGroup, onUpdat
   const sectionFieldIds = (fieldsList || []).map((f) => String(f.field_id || f.id || f.name));
   const availableToAdd = sectionFieldIds.filter((id) => !allIdsInAnyGroup.includes(id));
 
+  const gridTemplateCols =
+    focusedCol === "left" ? "minmax(480px, 2fr) 1fr 1fr"
+    : focusedCol === "center" ? "1fr minmax(480px, 2fr) 1fr"
+    : focusedCol === "right" ? "1fr 1fr minmax(480px, 2fr)"
+    : hasCenter ? "minmax(72px, 0.2fr) 1fr minmax(72px, 0.2fr)" // center used: narrow left/right, wide center
+    : undefined;
+
   const updateRow = (newGrid) => { onUpdateRow(rowIndex, newGrid); };
+  const setSlot = (col, value) => updateRow({ ...grid, [col]: value });
 
   const moveField = (fieldId, fromCol, toCol) => {
     if (fromCol === toCol) return;
     if (isColDisabled(toCol)) return;
-    const left = [...(grid.left || [])];
-    const center = [...(grid.center || [])];
-    const right = [...(grid.right || [])];
+    const left = Array.isArray(grid.left) ? [...grid.left] : [];
+    const center = Array.isArray(grid.center) ? [...grid.center] : [];
+    const right = Array.isArray(grid.right) ? [...grid.right] : [];
     FORM_GRID_COLS.forEach((col, i) => {
-      if (col === fromCol) { const idx = [left, center, right][i].indexOf(fieldId); if (idx !== -1) [left, center, right][i].splice(idx, 1); }
+      if (col === fromCol) { const arr = [left, center, right][i]; const idx = arr.indexOf(fieldId); if (idx !== -1) arr.splice(idx, 1); }
     });
     const addTo = (arr) => { if (!arr.includes(fieldId)) arr.push(fieldId); };
     if (toCol === "left") addTo(left); else if (toCol === "center") addTo(center); else addTo(right);
@@ -324,14 +580,16 @@ function FormOneRowEditor({ row, rowIndex, fieldsList, allIdsInAnyGroup, onUpdat
 
   const removeFromColumn = (fieldId, col) => {
     const nextGrid = { ...grid };
-    nextGrid[col] = (nextGrid[col] || []).filter((id) => id !== fieldId);
+    const arr = nextGrid[col];
+    nextGrid[col] = Array.isArray(arr) ? arr.filter((id) => id !== fieldId) : [];
     updateRow(nextGrid);
   };
 
   const addToColumn = (fieldId, col) => {
     if (isColDisabled(col)) return;
     const nextGrid = { ...grid };
-    nextGrid[col] = [...(nextGrid[col] || []), fieldId];
+    const arr = Array.isArray(nextGrid[col]) ? nextGrid[col] : [];
+    nextGrid[col] = [...arr, fieldId];
     updateRow(nextGrid);
   };
 
@@ -351,7 +609,7 @@ function FormOneRowEditor({ row, rowIndex, fieldsList, allIdsInAnyGroup, onUpdat
     if (isColDisabled(toCol)) return;
     const fieldId = e.dataTransfer.getData("fieldId");
     const fromCol = e.dataTransfer.getData("fromColumn");
-    if (fieldId && fromCol && e.dataTransfer.getData("fromRowIndex") === String(rowIndex)) moveField(fieldId, fromCol, toCol);
+    if (fieldId && fromCol && e.dataTransfer.getData("fromRowIndex") === String(rowIndex) && Array.isArray(grid[fromCol])) moveField(fieldId, fromCol, toCol);
   };
 
   return (
@@ -364,68 +622,190 @@ function FormOneRowEditor({ row, rowIndex, fieldsList, allIdsInAnyGroup, onUpdat
           </Button>
         )}
       </div>
-      <div className="grid grid-cols-3 gap-3">
+      <div
+        className="grid grid-cols-3 gap-3 overflow-x-auto"
+        style={gridTemplateCols ? { gridTemplateColumns: gridTemplateCols } : undefined}
+      >
         {FORM_GRID_COLS.map((col) => {
           const disabled = isColDisabled(col);
+          const slot = slotValue(col);
+          const isTable = isTableSlot(col);
+          const isTabs = isTabsSlot(col);
+          const tableCols = isTable && slot.table_columns?.length > 0 ? slot.table_columns : [{ id: "col_1", label: "Column 1" }];
+          const tableRows = isTable ? (slot.table_rows || []) : [];
+          const slotContentType = isTable ? "table" : isTabs ? "tabs" : "fields";
+          const isTableOrTabs = isTable || isTabs;
           return (
             <div
               key={col}
-              onDragOver={(e) => onDragOver(e, col)}
-              onDrop={(e) => onDrop(e, col)}
-              className={`min-h-[72px] rounded border border-dashed p-2 flex flex-col ${disabled ? "border-muted-foreground/20 bg-muted/10 opacity-80" : "border-muted-foreground/40"}`}
+              onFocus={isTableOrTabs ? () => setFocusedCol(col) : undefined}
+              onBlur={isTableOrTabs ? (e) => { if (!e.currentTarget.contains(e.relatedTarget)) setFocusedCol(null); } : undefined}
+              onDragOver={!isTable && !isTabs ? (e) => onDragOver(e, col) : undefined}
+              onDrop={!isTable && !isTabs ? (e) => onDrop(e, col) : undefined}
+              className={`min-h-[72px] rounded border border-dashed p-2 flex flex-col min-w-0 ${isTableOrTabs ? "overflow-x-auto" : ""} ${disabled ? "border-muted-foreground/20 bg-muted/10 opacity-80" : "border-muted-foreground/40"} ${focusedCol === col ? "ring-2 ring-primary/50" : ""}`}
             >
-              <div className="text-xs font-medium text-muted-foreground mb-1">
+              <div className="text-xs font-medium text-muted-foreground mb-1 flex items-center gap-1 flex-wrap">
                 {formGridColumnLabels[col]}
+                {!disabled && (
+                  <Select value={slotContentType} onValueChange={(v) => {
+                    if (v === "table") setSlot(col, { layout: "table", table_columns: tableCols, table_rows: tableRows.length > 0 ? tableRows : [{ cells: tableCols.map(() => ({ text: "", field_id: null })) }] });
+                    else if (v === "tabs") setSlot(col, { layout: "tabs", tabs: [{ id: `tab_${Date.now()}`, label: "Tab 1", fields: [] }] });
+                    else setSlot(col, []);
+                  }}>
+                    <SelectTrigger className="h-6 text-xs w-20"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="fields">Fields</SelectItem>
+                      <SelectItem value="table">Table</SelectItem>
+                      <SelectItem value="tabs">Tabs</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
                 {disabled && <span className="block text-muted-foreground/70 font-normal">({col === "center" ? "use left/right" : "use center"} in this row)</span>}
               </div>
-              <div className="flex flex-wrap gap-1 flex-1">
-                {(grid[col] || []).map((fid) => {
-                  const f = fieldsList.find((x) => String(x.field_id || x.id || x.name) === String(fid));
-                  return (
-                    <Badge key={fid} variant="outline" className="text-xs cursor-grab active:cursor-grabbing" draggable onDragStart={(e) => onDragStart(e, fid, col)}>
-                      {f?.label || fid}
-                      <button type="button" className="ml-1" onClick={() => removeFromColumn(fid, col)}><X className="h-3 w-3" /></button>
-                    </Badge>
-                  );
-                })}
-              </div>
-              {!disabled && availableToAdd.length > 0 && (
-                <Select value="__add__" onValueChange={(v) => { if (v && v !== "__add__") addToColumn(v, col); }}>
-                  <SelectTrigger className="h-7 text-xs mt-1"><SelectValue placeholder="+ Add field" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__add__">+ Add field</SelectItem>
-                    {availableToAdd.map((fid) => {
+              {isTable ? (
+                <GridCellTableEditor
+                  tableCols={tableCols}
+                  tableRows={tableRows}
+                  fieldsList={fieldsList}
+                  allIdsInAnyGroup={allIdsInAnyGroup}
+                  onUpdate={(table_columns, table_rows) => setSlot(col, { ...slot, table_columns, table_rows })}
+                />
+              ) : isTabs ? (
+                <GridCellTabsEditor tabs={slot.tabs || []} fieldsList={fieldsList} allIdsInAnyGroup={allIdsInAnyGroup} onUpdate={(tabs) => setSlot(col, { ...slot, tabs })} />
+              ) : (
+                <>
+                  <div className="flex flex-wrap gap-1 flex-1">
+                    {(Array.isArray(slot) ? slot : []).map((fid) => {
                       const f = fieldsList.find((x) => String(x.field_id || x.id || x.name) === String(fid));
-                      return <SelectItem key={fid} value={fid}>{f?.label || fid}</SelectItem>;
+                      return (
+                        <Badge key={fid} variant="outline" className="text-xs cursor-grab active:cursor-grabbing" draggable onDragStart={(e) => onDragStart(e, fid, col)}>
+                          {f?.label || fid}
+                          <button type="button" className="ml-1" onClick={() => removeFromColumn(fid, col)}><X className="h-3 w-3" /></button>
+                        </Badge>
+                      );
                     })}
-                  </SelectContent>
-                </Select>
+                  </div>
+                  {!disabled && availableToAdd.length > 0 && (
+                    <Select value="__add__" onValueChange={(v) => { if (v && v !== "__add__") addToColumn(v, col); }}>
+                      <SelectTrigger className="h-7 text-xs mt-1"><SelectValue placeholder="+ Add field" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__add__">+ Add field</SelectItem>
+                        {availableToAdd.map((fid) => {
+                          const f = fieldsList.find((x) => String(x.field_id || x.id || x.name) === String(fid));
+                          return <SelectItem key={fid} value={fid}>{f?.label || fid}</SelectItem>;
+                        })}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </>
               )}
             </div>
           );
         })}
+      </div>
+
+      {/* Grid row visibility: show this row when a field has a value */}
+      <div className="pt-2 mt-2 border-t border-border/50">
+        <div className="flex flex-wrap items-center gap-2">
+          <Label className="text-xs font-medium text-muted-foreground shrink-0">Show row when:</Label>
+          <SearchableFieldSelect
+            fields={fieldsList || []}
+            value={cvDisplay?.depends_on_field ?? "__none__"}
+            onValueChange={(v) => setRowVis(v && v !== "__none__" ? { ...(cvDisplay || {}), depends_on_field: v } : undefined)}
+            placeholder="Always show"
+            noneOption
+            noneLabel="Always show"
+            excludeTypes={["text_block", "image_block", "line_break", "page_break", "download_link"]}
+            compact
+            className="h-7 text-xs w-40"
+          />
+          {cvDisplay?.depends_on_field && (() => {
+            const depField = (fieldsList || []).find((f) => (f.field_id || f.id || f.name) === cvDisplay?.depends_on_field);
+            const depType = (depField?.field_type || depField?.type || "").toLowerCase();
+            const needsValue = ["equals", "not_equals", "contains"].includes(cvDisplay?.show_when || "");
+            const isBoolean = depType === "boolean" || depType === "checkbox";
+            const isSelectLike = ["select", "dropdown", "radio", "radio_group"].includes(depType);
+            const isMultiselect = depType === "multiselect";
+            const isNumber = depType === "number" || depType === "integer";
+            const depOptions = depField ? (depField.field_options?.options || depField.options || []) : [];
+            const opts = Array.isArray(depOptions) ? depOptions : [];
+            const cv = cvDisplay;
+            const setCv = setRowVis;
+            return (
+              <>
+                <Select value={cv?.show_when || ""} onValueChange={(v) => setCv({ ...cv, show_when: v || null, value: ["equals", "not_equals", "contains"].includes(v) ? (cv?.value ?? null) : null })}>
+                  <SelectTrigger className="h-7 text-xs w-24"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="equals">Equals</SelectItem>
+                    <SelectItem value="not_equals">Not equals</SelectItem>
+                    <SelectItem value="contains">Contains</SelectItem>
+                    <SelectItem value="is_empty">Is empty</SelectItem>
+                    <SelectItem value="is_not_empty">Not empty</SelectItem>
+                  </SelectContent>
+                </Select>
+                {needsValue && (isBoolean ? (
+                  <Select value={cv?.value || ""} onValueChange={(v) => setCv({ ...cv, value: v || null })}>
+                    <SelectTrigger className="h-7 text-xs w-20"><SelectValue /></SelectTrigger>
+                    <SelectContent><SelectItem value="yes">Yes</SelectItem><SelectItem value="no">No</SelectItem></SelectContent>
+                  </Select>
+                ) : isSelectLike || isMultiselect ? (
+                  <Select value={cv?.value || ""} onValueChange={(v) => setCv({ ...cv, value: v || null })}>
+                    <SelectTrigger className="h-7 text-xs w-28"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {opts.map((opt, i) => {
+                        const val = typeof opt === "object" && opt !== null ? (opt.value ?? opt.label ?? "") : opt;
+                        const label = typeof opt === "object" && opt !== null ? (opt.label ?? opt.value ?? String(val)) : String(opt);
+                        return <SelectItem key={i} value={String(val)}>{label}</SelectItem>;
+                      })}
+                    </SelectContent>
+                  </Select>
+                ) : isNumber ? (
+                  <Input type="number" className="h-7 text-xs w-20" value={cv?.value ?? ""} onChange={(e) => setCv({ ...cv, value: e.target.value || null })} placeholder="Number" />
+                ) : (
+                  <Input className="h-7 text-xs w-24" value={cv?.value ?? ""} onChange={(e) => setCv({ ...cv, value: e.target.value || null })} placeholder="Value" />
+                ))}
+              </>
+            );
+          })()}
+        </div>
       </div>
     </div>
   );
 }
 
 // Top-level groups only: grid with multiple rows, updates form_fields.groups
-function FormGroupGridColumnsEditor({ formData, setFormData, gIdx, group }) {
+function FormGroupGridColumnsEditor({ formData, setFormData, gIdx, group, pendingGroupUpdatesRef, onRowVisibilityChange }) {
   const fieldsList = formData?.form_fields?.fields || [];
   const gridRows = group.grid_rows && group.grid_rows.length > 0
     ? group.grid_rows
     : (group.grid_columns ? [{ ...group.grid_columns }] : [{ left: [], center: [], right: [] }]);
-  const allIdsInAnyGroup = (formData?.form_fields?.groups || []).flatMap((g) => g.fields || []);
+  const getAllGroupFieldIds = (grp) => {
+    if ((grp.layout || "") === "grid" && grp.grid_rows) return flatMapGridRowsFieldIds(grp.grid_rows);
+    if (grp.layout === "tabs" && grp.tabs?.length) return (grp.tabs || []).flatMap((t) => (t.layout === "table" && t.table_rows) ? (t.table_rows || []).flatMap((r) => (r.cells || []).map((c) => c.field_id).filter(Boolean)) : (t.fields || []));
+    if ((grp.layout || "") === "table" && grp.table_rows) return (grp.table_rows || []).flatMap((r) => (r.cells || []).map((c) => c.field_id).filter(Boolean));
+    return grp.fields || [];
+  };
+  const allIdsInAnyGroup = (formData?.form_fields?.groups || []).flatMap((g) => getAllGroupFieldIds(g));
 
   const updateGroup = (updated) => {
-    const next = [...(formData.form_fields.groups || [])];
-    next[gIdx] = updated;
-    setFormData({ ...formData, form_fields: { ...formData.form_fields, groups: next } });
+    setFormData((prev) => {
+      const groups = prev.form_fields?.groups || [];
+      const next = [...groups];
+      next[gIdx] = updated;
+      return { ...prev, form_fields: { ...prev.form_fields, groups: next } };
+    });
   };
 
   const updateRows = (newRows) => {
-    const flat = newRows.flatMap((r) => [...(r.left || []), ...(r.center || []), ...(r.right || [])]);
-    updateGroup({ ...group, grid_rows: newRows, fields: flat });
+    if (pendingGroupUpdatesRef?.current) pendingGroupUpdatesRef.current[gIdx] = { grid_rows: newRows };
+    const flat = flatMapGridRowsFieldIds(newRows);
+    setFormData((prev) => {
+      const groups = prev.form_fields?.groups || [];
+      const currentGroup = groups[gIdx] || {};
+      const next = [...groups];
+      next[gIdx] = { ...currentGroup, grid_rows: newRows, fields: flat };
+      return { ...prev, form_fields: { ...prev.form_fields, groups: next } };
+    });
   };
 
   const updateRowAt = (rowIndex, newGrid) => {
@@ -452,6 +832,7 @@ function FormGroupGridColumnsEditor({ formData, setFormData, gIdx, group }) {
           onUpdateRow={updateRowAt}
           onRemoveRow={removeRow}
           canRemoveRow={gridRows.length > 1}
+          onRowVisibilityChange={onRowVisibilityChange ? (rIdx, cv) => onRowVisibilityChange(gIdx, rIdx, cv) : undefined}
         />
       ))}
       <Button type="button" variant="outline" size="sm" onClick={addRow} className="w-full">
@@ -497,6 +878,8 @@ const EditFormPage = () => {
   const users = usersResponse?.users || usersResponse || [];
 
   const [formData, setFormData] = useState(null);
+  const pendingGroupUpdatesRef = useRef({});
+  const rowVisibilityOverridesRef = useRef({});
 
   useEffect(() => {
     if (form) {
@@ -576,6 +959,8 @@ const EditFormPage = () => {
     }
   }, [form]);
 
+  const fieldFormRef = useRef(null);
+
   const [newField, setNewField] = useState({
     field_id: "",
     field_name: "",
@@ -612,6 +997,8 @@ const EditFormPage = () => {
     // People field specific
     filter_by_roles: [], // Array of role IDs to filter users by
     filter_by_organization: false, // Filter by full organization
+    // Repeatable group: child fields (one per column in each row)
+    fields: [],
   });
   const [newOption, setNewOption] = useState({ value: "", label: "" });
   const [allowAllFileTypes, setAllowAllFileTypes] = useState(false);
@@ -734,7 +1121,8 @@ const EditFormPage = () => {
     const displayOnlyTypes = ['text_block', 'image_block', 'youtube_video_embed', 'line_break', 'page_break', 'download_link'];
     const isDisplayOnly = displayOnlyTypes.includes(newField.field_type);
 
-    // Auto-generate field_id if not provided
+    // Auto-generate field_id if not provided, and ensure uniqueness
+    const existingFieldIds = (formData.form_fields?.fields || []).map((f) => f.field_id || f.id || f.name);
     let fieldId = newField.field_id;
     if (!fieldId) {
       if (isDisplayOnly) {
@@ -753,6 +1141,7 @@ const EditFormPage = () => {
         return;
       }
     }
+    fieldId = ensureUniqueFieldId(fieldId, existingFieldIds);
 
     // For regular fields, require label
     if (!isDisplayOnly && !newField.label) {
@@ -794,6 +1183,12 @@ const EditFormPage = () => {
       toast.error(
         `${newField.field_type === "select" ? "Select" : newField.field_type === "multiselect" ? "Multi-select" : "Radio"} fields require at least one option`
       );
+      return;
+    }
+
+    // Repeatable group: require at least one child field
+    if (newField.field_type === "repeatable_group" && (!newField.fields || newField.fields.length === 0)) {
+      toast.error("Repeatable group requires at least one child field. Add child fields below.");
       return;
     }
 
@@ -871,6 +1266,19 @@ const EditFormPage = () => {
       newField.options.length > 0
     ) {
       field.options = sortOptionsByValue(newField.options);
+    }
+
+    // Repeatable group: child fields (columns per row)
+    if (newField.field_type === "repeatable_group" && Array.isArray(newField.fields) && newField.fields.length > 0) {
+      field.fields = newField.fields.map((c) => ({
+        id: c.id || c.name || generateFieldIdFromLabel(c.label) || c.id,
+        name: c.name || c.id,
+        type: c.type || c.field_type || "text",
+        field_type: c.type || c.field_type || "text",
+        label: c.label || c.field_label,
+        field_label: c.label || c.field_label,
+        ...(c.options?.length ? { options: c.options } : {}),
+      }));
     }
 
     // Add configuration for people field
@@ -956,6 +1364,7 @@ const EditFormPage = () => {
       allowed_types: "",
       max_size_mb: "",
       json_schema: "",
+      fields: [],
     });
     setNewOption({ value: "", label: "" });
     setAllowAllFileTypes(false);
@@ -1093,6 +1502,44 @@ const EditFormPage = () => {
     try {
       const submitData = { ...formData };
 
+      // Always merge pending group updates (table/grid row visibility, tabs) so they are included in the payload
+      const pending = pendingGroupUpdatesRef.current;
+      const rowVisOverrides = rowVisibilityOverridesRef.current;
+      submitData.form_fields = {
+        ...submitData.form_fields,
+        groups: (submitData.form_fields?.groups || []).map((g, gIdx) => {
+          let group = pending[gIdx] ? { ...g, ...pending[gIdx] } : { ...g };
+          // Apply row visibility overrides for grid rows (ensures "Show row when" is always in payload)
+          if (Array.isArray(group.grid_rows) && group.grid_rows.length > 0) {
+            const keyPrefix = `grid_${gIdx}_`;
+            group = {
+              ...group,
+              grid_rows: group.grid_rows.map((row, rIdx) => {
+                const key = `${keyPrefix}${rIdx}`;
+                const cv = rowVisOverrides[key];
+                if (cv !== undefined) return { ...row, conditional_visibility: cv || undefined };
+                return row;
+              }),
+            };
+          }
+          // Apply row visibility overrides for table rows
+          if (Array.isArray(group.table_rows) && group.table_rows.length > 0) {
+            const keyPrefix = `table_${gIdx}_`;
+            let changed = false;
+            const table_rows = group.table_rows.map((row, rIdx) => {
+              const key = `${keyPrefix}${rIdx}`;
+              const cv = rowVisOverrides[key];
+              if (cv !== undefined) { changed = true; return { ...row, conditional_visibility: cv || undefined }; }
+              return row;
+            });
+            if (changed) group = { ...group, table_rows };
+          }
+          return group;
+        }),
+      };
+      pendingGroupUpdatesRef.current = {};
+      rowVisibilityOverridesRef.current = {};
+
       // Ensure form_config is properly included with categories
       submitData.form_config = {
         ...submitData.form_config,
@@ -1145,22 +1592,24 @@ const EditFormPage = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => router.back()}>
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Edit Form</h1>
-          <p className="text-sm sm:text-base text-muted-foreground mt-1">
-            Update form fields and configuration
-          </p>
+      {/* Header + form (Basic Information, Form Fields, Sidebar, Submit) */}
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" size="icon" onClick={() => router.back()}>
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Edit Form</h1>
+            <p className="text-sm sm:text-base text-muted-foreground mt-1">
+              Update form fields and configuration
+            </p>
+          </div>
         </div>
-      </div>
 
-      <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit}>
         <div className="grid gap-6 md:grid-cols-3">
-          {/* Main Form Builder */}
+          {/* Left column: form content only (Basic Information + Form Fields). Field groups section is below the grid. */}
           <div className="md:col-span-2 space-y-6">
             {/* Basic Information */}
             <Card>
@@ -1258,7 +1707,7 @@ const EditFormPage = () => {
               </CardHeader>
               <CardContent className="space-y-4">
                 {/* Add New Field */}
-                <div className="p-4 border rounded-md space-y-4">
+                <div ref={fieldFormRef} className="p-4 border rounded-md space-y-4">
                   <h3 className="font-medium">Add New Field</h3>
                   
                   {/* Field Type Selection */}
@@ -1272,8 +1721,8 @@ const EditFormPage = () => {
                         setNewField({ 
                           ...newField, 
                           field_type: value,
-                          // Reset field_id when type changes (will be auto-generated)
-                          field_id: isDisplayOnly ? '' : newField.field_id
+                          field_id: isDisplayOnly ? '' : newField.field_id,
+                          ...(value === "repeatable_group" ? { fields: Array.isArray(newField.fields) ? newField.fields : [] } : {}),
                         });
                       }}
                     >
@@ -1442,7 +1891,7 @@ const EditFormPage = () => {
 
                   {/* Boolean display: checkbox or Yes/No radios */}
                   {(newField.field_type === "boolean" || newField.field_type === "checkbox") && (
-                    <div className="space-y-1 pt-2 border-t">
+                    <div className="space-y-2 pt-2 border-t">
                       <Label className="text-xs">Display as</Label>
                       <Select
                         value={newField.field_options?.boolean_display || "checkbox"}
@@ -1460,6 +1909,24 @@ const EditFormPage = () => {
                         </SelectContent>
                       </Select>
                       <p className="text-xs text-muted-foreground">Use Yes/No radios for explicit true/false choice.</p>
+                      <Label className="text-xs">Checkbox style</Label>
+                      <Select
+                        value={newField.field_options?.checkbox_display_style || newField.field_options?.display_style || "default"}
+                        onValueChange={(v) =>
+                          setNewField((prev) => ({
+                            ...prev,
+                            field_options: { ...(prev.field_options || {}), checkbox_display_style: v },
+                          }))
+                        }
+                      >
+                        <SelectTrigger className="h-8 w-40"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="default">Default</SelectItem>
+                          <SelectItem value="warning">Warning (amber box)</SelectItem>
+                          <SelectItem value="alert">Alert (yellow left border)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">Use Warning or Alert for confirmations (e.g. &quot;Mark as urgent&quot;, &quot;I have completed…&quot;).</p>
                     </div>
                   )}
 
@@ -1786,11 +2253,15 @@ const EditFormPage = () => {
                             value={newOption.label}
                             onChange={(e) => {
                               const label = e.target.value;
-                              setNewOption((prev) => ({
-                                ...prev,
-                                label,
-                                value: prev.value || generateFieldIdFromLabel(label),
-                              }));
+                              setNewOption((prev) => {
+                                const autoFromPrev = generateFieldIdFromLabel(prev.label);
+                                const wasAuto = !prev.value || prev.value === autoFromPrev;
+                                return {
+                                  ...prev,
+                                  label,
+                                  value: wasAuto ? generateFieldIdFromLabel(label) : prev.value,
+                                };
+                              });
                             }}
                             placeholder="Option label *"
                             onKeyDown={(e) => {
@@ -2279,31 +2750,21 @@ const EditFormPage = () => {
                           <Label htmlFor="depends_on_field" className="text-xs">
                             Show this field when
                           </Label>
-                          <Select
+                          <SearchableFieldSelect
+                            fields={formData.form_fields?.fields ?? []}
                             value={newField.conditional_visibility?.depends_on_field || ''}
                             onValueChange={(value) =>
                               setNewField({
                                 ...newField,
                                 conditional_visibility: value
-                                  ? { depends_on_field: value, show_when: null, value: null }
+                                  ? { depends_on_field: value, show_when: null, value: null, action: newField.conditional_visibility?.action || 'hide' }
                                   : null,
                               })
                             }
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select a field..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {formData.form_fields.fields
-                                .filter(f => f.field_id !== newField.field_id &&
-                                  !['text_block', 'image_block', 'line_break', 'page_break', 'download_link'].includes(f.field_type?.toLowerCase()))
-                                .map((f) => (
-                                  <SelectItem key={f.field_id || f.field_name} value={f.field_id || f.field_name}>
-                                    {f.label || f.field_id || f.field_name}
-                                  </SelectItem>
-                                ))}
-                            </SelectContent>
-                          </Select>
+                            placeholder="Select a field..."
+                            excludeFieldId={newField.field_id}
+                            excludeTypes={['text_block', 'image_block', 'line_break', 'page_break', 'download_link']}
+                          />
                         </div>
                         {newField.conditional_visibility?.depends_on_field && (() => {
                           const formFields = formData.form_fields?.fields || [];
@@ -2421,13 +2882,120 @@ const EditFormPage = () => {
                                   )}
                                 </div>
                               )}
+                              <div>
+                                <Label htmlFor="conditional_action" className="text-xs">When condition is not met</Label>
+                                <Select
+                                  value={newField.conditional_visibility?.action || 'hide'}
+                                  onValueChange={(v) =>
+                                    setNewField({
+                                      ...newField,
+                                      conditional_visibility: { ...newField.conditional_visibility, action: v || 'hide' },
+                                    })
+                                  }
+                                >
+                                  <SelectTrigger id="conditional_action">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="hide">Hide field</SelectItem>
+                                    <SelectItem value="disable">Disable field</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
                             </>
                           );
                         })()}
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        This field will only be visible when the condition is met
+                        {newField.conditional_visibility?.action === 'disable'
+                          ? 'When condition is not met, the field will be shown but disabled (read-only).'
+                          : 'When condition is not met, the field will be hidden.'}
                       </p>
+                    </div>
+                  )}
+
+                  {/* Repeatable group: child fields (columns in each row, e.g. Drug, Dose, Duration, Repeat) */}
+                  {newField.field_type === "repeatable_group" && (
+                    <div className="space-y-3 pt-2 border-t">
+                      <Label className="text-sm font-medium">Child fields (one per column in each row)</Label>
+                      <p className="text-xs text-muted-foreground">
+                        Users will see a grid of these columns and can add multiple rows with &quot;Add row&quot;.
+                      </p>
+                      {(newField.fields || []).map((child, childIdx) => (
+                        <div key={childIdx} className="flex flex-wrap items-center gap-2 p-2 rounded border bg-muted/30">
+                          <Input
+                            className="flex-1 min-w-[100px] h-8 text-sm"
+                            placeholder="Label (e.g. Drug)"
+                            value={child.label || child.field_label || ""}
+                            onChange={(e) => {
+                              const label = e.target.value;
+                              const id = generateFieldIdFromLabel(label) || `field_${childIdx + 1}`;
+                              setNewField((prev) => ({
+                                ...prev,
+                                fields: (prev.fields || []).map((c, i) =>
+                                  i === childIdx ? { ...c, label, field_label: label, id, name: id } : c
+                                ),
+                              }));
+                            }}
+                          />
+                          <Select
+                            value={(child.type || child.field_type || "text").toLowerCase()}
+                            onValueChange={(value) =>
+                              setNewField((prev) => ({
+                                ...prev,
+                                fields: (prev.fields || []).map((c, i) => (i === childIdx ? { ...c, type: value, field_type: value } : c)),
+                              }))
+                            }
+                          >
+                            <SelectTrigger className="w-[120px] h-8 text-sm">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="text">Text</SelectItem>
+                              <SelectItem value="number">Number</SelectItem>
+                              <SelectItem value="date">Date</SelectItem>
+                              <SelectItem value="boolean">Checkbox</SelectItem>
+                              <SelectItem value="select">Select</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <span className="text-xs text-muted-foreground shrink-0">
+                            ID: {child.id || child.name || generateFieldIdFromLabel(child.label) || `field_${childIdx + 1}`}
+                          </span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 text-destructive hover:text-destructive"
+                            onClick={() =>
+                              setNewField((prev) => ({
+                                ...prev,
+                                fields: (prev.fields || []).filter((_, i) => i !== childIdx),
+                              }))
+                            }
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          setNewField((prev) => {
+                            const n = (prev.fields || []).length + 1;
+                            const label = `Column ${n}`;
+                            const id = generateFieldIdFromLabel(label) || `field_${n}`;
+                            return {
+                              ...prev,
+                              fields: [...(prev.fields || []), { id, name: id, type: "text", field_type: "text", label }],
+                            };
+                          })
+                        }
+                      >
+                        <Plus className="h-4 w-4 mr-1" />
+                        Add child field
+                      </Button>
                     </div>
                   )}
 
@@ -2469,7 +3037,7 @@ const EditFormPage = () => {
                       Fields ({formData.form_fields.fields.length})
                     </h3>
                     {formData.form_fields.fields.map((field, index) => {
-                      const getFieldIcon = (type) => {
+                        const getFieldIcon = (type) => {
                         const icons = {
                           text: Type,
                           email: Mail,
@@ -2483,6 +3051,7 @@ const EditFormPage = () => {
                           radio: List,
                           boolean: CheckSquare,
                           checkbox: CheckSquare,
+                          repeatable_group: List,
                           file: Upload,
                           signature: PenTool,
                           text_block: FileText,
@@ -2573,9 +3142,14 @@ const EditFormPage = () => {
                                   json_schema: fieldToEdit.validation?.schema ? JSON.stringify(fieldToEdit.validation.schema, null, 2) : '',
                                   allowed_types: fieldToEdit.validation?.allowed_types ? (Array.isArray(fieldToEdit.validation.allowed_types) ? fieldToEdit.validation.allowed_types.join(', ') : fieldToEdit.validation.allowed_types) : '',
                                   max_size_mb: fieldToEdit.validation?.max_size_mb || '',
+                                  fields: fieldToEdit.fields || [],
                                 });
                                 // Remove the field
                                 handleRemoveField(index);
+                                // Scroll to the field form so the user sees the edit form
+                                setTimeout(() => {
+                                  fieldFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                }, 0);
                               }}
                               title="Edit field"
                             >
@@ -2612,286 +3186,9 @@ const EditFormPage = () => {
                 )}
               </CardContent>
             </Card>
-
-            {/* Field groups: optional layout for form submit (group headings, visibility, grid layout) */}
-            {formData.form_fields.fields.length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Field groups</CardTitle>
-                  <p className="text-sm text-muted-foreground font-normal">
-                    Optionally group fields. Each group has a heading on submit; groups can have conditional visibility (show when another field has a value) and grid layout.
-                  </p>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {(formData.form_fields.groups || []).map((group, gIdx) => (
-                    <div key={group.id || gIdx} className="p-4 border rounded-lg space-y-3 bg-muted/30">
-                      <div className="flex gap-2 items-center">
-                        <div className="flex flex-col gap-0">
-                          <Button type="button" variant="ghost" size="icon" className="h-6 w-6" disabled={gIdx === 0} onClick={() => {
-                            const next = [...(formData.form_fields.groups || [])];
-                            if (gIdx <= 0) return;
-                            [next[gIdx - 1], next[gIdx]] = [next[gIdx], next[gIdx - 1]];
-                            setFormData({ ...formData, form_fields: { ...formData.form_fields, groups: next } });
-                          }}>
-                            <ChevronUp className="h-4 w-4" />
-                          </Button>
-                          <Button type="button" variant="ghost" size="icon" className="h-6 w-6" disabled={gIdx >= (formData.form_fields.groups || []).length - 1} onClick={() => {
-                            const next = [...(formData.form_fields.groups || [])];
-                            if (gIdx >= next.length - 1) return;
-                            [next[gIdx], next[gIdx + 1]] = [next[gIdx + 1], next[gIdx]];
-                            setFormData({ ...formData, form_fields: { ...formData.form_fields, groups: next } });
-                          }}>
-                            <ChevronDown className="h-4 w-4" />
-                          </Button>
-                        </div>
-                        <Input
-                          placeholder="Group label"
-                          value={group.label || ""}
-                          onChange={(e) => {
-                            const next = [...(formData.form_fields.groups || [])];
-                            next[gIdx] = { ...group, label: e.target.value, id: group.id || `g_${gIdx}` };
-                            setFormData({ ...formData, form_fields: { ...formData.form_fields, groups: next } });
-                          }}
-                          className="flex-1 h-8 text-sm"
-                        />
-                        <Button type="button" variant="ghost" size="sm" onClick={() => {
-                          const next = (formData.form_fields.groups || []).filter((_, i) => i !== gIdx);
-                          setFormData({ ...formData, form_fields: { ...formData.form_fields, groups: next } });
-                        }}>
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-xs">Layout</Label>
-                        <Select value={group.layout || "stack"} onValueChange={(v) => {
-                          const next = [...(formData.form_fields.groups || [])];
-                          const newGroup = { ...group, layout: v };
-                          if (v === "grid") {
-                            const fromFields = group.fields || [];
-                            const hasRows = Array.isArray(group.grid_rows) && group.grid_rows.length > 0;
-                            const hasGrid = group.grid_columns && ((group.grid_columns.left?.length || 0) + (group.grid_columns.center?.length || 0) + (group.grid_columns.right?.length || 0)) > 0;
-                            if (hasRows) {
-                              newGroup.grid_rows = group.grid_rows;
-                              newGroup.fields = group.grid_rows.flatMap((r) => [...(r.left || []), ...(r.center || []), ...(r.right || [])]);
-                            } else if (hasGrid) {
-                              newGroup.grid_rows = [{ left: group.grid_columns?.left ?? [], center: group.grid_columns?.center ?? [], right: group.grid_columns?.right ?? [] }];
-                              newGroup.fields = [...(newGroup.grid_rows[0].left || []), ...(newGroup.grid_rows[0].center || []), ...(newGroup.grid_rows[0].right || [])];
-                            } else {
-                              newGroup.grid_rows = [{ left: fromFields.length ? [...fromFields] : [], center: [], right: [] }];
-                              newGroup.fields = fromFields.length ? [...fromFields] : [];
-                            }
-                          } else if (v === "tabs") {
-                            newGroup.tabs = Array.isArray(group.tabs) && group.tabs.length > 0
-                              ? group.tabs
-                              : [{ id: `tab_${Date.now()}`, label: "Tab 1", fields: [] }];
-                            newGroup.fields = newGroup.tabs.flatMap((t) => t.fields || []);
-                          }
-                          next[gIdx] = newGroup;
-                          setFormData({ ...formData, form_fields: { ...formData.form_fields, groups: next } });
-                        }}>
-                          <SelectTrigger className="h-7 text-xs w-36"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="stack">Stack (default)</SelectItem>
-                            <SelectItem value="grid">Grid (3 columns)</SelectItem>
-                            <SelectItem value="tabs">Tabs</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      {(group.layout || "") === "grid" ? (
-                        <FormGroupGridColumnsEditor formData={formData} setFormData={setFormData} gIdx={gIdx} group={group} />
-                      ) : (group.layout || "") === "tabs" ? (
-                        <div className="space-y-3">
-                          <Label className="text-xs">Tabs (each tab shows its own fields, e.g. Ear / Nose / Throat)</Label>
-                          {(group.tabs || []).map((tab, tIdx) => (
-                            <div key={tab.id || tIdx} className="p-2 border rounded bg-background space-y-2">
-                              <div className="flex items-center gap-2">
-                                <Input
-                                  placeholder="Tab label (e.g. Ear)"
-                                  value={tab.label || ""}
-                                  className="h-7 text-xs flex-1"
-                                  onChange={(e) => {
-                                    const next = [...(formData.form_fields.groups || [])];
-                                    const nextTabs = [...(group.tabs || [])];
-                                    nextTabs[tIdx] = { ...tab, label: e.target.value, id: tab.id || `tab_${tIdx}` };
-                                    next[gIdx] = { ...group, tabs: nextTabs };
-                                    setFormData({ ...formData, form_fields: { ...formData.form_fields, groups: next } });
-                                  }}
-                                />
-                                <div className="flex gap-0">
-                                  <Button type="button" variant="ghost" size="icon" className="h-6 w-6" disabled={tIdx === 0} onClick={() => {
-                                    const next = [...(formData.form_fields.groups || [])];
-                                    const nextTabs = [...(group.tabs || [])];
-                                    if (tIdx <= 0) return;
-                                    [nextTabs[tIdx - 1], nextTabs[tIdx]] = [nextTabs[tIdx], nextTabs[tIdx - 1]];
-                                    const newGroup = { ...group, tabs: nextTabs, fields: nextTabs.flatMap((t) => t.fields || []) };
-                                    next[gIdx] = newGroup;
-                                    setFormData({ ...formData, form_fields: { ...formData.form_fields, groups: next } });
-                                  }}><ChevronUp className="h-3 w-3" /></Button>
-                                  <Button type="button" variant="ghost" size="icon" className="h-6 w-6" disabled={tIdx >= (group.tabs || []).length - 1} onClick={() => {
-                                    const next = [...(formData.form_fields.groups || [])];
-                                    const nextTabs = [...(group.tabs || [])];
-                                    if (tIdx >= nextTabs.length - 1) return;
-                                    [nextTabs[tIdx], nextTabs[tIdx + 1]] = [nextTabs[tIdx + 1], nextTabs[tIdx]];
-                                    const newGroup = { ...group, tabs: nextTabs, fields: nextTabs.flatMap((t) => t.fields || []) };
-                                    next[gIdx] = newGroup;
-                                    setFormData({ ...formData, form_fields: { ...formData.form_fields, groups: next } });
-                                  }}><ChevronDown className="h-3 w-3" /></Button>
-                                </div>
-                                <Button type="button" variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => {
-                                  const next = [...(formData.form_fields.groups || [])];
-                                  const nextTabs = (group.tabs || []).filter((_, i) => i !== tIdx);
-                                  const newGroup = { ...group, tabs: nextTabs.length > 0 ? nextTabs : [{ id: `tab_${Date.now()}`, label: "Tab 1", fields: [] }], fields: nextTabs.flatMap((t) => t.fields || []) };
-                                  next[gIdx] = newGroup;
-                                  setFormData({ ...formData, form_fields: { ...formData.form_fields, groups: next } });
-                                }}><Trash2 className="h-3 w-3" /></Button>
-                              </div>
-                              <div className="flex flex-wrap gap-1">
-                                {(tab.fields || []).map((fid) => {
-                                  const f = formData.form_fields.fields.find((x) => (x.field_id || x.id || x.name) === fid);
-                                  return (
-                                    <Badge key={fid} variant="outline" className="text-xs">
-                                      {f?.label || fid}
-                                      <button type="button" className="ml-1" onClick={() => {
-                                        const next = [...(formData.form_fields.groups || [])];
-                                        const nextTabs = [...(group.tabs || [])];
-                                        nextTabs[tIdx] = { ...tab, fields: (tab.fields || []).filter((id) => id !== fid) };
-                                        const newGroup = { ...group, tabs: nextTabs, fields: nextTabs.flatMap((t) => t.fields || []) };
-                                        next[gIdx] = newGroup;
-                                        setFormData({ ...formData, form_fields: { ...formData.form_fields, groups: next } });
-                                      }}><X className="h-3 w-3" /></button>
-                                    </Badge>
-                                  );
-                                })}
-                                <Select value="__add__" onValueChange={(v) => {
-                                  if (!v || v === "__add__") return;
-                                  const next = [...(formData.form_fields.groups || [])];
-                                  const allIdsInAnyGroup = (formData.form_fields.groups || []).flatMap((g) =>
-                                    (g.layout === "tabs" && g.tabs?.length) ? (g.tabs || []).flatMap((t) => t.fields || []) : (g.fields || [])
-                                  );
-                                  const nextTabs = [...(group.tabs || [])];
-                                  nextTabs[tIdx] = { ...tab, fields: [...(tab.fields || []), v] };
-                                  const newGroup = { ...group, tabs: nextTabs, fields: nextTabs.flatMap((t) => t.fields || []) };
-                                  next[gIdx] = newGroup;
-                                  setFormData({ ...formData, form_fields: { ...formData.form_fields, groups: next } });
-                                }}>
-                                  <SelectTrigger className="w-28 h-6 text-xs"><SelectValue placeholder="+ Field" /></SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="__add__">+ Field</SelectItem>
-                                    {(formData.form_fields.fields || []).filter((f) => !(formData.form_fields.groups || []).flatMap((g) =>
-                                      (g.layout === "tabs" && g.tabs?.length) ? (g.tabs || []).flatMap((t) => t.fields || []) : (g.fields || [])
-                                    ).includes(String(f.field_id || f.id || f.name))).map((f) => (
-                                      <SelectItem key={f.field_id || f.id || f.name} value={String(f.field_id || f.id || f.name)}>{f.label || f.field_id || f.id}</SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                            </div>
-                          ))}
-                          <Button type="button" variant="outline" size="sm" className="text-xs" onClick={() => {
-                            const next = [...(formData.form_fields.groups || [])];
-                            const nextTabs = [...(group.tabs || []), { id: `tab_${Date.now()}`, label: `Tab ${(group.tabs || []).length + 1}`, fields: [] }];
-                            next[gIdx] = { ...group, tabs: nextTabs, fields: nextTabs.flatMap((t) => t.fields || []) };
-                            setFormData({ ...formData, form_fields: { ...formData.form_fields, groups: next } });
-                          }}>
-                            <Plus className="h-3 w-3 mr-1" /> Add tab
-                          </Button>
-                        </div>
-                      ) : (
-                        <div className="flex flex-wrap gap-1">
-                          {(group.fields || []).map((fid) => {
-                            const f = formData.form_fields.fields.find((x) => (x.field_id || x.id || x.name) === fid);
-                            return (
-                              <Badge key={fid} variant="outline" className="text-xs">
-                                {f?.label || fid}
-                                <button type="button" className="ml-1" onClick={() => {
-                                  const next = [...(formData.form_fields.groups || [])];
-                                  next[gIdx] = { ...group, fields: (group.fields || []).filter((id) => id !== fid) };
-                                  setFormData({ ...formData, form_fields: { ...formData.form_fields, groups: next } });
-                                }}><X className="h-3 w-3" /></button>
-                              </Badge>
-                            );
-                          })}
-                          <Select value="__add__" onValueChange={(v) => {
-                            if (!v || v === "__add__") return;
-                            const next = [...(formData.form_fields.groups || [])];
-                            next[gIdx] = { ...group, fields: [...(group.fields || []), v] };
-                            setFormData({ ...formData, form_fields: { ...formData.form_fields, groups: next } });
-                          }}>
-                            <SelectTrigger className="w-32 h-7 text-xs"><SelectValue placeholder="+ Field" /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="__add__">+ Field</SelectItem>
-                              {(formData.form_fields.fields || []).filter((f) => !(formData.form_fields.groups || []).flatMap((g) =>
-                                (g.layout === "tabs" && g.tabs?.length) ? (g.tabs || []).flatMap((t) => t.fields || []) : (g.fields || [])
-                              ).includes(String(f.field_id || f.id || f.name))).map((f) => (
-                                <SelectItem key={f.field_id || f.id || f.name} value={String(f.field_id || f.id || f.name)}>{f.label || f.field_id || f.id}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      )}
-                      <div className="text-xs space-y-1">
-                        <Label className="text-xs">Show group when</Label>
-                        <div className="flex flex-wrap gap-2">
-                          <Select value={group.conditional_visibility?.depends_on_field || "__none__"} onValueChange={(v) => {
-                            const next = [...(formData.form_fields.groups || [])];
-                            next[gIdx] = { ...group, conditional_visibility: v && v !== "__none__" ? { ...(group.conditional_visibility || {}), depends_on_field: v } : null };
-                            setFormData({ ...formData, form_fields: { ...formData.form_fields, groups: next } });
-                          }}>
-                            <SelectTrigger className="h-7 text-xs w-40"><SelectValue placeholder="Field" /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="__none__">Always show</SelectItem>
-                              {(formData.form_fields.fields || []).filter((x) => !["text_block", "image_block", "line_break", "page_break", "download_link"].includes((x.field_type || x.type || "").toLowerCase())).map((f) => (
-                                <SelectItem key={f.field_id || f.id} value={String(f.field_id || f.id || f.name)}>{f.label || f.field_id}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          {group.conditional_visibility?.depends_on_field && (
-                            <>
-                              <Select value={group.conditional_visibility?.show_when || ""} onValueChange={(v) => {
-                                const next = [...(formData.form_fields.groups || [])];
-                                next[gIdx] = { ...group, conditional_visibility: { ...(group.conditional_visibility || {}), show_when: v } };
-                                setFormData({ ...formData, form_fields: { ...formData.form_fields, groups: next } });
-                              }}>
-                                <SelectTrigger className="h-7 text-xs w-28"><SelectValue placeholder="is" /></SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="equals">Equals</SelectItem>
-                                  <SelectItem value="not_equals">Not equals</SelectItem>
-                                  <SelectItem value="contains">Contains</SelectItem>
-                                  <SelectItem value="is_empty">Is empty</SelectItem>
-                                  <SelectItem value="is_not_empty">Is not empty</SelectItem>
-                                </SelectContent>
-                              </Select>
-                              {["equals", "not_equals", "contains"].includes(group.conditional_visibility?.show_when) && (
-                                <Input placeholder="Value" className="h-7 text-xs w-32" value={group.conditional_visibility?.value ?? ""} onChange={(e) => {
-                                  const next = [...(formData.form_fields.groups || [])];
-                                  next[gIdx] = { ...group, conditional_visibility: { ...(group.conditional_visibility || {}), value: e.target.value } };
-                                  setFormData({ ...formData, form_fields: { ...formData.form_fields, groups: next } });
-                                }} />
-                              )}
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                  <Button type="button" variant="outline" size="sm" onClick={() => {
-                    const newGroup = { id: `g_${Date.now()}`, label: "New group", fields: [] };
-                    setFormData({
-                      ...formData,
-                      form_fields: {
-                        ...formData.form_fields,
-                        groups: [...(formData.form_fields.groups || []), newGroup],
-                      },
-                    });
-                  }}>
-                    <Plus className="h-4 w-4 mr-2" /> Add group
-                  </Button>
-                </CardContent>
-              </Card>
-            )}
           </div>
 
-          {/* Sidebar - Configuration */}
+          {/* Right column: actions / configuration */}
           <div className="space-y-6">
             {/* Form Configuration */}
             <Card>
@@ -3648,6 +3945,322 @@ const EditFormPage = () => {
           </div>
         </div>
 
+        {/* Field groups: full width - outside md:col-span-2, inside form */}
+        {formData.form_fields.fields.length > 0 && (
+          <div className="w-full mt-6">
+            <Card>
+            <CardHeader>
+              <CardTitle>Field groups</CardTitle>
+              <p className="text-sm text-muted-foreground font-normal">
+                Optionally group fields. Each group has a heading on submit; groups can have conditional visibility (show when another field has a value) and grid layout.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {(formData.form_fields.groups || []).map((group, gIdx) => {
+                    const fieldsList = formData?.form_fields?.fields || [];
+                    const getAllGroupFieldIds = (grp) => {
+                      if ((grp.layout || "") === "grid" && grp.grid_rows) return flatMapGridRowsFieldIds(grp.grid_rows);
+                      if (grp.layout === "tabs" && grp.tabs?.length) return (grp.tabs || []).flatMap((t) => (t.layout === "table" && t.table_rows) ? (t.table_rows || []).flatMap((r) => (r.cells || []).map((c) => c.field_id).filter(Boolean)) : (t.fields || []));
+                      if ((grp.layout || "") === "table" && grp.table_rows) return (grp.table_rows || []).flatMap((r) => (r.cells || []).map((c) => c.field_id).filter(Boolean));
+                      return grp.fields || [];
+                    };
+                    const allIdsInAnyGroup = (formData?.form_fields?.groups || []).flatMap((g) => getAllGroupFieldIds(g));
+                    return (
+                      <div key={group.id || gIdx} className="p-4 border rounded-lg space-y-3 bg-muted/30">
+                        <div className="flex gap-2 items-center">
+                          <div className="flex flex-col gap-0">
+                            <Button type="button" variant="ghost" size="icon" className="h-6 w-6" disabled={gIdx === 0} onClick={() => {
+                              const next = [...(formData.form_fields.groups || [])];
+                              if (gIdx <= 0) return;
+                              [next[gIdx - 1], next[gIdx]] = [next[gIdx], next[gIdx - 1]];
+                              setFormData({ ...formData, form_fields: { ...formData.form_fields, groups: next } });
+                            }}>
+                              <ChevronUp className="h-4 w-4" />
+                            </Button>
+                            <Button type="button" variant="ghost" size="icon" className="h-6 w-6" disabled={gIdx >= (formData.form_fields.groups || []).length - 1} onClick={() => {
+                              const next = [...(formData.form_fields.groups || [])];
+                              if (gIdx >= next.length - 1) return;
+                              [next[gIdx], next[gIdx + 1]] = [next[gIdx + 1], next[gIdx]];
+                              setFormData({ ...formData, form_fields: { ...formData.form_fields, groups: next } });
+                            }}>
+                              <ChevronDown className="h-4 w-4" />
+                            </Button>
+                          </div>
+                          <Input
+                            placeholder="Group label"
+                            value={group.label || ""}
+                            onChange={(e) => {
+                              const next = [...(formData.form_fields.groups || [])];
+                              next[gIdx] = { ...group, label: e.target.value, id: group.id || `g_${gIdx}` };
+                              setFormData({ ...formData, form_fields: { ...formData.form_fields, groups: next } });
+                            }}
+                            className="flex-1 h-8 text-sm"
+                          />
+                          <Button type="button" variant="ghost" size="sm" onClick={() => {
+                            const next = (formData.form_fields.groups || []).filter((_, i) => i !== gIdx);
+                            setFormData({ ...formData, form_fields: { ...formData.form_fields, groups: next } });
+                          }}>
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">Layout</Label>
+                          <Select value={group.layout || "stack"} onValueChange={(v) => {
+                            const next = [...(formData.form_fields.groups || [])];
+                            const newGroup = { ...group, layout: v };
+                            if (v === "grid") {
+                              const fromFields = group.fields || [];
+                              const hasRows = Array.isArray(group.grid_rows) && group.grid_rows.length > 0;
+                              const hasGrid = group.grid_columns && ((group.grid_columns.left?.length || 0) + (group.grid_columns.center?.length || 0) + (group.grid_columns.right?.length || 0)) > 0;
+                              if (hasRows) {
+                                newGroup.grid_rows = group.grid_rows;
+                                newGroup.fields = group.grid_rows.flatMap((r) => [...(r.left || []), ...(r.center || []), ...(r.right || [])]);
+                              } else if (hasGrid) {
+                                newGroup.grid_rows = [{ left: group.grid_columns?.left ?? [], center: group.grid_columns?.center ?? [], right: group.grid_columns?.right ?? [] }];
+                                newGroup.fields = [...(newGroup.grid_rows[0].left || []), ...(newGroup.grid_rows[0].center || []), ...(newGroup.grid_rows[0].right || [])];
+                              } else {
+                                newGroup.grid_rows = [{ left: fromFields.length ? [...fromFields] : [], center: [], right: [] }];
+                                newGroup.fields = fromFields.length ? [...fromFields] : [];
+                              }
+                            } else if (v === "tabs") {
+                              newGroup.tabs = Array.isArray(group.tabs) && group.tabs.length > 0
+                                ? group.tabs
+                                : [{ id: `tab_${Date.now()}`, label: "Tab 1", fields: [] }];
+                              newGroup.fields = newGroup.tabs.flatMap((t) => t.fields || []);
+                            } else if (v === "table") {
+                              const cols = Array.isArray(group.table_columns) && group.table_columns.length > 0 ? group.table_columns : [{ id: "col_1", label: "Column 1" }];
+                              const rows = Array.isArray(group.table_rows) && group.table_rows.length > 0 ? group.table_rows : [{ cells: cols.map(() => ({ text: "", field_id: null })) }];
+                              newGroup.table_columns = cols;
+                              newGroup.table_rows = rows;
+                            }
+                            next[gIdx] = newGroup;
+                            setFormData({ ...formData, form_fields: { ...formData.form_fields, groups: next } });
+                          }}>
+                            <SelectTrigger className="h-7 text-xs w-36"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="stack">Stack (default)</SelectItem>
+                              <SelectItem value="grid">Grid (3 columns)</SelectItem>
+                              <SelectItem value="tabs">Tabs</SelectItem>
+                              <SelectItem value="table">Table</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        {(group.layout || "") === "grid" ? (
+                          <FormGroupGridColumnsEditor
+                            formData={formData}
+                            setFormData={setFormData}
+                            gIdx={gIdx}
+                            group={group}
+                            pendingGroupUpdatesRef={pendingGroupUpdatesRef}
+                            onRowVisibilityChange={(gIdx, rowIndex, cv) => { rowVisibilityOverridesRef.current[`grid_${gIdx}_${rowIndex}`] = cv; }}
+                          />
+                        ) : (group.layout || "") === "table" ? (
+                          (() => {
+                            const cols = Array.isArray(group.table_columns) && group.table_columns.length > 0 ? group.table_columns : [{ id: "col_1", label: "Column 1" }];
+                            const rows = Array.isArray(group.table_rows) ? group.table_rows : [];
+                            return (
+                              <GridCellTableEditor
+                                tableCols={cols}
+                                tableRows={rows}
+                                fieldsList={fieldsList}
+                                allIdsInAnyGroup={allIdsInAnyGroup}
+                                onUpdate={(table_columns, table_rows) => {
+                                  pendingGroupUpdatesRef.current[gIdx] = { table_columns, table_rows };
+                                  setFormData((prev) => {
+                                    const groups = prev.form_fields?.groups || [];
+                                    const next = [...groups];
+                                    const currentGroup = next[gIdx] || {};
+                                    next[gIdx] = { ...currentGroup, table_columns, table_rows };
+                                    return { ...prev, form_fields: { ...prev.form_fields, groups: next } };
+                                  });
+                                }}
+                                onRowVisibilityChange={(rIdx, cv) => { rowVisibilityOverridesRef.current[`table_${gIdx}_${rIdx}`] = cv; }}
+                              />
+                            );
+                          })()
+                        ) : (group.layout || "") === "tabs" ? (
+                          (() => {
+                            const tabList = Array.isArray(group.tabs) ? group.tabs : [{ id: `tab_${Date.now()}`, label: "Tab 1", fields: [] }];
+                            const setTabs = (newTabs) => {
+                              const updatedGroup = { ...group, tabs: newTabs, fields: newTabs.flatMap((t) => (t.layout === "table" && t.table_rows) ? (t.table_rows || []).flatMap((r) => (r.cells || []).map((c) => c.field_id).filter(Boolean)) : (t.fields || [])) };
+                              pendingGroupUpdatesRef.current[gIdx] = { tabs: newTabs, fields: updatedGroup.fields };
+                              setFormData((prev) => {
+                                const groups = prev.form_fields?.groups || [];
+                                const next = [...groups];
+                                next[gIdx] = updatedGroup;
+                                return { ...prev, form_fields: { ...prev.form_fields, groups: next } };
+                              });
+                            };
+                            const setTab = (tIdx, updater) => setTabs(tabList.map((t, i) => (i !== tIdx ? t : (typeof updater === "function" ? updater(t) : updater))));
+                            const addTab = () => setTabs([...tabList, { id: `tab_${Date.now()}`, label: `Tab ${tabList.length + 1}`, fields: [] }]);
+                            const removeTab = (tIdx) => setTabs(tabList.filter((_, i) => i !== tIdx));
+                            const tabFieldIds = tabList.flatMap((t) => t.fields || []);
+                            const availableToAdd = (fieldsList || []).map((f) => String(f.field_id || f.id || f.name)).filter((id) => !allIdsInAnyGroup.includes(id) || tabFieldIds.includes(id));
+                            return (
+                              <div className="space-y-1.5 mt-2 min-w-[320px] overflow-x-auto">
+                                {tabList.map((tab, tIdx) => (
+                                  <div key={tab.id || tIdx} className="rounded border bg-muted/20 p-1.5 space-y-1 min-w-0">
+                                    <div className="flex items-center gap-1 flex-wrap">
+                                      <Input className="h-6 text-xs w-28 min-w-[5rem] max-w-[8rem] shrink-0" placeholder="Tab label" value={tab.label || ""} onChange={(e) => setTab(tIdx, { ...tab, label: e.target.value })} />
+                                      <Button type="button" variant="ghost" size="icon" className="h-5 w-5 text-destructive" onClick={() => removeTab(tIdx)}><Trash2 className="h-2.5 w-2.5" /></Button>
+                                    </div>
+                                    <div className="flex flex-wrap gap-0.5">
+                                      {(tab.fields || []).map((fid) => {
+                                        const f = fieldsList.find((x) => String(x.field_id || x.id || x.name) === String(fid));
+                                        return (
+                                          <Badge key={fid} variant="outline" className="text-xs py-0">
+                                            {f?.label || fid}
+                                            <button type="button" className="ml-0.5" onClick={() => setTab(tIdx, { ...tab, fields: (tab.fields || []).filter((id) => id !== fid) })}><X className="h-2.5 w-2.5" /></button>
+                                          </Badge>
+                                        );
+                                      })}
+                                      <Select value="__add__" onValueChange={(v) => { if (v && v !== "__add__") setTab(tIdx, { ...tab, fields: [...(tab.fields || []), v] }); }}>
+                                        <SelectTrigger className="h-5 text-xs w-[110px]"><SelectValue placeholder="+ Field" /></SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="__add__">+ Field</SelectItem>
+                                          {availableToAdd.map((fid) => {
+                                            const f = fieldsList.find((x) => String(x.field_id || x.id || x.name) === String(fid));
+                                            return <SelectItem key={fid} value={fid}>{f?.label || fid}</SelectItem>;
+                                          })}
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                  </div>
+                                ))}
+                                <Button type="button" variant="outline" size="sm" className="h-6 text-xs w-full" onClick={addTab}><Plus className="h-2.5 w-2.5 mr-0.5" /> Add tab</Button>
+                              </div>
+                            );
+                          })()
+                        ) : null}
+                        <div className="space-y-2 pt-2 border-t">
+                          <Label className="text-xs">Show group when (optional)</Label>
+                          <p className="text-xs text-muted-foreground">Show when any condition matches (OR).</p>
+                          {(() => {
+                            const cv = group.conditional_visibility;
+                            const conditions = Array.isArray(cv?.conditions)
+                              ? cv.conditions
+                              : cv?.depends_on_field
+                                ? [{ depends_on_field: cv.depends_on_field, show_when: cv.show_when ?? null, value: cv.value ?? null }]
+                                : [];
+                            const formFields = formData.form_fields?.fields || [];
+                            const setConditions = (newList) => {
+                              const next = [...(formData.form_fields.groups || [])];
+                              next[gIdx] = {
+                                ...group,
+                                conditional_visibility: newList.length === 0 ? undefined : { conditions: newList },
+                              };
+                              setFormData({ ...formData, form_fields: { ...formData.form_fields, groups: next } });
+                            };
+                            const updateCondition = (cIdx, upd) => {
+                              const newList = conditions.map((c, i) => (i === cIdx ? { ...c, ...upd } : c));
+                              setConditions(newList);
+                            };
+                            const removeCondition = (cIdx) => {
+                              setConditions(conditions.filter((_, i) => i !== cIdx));
+                            };
+                            const addCondition = () => {
+                              setConditions([...conditions, { depends_on_field: null, show_when: null, value: null }]);
+                            };
+                            return (
+                              <div className="space-y-2">
+                                {conditions.length === 0 ? (
+                                  <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={addCondition}>
+                                    <Plus className="h-3 w-3 mr-1" /> Add condition
+                                  </Button>
+                                ) : (
+                                  conditions.map((cond, cIdx) => {
+                                    const depField = formFields.find((f) => (f.field_id || f.id || f.name) === cond.depends_on_field);
+                                    const depType = (depField?.field_type || depField?.type || "").toLowerCase();
+                                    const needsValue = ["equals", "not_equals", "contains"].includes(cond.show_when || "");
+                                    const isBoolean = depType === "boolean" || depType === "checkbox";
+                                    const isSelectLike = ["select", "dropdown", "radio", "radio_group"].includes(depType);
+                                    const isMultiselect = depType === "multiselect";
+                                    const isNumber = depType === "number" || depType === "integer";
+                                    const depOptions = depField ? (depField.field_options?.options || depField.options || []) : [];
+                                    const opts = Array.isArray(depOptions) ? depOptions : [];
+                                    return (
+                                      <div key={cIdx} className="flex flex-wrap items-center gap-2 rounded border p-2 bg-muted/30">
+                                        <SearchableFieldSelect
+                                          fields={formFields}
+                                          value={cond.depends_on_field || "__none__"}
+                                          onValueChange={(v) => updateCondition(cIdx, { depends_on_field: v && v !== "__none__" ? v : null, show_when: null, value: null })}
+                                          placeholder="Select field"
+                                          noneOption
+                                          noneLabel="Select field"
+                                          compact
+                                          className="h-7 text-xs w-40"
+                                        />
+                                        {cond.depends_on_field && (
+                                          <>
+                                            <Select value={cond.show_when || ""} onValueChange={(v) => updateCondition(cIdx, { show_when: v || null, value: needsValue ? (cond.value ?? null) : null })}>
+                                              <SelectTrigger className="h-7 text-xs w-24"><SelectValue /></SelectTrigger>
+                                              <SelectContent>
+                                                <SelectItem value="equals">Equals</SelectItem>
+                                                <SelectItem value="not_equals">Not equals</SelectItem>
+                                                <SelectItem value="contains">Contains</SelectItem>
+                                                <SelectItem value="is_empty">Is empty</SelectItem>
+                                                <SelectItem value="is_not_empty">Not empty</SelectItem>
+                                              </SelectContent>
+                                            </Select>
+                                            {needsValue && (isBoolean ? (
+                                              <Select value={cond.value || ""} onValueChange={(v) => updateCondition(cIdx, { value: v || null })}>
+                                                <SelectTrigger className="h-7 text-xs w-20"><SelectValue /></SelectTrigger>
+                                                <SelectContent><SelectItem value="yes">Yes</SelectItem><SelectItem value="no">No</SelectItem></SelectContent>
+                                              </Select>
+                                            ) : isSelectLike || isMultiselect ? (
+                                              <Select value={cond.value || ""} onValueChange={(v) => updateCondition(cIdx, { value: v || null })}>
+                                                <SelectTrigger className="h-7 text-xs w-28"><SelectValue /></SelectTrigger>
+                                                <SelectContent>
+                                                  {opts.map((opt, i) => {
+                                                    const val = typeof opt === "object" && opt !== null ? (opt.value ?? opt.label ?? "") : opt;
+                                                    const label = typeof opt === "object" && opt !== null ? (opt.label ?? opt.value ?? String(val)) : String(opt);
+                                                    return <SelectItem key={i} value={String(val)}>{label}</SelectItem>;
+                                                  })}
+                                                </SelectContent>
+                                              </Select>
+                                            ) : isNumber ? (
+                                              <Input type="number" className="h-7 text-xs w-20" value={cond.value ?? ""} onChange={(e) => updateCondition(cIdx, { value: e.target.value || null })} placeholder="Number" />
+                                            ) : (
+                                              <Input className="h-7 text-xs w-24" value={cond.value ?? ""} onChange={(e) => updateCondition(cIdx, { value: e.target.value || null })} placeholder="Value" />
+                                            ))}
+                                          </>
+                                        )}
+                                        <Button type="button" variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-destructive" onClick={() => removeCondition(cIdx)} title="Remove condition">
+                                          <Trash2 className="h-3 w-3" />
+                                        </Button>
+                                      </div>
+                                    );
+                                  })
+                                )}
+                                {conditions.length > 0 && (
+                                  <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={addCondition}>
+                                    <Plus className="h-3 w-3 mr-1" /> Add condition (OR)
+                                  </Button>
+                                )}
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <Button type="button" variant="outline" size="sm" onClick={() => {
+                    const newGroup = { id: `g_${Date.now()}`, label: "New group", fields: [] };
+                    setFormData({
+                      ...formData,
+                      form_fields: {
+                        ...formData.form_fields,
+                        groups: [...(formData.form_fields.groups || []), newGroup],
+                      },
+                    });
+                  }}>
+                    <Plus className="h-4 w-4 mr-2" /> Add group
+                  </Button>
+            </CardContent>
+          </Card>
+          </div>
+        )}
+
         {/* Submit Button */}
         <div className="flex justify-end gap-2">
           <Link href={`/admin/forms/${formSlug}`}>
@@ -3663,6 +4276,7 @@ const EditFormPage = () => {
           </Button>
         </div>
       </form>
+      </div>
 
       {/* Create Role Modal */}
       <Dialog open={isCreateRoleModalOpen} onOpenChange={setIsCreateRoleModalOpen}>

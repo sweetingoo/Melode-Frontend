@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
-import { CalendarIcon, Download, FileText, X, Search, Loader2, Plus, Trash2 } from "lucide-react";
+import { CalendarIcon, Download, FileText, X, Search, Loader2, Plus, Trash2, AlertTriangle } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useDownloadFile } from "@/hooks/useProfile";
@@ -27,19 +27,24 @@ const sortOptionsByValue = (options) => {
   });
 };
 
+// True if option value or label indicates "other" / "others" / "other (specify)" etc.
+const isOptionOther = (value, label) => {
+  const v = String(value ?? '').toLowerCase().trim();
+  const l = String(label ?? '').toLowerCase().trim();
+  if (v === 'other' || v === 'others' || l === 'other' || l === 'others') return true;
+  if (l.includes('other') && (l.includes('specify') || l.includes('describe') || l.includes('please'))) return true;
+  if (v.includes('other_specify')) return true;
+  return false;
+};
+
 // Order options: put "other"/"others" at end only (no None). Use for radio and other types that don't need None.
 const orderOptionsOtherAtEnd = (options) => {
   if (!Array.isArray(options) || options.length === 0) return [];
   const normalized = options.map((o) =>
     typeof o === 'object' && o !== null ? { value: o.value ?? '', label: o.label ?? o.value ?? '' } : { value: String(o), label: String(o) }
   );
-  const isOther = (v, l) => {
-    const vv = String(v || '').toLowerCase().trim();
-    const ll = String(l || '').toLowerCase().trim();
-    return vv === 'other' || vv === 'others' || ll === 'other' || ll === 'others';
-  };
-  const otherOptions = normalized.filter((o) => isOther(o.value, o.label));
-  const rest = normalized.filter((o) => !isOther(o.value, o.label));
+  const otherOptions = normalized.filter((o) => isOptionOther(o.value, o.label));
+  const rest = normalized.filter((o) => !isOptionOther(o.value, o.label));
   const sortedRest = sortOptionsByValue(rest);
   return [...sortedRest, ...otherOptions];
 };
@@ -58,11 +63,6 @@ const normalizeOptionsWithNoneAndOther = (options) => {
     const ll = String(l || '').toLowerCase().trim();
     return vv === 'none' || ll === 'none';
   };
-  const isOther = (v, l) => {
-    const vv = String(v || '').toLowerCase().trim();
-    const ll = String(l || '').toLowerCase().trim();
-    return vv === 'other' || vv === 'others' || ll === 'other' || ll === 'others';
-  };
   const hasNone = normalized.some((o) => isNone(o.value, o.label));
   const noneOption = hasNone ? normalized.find((o) => isNone(o.value, o.label)) : { value: 'none', label: 'None' };
   const noneValue = noneOption?.value ?? 'none';
@@ -70,8 +70,8 @@ const normalizeOptionsWithNoneAndOther = (options) => {
     normalized.unshift({ value: noneValue, label: 'None' });
   }
   const rest = normalized.filter((o) => !isNone(o.value, o.label));
-  const otherOptions = rest.filter((o) => isOther(o.value, o.label));
-  const middleOptions = rest.filter((o) => !isOther(o.value, o.label));
+  const otherOptions = rest.filter((o) => isOptionOther(o.value, o.label));
+  const middleOptions = rest.filter((o) => !isOptionOther(o.value, o.label));
   const sortedMiddle = sortOptionsByValue(middleOptions);
   const ordered = [normalized.find((o) => isNone(o.value, o.label)) || { value: noneValue, label: 'None' }, ...sortedMiddle, ...otherOptions];
   return { options: ordered, noneValue };
@@ -83,9 +83,11 @@ const CustomFieldRenderer = ({
   onChange, 
   error,
   readOnly = false,
-  hideLabel = false
+  hideLabel = false,
+  otherTextValue,
 }) => {
   const fieldId = `custom-field-${field.id}`;
+  const otherFieldId = `${field.id}_other`;
   const isRequired = field.is_required || field.required;
   const fieldType = field.field_type || field.type;
   // Field config can hide the label (show_label: false); prop hideLabel overrides for special layouts
@@ -244,40 +246,94 @@ const CustomFieldRenderer = ({
       case 'boolean':
       case 'checkbox': {
         const booleanDisplay = field.field_options?.boolean_display || field.field_options?.display || 'checkbox';
+        const displayStyle = field.field_options?.checkbox_display_style || field.field_options?.display_style || 'default';
         const isYesNoRadios = booleanDisplay === 'radio' || booleanDisplay === 'yes_no';
-        if (isYesNoRadios) {
-          const boolVal = value === true || value === 'true';
-          return (
-            <RadioGroup
-              value={boolVal ? 'true' : 'false'}
-              onValueChange={(v) => handleChange(v === 'true')}
-              className="flex flex-wrap gap-4"
-              disabled={readOnly}
-            >
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="true" id={`${fieldId}-yes`} disabled={readOnly} />
-                <Label htmlFor={`${fieldId}-yes`} className="text-sm font-normal cursor-pointer">Yes</Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="false" id={`${fieldId}-no`} disabled={readOnly} />
-                <Label htmlFor={`${fieldId}-no`} className="text-sm font-normal cursor-pointer">No</Label>
-              </div>
-            </RadioGroup>
-          );
-        }
-        return (
-          <div className="flex items-center space-x-2">
+        const label = field.field_description || field.field_label || field.name;
+        const helperText = field.helper_text || field.field_options?.helper_text;
+        const checkboxContent = isYesNoRadios ? (
+          <RadioGroup
+            value={value === true || value === 'true' ? 'true' : 'false'}
+            onValueChange={(v) => handleChange(v === 'true')}
+            className="flex flex-wrap gap-4"
+            disabled={readOnly}
+          >
+            <div className="flex items-center space-x-2">
+              <RadioGroupItem value="true" id={`${fieldId}-yes`} disabled={readOnly} />
+              <Label htmlFor={`${fieldId}-yes`} className="text-sm font-normal cursor-pointer">Yes</Label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <RadioGroupItem value="false" id={`${fieldId}-no`} disabled={readOnly} />
+              <Label htmlFor={`${fieldId}-no`} className="text-sm font-normal cursor-pointer">No</Label>
+            </div>
+          </RadioGroup>
+        ) : (
+          <div className="flex items-start gap-3">
             <Checkbox
               id={fieldId}
               checked={value === true || value === 'true'}
               onCheckedChange={(checked) => handleChange(checked)}
               disabled={readOnly}
+              className={displayStyle === 'warning' ? 'border-amber-600 data-[state=checked]:bg-amber-600 focus-visible:ring-amber-500' : displayStyle === 'alert' ? 'border-yellow-500 data-[state=checked]:bg-[#50b8c4] focus-visible:ring-[#50b8c4]' : undefined}
             />
-            <Label htmlFor={fieldId} className="text-sm font-normal">
-              {field.field_description || field.field_label || field.name}
-            </Label>
+            <div className="grid gap-1.5 leading-none">
+              <Label
+                htmlFor={fieldId}
+                className={cn(
+                  "text-sm font-medium cursor-pointer",
+                  displayStyle === 'alert' && "text-yellow-800"
+                )}
+              >
+                {label}
+              </Label>
+              {helperText && <p className={cn("text-xs", displayStyle === 'alert' ? "text-yellow-700/90" : "text-muted-foreground")}>{helperText}</p>}
+            </div>
           </div>
         );
+        if (displayStyle === 'warning') {
+          const innerContent = isYesNoRadios ? (
+            checkboxContent
+          ) : (
+            <>
+              <label className="flex items-center cursor-pointer" htmlFor={fieldId}>
+                <Checkbox
+                  id={fieldId}
+                  checked={value === true || value === 'true'}
+                  onCheckedChange={(checked) => handleChange(checked)}
+                  disabled={readOnly}
+                  className="h-5 w-5 border-amber-600 data-[state=checked]:bg-amber-600 focus-visible:ring-amber-500 shrink-0"
+                />
+                <span className="ml-3 text-sm font-medium text-gray-700">{label}</span>
+              </label>
+              {helperText && <p className="mt-2 text-xs text-gray-500">{helperText}</p>}
+            </>
+          );
+          return (
+            <div className="mb-6 bg-amber-50 border border-amber-200 rounded-lg p-6">
+              <h3 className="text-lg font-medium mb-4 flex items-center text-amber-800">
+                <AlertTriangle className="w-5 h-5 text-amber-600 mr-2 shrink-0" />
+                {field.field_label || field.name || 'Confirm'}
+              </h3>
+              <div className="border border-amber-300 bg-white p-4 rounded">
+                {innerContent}
+              </div>
+            </div>
+          );
+        }
+        if (displayStyle === 'alert') {
+          return (
+            <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-md">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <AlertTriangle className="h-5 w-5 text-yellow-500" />
+                </div>
+                <div className="ml-3 flex-1">
+                  {checkboxContent}
+                </div>
+              </div>
+            </div>
+          );
+        }
+        return checkboxContent;
       }
 
       case 'select':
@@ -303,23 +359,26 @@ const CustomFieldRenderer = ({
             </div>
           );
         }
+        const selectedOption = options.find((o) => (o.value ?? o) === selectVal);
+        const isOtherSelected = selectedOption && isOptionOther(selectedOption.value, selectedOption.label);
         return (
-          <Select
-            value={selectVal ?? noneValue}
-            onValueChange={handleChange}
-            disabled={readOnly}
-          >
-            <SelectTrigger className={error ? 'border-red-500' : ''}>
-              <SelectValue placeholder={field.field_description || `Select ${field.field_label || field.name}`} />
-            </SelectTrigger>
-            <SelectContent>
-              {options.map((option, index) => {
-                // Handle both object and primitive options
-                let optionValue;
-                if (typeof option === 'object' && option !== null) {
-                  optionValue = option.value;
-                } else {
-                  optionValue = option;
+          <div className="space-y-2">
+            <Select
+              value={selectVal ?? noneValue}
+              onValueChange={handleChange}
+              disabled={readOnly}
+            >
+              <SelectTrigger className={error ? 'border-red-500' : ''}>
+                <SelectValue placeholder={field.field_description || `Select ${field.field_label || field.name}`} />
+              </SelectTrigger>
+              <SelectContent>
+                {options.map((option, index) => {
+                  // Handle both object and primitive options
+                  let optionValue;
+                  if (typeof option === 'object' && option !== null) {
+                    optionValue = option.value;
+                  } else {
+                    optionValue = option;
                 }
                 
                 // Ensure value is never an empty string - use a safe fallback
@@ -335,6 +394,23 @@ const CustomFieldRenderer = ({
               })}
             </SelectContent>
           </Select>
+          {isOtherSelected && !readOnly && (
+            <div className="space-y-1">
+              <Label htmlFor={`${fieldId}-other`} className="text-sm text-muted-foreground">
+                Please specify
+              </Label>
+              <Textarea
+                id={`${fieldId}-other`}
+                value={otherTextValue ?? ''}
+                onChange={(e) => onChange(otherFieldId, e.target.value)}
+                placeholder="Type here..."
+                rows={3}
+                className={error ? 'border-red-500' : ''}
+                disabled={readOnly}
+              />
+            </div>
+          )}
+        </div>
         );
       }
 
@@ -518,15 +594,20 @@ const CustomFieldRenderer = ({
           if (isOnlyNone) setExpandedOptionFields((prev) => ({ ...prev, [fieldId]: false }));
           handleChange(next.length ? next : [multiNoneValue]);
         };
+        const selectedOtherOption = multiOptions.find((o) => {
+          const v = o.value ?? o;
+          return selectedValues.includes(v) && isOptionOther(o.value, o.label);
+        });
+        const isOtherSelectedMulti = !!selectedOtherOption;
         return (
-          <div className="space-y-2">
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-4">
+          <div className="space-y-2 w-full">
+            <div className="grid w-full grid-cols-1 sm:grid-cols-2 lg:grid-cols-[repeat(3,minmax(14rem,1fr))] gap-x-6 gap-y-4">
               {multiOptionsToShow.map((option, index) => {
                 const optionValue = option.value ?? option;
                 const isSelected = selectedValues.includes(optionValue);
                 const isNoneOption = String(optionValue) === String(multiNoneValue);
                 return (
-                  <div key={index} className="flex items-center space-x-2 py-1.5 pr-2">
+                  <div key={index} className="flex min-w-0 items-center gap-2 py-1.5 pr-2">
                     <Checkbox
                       id={`${fieldId}-${index}`}
                       checked={isSelected}
@@ -542,14 +623,31 @@ const CustomFieldRenderer = ({
                           setMultiValue(next.length ? next : [multiNoneValue]);
                         }
                       }}
+                      className="shrink-0"
                     />
-                    <Label htmlFor={`${fieldId}-${index}`} className="text-sm font-normal cursor-pointer flex-1 min-w-0">
+                    <Label htmlFor={`${fieldId}-${index}`} className="text-sm font-normal cursor-pointer min-w-0 flex-1 break-words">
                       {option.label || option}
                     </Label>
                   </div>
                 );
               })}
             </div>
+            {isOtherSelectedMulti && !readOnly && (
+              <div className="space-y-1">
+                <Label htmlFor={`${fieldId}-other`} className="text-sm text-muted-foreground">
+                  Please specify
+                </Label>
+                <Textarea
+                  id={`${fieldId}-other`}
+                  value={otherTextValue ?? ''}
+                  onChange={(e) => onChange(otherFieldId, e.target.value)}
+                  placeholder="Type here..."
+                  rows={3}
+                  className={error ? 'border-red-500' : ''}
+                  disabled={readOnly}
+                />
+              </div>
+            )}
             {!readOnly && isOnlyNoneSelected && !multiExpanded && multiOptions.length > 1 && (
               <Button
                 type="button"
@@ -942,20 +1040,26 @@ const CustomFieldRenderer = ({
         const rows = Array.isArray(value) ? value : [];
         const childFields = field.fields || [];
         const isInline = field.layout === 'inline' || (childFields.length <= 4 && childFields.length >= 2);
+        const colCount = Math.min(childFields.length, 4);
+        // Show at least one row when empty so the grid/inputs are visible (match "Prescription" style UI)
+        const displayRows = rows.length > 0 ? rows : [{}];
         const updateRow = (rowIndex, childId, childValue) => {
-          const newRows = [...rows];
-          const row = newRows[rowIndex] != null && typeof newRows[rowIndex] === 'object' ? { ...newRows[rowIndex] } : {};
-          row[childId] = childValue;
-          newRows[rowIndex] = row;
-          handleChange(newRows);
+          const source = rows.length > 0 ? rows : displayRows;
+          const newRows = source.map((r, i) => (i === rowIndex ? { ...(r || {}), [childId]: childValue } : r || {}));
+          if (rows.length === 0 && rowIndex === 0) handleChange([newRows[0]]);
+          else handleChange(newRows);
         };
-        const addRow = () => handleChange([...rows, {}]);
-        const removeRow = (rowIndex) => handleChange(rows.filter((_, i) => i !== rowIndex));
+        const addRow = () => handleChange([...displayRows, {}]);
+        const removeRow = (rowIndex) => {
+          const next = displayRows.filter((_, i) => i !== rowIndex);
+          handleChange(next.length === 0 ? [] : next);
+        };
         if (readOnly) {
+          const toShow = rows.length > 0 ? rows : [];
           return (
             <div className="space-y-3">
-              {rows.length === 0 && <p className="text-sm text-muted-foreground">—</p>}
-              {rows.map((row, rowIndex) => (
+              {toShow.length === 0 && <p className="text-sm text-muted-foreground">—</p>}
+              {toShow.map((row, rowIndex) => (
                 <div key={rowIndex} className={cn("rounded-md border p-3 bg-muted/30", isInline && "flex flex-wrap items-end gap-3")}>
                   {!isInline && <div className="text-xs font-medium text-muted-foreground mb-2">Row {rowIndex + 1}</div>}
                   <div className={cn(isInline ? "flex flex-wrap items-end gap-3 flex-1 min-w-0" : "grid gap-2")}>
@@ -976,19 +1080,87 @@ const CustomFieldRenderer = ({
           );
         }
         if (isInline) {
+          const gridCols = colCount;
           return (
             <div className="space-y-2">
               {!hideLabel && (field.label || field.field_label) && (
                 <Label className="text-sm font-medium">{(field.label || field.field_label)}</Label>
               )}
-              {rows.map((row, rowIndex) => (
-                <div key={rowIndex} className="flex flex-wrap items-end gap-2">
-                  {childFields.map((child) => {
-                    const cid = child.id || child.name || child.field_id;
-                    if (!cid) return null;
-                    return (
-                      <div key={cid} className="flex flex-col gap-1 min-w-0 flex-1 basis-0 max-w-[200px]">
+              <div className="border rounded-md p-4">
+                <div className="space-y-4">
+                  {displayRows.map((row, rowIndex) => (
+                    <div
+                      key={rowIndex}
+                      className="grid gap-4 mb-4"
+                      style={{
+                        gridTemplateColumns: displayRows.length > 1
+                          ? `repeat(${gridCols}, minmax(0, 1fr)) auto`
+                          : `repeat(${gridCols}, minmax(0, 1fr))`,
+                        gap: '1rem',
+                        alignItems: 'end',
+                      }}
+                    >
+                      {childFields.map((child) => {
+                        const cid = child.id || child.name || child.field_id;
+                        if (!cid) return null;
+                        return (
+                          <div key={cid} className="min-w-0 space-y-1">
+                            <CustomFieldRenderer
+                              field={{
+                                ...child,
+                                id: cid,
+                                field_type: child.type || child.field_type,
+                                type: child.type || child.field_type,
+                                field_label: child.label || child.field_label || child.name,
+                                field_name: child.name || child.id,
+                              }}
+                              value={row[cid]}
+                              onChange={(id, v) => updateRow(rowIndex, id, v)}
+                              readOnly={readOnly}
+                              hideLabel={false}
+                            />
+                          </div>
+                        );
+                      })}
+                      {displayRows.length > 1 && (
+                        <div className="flex items-end pb-0.5">
+                          <Button type="button" variant="ghost" size="sm" onClick={() => removeRow(rowIndex)} className="h-9 shrink-0 text-destructive hover:text-destructive">
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <Button type="button" variant="default" size="sm" onClick={addRow} className="mt-2 gap-1 bg-primary hover:bg-primary/90">
+                  <Plus className="h-4 w-4" />
+                  Add More
+                </Button>
+              </div>
+            </div>
+          );
+        }
+        return (
+          <div className="space-y-3">
+            {!hideLabel && (field.label || field.field_label) && (
+              <Label className="text-sm font-medium">{(field.label || field.field_label)}</Label>
+            )}
+            <div className="border rounded-md p-4 space-y-4">
+              {displayRows.map((row, rowIndex) => (
+                <div key={rowIndex} className="rounded-md border p-3 space-y-2 bg-muted/30">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-medium text-muted-foreground">Row {rowIndex + 1}</span>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => removeRow(rowIndex)} className="h-7 text-destructive hover:text-destructive">
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${colCount}, minmax(0, 1fr))` }}>
+                    {childFields.map((child) => {
+                      const cid = child.id || child.name || child.field_id;
+                      if (!cid) return null;
+                      return (
                         <CustomFieldRenderer
+                          key={cid}
                           field={{
                             ...child,
                             id: cid,
@@ -1002,60 +1174,16 @@ const CustomFieldRenderer = ({
                           readOnly={readOnly}
                           hideLabel={false}
                         />
-                      </div>
-                    );
-                  })}
-                  <Button type="button" variant="ghost" size="sm" onClick={() => removeRow(rowIndex)} className="h-9 shrink-0 text-destructive hover:text-destructive">
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                      );
+                    })}
+                  </div>
                 </div>
               ))}
-              <Button type="button" variant="outline" size="sm" onClick={addRow} className="gap-1">
+              <Button type="button" variant="default" size="sm" onClick={addRow} className="gap-1 bg-primary hover:bg-primary/90">
                 <Plus className="h-4 w-4" />
-                Add row
+                Add More
               </Button>
             </div>
-          );
-        }
-        return (
-          <div className="space-y-3">
-            {rows.map((row, rowIndex) => (
-              <div key={rowIndex} className="rounded-md border p-3 space-y-2 bg-muted/30">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-medium text-muted-foreground">Row {rowIndex + 1}</span>
-                  <Button type="button" variant="ghost" size="sm" onClick={() => removeRow(rowIndex)} className="h-7 text-destructive hover:text-destructive">
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-                <div className="grid gap-3">
-                  {childFields.map((child) => {
-                    const cid = child.id || child.name || child.field_id;
-                    if (!cid) return null;
-                    return (
-                      <CustomFieldRenderer
-                        key={cid}
-                        field={{
-                          ...child,
-                          id: cid,
-                          field_type: child.type || child.field_type,
-                          type: child.type || child.field_type,
-                          field_label: child.label || child.field_label || child.name,
-                          field_name: child.name || child.id,
-                        }}
-                        value={row[cid]}
-                        onChange={(id, v) => updateRow(rowIndex, id, v)}
-                        readOnly={readOnly}
-                        hideLabel={false}
-                      />
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-            <Button type="button" variant="outline" size="sm" onClick={addRow} className="gap-1">
-              <Plus className="h-4 w-4" />
-              Add row
-            </Button>
           </div>
         );
       }
