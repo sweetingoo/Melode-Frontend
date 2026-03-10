@@ -723,6 +723,45 @@ const TrackerEntryDetailPage = () => {
 
   const comments = commentsData?.comments || commentsData || [];
 
+  // Defaults for all tracker fields (first-load visibility and radio first-option)
+  const entryDefaults = useMemo(() => {
+    const out = {};
+    const opts = (f) => f.field_options?.options || f.options || [];
+    const getNoneValue = (field) => {
+      const options = opts(field);
+      const o = options.find((opt) => String(opt?.value ?? "").toLowerCase().trim() === "none" || String(opt?.label ?? "").toLowerCase().trim() === "none");
+      return o && (o.value != null && o.value !== "") ? o.value : "none";
+    };
+    const firstOptionValue = (field) => {
+      const options = opts(field);
+      const o = options[0];
+      return o != null && (o.value != null && o.value !== "") ? o.value : o?.label;
+    };
+    trackerFields.forEach((field) => {
+      const fieldId = field.id || field.name || field.field_id;
+      if (!fieldId) return;
+      const type = (field.type || field.field_type || "").toLowerCase();
+      if (type === "select" || type === "dropdown") out[fieldId] = getNoneValue(field);
+      else if (type === "multiselect") out[fieldId] = [getNoneValue(field)];
+      else if (type === "boolean" || type === "checkbox") out[fieldId] = false;
+      else if ((type === "radio" || type === "radio_group") && opts(field).length > 0) out[fieldId] = firstOptionValue(field);
+    });
+    return out;
+  }, [tracker?.id, trackerFields]);
+
+  const effectiveEntryData = useMemo(() => ({ ...entryDefaults, ...entryData }), [entryDefaults, entryData]);
+
+  useEffect(() => {
+    if (!tracker || !entry || Object.keys(entryDefaults).length === 0) return;
+    const raw = entry.submission_data || entry.formatted_data || entry.entry_data || {};
+    if (Object.keys(raw).length > 0) return;
+    setEntryData((prev) => {
+      const merged = { ...entryDefaults, ...prev };
+      if (JSON.stringify(merged) === JSON.stringify(prev)) return prev;
+      return merged;
+    });
+  }, [tracker?.id, entry?.id, entryDefaults]);
+
   // Handle field value changes
   const handleFieldChange = (fieldId, value) => {
     setEntryData((prev) => ({
@@ -750,11 +789,13 @@ const TrackerEntryDetailPage = () => {
     let isValid = true;
 
     trackerFields.forEach((field) => {
-      const fieldId = field.id || field.name;
+      const fieldId = field.id || field.name || field.field_id;
+      if (!checkFieldVisibility(field, effectiveEntryData)) return;
+      if (isFieldDisabledByCondition(field, effectiveEntryData)) return;
       const isRequired = field.required || false;
-      const value = entryData[fieldId];
+      const value = effectiveEntryData[fieldId];
 
-      if (isRequired && (value === undefined || value === null || value === "")) {
+      if (isRequired && (value === undefined || value === null || value === "" || (Array.isArray(value) && value.length === 0))) {
         errors[fieldId] = `${field.label || field.name} is required`;
         isValid = false;
       }
@@ -765,7 +806,7 @@ const TrackerEntryDetailPage = () => {
     const guardrail = statusGuardrails[entryStatus];
     if (guardrail?.required_fields?.length) {
       guardrail.required_fields.forEach((fieldId) => {
-        const value = entryData[fieldId];
+        const value = effectiveEntryData[fieldId];
         const isEmpty = value === undefined || value === null || (typeof value === "string" && !value.trim());
         if (isEmpty) {
           const label = fieldId.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -789,7 +830,7 @@ const TrackerEntryDetailPage = () => {
     // Status is only the tracker's default status (top "Change Status" dropdown). current_status in the form is just a normal field.
     try {
       const currentStage = String(entry?.formatted_data?.derived_stage ?? "").trim();
-      const payload = { submission_data: entryData, status: entryStatus };
+      const payload = { submission_data: effectiveEntryData, status: entryStatus };
       if (isStageStyledTracker && editModeStage && editModeStage.trim() !== currentStage) {
         payload.stage = editModeStage.trim();
       }
@@ -894,43 +935,57 @@ const TrackerEntryDetailPage = () => {
     };
   };
 
-  // Conditional visibility for tracker fields (e.g. Stage 2 triage: hide prep when refer back / diabetic / bloods)
-  const checkFieldVisibility = (field, data) => {
-    if (!field?.conditional_visibility?.depends_on_field) return true;
-    const { depends_on_field, show_when, value: expectedValue } = field.conditional_visibility;
+  const normalizeCondValue = (v) => {
+    if (v === true || v === "true" || v === "True" || v === "TRUE") return true;
+    if (v === false || v === "false" || v === "False" || v === "FALSE") return false;
+    if (v === "yes" || v === "Yes" || v === "YES") return true;
+    if (v === "no" || v === "No" || v === "NO") return false;
+    return v;
+  };
+
+  const isConditionMet = (cv, data) => {
+    if (!cv?.depends_on_field) return true;
+    const { depends_on_field, show_when, value: expectedValue } = cv;
     const dependentValue = data?.[depends_on_field];
-    const normalize = (v) => {
-      if (v === true || v === "true" || v === "True" || v === "TRUE") return true;
-      if (v === false || v === "false" || v === "False" || v === "FALSE") return false;
-      if (v === "yes" || v === "Yes" || v === "YES") return true;
-      if (v === "no" || v === "No" || v === "NO") return false;
-      return v;
-    };
-    if (show_when === "equals") return normalize(dependentValue) === normalize(expectedValue);
-    if (show_when === "not_equals") return normalize(dependentValue) !== normalize(expectedValue);
+    if (show_when === "equals") return normalizeCondValue(dependentValue) === normalizeCondValue(expectedValue);
+    if (show_when === "not_equals") return normalizeCondValue(dependentValue) !== normalizeCondValue(expectedValue);
+    if (show_when === "contains") return Array.isArray(dependentValue) ? dependentValue.includes(expectedValue) : String(dependentValue || "").includes(String(expectedValue || ""));
     if (show_when === "is_empty") return !dependentValue || dependentValue === "" || dependentValue === false;
     if (show_when === "is_not_empty") return dependentValue != null && dependentValue !== "" && dependentValue !== false;
     return true;
   };
 
-  // Group-level conditional visibility: show/hide whole group based on other fields' values
+  // Conditional visibility for tracker fields; when action is "disable", field is still visible
+  const checkFieldVisibility = (field, data) => {
+    if (!field?.conditional_visibility?.depends_on_field) return true;
+    const met = isConditionMet(field.conditional_visibility, data);
+    const action = (field.conditional_visibility.action || "hide").toLowerCase();
+    if (action === "disable") return true;
+    return met;
+  };
+
+  const isFieldDisabledByCondition = (field, data) => {
+    if (!field?.conditional_visibility?.depends_on_field) return false;
+    const met = isConditionMet(field.conditional_visibility, data);
+    const action = (field.conditional_visibility.action || "hide").toLowerCase();
+    return action === "disable" && !met;
+  };
+
+  const isGroupConditionMet = (condition, data) => {
+    if (!condition?.depends_on_field) return false;
+    return isConditionMet(condition, data);
+  };
+
+  // Group-level conditional visibility: show when any condition is met (OR), or legacy single condition
   const checkGroupVisibility = (group, data) => {
-    if (!group?.conditional_visibility?.depends_on_field) return true;
-    const { depends_on_field, show_when, value: expectedValue } = group.conditional_visibility;
-    const dependentValue = data?.[depends_on_field];
-    const normalize = (v) => {
-      if (v === true || v === "true" || v === "True" || v === "TRUE") return true;
-      if (v === false || v === "false" || v === "False" || v === "FALSE") return false;
-      if (v === "yes" || v === "Yes" || v === "YES") return true;
-      if (v === "no" || v === "No" || v === "NO") return false;
-      return v;
-    };
-    if (show_when === "equals") return normalize(dependentValue) === normalize(expectedValue);
-    if (show_when === "not_equals") return normalize(dependentValue) !== normalize(expectedValue);
-    if (show_when === "contains") return Array.isArray(dependentValue) ? dependentValue.includes(expectedValue) : String(dependentValue || "").includes(String(expectedValue || ""));
-    if (show_when === "is_empty") return !dependentValue || dependentValue === "" || dependentValue === false;
-    if (show_when === "is_not_empty") return dependentValue != null && dependentValue !== "" && dependentValue !== false;
-    return true;
+    const cv = group?.conditional_visibility;
+    if (!cv) return true;
+    const conditions = Array.isArray(cv.conditions) ? cv.conditions : null;
+    if (conditions && conditions.length > 0) {
+      return conditions.some((c) => isGroupConditionMet(c, data));
+    }
+    if (!cv.depends_on_field) return true;
+    return isGroupConditionMet(cv, data);
   };
 
   // Table row conditional visibility (same logic as group)
@@ -1502,16 +1557,17 @@ const TrackerEntryDetailPage = () => {
                       </div>
                       {fieldsWithoutSection.map((field) => {
                         const fieldId = field.id || field.name || field.field_id;
-                        const value = entryData[fieldId];
+                        const value = effectiveEntryData[fieldId];
                         const baseField = { ...field, type: field.type || field.field_type, field_label: field.label || field.field_label || field.name, field_name: field.name || field.id };
                         return (
                           <CustomFieldRenderer
                             key={fieldId}
                             field={getFieldWithStageFilteredStatusOptions(baseField, statusesForEditModeStage)}
                             value={value}
+                            otherTextValue={effectiveEntryData[`${fieldId}_other`]}
                             onChange={handleFieldChange}
                             error={fieldErrors[fieldId]}
-                            readOnly={false}
+                            readOnly={isFieldDisabledByCondition(field, effectiveEntryData)}
                           />
                         );
                       })}
@@ -1535,7 +1591,7 @@ const TrackerEntryDetailPage = () => {
                     const sectionKey = activeStageSection.id ?? activeStageSection.title ?? activeStageSection.label ?? `section-${activeStageSectionIndex}`;
                     const statusFieldId = tracker?.tracker_config?.status_field_id;
                     const sectionFields = (fieldsBySection[sectionKey]?.fields || [])
-                      .filter((field) => checkFieldVisibility(field, entryData))
+                      .filter((field) => checkFieldVisibility(field, effectiveEntryData))
                       .filter((field) => {
                         const fid = field.id ?? field.name ?? field.field_id;
                         return !statusFieldId || String(fid) !== String(statusFieldId);
@@ -1630,23 +1686,24 @@ const TrackerEntryDetailPage = () => {
                             if (sectionGroups?.length > 0) {
                               const renderGroupField = (field) => {
                                 const fieldId = field.id || field.name || field.field_id;
-                                const value = entryData[fieldId];
+                                const value = effectiveEntryData[fieldId];
                                 const baseField = { ...field, type: field.type || field.field_type, field_label: field.label || field.field_label || field.name, field_name: field.name || field.id };
                                 return (
                                   <CustomFieldRenderer
                                     key={fieldId}
                                     field={getFieldWithStageFilteredStatusOptions(baseField, statusesForEditModeStageFiltered)}
                                     value={value}
+                                    otherTextValue={effectiveEntryData[`${fieldId}_other`]}
                                     onChange={handleFieldChange}
                                     error={fieldErrors[fieldId]}
-                                    readOnly={false}
+                                    readOnly={isFieldDisabledByCondition(field, effectiveEntryData)}
                                   />
                                 );
                               };
                               return (
                                 <>
                                   {sectionGroups.map((group) => {
-                                    if (!checkGroupVisibility(group, entryData)) return null;
+                                    if (!checkGroupVisibility(group, effectiveEntryData)) return null;
                                     const groupFields = (group.fields || [])
                                       .map((fid) => sectionFields.find((f) => (f.id || f.name || f.field_id) === fid))
                                       .filter(Boolean);
@@ -1679,7 +1736,7 @@ const TrackerEntryDetailPage = () => {
                                                       </tr>
                                                     </thead>
                                                     <tbody>
-                                                      {tableRows.filter((row) => checkRowVisibility(row, entryData)).map((row, rIdx) => {
+                                                      {tableRows.filter((row) => checkRowVisibility(row, effectiveEntryData)).map((row, rIdx) => {
                                                         const cells = (row.cells || []).slice(0, tableCols.length);
                                                         while (cells.length < tableCols.length) cells.push({ text: "", field_id: null });
                                                         return (
@@ -1696,11 +1753,12 @@ const TrackerEntryDetailPage = () => {
                                                                     return (
                                                                       <CustomFieldRenderer
                                                                         field={getFieldWithStageFilteredStatusOptions(baseField, statusesForEditModeStageFiltered)}
-                                                                        value={entryData[fieldId]}
+                                                                        value={effectiveEntryData[fieldId]}
+                                                                        otherTextValue={effectiveEntryData[`${fieldId}_other`]}
                                                                         onChange={handleFieldChange}
                                                                         hideLabel
                                                                         error={fieldErrors[fieldId]}
-                                                                        readOnly={false}
+                                                                        readOnly={isFieldDisabledByCondition(f, effectiveEntryData)}
                                                                       />
                                                                     );
                                                                   })() : null}
@@ -1744,11 +1802,12 @@ const TrackerEntryDetailPage = () => {
                                                               <td key={col.id} className="p-2 align-middle">
                                                                 <CustomFieldRenderer
                                                                   field={getFieldWithStageFilteredStatusOptions(baseField, statusesForEditModeStageFiltered)}
-                                                                  value={entryData[fieldId]}
+                                                                  value={effectiveEntryData[fieldId]}
+                                                                  otherTextValue={effectiveEntryData[`${fieldId}_other`]}
                                                                   onChange={handleFieldChange}
                                                                   hideLabel
                                                                   error={fieldErrors[fieldId]}
-                                                                  readOnly={false}
+                                                                  readOnly={isFieldDisabledByCondition(f, effectiveEntryData)}
                                                                 />
                                                               </td>
                                                             ) : (
@@ -1800,16 +1859,17 @@ const TrackerEntryDetailPage = () => {
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 space-y-3">
                                       {ungroupedSectionFields.map((field) => {
                                         const fieldId = field.id || field.name || field.field_id;
-                                        const value = entryData[fieldId];
+                                        const value = effectiveEntryData[fieldId];
                                         const baseField = { ...field, type: field.type || field.field_type, field_label: field.label || field.field_label || field.name, field_name: field.name || field.id };
                                         return (
                                           <CustomFieldRenderer
                                             key={fieldId}
                                             field={getFieldWithStageFilteredStatusOptions(baseField, statusesForEditModeStageFiltered)}
                                             value={value}
+                                            otherTextValue={effectiveEntryData[`${fieldId}_other`]}
                                             onChange={handleFieldChange}
                                             error={fieldErrors[fieldId]}
-                                            readOnly={false}
+                                            readOnly={isFieldDisabledByCondition(field, effectiveEntryData)}
                                           />
                                         );
                                       })}
@@ -1820,16 +1880,17 @@ const TrackerEntryDetailPage = () => {
                             }
                             return sectionFields.map((field) => {
                               const fieldId = field.id || field.name || field.field_id;
-                              const value = entryData[fieldId];
+                              const value = effectiveEntryData[fieldId];
                               const baseField = { ...field, type: field.type || field.field_type, field_label: field.label || field.field_label || field.name, field_name: field.name || field.id };
                               return (
                                 <CustomFieldRenderer
                                   key={fieldId}
                                   field={getFieldWithStageFilteredStatusOptions(baseField, statusesForEditModeStageFiltered)}
                                   value={value}
+                                  otherTextValue={effectiveEntryData[`${fieldId}_other`]}
                                   onChange={handleFieldChange}
                                   error={fieldErrors[fieldId]}
-                                  readOnly={false}
+                                  readOnly={isFieldDisabledByCondition(field, effectiveEntryData)}
                                 />
                               );
                             });
@@ -1850,7 +1911,7 @@ const TrackerEntryDetailPage = () => {
                           {sections.map((section, sectionIndex) => {
                             if (sectionIndex === activeStageSectionIndex) return null;
                             const sectionKey = section.id ?? section.title ?? section.label ?? `section-${sectionIndex}`;
-                            const sectionFields = getVisibleSectionFields(sectionKey, entryData);
+                            const sectionFields = getVisibleSectionFields(sectionKey, effectiveEntryData);
                             if (sectionFields.length === 0) return null;
                             const stageName = stageMapping[sectionIndex]?.stage ?? stageMapping[sectionIndex]?.name ?? section.label ?? sectionKey;
                             return (
@@ -1863,7 +1924,7 @@ const TrackerEntryDetailPage = () => {
                                   <div className="px-4 pb-4 pt-1 space-y-3">
                                     {sectionFields.map((field) => {
                                       const fieldId = field.id || field.name || field.field_id;
-                                      const value = entryData[fieldId];
+                                      const value = effectiveEntryData[fieldId];
                                       const stageForSection = stageMapping[sectionIndex];
                                       const statusesForSectionStage = (stageForSection?.statuses ?? stageForSection?.status_list ?? []).filter(Boolean);
                                       const baseField = { ...field, type: field.type || field.field_type, field_label: field.label || field.field_label || field.name, field_name: field.name || field.id };
@@ -1872,9 +1933,10 @@ const TrackerEntryDetailPage = () => {
                                           key={fieldId}
                                           field={getFieldWithStageFilteredStatusOptions(baseField, statusesForSectionStage.length ? statusesForSectionStage : statusesForEditModeStage)}
                                           value={value}
+                                          otherTextValue={effectiveEntryData[`${fieldId}_other`]}
                                           onChange={handleFieldChange}
                                           error={fieldErrors[fieldId]}
-                                          readOnly={false}
+                                          readOnly={isFieldDisabledByCondition(field, effectiveEntryData)}
                                         />
                                       );
                                     })}
@@ -1899,16 +1961,17 @@ const TrackerEntryDetailPage = () => {
                       <CardContent className="space-y-4">
                         {fieldsWithoutSection.map((field) => {
                           const fieldId = field.id || field.name || field.field_id;
-                          const value = entryData[fieldId];
+                          const value = effectiveEntryData[fieldId];
                           const baseField = { ...field, type: field.type || field.field_type, field_label: field.label || field.field_label || field.name, field_name: field.name || field.id };
                           return (
                             <CustomFieldRenderer
                               key={fieldId}
                               field={getFieldWithStageFilteredStatusOptions(baseField, statusesForEditModeStage)}
                               value={value}
+                              otherTextValue={effectiveEntryData[`${fieldId}_other`]}
                               onChange={handleFieldChange}
                               error={fieldErrors[fieldId]}
-                              readOnly={false}
+                              readOnly={isFieldDisabledByCondition(field, effectiveEntryData)}
                             />
                           );
                         })}
@@ -1920,7 +1983,7 @@ const TrackerEntryDetailPage = () => {
                   {sections.length > 0 && (
                     sections.map((section, sectionIndex) => {
                       const sectionKey = section.id ?? section.title ?? section.label ?? `section-${sectionIndex}`;
-                      const sectionFields = getVisibleSectionFields(sectionKey, entryData);
+                      const sectionFields = getVisibleSectionFields(sectionKey, effectiveEntryData);
                       if (sectionFields.length === 0) return null;
 
                       return (
@@ -1931,7 +1994,7 @@ const TrackerEntryDetailPage = () => {
                           <CardContent className="space-y-4">
                             {sectionFields.map((field) => {
                               const fieldId = field.id || field.name || field.field_id;
-                              const value = entryData[fieldId];
+                              const value = effectiveEntryData[fieldId];
                               const stageForSection = stageMapping[sectionIndex];
                               const statusesForSectionStage = (stageForSection?.statuses ?? stageForSection?.status_list ?? []).filter(Boolean);
                               const baseField = { ...field, type: field.type || field.field_type, field_label: field.label || field.field_label || field.name, field_name: field.name || field.id };
@@ -1940,9 +2003,10 @@ const TrackerEntryDetailPage = () => {
                                   key={fieldId}
                                   field={getFieldWithStageFilteredStatusOptions(baseField, statusesForSectionStage.length ? statusesForSectionStage : statusesForEditModeStage)}
                                   value={value}
+                                  otherTextValue={effectiveEntryData[`${fieldId}_other`]}
                                   onChange={handleFieldChange}
                                   error={fieldErrors[fieldId]}
-                                  readOnly={false}
+                                  readOnly={isFieldDisabledByCondition(field, effectiveEntryData)}
                                 />
                               );
                             })}
@@ -1962,16 +2026,17 @@ const TrackerEntryDetailPage = () => {
                         {trackerFields.length > 0 ? (
                           trackerFields.map((field) => {
                             const fieldId = field.id || field.name || field.field_id;
-                            const value = entryData[fieldId];
+                            const value = effectiveEntryData[fieldId];
                             const baseField = { ...field, type: field.type || field.field_type, field_label: field.label || field.field_label || field.name, field_name: field.name || field.id };
                             return (
                               <CustomFieldRenderer
                                 key={fieldId}
                                 field={getFieldWithStageFilteredStatusOptions(baseField, statusesForEditModeStage)}
                                 value={value}
+                                otherTextValue={effectiveEntryData[`${fieldId}_other`]}
                                 onChange={handleFieldChange}
                                 error={fieldErrors[fieldId]}
-                                readOnly={false}
+                                readOnly={isFieldDisabledByCondition(field, effectiveEntryData)}
                               />
                             );
                           })

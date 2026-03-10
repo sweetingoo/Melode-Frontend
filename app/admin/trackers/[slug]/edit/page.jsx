@@ -1738,7 +1738,7 @@ const TrackerEditPage = () => {
                                     setEditingField((prev) => ({
                                       ...prev,
                                       conditional_visibility: value && value !== "__none__"
-                                        ? { depends_on_field: value, show_when: null, value: null }
+                                        ? { depends_on_field: value, show_when: null, value: null, action: prev.conditional_visibility?.action || "hide" }
                                         : null,
                                     }))
                                   }
@@ -1871,6 +1871,24 @@ const TrackerEditPage = () => {
                                         )}
                                       </div>
                                     )}
+                                    <div>
+                                      <Label className="text-xs">When condition is not met</Label>
+                                      <Select
+                                        value={editingField.conditional_visibility?.action || "hide"}
+                                        onValueChange={(v) =>
+                                          setEditingField((prev) => ({
+                                            ...prev,
+                                            conditional_visibility: { ...(prev.conditional_visibility || {}), action: v || "hide" },
+                                          }))
+                                        }
+                                      >
+                                        <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="hide">Hide field</SelectItem>
+                                          <SelectItem value="disable">Disable field</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
                                   </>
                                 );
                               })()}
@@ -1921,7 +1939,7 @@ const TrackerEditPage = () => {
 
                         {/* Boolean display: checkbox or Yes/No radios */}
                         {(editingField.type === "boolean" || editingField.type === "checkbox") && (
-                          <div className="space-y-1">
+                          <div className="space-y-2">
                             <Label className="text-xs">Display as</Label>
                             <Select
                               value={editingField.field_options?.boolean_display || "checkbox"}
@@ -1939,6 +1957,24 @@ const TrackerEditPage = () => {
                               </SelectContent>
                             </Select>
                             <p className="text-xs text-muted-foreground">Use Yes/No radios for explicit true/false choice.</p>
+                            <Label className="text-xs">Checkbox style</Label>
+                            <Select
+                              value={editingField.field_options?.checkbox_display_style || editingField.field_options?.display_style || "default"}
+                              onValueChange={(v) =>
+                                setEditingField((prev) => ({
+                                  ...prev,
+                                  field_options: { ...(prev.field_options || {}), checkbox_display_style: v },
+                                }))
+                              }
+                            >
+                              <SelectTrigger className="h-8 w-40"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="default">Default</SelectItem>
+                                <SelectItem value="warning">Warning (amber box)</SelectItem>
+                                <SelectItem value="alert">Alert (yellow left border)</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <p className="text-xs text-muted-foreground">Use Warning or Alert for confirmations (e.g. &quot;Mark as urgent&quot;).</p>
                           </div>
                         )}
 
@@ -2749,7 +2785,7 @@ const TrackerEditPage = () => {
 
                     {/* Boolean display: checkbox or Yes/No radios */}
                     {(newField.type === "boolean" || newField.type === "checkbox") && (
-                      <div className="space-y-1">
+                      <div className="space-y-2">
                         <Label className="text-xs">Display as</Label>
                         <Select
                           value={newField.field_options?.boolean_display || "checkbox"}
@@ -2767,6 +2803,24 @@ const TrackerEditPage = () => {
                           </SelectContent>
                         </Select>
                         <p className="text-xs text-muted-foreground">Use Yes/No radios for explicit true/false choice.</p>
+                        <Label className="text-xs">Checkbox style</Label>
+                        <Select
+                          value={newField.field_options?.checkbox_display_style || newField.field_options?.display_style || "default"}
+                          onValueChange={(v) =>
+                            setNewField((prev) => ({
+                              ...prev,
+                              field_options: { ...(prev.field_options || {}), checkbox_display_style: v },
+                            }))
+                          }
+                        >
+                          <SelectTrigger className="h-8 w-40"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="default">Default</SelectItem>
+                            <SelectItem value="warning">Warning (amber box)</SelectItem>
+                            <SelectItem value="alert">Alert (yellow left border)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">Use Warning or Alert for confirmations (e.g. &quot;Mark as urgent&quot;).</p>
                       </div>
                     )}
 
@@ -3627,132 +3681,115 @@ const TrackerEditPage = () => {
                                 </Select>
                               </div>
                               )}
-                              {/* Group conditional visibility: show whole group when another field meets a condition */}
+                              {/* Group conditional visibility: show when any condition matches (OR) */}
                               <div className="space-y-2 pt-2 border-t border-muted">
                                 <Label className="text-xs font-medium">Show group when (optional)</Label>
-                                <div className="space-y-2">
-                                  <SearchableFieldSelect
-                                    fields={sectionFields}
-                                    value={group.conditional_visibility?.depends_on_field || "__none__"}
-                                    onValueChange={(value) => {
-                                      const next = [...(editingSection.groups || [])];
-                                      next[groupIdx] = {
-                                        ...group,
-                                        conditional_visibility: value && value !== "__none__"
-                                          ? { depends_on_field: value, show_when: null, value: null }
-                                          : null,
-                                      };
-                                      setEditingSection((prev) => ({ ...prev, groups: next }));
-                                    }}
-                                    placeholder="Select field..."
-                                    noneOption
-                                    noneLabel="None (always show)"
-                                    excludeTypes={["text_block", "image_block", "line_break", "page_break", "download_link"]}
-                                    compact
-                                    className="h-8 text-xs w-44"
-                                  />
-                                  {group.conditional_visibility?.depends_on_field && (() => {
-                                    const depFieldId = group.conditional_visibility?.depends_on_field;
-                                    const depField = sectionFields.find((f) => String(f.id || f.name || f.field_id) === String(depFieldId));
-                                    const depType = (depField?.type || depField?.field_type || "").toLowerCase();
-                                    const needsValue = ["equals", "not_equals", "contains"].includes(group.conditional_visibility?.show_when || "");
-                                    const isBoolean = depType === "boolean" || depType === "checkbox";
-                                    const isSelectLike = ["select", "dropdown", "radio", "radio_group"].includes(depType);
-                                    const isMultiselect = depType === "multiselect";
-                                    const isNumber = depType === "number" || depType === "integer";
-                                    const depOptions = depField ? (depField.field_options?.options || depField.options || []) : [];
-                                    const opts = Array.isArray(depOptions) ? depOptions : [];
-                                    return (
-                                      <>
-                                        <Select
-                                          value={group.conditional_visibility?.show_when || ""}
-                                          onValueChange={(value) => {
-                                            const next = [...(editingSection.groups || [])];
-                                            next[groupIdx] = {
-                                              ...group,
-                                              conditional_visibility: { ...(group.conditional_visibility || {}), show_when: value || null, value: ["equals", "not_equals", "contains"].includes(value) ? (group.conditional_visibility?.value ?? null) : null },
-                                            };
-                                            setEditingSection((prev) => ({ ...prev, groups: next }));
-                                          }}
-                                        >
-                                          <SelectTrigger className="h-8 text-xs">
-                                            <SelectValue placeholder="Condition" />
-                                          </SelectTrigger>
-                                          <SelectContent>
-                                            <SelectItem value="equals">Equals</SelectItem>
-                                            <SelectItem value="not_equals">Not equals</SelectItem>
-                                            <SelectItem value="contains">Contains</SelectItem>
-                                            <SelectItem value="is_empty">Is empty</SelectItem>
-                                            <SelectItem value="is_not_empty">Is not empty</SelectItem>
-                                          </SelectContent>
-                                        </Select>
-                                        {needsValue && (
-                                          isBoolean ? (
-                                            <Select
-                                              value={group.conditional_visibility?.value ?? ""}
-                                              onValueChange={(v) => {
-                                                const next = [...(editingSection.groups || [])];
-                                                next[groupIdx] = { ...group, conditional_visibility: { ...(group.conditional_visibility || {}), value: v || null } };
-                                                setEditingSection((prev) => ({ ...prev, groups: next }));
-                                              }}
-                                            >
-                                              <SelectTrigger className="h-8 text-xs">
-                                                <SelectValue placeholder="Yes/No" />
-                                              </SelectTrigger>
-                                              <SelectContent>
-                                                <SelectItem value="yes">Yes</SelectItem>
-                                                <SelectItem value="no">No</SelectItem>
-                                              </SelectContent>
-                                            </Select>
-                                          ) : isSelectLike || isMultiselect ? (
-                                            <Select
-                                              value={group.conditional_visibility?.value ?? ""}
-                                              onValueChange={(v) => {
-                                                const next = [...(editingSection.groups || [])];
-                                                next[groupIdx] = { ...group, conditional_visibility: { ...(group.conditional_visibility || {}), value: v || null } };
-                                                setEditingSection((prev) => ({ ...prev, groups: next }));
-                                              }}
-                                            >
-                                              <SelectTrigger className="h-8 text-xs">
-                                                <SelectValue placeholder="Option" />
-                                              </SelectTrigger>
-                                              <SelectContent>
-                                                {opts.map((opt, i) => {
-                                                  const val = typeof opt === "object" && opt !== null ? (opt.value ?? opt.label ?? "") : opt;
-                                                  const label = typeof opt === "object" && opt !== null ? (opt.label ?? opt.value ?? String(val)) : String(opt);
-                                                  return <SelectItem key={i} value={String(val)}>{label}</SelectItem>;
-                                                })}
-                                              </SelectContent>
-                                            </Select>
-                                          ) : isNumber ? (
-                                            <Input
-                                              type="number"
-                                              className="h-8 text-xs w-32"
-                                              placeholder="Number"
-                                              value={group.conditional_visibility?.value ?? ""}
-                                              onChange={(e) => {
-                                                const next = [...(editingSection.groups || [])];
-                                                next[groupIdx] = { ...group, conditional_visibility: { ...(group.conditional_visibility || {}), value: e.target.value !== "" ? e.target.value : null } };
-                                                setEditingSection((prev) => ({ ...prev, groups: next }));
-                                              }}
-                                            />
-                                          ) : (
-                                            <Input
-                                              className="h-8 text-xs w-32"
-                                              placeholder="Value"
-                                              value={group.conditional_visibility?.value ?? ""}
-                                              onChange={(e) => {
-                                                const next = [...(editingSection.groups || [])];
-                                                next[groupIdx] = { ...group, conditional_visibility: { ...(group.conditional_visibility || {}), value: e.target.value || null } };
-                                                setEditingSection((prev) => ({ ...prev, groups: next }));
-                                              }}
-                                            />
-                                          )
-                                        )}
-                                      </>
-                                    );
-                                  })()}
-                                </div>
+                                <p className="text-xs text-muted-foreground">Show when any condition matches (OR).</p>
+                                {(() => {
+                                  const cv = group.conditional_visibility;
+                                  const conditions = Array.isArray(cv?.conditions)
+                                    ? cv.conditions
+                                    : cv?.depends_on_field
+                                      ? [{ depends_on_field: cv.depends_on_field, show_when: cv.show_when ?? null, value: cv.value ?? null }]
+                                      : [];
+                                  const setConditions = (newList) => {
+                                    const next = [...(editingSection.groups || [])];
+                                    next[groupIdx] = {
+                                      ...group,
+                                      conditional_visibility: newList.length === 0 ? undefined : { conditions: newList },
+                                    };
+                                    setEditingSection((prev) => ({ ...prev, groups: next }));
+                                  };
+                                  const updateCondition = (cIdx, upd) => {
+                                    const newList = conditions.map((c, i) => (i === cIdx ? { ...c, ...upd } : c));
+                                    setConditions(newList);
+                                  };
+                                  const removeCondition = (cIdx) => {
+                                    setConditions(conditions.filter((_, i) => i !== cIdx));
+                                  };
+                                  const addCondition = () => {
+                                    setConditions([...conditions, { depends_on_field: null, show_when: null, value: null }]);
+                                  };
+                                  return (
+                                    <div className="space-y-2">
+                                      {conditions.length === 0 ? (
+                                        <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={addCondition}>
+                                          <Plus className="h-3 w-3 mr-1" /> Add condition
+                                        </Button>
+                                      ) : (
+                                        conditions.map((cond, cIdx) => {
+                                          const depField = sectionFields.find((f) => String(f.id || f.name || f.field_id) === cond.depends_on_field);
+                                          const depType = (depField?.type || depField?.field_type || "").toLowerCase();
+                                          const needsValue = ["equals", "not_equals", "contains"].includes(cond.show_when || "");
+                                          const isBoolean = depType === "boolean" || depType === "checkbox";
+                                          const isSelectLike = ["select", "dropdown", "radio", "radio_group"].includes(depType);
+                                          const isMultiselect = depType === "multiselect";
+                                          const isNumber = depType === "number" || depType === "integer";
+                                          const depOptions = depField ? (depField.field_options?.options || depField.options || []) : [];
+                                          const opts = Array.isArray(depOptions) ? depOptions : [];
+                                          return (
+                                            <div key={cIdx} className="flex flex-wrap items-center gap-2 rounded border p-2 bg-muted/30">
+                                              <SearchableFieldSelect
+                                                fields={sectionFields}
+                                                value={cond.depends_on_field || "__none__"}
+                                                onValueChange={(v) => updateCondition(cIdx, { depends_on_field: v && v !== "__none__" ? v : null, show_when: null, value: null })}
+                                                placeholder="Select field"
+                                                noneOption
+                                                noneLabel="Select field"
+                                                excludeTypes={["text_block", "image_block", "line_break", "page_break", "download_link"]}
+                                                compact
+                                                className="h-8 text-xs w-44"
+                                              />
+                                              {cond.depends_on_field && (
+                                                <>
+                                                  <Select value={cond.show_when || ""} onValueChange={(v) => updateCondition(cIdx, { show_when: v || null, value: needsValue ? (cond.value ?? null) : null })}>
+                                                    <SelectTrigger className="h-8 text-xs w-24"><SelectValue /></SelectTrigger>
+                                                    <SelectContent>
+                                                      <SelectItem value="equals">Equals</SelectItem>
+                                                      <SelectItem value="not_equals">Not equals</SelectItem>
+                                                      <SelectItem value="contains">Contains</SelectItem>
+                                                      <SelectItem value="is_empty">Is empty</SelectItem>
+                                                      <SelectItem value="is_not_empty">Not empty</SelectItem>
+                                                    </SelectContent>
+                                                  </Select>
+                                                  {needsValue && (isBoolean ? (
+                                                    <Select value={cond.value || ""} onValueChange={(v) => updateCondition(cIdx, { value: v || null })}>
+                                                      <SelectTrigger className="h-8 text-xs w-20"><SelectValue /></SelectTrigger>
+                                                      <SelectContent><SelectItem value="yes">Yes</SelectItem><SelectItem value="no">No</SelectItem></SelectContent>
+                                                    </Select>
+                                                  ) : isSelectLike || isMultiselect ? (
+                                                    <Select value={cond.value || ""} onValueChange={(v) => updateCondition(cIdx, { value: v || null })}>
+                                                      <SelectTrigger className="h-8 text-xs w-28"><SelectValue /></SelectTrigger>
+                                                      <SelectContent>
+                                                        {opts.map((opt, i) => {
+                                                          const val = typeof opt === "object" && opt !== null ? (opt.value ?? opt.label ?? "") : opt;
+                                                          const label = typeof opt === "object" && opt !== null ? (opt.label ?? opt.value ?? String(val)) : String(opt);
+                                                          return <SelectItem key={i} value={String(val)}>{label}</SelectItem>;
+                                                        })}
+                                                      </SelectContent>
+                                                    </Select>
+                                                  ) : isNumber ? (
+                                                    <Input type="number" className="h-8 text-xs w-20" value={cond.value ?? ""} onChange={(e) => updateCondition(cIdx, { value: e.target.value || null })} placeholder="Number" />
+                                                  ) : (
+                                                    <Input className="h-8 text-xs w-24" value={cond.value ?? ""} onChange={(e) => updateCondition(cIdx, { value: e.target.value || null })} placeholder="Value" />
+                                                  ))}
+                                                </>
+                                              )}
+                                              <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0 text-destructive" onClick={() => removeCondition(cIdx)} title="Remove condition">
+                                                <Trash2 className="h-3 w-3" />
+                                              </Button>
+                                            </div>
+                                          );
+                                        })
+                                      )}
+                                      {conditions.length > 0 && (
+                                        <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={addCondition}>
+                                          <Plus className="h-3 w-3 mr-1" /> Add condition (OR)
+                                        </Button>
+                                      )}
+                                    </div>
+                                  );
+                                })()}
                               </div>
                             </div>
                           ))}

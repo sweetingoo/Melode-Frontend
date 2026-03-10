@@ -557,6 +557,89 @@ const addLogoToPdfLib = async (pdfDoc, pageWidth, pageHeight, margin = 72) => {
 };
 
 /**
+ * Convert CSS color string to rgb/rgba so html2canvas can parse it.
+ * Browsers may return lab()/oklch() from getComputedStyle; html2canvas does not support those.
+ */
+const colorToRgbString = (cssColor) => {
+  if (!cssColor || cssColor === "transparent") return null;
+  const t = cssColor.trim();
+  if (/^rgba?\s*\(/i.test(t) || /^#[0-9a-fA-F]{3,8}$/.test(t)) return t;
+  if (/^hsla?\s*\(/i.test(t)) return t;
+  const labMatch = t.match(/^lab\s*\(\s*([\d.]+%?)\s*[\s,]\s*([\d.-]+)\s*[\s,]\s*([\d.-]+)\s*(?:\s*\/\s*([\d.]+))?\s*\)$/);
+  if (labMatch) {
+    let L = parseFloat(labMatch[1]);
+    const a = parseFloat(labMatch[2]);
+    const b = parseFloat(labMatch[3]);
+    const alpha = labMatch[4] != null ? parseFloat(labMatch[4]) : 1;
+    if (String(labMatch[1]).endsWith("%")) L = (L / 100) * 100;
+    else if (L <= 1) L = L * 100;
+    L = Math.max(0, Math.min(100, L));
+    const y = (L + 16) / 116;
+    const x = a / 500 + y;
+    const z = y - b / 200;
+    const toLinear = (t) => (t > 0.20689655 ? t * t * t : (t - 16 / 116) / 7.787);
+    const xX = 0.95047 * toLinear(x);
+    const yY = 1.0 * toLinear(y);
+    const zZ = 1.08883 * toLinear(z);
+    let r = xX * 3.2406 + yY * -1.5372 + zZ * -0.4986;
+    let g = xX * -0.9689 + yY * 1.8758 + zZ * 0.0415;
+    let b_ = xX * 0.0557 + yY * -0.204 + zZ * 1.057;
+    const toSrgb = (c) => (c > 0.0031308 ? 1.055 * Math.pow(c, 1 / 2.4) - 0.055 : 12.92 * c);
+    r = Math.round(Math.max(0, Math.min(1, toSrgb(r))) * 255);
+    g = Math.round(Math.max(0, Math.min(1, toSrgb(g))) * 255);
+    b_ = Math.round(Math.max(0, Math.min(1, toSrgb(b_))) * 255);
+    return alpha >= 1 ? `rgb(${r},${g},${b_})` : `rgba(${r},${g},${b_},${alpha})`;
+  }
+  if (/\b(lab|oklch|lch|oklab)\s*\(/i.test(t)) return "rgb(128,128,128)";
+  return t;
+};
+
+/**
+ * Copy computed color-related styles from original to clone, normalizing to rgb()
+ * so html2canvas never sees lab() / oklch() (avoids "unsupported color function 'lab'").
+ */
+const copyComputedColorsToClone = (original, clone) => {
+  if (!original || !clone || original.nodeType !== Node.ELEMENT_NODE || clone.nodeType !== Node.ELEMENT_NODE) return;
+  const el = /** @type {HTMLElement} */ (original);
+  const cl = /** @type {HTMLElement} */ (clone);
+  const s = window.getComputedStyle(el);
+  const colorProps = ["color", "backgroundColor", "borderColor", "borderTopColor", "borderRightColor", "borderBottomColor", "borderLeftColor", "outlineColor", "textDecorationColor", "fill", "stroke"];
+  colorProps.forEach((prop) => {
+    const val = s.getPropertyValue(prop);
+    if (val && val !== "rgba(0, 0, 0, 0)" && val !== "transparent") {
+      const rgb = colorToRgbString(val);
+      if (rgb) cl.style.setProperty(prop, rgb);
+    }
+  });
+  const origChildren = el.children;
+  const cloneChildren = cl.children;
+  for (let i = 0; i < origChildren.length && i < cloneChildren.length; i++) {
+    copyComputedColorsToClone(origChildren[i], cloneChildren[i]);
+  }
+};
+
+/**
+ * Force all elements in subtree to have rgb-only color props.
+ * Uses win.getComputedStyle so it works inside html2canvas's cloned document (iframe).
+ */
+const forceRgbOnClone = (clone, win = typeof window !== "undefined" ? window : null) => {
+  if (!clone || clone.nodeType !== Node.ELEMENT_NODE || !win) return;
+  const el = /** @type {HTMLElement} */ (clone);
+  const s = win.getComputedStyle(el);
+  const colorProps = ["color", "backgroundColor", "borderColor", "borderTopColor", "borderRightColor", "borderBottomColor", "borderLeftColor", "outlineColor", "textDecorationColor", "fill", "stroke"];
+  colorProps.forEach((prop) => {
+    const val = s.getPropertyValue(prop);
+    if (val && val !== "rgba(0, 0, 0, 0)" && val !== "transparent") {
+      const rgb = colorToRgbString(val);
+      if (rgb) el.style.setProperty(prop, rgb);
+    }
+  });
+  for (let i = 0; i < el.children.length; i++) {
+    forceRgbOnClone(el.children[i], win);
+  }
+};
+
+/**
  * Generate PDF from form submission
  * @param {Object} options - PDF generation options
  * @param {HTMLElement} options.element - The DOM element to convert to PDF
@@ -595,6 +678,11 @@ export const generateFormSubmissionPDF = async ({
     clonedElement.style.color = "#000000";
     tempContainer.appendChild(clonedElement);
 
+    // Copy computed colors from original to clone (with lab→rgb conversion) so html2canvas only sees rgb()
+    copyComputedColorsToClone(element, clonedElement);
+    // Safety: force any remaining lab() on the clone to rgb (e.g. from stylesheet cascade on clone)
+    forceRgbOnClone(clonedElement);
+
     // Wait for images to load
     const images = clonedElement.querySelectorAll("img");
     await Promise.all(
@@ -608,7 +696,11 @@ export const generateFormSubmissionPDF = async ({
       })
     );
 
-    // Convert to canvas
+    // html2canvas renders a CLONED document (e.g. in an iframe). We must fix lab() colors
+    // inside onclone on that cloned document/element, not the main document.
+    const replaceUnsupportedColors = (cssText) =>
+      (cssText || "").replace(/\b(lab|oklch|lch|oklab)\s*\([^)]*\)/g, "rgb(120,120,120)");
+
     const canvas = await html2canvas(clonedElement, {
       scale: 2,
       useCORS: true,
@@ -616,6 +708,17 @@ export const generateFormSubmissionPDF = async ({
       backgroundColor: "#ffffff",
       width: clonedElement.scrollWidth,
       height: clonedElement.scrollHeight,
+      onclone: (clonedDoc, clonedEl) => {
+        if (!clonedDoc || !clonedEl) return;
+        const win = clonedDoc.defaultView || (typeof window !== "undefined" ? window : null);
+        const styleTags = clonedDoc.querySelectorAll ? clonedDoc.querySelectorAll("style") : [];
+        styleTags.forEach((style) => {
+          const raw = style.textContent || "";
+          const fixed = replaceUnsupportedColors(raw);
+          if (fixed !== raw) style.textContent = fixed;
+        });
+        if (win) forceRgbOnClone(clonedEl, win);
+      },
     });
 
     // Calculate PDF dimensions

@@ -601,16 +601,18 @@ const CustomFieldRenderer = ({
         const isOtherSelectedMulti = !!selectedOtherOption;
         return (
           <div className="space-y-2 w-full">
-            <div className="grid w-full grid-cols-1 sm:grid-cols-2 lg:grid-cols-[repeat(3,minmax(14rem,1fr))] gap-x-6 gap-y-4">
+            <div className="grid w-full grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4 min-w-0">
               {multiOptionsToShow.map((option, index) => {
                 const optionValue = option.value ?? option;
-                const isSelected = selectedValues.includes(optionValue);
+                const optionLabel = typeof option === 'object' && option !== null ? (option.label ?? option.value ?? '') : (option ?? '');
+                const isSelected = selectedValues.some((v) => String(v) === String(optionValue) || String(v) === String(optionLabel));
                 const isNoneOption = String(optionValue) === String(multiNoneValue);
                 return (
-                  <div key={index} className="flex min-w-0 items-center gap-2 py-1.5 pr-2">
+                  <div key={index} className="flex min-w-0 items-start gap-2 py-1.5 pr-2">
                     <Checkbox
                       id={`${fieldId}-${index}`}
                       checked={isSelected}
+                      className="shrink-0 mt-0.5"
                       onCheckedChange={(checked) => {
                         if (checked) {
                           if (isNoneOption) {
@@ -619,11 +621,10 @@ const CustomFieldRenderer = ({
                             handleChange([...selectedValues.filter(v => String(v) !== String(multiNoneValue)), optionValue]);
                           }
                         } else {
-                          const next = selectedValues.filter(v => v !== optionValue);
+                          const next = selectedValues.filter((v) => String(v) !== String(optionValue) && String(v) !== String(optionLabel));
                           setMultiValue(next.length ? next : [multiNoneValue]);
                         }
                       }}
-                      className="shrink-0"
                     />
                     <Label htmlFor={`${fieldId}-${index}`} className="text-sm font-normal cursor-pointer min-w-0 flex-1 break-words">
                       {option.label || option}

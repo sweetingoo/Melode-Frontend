@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -24,7 +24,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Loader2, ArrowLeft, FileText, CheckCircle, Download, Check, X, Mail, Phone, Link as LinkIcon, Calendar, Clock, Eye, File, AlertCircle, CheckCircle2, XCircle, Link2, Tag, Edit, Save, FileDown, User } from "lucide-react";
+import { Loader2, ArrowLeft, FileText, CheckCircle, Download, Check, X, Mail, Phone, Link as LinkIcon, Calendar, Clock, Eye, File, AlertCircle, CheckCircle2, XCircle, Link2, Tag, Edit, Save, FileDown, User, Printer } from "lucide-react";
 import { useFormSubmission, useForm, useUpdateFormSubmission } from "@/hooks/useForms";
 import { useUsers } from "@/hooks/useUsers";
 import { useDownloadFile } from "@/hooks/useProfile";
@@ -36,6 +36,7 @@ import CustomFieldRenderer from "@/components/CustomFieldRenderer";
 import CommentThread from "@/components/CommentThread";
 import { generateFormSubmissionPDFFromData } from "@/utils/pdf-generator";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 const FormSubmissionDetailPage = () => {
   const params = useParams();
@@ -177,19 +178,11 @@ const FormSubmissionDetailPage = () => {
   // Smart status color mapping - handles both default and custom statuses
   const getStatusColor = (status) => {
     if (!status) return "bg-muted text-muted-foreground";
-    
     const statusLower = status.toLowerCase();
-    
-    // Default statuses
-    if (statusLower === "submitted") {
-      return "bg-blue-500/10 text-blue-600 border-blue-500/20";
-    }
-    if (statusLower === "reviewed" || statusLower === "approved") {
-      return "bg-green-500/10 text-green-600 border-green-500/20";
-    }
-    if (statusLower === "rejected" || statusLower === "closed") {
-      return "bg-red-500/10 text-red-600 border-red-500/20";
-    }
+    // NHS-style: blue = submitted, green = approved/success, red = rejected/alert
+    if (statusLower === "submitted") return "bg-[#005eb8]/10 text-[#005eb8] border border-[#005eb8]/30";
+    if (statusLower === "reviewed" || statusLower === "approved") return "bg-[#007f3b]/10 text-[#007f3b] border border-[#007f3b]/30";
+    if (statusLower === "rejected" || statusLower === "closed") return "bg-[#da291c]/10 text-[#da291c] border border-[#da291c]/30";
     if (statusLower === "draft") {
       return "bg-gray-500/10 text-gray-600 border-gray-500/20";
     }
@@ -284,6 +277,136 @@ const FormSubmissionDetailPage = () => {
   // Use formatted_data for display, fall back to submission_data if not available
   const displayData = submission.formatted_data || submission.submission_data || {};
   const submissionData = submission.submission_data || {}; // Keep raw data for editing
+  // Use raw submission_data for conditional visibility so keys/values match submit form behaviour
+  // Use raw submission_data for visibility so conditions match submit-page behaviour (same keys/values).
+  const dataForVisibility = submission.submission_data || {};
+
+  // Visibility helpers (same logic as submit page) so we show/hide by submission data
+  const normalizeCond = (v) => {
+    if (v === true || v === "true" || v === "True" || v === "TRUE") return true;
+    if (v === false || v === "false" || v === "False" || v === "FALSE") return false;
+    if (v === "yes" || v === "Yes" || v === "YES") return true;
+    if (v === "no" || v === "No" || v === "NO") return false;
+    return v;
+  };
+  const isConditionMet = (cv, data) => {
+    if (!cv?.depends_on_field) return true;
+    const { depends_on_field, show_when, value: expectedValue } = cv;
+    const dependentValue = data?.[depends_on_field];
+    if (show_when === "equals") return normalizeCond(dependentValue) === normalizeCond(expectedValue);
+    if (show_when === "not_equals") return normalizeCond(dependentValue) !== normalizeCond(expectedValue);
+    if (show_when === "contains") return Array.isArray(dependentValue) ? dependentValue.includes(expectedValue) : String(dependentValue || "").includes(String(expectedValue || ""));
+    if (show_when === "is_empty") return !dependentValue || dependentValue === "" || dependentValue === false;
+    if (show_when === "is_not_empty") return dependentValue != null && dependentValue !== "" && dependentValue !== false;
+    return true;
+  };
+  const checkFieldVisibility = (field, data) => {
+    if (!field?.conditional_visibility?.depends_on_field) return true;
+    const met = isConditionMet(field.conditional_visibility, data);
+    const action = (field.conditional_visibility?.action || "hide").toLowerCase();
+    if (action === "disable") return true;
+    return met;
+  };
+  const isGroupConditionMet = (condition, data) => {
+    if (!condition?.depends_on_field) return false;
+    return isConditionMet(condition, data);
+  };
+  const checkGroupVisibility = (group, data) => {
+    const cv = group?.conditional_visibility;
+    if (!cv) return true;
+    const conditions = Array.isArray(cv.conditions) ? cv.conditions : null;
+    if (conditions?.length) return conditions.some((c) => isGroupConditionMet(c, data));
+    if (!cv.depends_on_field) return true;
+    return isGroupConditionMet(cv, data);
+  };
+  const checkRowVisibility = (row, data) => {
+    if (!row?.conditional_visibility?.depends_on_field) return true;
+    return isConditionMet(row.conditional_visibility, data);
+  };
+  const isFieldInHiddenGroup = (fieldId, data) => {
+    const formGroups = form?.form_fields?.groups || [];
+    const fieldIdStr = fieldId != null ? String(fieldId) : "";
+    const idInList = (list) => list && list.some((id) => String(id) === fieldIdStr);
+    for (const group of formGroups) {
+      if (!group?.conditional_visibility?.depends_on_field) continue;
+      const fieldIds = group.fields || [];
+      if (!idInList(fieldIds)) continue;
+      if (!checkGroupVisibility(group, data)) return true;
+    }
+    const sections = form?.form_fields?.sections || [];
+    for (const section of sections) {
+      for (const group of section?.groups || []) {
+        if (!group?.conditional_visibility?.depends_on_field) continue;
+        const fieldIds = group.fields || [];
+        if (!idInList(fieldIds)) continue;
+        if (!checkGroupVisibility(group, data)) return true;
+      }
+    }
+    return false;
+  };
+
+  // Build form layout for read-only view (same structure as submit page, all fields in one "page")
+  const fullPageFields = useMemo(() => {
+    const all = form?.form_fields?.fields || [];
+    return all.filter((f) => (f.type || f.field_type || "")?.toLowerCase() !== "page_break");
+  }, [form?.form_fields?.fields]);
+
+  const fullLayout = useMemo(() => {
+    const formGroups = form?.form_fields?.groups || [];
+    const formSections = form?.form_fields?.sections || [];
+    const hasFormGroups = formGroups.length > 0;
+    const hasFormSections = formSections.length > 0 && !hasFormGroups;
+    if (hasFormGroups) {
+      const FORM_GRID_COLS = ["left", "center", "right"];
+      const isGridSlotTable = (slot) => slot && typeof slot === "object" && (slot.layout || "") === "table" && Array.isArray(slot.table_rows);
+      const isGridSlotTabs = (slot) => slot && typeof slot === "object" && (slot.layout || "") === "tabs" && Array.isArray(slot.tabs);
+      const getGridSlotFieldIds = (slot) => {
+        if (Array.isArray(slot)) return slot;
+        if (isGridSlotTable(slot)) return (slot.table_rows || []).flatMap((r) => (r.cells || []).map((c) => c.field_id).filter(Boolean));
+        if (isGridSlotTabs(slot)) return (slot.tabs || []).flatMap((t) => (t.layout === "table" && t.table_rows) ? (t.table_rows || []).flatMap((r) => (r.cells || []).map((c) => c.field_id).filter(Boolean)) : (t.fields || []));
+        return [];
+      };
+      const gridFieldIds = (g) => (g.layout || "") === "grid" && (g.grid_rows || []).length > 0
+        ? (g.grid_rows || []).flatMap((r) => FORM_GRID_COLS.flatMap((col) => getGridSlotFieldIds(r[col])))
+        : (g.layout || "") === "grid" ? (g.fields || []) : [];
+      const tabFieldIds = (g) => (g.layout === "tabs" && g.tabs?.length) ? (g.tabs || []).flatMap((t) => (t.layout === "table" && t.table_rows) ? (t.table_rows || []).flatMap((r) => (r.cells || []).map((c) => c.field_id).filter(Boolean)) : (t.fields || [])) : [];
+      const tableFieldIds = (g) => ((g.layout || "") === "table" && (g.table_rows || []).length > 0) ? (g.table_rows || []).flatMap((r) => (r.cells || []).map((c) => c.field_id).filter(Boolean)) : [];
+      const fieldIdsInGroups = new Set(formGroups.flatMap((g) =>
+        (g.layout === "tabs" && g.tabs?.length) ? tabFieldIds(g) : (g.layout || "") === "table" ? tableFieldIds(g) : (g.layout || "") === "grid" ? gridFieldIds(g) : (g.fields || [])
+      ));
+      const fieldsNotInAnyGroup = fullPageFields.filter((f) => !fieldIdsInGroups.has(f.id || f.field_id || f.name));
+      const hasTableRows = (g) => (g.layout || "") === "table" && Array.isArray(g.table_rows) && g.table_rows.length > 0;
+      const hasGridTable = (g) => (g.layout || "") === "grid" && (g.grid_rows || []).some((r) => FORM_GRID_COLS.some((col) => isGridSlotTable(r[col]) || isGridSlotTabs(r[col])));
+      const groupsWithFields = formGroups
+        .map((g) => {
+          const fieldIds = (g.layout === "tabs" && g.tabs?.length) ? new Set(tabFieldIds(g)) : (g.layout || "") === "table" ? new Set(tableFieldIds(g)) : (g.layout || "") === "grid" ? new Set(gridFieldIds(g)) : new Set(g.fields || []);
+          const groupFields = fullPageFields.filter((f) => fieldIds.has(f.id || f.field_id || f.name));
+          return { group: g, fields: groupFields };
+        })
+        .filter((g) => (g.group.layout === "tabs" && g.group.tabs?.length) || g.fields.length > 0 || hasTableRows(g.group) || hasGridTable(g.group));
+      return { fieldsNotInAnySection: fieldsNotInAnyGroup, sectionsWithContent: [{ sectionLabel: null, ungrouped: fieldsNotInAnyGroup, groupsWithFields }] };
+    }
+    if (hasFormSections) {
+      const fieldIdsInSections = new Set(formSections.flatMap((s) => s.fields || []));
+      const fieldsNotInAnySection = fullPageFields.filter((f) => !fieldIdsInSections.has(f.id || f.field_id || f.name));
+      const groupFieldIds = (g) => ((g.layout || "") === "table" && (g.table_rows || []).length > 0) ? (g.table_rows || []).flatMap((r) => (r.cells || []).map((c) => c.field_id).filter(Boolean)) : (g.fields || []);
+      const sectionsWithContent = formSections.map((section) => {
+        const sectionFieldIds = section.fields || [];
+        const sectionFieldsOnPage = fullPageFields.filter((f) => sectionFieldIds.includes(f.id || f.field_id || f.name));
+        if (sectionFieldsOnPage.length === 0) return null;
+        const fieldIdsInGroups = new Set((section.groups || []).flatMap((g) => groupFieldIds(g)));
+        const ungrouped = sectionFieldsOnPage.filter((f) => !fieldIdsInGroups.has(f.id || f.field_id || f.name));
+        const hasTableRows = (g) => (g.layout || "") === "table" && Array.isArray(g.table_rows) && g.table_rows.length > 0;
+        const groupsWithFields = (section.groups || []).map((g) => ({
+          group: g,
+          fields: sectionFieldsOnPage.filter((f) => groupFieldIds(g).includes(f.id || f.field_id || f.name)),
+        })).filter((g) => g.fields.length > 0 || hasTableRows(g.group));
+        return { sectionLabel: section.title || section.label || section.id || "Section", ungrouped, groupsWithFields };
+      }).filter(Boolean);
+      return { fieldsNotInAnySection, sectionsWithContent };
+    }
+    return null;
+  }, [form?.form_fields?.groups, form?.form_fields?.sections, fullPageFields]);
 
   // Helper function to format field value for display
   const formatFieldValue = (field, value) => {
@@ -774,7 +897,7 @@ const FormSubmissionDetailPage = () => {
     );
   };
 
-  // Handle PDF download
+  // Handle PDF download – use data-based generator (avoids html2canvas lab() color errors with modern CSS)
   const handleDownloadPDF = async () => {
     if (!submission || !form) {
       toast.error("Unable to generate PDF", {
@@ -786,14 +909,12 @@ const FormSubmissionDetailPage = () => {
     setIsGeneratingPDF(true);
     try {
       const filename = `form-submission-${submission.id}-${form.form_title || form.form_name || "submission"}.pdf`.replace(/[^a-z0-9]/gi, "-").toLowerCase();
-      
       await generateFormSubmissionPDFFromData({
         submission,
         form,
         users,
         filename,
       });
-
       toast.success("PDF downloaded successfully");
     } catch (error) {
       console.error("Error generating PDF:", error);
@@ -805,7 +926,29 @@ const FormSubmissionDetailPage = () => {
     }
   };
 
+  const handlePrintFormOnly = () => {
+    window.print();
+  };
+
   return (
+    <>
+      {/* Print: show only the form card (user can "Save as PDF" in print dialog) */}
+      <style dangerouslySetInnerHTML={{ __html: `
+        @media print {
+          body * { visibility: hidden; }
+          .submission-print-form-only,
+          .submission-print-form-only * { visibility: visible; }
+          .submission-print-form-only {
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            box-shadow: none !important;
+            background: #fff !important;
+          }
+        }
+      `}} />
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -832,6 +975,15 @@ const FormSubmissionDetailPage = () => {
           <Badge className={getStatusColor(submission.status)}>
             {submission.status || "N/A"}
           </Badge>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handlePrintFormOnly}
+            title="Print or save as PDF – shows only the form"
+          >
+            <Printer className="h-4 w-4 mr-2" />
+            Print / Save as PDF
+          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -872,90 +1024,334 @@ const FormSubmissionDetailPage = () => {
       <div className="grid gap-6 md:grid-cols-3">
         {/* Main Content */}
         <div className="md:col-span-2 space-y-6">
-          {/* Submission Data */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Submission Data</CardTitle>
+          {/* Submission Data – form-style read-only view (PDF-like, NHS-friendly); only this shows when printing */}
+          <Card className="submission-print-form-only overflow-hidden border border-gray-200 bg-white shadow-sm">
+            <CardHeader className="border-b border-gray-100 bg-gray-50/50 py-4">
+              <CardTitle className="text-xl font-semibold text-[#005eb8]">
+                {form?.form_title || form?.form_name || "Form"}
+              </CardTitle>
+              <p className="text-sm text-muted-foreground mt-1">Submission view – read only</p>
             </CardHeader>
-            <CardContent className="space-y-4">
-              {fields.length > 0 ? (
-                <div className="space-y-4">
+            <CardContent className="p-0">
+              {fullLayout ? (
+                <div className="min-h-[400px] bg-[#f8f9fa]">
+                  <div className="max-w-4xl mx-auto px-6 py-6 space-y-6">
+                    {fullLayout.sectionsWithContent?.map(({ sectionLabel, ungrouped, groupsWithFields }, sectionIdx) => (
+                      <React.Fragment key={sectionIdx}>
+                        {sectionLabel && (
+                          <div className="border-l-4 border-[#005eb8] pl-3 py-1">
+                            <h3 className="text-sm font-semibold text-[#005eb8]">{sectionLabel}</h3>
+                          </div>
+                        )}
+                        {groupsWithFields.map(({ group, fields: groupFields }) => {
+                          if (!checkGroupVisibility(group, dataForVisibility)) return null;
+                          const isTabs = (group.layout || "") === "tabs" && (group.tabs || []).length > 0;
+                          const isGrid = (group.layout || "") === "grid" && (group.grid_rows || []).length > 0;
+                          const isTable = (group.layout || "") === "table" && Array.isArray(group.table_rows) && group.table_rows.length > 0;
+                          const allFormFields = form?.form_fields?.fields || [];
+                          const getFieldById = (id) => allFormFields.find((f) => (f.field_id || f.id || f.name) === id);
+                          const renderTable = (tableCols, tableRows, tableKey) => (
+                            <div key={tableKey} className="overflow-x-auto">
+                              <table className="w-full border-collapse text-sm">
+                                <thead>
+                                  <tr className="border-b border-[#005eb8] bg-[#005eb8]/5">
+                                    {tableCols.map((col) => (
+                                      <th key={col.id} className="text-left font-medium p-3 text-[#005eb8]">{col.label || col.id}</th>
+                                    ))}
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {tableRows.filter((row) => checkRowVisibility(row, dataForVisibility)).map((row, rIdx) => {
+                                    const cells = (row.cells || []).slice(0, tableCols.length);
+                                    while (cells.length < tableCols.length) cells.push({ text: "", field_id: null });
+                                    return (
+                                      <tr key={rIdx} className="border-b border-gray-100 hover:bg-gray-50/50">
+                                        {cells.map((cell, cIdx) => {
+                                          const fieldId = cell.field_id ? String(cell.field_id) : null;
+                                          const field = fieldId ? getFieldById(fieldId) : null;
+                                          const isVisible = !field || (checkFieldVisibility(field, dataForVisibility) && !isFieldInHiddenGroup(fieldId, dataForVisibility));
+                                          if (!isVisible) return <td key={cIdx} className="p-3 align-middle" />;
+                                          const isDisplayOnly = field && ["text_block", "image_block", "youtube_video_embed", "line_break", "page_break", "download_link"].includes((field.type || field.field_type || "").toLowerCase());
+                                          const optionsForField = field?.options || field?.field_options?.options || [];
+                                          const mappedField = field ? { ...field, id: fieldId, field_label: field.label || field.field_label, label: field.label, name: field.name || field.field_name || fieldId, field_description: field.help_text, field_type: field.type || field.field_type, field_options: { ...(field.field_options || {}), options: optionsForField }, ...(optionsForField.length ? { options: optionsForField } : {}) } : null;
+                                          return (
+                                            <td key={cIdx} className="p-3 align-middle">
+                                              <div className="space-y-1">
+                                                {cell.text ? <span className="text-muted-foreground text-xs block">{cell.text}</span> : null}
+                                                {mappedField && (
+                                                  <CustomFieldRenderer field={mappedField} value={isDisplayOnly ? undefined : displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} hideLabel readOnly />
+                                                )}
+                                              </div>
+                                            </td>
+                                          );
+                                        })}
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          );
+                          if (isTabs) {
+                            return (
+                              <section key={group.id || group.label} className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+                                {group.label && (
+                                  <div className="px-5 py-3 border-b border-gray-100">
+                                    <h4 className="font-semibold text-gray-800">{group.label}</h4>
+                                  </div>
+                                )}
+                                <div className="p-5 space-y-6">
+                                  {(group.tabs || []).map((tab) => {
+                                    const tabHasTable = (tab.layout || "") === "table" && Array.isArray(tab.table_rows) && tab.table_rows.length > 0;
+                                    const tabLabel = tab.label || tab.id || "Tab";
+                                    if (tabHasTable) {
+                                      const tableCols = Array.isArray(tab.table_columns) && tab.table_columns.length > 0 ? tab.table_columns : [{ id: "col_1", label: "Column 1" }];
+                                      const tableRows = tab.table_rows || [];
+                                      return (
+                                        <div key={tab.id || tab.label}>
+                                          <h5 className="text-sm font-medium text-[#005eb8] border-l-4 border-[#005eb8] pl-3 mb-3">{tabLabel}</h5>
+                                          {renderTable(tableCols, tableRows, `tab-${tab.id || tab.label}-table`)}
+                                        </div>
+                                      );
+                                    }
+                                    const tabFieldIds = new Set(tab.fields || []);
+                                    const tabFields = groupFields.filter((f) => tabFieldIds.has(f.id || f.field_id || f.name));
+                                    return (
+                                      <div key={tab.id || tab.label}>
+                                        <h5 className="text-sm font-medium text-[#005eb8] border-l-4 border-[#005eb8] pl-3 mb-3">{tabLabel}</h5>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+                                          {tabFields.filter((f) => checkFieldVisibility(f, dataForVisibility) && !isFieldInHiddenGroup(f.id || f.field_id || f.name, dataForVisibility)).map((field) => {
+                                            const fieldId = field.id || field.field_id || field.field_name || field.name;
+                                            const isDisplayOnly = ["text_block", "image_block", "youtube_video_embed", "line_break", "page_break", "download_link"].includes((field.type || field.field_type || "").toLowerCase());
+                                            const optionsForField = field.options || field.field_options?.options || [];
+                                            const mappedField = { ...field, id: fieldId, field_label: field.label || field.field_label, label: field.label, name: field.name || field.field_name || fieldId, field_description: field.help_text, field_type: field.type || field.field_type, field_options: { ...(field.field_options || {}), options: optionsForField }, ...(optionsForField.length ? { options: optionsForField } : {}) };
+                                            return (
+                                              <div key={fieldId} className={cn("py-2", isDisplayOnly && "md:col-span-2")}>
+                                                <CustomFieldRenderer field={mappedField} value={isDisplayOnly ? undefined : displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} readOnly />
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </section>
+                            );
+                          }
+                          if (isTable) {
+                            const tableCols = Array.isArray(group.table_columns) && group.table_columns.length > 0 ? group.table_columns : [{ id: "col_1", label: "Column 1" }];
+                            const tableRows = group.table_rows || [];
+                            return (
+                              <section key={group.id || group.label} className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+                                {group.label && (
+                                  <div className="px-5 py-3 border-b border-gray-100">
+                                    <h4 className="font-semibold text-gray-800">{group.label}</h4>
+                                  </div>
+                                )}
+                                <div className="p-5">
+                                  {renderTable(tableCols, tableRows, `group-${group.id || group.label}-table`)}
+                                </div>
+                              </section>
+                            );
+                          }
+                          const FORM_GRID_COLS = ["left", "center", "right"];
+                          const isGridSlotTable = (slot) => slot && typeof slot === "object" && (slot.layout || "") === "table" && Array.isArray(slot.table_rows);
+                          const isGridSlotTabs = (slot) => slot && typeof slot === "object" && (slot.layout || "") === "tabs" && Array.isArray(slot.tabs);
+                          if (isGrid && (group.grid_rows || []).length > 0) {
+                            const renderGridSlot = (slot, rowIdx, col) => {
+                              if (isGridSlotTable(slot)) {
+                                const tableCols = slot.table_columns?.length > 0 ? slot.table_columns : [{ id: "col_1", label: "Column 1" }];
+                                const tableRows = slot.table_rows || [];
+                                return renderTable(tableCols, tableRows, `grid-${rowIdx}-${col}`);
+                              }
+                              if (isGridSlotTabs(slot)) {
+                                return (
+                                  <div className="space-y-3">
+                                    {(slot.tabs || []).map((tab) => {
+                                      const tabHasTable = (tab.layout || "") === "table" && Array.isArray(tab.table_rows) && tab.table_rows.length > 0;
+                                      const tabLabel = tab.label || tab.id || "Tab";
+                                      if (tabHasTable) {
+                                        const tableCols = tab.table_columns?.length > 0 ? tab.table_columns : [{ id: "col_1", label: "Column 1" }];
+                                        const tableRows = tab.table_rows || [];
+                                        return (
+                                          <div key={tab.id || tab.label}>
+                                            <h6 className="text-xs font-medium text-[#005eb8] mb-2">{tabLabel}</h6>
+                                            {renderTable(tableCols, tableRows, `grid-tab-${tab.id || tab.label}`)}
+                                          </div>
+                                        );
+                                      }
+                                      const tabFieldIds = new Set(tab.fields || []);
+                                      const tabFields = groupFields.filter((f) => tabFieldIds.has(f.id || f.field_id || f.name));
+                                      return (
+                                        <div key={tab.id || tab.label}>
+                                          <h6 className="text-xs font-medium text-[#005eb8] mb-2">{tabLabel}</h6>
+                                          <div className="space-y-2">
+                                            {tabFields.filter((f) => checkFieldVisibility(f, dataForVisibility) && !isFieldInHiddenGroup(f.id || f.field_id || f.name, dataForVisibility)).map((field) => {
+                                              const fieldId = field.id || field.field_id || field.field_name || field.name;
+                                              const isDisplayOnly = ["text_block", "image_block", "youtube_video_embed", "line_break", "page_break", "download_link"].includes((field.type || field.field_type || "").toLowerCase());
+                                              const optionsForField = field.options || field.field_options?.options || [];
+                                              const mappedField = { ...field, id: fieldId, field_label: field.label || field.field_label, label: field.label, name: field.name || field.field_name || fieldId, field_description: field.help_text, field_type: field.type || field.field_type, field_options: { ...(field.field_options || {}), options: optionsForField }, ...(optionsForField.length ? { options: optionsForField } : {}) };
+                                              return (
+                                                <div key={fieldId} className={cn("py-1", isDisplayOnly && "md:col-span-2")}>
+                                                  <CustomFieldRenderer field={mappedField} value={isDisplayOnly ? undefined : displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} readOnly />
+                                                </div>
+                                              );
+                                            })}
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                );
+                              }
+                              const fieldIds = Array.isArray(slot) ? slot : [];
+                              const slotFields = fieldIds.map((fid) => groupFields.find((f) => (f.id || f.field_id || f.name) === fid)).filter(Boolean);
+                              return (
+                                <div className="space-y-2">
+                                  {slotFields.filter((f) => checkFieldVisibility(f, dataForVisibility) && !isFieldInHiddenGroup(f.id || f.field_id || f.name, dataForVisibility)).map((field) => {
+                                    const fieldId = field.id || field.field_id || field.field_name || field.name;
+                                    const isDisplayOnly = ["text_block", "image_block", "youtube_video_embed", "line_break", "page_break", "download_link"].includes((field.type || field.field_type || "").toLowerCase());
+                                    const optionsForField = field.options || field.field_options?.options || [];
+                                    const mappedField = { ...field, id: fieldId, field_label: field.label || field.field_label, label: field.label, name: field.name || field.field_name || fieldId, field_description: field.help_text, field_type: field.type || field.field_type, field_options: { ...(field.field_options || {}), options: optionsForField }, ...(optionsForField.length ? { options: optionsForField } : {}) };
+                                    return (
+                                      <div key={fieldId} className={cn("py-1", isDisplayOnly && "md:col-span-2")}>
+                                        <CustomFieldRenderer field={mappedField} value={isDisplayOnly ? undefined : displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} readOnly />
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              );
+                            };
+                            const rows = group.grid_rows || [];
+                            return (
+                              <section key={group.id || group.label} className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+                                {group.label && (
+                                  <div className="px-5 py-3 border-b border-gray-100">
+                                    <h4 className="font-semibold text-gray-800">{group.label}</h4>
+                                  </div>
+                                )}
+                                <div className="p-5 space-y-4">
+                                  {rows.filter((gridRow) => checkRowVisibility(gridRow, dataForVisibility)).map((gridRow, rowIdx) => {
+                                    const leftSlot = gridRow.left;
+                                    const centerSlot = gridRow.center;
+                                    const rightSlot = gridRow.right;
+                                    const hasLeftOrRight = (Array.isArray(leftSlot) && leftSlot.length > 0) || (Array.isArray(rightSlot) && rightSlot.length > 0) || isGridSlotTable(leftSlot) || isGridSlotTable(rightSlot) || isGridSlotTabs(leftSlot) || isGridSlotTabs(rightSlot);
+                                    const hasCenter = (Array.isArray(centerSlot) && centerSlot.length > 0) || isGridSlotTable(centerSlot) || isGridSlotTabs(centerSlot);
+                                    return (
+                                      <div key={`row-${rowIdx}`} className="space-y-4">
+                                        {hasLeftOrRight && (
+                                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div>{renderGridSlot(leftSlot, rowIdx, "left")}</div>
+                                            <div>{renderGridSlot(rightSlot, rowIdx, "right")}</div>
+                                          </div>
+                                        )}
+                                        {hasCenter && <div className="w-full">{renderGridSlot(centerSlot, rowIdx, "center")}</div>}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </section>
+                            );
+                          }
+                          return (
+                            <section key={group.id || group.label} className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+                              {group.label && (
+                                <div className="px-5 py-3 border-b border-gray-100">
+                                  <h4 className="font-semibold text-gray-800">{group.label}</h4>
+                                </div>
+                              )}
+                              <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+                                {groupFields.filter((f) => checkFieldVisibility(f, dataForVisibility) && !isFieldInHiddenGroup(f.id || f.field_id || f.name, dataForVisibility)).map((field) => {
+                                  const fieldId = field.id || field.field_id || field.field_name || field.name;
+                                  const isDisplayOnly = ["text_block", "image_block", "youtube_video_embed", "line_break", "page_break", "download_link"].includes((field.type || field.field_type || "").toLowerCase());
+                                  const optionsForField = field.options || field.field_options?.options || [];
+                                  const mappedField = { ...field, id: fieldId, field_label: field.label || field.field_label, label: field.label, name: field.name || field.field_name || fieldId, field_description: field.help_text, field_type: field.type || field.field_type, field_options: { ...(field.field_options || {}), options: optionsForField }, ...(optionsForField.length ? { options: optionsForField } : {}) };
+                                  return (
+                                    <div key={fieldId} className={cn("py-2", isDisplayOnly && "md:col-span-2")}>
+                                      <CustomFieldRenderer field={mappedField} value={isDisplayOnly ? undefined : displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} readOnly />
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </section>
+                          );
+                        })}
+                        {ungrouped.length > 0 && (
+                          <section className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+                            <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+                              {ungrouped.filter((f) => checkFieldVisibility(f, dataForVisibility) && !isFieldInHiddenGroup(f.id || f.field_id || f.name, dataForVisibility)).map((field) => {
+                                const fieldId = field.id || field.field_id || field.field_name || field.name;
+                                const isDisplayOnly = ["text_block", "image_block", "youtube_video_embed", "line_break", "page_break", "download_link"].includes((field.type || field.field_type || "").toLowerCase());
+                                const optionsForField = field.options || field.field_options?.options || [];
+                                const mappedField = { ...field, id: fieldId, field_label: field.label || field.field_label, label: field.label, name: field.name || field.field_name || fieldId, field_description: field.help_text, field_type: field.type || field.field_type, field_options: { ...(field.field_options || {}), options: optionsForField }, ...(optionsForField.length ? { options: optionsForField } : {}) };
+                                return (
+                                  <div key={fieldId} className={cn("py-2", isDisplayOnly && "md:col-span-2")}>
+                                    <CustomFieldRenderer field={mappedField} value={isDisplayOnly ? undefined : displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} readOnly />
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </section>
+                        )}
+                      </React.Fragment>
+                    ))}
+                    {fullLayout.fieldsNotInAnySection?.length > 0 && (
+                      <section className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+                        <div className="px-5 py-4 border-b border-gray-100">
+                          <h3 className="text-sm font-semibold text-[#005eb8] border-l-4 border-[#005eb8] pl-3">Details</h3>
+                        </div>
+                        <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+                          {fullLayout.fieldsNotInAnySection
+                            .filter((f) => checkFieldVisibility(f, dataForVisibility) && !isFieldInHiddenGroup(f.id || f.field_id || f.name, dataForVisibility))
+                            .map((field) => {
+                              const fieldId = field.id || field.field_id || field.field_name || field.name;
+                              const isDisplayOnly = ["text_block", "image_block", "youtube_video_embed", "line_break", "page_break", "download_link"].includes((field.type || field.field_type || "").toLowerCase());
+                              const optionsForField = field.options || field.field_options?.options || [];
+                              const mappedField = { ...field, id: fieldId, field_label: field.label || field.field_label, label: field.label, name: field.name || field.field_name || fieldId, field_description: field.help_text, field_type: field.type || field.field_type, field_options: { ...(field.field_options || {}), options: optionsForField }, ...(optionsForField.length ? { options: optionsForField } : {}) };
+                              return (
+                                <div key={fieldId} className={cn("py-2", isDisplayOnly && "md:col-span-2")}>
+                                  <CustomFieldRenderer field={mappedField} value={isDisplayOnly ? undefined : displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} readOnly />
+                                </div>
+                              );
+                            })}
+                        </div>
+                      </section>
+                    )}
+                  </div>
+                </div>
+              ) : fields.length > 0 ? (
+                <div className="p-6 space-y-4 bg-[#f8f9fa]">
                   {fields.map((field) => {
                     const fieldId = field.field_id || field.field_name;
                     const fieldType = field.field_type?.toLowerCase();
-                    
-                    // Display-only field types that don't have submission data
-                    const displayOnlyTypes = ['text_block', 'image_block', 'youtube_video_embed', 'line_break', 'page_break'];
+                    const displayOnlyTypes = ["text_block", "image_block", "youtube_video_embed", "line_break", "page_break"];
                     const isDisplayOnly = displayOnlyTypes.includes(fieldType);
-                    
-                    // For display-only fields, render them directly without submission data
                     if (isDisplayOnly) {
-                      const mappedField = {
-                        ...field,
-                        id: fieldId,
-                        field_label: field.label,
-                        field_description: field.help_text,
-                        field_type: field.field_type,
-                        // Preserve display-only field properties
-                        content: field.content,
-                        image_url: field.image_url,
-                        video_url: field.video_url,
-                        alt_text: field.alt_text,
-                      };
-                      
-                      return (
-                        <div key={fieldId}>
-                          <CustomFieldRenderer
-                            field={mappedField}
-                            value={undefined}
-                            onChange={undefined}
-                            error={undefined}
-                          />
-                        </div>
-                      );
+                      const mappedField = { ...field, id: fieldId, field_label: field.label, field_description: field.help_text, field_type: field.field_type, content: field.content, image_url: field.image_url, video_url: field.video_url, alt_text: field.alt_text };
+                      return <div key={fieldId}><CustomFieldRenderer field={mappedField} value={undefined} readOnly /></div>;
                     }
-                    
                     const value = displayData[fieldId];
-                    // Debug: Log file field data
-                    if (field.field_type?.toLowerCase() === 'file') {
-                      console.log('File field:', fieldId, 'Value:', value, 'Type:', typeof value);
-                    }
-
                     return (
-                      <div key={fieldId} className="p-4 border rounded-md">
+                      <div key={fieldId} className="p-4 bg-white border border-gray-200 rounded-lg">
                         <div className="flex items-center justify-between mb-2">
-                          <label className="font-medium">
-                            {field.label || fieldId}
-                          </label>
-                          {field.required && (
-                            <Badge variant="destructive" className="text-xs">
-                              Required
-                            </Badge>
-                          )}
+                          <label className="font-medium text-gray-800">{field.label || fieldId}</label>
+                          {field.required && <Badge className="bg-[#da291c] text-white text-xs">Required</Badge>}
                         </div>
-                        <div className="text-sm">
-                          {renderFieldValue(field, value)}
-                        </div>
+                        <div className="text-sm">{renderFieldValue(field, value)}</div>
                       </div>
                     );
                   })}
                 </div>
               ) : (
-                <div className="space-y-2">
+                <div className="p-6 space-y-2 bg-[#f8f9fa]">
                   {Object.entries(displayData).map(([key, value]) => {
-                    // Try to find field by ID to get field type
-                    const field = fields.find(
-                      (f) => (f.field_id || f.field_name) === key
-                    );
+                    const field = fields.find((f) => (f.field_id || f.field_name) === key);
                     return (
-                    <div key={key} className="p-4 border rounded-md">
-                      <label className="font-medium text-sm text-muted-foreground">
-                          {field?.label || key}
-                      </label>
-                        <div className="mt-1 text-sm">
-                          {renderFieldValue(field || { field_type: 'text' }, value)}
-                        </div>
-                    </div>
+                      <div key={key} className="p-4 bg-white border border-gray-200 rounded-lg">
+                        <label className="font-medium text-sm text-gray-600">{field?.label || key}</label>
+                        <div className="mt-1 text-sm">{renderFieldValue(field || { field_type: "text" }, value)}</div>
+                      </div>
                     );
                   })}
                 </div>
@@ -1403,6 +1799,7 @@ const FormSubmissionDetailPage = () => {
         </DialogContent>
       </Dialog>
     </div>
+    </>
   );
 };
 
