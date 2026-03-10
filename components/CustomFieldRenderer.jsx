@@ -622,7 +622,12 @@ const CustomFieldRenderer = ({
                           }
                         } else {
                           const next = selectedValues.filter((v) => String(v) !== String(optionValue) && String(v) !== String(optionLabel));
-                          setMultiValue(next.length ? next : [multiNoneValue]);
+                          if (isNoneOption) {
+                            handleChange(next.length ? next : []);
+                            setExpandedOptionFields((prev) => ({ ...prev, [fieldId]: true }));
+                          } else {
+                            setMultiValue(next.length ? next : [multiNoneValue]);
+                          }
                         }
                       }}
                     />

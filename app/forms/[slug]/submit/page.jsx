@@ -239,24 +239,24 @@ const FormSubmitPage = () => {
   const isConditionMet = (cv, data) => {
     if (!cv?.depends_on_field) return true;
     const { depends_on_field, show_when } = cv;
-    const dependentValue = data[depends_on_field];
+      const dependentValue = data[depends_on_field];
     const expectedValue = cv.value;
-    const normalizeValue = (val) => {
-      if (val === true || val === 'true' || val === 'True' || val === 'TRUE') return true;
-      if (val === false || val === 'false' || val === 'False' || val === 'FALSE') return false;
+      const normalizeValue = (val) => {
+        if (val === true || val === 'true' || val === 'True' || val === 'TRUE') return true;
+        if (val === false || val === 'false' || val === 'False' || val === 'FALSE') return false;
       if (val === 'yes' || val === 'Yes' || val === 'YES') return true;
       if (val === 'no' || val === 'No' || val === 'NO') return false;
-      return val;
-    };
-    const normalizedDependent = normalizeValue(dependentValue);
-    const normalizedExpected = normalizeValue(expectedValue);
+        return val;
+      };
+      const normalizedDependent = normalizeValue(dependentValue);
+      const normalizedExpected = normalizeValue(expectedValue);
     if (show_when === 'equals') return normalizedDependent === normalizedExpected;
     if (show_when === 'not_equals') {
-      if (expectedValue === undefined || expectedValue === null || expectedValue === '') {
+        if (expectedValue === undefined || expectedValue === null || expectedValue === '') {
         if (typeof dependentValue === 'boolean') return dependentValue === true;
-        return dependentValue !== undefined && dependentValue !== null && dependentValue !== '' && dependentValue !== false && dependentValue !== 0;
-      }
-      return normalizedDependent !== normalizedExpected;
+          return dependentValue !== undefined && dependentValue !== null && dependentValue !== '' && dependentValue !== false && dependentValue !== 0;
+        }
+        return normalizedDependent !== normalizedExpected;
     }
     if (show_when === 'contains') return Array.isArray(dependentValue) ? dependentValue.includes(expectedValue) : String(dependentValue || '').includes(String(expectedValue || ''));
     if (show_when === 'is_empty') return !dependentValue || dependentValue === '' || dependentValue === false;
