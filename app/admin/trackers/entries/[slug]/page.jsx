@@ -1364,44 +1364,46 @@ const TrackerEntryDetailPage = () => {
               </div>
             </CardHeader>
             <CardContent>
-              {timelineLoading ? (
-                <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
-              ) : allTimelineEvents?.length > 0 ? (
-                <div className="space-y-3">
-                  {allTimelineEvents.map((event, index) => {
-                    const prevEvent = allTimelineEvents[index - 1];
-                    const daysBetween = index > 0 && prevEvent?.timestamp && event.timestamp ? Math.abs(differenceInDays(parseUTCDate(prevEvent.timestamp), parseUTCDate(event.timestamp))) : null;
-                    return (
-                      <div key={event.id || index} className="relative pl-4 border-l-2 border-border ml-1">
-                        {daysBetween != null && daysBetween > 0 && <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">{daysBetween} day{daysBetween === 1 ? "" : "s"} later</span>}
-                        <div className="pb-4">
-                          <div className="flex flex-wrap items-center gap-2 mb-1">
-                            {(event.stage || event.status) && (<>{event.stage && <Badge variant="secondary" className="text-xs font-normal" style={getStageColor(tracker?.tracker_config?.stage_mapping || [], event.stage) ? { backgroundColor: getStageColor(tracker?.tracker_config?.stage_mapping || [], event.stage), color: "#fff" } : undefined}>{event.stage}</Badge>}{event.status && <Badge variant="outline" className="text-xs">{event.status}</Badge>}</>)}
-                            <span className="font-medium">{event.title}</span>
-                            {event.message_source === "sms" && <Badge variant="outline" className="text-xs">SMS</Badge>}
-                            {event.message_source === "comment" && <Badge variant="outline" className="text-xs">Comment</Badge>}
-                            {event.note_category && <Badge variant="secondary" className="text-xs">{event.note_category}</Badge>}
-                          </div>
-                          {(event.description || (event.type === "field_updates" && event.changes?.length)) && (
-                            <p className="text-sm text-muted-foreground break-words">
-                              {event.type === "field_updates" && event.changes?.length > 0 ? event.changes.map((c, i) => `${c.field_label}: ${c.old_value ?? "—"} → ${c.new_value ?? "—"}`).join(" · ") : formatTimelineDescription(event.description, event)}
-                            </p>
-                          )}
-                          <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
-                            <span>{format(parseUTCDate(event.timestamp), "d MMM yyyy, HH:mm")}</span>
-                            {event.user_name && <span>by {event.user_name}</span>}
+              <div className="max-h-[min(400px,50vh)] overflow-y-auto">
+                {timelineLoading ? (
+                  <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+                ) : allTimelineEvents?.length > 0 ? (
+                  <div className="space-y-3">
+                    {allTimelineEvents.map((event, index) => {
+                      const prevEvent = allTimelineEvents[index - 1];
+                      const daysBetween = index > 0 && prevEvent?.timestamp && event.timestamp ? Math.abs(differenceInDays(parseUTCDate(prevEvent.timestamp), parseUTCDate(event.timestamp))) : null;
+                      return (
+                        <div key={event.id || index} className="relative pl-4 border-l-2 border-border ml-1">
+                          {daysBetween != null && daysBetween > 0 && <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">{daysBetween} day{daysBetween === 1 ? "" : "s"} later</span>}
+                          <div className="pb-4">
+                            <div className="flex flex-wrap items-center gap-2 mb-1">
+                              {(event.stage || event.status) && (<>{event.stage && <Badge variant="secondary" className="text-xs font-normal" style={getStageColor(tracker?.tracker_config?.stage_mapping || [], event.stage) ? { backgroundColor: getStageColor(tracker?.tracker_config?.stage_mapping || [], event.stage), color: "#fff" } : undefined}>{event.stage}</Badge>}{event.status && <Badge variant="outline" className="text-xs">{event.status}</Badge>}</>)}
+                              <span className="font-medium">{event.title}</span>
+                              {event.message_source === "sms" && <Badge variant="outline" className="text-xs">SMS</Badge>}
+                              {event.message_source === "comment" && <Badge variant="outline" className="text-xs">Comment</Badge>}
+                              {event.note_category && <Badge variant="secondary" className="text-xs">{event.note_category}</Badge>}
+                            </div>
+                            {(event.description || (event.type === "field_updates" && event.changes?.length)) && (
+                              <p className="text-sm text-muted-foreground break-words">
+                                {event.type === "field_updates" && event.changes?.length > 0 ? event.changes.map((c, i) => `${c.field_label}: ${c.old_value ?? "—"} → ${c.new_value ?? "—"}`).join(" · ") : formatTimelineDescription(event.description, event)}
+                              </p>
+                            )}
+                            <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
+                              <span>{format(parseUTCDate(event.timestamp), "d MMM yyyy, HH:mm")}</span>
+                              {event.user_name && <span>by {event.user_name}</span>}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    );
-                  })}
-                  {timelinePagination.total_pages > timelinePage && (
-                    <Button variant="outline" size="sm" onClick={() => setTimelinePage((p) => p + 1)} disabled={timelineLoading}>{timelineLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Load more</Button>
-                  )}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground text-center py-8">No activity yet. Use Add Action or log a note to start the timeline.</p>
-              )}
+                      );
+                    })}
+                    {timelinePagination.total_pages > timelinePage && (
+                      <Button variant="outline" size="sm" onClick={() => setTimelinePage((p) => p + 1)} disabled={timelineLoading}>{timelineLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Load more</Button>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground text-center py-8">No activity yet. Use Add Action or log a note to start the timeline.</p>
+                )}
+              </div>
             </CardContent>
           </Card>
         </main>
@@ -1413,23 +1415,25 @@ const TrackerEntryDetailPage = () => {
               <CardTitle className="text-sm font-medium">Tasks & reminders</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <p className="text-xs text-muted-foreground">Tasks linked to this case and chase dates appear here.</p>
-              {entryTasksData?.tasks?.length > 0 ? (
-                <ul className="space-y-2">
-                  {entryTasksData.tasks.map((task) => (
-                    <li key={task.id} className="text-sm border-b border-border pb-2 last:border-0 last:pb-0">
-                      <Link href={`/admin/tasks/${task.slug || task.id}`} className="font-medium text-primary hover:underline block truncate">
-                        {task.title}
-                      </Link>
-                      <span className="text-xs text-muted-foreground">
-                        {task.due_date ? format(parseUTCDate(task.due_date), "d MMM yyyy") : "No date"} · {task.status || "pending"}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-xs text-muted-foreground">No tasks linked yet.</p>
-              )}
+              <div className="max-h-[min(400px,50vh)] overflow-y-auto">
+                <p className="text-xs text-muted-foreground">Tasks linked to this case and chase dates appear here.</p>
+                {entryTasksData?.tasks?.length > 0 ? (
+                  <ul className="space-y-2">
+                    {entryTasksData.tasks.map((task) => (
+                      <li key={task.id} className="text-sm border-b border-border pb-2 last:border-0 last:pb-0">
+                        <Link href={`/admin/tasks/${task.slug || task.id}`} className="font-medium text-primary hover:underline block truncate">
+                          {task.title}
+                        </Link>
+                        <span className="text-xs text-muted-foreground">
+                          {task.due_date ? format(parseUTCDate(task.due_date), "d MMM yyyy") : "No date"} · {task.status || "pending"}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-xs text-muted-foreground">No tasks linked yet.</p>
+                )}
+              </div>
               <Button size="sm" className="w-full" onClick={() => { setCreateTaskForm({ title: `Task for case #${entryNumber}`, due_date: format(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), "yyyy-MM-dd"), task_type: "" }); setIsCreateTaskModalOpen(true); }}><ListTodo className="mr-2 h-4 w-4" />Add task</Button>
             </CardContent>
           </Card>
@@ -2411,6 +2415,7 @@ const TrackerEntryDetailPage = () => {
               <CardTitle>Timeline</CardTitle>
             </CardHeader>
             <CardContent>
+              <div className="max-h-[70vh] overflow-y-auto">
               {timelineLoading ? (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="h-6 w-6 animate-spin" />
@@ -2546,6 +2551,7 @@ const TrackerEntryDetailPage = () => {
                   No timeline events yet
                 </p>
               )}
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
