@@ -61,6 +61,7 @@ import { STAGE_COLOR_PALETTE } from "@/utils/stageColors";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { parseUTCDate } from "@/utils/time";
+import { trackersService } from "@/services/trackers";
 
 const fieldTypes = [
   { value: "text", label: "Text" },
@@ -405,6 +406,7 @@ const TrackerEditPage = () => {
       action_types: [],
       constants: {},
       table_aggregates: {},
+      twilio_from_number: "",
     },
     tracker_fields: {
       fields: [],
@@ -471,6 +473,7 @@ const TrackerEditPage = () => {
   const [newOption, setNewOption] = useState({ value: "", label: "" });
   const [editingOption, setEditingOption] = useState({ value: "", label: "" });
   const [shareLinkCopied, setShareLinkCopied] = useState(false);
+  const [provisionSmsLoading, setProvisionSmsLoading] = useState(false);
 
   // Load tracker data
   useEffect(() => {
@@ -509,6 +512,7 @@ const TrackerEditPage = () => {
               send_push: tracker.tracker_config?.notification_settings?.send_push ?? true,
               send_sms: tracker.tracker_config?.notification_settings?.send_sms ?? false,
             },
+            twilio_from_number: tracker.tracker_config?.twilio_from_number ?? "",
           },
         tracker_fields: tracker.tracker_fields || {
           fields: [],
@@ -532,7 +536,7 @@ const TrackerEditPage = () => {
       if (stagesWithNoStatuses.length > 0 && defaultStatuses.length === 0) {
         const names = stagesWithNoStatuses.map((s) => s.stage || s.name || "Unnamed").join(", ");
         toast.warning("Some stages have no statuses and tracker has no default", {
-          description: `"${names}" will use the default list. Add statuses in the Statuses tab so these stages can be used.`,
+          description: `"${names}" will use the default list. Add statuses in the Statuses & settings tab so these stages can be used.`,
         });
       }
 
@@ -546,6 +550,32 @@ const TrackerEditPage = () => {
       }
     } catch (error) {
       // Error handled by mutation
+    }
+  };
+
+  const handleProvisionSmsNumber = async () => {
+    if (!slug) return;
+    setProvisionSmsLoading(true);
+    try {
+      const data = await trackersService.provisionSmsNumber(slug, { country_code: "GB" });
+      const phoneNumber = data?.phone_number;
+      if (!phoneNumber) {
+        toast.error("No number returned from provisioning");
+        return;
+      }
+      setFormData((prev) => ({
+        ...prev,
+        tracker_config: {
+          ...prev.tracker_config,
+          twilio_from_number: phoneNumber,
+        },
+      }));
+      toast.success("Number provisioned", { description: `${phoneNumber} — click Save to assign to this tracker.` });
+    } catch (err) {
+      const msg = err?.response?.data?.detail || err?.message || "Failed to provision number";
+      toast.error(typeof msg === "string" ? msg : msg?.message || "Failed to provision number");
+    } finally {
+      setProvisionSmsLoading(false);
     }
   };
 
@@ -1165,8 +1195,8 @@ const TrackerEditPage = () => {
 
   return (
     <div className="space-y-6">
-      {/* Sticky header at top: title, subtitle, and actions */}
-      <header className="sticky top-0 z-30 flex items-center justify-between gap-4 py-3 -mx-4 px-4 sm:-mx-6 sm:px-6 bg-background border-b shadow-sm">
+      {/* Sticky header: stays at top when scrolling so Save Changes is always visible */}
+      <header className="sticky top-0 z-40 flex items-center justify-between gap-4 py-3 -mx-4 px-4 sm:-mx-6 sm:px-6 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b shadow-sm">
         <div className="flex items-center gap-4 min-w-0">
           <Link href="/admin/trackers/manage">
             <Button variant="ghost" size="sm" className="shrink-0">
@@ -1190,14 +1220,13 @@ const TrackerEditPage = () => {
         </Button>
       </header>
 
-      {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <div className="overflow-x-auto -mx-1 px-1 sm:overflow-x-visible sm:mx-0 sm:px-0">
           <TabsList className="inline-flex w-auto min-w-max sm:w-auto">
             <TabsTrigger value="basic">Basic Info</TabsTrigger>
             <TabsTrigger value="fields">Fields ({fields.length})</TabsTrigger>
             <TabsTrigger value="sections">Fields per stage ({sections.length})</TabsTrigger>
-            <TabsTrigger value="statuses">Statuses ({statuses.length})</TabsTrigger>
+            <TabsTrigger value="statuses">Statuses & settings ({statuses.length})</TabsTrigger>
             {formData.tracker_config?.use_stages && (
               <TabsTrigger value="stages">Stages ({stageMapping.length})</TabsTrigger>
             )}
@@ -3989,7 +4018,7 @@ const TrackerEditPage = () => {
           </Card>
         </TabsContent>
 
-        {/* Statuses Tab */}
+        {/* Statuses & settings Tab */}
         <TabsContent value="statuses" className="space-y-4">
           <Card>
             <CardHeader>
@@ -4202,6 +4231,52 @@ const TrackerEditPage = () => {
               </div>
             </CardContent>
           </Card>
+
+          {/* SMS sender number – dedicated number for this tracker (no org default) */}
+          <Card>
+            <CardHeader>
+              <CardTitle>SMS sender number</CardTitle>
+              <p className="text-sm text-muted-foreground mt-1">
+                Assign a dedicated phone number for this tracker. SMS can only be sent from entries when this number is set; the organisation default is not used. Generate a new number here (uses your organisation&apos;s Twilio account) or enter one manually.
+              </p>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                <Label htmlFor="tracker-twilio-from">Sender number (E.164, required for SMS)</Label>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Input
+                    id="tracker-twilio-from"
+                    type="tel"
+                    placeholder="e.g. +447876555595"
+                    value={formData.tracker_config?.twilio_from_number ?? ""}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        tracker_config: {
+                          ...prev.tracker_config,
+                          twilio_from_number: e.target.value.trim(),
+                        },
+                      }))
+                    }
+                    className="max-w-xs font-mono"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleProvisionSmsNumber}
+                    disabled={provisionSmsLoading}
+                  >
+                    {provisionSmsLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                    Generate new number
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Each tracker must have its own number so replies are matched to the right tracker. &quot;Generate new number&quot; provisions a UK number from Twilio (organisation credentials required). Then click Save to assign it.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* Stages Tab – only when use_stages is enabled */}
@@ -4211,13 +4286,13 @@ const TrackerEditPage = () => {
             <CardHeader>
               <CardTitle>Stages &amp; workflow</CardTitle>
               <p className="text-sm text-muted-foreground mt-1">
-                <strong>Stages</strong> are workflow steps (e.g. Case Creation, Triage). Add stages and assign statuses per stage; if a stage has no statuses, it uses the tracker default from the <strong>Statuses</strong> tab. Use <strong>Allowed next stages</strong> and <strong>Allowed next statuses</strong> to control progression. Which fields appear at each step is set in the <strong>Fields per stage</strong> tab; order matches (section 1 = stage 1, etc.).
+                <strong>Stages</strong> are workflow steps (e.g. Case Creation, Triage). Add stages and assign statuses per stage; if a stage has no statuses, it uses the tracker default from the <strong>Statuses & settings</strong> tab. Use <strong>Allowed next stages</strong> and <strong>Allowed next statuses</strong> to control progression. Which fields appear at each step is set in the <strong>Fields per stage</strong> tab; order matches (section 1 = stage 1, etc.).
               </p>
             </CardHeader>
             <CardContent className="space-y-4">
               {stageMapping.some((item) => !(item.statuses || []).length) && statuses.length === 0 && (
                 <p className="text-sm text-amber-600 dark:text-amber-500 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 rounded-md">
-                  Stages with no statuses use the tracker default list. Add statuses in the <strong>Statuses</strong> tab so those stages can be used.
+                  Stages with no statuses use the tracker default list. Add statuses in the <strong>Statuses & settings</strong> tab so those stages can be used.
                 </p>
               )}
               <div>
@@ -5016,6 +5091,17 @@ const TrackerEditPage = () => {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* Save button at bottom of page */}
+        <div className="flex justify-end pt-6 pb-2 border-t mt-6">
+          <Button onClick={handleSave} disabled={updateMutation.isPending} className="shrink-0">
+            {updateMutation.isPending && (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            )}
+            <Save className="mr-2 h-4 w-4" />
+            Save Changes
+          </Button>
+        </div>
       </Tabs>
     </div>
   );

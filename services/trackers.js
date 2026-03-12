@@ -169,6 +169,20 @@ export const trackersService = {
     }
   },
 
+  /**
+   * Provision a new Twilio number for this tracker (search + purchase via org credentials).
+   * Returns { phone_number, success }. Assign the returned number to the tracker's SMS sender field and save.
+   */
+  provisionSmsNumber: async (slug, body = { country_code: "GB" }) => {
+    try {
+      const response = await api.post(`/trackers/${slug}/provision-sms-number`, body);
+      return response.data;
+    } catch (error) {
+      console.error(`Provision SMS number for ${slug} failed:`, error);
+      throw error;
+    }
+  },
+
   // Delete tracker
   deleteTracker: async (slug) => {
     try {

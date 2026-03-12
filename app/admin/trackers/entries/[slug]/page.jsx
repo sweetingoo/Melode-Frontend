@@ -142,6 +142,7 @@ const TrackerEntryDetailPage = () => {
   const [logActionNote, setLogActionNote] = useState("");
   const [logActionChaseDate, setLogActionChaseDate] = useState("");
   const [logActionNoChase, setLogActionNoChase] = useState(false);
+  const [isCloseCaseDialogOpen, setIsCloseCaseDialogOpen] = useState(false);
 
   const { data: entry, isLoading: entryLoading, error: entryError } = useTrackerEntry(entrySlug);
   const createTrackerActionMutation = useCreateTrackerAction();
@@ -684,8 +685,9 @@ const TrackerEntryDetailPage = () => {
   const isClosed = Boolean(entry?.status && String(entry.status).startsWith("Closed"));
   const canEditCase = canUpdateEntry && !isClosed;
 
-  // Phase 5.2: Send SMS available for all trackers when user can edit (backend validates phone + consent)
-  const canSendSms = canEditCase;
+  // Phase 5.2: Send SMS only when tracker has an SMS sender number configured (backend also enforces)
+  const hasSmsSenderNumber = !!(tracker?.tracker_config?.twilio_from_number?.trim());
+  const canSendSms = canEditCase && hasSmsSenderNumber;
 
   // Format field value for read-only display
   const formatFieldValue = (field, value) => {
@@ -1218,6 +1220,29 @@ const TrackerEntryDetailPage = () => {
     setIsSendSmsModalOpen(true);
   };
 
+  // Closed status: first status that starts with "Closed" in tracker, or "Closed"
+  const closedStatus = useMemo(() => {
+    const statuses = tracker?.tracker_config?.statuses || [];
+    const found = statuses.find((s) => String(s).startsWith("Closed"));
+    if (found) return found;
+    const fromStages = (tracker?.tracker_config?.stage_mapping || []).flatMap((s) => s.statuses || []);
+    return fromStages.find((s) => String(s).startsWith("Closed")) || "Closed";
+  }, [tracker?.tracker_config?.statuses, tracker?.tracker_config?.stage_mapping]);
+
+  const handleCloseCase = async () => {
+    try {
+      await updateEntryMutation.mutateAsync({
+        entryIdentifier: entrySlug,
+        entryData: { status: closedStatus },
+      });
+      setIsCloseCaseDialogOpen(false);
+      toast.success("Case closed. The entry is now read-only.");
+    } catch (err) {
+      const d = err?.response?.data?.detail;
+      toast.error(typeof d === "string" ? d : d?.message || "Failed to close case");
+    }
+  };
+
   // Case cockpit: key dates and assignee from entry data
   const fd = entry?.formatted_data || entry?.submission_data || {};
   const nextDueDate = fd.chase_due || fd.next_action_date || null;
@@ -1296,6 +1321,10 @@ const TrackerEntryDetailPage = () => {
                       <Button variant="outline" size="sm" onClick={handleChangeStatusOrEdit}>
                         <Edit className="mr-2 h-4 w-4" />
                         Change Status
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => setIsCloseCaseDialogOpen(true)}>
+                        <X className="mr-2 h-4 w-4" />
+                        Close case
                       </Button>
                       {canSendSms && (
                         <Button variant="outline" size="sm" onClick={handleOpenSendSms}>
@@ -3388,6 +3417,25 @@ const TrackerEntryDetailPage = () => {
             >
               {updateEntryMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               Update status
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Close case confirmation */}
+      <Dialog open={isCloseCaseDialogOpen} onOpenChange={setIsCloseCaseDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Close case</DialogTitle>
+            <DialogDescription>
+              This case will be marked as closed and become read-only. You can still view it and the timeline.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsCloseCaseDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleCloseCase} disabled={updateEntryMutation.isPending}>
+              {updateEntryMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Close case
             </Button>
           </DialogFooter>
         </DialogContent>
