@@ -37,7 +37,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFo
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Loader2, ArrowLeft, Edit, Save, X, Clock, MessageSquare, FileText, User as UserIcon, Calendar, ListTodo, Paperclip, Smartphone, ChevronRight, ChevronDown, Link2, Share2, Bell, Phone, Mail } from "lucide-react";
+import { Loader2, ArrowLeft, Edit, Save, X, Clock, MessageSquare, FileText, User as UserIcon, Calendar, ListTodo, Paperclip, Smartphone, ChevronRight, ChevronDown, Link2, Share2, Bell, Phone, Mail, Plus } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   useTrackerEntry,
@@ -47,11 +47,13 @@ import {
   useCreateTrackerAction,
   useTrackers,
   useTrackerEntries,
+  useTracker,
+  useUpdateTracker,
 } from "@/hooks/useTrackers";
 import { useComments } from "@/hooks/useComments";
 import { useCreateTask, useTasks } from "@/hooks/useTasks";
 import CommentThread from "@/components/CommentThread";
-import { format, startOfDay, differenceInDays } from "date-fns";
+import { format, startOfDay, differenceInDays, addDays } from "date-fns";
 import { parseUTCDate } from "@/utils/time";
 import { humanizeStatusForDisplay } from "@/utils/slug";
 import { getStageColor } from "@/utils/stageColors";
@@ -62,8 +64,23 @@ import { api } from "@/services/api-client";
 import { filesService } from "@/services/files";
 import { trackersService } from "@/services/trackers";
 import { cn } from "@/lib/utils";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 const ENTRY_DATA_TAB = "__entry_data__";
+
+// Generate action type id from label (same logic as tracker edit page)
+const generateActionTypeId = (label) => {
+  if (!label) return "";
+  return label
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s_-]/g, "")
+    .replace(/\s+/g, "_")
+    .replace(/-+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .substring(0, 100);
+};
 
 const TrackerEntryDetailPage = () => {
   const params = useParams();
@@ -71,6 +88,7 @@ const TrackerEntryDetailPage = () => {
   const { hasPermission } = usePermissionsCheck();
   const canReadEntry = hasPermission("tracker_entry:read");
   const canUpdateEntry = hasPermission("tracker_entry:update");
+  const canManageTracker = hasPermission("tracker:update");
   // Get slug from params - handle both 'slug' and 'entryId' for backward compatibility
   const entrySlug = params.slug || params.entryId;
   
@@ -118,6 +136,9 @@ const TrackerEntryDetailPage = () => {
   const [isLogActionOpen, setIsLogActionOpen] = useState(false);
   const [logActionType, setLogActionType] = useState("");
   const [logActionFreeText, setLogActionFreeText] = useState("");
+  const [addActionTypeOpen, setAddActionTypeOpen] = useState(false);
+  const [newActionTypeLabel, setNewActionTypeLabel] = useState("");
+  const [newActionTypeChaseDays, setNewActionTypeChaseDays] = useState("");
   const [logActionNote, setLogActionNote] = useState("");
   const [logActionChaseDate, setLogActionChaseDate] = useState("");
   const [logActionNoChase, setLogActionNoChase] = useState(false);
@@ -275,6 +296,10 @@ const TrackerEntryDetailPage = () => {
     }
     return foundTracker;
   }, [entry?.form_id, trackersResponse]);
+
+  // Full tracker (for adding action types) and update mutation
+  const { data: fullTracker } = useTracker(tracker?.slug ?? null, { enabled: !!tracker?.slug });
+  const updateTrackerMutation = useUpdateTracker();
 
   // Use persistent tracker entry number from backend
   // This is calculated based on creation order within the tracker
@@ -2860,15 +2885,110 @@ const TrackerEntryDetailPage = () => {
               <div className="space-y-3">
                 <div className="space-y-2">
                   <Label className="text-muted-foreground">Type</Label>
-                  <Select value={logActionType} onValueChange={(v) => { setLogActionType(v); if (v !== "other") setLogActionFreeText(""); }}>
-                    <SelectTrigger className="w-full"><SelectValue placeholder="Select action" /></SelectTrigger>
-                    <SelectContent>
-                      {(tracker?.tracker_config?.action_types || []).map((at) => (
-                        <SelectItem key={at.id} value={at.id}>{at.label || at.id}</SelectItem>
-                      ))}
-                      <SelectItem value="other">Other (free text)</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <div className="flex items-center gap-2">
+                    <Select
+                      value={logActionType}
+                      onValueChange={(v) => {
+                        setLogActionType(v);
+                        if (v !== "other") setLogActionFreeText("");
+                        // Prefill chase date from action type's default_chase_days
+                        if (v && v !== "other" && tracker?.tracker_config?.action_types) {
+                          const actionType = tracker.tracker_config.action_types.find((at) => at.id === v);
+                          const days = actionType?.default_chase_days;
+                          if (typeof days === "number" && days >= 0) {
+                            const chaseDate = format(addDays(startOfDay(new Date()), days), "yyyy-MM-dd");
+                            setLogActionChaseDate(chaseDate);
+                            setLogActionNoChase(false);
+                          } else {
+                            setLogActionChaseDate("");
+                          }
+                        } else {
+                          setLogActionChaseDate("");
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="w-full min-w-0"><SelectValue placeholder="Select action" /></SelectTrigger>
+                      <SelectContent>
+                        {(tracker?.tracker_config?.action_types || []).map((at) => (
+                          <SelectItem key={at.id} value={at.id}>{at.label || at.id}</SelectItem>
+                        ))}
+                        <SelectItem value="other">Other (free text)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {canManageTracker && tracker?.slug && (
+                      <Popover open={addActionTypeOpen} onOpenChange={setAddActionTypeOpen}>
+                        <PopoverTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            className="h-9 w-9 shrink-0"
+                            aria-label="Add action type"
+                          >
+                            <Plus className="h-4 w-4" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-72" align="start">
+                          <div className="space-y-3">
+                            <p className="text-sm font-medium">Add action type</p>
+                            <div className="space-y-2">
+                              <Label className="text-muted-foreground">Label</Label>
+                              <Input
+                                value={newActionTypeLabel}
+                                onChange={(e) => setNewActionTypeLabel(e.target.value)}
+                                placeholder="e.g. Phoned patient"
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label className="text-muted-foreground">Chase days (optional)</Label>
+                              <Input
+                                type="number"
+                                min={0}
+                                value={newActionTypeChaseDays}
+                                onChange={(e) => setNewActionTypeChaseDays(e.target.value)}
+                                placeholder="Days"
+                              />
+                            </div>
+                            <Button
+                              size="sm"
+                              className="w-full"
+                              disabled={!newActionTypeLabel?.trim() || updateTrackerMutation.isPending}
+                              onClick={async () => {
+                                const label = newActionTypeLabel?.trim();
+                                if (!label || !tracker?.slug) return;
+                                const baseTracker = fullTracker ?? tracker;
+                                const id = generateActionTypeId(label) || label.toLowerCase().replace(/\s+/g, "_");
+                                const newEntry = {
+                                  id,
+                                  label,
+                                  ...(newActionTypeChaseDays !== "" && !Number.isNaN(Number(newActionTypeChaseDays))
+                                    ? { default_chase_days: Number(newActionTypeChaseDays) }
+                                    : {}),
+                                };
+                                const existingTypes = baseTracker?.tracker_config?.action_types || [];
+                                const updated = {
+                                  ...baseTracker,
+                                  tracker_config: {
+                                    ...(baseTracker?.tracker_config || {}),
+                                    action_types: [...existingTypes, newEntry],
+                                  },
+                                };
+                                await updateTrackerMutation.mutateAsync({ slug: tracker.slug, trackerData: updated });
+                                setLogActionType(id);
+                                setAddActionTypeOpen(false);
+                                setNewActionTypeLabel("");
+                                setNewActionTypeChaseDays("");
+                                toast.success("Action type added");
+                              }}
+                            >
+                              {updateTrackerMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                              Add
+                            </Button>
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                    )}
+                  </div>
                 </div>
                 {logActionType === "other" && (
                   <div className="space-y-2">
