@@ -551,6 +551,38 @@ const TrackerEntryDetailPage = () => {
     }
   }, [entry, tracker]);
 
+  // Phone-like fields in entry (keys containing "phone" or "mobile") for Send SMS — must be before any early return (Rules of Hooks)
+  const sendSmsPhoneCandidates = useMemo(() => {
+    const data = entry?.submission_data || entry?.formatted_data || {};
+    const formatted = entry?.formatted_data || {};
+    const out = [];
+    const seen = new Set();
+    const keyMatches = (k) => (k || "").toLowerCase().includes("phone") || (k || "").toLowerCase().includes("mobile");
+    Object.keys(data).forEach((key) => {
+      if (!keyMatches(key) || seen.has(key)) return;
+      const raw = data[key];
+      const display = formatted[key];
+      let value = null;
+      if (typeof raw === "string" && raw.trim()) value = raw.trim();
+      else if (raw && typeof raw === "object" && (raw.value || raw.display)) value = raw.value || raw.display;
+      else if (display && typeof display === "string" && display.trim()) value = display.trim();
+      else if (display && typeof display === "object" && (display.value || display.display)) value = display.value || display.display;
+      if (value) {
+        seen.add(key);
+        const label = key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+        out.push({ fieldId: key, label, value: String(value) });
+      }
+    });
+    return out;
+  }, [entry?.submission_data, entry?.formatted_data]);
+
+  // When Send SMS modal opens with multiple phones, default to first
+  useEffect(() => {
+    if (isSendSmsModalOpen && sendSmsPhoneCandidates.length >= 2 && !sendSmsPhoneField) {
+      setSendSmsPhoneField(sendSmsPhoneCandidates[0].fieldId);
+    }
+  }, [isSendSmsModalOpen, sendSmsPhoneCandidates, sendSmsPhoneField]);
+
   // Show error if there's an API error
   if (entryError) {
     console.error("TrackerEntryDetailPage - API Error:", entryError);
@@ -625,38 +657,6 @@ const TrackerEntryDetailPage = () => {
 
   // Phase 5.2: Send SMS available for all trackers when user can edit (backend validates phone + consent)
   const canSendSms = canEditCase;
-
-  // Phone-like fields in entry (keys containing "phone" or "mobile") for Send SMS
-  const sendSmsPhoneCandidates = useMemo(() => {
-    const data = entry?.submission_data || entry?.formatted_data || {};
-    const formatted = entry?.formatted_data || {};
-    const out = [];
-    const seen = new Set();
-    const keyMatches = (k) => (k || "").toLowerCase().includes("phone") || (k || "").toLowerCase().includes("mobile");
-    Object.keys(data).forEach((key) => {
-      if (!keyMatches(key) || seen.has(key)) return;
-      const raw = data[key];
-      const display = formatted[key];
-      let value = null;
-      if (typeof raw === "string" && raw.trim()) value = raw.trim();
-      else if (raw && typeof raw === "object" && (raw.value || raw.display)) value = raw.value || raw.display;
-      else if (display && typeof display === "string" && display.trim()) value = display.trim();
-      else if (display && typeof display === "object" && (display.value || display.display)) value = display.value || display.display;
-      if (value) {
-        seen.add(key);
-        const label = key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-        out.push({ fieldId: key, label, value: String(value) });
-      }
-    });
-    return out;
-  }, [entry?.submission_data, entry?.formatted_data]);
-
-  // When Send SMS modal opens with multiple phones, default to first
-  useEffect(() => {
-    if (isSendSmsModalOpen && sendSmsPhoneCandidates.length >= 2 && !sendSmsPhoneField) {
-      setSendSmsPhoneField(sendSmsPhoneCandidates[0].fieldId);
-    }
-  }, [isSendSmsModalOpen, sendSmsPhoneCandidates, sendSmsPhoneField]);
 
   // Format field value for read-only display
   const formatFieldValue = (field, value) => {
