@@ -70,6 +70,25 @@ const getInitials = (name) => {
 };
 
 /**
+ * Parse "SMS sent" comment text from backend format:
+ * "SMS sent (template: X) at ... Message: BODY [SID: xxx]"
+ */
+const parseSmsSentComment = (text) => {
+  if (!text || typeof text !== "string") return null;
+  const templateMatch = text.match(/\(template:\s*([^)]+)\)/);
+  const sidMatch = text.match(/\[SID:\s*([^\]]+)\]/);
+  const afterMessage = text.indexOf("Message: ");
+  const message = afterMessage >= 0
+    ? text.slice(afterMessage + 9).replace(/\s*\[SID:[^\]]*\]\s*$/, "").trim()
+    : null;
+  return {
+    template: templateMatch ? templateMatch[1].trim() : null,
+    message: message || null,
+    sid: sidMatch ? sidMatch[1].trim() : null,
+  };
+};
+
+/**
  * Comment Attachments Display Component
  */
 const CommentAttachments = ({ commentSlug }) => {
@@ -325,10 +344,32 @@ const CommentItem = ({
               {formatTimestamp(comment.created_at)}
             </span>
           </div>
-          <p className="text-sm text-foreground whitespace-pre-wrap">
-            {comment.comment_text}
-          </p>
-          {(comment.note_category || comment.contact_method || comment.contact_outcome) && (
+          {(() => {
+            const smsParsed = comment.note_category === "SMS sent" ? parseSmsSentComment(comment.comment_text) : null;
+            if (smsParsed) {
+              return (
+                <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="rounded bg-primary/10 text-primary px-2 py-0.5 text-xs font-medium">SMS sent</span>
+                    {smsParsed.template && (
+                      <span className="text-xs text-muted-foreground">
+                        {smsParsed.template.replace(/_/g, " ")}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm text-foreground">
+                    {smsParsed.message || comment.comment_text}
+                  </p>
+                </div>
+              );
+            }
+            return (
+              <p className="text-sm text-foreground whitespace-pre-wrap">
+                {comment.comment_text}
+              </p>
+            );
+          })()}
+          {(comment.note_category || comment.contact_method || comment.contact_outcome) && comment.note_category !== "SMS sent" && (
             <div className="flex flex-wrap gap-1.5 mt-1 text-xs text-muted-foreground">
               {comment.note_category && <span className="rounded bg-muted px-1.5 py-0.5">{comment.note_category}</span>}
               {comment.contact_method && <span>Method: {comment.contact_method}</span>}

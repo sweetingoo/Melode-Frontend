@@ -357,6 +357,16 @@ export const trackersService = {
   },
 
   // Get tracker entry timeline by slug or ID
+  createTrackerAction: async (entryIdentifier, body) => {
+    try {
+      const response = await api.post(`/trackers/entries/${entryIdentifier}/actions`, body);
+      return response.data;
+    } catch (error) {
+      console.error(`Create tracker action for ${entryIdentifier} failed:`, error);
+      throw error;
+    }
+  },
+
   getTrackerEntryTimeline: async (entryIdentifier, page = 1, per_page = 50) => {
     try {
       return await api.get(`/trackers/entries/${entryIdentifier}/timeline`, {

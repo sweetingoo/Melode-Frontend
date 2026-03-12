@@ -33,15 +33,18 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, ArrowLeft, Edit, Save, X, Clock, MessageSquare, FileText, User as UserIcon, Calendar, ListTodo, Paperclip, Smartphone, ChevronRight, ChevronDown, Link2, Share2 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Loader2, ArrowLeft, Edit, Save, X, Clock, MessageSquare, FileText, User as UserIcon, Calendar, ListTodo, Paperclip, Smartphone, ChevronRight, ChevronDown, Link2, Share2, Bell, Phone, Mail } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   useTrackerEntry,
   useTrackerEntryTimeline,
   useTrackerEntryAuditLogs,
   useUpdateTrackerEntry,
+  useCreateTrackerAction,
   useTrackers,
   useTrackerEntries,
 } from "@/hooks/useTrackers";
@@ -100,6 +103,7 @@ const TrackerEntryDetailPage = () => {
   const [createTaskForm, setCreateTaskForm] = useState({ title: "", due_date: "", task_type: "" });
   const [isSendSmsModalOpen, setIsSendSmsModalOpen] = useState(false);
   const [sendSmsTemplate, setSendSmsTemplate] = useState("please_contact_us");
+  const [sendSmsPhoneField, setSendSmsPhoneField] = useState("");
   const [sendSmsSubmitting, setSendSmsSubmitting] = useState(false);
   const [stageChangePending, setStageChangePending] = useState(null);
   const [stageChangeNotes, setStageChangeNotes] = useState("");
@@ -111,8 +115,15 @@ const TrackerEntryDetailPage = () => {
   const [activeStageTab, setActiveStageTab] = useState("");
   const [entryLinkCopied, setEntryLinkCopied] = useState(false);
   const [shareableLinkCopied, setShareableLinkCopied] = useState(false);
+  const [isLogActionOpen, setIsLogActionOpen] = useState(false);
+  const [logActionType, setLogActionType] = useState("");
+  const [logActionFreeText, setLogActionFreeText] = useState("");
+  const [logActionNote, setLogActionNote] = useState("");
+  const [logActionChaseDate, setLogActionChaseDate] = useState("");
+  const [logActionNoChase, setLogActionNoChase] = useState(false);
 
   const { data: entry, isLoading: entryLoading, error: entryError } = useTrackerEntry(entrySlug);
+  const createTrackerActionMutation = useCreateTrackerAction();
   
   // Debug logging for API call
   useEffect(() => {
@@ -615,6 +626,38 @@ const TrackerEntryDetailPage = () => {
   // Phase 5.2: Send SMS available for all trackers when user can edit (backend validates phone + consent)
   const canSendSms = canEditCase;
 
+  // Phone-like fields in entry (keys containing "phone" or "mobile") for Send SMS
+  const sendSmsPhoneCandidates = useMemo(() => {
+    const data = entry?.submission_data || entry?.formatted_data || {};
+    const formatted = entry?.formatted_data || {};
+    const out = [];
+    const seen = new Set();
+    const keyMatches = (k) => (k || "").toLowerCase().includes("phone") || (k || "").toLowerCase().includes("mobile");
+    Object.keys(data).forEach((key) => {
+      if (!keyMatches(key) || seen.has(key)) return;
+      const raw = data[key];
+      const display = formatted[key];
+      let value = null;
+      if (typeof raw === "string" && raw.trim()) value = raw.trim();
+      else if (raw && typeof raw === "object" && (raw.value || raw.display)) value = raw.value || raw.display;
+      else if (display && typeof display === "string" && display.trim()) value = display.trim();
+      else if (display && typeof display === "object" && (display.value || display.display)) value = display.value || display.display;
+      if (value) {
+        seen.add(key);
+        const label = key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+        out.push({ fieldId: key, label, value: String(value) });
+      }
+    });
+    return out;
+  }, [entry?.submission_data, entry?.formatted_data]);
+
+  // When Send SMS modal opens with multiple phones, default to first
+  useEffect(() => {
+    if (isSendSmsModalOpen && sendSmsPhoneCandidates.length >= 2 && !sendSmsPhoneField) {
+      setSendSmsPhoneField(sendSmsPhoneCandidates[0].fieldId);
+    }
+  }, [isSendSmsModalOpen, sendSmsPhoneCandidates, sendSmsPhoneField]);
+
   // Format field value for read-only display
   const formatFieldValue = (field, value) => {
     const fieldType = field.type || field.field_type;
@@ -1089,340 +1132,273 @@ const TrackerEntryDetailPage = () => {
     setStageChangeStatus(statuses.includes(curStatus) ? curStatus : (statuses[0] ?? ""));
   };
 
+  const copyEntryLink = async () => {
+    if (typeof window === "undefined") return;
+    const link = window.location.origin + ["", "admin", "trackers", "entries", entrySlug].join("/");
+    try {
+      await navigator.clipboard.writeText(link);
+      setEntryLinkCopied(true);
+      toast.success("Link copied");
+      setTimeout(() => setEntryLinkCopied(false), 2000);
+    } catch {
+      toast.error("Failed to copy link");
+    }
+  };
+
+  const copyShareableLink = async () => {
+    const trackerSlug = tracker?.slug || tracker?.form_name;
+    if (!trackerSlug || !(entry?.slug ?? entrySlug) || typeof window === "undefined") return;
+    const path = ["", "forms", trackerSlug, "entry", entry?.slug ?? entrySlug, "submit"].join("/");
+    const link = window.location.origin + path;
+    try {
+      await navigator.clipboard.writeText(link);
+      setShareableLinkCopied(true);
+      toast.success("Shareable link copied");
+      setTimeout(() => setShareableLinkCopied(false), 2000);
+    } catch {
+      toast.error("Failed to copy");
+    }
+  };
+
+  const handleOpenLogAction = () => {
+    const types = tracker?.tracker_config?.action_types || [];
+    setLogActionType(types.length ? "" : "other");
+    setLogActionFreeText("");
+    setLogActionNote("");
+    setLogActionChaseDate("");
+    setLogActionNoChase(false);
+    setIsLogActionOpen(true);
+  };
+
+  const handleOpenSetReminder = () => {
+    setCreateTaskForm({
+      title: "Task for case #" + entryNumber,
+      due_date: format(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), "yyyy-MM-dd"),
+      task_type: "",
+    });
+    setIsCreateTaskModalOpen(true);
+  };
+
+  const handleChangeStatusOrEdit = () => {
+    if (isStageStyledTracker) openChangeStatusDialog();
+    else setIsEditing(true);
+  };
+
+  const handleOpenSendSms = () => {
+    setSendSmsTemplate("please_contact_us");
+    setIsSendSmsModalOpen(true);
+  };
+
+  // Case cockpit: key dates and assignee from entry data
+  const fd = entry?.formatted_data || entry?.submission_data || {};
+  const nextDueDate = fd.chase_due || fd.next_action_date || null;
+  const assignedToDisplay = (() => {
+    const v = fd.assigned_to ?? fd.owner ?? fd.assigned_user;
+    if (typeof v === "object" && v !== null) return v?.display_name || [v?.first_name, v?.last_name].filter(Boolean).join(" ") || v?.email || null;
+    return v ? String(v) : null;
+  })();
+
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
-        <div className="min-w-0 flex-1 flex items-start gap-3 sm:gap-4">
-          <Link href="/admin/trackers" className="shrink-0">
-            <Button variant="ghost" size="sm">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back
-            </Button>
-          </Link>
-          <div className="min-w-0 flex-1">
-            <h1 className="text-2xl sm:text-3xl font-bold truncate" title={headingValue}>
-              {headingValue}
-            </h1>
-            <div className="space-y-1 mt-1">
-              {tracker && (
-                <div className="flex items-center gap-2 flex-wrap">
-                  {headingValue !== tracker.name && (
-                    <p className="text-sm font-medium text-muted-foreground truncate">
-                      {tracker.name}
-                    </p>
-                  )}
-                  {tracker.category && (
-                    <Badge variant="secondary" className="text-xs shrink-0">
-                      {tracker.category}
-                    </Badge>
-                  )}
-                </div>
-              )}
-              <p className="text-sm text-muted-foreground">
-                Created {entry.created_at ? format(parseUTCDate(entry.created_at), "PPp") : "—"}
-              </p>
-            </div>
+    <div className="min-h-screen flex flex-col bg-muted/20">
+      {/* Sticky case header – actions at core */}
+      <header className="sticky top-0 z-20 bg-background border-b shadow-sm">
+        <div className="px-4 py-3 flex flex-col gap-3">
+          <div className="flex items-center gap-2">
+            <Link href="/admin/trackers">
+              <Button variant="ghost" size="sm">
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Back
+              </Button>
+            </Link>
           </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2 shrink-0">
-          {isEditing ? (
-            <>
-              {isStageStyledTracker ? (
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:flex-wrap">
+            <div className="min-w-0">
+              <h1 className="text-xl font-bold truncate" title={headingValue}>{headingValue}</h1>
+              <div className="flex items-center gap-2 flex-wrap mt-1">
+                <span className="text-sm text-muted-foreground">Case #{entryNumber}</span>
+                <Badge variant="outline" className="text-xs font-normal">{humanizeStatusForDisplay(entry?.status || "open")}</Badge>
+                {currentStage && (
+                  <Badge variant="secondary" className="text-xs" style={getStageColor(tracker?.tracker_config?.stage_mapping || [], currentStage) ? { borderLeft: `3px solid ${getStageColor(tracker?.tracker_config?.stage_mapping || [], currentStage)}` } : undefined}>
+                    {currentStage}
+                  </Badge>
+                )}
+                {nextDueDate && (
+                  <span className="text-sm text-muted-foreground">
+                    Next due: {format(parseUTCDate(nextDueDate), "d MMM yyyy")}
+                  </span>
+                )}
+                {entry?.has_patient_message && (
+                  <Badge variant="secondary" className="text-xs bg-amber-100 text-amber-800 dark:bg-amber-900 dark:bg-opacity-40 dark:text-amber-200">
+                    Patient messaged
+                  </Badge>
+                )}
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              {isEditing ? (
                 <>
-                  <Select
-                    value={editModeStage || ""}
-                    onValueChange={(stageName) => {
-                      const name = (stageName ?? "").toString().trim();
-                      if (!name) return;
-                      setEditModeStage(name);
-                      const stageItem = stageMapping.find((s) => (s?.stage ?? s?.name ?? "").toString().trim() === name);
-                      const statuses = (stageItem?.statuses ?? stageItem?.status_list ?? []).filter(Boolean);
-                      const cur = entry?.status ?? "";
-                      setEntryStatus(statuses.includes(cur) ? cur : (statuses[0] ?? ""));
-                    }}
-                  >
-                    <SelectTrigger className="w-[160px]">
-                      <SelectValue placeholder="Stage" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {stagesForEditModeDropdown.map((item) => {
-                        const stageName = item?.stage ?? item?.name ?? "";
-                        if (!stageName) return null;
-                        return (
-                          <SelectItem key={stageName} value={stageName}>
-                            {stageName}
-                          </SelectItem>
-                        );
-                      })}
-                    </SelectContent>
-                  </Select>
-                  <Select
-                    value={statusesForEditModeStageFiltered.includes(entryStatus) ? entryStatus : (statusesForEditModeStageFiltered[0] ?? "")}
-                    onValueChange={setEntryStatus}
-                  >
-                    <SelectTrigger className="w-[180px]">
-                      <SelectValue placeholder="Status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {statusesForEditModeStageFiltered.map((status) => (
-                        <SelectItem key={status} value={status}>
-                          {humanizeStatusForDisplay(status)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  {isStageStyledTracker && (
+                    <>
+                      <Select value={editModeStage || ""} onValueChange={(stageName) => { const name = (stageName ?? "").toString().trim(); if (!name) return; setEditModeStage(name); const stageItem = stageMapping.find((s) => (s?.stage ?? s?.name ?? "").toString().trim() === name); const statuses = (stageItem?.statuses ?? stageItem?.status_list ?? []).filter(Boolean); setEntryStatus(statuses.includes(entry?.status ?? "") ? entry.status : (statuses[0] ?? "")); }}>
+                        <SelectTrigger className="w-[140px] h-8"><SelectValue placeholder="Stage" /></SelectTrigger>
+                        <SelectContent>{stagesForEditModeDropdown.map((item) => { const stageName = item?.stage ?? item?.name ?? ""; if (!stageName) return null; return <SelectItem key={stageName} value={stageName}>{stageName}</SelectItem>; })}</SelectContent>
+                      </Select>
+                      <Select value={statusesForEditModeStageFiltered.includes(entryStatus) ? entryStatus : (statusesForEditModeStageFiltered[0] ?? "")} onValueChange={setEntryStatus}>
+                        <SelectTrigger className="w-[140px] h-8"><SelectValue placeholder="Status" /></SelectTrigger>
+                        <SelectContent>{statusesForEditModeStageFiltered.map((s) => <SelectItem key={s} value={s}>{humanizeStatusForDisplay(s)}</SelectItem>)}</SelectContent>
+                      </Select>
+                    </>
+                  )}
+                  <Button onClick={handleSave} disabled={updateEntryMutation.isPending} size="sm">{updateEntryMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}<Save className="mr-2 h-4 w-4" />Save</Button>
+                  <Button onClick={handleCancel} variant="outline" size="sm"><X className="mr-2 h-4 w-4" />Cancel</Button>
                 </>
               ) : (
-                <Select value={entryStatus} onValueChange={setEntryStatus}>
-                  <SelectTrigger className="w-[180px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(tracker?.tracker_config?.statuses || ["open", "in_progress", "pending", "resolved", "closed"]).map((status) => (
-                      <SelectItem key={status} value={status}>
-                        {humanizeStatusForDisplay(status)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <>
+                  {canEditCase && !isClosed && (
+                    <span className="inline-flex flex-wrap items-center gap-2">
+                      <Button size="sm" onClick={handleOpenLogAction}>
+                        <MessageSquare className="mr-2 h-4 w-4" />
+                        Add Action
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={handleOpenSetReminder}>
+                        <ListTodo className="mr-2 h-4 w-4" />
+                        Set Reminder
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={handleChangeStatusOrEdit}>
+                        <Edit className="mr-2 h-4 w-4" />
+                        Change Status
+                      </Button>
+                      {canSendSms && (
+                        <Button variant="outline" size="sm" onClick={handleOpenSendSms}>
+                          <Smartphone className="mr-2 h-4 w-4" />
+                          Send SMS
+                        </Button>
+                      )}
+                    </span>
+                  )}
+                  <Button variant="outline" size="sm" title="Copy link to this entry" onClick={copyEntryLink}>
+                    <Link2 className="h-4 w-4 mr-1" />
+                    {entryLinkCopied ? "Copied" : "Copy link"}
+                  </Button>
+                  {tracker?.tracker_config?.allow_public_submit && (
+                    <Button variant="outline" size="sm" onClick={copyShareableLink}>
+                      <Share2 className="h-4 w-4 mr-1" />
+                      {shareableLinkCopied ? "Copied" : "Share form link"}
+                    </Button>
+                  )}
+                  {isClosed && (
+                    <Badge variant="secondary" className="text-xs">
+                      Read-only (closed)
+                    </Badge>
+                  )}
+                </>
               )}
-              <Button onClick={handleSave} disabled={updateEntryMutation.isPending}>
-                {updateEntryMutation.isPending && (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                )}
-                <Save className="mr-2 h-4 w-4" />
-                Save
-              </Button>
-              <Button onClick={handleCancel} variant="outline">
-                <X className="mr-2 h-4 w-4" />
-                Cancel
-              </Button>
-            </>
-          ) : (
-            <>
-              <Badge variant="outline" className="text-sm">
-                {humanizeStatusForDisplay(entry.status || "open")}
-              </Badge>
-              <Button
-                variant="outline"
-                size="sm"
-                title="Copy link to this entry"
-                onClick={async () => {
-                  const link =
-                    typeof window !== "undefined"
-                      ? `${window.location.origin}/admin/trackers/entries/${entrySlug}`
-                      : "";
-                  if (!link) return;
-                  try {
-                    await navigator.clipboard.writeText(link);
-                    setEntryLinkCopied(true);
-                    toast.success("Link to this entry copied to clipboard");
-                    setTimeout(() => setEntryLinkCopied(false), 2000);
-                  } catch (err) {
-                    toast.error("Failed to copy link");
-                  }
-                }}
-              >
-                <Link2 className="h-4 w-4 mr-1" />
-                {entryLinkCopied ? "Copied" : "Copy link"}
-              </Button>
-              {tracker?.tracker_config?.allow_public_submit && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  title="Copy shareable form link for external user"
-                  onClick={async () => {
-                    const trackerSlug = tracker?.slug || tracker?.form_name;
-                    if (!trackerSlug) return;
-                    const slugToUse = entry?.slug ?? entrySlug;
-                    if (!slugToUse) {
-                      toast.error("Entry slug not available");
-                      return;
-                    }
-                    try {
-                      const link =
-                        typeof window !== "undefined"
-                          ? `${window.location.origin}/forms/${trackerSlug}/entry/${slugToUse}/submit`
-                          : "";
-                      if (!link) return;
-                      await navigator.clipboard.writeText(link);
-                      setShareableLinkCopied(true);
-                      toast.success("Shareable form link copied — external user can open it to submit the stage");
-                      setTimeout(() => setShareableLinkCopied(false), 2000);
-                    } catch (err) {
-                      toast.error(err?.response?.data?.detail || "Failed to copy link");
-                    }
-                  }}
-                >
-                  <Share2 className="h-4 w-4 mr-1" />
-                  {shareableLinkCopied ? "Copied" : "Share form link"}
-                </Button>
-              )}
-              {canEditCase && (
-              <Button onClick={() => setIsEditing(true)}>
-                <Edit className="mr-2 h-4 w-4" />
-                Edit
-              </Button>
-              )}
-              {isClosed && (
-                <Badge variant="secondary" className="text-xs">Read-only (closed)</Badge>
-              )}
-            </>
-          )}
+            </div>
+          </div>
         </div>
-      </div>
+      </header>
 
-      {/* Phase 4.1: Snapshot panel – Status, Chase Due, Next Appt, Owner (prominent for patient-referral) */}
-      <Card className="border-primary/20">
-        <CardContent className="pt-4 pb-4">
-          <div className="flex flex-wrap items-center gap-6">
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-muted-foreground">Case #</span>
-              <span className="font-semibold">#{entryNumber}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-muted-foreground">Status</span>
-              <Badge variant="outline" className="font-normal">{humanizeStatusForDisplay(entry?.status || "open")}</Badge>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      {/* 3-column: Summary | Timeline (actions at core) | Tasks */}
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-[280px_1fr_280px] gap-4 p-4 max-w-[1600px] w-full mx-auto">
+        {/* Left: Case summary */}
+        <aside className="space-y-3 order-2 lg:order-1">
+          <Card>
+            <CardHeader className="py-3">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Case summary</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm">
+              <div><span className="text-muted-foreground">Case ID</span><p className="font-medium">#{entryNumber}</p></div>
+              <div><span className="text-muted-foreground">Status</span><div className="font-medium"><Badge variant="outline" className="font-normal">{humanizeStatusForDisplay(entry?.status || "open")}</Badge></div></div>
+              {currentStage && <div><span className="text-muted-foreground">Stage</span><p className="font-medium">{currentStage}</p></div>}
+              {assignedToDisplay && <div><span className="text-muted-foreground">Assigned to</span><p className="font-medium flex items-center gap-1"><UserIcon className="h-3.5 w-3.5" />{assignedToDisplay}</p></div>}
+              <div><span className="text-muted-foreground">Opened</span><p className="font-medium">{entry?.created_at ? format(parseUTCDate(entry.created_at), "d MMM yyyy") : "—"}</p></div>
+              {nextDueDate && <div><span className="text-muted-foreground">Next due</span><p className="font-medium">{format(parseUTCDate(nextDueDate), "d MMM yyyy")}</p></div>}
+              {(formFileAttachments.length + attachments.length) > 0 && <div><span className="text-muted-foreground">Attachments</span><p className="font-medium">{formFileAttachments.length + attachments.length} file(s)</p></div>}
+            </CardContent>
+          </Card>
+          <Button variant="outline" size="sm" className="w-full" onClick={() => setActiveTab("details")}><FileText className="mr-2 h-4 w-4" />Entry data & forms</Button>
+        </aside>
 
-      {/* Stage tabs: one tab per stage, then Entry data (last); current stage open by default (stage-styled trackers only) */}
-      {isStageStyledTracker && stageMapping.length > 0 && (
-        <Tabs
-          value={activeStageTab || currentStage || (stageMapping[0]?.stage ?? stageMapping[0]?.name ?? "")}
-          onValueChange={setActiveStageTab}
-          className="w-full"
-        >
-          <div className="overflow-x-auto -mx-1 px-1 sm:overflow-x-visible sm:mx-0 sm:px-0">
-            <TabsList className="inline-flex w-auto min-w-max sm:w-auto h-auto flex-wrap gap-1 bg-muted/50">
-              {(tracker?.tracker_config?.stage_mapping || []).map((item) => {
-                const stageName = item?.stage ?? item?.name ?? "";
-                if (!stageName) return null;
-                const isCurrent = (entry?.formatted_data?.derived_stage ?? "") === stageName;
-                const stageColor = getStageColor(tracker?.tracker_config?.stage_mapping || [], stageName);
-                return (
-                  <TabsTrigger
-                    key={stageName}
-                    value={stageName}
-                    className={cn(
-                      "font-normal",
-                      isCurrent && "ring-2 ring-primary ring-offset-2"
-                    )}
-                    style={stageColor ? { borderLeft: `3px solid ${stageColor}` } : undefined}
-                  >
-                    {stageName}
-                    {isCurrent && (
-                      <span className="ml-1.5 text-xs text-muted-foreground font-normal">(current)</span>
-                    )}
-                  </TabsTrigger>
-                );
-              })}
-              {fieldsWithoutSection.length > 0 && (
-                <TabsTrigger key={ENTRY_DATA_TAB} value={ENTRY_DATA_TAB} className="font-normal text-muted-foreground">
-                  Entry data
-                </TabsTrigger>
-              )}
-            </TabsList>
-          </div>
-        </Tabs>
-      )}
-
-      {/* Phase 4.2 / 5.2: Actions – Change Status, Next stage, Add Note, Create Task, Send SMS (5.4: disabled when closed) */}
-      {canEditCase && (
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => (isStageStyledTracker ? openChangeStatusDialog() : setIsEditing(true))}
-          >
-            <Edit className="mr-2 h-4 w-4" />
-            Change Status
-          </Button>
-          {tracker?.tracker_config?.use_stages !== false && stageMapping.length > 0 && (
-            <>
-              <Select
-                value={currentStage || ""}
-                onValueChange={(value) => value && handleStageChange(value)}
-              >
-                <SelectTrigger className="w-[180px] h-8 text-sm">
-                  <SelectValue placeholder="Stage" />
-                </SelectTrigger>
-                <SelectContent>
-                  {(tracker.tracker_config.stage_mapping || []).map((item) => {
-                    const stageName = item?.stage ?? item?.name ?? "";
-                    if (!stageName) return null;
-                    const isCurrent = (entry?.formatted_data?.derived_stage ?? "") === stageName;
+        {/* Centre: Activity timeline (actions at core) */}
+        <main className="space-y-3 order-1 lg:order-2 min-w-0">
+          <Card>
+            <CardHeader className="py-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <CardTitle className="text-sm font-medium">Activity timeline</CardTitle>
+                {canEditCase && !isClosed && (
+                  <div className="flex flex-wrap gap-1">
+                    <Button variant="outline" size="sm" onClick={() => setActiveTab("notes")}><MessageSquare className="mr-1.5 h-3.5 w-3.5" />Note</Button>
+                    {canSendSms && <Button variant="outline" size="sm" onClick={() => { setSendSmsTemplate("please_contact_us"); setIsSendSmsModalOpen(true); }}><Smartphone className="mr-1.5 h-3.5 w-3.5" />SMS</Button>}
+                    <Button variant="outline" size="sm" onClick={() => { setCreateTaskForm({ title: `Task for case #${entryNumber}`, due_date: format(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), "yyyy-MM-dd"), task_type: "" }); setIsCreateTaskModalOpen(true); }}><ListTodo className="mr-1.5 h-3.5 w-3.5" />Task</Button>
+                  </div>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent>
+              {timelineLoading ? (
+                <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+              ) : allTimelineEvents?.length > 0 ? (
+                <div className="space-y-3">
+                  {allTimelineEvents.map((event, index) => {
+                    const prevEvent = allTimelineEvents[index - 1];
+                    const daysBetween = index > 0 && prevEvent?.timestamp && event.timestamp ? Math.abs(differenceInDays(parseUTCDate(prevEvent.timestamp), parseUTCDate(event.timestamp))) : null;
                     return (
-                      <SelectItem key={stageName} value={stageName}>
-                        {stageName}{isCurrent ? " (current)" : ""}
-                      </SelectItem>
+                      <div key={event.id || index} className="relative pl-4 border-l-2 border-border ml-1">
+                        {daysBetween != null && daysBetween > 0 && <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">{daysBetween} day{daysBetween === 1 ? "" : "s"} later</span>}
+                        <div className="pb-4">
+                          <div className="flex flex-wrap items-center gap-2 mb-1">
+                            {(event.stage || event.status) && (<>{event.stage && <Badge variant="secondary" className="text-xs font-normal" style={getStageColor(tracker?.tracker_config?.stage_mapping || [], event.stage) ? { backgroundColor: getStageColor(tracker?.tracker_config?.stage_mapping || [], event.stage), color: "#fff" } : undefined}>{event.stage}</Badge>}{event.status && <Badge variant="outline" className="text-xs">{event.status}</Badge>}</>)}
+                            <span className="font-medium">{event.title}</span>
+                            {event.message_source === "sms" && <Badge variant="outline" className="text-xs">SMS</Badge>}
+                            {event.message_source === "comment" && <Badge variant="outline" className="text-xs">Comment</Badge>}
+                            {event.note_category && <Badge variant="secondary" className="text-xs">{event.note_category}</Badge>}
+                          </div>
+                          {(event.description || (event.type === "field_updates" && event.changes?.length)) && (
+                            <p className="text-sm text-muted-foreground break-words">
+                              {event.type === "field_updates" && event.changes?.length > 0 ? event.changes.map((c, i) => `${c.field_label}: ${c.old_value ?? "—"} → ${c.new_value ?? "—"}`).join(" · ") : formatTimelineDescription(event.description, event)}
+                            </p>
+                          )}
+                          <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
+                            <span>{format(parseUTCDate(event.timestamp), "d MMM yyyy, HH:mm")}</span>
+                            {event.user_name && <span>by {event.user_name}</span>}
+                          </div>
+                        </div>
+                      </div>
                     );
                   })}
-                </SelectContent>
-              </Select>
-            </>
-          )}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setActiveTab("notes")}
-          >
-            <MessageSquare className="mr-2 h-4 w-4" />
-            Add Note
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              setCreateTaskForm({
-                title: `Task for case #${entryNumber}`,
-                due_date: format(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), "yyyy-MM-dd"),
-                task_type: "",
-              });
-              setIsCreateTaskModalOpen(true);
-            }}
-          >
-            <ListTodo className="mr-2 h-4 w-4" />
-            Create Task
-          </Button>
-          {canSendSms && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => { setSendSmsTemplate("please_contact_us"); setIsSendSmsModalOpen(true); }}
-            >
-              <Smartphone className="mr-2 h-4 w-4" />
-              Send SMS
-            </Button>
-          )}
-        </div>
-      )}
+                  {timelinePagination.total_pages > timelinePage && (
+                    <Button variant="outline" size="sm" onClick={() => setTimelinePage((p) => p + 1)} disabled={timelineLoading}>{timelineLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Load more</Button>
+                  )}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground text-center py-8">No activity yet. Use Add Action or log a note to start the timeline.</p>
+              )}
+            </CardContent>
+          </Card>
+        </main>
 
-      {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <div className="overflow-x-auto -mx-1 px-1 sm:overflow-x-visible sm:mx-0 sm:px-0">
-          <TabsList className="inline-flex w-auto min-w-max sm:w-auto">
-            <TabsTrigger value="details">
-              <FileText className="mr-2 h-4 w-4" />
-              Details
-            </TabsTrigger>
-            <TabsTrigger value="notes">
-              <MessageSquare className="mr-2 h-4 w-4" />
-              Notes & Files ({comments.length})
-            </TabsTrigger>
-            <TabsTrigger value="timeline">
-              <Clock className="mr-2 h-4 w-4" />
-              Timeline
-            </TabsTrigger>
-            <TabsTrigger value="audit">
-              <FileText className="mr-2 h-4 w-4" />
-              Audit Logs
-            </TabsTrigger>
+        {/* Right: Tasks & reminders */}
+        <aside className="space-y-3 order-3">
+          <Card>
+            <CardHeader className="py-3">
+              <CardTitle className="text-sm font-medium">Tasks & reminders</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-xs text-muted-foreground">Tasks linked to this case and chase dates will appear here. Create a task to set a reminder.</p>
+              <Button size="sm" className="w-full" onClick={() => { setCreateTaskForm({ title: `Task for case #${entryNumber}`, due_date: format(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), "yyyy-MM-dd"), task_type: "" }); setIsCreateTaskModalOpen(true); }}><ListTodo className="mr-2 h-4 w-4" />Add task</Button>
+            </CardContent>
+          </Card>
+        </aside>
+      </div>
+
+      {/* Secondary tabs: Entry data | Notes & files | Audit */}
+      <div className="border-t bg-background px-4 py-3">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full max-w-[1600px] mx-auto">
+          <TabsList className="bg-muted/50">
+            <TabsTrigger value="details"><FileText className="mr-2 h-4 w-4" />Entry data</TabsTrigger>
+            <TabsTrigger value="notes"><MessageSquare className="mr-2 h-4 w-4" />Notes & files ({comments.length})</TabsTrigger>
+            <TabsTrigger value="audit"><FileText className="mr-2 h-4 w-4" />Audit logs</TabsTrigger>
           </TabsList>
-        </div>
 
         {/* Details Tab */}
         <TabsContent value="details" className="space-y-4">
@@ -2449,6 +2425,8 @@ const TrackerEntryDetailPage = () => {
                                     )}
                                     <div className="flex items-center gap-2 flex-wrap">
                                       <h4 className="font-medium">{event.title}</h4>
+                                    {event.message_source === "sms" && <Badge variant="outline" className="text-xs">SMS</Badge>}
+                                    {event.message_source === "comment" && <Badge variant="outline" className="text-xs">Comment</Badge>}
                                     {event.note_category && (
                                       <Badge variant="secondary" className="text-xs">
                                         {event.note_category}
@@ -2845,6 +2823,104 @@ const TrackerEntryDetailPage = () => {
           </Card>
         </TabsContent>
       </Tabs>
+      </div>
+
+      {/* Log Action drawer */}
+      <Sheet open={isLogActionOpen} onOpenChange={setIsLogActionOpen}>
+        <SheetContent className="flex flex-col sm:max-w-lg">
+          <SheetHeader className="space-y-1 px-6 pt-6 pb-2">
+            <SheetTitle className="text-lg">Log action</SheetTitle>
+            <SheetDescription>
+              Record what you did on this case. Optionally set a chase or reminder date.
+            </SheetDescription>
+          </SheetHeader>
+          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6">
+            <section className="space-y-3">
+              <h4 className="text-sm font-medium text-foreground">Action</h4>
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">Type</Label>
+                  <Select value={logActionType} onValueChange={(v) => { setLogActionType(v); if (v !== "other") setLogActionFreeText(""); }}>
+                    <SelectTrigger className="w-full"><SelectValue placeholder="Select action" /></SelectTrigger>
+                    <SelectContent>
+                      {(tracker?.tracker_config?.action_types || []).map((at) => (
+                        <SelectItem key={at.id} value={at.id}>{at.label || at.id}</SelectItem>
+                      ))}
+                      <SelectItem value="other">Other (free text)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {logActionType === "other" && (
+                  <div className="space-y-2">
+                    <Label className="text-muted-foreground">Description</Label>
+                    <Input
+                      value={logActionFreeText}
+                      onChange={(e) => setLogActionFreeText(e.target.value)}
+                      placeholder="e.g. Phoned patient – no answer"
+                      className="w-full"
+                    />
+                  </div>
+                )}
+              </div>
+            </section>
+            <section className="space-y-3">
+              <h4 className="text-sm font-medium text-foreground">Note</h4>
+              <Textarea
+                value={logActionNote}
+                onChange={(e) => setLogActionNote(e.target.value)}
+                placeholder="Add details (optional)"
+                rows={3}
+                className="resize-none"
+              />
+            </section>
+            <section className="space-y-3">
+              <h4 className="text-sm font-medium text-foreground">Follow-up</h4>
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="logActionNoChase"
+                  checked={logActionNoChase}
+                  onCheckedChange={(checked) => setLogActionNoChase(!!checked)}
+                />
+                <Label htmlFor="logActionNoChase" className="text-sm font-normal cursor-pointer text-muted-foreground">
+                  No chase or reminder
+                </Label>
+              </div>
+              {!logActionNoChase && (
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">Chase date (optional)</Label>
+                  <Input
+                    type="date"
+                    value={logActionChaseDate}
+                    onChange={(e) => setLogActionChaseDate(e.target.value)}
+                    className="w-full"
+                  />
+                </div>
+              )}
+            </section>
+          </div>
+          <SheetFooter className="flex-row gap-2 sm:justify-end border-t px-6 py-4">
+            <Button variant="outline" onClick={() => setIsLogActionOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={!logActionType || (logActionType === "other" && !logActionFreeText?.trim()) || createTrackerActionMutation.isPending}
+              onClick={async () => {
+                const action_type = logActionType === "other" ? "other" : logActionType;
+                const free_text_label = logActionType === "other" ? (logActionFreeText?.trim() || null) : null;
+                const chase_date = logActionNoChase ? null : (logActionChaseDate ? logActionChaseDate : null);
+                await createTrackerActionMutation.mutateAsync({
+                  entryIdentifier: entrySlug,
+                  body: { action_type, free_text_label, note: logActionNote?.trim() || null, chase_date: chase_date || undefined },
+                });
+                setIsLogActionOpen(false);
+              }}
+            >
+              {createTrackerActionMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Log action
+            </Button>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
 
       {/* Phase 4.2: Create Task modal */}
       <Dialog open={isCreateTaskModalOpen} onOpenChange={setIsCreateTaskModalOpen}>
@@ -2907,15 +2983,48 @@ const TrackerEntryDetailPage = () => {
       </Dialog>
 
       {/* Phase 5.2: Send SMS modal */}
-      <Dialog open={isSendSmsModalOpen} onOpenChange={setIsSendSmsModalOpen}>
+      <Dialog
+        open={isSendSmsModalOpen}
+        onOpenChange={(open) => {
+          if (!open) setSendSmsPhoneField("");
+          setIsSendSmsModalOpen(open);
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Send SMS</DialogTitle>
             <DialogDescription>
-              Send an SMS to the patient. Phone and SMS consent must be set on this case.
+              {sendSmsPhoneCandidates.length === 0 && "No phone number found in this case. Add a field whose name contains \"phone\" or \"mobile\"."}
+              {sendSmsPhoneCandidates.length === 1 && "Sending to the phone number below. Patient must have SMS consent on this case."}
+              {sendSmsPhoneCandidates.length >= 2 && "Choose which number to send to. Patient must have SMS consent on this case."}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
+            {sendSmsPhoneCandidates.length === 1 && (
+              <p className="text-sm font-medium text-foreground rounded-md bg-muted/50 px-3 py-2">
+                Sending to: {sendSmsPhoneCandidates[0].value}
+              </p>
+            )}
+            {sendSmsPhoneCandidates.length >= 2 && (
+              <div>
+                <Label>Send to this number</Label>
+                <Select
+                  value={sendSmsPhoneField || sendSmsPhoneCandidates[0]?.fieldId || ""}
+                  onValueChange={setSendSmsPhoneField}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choose number" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {sendSmsPhoneCandidates.map((c) => (
+                      <SelectItem key={c.fieldId} value={c.fieldId}>
+                        {c.label}: {c.value}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div>
               <Label>Template</Label>
               <Select value={sendSmsTemplate} onValueChange={setSendSmsTemplate}>
@@ -2936,9 +3045,17 @@ const TrackerEntryDetailPage = () => {
             </Button>
             <Button
               onClick={async () => {
+                if (sendSmsPhoneCandidates.length === 0) return;
+                if (sendSmsPhoneCandidates.length >= 2 && !sendSmsPhoneField) {
+                  toast.error("Choose which number to send to.");
+                  return;
+                }
                 setSendSmsSubmitting(true);
                 try {
-                  const res = await trackersService.sendSmsFromEntry(entrySlug, { template_key: sendSmsTemplate });
+                  const body = { template_key: sendSmsTemplate };
+                  if (sendSmsPhoneCandidates.length >= 2 && sendSmsPhoneField) body.phone_field = sendSmsPhoneField;
+                  else if (sendSmsPhoneCandidates.length === 1) body.phone_field = sendSmsPhoneCandidates[0].fieldId;
+                  const res = await trackersService.sendSmsFromEntry(entrySlug, body);
                   setIsSendSmsModalOpen(false);
                   if (res?.success) {
                     toast.success("SMS sent. A note has been added to the timeline.");
@@ -2947,12 +3064,17 @@ const TrackerEntryDetailPage = () => {
                   }
                 } catch (err) {
                   const d = err?.response?.data?.detail;
-                  toast.error(typeof d === "string" ? d : d?.message || "Failed to send SMS");
+                  if (d?.available_phone_fields) {
+                    toast.error("Choose which number to send to.");
+                    setSendSmsPhoneField(d.available_phone_fields[0] || "");
+                  } else {
+                    toast.error(typeof d === "string" ? d : d?.message || "Failed to send SMS");
+                  }
                 } finally {
                   setSendSmsSubmitting(false);
                 }
               }}
-              disabled={sendSmsSubmitting}
+              disabled={sendSmsSubmitting || sendSmsPhoneCandidates.length === 0}
             >
               {sendSmsSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               Send SMS

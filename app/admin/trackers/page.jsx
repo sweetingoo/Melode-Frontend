@@ -2835,6 +2835,8 @@ const TrackersPage = () => {
                         <TableHead className="font-semibold min-w-[140px]">Stage</TableHead>
                       )}
                       <TableHead className="border-r font-semibold min-w-[100px]">Status</TableHead>
+                      <TableHead className="border-r font-semibold min-w-[120px]">Next action</TableHead>
+                      <TableHead className="border-r font-semibold min-w-[100px]">Chase due</TableHead>
                                 {/* Dynamic field columns (only visible) */}
                                 {visibleFields.map((field) => {
                                   const fieldId = field.id || field.field_id || field.name;
@@ -3102,6 +3104,31 @@ const TrackersPage = () => {
                               <Badge variant="outline" className="font-normal">{humanizeStatusForDisplay(entry.status || "open")}</Badge>
                             )}
                           </TableCell>
+                          <TableCell className={cn("border-r text-muted-foreground", densityClass)}>
+                            {entry.next_action_label ?? "—"}
+                          </TableCell>
+                          <TableCell className={cn("border-r tabular-nums", densityClass)}>
+                            {entry.next_action_date
+                              ? (() => {
+                                  try {
+                                    const d = new Date(String(entry.next_action_date).split("T")[0]);
+                                    return Number.isNaN(d.getTime()) ? entry.next_action_date : format(d, "d MMM yyyy");
+                                  } catch {
+                                    return entry.next_action_date;
+                                  }
+                                })()
+                              : (entry.formatted_data?.chase_due || entry.submission_data?.chase_due)
+                                ? (() => {
+                                    const v = entry.formatted_data?.chase_due || entry.submission_data?.chase_due;
+                                    try {
+                                      const d = new Date(String(v).split("T")[0]);
+                                      return Number.isNaN(d.getTime()) ? v : format(d, "d MMM yyyy");
+                                    } catch {
+                                      return v;
+                                    }
+                                  })()
+                                : "—"}
+                          </TableCell>
                                   {/* Dynamic field values - only visible columns */}
                                   {visibleFields.map((field) => {
                                     const fieldId = field.id || field.field_id || field.name;
@@ -3204,6 +3231,8 @@ const TrackersPage = () => {
                         {(tracker?.tracker_config?.use_stages !== false && (tracker?.tracker_config?.stage_mapping?.length > 0 || tracker?.tracker_config?.is_patient_referral)) && (
                           <TableCell className="bg-muted border-r" />
                         )}
+                        <TableCell className="bg-muted border-r" />
+                        <TableCell className="bg-muted border-r" />
                         <TableCell className="bg-muted border-r" />
                         {visibleFields.map((field) => {
                           const fieldId = field.id || field.field_id || field.name;

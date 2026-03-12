@@ -393,6 +393,29 @@ export const useUpdateTrackerEntry = () => {
   });
 };
 
+// Create tracker action mutation (log action with optional chase date)
+export const useCreateTrackerAction = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ entryIdentifier, body }) => {
+      const data = await trackersService.createTrackerAction(entryIdentifier, body);
+      return { data, entryIdentifier };
+    },
+    onSuccess: ({ entryIdentifier }) => {
+      queryClient.invalidateQueries({ queryKey: trackerKeys.entryDetail(entryIdentifier) });
+      queryClient.invalidateQueries({ queryKey: trackerKeys.entryTimeline(entryIdentifier) });
+      queryClient.invalidateQueries({ queryKey: trackerKeys.entries() });
+      queryClient.invalidateQueries({ queryKey: trackerKeys.details() });
+      toast.success("Action logged");
+    },
+    onError: (error) => {
+      const msg = error?.response?.data?.detail || error?.message || "Failed to log action";
+      toast.error(Array.isArray(msg) ? msg.map((e) => e.msg || e).join(", ") : msg);
+    },
+  });
+};
+
 // Delete tracker entry mutation
 export const useDeleteTrackerEntry = () => {
   const queryClient = useQueryClient();
