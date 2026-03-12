@@ -402,6 +402,7 @@ const TrackerEditPage = () => {
       sections: [],
       list_view_fields: [],
       note_categories: [],
+      action_types: [],
       constants: {},
       table_aggregates: {},
     },
@@ -465,6 +466,8 @@ const TrackerEditPage = () => {
 
   const [newStatus, setNewStatus] = useState("");
   const [newNoteCategory, setNewNoteCategory] = useState("");
+  const [newActionTypeLabel, setNewActionTypeLabel] = useState("");
+  const [newActionTypeChaseDays, setNewActionTypeChaseDays] = useState("");
   const [newOption, setNewOption] = useState({ value: "", label: "" });
   const [editingOption, setEditingOption] = useState({ value: "", label: "" });
   const [shareLinkCopied, setShareLinkCopied] = useState(false);
@@ -491,6 +494,9 @@ const TrackerEditPage = () => {
             list_view_fields: tracker.tracker_config?.list_view_fields || [],
             create_view_fields: tracker.tracker_config?.create_view_fields || [],
             note_categories: tracker.tracker_config?.note_categories || [],
+            action_types: (tracker.tracker_config?.action_types && Array.isArray(tracker.tracker_config.action_types))
+              ? JSON.parse(JSON.stringify(tracker.tracker_config.action_types))
+              : [],
             constants: tracker.tracker_config?.constants || {},
             table_aggregates: tracker.tracker_config?.table_aggregates || {},
             stage_mapping: (tracker.tracker_config?.stage_mapping && Array.isArray(tracker.tracker_config.stage_mapping))
@@ -1000,6 +1006,48 @@ const TrackerEditPage = () => {
       },
     }));
     toast.success("Note category removed");
+  };
+
+  // Action type management (for "Log action" dropdown on tracker entries)
+  const handleAddActionType = () => {
+    if (!newActionTypeLabel.trim()) {
+      toast.error("Action type label is required");
+      return;
+    }
+    const label = newActionTypeLabel.trim();
+    const id = generateFieldIdFromLabel(label) || label.toLowerCase().replace(/\s+/g, "_");
+    const actionTypes = formData.tracker_config?.action_types || [];
+    if (actionTypes.some((at) => (at.id || at.label) === id || at.label === label)) {
+      toast.error("An action type with this label or ID already exists");
+      return;
+    }
+    const chaseDays = newActionTypeChaseDays.trim() ? parseInt(newActionTypeChaseDays, 10) : undefined;
+    const newEntry = { id, label };
+    if (chaseDays !== undefined && !Number.isNaN(chaseDays)) newEntry.default_chase_days = chaseDays;
+    setFormData((prev) => ({
+      ...prev,
+      tracker_config: {
+        ...prev.tracker_config,
+        action_types: [...actionTypes, newEntry],
+      },
+    }));
+    setNewActionTypeLabel("");
+    setNewActionTypeChaseDays("");
+    toast.success("Action type added");
+  };
+
+  const handleRemoveActionType = (idToRemove) => {
+    const actionTypes = (formData.tracker_config?.action_types || []).filter(
+      (at) => (at.id || at.label) !== idToRemove
+    );
+    setFormData((prev) => ({
+      ...prev,
+      tracker_config: {
+        ...prev.tracker_config,
+        action_types: actionTypes,
+      },
+    }));
+    toast.success("Action type removed");
   };
 
   // Option Management for Select Fields
@@ -4075,6 +4123,82 @@ const TrackerEditPage = () => {
                     Categories will appear when adding notes to tracker entries
                   </p>
                 </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Action types – options for "Log action" on tracker entries */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Action types</CardTitle>
+              <p className="text-sm text-muted-foreground mt-1">
+                Options shown when logging an action on a tracker entry (e.g. &quot;Phoned Patient&quot;, &quot;Bloods sent&quot;). Optional default chase days set the next due date when that action is logged.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {(formData.tracker_config?.action_types?.length ?? 0) > 0 && (
+                <div className="space-y-2">
+                  <Label>Existing action types</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {formData.tracker_config.action_types.map((at) => (
+                      <Badge
+                        key={at.id || at.label}
+                        variant="outline"
+                        className="flex items-center gap-2"
+                      >
+                        {at.label || at.id}
+                        {at.default_chase_days != null && (
+                          <span className="text-xs text-muted-foreground">({at.default_chase_days}d chase)</span>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-4 w-4 p-0"
+                          onClick={() => handleRemoveActionType(at.id || at.label)}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div className="p-4 border rounded-md space-y-4">
+                <div className="grid gap-2 sm:grid-cols-[1fr_auto_120px] items-end">
+                  <div>
+                    <Label htmlFor="new-action-type-label">Label</Label>
+                    <Input
+                      id="new-action-type-label"
+                      value={newActionTypeLabel}
+                      onChange={(e) => setNewActionTypeLabel(e.target.value)}
+                      placeholder="e.g., Phoned Patient, Bloods sent"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleAddActionType();
+                        }
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="new-action-type-chase">Chase days (optional)</Label>
+                    <Input
+                      id="new-action-type-chase"
+                      type="number"
+                      min={0}
+                      value={newActionTypeChaseDays}
+                      onChange={(e) => setNewActionTypeChaseDays(e.target.value)}
+                      placeholder="e.g. 7"
+                    />
+                  </div>
+                  <Button onClick={handleAddActionType} disabled={!newActionTypeLabel.trim()}>
+                    <Plus className="h-4 w-4 mr-1" />
+                    Add
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  ID is generated from the label (e.g. &quot;Phoned Patient&quot; → phoned_patient). These appear in the &quot;Log action&quot; dropdown on tracker entries.
+                </p>
               </div>
             </CardContent>
           </Card>
