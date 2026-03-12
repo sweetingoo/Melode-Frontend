@@ -49,7 +49,7 @@ import {
   useTrackerEntries,
 } from "@/hooks/useTrackers";
 import { useComments } from "@/hooks/useComments";
-import { useCreateTask } from "@/hooks/useTasks";
+import { useCreateTask, useTasks } from "@/hooks/useTasks";
 import CommentThread from "@/components/CommentThread";
 import { format, startOfDay, differenceInDays } from "date-fns";
 import { parseUTCDate } from "@/utils/time";
@@ -243,6 +243,10 @@ const TrackerEntryDetailPage = () => {
   }, [auditLogsResponse]);
   // Use entry ID for comments (comments API might still use ID)
   const { data: commentsData } = useComments("tracker_entry", entry?.id?.toString() || entrySlug);
+  const { data: entryTasksData } = useTasks(
+    { form_submission_id: entry?.id, per_page: 20, sort_by: "due_date", order: "asc" },
+    { enabled: !!entry?.id }
+  );
   const updateEntryMutation = useUpdateTrackerEntry();
 
   // Fetch attachments for this entry (Phase 4.4)
@@ -1384,7 +1388,23 @@ const TrackerEntryDetailPage = () => {
               <CardTitle className="text-sm font-medium">Tasks & reminders</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <p className="text-xs text-muted-foreground">Tasks linked to this case and chase dates will appear here. Create a task to set a reminder.</p>
+              <p className="text-xs text-muted-foreground">Tasks linked to this case and chase dates appear here.</p>
+              {entryTasksData?.tasks?.length > 0 ? (
+                <ul className="space-y-2">
+                  {entryTasksData.tasks.map((task) => (
+                    <li key={task.id} className="text-sm border-b border-border pb-2 last:border-0 last:pb-0">
+                      <Link href={`/admin/tasks/${task.slug || task.id}`} className="font-medium text-primary hover:underline block truncate">
+                        {task.title}
+                      </Link>
+                      <span className="text-xs text-muted-foreground">
+                        {task.due_date ? format(parseUTCDate(task.due_date), "d MMM yyyy") : "No date"} · {task.status || "pending"}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-xs text-muted-foreground">No tasks linked yet.</p>
+              )}
               <Button size="sm" className="w-full" onClick={() => { setCreateTaskForm({ title: `Task for case #${entryNumber}`, due_date: format(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), "yyyy-MM-dd"), task_type: "" }); setIsCreateTaskModalOpen(true); }}><ListTodo className="mr-2 h-4 w-4" />Add task</Button>
             </CardContent>
           </Card>
