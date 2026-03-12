@@ -35,7 +35,7 @@ import {
   usePreferences,
   useUpdatePreferences,
 } from "@/hooks/useProfile";
-import { useRoles } from "@/hooks/useRoles";
+import { useRolesAll } from "@/hooks/useRoles";
 import { useLocations } from "@/hooks/useLocations";
 import { useUserDepartments } from "@/hooks/useDepartmentContext";
 import { useOrganisation } from "@/hooks/useConfiguration";
@@ -54,7 +54,8 @@ export default function PreferencesPage() {
       default_location_id: preferences.default_location_id,
     };
   }, [preferences?.default_job_role_id, preferences?.default_shift_role_id, preferences?.default_location_id]);
-  const { data: rolesData } = useRoles();
+  const { data: rolesResponse } = useRolesAll(50);
+  const rolesData = rolesResponse?.data ?? rolesResponse ?? [];
   const { data: locationsData } = useLocations();
   const { data: departmentsData } = useUserDepartments();
   const { data: organisationData } = useOrganisation();

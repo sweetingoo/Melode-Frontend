@@ -456,6 +456,47 @@ const TrackerEntryDetailPage = () => {
     }
   }, [entry]);
 
+  // Defaults for all tracker fields (first-load visibility and radio first-option)
+  // Must be before any early return to keep hook order consistent (Rules of Hooks).
+  const entryDefaults = useMemo(() => {
+    const fields = tracker?.tracker_fields?.fields || [];
+    const out = {};
+    const opts = (f) => f.field_options?.options || f.options || [];
+    const getNoneValue = (field) => {
+      const options = opts(field);
+      const o = options.find((opt) => String(opt?.value ?? "").toLowerCase().trim() === "none" || String(opt?.label ?? "").toLowerCase().trim() === "none");
+      return o && (o.value != null && o.value !== "") ? o.value : "none";
+    };
+    const firstOptionValue = (field) => {
+      const options = opts(field);
+      const o = options[0];
+      return o != null && (o.value != null && o.value !== "") ? o.value : o?.label;
+    };
+    fields.forEach((field) => {
+      const fieldId = field.id || field.name || field.field_id;
+      if (!fieldId) return;
+      const type = (field.type || field.field_type || "").toLowerCase();
+      if (type === "select" || type === "dropdown") out[fieldId] = getNoneValue(field);
+      else if (type === "multiselect") out[fieldId] = [getNoneValue(field)];
+      else if (type === "boolean" || type === "checkbox") out[fieldId] = false;
+      else if ((type === "radio" || type === "radio_group") && opts(field).length > 0) out[fieldId] = firstOptionValue(field);
+    });
+    return out;
+  }, [tracker?.id, tracker?.tracker_fields?.fields]);
+
+  const effectiveEntryData = useMemo(() => ({ ...entryDefaults, ...entryData }), [entryDefaults, entryData]);
+
+  useEffect(() => {
+    if (!tracker || !entry || Object.keys(entryDefaults).length === 0) return;
+    const raw = entry.submission_data || entry.formatted_data || entry.entry_data || {};
+    if (Object.keys(raw).length > 0) return;
+    setEntryData((prev) => {
+      const merged = { ...entryDefaults, ...prev };
+      if (JSON.stringify(merged) === JSON.stringify(prev)) return prev;
+      return merged;
+    });
+  }, [tracker?.id, entry?.id, entryDefaults]);
+
   // When entering edit mode on a stage-styled tracker, set edit-mode stage to current stage
   useEffect(() => {
     if (isEditing && entry && tracker?.tracker_config?.stage_mapping?.length) {
@@ -722,45 +763,6 @@ const TrackerEntryDetailPage = () => {
   const fieldsWithoutSection = trackerFields.filter((field) => !field.section || field.section === null);
 
   const comments = commentsData?.comments || commentsData || [];
-
-  // Defaults for all tracker fields (first-load visibility and radio first-option)
-  const entryDefaults = useMemo(() => {
-    const out = {};
-    const opts = (f) => f.field_options?.options || f.options || [];
-    const getNoneValue = (field) => {
-      const options = opts(field);
-      const o = options.find((opt) => String(opt?.value ?? "").toLowerCase().trim() === "none" || String(opt?.label ?? "").toLowerCase().trim() === "none");
-      return o && (o.value != null && o.value !== "") ? o.value : "none";
-    };
-    const firstOptionValue = (field) => {
-      const options = opts(field);
-      const o = options[0];
-      return o != null && (o.value != null && o.value !== "") ? o.value : o?.label;
-    };
-    trackerFields.forEach((field) => {
-      const fieldId = field.id || field.name || field.field_id;
-      if (!fieldId) return;
-      const type = (field.type || field.field_type || "").toLowerCase();
-      if (type === "select" || type === "dropdown") out[fieldId] = getNoneValue(field);
-      else if (type === "multiselect") out[fieldId] = [getNoneValue(field)];
-      else if (type === "boolean" || type === "checkbox") out[fieldId] = false;
-      else if ((type === "radio" || type === "radio_group") && opts(field).length > 0) out[fieldId] = firstOptionValue(field);
-    });
-    return out;
-  }, [tracker?.id, trackerFields]);
-
-  const effectiveEntryData = useMemo(() => ({ ...entryDefaults, ...entryData }), [entryDefaults, entryData]);
-
-  useEffect(() => {
-    if (!tracker || !entry || Object.keys(entryDefaults).length === 0) return;
-    const raw = entry.submission_data || entry.formatted_data || entry.entry_data || {};
-    if (Object.keys(raw).length > 0) return;
-    setEntryData((prev) => {
-      const merged = { ...entryDefaults, ...prev };
-      if (JSON.stringify(merged) === JSON.stringify(prev)) return prev;
-      return merged;
-    });
-  }, [tracker?.id, entry?.id, entryDefaults]);
 
   // Handle field value changes
   const handleFieldChange = (fieldId, value) => {

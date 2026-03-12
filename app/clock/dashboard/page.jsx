@@ -29,7 +29,7 @@ import {
   useStartBreak,
   useEndBreak,
 } from "@/hooks/useClock";
-import { useRoles } from "@/hooks/useRoles";
+import { useRolesAll } from "@/hooks/useRoles";
 import { useCurrentUser } from "@/hooks/useAuth";
 import { formatElapsedTimeHHMMSS, calculateElapsedHours as calcElapsedHours } from "@/utils/time";
 import {
@@ -70,8 +70,9 @@ export default function ClockDashboardPage() {
     refetchInterval: 30000, // Refresh every 30 seconds
   });
 
-  // Get all roles for shift role change
-  const { data: rolesData } = useRoles();
+  // Get all roles (all pages) so shift roles (e.g. General) are available when changing role
+  const { data: rolesResponse } = useRolesAll(50);
+  const rolesData = rolesResponse?.data ?? rolesResponse ?? [];
 
   // Mutations
   const clockOutMutation = useClockOut();

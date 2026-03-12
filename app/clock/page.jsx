@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/select";
 import { useClockIn, useClockStatus, useLinkClockToProvisionalShift } from "@/hooks/useClock";
 import { useCurrentUser } from "@/hooks/useAuth";
-import { useRoles } from "@/hooks/useRoles";
+import { useRolesAll } from "@/hooks/useRoles";
 import { useLocations } from "@/hooks/useLocations";
 import { useUserDepartments } from "@/hooks/useDepartmentContext";
 import { usePreferences } from "@/hooks/useProfile";
@@ -52,8 +52,9 @@ export default function ClockPage() {
   // Get clock status to check if already clocked in
   const { data: clockStatus, isLoading: statusLoading, refetch: refetchStatus } = useClockStatus();
 
-  // Get all roles to find shift roles
-  const { data: rolesData, isLoading: rolesLoading } = useRoles();
+  // Get all roles (all pages) so job roles and their shift roles (e.g. General) are always available
+  const { data: rolesResponse, isLoading: rolesLoading } = useRolesAll(50);
+  const rolesData = rolesResponse?.data ?? rolesResponse ?? [];
 
   // Get user assignments (which contain the roles they can check in with)
   const { data: departmentsData, isLoading: assignmentsLoading } = useUserDepartments();
