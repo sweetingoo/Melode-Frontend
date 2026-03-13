@@ -613,69 +613,6 @@ const TrackerEntryDetailPage = () => {
     }
   }, [isSendSmsModalOpen, sendSmsPhoneCandidates, sendSmsPhoneField]);
 
-  // Show error if there's an API error
-  if (entryError) {
-    console.error("TrackerEntryDetailPage - API Error:", entryError);
-    return (
-      <div className="text-center py-12">
-        <h3 className="text-lg font-semibold mb-2">Error loading entry</h3>
-        <p className="text-muted-foreground mb-4">
-          {entryError?.response?.data?.detail || entryError?.message || "An error occurred"}
-        </p>
-        <Link href="/admin/trackers">
-          <Button variant="outline">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Trackers
-          </Button>
-        </Link>
-      </div>
-    );
-  }
-
-  if (entryLoading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin" />
-        <p className="ml-4 text-muted-foreground">Loading entry {entrySlug}...</p>
-      </div>
-    );
-  }
-
-  if (!entry) {
-    return (
-      <div className="text-center py-12">
-        <h3 className="text-lg font-semibold mb-2">Entry not found</h3>
-        <p className="text-muted-foreground mb-2">Slug: {entrySlug}</p>
-        <p className="text-sm text-muted-foreground mb-4">
-          The entry you're looking for doesn't exist or you don't have permission to view it.
-        </p>
-        <Link href="/admin/trackers">
-          <Button variant="outline">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Trackers
-          </Button>
-        </Link>
-      </div>
-    );
-  }
-
-  // Check if user has permission to read this entry
-  if (!canReadEntry) {
-    return (
-      <div className="space-y-4">
-        <Link href="/admin/trackers">
-          <Button variant="ghost" size="sm">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Trackers
-          </Button>
-        </Link>
-        <div className="text-center py-12">
-          <p className="text-muted-foreground">You don't have permission to view this tracker entry</p>
-        </div>
-      </div>
-    );
-  }
-
   const trackerFields = tracker?.tracker_fields?.fields || [];
   const trackerConfig = tracker?.tracker_config || {};
   // Sections can live in form_config (tracker_config) or in form_fields (tracker_fields) for patient-referral-style configs
@@ -1242,6 +1179,69 @@ const TrackerEntryDetailPage = () => {
       toast.error(typeof d === "string" ? d : d?.message || "Failed to close case");
     }
   };
+
+  // Show error if there's an API error
+  if (entryError) {
+    console.error("TrackerEntryDetailPage - API Error:", entryError);
+    return (
+      <div className="text-center py-12">
+        <h3 className="text-lg font-semibold mb-2">Error loading entry</h3>
+        <p className="text-muted-foreground mb-4">
+          {entryError?.response?.data?.detail || entryError?.message || "An error occurred"}
+        </p>
+        <Link href="/admin/trackers">
+          <Button variant="outline">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to Trackers
+          </Button>
+        </Link>
+      </div>
+    );
+  }
+
+  if (entryLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <p className="ml-4 text-muted-foreground">Loading entry {entrySlug}...</p>
+      </div>
+    );
+  }
+
+  if (!entry) {
+    return (
+      <div className="text-center py-12">
+        <h3 className="text-lg font-semibold mb-2">Entry not found</h3>
+        <p className="text-muted-foreground mb-2">Slug: {entrySlug}</p>
+        <p className="text-sm text-muted-foreground mb-4">
+          The entry you're looking for doesn't exist or you don't have permission to view it.
+        </p>
+        <Link href="/admin/trackers">
+          <Button variant="outline">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to Trackers
+          </Button>
+        </Link>
+      </div>
+    );
+  }
+
+  // Check if user has permission to read this entry
+  if (!canReadEntry) {
+    return (
+      <div className="space-y-4">
+        <Link href="/admin/trackers">
+          <Button variant="ghost" size="sm">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to Trackers
+          </Button>
+        </Link>
+        <div className="text-center py-12">
+          <p className="text-muted-foreground">You don't have permission to view this tracker entry</p>
+        </div>
+      </div>
+    );
+  }
 
   // Case cockpit: key dates and assignee from entry data
   const fd = entry?.formatted_data || entry?.submission_data || {};
