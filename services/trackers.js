@@ -170,6 +170,20 @@ export const trackersService = {
   },
 
   /**
+   * List active Twilio numbers for the organisation (for this tracker). Used on Configure page to select a number.
+   * Returns { numbers: [ { phone_number, friendly_name? } ] }.
+   */
+  getTwilioActiveNumbers: async (slug) => {
+    try {
+      const response = await api.get(`/trackers/${slug}/twilio-active-numbers`);
+      return response.data;
+    } catch (error) {
+      console.error(`Get Twilio active numbers for ${slug} failed:`, error);
+      throw error;
+    }
+  },
+
+  /**
    * Provision a new Twilio number for this tracker (search + purchase via org credentials).
    * Returns { phone_number, success }. Assign the returned number to the tracker's SMS sender field and save.
    */
@@ -388,6 +402,16 @@ export const trackersService = {
       });
     } catch (error) {
       console.error(`Get tracker entry timeline ${entryIdentifier} failed:`, error);
+      throw error;
+    }
+  },
+
+  getTrackerEntryInboundMessages: async (entryIdentifier) => {
+    try {
+      const response = await api.get(`/trackers/entries/${entryIdentifier}/inbound-messages`);
+      return response.data;
+    } catch (error) {
+      console.error(`Get tracker entry inbound messages ${entryIdentifier} failed:`, error);
       throw error;
     }
   },

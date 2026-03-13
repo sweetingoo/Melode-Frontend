@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -37,12 +37,13 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFo
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Loader2, ArrowLeft, Edit, Save, X, Clock, MessageSquare, FileText, User as UserIcon, Calendar, ListTodo, Paperclip, Smartphone, ChevronRight, ChevronDown, Link2, Share2, Bell, Phone, Mail, Plus } from "lucide-react";
+import { Loader2, ArrowLeft, Edit, Save, X, Clock, MessageSquare, FileText, User as UserIcon, Calendar, Paperclip, Smartphone, ChevronRight, ChevronDown, Link2, Share2, Bell, Phone, Mail, Plus, Send, MessageCircle, Globe } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   useTrackerEntry,
   useTrackerEntryTimeline,
   useTrackerEntryAuditLogs,
+  useTrackerEntryInboundMessages,
   useUpdateTrackerEntry,
   useCreateTrackerAction,
   useTrackers,
@@ -82,27 +83,34 @@ const generateActionTypeId = (label) => {
     .substring(0, 100);
 };
 
+const ENTRY_DETAIL_TABS = ["activity", "forms", "communication", "notes", "audit"];
+
 const TrackerEntryDetailPage = () => {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { hasPermission } = usePermissionsCheck();
   const canReadEntry = hasPermission("tracker_entry:read");
   const canUpdateEntry = hasPermission("tracker_entry:update");
   const canManageTracker = hasPermission("tracker:update");
   // Get slug from params - handle both 'slug' and 'entryId' for backward compatibility
   const entrySlug = params.slug || params.entryId;
-  
-  // Debug logging - this will help us see if the component is rendering
+  const tabFromUrl = searchParams?.get("tab");
+
+  const [activeTab, setActiveTab] = useState(() => {
+    if (typeof window === "undefined") return "activity";
+    const t = new URLSearchParams(window.location.search).get("tab");
+    return t && ENTRY_DETAIL_TABS.includes(t) ? t : "activity";
+  });
   useEffect(() => {
-    console.log("🔍 TrackerEntryDetailPage - Component mounted");
-    console.log("🔍 TrackerEntryDetailPage - params:", params);
-    console.log("🔍 TrackerEntryDetailPage - entrySlug:", entrySlug);
-    if (!entrySlug) {
-      console.error("❌ TrackerEntryDetailPage - entrySlug is undefined/null!");
-    }
-  }, [params, entrySlug]);
-  
-  const [activeTab, setActiveTab] = useState("details");
+    if (tabFromUrl && ENTRY_DETAIL_TABS.includes(tabFromUrl)) setActiveTab(tabFromUrl);
+  }, [tabFromUrl]);
+  const handleTabChange = (value) => {
+    setActiveTab(value);
+    const sp = new URLSearchParams(searchParams?.toString() || "");
+    sp.set("tab", value);
+    router.replace(`/admin/trackers/entries/${entrySlug}?${sp.toString()}`, { scroll: false });
+  };
   const [isEditing, setIsEditing] = useState(false);
   const [entryData, setEntryData] = useState({});
   const [entryStatus, setEntryStatus] = useState("open");
@@ -117,10 +125,8 @@ const TrackerEntryDetailPage = () => {
   const [attachments, setAttachments] = useState([]);
   const [attachmentsLoading, setAttachmentsLoading] = useState(false);
   const [attachmentUploading, setAttachmentUploading] = useState(false);
-  const [isCreateTaskModalOpen, setIsCreateTaskModalOpen] = useState(false);
-  const [createTaskForm, setCreateTaskForm] = useState({ title: "", due_date: "", task_type: "" });
-  const [isSendSmsModalOpen, setIsSendSmsModalOpen] = useState(false);
   const [sendSmsTemplate, setSendSmsTemplate] = useState("please_contact_us");
+  const [sendSmsMessage, setSendSmsMessage] = useState("");
   const [sendSmsPhoneField, setSendSmsPhoneField] = useState("");
   const [sendSmsSubmitting, setSendSmsSubmitting] = useState(false);
   const [stageChangePending, setStageChangePending] = useState(null);
@@ -131,6 +137,8 @@ const TrackerEntryDetailPage = () => {
   const [changeStatusNote, setChangeStatusNote] = useState("");
   const [editModeStage, setEditModeStage] = useState("");
   const [activeStageTab, setActiveStageTab] = useState("");
+  const [formsSubTab, setFormsSubTab] = useState("entry_data");
+  const [communicationsSubTab, setCommunicationsSubTab] = useState("sms");
   const [entryLinkCopied, setEntryLinkCopied] = useState(false);
   const [shareableLinkCopied, setShareableLinkCopied] = useState(false);
   const [isLogActionOpen, setIsLogActionOpen] = useState(false);
@@ -158,7 +166,9 @@ const TrackerEntryDetailPage = () => {
   const timelinePerPage = 50;
   const [allTimelineEvents, setAllTimelineEvents] = useState([]);
   const [timelinePagination, setTimelinePagination] = useState({ total: 0, total_pages: 0 });
-  const { data: timelineData, isLoading: timelineLoading } = useTrackerEntryTimeline(entrySlug, timelinePage, timelinePerPage);
+  const { data: timelineData, isLoading: timelineLoading, refetch: refetchTimeline } = useTrackerEntryTimeline(entrySlug, timelinePage, timelinePerPage, {
+    refetchInterval: activeTab === "communication" ? 10000 : false, // poll every 10s when on Communications tab
+  });
   
   // Helper function to format People field values in timeline descriptions
   const formatTimelineDescription = (description, event) => {
@@ -242,6 +252,9 @@ const TrackerEntryDetailPage = () => {
       action: auditLogsActionFilter !== "all" ? auditLogsActionFilter : undefined
     }
   );
+  const { data: inboundMessages = [], isLoading: inboundMessagesLoading } = useTrackerEntryInboundMessages(entrySlug, {
+    refetchInterval: activeTab === "communication" ? 10000 : false, // poll every 10s when on Communications tab
+  });
   
   // Reset page when filter changes
   useEffect(() => {
@@ -555,6 +568,18 @@ const TrackerEntryDetailPage = () => {
     setActiveStageTab((prev) => (prev === "" ? (cur || firstStage) : prev));
   }, [entry?.id, entry?.formatted_data?.derived_stage, tracker?.tracker_config?.stage_mapping]);
 
+  // Default Forms sub-tab to current stage when entry loads (stage-styled trackers)
+  useEffect(() => {
+    if (!entry || !tracker?.tracker_config?.stage_mapping?.length) return;
+    const stages = (tracker.tracker_config.stage_mapping || []).map((s) => String(s?.stage ?? s?.name ?? "").trim()).filter(Boolean);
+    const cur = String(entry?.formatted_data?.derived_stage ?? "").trim();
+    const validStage = cur && stages.includes(cur);
+    setFormsSubTab((prev) => {
+      if (prev !== "entry_data" && stages.includes(prev)) return prev;
+      return validStage ? cur : "entry_data";
+    });
+  }, [entry?.id, entry?.formatted_data?.derived_stage, tracker?.tracker_config?.stage_mapping]);
+
   // Debug: Log field structure when entry and tracker are loaded
   useEffect(() => {
     if (entry && tracker) {
@@ -606,12 +631,79 @@ const TrackerEntryDetailPage = () => {
     return out;
   }, [entry?.submission_data, entry?.formatted_data]);
 
-  // When Send SMS modal opens with multiple phones, default to first
+  // Parse entry.notes into list of { date, stage, status, text } for stage change notes.
+  // New format: "[YYYY-MM-DD HH:MM] Stage: X, Status: Y — text". Old: "[YYYY-MM-DD HH:MM] Stage change: text"
+  const stageChangeNotesList = useMemo(() => {
+    const raw = entry?.notes?.trim();
+    if (!raw) return [];
+    const lines = raw.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    return lines.map((line) => {
+      const newFormat = line.match(/^\[(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2})\]\s*Stage:\s*([^,]*),\s*Status:\s*([^—]+)\s*—\s*(.*)$/);
+      if (newFormat) return { date: newFormat[1], stage: newFormat[2].trim(), status: newFormat[3].trim(), text: newFormat[4].trim() || "—" };
+      const oldFormat = line.match(/^\[(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2})\]\s*Stage change:\s*(.*)$/);
+      if (oldFormat) return { date: oldFormat[1], stage: null, status: null, text: oldFormat[2].trim() || "—" };
+      return { date: null, stage: null, status: null, text: line };
+    });
+  }, [entry?.notes]);
+
+  // Chase dates: current chase_due/next_action_date from entry + chase_date from timeline actions (for left sidebar list)
+  const chaseDatesList = useMemo(() => {
+    const dates = new Set();
+    const fd = entry?.formatted_data || entry?.submission_data || {};
+    const current = fd.chase_due || fd.next_action_date || null;
+    if (current) dates.add(typeof current === "string" ? current.split("T")[0] : current);
+    (allTimelineEvents || []).forEach((ev) => {
+      const d = ev.chase_date;
+      if (d) dates.add(typeof d === "string" ? d.split("T")[0] : d);
+    });
+    return Array.from(dates).sort((a, b) => (a < b ? 1 : a > b ? -1 : 0));
+  }, [entry?.formatted_data, entry?.submission_data, allTimelineEvents]);
+
+  // SMS thread: only messages between patient and platform (Send SMS). Excludes general comments/notes.
+  const smsThread = useMemo(() => {
+    const items = [];
+    (inboundMessages || []).forEach((msg) => {
+      items.push({
+        type: "inbound",
+        id: `inbound_${msg.id}`,
+        timestamp: msg.received_at,
+        content: msg.content || "—",
+        source_address: msg.source_address,
+      });
+    });
+    (allTimelineEvents || []).forEach((e) => {
+      if (e.note_category === "SMS sent" || (e.type === "comment" && e.title === "SMS sent")) {
+        // Use full comment_text so we can parse "Message: ..."; description is only the first sentence and omits the body
+        const raw = e.comment_text || e.description || "";
+        let content = "";
+        const msgIdx = raw.indexOf("Message:");
+        if (msgIdx !== -1) {
+          content = raw.slice(msgIdx + 8).trim().replace(/\s*\[SID:.*$/, "").replace(/\s*\[Error:.*$/, "").trim();
+        }
+        if (!content) content = "—";
+        items.push({
+          type: "sent",
+          id: `sent_${e.id}`,
+          timestamp: e.timestamp,
+          content,
+          user_name: e.user_name,
+        });
+      }
+    });
+    items.sort((a, b) => {
+      const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+      const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+      return ta - tb;
+    });
+    return items;
+  }, [inboundMessages, allTimelineEvents]);
+
+  // When multiple phones exist, default to first for inline SMS composer
   useEffect(() => {
-    if (isSendSmsModalOpen && sendSmsPhoneCandidates.length >= 2 && !sendSmsPhoneField) {
+    if (sendSmsPhoneCandidates.length >= 2 && !sendSmsPhoneField) {
       setSendSmsPhoneField(sendSmsPhoneCandidates[0].fieldId);
     }
-  }, [isSendSmsModalOpen, sendSmsPhoneCandidates, sendSmsPhoneField]);
+  }, [sendSmsPhoneCandidates, sendSmsPhoneField]);
 
   const trackerFields = tracker?.tracker_fields?.fields || [];
   const trackerConfig = tracker?.tracker_config || {};
@@ -875,6 +967,11 @@ const TrackerEntryDetailPage = () => {
   };
 
   const stageMapping = tracker?.tracker_config?.stage_mapping || [];
+  const formTabsList = useMemo(
+    () => ["entry_data", ...(stageMapping || []).map((s) => String(s?.stage ?? s?.name ?? "").trim()).filter(Boolean)],
+    [stageMapping]
+  );
+  const effectiveFormsSubTab = formTabsList.includes(formsSubTab) ? formsSubTab : "entry_data";
   const currentStage = String(entry?.formatted_data?.derived_stage ?? "").trim();
   const currentStageIndex = stageMapping.findIndex((s) => String(s?.stage ?? s?.name ?? "").trim() === currentStage);
   const hasNextStage = currentStageIndex >= 0 && currentStageIndex < stageMapping.length - 1;
@@ -1048,6 +1145,13 @@ const TrackerEntryDetailPage = () => {
       : null;
   const showDetailsFilteredByStage = isStageStyledTracker && activeStageSection != null;
 
+  // When showing all sections (e.g. Entry data tab), which section to expand: current stage from entry, or first
+  const activeStageSectionIndexFromEntry =
+    isStageStyledTracker && stageMapping.length
+      ? stageMapping.findIndex((s) => (s?.stage ?? s?.name ?? "").toString().trim() === (entry?.formatted_data?.derived_stage ?? "").toString().trim())
+      : -1;
+  const expandedSectionIndex = activeStageSectionIndexFromEntry >= 0 ? activeStageSectionIndexFromEntry : 0;
+
   const openChangeStatusDialog = () => {
     const curStage = String(entry?.formatted_data?.derived_stage ?? "").trim();
     const initialStage = curStage || (stageMapping[0]?.stage ?? stageMapping[0]?.name ?? "");
@@ -1136,15 +1240,6 @@ const TrackerEntryDetailPage = () => {
     setLogActionChaseDate("");
     setLogActionNoChase(false);
     setIsLogActionOpen(true);
-  };
-
-  const handleOpenSetReminder = () => {
-    setCreateTaskForm({
-      title: "Task for case #" + entryNumber,
-      due_date: format(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), "yyyy-MM-dd"),
-      task_type: "",
-    });
-    setIsCreateTaskModalOpen(true);
   };
 
   const handleChangeStatusOrEdit = () => {
@@ -1314,10 +1409,6 @@ const TrackerEntryDetailPage = () => {
                         <MessageSquare className="mr-2 h-4 w-4" />
                         Add Action
                       </Button>
-                      <Button variant="outline" size="sm" onClick={handleOpenSetReminder}>
-                        <ListTodo className="mr-2 h-4 w-4" />
-                        Set Reminder
-                      </Button>
                       <Button variant="outline" size="sm" onClick={handleChangeStatusOrEdit}>
                         <Edit className="mr-2 h-4 w-4" />
                         Change Status
@@ -1356,10 +1447,10 @@ const TrackerEntryDetailPage = () => {
         </div>
       </header>
 
-      {/* 3-column: Summary | Timeline (actions at core) | Tasks */}
-      <div className="flex-1 grid grid-cols-1 lg:grid-cols-[280px_1fr_280px] gap-4 p-4 max-w-[1600px] w-full mx-auto">
-        {/* Left: Case summary */}
-        <aside className="space-y-3 order-2 lg:order-1">
+      {/* Two-column full-width: Sidebar (Summary + Tasks) | Main (Timeline) – like Documents */}
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 p-4 w-full">
+        {/* Left: Case summary, then Chase dates */}
+        <aside className="space-y-4 order-2 lg:order-1 lg:col-span-3">
           <Card>
             <CardHeader className="py-3">
               <CardTitle className="text-sm font-medium text-muted-foreground">Case summary</CardTitle>
@@ -1374,25 +1465,94 @@ const TrackerEntryDetailPage = () => {
               {(formFileAttachments.length + attachments.length) > 0 && <div><span className="text-muted-foreground">Attachments</span><p className="font-medium">{formFileAttachments.length + attachments.length} file(s)</p></div>}
             </CardContent>
           </Card>
-          <Button variant="outline" size="sm" className="w-full" onClick={() => setActiveTab("details")}><FileText className="mr-2 h-4 w-4" />Entry data & forms</Button>
+          <Card>
+            <CardHeader className="py-3">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Chase dates</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {chaseDatesList.length > 0 ? (
+                <ul className="space-y-2 max-h-[min(240px,35vh)] overflow-y-auto text-sm">
+                  {chaseDatesList.map((dateStr) => (
+                    <li key={dateStr} className="font-medium">
+                      {format(parseUTCDate(dateStr + "T12:00:00"), "d MMM yyyy")}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-muted-foreground">No chase dates recorded.</p>
+              )}
+            </CardContent>
+          </Card>
         </aside>
 
-        {/* Centre: Activity timeline (actions at core) */}
-        <main className="space-y-3 order-1 lg:order-2 min-w-0">
+        {/* Main: 5 tabs – Activity, Forms, Communication, Notes & Files, Audit */}
+        <main className="space-y-3 order-1 lg:order-2 min-w-0 lg:col-span-9">
+          <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
+            <TabsList className="bg-muted/50 flex flex-wrap gap-1">
+              <TabsTrigger value="activity"><Clock className="mr-2 h-4 w-4" />Activity</TabsTrigger>
+              <TabsTrigger value="forms"><FileText className="mr-2 h-4 w-4" />Forms</TabsTrigger>
+              <TabsTrigger value="communication"><MessageSquare className="mr-2 h-4 w-4" />Communications</TabsTrigger>
+              <TabsTrigger value="notes"><MessageSquare className="mr-2 h-4 w-4" />Notes & Files ({comments.length})</TabsTrigger>
+              <TabsTrigger value="audit"><FileText className="mr-2 h-4 w-4" />Audit</TabsTrigger>
+            </TabsList>
+            <TabsContent value="activity" className="mt-4">
           <Card>
             <CardHeader className="py-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <CardTitle className="text-sm font-medium">Activity timeline</CardTitle>
                 {canEditCase && !isClosed && (
                   <div className="flex flex-wrap gap-1">
-                    <Button variant="outline" size="sm" onClick={() => setActiveTab("notes")}><MessageSquare className="mr-1.5 h-3.5 w-3.5" />Note</Button>
-                    {canSendSms && <Button variant="outline" size="sm" onClick={() => { setSendSmsTemplate("please_contact_us"); setIsSendSmsModalOpen(true); }}><Smartphone className="mr-1.5 h-3.5 w-3.5" />SMS</Button>}
-                    <Button variant="outline" size="sm" onClick={() => { setCreateTaskForm({ title: `Task for case #${entryNumber}`, due_date: format(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), "yyyy-MM-dd"), task_type: "" }); setIsCreateTaskModalOpen(true); }}><ListTodo className="mr-1.5 h-3.5 w-3.5" />Task</Button>
+                    <Button variant="outline" size="sm" onClick={() => handleTabChange("notes")}><MessageSquare className="mr-1.5 h-3.5 w-3.5" />Note</Button>
+                    {canSendSms && <Button variant="outline" size="sm" onClick={() => handleTabChange("communication")}><Smartphone className="mr-1.5 h-3.5 w-3.5" />SMS</Button>}
                   </div>
                 )}
               </div>
             </CardHeader>
             <CardContent>
+              {stageChangeNotesList.length > 0 && (
+                <Collapsible defaultOpen={false} className="mb-4 group rounded-md border border-muted/60 bg-muted/40">
+                  <CollapsibleTrigger className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left hover:bg-muted/50 rounded-md data-[state=open]:rounded-b-none transition-colors">
+                    <div className="flex items-center gap-2">
+                      <MessageSquare className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Stage change notes</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] text-muted-foreground">{stageChangeNotesList.length} note{stageChangeNotesList.length === 1 ? "" : "s"}</span>
+                      <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180" />
+                    </div>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <ul className="space-y-2 max-h-[160px] overflow-y-auto px-3 pb-3 pt-1 pr-2">
+                      {stageChangeNotesList.map((item, idx) => (
+                        <li key={idx} className="flex flex-col gap-1 text-xs border-l-2 border-primary/30 pl-2 py-1">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            {item.date && (
+                              <span className="text-[11px] text-muted-foreground whitespace-nowrap">
+                                {format(parseUTCDate(item.date.replace(" ", "T") + ":00"), "d MMM yyyy, HH:mm")}
+                              </span>
+                            )}
+                            {(item.stage != null && item.stage !== "") || (item.status != null && item.status !== "") ? (
+                              <div className="flex flex-wrap items-center gap-1">
+                                {item.stage != null && item.stage !== "" && (
+                                  <Badge variant="secondary" className="text-[10px] font-normal py-0 px-1.5 rounded-full">
+                                    {item.stage}
+                                  </Badge>
+                                )}
+                                {item.status != null && item.status !== "" && (
+                                  <Badge variant="outline" className="text-[10px] font-normal py-0 px-1.5 rounded-full">
+                                    {item.status}
+                                  </Badge>
+                                )}
+                              </div>
+                            ) : null}
+                          </div>
+                          <p className="text-xs text-foreground break-words leading-snug">{item.text}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  </CollapsibleContent>
+                </Collapsible>
+              )}
               <div className="max-h-[min(400px,50vh)] overflow-y-auto">
                 {timelineLoading ? (
                   <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
@@ -1435,51 +1595,10 @@ const TrackerEntryDetailPage = () => {
               </div>
             </CardContent>
           </Card>
-        </main>
+            </TabsContent>
 
-        {/* Right: Tasks & reminders */}
-        <aside className="space-y-3 order-3">
-          <Card>
-            <CardHeader className="py-3">
-              <CardTitle className="text-sm font-medium">Tasks & reminders</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="max-h-[min(400px,50vh)] overflow-y-auto">
-                <p className="text-xs text-muted-foreground">Tasks linked to this case and chase dates appear here.</p>
-                {entryTasksData?.tasks?.length > 0 ? (
-                  <ul className="space-y-2">
-                    {entryTasksData.tasks.map((task) => (
-                      <li key={task.id} className="text-sm border-b border-border pb-2 last:border-0 last:pb-0">
-                        <Link href={`/admin/tasks/${task.slug || task.id}`} className="font-medium text-primary hover:underline block truncate">
-                          {task.title}
-                        </Link>
-                        <span className="text-xs text-muted-foreground">
-                          {task.due_date ? format(parseUTCDate(task.due_date), "d MMM yyyy") : "No date"} · {task.status || "pending"}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="text-xs text-muted-foreground">No tasks linked yet.</p>
-                )}
-              </div>
-              <Button size="sm" className="w-full" onClick={() => { setCreateTaskForm({ title: `Task for case #${entryNumber}`, due_date: format(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), "yyyy-MM-dd"), task_type: "" }); setIsCreateTaskModalOpen(true); }}><ListTodo className="mr-2 h-4 w-4" />Add task</Button>
-            </CardContent>
-          </Card>
-        </aside>
-      </div>
-
-      {/* Secondary tabs: Entry data | Notes & files | Audit */}
-      <div className="border-t bg-background px-4 py-3">
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full max-w-[1600px] mx-auto">
-          <TabsList className="bg-muted/50">
-            <TabsTrigger value="details"><FileText className="mr-2 h-4 w-4" />Entry data</TabsTrigger>
-            <TabsTrigger value="notes"><MessageSquare className="mr-2 h-4 w-4" />Notes & files ({comments.length})</TabsTrigger>
-            <TabsTrigger value="audit"><FileText className="mr-2 h-4 w-4" />Audit logs</TabsTrigger>
-          </TabsList>
-
-        {/* Details Tab */}
-        <TabsContent value="details" className="space-y-4">
+        {/* Forms Tab */}
+        <TabsContent value="forms" className="space-y-4 mt-4">
           {/* Complete Triage: when status is Awaiting Triage and tracker has triage_outcome */}
           {!isEditing && canEditCase && entry?.status === "Awaiting Triage" && tracker?.tracker_fields?.fields?.some((f) => (f.id || f.name) === "triage_outcome") && (
             <Card className="border-primary/50">
@@ -1581,10 +1700,19 @@ const TrackerEntryDetailPage = () => {
             </Card>
           )}
 
+          <Tabs value={effectiveFormsSubTab} onValueChange={setFormsSubTab} className="w-full">
+            <TabsList className="bg-muted/50 flex flex-wrap gap-1 mb-4">
+              <TabsTrigger value="entry_data">Entry data</TabsTrigger>
+              {stageMapping?.map((s) => {
+                const n = String(s?.stage ?? s?.name ?? "").trim();
+                return n ? <TabsTrigger key={n} value={n}>{n}</TabsTrigger> : null;
+              })}
+            </TabsList>
+            <TabsContent value="entry_data" className="mt-0 space-y-4">
           {isEditing ? (
             <div className="space-y-4">
-              {/* Stage-styled + Entry data tab: show only shared/entry data (summarises across stages) */}
-              {isStageStyledTracker && activeStageTab === ENTRY_DATA_TAB ? (
+              {/* Entry data tab: shared/entry data (stage-styled) or full form (non-stage) */}
+              {isStageStyledTracker ? (
                 fieldsWithoutSection.length > 0 ? (
                   <Card>
                     <CardHeader>
@@ -1640,372 +1768,6 @@ const TrackerEntryDetailPage = () => {
                     <p className="text-sm text-muted-foreground py-4">No shared fields for this tracker.</p>
                   </>
                 )
-              ) : showDetailsFilteredByStage ? (
-                <>
-                  {/* Current stage section only (no Entry data at top; use Entry data tab for that) */}
-                  {activeStageSection && (() => {
-                    const sectionKey = activeStageSection.id ?? activeStageSection.title ?? activeStageSection.label ?? `section-${activeStageSectionIndex}`;
-                    const statusFieldId = tracker?.tracker_config?.status_field_id;
-                    const sectionFields = (fieldsBySection[sectionKey]?.fields || [])
-                      .filter((field) => checkFieldVisibility(field, effectiveEntryData))
-                      .filter((field) => {
-                        const fid = field.id ?? field.name ?? field.field_id;
-                        return !statusFieldId || String(fid) !== String(statusFieldId);
-                      });
-                    if (sectionFields.length === 0 && !statusFieldId) return null;
-                    return (
-                      <Card key={sectionKey}>
-                        <CardHeader>
-                          <CardTitle>{activeStageSection.label || activeStageSection.id}</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                          {/* Stage & Status at top of section so consultants can set next stage/status without leaving the form */}
-                          {(() => {
-                            const currentStageConfig = activeStageSectionIndex >= 0 && stageMapping[activeStageSectionIndex]
-                              ? stageMapping[activeStageSectionIndex]
-                              : null;
-                            const allowedNext = currentStageConfig?.allowed_next_stages;
-                            const stagesForDropdown = (allowedNext && Array.isArray(allowedNext) && allowedNext.length > 0)
-                              ? stageMapping.filter((s) => {
-                                  const name = (s?.stage ?? s?.name ?? "").toString().trim();
-                                  return name && allowedNext.some((a) => (typeof a === "string" ? a : (a?.stage ?? a?.name ?? "")).toString().trim() === name);
-                                })
-                              : (tracker?.tracker_config?.stage_mapping || []);
-                            return (
-                          <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
-                            <p className="text-sm font-medium text-muted-foreground">Set the next stage and status for this entry</p>
-                            <div className="flex flex-wrap items-end gap-3">
-                              <div className="space-y-2">
-                                <Label htmlFor="section-stage-select" className="text-xs">Stage</Label>
-                                <Select
-                                  id="section-stage-select"
-                                  value={editModeStage || ""}
-                                  onValueChange={(stageName) => {
-                                    const name = (stageName ?? "").toString().trim();
-                                    if (!name) return;
-                                    setEditModeStage(name);
-                                    const stageItem = stageMapping.find((s) => (s?.stage ?? s?.name ?? "").toString().trim() === name);
-                                    const statuses = (stageItem?.statuses ?? stageItem?.status_list ?? []).filter(Boolean);
-                                    const cur = entry?.status ?? "";
-                                    setEntryStatus(statuses.includes(cur) ? cur : (statuses[0] ?? ""));
-                                  }}
-                                >
-                                  <SelectTrigger className="w-[180px]">
-                                    <SelectValue placeholder="Stage" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {stagesForDropdown.map((item) => {
-                                      const stageName = item?.stage ?? item?.name ?? "";
-                                      if (!stageName) return null;
-                                      return (
-                                        <SelectItem key={stageName} value={stageName}>
-                                          {stageName}
-                                        </SelectItem>
-                                      );
-                                    })}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              <div className="space-y-2">
-                                <Label htmlFor="section-status-select" className="text-xs">Status</Label>
-                                <Select
-                                  id="section-status-select"
-                                  value={statusesForEditModeStageFiltered.includes(entryStatus) ? entryStatus : (statusesForEditModeStageFiltered[0] ?? "")}
-                                  onValueChange={(v) => {
-                                    setEntryStatus(v ?? "");
-                                    handleFieldChange(tracker?.tracker_config?.status_field_id || "current_status", v);
-                                  }}
-                                >
-                                  <SelectTrigger className="w-[200px]">
-                                    <SelectValue placeholder="Status" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {statusesForEditModeStageFiltered.map((status) => (
-                                      <SelectItem key={status} value={status}>
-                                        {humanizeStatusForDisplay(status)}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                            </div>
-                          </div>
-                            );
-                          })()}
-                          {(() => {
-                            const sectionGroups = fieldsBySection[sectionKey]?.groups;
-                            const sectionFieldIds = new Set(sectionFields.map((f) => (f.id || f.name || f.field_id)));
-                            const fieldIdsInGroups = new Set((sectionGroups || []).flatMap((g) => g.fields || []));
-                            const ungroupedSectionFields = sectionGroups?.length
-                              ? sectionFields.filter((f) => !fieldIdsInGroups.has(f.id || f.name || f.field_id))
-                              : [];
-                            if (sectionGroups?.length > 0) {
-                              const renderGroupField = (field) => {
-                                const fieldId = field.id || field.name || field.field_id;
-                                const value = effectiveEntryData[fieldId];
-                                const baseField = { ...field, type: field.type || field.field_type, field_label: field.label || field.field_label || field.name, field_name: field.name || field.id };
-                                return (
-                                  <CustomFieldRenderer
-                                    key={fieldId}
-                                    field={getFieldWithStageFilteredStatusOptions(baseField, statusesForEditModeStageFiltered)}
-                                    value={value}
-                                    otherTextValue={effectiveEntryData[`${fieldId}_other`]}
-                                    onChange={handleFieldChange}
-                                    error={fieldErrors[fieldId]}
-                                    readOnly={isFieldDisabledByCondition(field, effectiveEntryData)}
-                                  />
-                                );
-                              };
-                              return (
-                                <>
-                                  {sectionGroups.map((group) => {
-                                    if (!checkGroupVisibility(group, effectiveEntryData)) return null;
-                                    const groupFields = (group.fields || [])
-                                      .map((fid) => sectionFields.find((f) => (f.id || f.name || f.field_id) === fid))
-                                      .filter(Boolean);
-                                    const isTable = (group.layout || "") === "table";
-                                    const hasNewTableRows = isTable && Array.isArray(group.table_rows) && group.table_rows.length > 0;
-                                    const hasOldTableData = isTable && (Array.isArray(group.table_text_rows) && group.table_text_rows.length > 0 || groupFields.length > 0);
-                                    const hasTableRows = hasNewTableRows || hasOldTableData;
-                                    if (groupFields.length === 0 && !hasTableRows) return null;
-                                    const isGrid = (group.layout || "") === "grid" && (group.grid_rows?.length > 0 || group.grid_columns);
-                                    const rows = (group.grid_rows && group.grid_rows.length > 0)
-                                      ? group.grid_rows
-                                      : (group.grid_columns ? [group.grid_columns] : []);
-                                    return (
-                                      <div key={group.id || group.label} className="space-y-3">
-                                        {group.label && <h4 className="text-lg font-bold text-muted-foreground border-b pb-1.5">{group.label}</h4>}
-                                        {isTable ? (
-                                          (() => {
-                                            const tableCols = Array.isArray(group.table_columns) && group.table_columns.length > 0 ? group.table_columns : [{ id: "col_1", label: "Column 1" }];
-                                            const tableRows = Array.isArray(group.table_rows) ? group.table_rows : [];
-                                            const getFieldById = (fid) => sectionFields.find((f) => (f.id || f.name || f.field_id) === fid);
-                                            if (tableRows.length > 0) {
-                                              return (
-                                                <div className="overflow-x-auto">
-                                                  <table className="w-full border-collapse text-sm">
-                                                    <thead>
-                                                      <tr className="border-b border-border">
-                                                        {tableCols.map((col) => (
-                                                          <th key={col.id} className="text-left font-medium p-2 pr-4">{col.label || col.id}</th>
-                                                        ))}
-                                                      </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                      {tableRows.filter((row) => checkRowVisibility(row, effectiveEntryData)).map((row, rIdx) => {
-                                                        const cells = (row.cells || []).slice(0, tableCols.length);
-                                                        while (cells.length < tableCols.length) cells.push({ text: "", field_id: null });
-                                                        return (
-                                                          <tr key={rIdx} className="border-b border-border">
-                                                            {cells.map((cell, cIdx) => (
-                                                              <td key={cIdx} className="p-2 pr-4 align-middle">
-                                                                <div className="space-y-1">
-                                                                  {(cell.text ?? "").trim() ? <span className="text-muted-foreground">{cell.text}</span> : null}
-                                                                  {cell.field_id ? (() => {
-                                                                    const f = getFieldById(cell.field_id);
-                                                                    if (!f) return null;
-                                                                    const baseField = { ...f, type: f.type || f.field_type, field_label: f.label || f.field_label || f.name, field_name: f.name || f.id };
-                                                                    const fieldId = f.id || f.name || f.field_id;
-                                                                    return (
-                                                                      <CustomFieldRenderer
-                                                                        field={getFieldWithStageFilteredStatusOptions(baseField, statusesForEditModeStageFiltered)}
-                                                                        value={effectiveEntryData[fieldId]}
-                                                                        otherTextValue={effectiveEntryData[`${fieldId}_other`]}
-                                                                        onChange={handleFieldChange}
-                                                                        hideLabel
-                                                                        error={fieldErrors[fieldId]}
-                                                                        readOnly={isFieldDisabledByCondition(f, effectiveEntryData)}
-                                                                      />
-                                                                    );
-                                                                  })() : null}
-                                                                </div>
-                                                              </td>
-                                                            ))}
-                                                          </tr>
-                                                        );
-                                                      })}
-                                                    </tbody>
-                                                  </table>
-                                                </div>
-                                              );
-                                            }
-                                            const oldCols = tableCols.length >= 2 ? tableCols : [{ id: "label", label: "Label" }, { id: "value", label: "Value" }];
-                                            return (
-                                              <div className="overflow-x-auto">
-                                                <table className="w-full border-collapse text-sm">
-                                                  <thead>
-                                                    <tr className="border-b border-border">
-                                                      {oldCols.map((col) => (
-                                                        <th key={col.id} className="text-left font-medium p-2 pr-4">{col.label || col.id}</th>
-                                                      ))}
-                                                    </tr>
-                                                  </thead>
-                                                  <tbody>
-                                                    {(group.table_text_rows || []).map((row, rIdx) => (
-                                                      <tr key={`text-${rIdx}`} className="border-b border-border">
-                                                        {oldCols.map((col) => (
-                                                          <td key={col.id} className="p-2 pr-4 align-middle">{row[col.id] ?? (col.id === "label" ? row.col1 : col.id === "value" ? row.col2 : "") ?? ""}</td>
-                                                        ))}
-                                                      </tr>
-                                                    ))}
-                                                    {groupFields.map((field) => {
-                                                      const fieldId = field.id || field.name || field.field_id;
-                                                      const baseField = { ...field, type: field.type || field.field_type, field_label: field.label || field.field_label || field.name, field_name: field.name || field.id };
-                                                      return (
-                                                        <tr key={fieldId} className="border-b border-border">
-                                                          {oldCols.map((col) => (
-                                                            col.id === "value" ? (
-                                                              <td key={col.id} className="p-2 align-middle">
-                                                                <CustomFieldRenderer
-                                                                  field={getFieldWithStageFilteredStatusOptions(baseField, statusesForEditModeStageFiltered)}
-                                                                  value={effectiveEntryData[fieldId]}
-                                                                  otherTextValue={effectiveEntryData[`${fieldId}_other`]}
-                                                                  onChange={handleFieldChange}
-                                                                  hideLabel
-                                                                  error={fieldErrors[fieldId]}
-                                                                  readOnly={isFieldDisabledByCondition(f, effectiveEntryData)}
-                                                                />
-                                                              </td>
-                                                            ) : (
-                                                              <td key={col.id} className="p-2 pr-4 align-middle">
-                                                                {col.id === "label" ? (baseField.label || fieldId) : (field.field_options?.[col.id] ?? "")}
-                                                              </td>
-                                                            )
-                                                          ))}
-                                                        </tr>
-                                                      );
-                                                    })}
-                                                  </tbody>
-                                                </table>
-                                              </div>
-                                            );
-                                          })()
-                                        ) : isGrid && rows.length > 0 ? (
-                                          <div className="space-y-4">
-                                            {rows.map((gridRow, rowIdx) => {
-                                              const leftFields = (gridRow.left || []).map((fid) => sectionFields.find((f) => (f.id || f.name || f.field_id) === fid)).filter(Boolean);
-                                              const centerFields = (gridRow.center || []).map((fid) => sectionFields.find((f) => (f.id || f.name || f.field_id) === fid)).filter(Boolean);
-                                              const rightFields = (gridRow.right || []).map((fid) => sectionFields.find((f) => (f.id || f.name || f.field_id) === fid)).filter(Boolean);
-                                              return (
-                                                <div key={`row-${rowIdx}`} className="space-y-4">
-                                                  {Array.from({ length: Math.max(leftFields.length, rightFields.length) }, (_, i) => (
-                                                    <div key={`lr-${i}`} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                      <div className="space-y-3">{leftFields[i] ? renderGroupField(leftFields[i]) : null}</div>
-                                                      <div className="space-y-3">{rightFields[i] ? renderGroupField(rightFields[i]) : null}</div>
-                                                    </div>
-                                                  ))}
-                                                  {centerFields.map((field) => (
-                                                    <div key={field.id || field.name || field.field_id} className="w-full">
-                                                      {renderGroupField(field)}
-                                                    </div>
-                                                  ))}
-                                                </div>
-                                              );
-                                            })}
-                                          </div>
-                                        ) : (
-                                          <div className="space-y-3 pl-0">
-                                            {groupFields.map(renderGroupField)}
-                                          </div>
-                                        )}
-                                      </div>
-                                    );
-                                  })}
-                                  {ungroupedSectionFields.length > 0 && (
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 space-y-3">
-                                      {ungroupedSectionFields.map((field) => {
-                                        const fieldId = field.id || field.name || field.field_id;
-                                        const value = effectiveEntryData[fieldId];
-                                        const baseField = { ...field, type: field.type || field.field_type, field_label: field.label || field.field_label || field.name, field_name: field.name || field.id };
-                                        return (
-                                          <CustomFieldRenderer
-                                            key={fieldId}
-                                            field={getFieldWithStageFilteredStatusOptions(baseField, statusesForEditModeStageFiltered)}
-                                            value={value}
-                                            otherTextValue={effectiveEntryData[`${fieldId}_other`]}
-                                            onChange={handleFieldChange}
-                                            error={fieldErrors[fieldId]}
-                                            readOnly={isFieldDisabledByCondition(field, effectiveEntryData)}
-                                          />
-                                        );
-                                      })}
-                                    </div>
-                                  )}
-                                </>
-                              );
-                            }
-                            return sectionFields.map((field) => {
-                              const fieldId = field.id || field.name || field.field_id;
-                              const value = effectiveEntryData[fieldId];
-                              const baseField = { ...field, type: field.type || field.field_type, field_label: field.label || field.field_label || field.name, field_name: field.name || field.id };
-                              return (
-                                <CustomFieldRenderer
-                                  key={fieldId}
-                                  field={getFieldWithStageFilteredStatusOptions(baseField, statusesForEditModeStageFiltered)}
-                                  value={value}
-                                  otherTextValue={effectiveEntryData[`${fieldId}_other`]}
-                                  onChange={handleFieldChange}
-                                  error={fieldErrors[fieldId]}
-                                  readOnly={isFieldDisabledByCondition(field, effectiveEntryData)}
-                                />
-                              );
-                            });
-                          })()}
-                        </CardContent>
-                      </Card>
-                    );
-                  })()}
-                  {/* Other stages: expand to see previous/other stage data */}
-                  {sections.filter((_, i) => i !== activeStageSectionIndex).length > 0 && (
-                    <Collapsible className="group rounded-lg border bg-muted/30">
-                      <CollapsibleTrigger className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-medium hover:bg-muted/50 rounded-t-lg data-[state=open]:rounded-b-none">
-                        <span className="text-muted-foreground">View other stages</span>
-                        <ChevronDown className="h-4 w-4 shrink-0 transition-transform duration-200 group-data-[state=open]:rotate-180" />
-                      </CollapsibleTrigger>
-                      <CollapsibleContent>
-                        <div className="rounded-b-lg border border-t-0 bg-background divide-y">
-                          {sections.map((section, sectionIndex) => {
-                            if (sectionIndex === activeStageSectionIndex) return null;
-                            const sectionKey = section.id ?? section.title ?? section.label ?? `section-${sectionIndex}`;
-                            const sectionFields = getVisibleSectionFields(sectionKey, effectiveEntryData);
-                            if (sectionFields.length === 0) return null;
-                            const stageName = stageMapping[sectionIndex]?.stage ?? stageMapping[sectionIndex]?.name ?? section.label ?? sectionKey;
-                            return (
-                              <Collapsible key={sectionKey} className="group">
-                                <CollapsibleTrigger className="flex w-full items-center justify-between px-4 py-2.5 text-left text-sm hover:bg-muted/50">
-                                  <span>{stageName}</span>
-                                  <ChevronRight className="h-4 w-4 shrink-0 transition-transform duration-200 group-data-[state=open]:rotate-90" />
-                                </CollapsibleTrigger>
-                                <CollapsibleContent>
-                                  <div className="px-4 pb-4 pt-1 space-y-3">
-                                    {sectionFields.map((field) => {
-                                      const fieldId = field.id || field.name || field.field_id;
-                                      const value = effectiveEntryData[fieldId];
-                                      const stageForSection = stageMapping[sectionIndex];
-                                      const statusesForSectionStage = (stageForSection?.statuses ?? stageForSection?.status_list ?? []).filter(Boolean);
-                                      const baseField = { ...field, type: field.type || field.field_type, field_label: field.label || field.field_label || field.name, field_name: field.name || field.id };
-                                      return (
-                                        <CustomFieldRenderer
-                                          key={fieldId}
-                                          field={getFieldWithStageFilteredStatusOptions(baseField, statusesForSectionStage.length ? statusesForSectionStage : statusesForEditModeStage)}
-                                          value={value}
-                                          otherTextValue={effectiveEntryData[`${fieldId}_other`]}
-                                          onChange={handleFieldChange}
-                                          error={fieldErrors[fieldId]}
-                                          readOnly={isFieldDisabledByCondition(field, effectiveEntryData)}
-                                        />
-                                      );
-                                    })}
-                                  </div>
-                                </CollapsibleContent>
-                              </Collapsible>
-                            );
-                          })}
-                        </div>
-                      </CollapsibleContent>
-                    </Collapsible>
-                  )}
-                </>
               ) : (
                 <>
                   {/* Non-stage-styled: Entry Data card when there are fields without section */}
@@ -2035,39 +1797,45 @@ const TrackerEntryDetailPage = () => {
                     </Card>
                   )}
 
-                  {/* Render fields by section for editing (all sections when not stage-filtered) */}
+                  {/* Render fields by section for editing (all sections when not stage-filtered) – collapsed except active stage */}
                   {sections.length > 0 && (
                     sections.map((section, sectionIndex) => {
                       const sectionKey = section.id ?? section.title ?? section.label ?? `section-${sectionIndex}`;
                       const sectionFields = getVisibleSectionFields(sectionKey, effectiveEntryData);
                       if (sectionFields.length === 0) return null;
+                      const isActiveStage = sectionIndex === expandedSectionIndex;
 
                       return (
-                        <Card key={sectionKey}>
-                          <CardHeader>
-                            <CardTitle>{section.label || section.id}</CardTitle>
-                          </CardHeader>
-                          <CardContent className="space-y-4">
-                            {sectionFields.map((field) => {
-                              const fieldId = field.id || field.name || field.field_id;
-                              const value = effectiveEntryData[fieldId];
-                              const stageForSection = stageMapping[sectionIndex];
-                              const statusesForSectionStage = (stageForSection?.statuses ?? stageForSection?.status_list ?? []).filter(Boolean);
-                              const baseField = { ...field, type: field.type || field.field_type, field_label: field.label || field.field_label || field.name, field_name: field.name || field.id };
-                              return (
-                                <CustomFieldRenderer
-                                  key={fieldId}
-                                  field={getFieldWithStageFilteredStatusOptions(baseField, statusesForSectionStage.length ? statusesForSectionStage : statusesForEditModeStage)}
-                                  value={value}
-                                  otherTextValue={effectiveEntryData[`${fieldId}_other`]}
-                                  onChange={handleFieldChange}
-                                  error={fieldErrors[fieldId]}
-                                  readOnly={isFieldDisabledByCondition(field, effectiveEntryData)}
-                                />
-                              );
-                            })}
-                          </CardContent>
-                        </Card>
+                        <Collapsible key={sectionKey} defaultOpen={isActiveStage} className="group rounded-lg border bg-card">
+                          <CollapsibleTrigger className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-medium hover:bg-muted/50 rounded-t-lg data-[state=open]:rounded-b-none transition-colors">
+                            <span>{section.label || section.id}</span>
+                            <ChevronDown className="h-4 w-4 shrink-0 transition-transform duration-200 group-data-[state=open]:rotate-180" />
+                          </CollapsibleTrigger>
+                          <CollapsibleContent>
+                            <Card className="rounded-t-none border-t">
+                              <CardContent className="pt-4 space-y-4">
+                                {sectionFields.map((field) => {
+                                  const fieldId = field.id || field.name || field.field_id;
+                                  const value = effectiveEntryData[fieldId];
+                                  const stageForSection = stageMapping[sectionIndex];
+                                  const statusesForSectionStage = (stageForSection?.statuses ?? stageForSection?.status_list ?? []).filter(Boolean);
+                                  const baseField = { ...field, type: field.type || field.field_type, field_label: field.label || field.field_label || field.name, field_name: field.name || field.id };
+                                  return (
+                                    <CustomFieldRenderer
+                                      key={fieldId}
+                                      field={getFieldWithStageFilteredStatusOptions(baseField, statusesForSectionStage.length ? statusesForSectionStage : statusesForEditModeStage)}
+                                      value={value}
+                                      otherTextValue={effectiveEntryData[`${fieldId}_other`]}
+                                      onChange={handleFieldChange}
+                                      error={fieldErrors[fieldId]}
+                                      readOnly={isFieldDisabledByCondition(field, effectiveEntryData)}
+                                    />
+                                  );
+                                })}
+                              </CardContent>
+                            </Card>
+                          </CollapsibleContent>
+                        </Collapsible>
                       );
                     })
                   )}
@@ -2109,8 +1877,8 @@ const TrackerEntryDetailPage = () => {
             </div>
           ) : (
             <div className="space-y-4">
-              {/* Stage-styled + Entry data tab: show only shared/entry data (summarises across stages) */}
-              {isStageStyledTracker && activeStageTab === ENTRY_DATA_TAB ? (
+              {/* Entry data tab: shared/entry data (stage-styled) or full form (non-stage) */}
+              {isStageStyledTracker ? (
                 fieldsWithoutSection.length > 0 ? (
                   <Card>
                     <CardHeader>
@@ -2161,78 +1929,6 @@ const TrackerEntryDetailPage = () => {
                     <p className="text-sm text-muted-foreground py-4">No shared fields for this tracker.</p>
                   </>
                 )
-              ) : showDetailsFilteredByStage ? (
-                <>
-                  {/* Current stage section only (no Entry data at top; use Entry data tab for that) */}
-                  {activeStageSection && (() => {
-                    const displayData = entry.formatted_data || entry.submission_data || entry.entry_data || {};
-                    const sectionKey = activeStageSection.id ?? activeStageSection.title ?? activeStageSection.label ?? `section-${activeStageSectionIndex}`;
-                    const sectionFields = getVisibleSectionFields(sectionKey, displayData);
-                    if (sectionFields.length === 0) return null;
-                    return (
-                      <Card key={sectionKey}>
-                        <CardHeader>
-                          <CardTitle>{activeStageSection.label || activeStageSection.id}</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                          {sectionFields.map((field) => {
-                            const fieldId = field.id || field.name || field.field_id;
-                            const value = fieldId ? displayData[fieldId] : null;
-                            return (
-                              <div key={field.id || field.name || field.field_id}>
-                                <label className="text-sm font-medium text-muted-foreground">{field.label || "Untitled Field"}</label>
-                                <div className="mt-1 text-sm">{formatFieldValue(field, value)}</div>
-                              </div>
-                            );
-                          })}
-                        </CardContent>
-                      </Card>
-                    );
-                  })()}
-                  {/* Other stages: expand to see previous/other stage data */}
-                  {sections.filter((_, i) => i !== activeStageSectionIndex).length > 0 && (
-                    <Collapsible className="group rounded-lg border bg-muted/30">
-                      <CollapsibleTrigger className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-medium hover:bg-muted/50 rounded-t-lg data-[state=open]:rounded-b-none">
-                        <span className="text-muted-foreground">View other stages</span>
-                        <ChevronDown className="h-4 w-4 shrink-0 transition-transform duration-200 group-data-[state=open]:rotate-180" />
-                      </CollapsibleTrigger>
-                      <CollapsibleContent>
-                        <div className="rounded-b-lg border border-t-0 bg-background divide-y">
-                          {sections.map((section, sectionIndex) => {
-                            if (sectionIndex === activeStageSectionIndex) return null;
-                            const displayData = entry.formatted_data || entry.submission_data || entry.entry_data || {};
-                            const sectionKey = section.id ?? section.title ?? section.label ?? `section-${sectionIndex}`;
-                            const sectionFields = getVisibleSectionFields(sectionKey, displayData);
-                            if (sectionFields.length === 0) return null;
-                            const stageName = stageMapping[sectionIndex]?.stage ?? stageMapping[sectionIndex]?.name ?? section.label ?? sectionKey;
-                            return (
-                              <Collapsible key={sectionKey} className="group">
-                                <CollapsibleTrigger className="flex w-full items-center justify-between px-4 py-2.5 text-left text-sm hover:bg-muted/50">
-                                  <span>{stageName}</span>
-                                  <ChevronRight className="h-4 w-4 shrink-0 transition-transform duration-200 group-data-[state=open]:rotate-90" />
-                                </CollapsibleTrigger>
-                                <CollapsibleContent>
-                                  <div className="px-4 pb-4 pt-1 space-y-3">
-                                    {sectionFields.map((field) => {
-                                      const fieldId = field.id || field.name || field.field_id;
-                                      const value = fieldId ? displayData[fieldId] : null;
-                                      return (
-                                        <div key={field.id || field.name || field.field_id}>
-                                          <label className="text-sm font-medium text-muted-foreground">{field.label || "Untitled Field"}</label>
-                                          <div className="mt-1 text-sm">{formatFieldValue(field, value)}</div>
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                </CollapsibleContent>
-                              </Collapsible>
-                            );
-                          })}
-                        </div>
-                      </CollapsibleContent>
-                    </Collapsible>
-                  )}
-                </>
               ) : (
                 <>
                   {/* Non-stage-styled: Entry Data card when there are fields without section */}
@@ -2257,32 +1953,36 @@ const TrackerEntryDetailPage = () => {
                     </Card>
                   )}
 
-                  {/* Render fields by section (all sections when not stage-filtered) */}
+                  {/* Render fields by section (all sections when not stage-filtered) – collapsed except active stage */}
                   {sections.length > 0 ? (
                     sections.map((section, sectionIndex) => {
                       const displayData = entry.formatted_data || entry.submission_data || entry.entry_data || {};
                       const sectionKey = section.id ?? section.title ?? section.label ?? `section-${sectionIndex}`;
                       const sectionFields = getVisibleSectionFields(sectionKey, displayData);
                       if (sectionFields.length === 0) return null;
+                      const isActiveStage = sectionIndex === expandedSectionIndex;
 
                       return (
-                        <Card key={sectionKey}>
-                          <CardHeader>
-                            <CardTitle>{section.label || section.id}</CardTitle>
-                          </CardHeader>
-                          <CardContent className="space-y-4">
-                            {sectionFields.map((field) => {
-                              const fieldId = field.id || field.name || field.field_id;
-                              const value = fieldId ? displayData[fieldId] : null;
-                              return (
-                                <div key={field.id || field.name || field.field_id}>
-                                  <label className="text-sm font-medium text-muted-foreground">{field.label || "Untitled Field"}</label>
-                                  <div className="mt-1 text-sm">{formatFieldValue(field, value)}</div>
-                                </div>
-                              );
-                            })}
-                          </CardContent>
-                        </Card>
+                        <Collapsible key={sectionKey} defaultOpen={isActiveStage} className="group rounded-lg border bg-card">
+                          <CollapsibleTrigger className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-medium hover:bg-muted/50 rounded-t-lg data-[state=open]:rounded-b-none transition-colors">
+                            <span>{section.label || section.id}</span>
+                            <ChevronDown className="h-4 w-4 shrink-0 transition-transform duration-200 group-data-[state=open]:rotate-180" />
+                          </CollapsibleTrigger>
+                          <CollapsibleContent>
+                            <div className="rounded-b-lg border border-t-0 bg-background px-4 pb-4 pt-3 space-y-3">
+                              {sectionFields.map((field) => {
+                                const fieldId = field.id || field.name || field.field_id;
+                                const value = fieldId ? displayData[fieldId] : null;
+                                return (
+                                  <div key={field.id || field.name || field.field_id}>
+                                    <label className="text-sm font-medium text-muted-foreground">{field.label || "Untitled Field"}</label>
+                                    <div className="mt-1 text-sm">{formatFieldValue(field, value)}</div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </CollapsibleContent>
+                        </Collapsible>
                       );
                     })
                   ) : null}
@@ -2316,6 +2016,230 @@ const TrackerEntryDetailPage = () => {
               )}
             </div>
           )}
+            </TabsContent>
+            {stageMapping?.map((s, sectionIndex) => {
+              const stageName = String(s?.stage ?? s?.name ?? "").trim();
+              if (!stageName) return null;
+              const section = sections[sectionIndex];
+              if (!section) return null;
+              const sectionKey = section.id ?? section.title ?? section.label ?? `section-${sectionIndex}`;
+              const displayData = entry?.formatted_data || entry?.submission_data || entry?.entry_data || {};
+              const sectionFields = getVisibleSectionFields(sectionKey, displayData);
+              return (
+                <TabsContent key={stageName} value={stageName} className="mt-0 space-y-4">
+                  <Card>
+                    <CardHeader><CardTitle>{section.label || section.id}</CardTitle></CardHeader>
+                    <CardContent className="space-y-4">
+                      {sectionFields.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">No fields in this stage.</p>
+                      ) : (
+                        sectionFields.map((field) => {
+                          const fieldId = field.id || field.name || field.field_id;
+                          const value = fieldId ? displayData[fieldId] : null;
+                          return (
+                            <div key={field.id || field.name || field.field_id}>
+                              <label className="text-sm font-medium text-muted-foreground">{field.label || "Untitled Field"}</label>
+                              <div className="mt-1 text-sm">{formatFieldValue(field, value)}</div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+              );
+            })}
+          </Tabs>
+        </TabsContent>
+
+        {/* Communications Tab – sub-tabs: SMS, WhatsApp, Portal, Email, Letter */}
+        <TabsContent value="communication" className="space-y-4 mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2"><MessageSquare className="h-5 w-5" />Communications</CardTitle>
+              <p className="text-sm text-muted-foreground mt-1">Messages between the patient and the care team (sent from this platform). Not for general comments or notes.</p>
+            </CardHeader>
+            <CardContent>
+              <Tabs value={communicationsSubTab} onValueChange={setCommunicationsSubTab} className="w-full">
+                <div className="overflow-x-auto overflow-y-hidden mb-4 -mx-1 px-1 scrollbar-thin md:overflow-x-visible" style={{ WebkitOverflowScrolling: "touch" }}>
+                  <TabsList className="bg-muted/50 flex flex-nowrap gap-1 w-max min-w-full md:min-w-0 md:flex-wrap">
+                    <TabsTrigger value="sms" className="shrink-0"><Smartphone className="mr-1.5 h-3.5 w-3.5" />SMS</TabsTrigger>
+                    <TabsTrigger value="whatsapp" className="shrink-0"><MessageCircle className="mr-1.5 h-3.5 w-3.5" />WhatsApp</TabsTrigger>
+                    <TabsTrigger value="portal" className="shrink-0"><Globe className="mr-1.5 h-3.5 w-3.5" />Portal</TabsTrigger>
+                    <TabsTrigger value="email" className="shrink-0"><Mail className="mr-1.5 h-3.5 w-3.5" />Email</TabsTrigger>
+                    <TabsTrigger value="letter" className="shrink-0"><FileText className="mr-1.5 h-3.5 w-3.5" />Letter</TabsTrigger>
+                  </TabsList>
+                </div>
+                <TabsContent value="sms" className="mt-0">
+                  <div className="rounded-xl border border-border/60 bg-card shadow-sm overflow-hidden flex flex-col min-h-[320px] max-h-[520px]">
+                    {/* Message thread */}
+                    <div className="flex-1 min-h-[180px] max-h-[380px] overflow-y-auto p-4 flex flex-col gap-3 bg-gradient-to-b from-muted/20 to-muted/5">
+                      {inboundMessagesLoading || timelineLoading ? (
+                        <div className="flex flex-col items-center justify-center gap-3 py-12 text-muted-foreground">
+                          <div className="rounded-full bg-muted/80 p-3">
+                            <Loader2 className="h-5 w-5 animate-spin" />
+                          </div>
+                          <span className="text-sm font-medium">Loading messages…</span>
+                        </div>
+                      ) : smsThread.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-12 text-center px-4">
+                          <div className="rounded-full bg-muted/60 p-4 mb-3">
+                            <MessageSquare className="h-8 w-8 text-muted-foreground" />
+                          </div>
+                          <p className="text-sm font-medium text-foreground">No messages yet</p>
+                          <p className="text-xs text-muted-foreground mt-1 max-w-[240px]">Send an SMS or wait for a reply from the patient.</p>
+                        </div>
+                      ) : (
+                        smsThread.map((item) => (
+                          <div
+                            key={item.id}
+                            className={cn("flex gap-2", item.type === "inbound" ? "justify-start" : "justify-end")}
+                          >
+                            {item.type === "inbound" && (
+                              <div className="shrink-0 w-8 h-8 rounded-full bg-muted flex items-center justify-center mt-0.5">
+                                <UserIcon className="h-4 w-4 text-muted-foreground" />
+                              </div>
+                            )}
+                            <div
+                              className={cn(
+                                "max-w-[80%] sm:max-w-[70%] rounded-2xl px-4 py-2.5 shadow-sm",
+                                item.type === "inbound"
+                                  ? "rounded-tl-md bg-background border border-border/80 text-foreground"
+                                  : "rounded-tr-md bg-primary text-primary-foreground"
+                              )}
+                            >
+                              {item.type === "inbound" && item.source_address && (
+                                <p className="text-[11px] font-medium text-muted-foreground mb-1">{item.source_address}</p>
+                              )}
+                              <p className="text-[15px] leading-snug break-words whitespace-pre-wrap">{item.content}</p>
+                              <p className={cn("text-[11px] mt-1.5", item.type === "inbound" ? "text-muted-foreground" : "text-primary-foreground/80")}>
+                                {item.timestamp ? format(parseUTCDate(item.timestamp), "d MMM, HH:mm") : ""}
+                                {item.type === "sent" && item.user_name ? ` · ${item.user_name}` : ""}
+                              </p>
+                            </div>
+                            {item.type === "sent" && (
+                              <div className="shrink-0 w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center mt-0.5">
+                                <Send className="h-3.5 w-3.5 text-primary" />
+                              </div>
+                            )}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                    {/* Composer */}
+                    <div className="border-t border-border/60 bg-background/95 backdrop-blur-sm p-3 space-y-3">
+                      {sendSmsPhoneCandidates.length >= 2 && (
+                        <div className="flex items-center gap-2">
+                          <Label className="text-xs font-medium text-muted-foreground shrink-0">Send to</Label>
+                          <Select
+                            value={sendSmsPhoneField || sendSmsPhoneCandidates[0]?.fieldId || ""}
+                            onValueChange={setSendSmsPhoneField}
+                          >
+                            <SelectTrigger className="h-8 rounded-lg text-sm">
+                              <SelectValue placeholder="Choose number" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {sendSmsPhoneCandidates.map((c) => (
+                                <SelectItem key={c.fieldId} value={c.fieldId}>
+                                  {c.label}: {c.value}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+                      <div className="flex gap-2 items-center">
+                        <div className="flex-1 rounded-2xl border border-input bg-muted/30 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:border-transparent transition-shadow min-h-[44px] flex items-center">
+                          <Textarea
+                            placeholder="Type a message…"
+                            value={sendSmsMessage}
+                            onChange={(e) => setSendSmsMessage(e.target.value)}
+                            className="min-h-[40px] max-h-[120px] resize-none border-0 bg-transparent py-2.5 px-4 text-sm placeholder:text-muted-foreground focus-visible:ring-0 focus-visible:ring-offset-0"
+                            disabled={!canSendSms}
+                            rows={1}
+                          />
+                        </div>
+                        <Button
+                          size="icon"
+                          className="h-[44px] w-[44px] rounded-full shrink-0 shadow-sm"
+                          disabled={!canSendSms || sendSmsSubmitting || (sendSmsPhoneCandidates.length >= 2 && !sendSmsPhoneField)}
+                          onClick={async () => {
+                            if (sendSmsPhoneCandidates.length === 0) return;
+                            if (sendSmsPhoneCandidates.length >= 2 && !sendSmsPhoneField) {
+                              toast.error("Choose which number to send to.");
+                              return;
+                            }
+                            const messageToSend = sendSmsMessage.trim();
+                            setSendSmsSubmitting(true);
+                            try {
+                              const body = {
+                                template_key: sendSmsTemplate,
+                                ...(messageToSend ? { optional_message: messageToSend } : {}),
+                              };
+                              if (sendSmsPhoneCandidates.length >= 2 && sendSmsPhoneField) body.phone_field = sendSmsPhoneField;
+                              else if (sendSmsPhoneCandidates.length === 1) body.phone_field = sendSmsPhoneCandidates[0].fieldId;
+                              const res = await trackersService.sendSmsFromEntry(entrySlug, body);
+                              if (res?.success) {
+                                setSendSmsMessage("");
+                                refetchTimeline?.();
+                                toast.success("SMS sent.");
+                              } else {
+                                toast.error(res?.error || "SMS could not be sent (check Twilio config).");
+                              }
+                            } catch (err) {
+                              const d = err?.response?.data?.detail;
+                              if (d?.available_phone_fields) {
+                                toast.error("Choose which number to send to.");
+                                setSendSmsPhoneField(d.available_phone_fields[0] || "");
+                              } else {
+                                toast.error(typeof d === "string" ? d : d?.message || "Failed to send SMS");
+                              }
+                            } finally {
+                              setSendSmsSubmitting(false);
+                            }
+                          }}
+                        >
+                          {sendSmsSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                        </Button>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-xs text-muted-foreground font-medium">Quick reply</span>
+                        <Select value={sendSmsTemplate} onValueChange={setSendSmsTemplate} disabled={!canSendSms}>
+                          <SelectTrigger className="h-8 rounded-lg text-xs w-[160px] border-border/60">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="appointment_reminder">Appointment reminder</SelectItem>
+                            <SelectItem value="prep_reminder">Prep reminder</SelectItem>
+                            <SelectItem value="please_contact_us">Please contact us</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        {!canSendSms && (
+                          <span className="text-xs text-muted-foreground">
+                            {!hasSmsSenderNumber && "SMS not configured."}
+                            {hasSmsSenderNumber && isClosed && "Case closed."}
+                            {hasSmsSenderNumber && !isClosed && !canEditCase && "No permission."}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </TabsContent>
+                <TabsContent value="whatsapp" className="mt-0 py-6 text-center text-sm text-muted-foreground">
+                  WhatsApp messaging — coming soon.
+                </TabsContent>
+                <TabsContent value="portal" className="mt-0 py-6 text-center text-sm text-muted-foreground">
+                  Patient portal messages — coming soon.
+                </TabsContent>
+                <TabsContent value="email" className="mt-0 py-6 text-center text-sm text-muted-foreground">
+                  Email — coming soon.
+                </TabsContent>
+                <TabsContent value="letter" className="mt-0 py-6 text-center text-sm text-muted-foreground">
+                  Letter — coming soon.
+                </TabsContent>
+              </Tabs>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* Notes & Files Tab */}
@@ -2433,154 +2357,6 @@ const TrackerEntryDetailPage = () => {
                   ))}
                 </ul>
               )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Timeline Tab */}
-        <TabsContent value="timeline" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Timeline</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="max-h-[70vh] overflow-y-auto">
-              {timelineLoading ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="h-6 w-6 animate-spin" />
-                </div>
-              ) : allTimelineEvents && allTimelineEvents.length > 0 ? (
-                <div className="relative">
-                  {/* Vertical line in the center */}
-                  <div className="absolute left-1/2 top-0 bottom-0 w-px bg-border transform -translate-x-1/2" />
-                  
-                  {/* Timeline events */}
-                  <div className="space-y-0">
-                    {allTimelineEvents.map((event, index) => {
-                      // Alternate between left and right (0 = left, 1 = right)
-                      const isLeft = index % 2 === 0;
-                      const prevEvent = allTimelineEvents[index - 1];
-                      const daysBetween = index > 0 && prevEvent?.timestamp && event.timestamp
-                        ? Math.abs(differenceInDays(parseUTCDate(prevEvent.timestamp), parseUTCDate(event.timestamp)))
-                        : null;
-                      
-                      return (
-                        <div key={event.id || index} className="relative">
-                          {/* Days between this event and the previous (on the vertical line) */}
-                          {daysBetween != null && (
-                            <div className="flex justify-center py-1">
-                              <span className="text-xs text-muted-foreground bg-background px-2 py-0.5 rounded border z-10">
-                                {daysBetween === 0 ? "Same day" : `${daysBetween} day${daysBetween === 1 ? "" : "s"}`}
-                              </span>
-                            </div>
-                          )}
-                          <div className={`relative flex ${isLeft ? "justify-start" : "justify-end"} pt-2 pb-6`}>
-                            {/* Event content */}
-                            <div className={`w-[45%] ${isLeft ? "pr-8 text-right" : "pl-8 text-left"}`}>
-                              <div className="bg-card border rounded-lg p-4 shadow-sm">
-                                <div className="flex flex-col">
-                                  <div className="flex-1 min-w-0">
-                                    {/* Stage and status at top of each entry */}
-                                    {(event.stage || event.status) && (
-                                      <div className="flex items-center gap-2 flex-wrap mb-2 pb-2 border-b">
-                                        {event.stage && (() => {
-                                          const stageColor = getStageColor(tracker?.tracker_config?.stage_mapping || [], event.stage);
-                                          return (
-                                            <Badge
-                                              variant="secondary"
-                                              className="text-xs font-normal border-0"
-                                              style={stageColor ? { backgroundColor: stageColor, color: "#fff" } : undefined}
-                                            >
-                                              {event.stage}
-                                            </Badge>
-                                          );
-                                        })()}
-                                        {event.status && (
-                                          <Badge variant="outline" className="text-xs font-normal">
-                                            {event.status}
-                                          </Badge>
-                                        )}
-                                      </div>
-                                    )}
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                      <h4 className="font-medium">{event.title}</h4>
-                                    {event.message_source === "sms" && <Badge variant="outline" className="text-xs">SMS</Badge>}
-                                    {event.message_source === "comment" && <Badge variant="outline" className="text-xs">Comment</Badge>}
-                                    {event.note_category && (
-                                      <Badge variant="secondary" className="text-xs">
-                                        {event.note_category}
-                                      </Badge>
-                                    )}
-                                    {(event.contact_method || event.contact_outcome) && (
-                                      <span className="text-xs text-muted-foreground">
-                                        {[event.contact_method, event.contact_outcome].filter(Boolean).join(" · ")}
-                                      </span>
-                                    )}
-                                  </div>
-                                  {(event.type === "field_updates" || event.type === "created_fields" || event.type === "created") && event.changes?.length > 0 ? (
-                                    <ul className="text-sm text-muted-foreground mt-2 space-y-1 list-none pl-0">
-                                      {event.changes.map((c, i) => (
-                                        <li key={c.field_id || i} className="break-words">
-                                          {event.type === "field_updates"
-                                            ? `${c.field_label}: ${c.old_value ?? "—"} → ${c.new_value ?? "—"}`
-                                            : `${c.field_label}: ${c.new_value ?? "—"}`}
-                                        </li>
-                                      ))}
-                                    </ul>
-                                  ) : event.description ? (
-                                    <p className="text-sm text-muted-foreground mt-2 break-words">
-                                      {formatTimelineDescription(event.description, event)}
-                                    </p>
-                                  ) : null}
-                                </div>
-                                <div className={`flex flex-col ${isLeft ? "items-end" : "items-start"} mt-3 pt-3 border-t`}>
-                                  <span className="text-xs text-muted-foreground whitespace-nowrap">
-                            {format(parseUTCDate(event.timestamp), "PPp")}
-                          </span>
-                                  {event.user_name && (
-                                    <span className="text-xs text-muted-foreground mt-1 whitespace-nowrap">
-                                      by {event.user_name}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                          
-                          {/* Center dot */}
-                          <div className="absolute left-1/2 transform -translate-x-1/2 w-3 h-3 rounded-full bg-primary border-2 border-background z-10" />
-                        </div>
-                          </div>
-                      );
-                    })}
-                  </div>
-                  
-                  {/* Load More button */}
-                  {timelinePagination.total_pages > timelinePage && (
-                    <div className="flex justify-center mt-8">
-                      <Button
-                        variant="outline"
-                        onClick={() => setTimelinePage((prev) => prev + 1)}
-                        disabled={timelineLoading}
-                      >
-                        {timelineLoading ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Loading...
-                          </>
-                        ) : (
-                          `Load More (${timelinePagination.total - allTimelineEvents.length} remaining)`
-                        )}
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground text-center py-8">
-                  No timeline events yet
-                </p>
-              )}
-              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -2903,6 +2679,7 @@ const TrackerEntryDetailPage = () => {
           </Card>
         </TabsContent>
       </Tabs>
+        </main>
       </div>
 
       {/* Log Action drawer */}
@@ -3096,167 +2873,6 @@ const TrackerEntryDetailPage = () => {
           </SheetFooter>
         </SheetContent>
       </Sheet>
-
-      {/* Phase 4.2: Create Task modal */}
-      <Dialog open={isCreateTaskModalOpen} onOpenChange={setIsCreateTaskModalOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Create Task</DialogTitle>
-            <DialogDescription>Create a task linked to this case. It will be associated with this tracker entry.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div>
-              <Label>Title</Label>
-              <Input
-                value={createTaskForm.title}
-                onChange={(e) => setCreateTaskForm((p) => ({ ...p, title: e.target.value }))}
-                placeholder="Task title"
-              />
-            </div>
-            <div>
-              <Label>Due date</Label>
-              <Input
-                type="date"
-                value={createTaskForm.due_date}
-                onChange={(e) => setCreateTaskForm((p) => ({ ...p, due_date: e.target.value }))}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsCreateTaskModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={async () => {
-                if (!createTaskForm.title?.trim()) {
-                  toast.error("Title is required");
-                  return;
-                }
-                try {
-                  await createTaskMutation.mutateAsync({
-                    title: createTaskForm.title.trim(),
-                    form_submission_id: entry?.id,
-                    form_id: entry?.form_id,
-                    due_date: createTaskForm.due_date ? new Date(createTaskForm.due_date).toISOString() : undefined,
-                    status: "pending",
-                    priority: "medium",
-                  });
-                  setIsCreateTaskModalOpen(false);
-                  setCreateTaskForm({ title: "", due_date: "", task_type: "" });
-                  toast.success("Task created");
-                } catch (err) {
-                  toast.error(err?.response?.data?.detail || "Failed to create task");
-                }
-              }}
-              disabled={createTaskMutation.isPending}
-            >
-              {createTaskMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              Create Task
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Phase 5.2: Send SMS modal */}
-      <Dialog
-        open={isSendSmsModalOpen}
-        onOpenChange={(open) => {
-          if (!open) setSendSmsPhoneField("");
-          setIsSendSmsModalOpen(open);
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Send SMS</DialogTitle>
-            <DialogDescription>
-              {sendSmsPhoneCandidates.length === 0 && "No phone number found in this case. Add a field whose name contains \"phone\" or \"mobile\"."}
-              {sendSmsPhoneCandidates.length === 1 && "Sending to the phone number below. Patient must have SMS consent on this case."}
-              {sendSmsPhoneCandidates.length >= 2 && "Choose which number to send to. Patient must have SMS consent on this case."}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            {sendSmsPhoneCandidates.length === 1 && (
-              <p className="text-sm font-medium text-foreground rounded-md bg-muted/50 px-3 py-2">
-                Sending to: {sendSmsPhoneCandidates[0].value}
-              </p>
-            )}
-            {sendSmsPhoneCandidates.length >= 2 && (
-              <div>
-                <Label>Send to this number</Label>
-                <Select
-                  value={sendSmsPhoneField || sendSmsPhoneCandidates[0]?.fieldId || ""}
-                  onValueChange={setSendSmsPhoneField}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Choose number" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {sendSmsPhoneCandidates.map((c) => (
-                      <SelectItem key={c.fieldId} value={c.fieldId}>
-                        {c.label}: {c.value}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-            <div>
-              <Label>Template</Label>
-              <Select value={sendSmsTemplate} onValueChange={setSendSmsTemplate}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="appointment_reminder">Appointment reminder</SelectItem>
-                  <SelectItem value="prep_reminder">Prep reminder</SelectItem>
-                  <SelectItem value="please_contact_us">Please contact us</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsSendSmsModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={async () => {
-                if (sendSmsPhoneCandidates.length === 0) return;
-                if (sendSmsPhoneCandidates.length >= 2 && !sendSmsPhoneField) {
-                  toast.error("Choose which number to send to.");
-                  return;
-                }
-                setSendSmsSubmitting(true);
-                try {
-                  const body = { template_key: sendSmsTemplate };
-                  if (sendSmsPhoneCandidates.length >= 2 && sendSmsPhoneField) body.phone_field = sendSmsPhoneField;
-                  else if (sendSmsPhoneCandidates.length === 1) body.phone_field = sendSmsPhoneCandidates[0].fieldId;
-                  const res = await trackersService.sendSmsFromEntry(entrySlug, body);
-                  setIsSendSmsModalOpen(false);
-                  if (res?.success) {
-                    toast.success("SMS sent. A note has been added to the timeline.");
-                  } else {
-                    toast.error(res?.error || "SMS could not be sent (check Twilio config).");
-                  }
-                } catch (err) {
-                  const d = err?.response?.data?.detail;
-                  if (d?.available_phone_fields) {
-                    toast.error("Choose which number to send to.");
-                    setSendSmsPhoneField(d.available_phone_fields[0] || "");
-                  } else {
-                    toast.error(typeof d === "string" ? d : d?.message || "Failed to send SMS");
-                  }
-                } finally {
-                  setSendSmsSubmitting(false);
-                }
-              }}
-              disabled={sendSmsSubmitting || sendSmsPhoneCandidates.length === 0}
-            >
-              {sendSmsSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              Send SMS
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Stage change: require Stage, Status, and Note before moving */}
       <Dialog

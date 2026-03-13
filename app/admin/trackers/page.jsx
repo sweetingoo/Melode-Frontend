@@ -100,6 +100,7 @@ import { trackersService } from "@/services/trackers";
 const TRACKER_PARAM = "tracker";
 const Q_PARAM = "q";
 const STATUS_PARAM = "status";
+const CHASE_PARAM = "chase";
 const FIELD_PREFIX = "f_";
 const HIGHLIGHT_RULES_PARAM = "hl";
 const AGGREGATE_PREFIX = "ag_";
@@ -176,6 +177,7 @@ const TrackersPage = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [committedSearchTerm, setCommittedSearchTerm] = useState(""); // only pushed to URL on Enter
   const [statusFilter, setStatusFilter] = useState("all");
+  const [chaseFilter, setChaseFilter] = useState("all"); // "all" | "due_or_overdue"
   const [sortBy, setSortBy] = useState("created_at");
   const [sortOrder, setSortOrder] = useState("desc");
   const [isCreateEntryDialogOpen, setIsCreateEntryDialogOpen] = useState(false);
@@ -279,13 +281,15 @@ const TrackersPage = () => {
       statusFilter !== "all" ||
       Object.keys(columnFilters).length > 0 ||
       highlightRules.length > 0 ||
-      Object.keys(queryBarAggregateFields).length > 0,
-    [searchTerm, statusFilter, columnFilters, highlightRules, queryBarAggregateFields]
+      Object.keys(queryBarAggregateFields).length > 0 ||
+      chaseFilter !== "all",
+    [searchTerm, statusFilter, chaseFilter, columnFilters, highlightRules, queryBarAggregateFields]
   );
   const clearAllFilters = useCallback(() => {
     setSearchTerm("");
     setCommittedSearchTerm("");
     setStatusFilter("all");
+    setChaseFilter("all");
     setColumnFilters({});
     setColumnSorting({});
     setHighlightRules([]);
@@ -314,6 +318,7 @@ const TrackersPage = () => {
     setSearchTerm(q);
     setCommittedSearchTerm(q);
     setStatusFilter(status);
+    setChaseFilter(searchParams.get(CHASE_PARAM) ?? "all");
     setColumnFilters(filters);
     // Highlight rules (hl = JSON array)
     const hlRaw = searchParams.get(HIGHLIGHT_RULES_PARAM);
@@ -360,6 +365,8 @@ const TrackersPage = () => {
     else next.delete(Q_PARAM);
     if (statusFilter && statusFilter !== "all") next.set(STATUS_PARAM, statusFilter);
     else next.delete(STATUS_PARAM);
+    if (chaseFilter && chaseFilter !== "all") next.set(CHASE_PARAM, chaseFilter);
+    else next.delete(CHASE_PARAM);
     for (const key of Array.from(next.keys())) {
       if (key.startsWith(FIELD_PREFIX) || key === HIGHLIGHT_RULES_PARAM || key.startsWith(AGGREGATE_PREFIX)) next.delete(key);
     }
@@ -382,7 +389,7 @@ const TrackersPage = () => {
     if (nextSearch !== currentSearch) {
       router.replace(`/admin/trackers?${nextSearch}`, { scroll: false });
     }
-  }, [committedSearchTerm, statusFilter, columnFilters, highlightRules, queryBarAggregateFields, searchParams, router]);
+  }, [committedSearchTerm, statusFilter, chaseFilter, columnFilters, highlightRules, queryBarAggregateFields, searchParams, router]);
 
   // Clear formula bar selection, highlight rules, query-bar aggregates, and queue filter when user switches tracker (not on initial load)
   const prevSelectedTrackerRef = useRef(selectedTracker);
@@ -592,9 +599,14 @@ const TrackersPage = () => {
       params.query = searchTerm;
     }
 
-    if (Object.keys(columnFilters).length > 0) {
+    const today = format(startOfDay(new Date()), "yyyy-MM-dd");
+    const effectiveFieldFilters = { ...columnFilters };
+    if (chaseFilter === "due_or_overdue") {
+      effectiveFieldFilters.chase_due = { op: "<=", value: today };
+    }
+    if (Object.keys(effectiveFieldFilters).length > 0) {
       params.field_filters = Object.fromEntries(
-        Object.entries(columnFilters).map(([fid, v]) => [
+        Object.entries(effectiveFieldFilters).map(([fid, v]) => [
           fid,
           v && typeof v === "object" && "op" in v && "value" in v ? { op: v.op, value: v.value } : v,
         ])
@@ -606,7 +618,7 @@ const TrackersPage = () => {
     if (nextAppointmentDateBefore) params.next_appointment_date_before = nextAppointmentDateBefore;
 
     return params;
-  }, [selectedTracker, statusFilter, statusesFilter, searchTerm, sortBy, sortOrder, columnFilters, itemsPerPage, updatedAtAfter, updatedAtBefore, nextAppointmentDateAfter, nextAppointmentDateBefore]);
+  }, [selectedTracker, statusFilter, statusesFilter, chaseFilter, searchTerm, sortBy, sortOrder, columnFilters, itemsPerPage, updatedAtAfter, updatedAtBefore, nextAppointmentDateAfter, nextAppointmentDateBefore]);
 
   // Get tracker entries with infinite scroll
   const {
@@ -619,16 +631,21 @@ const TrackersPage = () => {
     enabled: !!selectedTracker,
   });
 
-  const aggregateParams = useMemo(
-    () => ({
+  const aggregateParams = useMemo(() => {
+    const today = format(startOfDay(new Date()), "yyyy-MM-dd");
+    const effectiveFieldFilters = { ...columnFilters };
+    if (chaseFilter === "due_or_overdue") {
+      effectiveFieldFilters.chase_due = { op: "<=", value: today };
+    }
+    return {
       form_id: selectedTracker ? parseInt(selectedTracker, 10) : undefined,
       status: statusesFilter?.length ? undefined : (statusFilter !== "all" ? statusFilter : undefined),
       statuses: statusesFilter?.length ? statusesFilter : undefined,
       query: searchTerm || undefined,
       field_filters:
-        Object.keys(columnFilters).length > 0
+        Object.keys(effectiveFieldFilters).length > 0
           ? Object.fromEntries(
-              Object.entries(columnFilters).map(([fid, v]) => [
+              Object.entries(effectiveFieldFilters).map(([fid, v]) => [
                 fid,
                 v && typeof v === "object" && "op" in v && "value" in v ? { op: v.op, value: v.value } : v,
               ])
@@ -639,9 +656,8 @@ const TrackersPage = () => {
       updated_at_before: updatedAtBefore || undefined,
       next_appointment_date_after: nextAppointmentDateAfter || undefined,
       next_appointment_date_before: nextAppointmentDateBefore || undefined,
-    }),
-    [selectedTracker, statusFilter, statusesFilter, searchTerm, columnFilters, queryBarAggregateFields, updatedAtAfter, updatedAtBefore, nextAppointmentDateAfter, nextAppointmentDateBefore]
-  );
+    };
+  }, [selectedTracker, statusFilter, statusesFilter, chaseFilter, searchTerm, columnFilters, queryBarAggregateFields, updatedAtAfter, updatedAtBefore, nextAppointmentDateAfter, nextAppointmentDateBefore]);
   const { data: backendAggregatesData } = useTrackerEntriesAggregates(aggregateParams, {
     enabled: !!selectedTracker,
   });
@@ -2224,6 +2240,21 @@ const TrackersPage = () => {
                     </Select>
                   </div>
                   <div className="flex-1">
+                    <Label>Chase</Label>
+                    <Select
+                      value={chaseFilter}
+                      onValueChange={(value) => setChaseFilter(value)}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Chase" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All</SelectItem>
+                        <SelectItem value="due_or_overdue">Due or overdue</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex-1">
                     <Label>Sort By</Label>
                     <Select
                       value={`${sortBy}:${sortOrder}`}
@@ -2241,6 +2272,8 @@ const TrackersPage = () => {
                         <SelectItem value="created_at:asc">Oldest First</SelectItem>
                         <SelectItem value="updated_at:desc">Recently Updated</SelectItem>
                         <SelectItem value="status:asc">Status A-Z</SelectItem>
+                        <SelectItem value="field_chase_due:asc">Chase due (earliest first)</SelectItem>
+                        <SelectItem value="field_chase_due:desc">Chase due (latest first)</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -2554,10 +2587,24 @@ const TrackersPage = () => {
             )}
           </div>
         </div>
-        {/* Applied filters (search + column filters + highlights + aggregates) — visible chips */}
-        {(searchTerm || Object.keys(columnFilters).length > 0 || highlightRules.length > 0 || Object.keys(queryBarAggregateFields).length > 0) && selectedTracker === tracker.id.toString() && (
+        {/* Applied filters (search + chase + column filters + highlights + aggregates) — visible chips */}
+        {(searchTerm || chaseFilter !== "all" || Object.keys(columnFilters).length > 0 || highlightRules.length > 0 || Object.keys(queryBarAggregateFields).length > 0) && selectedTracker === tracker.id.toString() && (
           <div className="flex flex-wrap items-center gap-1.5 px-4 py-2 border-b bg-muted/20">
             <span className="text-muted-foreground text-xs mr-1 shrink-0">Applied:</span>
+            {chaseFilter === "due_or_overdue" && (
+              <Badge variant="secondary" className="text-xs font-normal gap-1 pr-1">
+                Chase: Due or overdue
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-4 w-4 shrink-0"
+                  onClick={() => setChaseFilter("all")}
+                  aria-label="Clear chase filter"
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              </Badge>
+            )}
             {searchTerm && (
               <Badge variant="secondary" className="text-xs font-normal gap-1 pr-1">
                 Search: &quot;{searchTerm.length > 20 ? searchTerm.slice(0, 20) + "…" : searchTerm}&quot;

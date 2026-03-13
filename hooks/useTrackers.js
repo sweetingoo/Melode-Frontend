@@ -17,6 +17,7 @@ export const trackerKeys = {
   entryDetail: (identifier) => [...trackerKeys.entries(), "detail", identifier],
   entryTimeline: (identifier, page, per_page) => [...trackerKeys.entries(), "timeline", identifier, page, per_page],
   entryAuditLogs: (identifier) => [...trackerKeys.entries(), "audit-logs", identifier],
+  entryInboundMessages: (identifier) => [...trackerKeys.entries(), "inbound-messages", identifier],
   queueCounts: (slug) => [...trackerKeys.details(), slug, "queue-counts"],
 };
 
@@ -474,6 +475,20 @@ export const useTrackerEntryAuditLogs = (entryIdentifier, pagination = { page: 1
     },
     enabled: !!entryIdentifier,
     staleTime: 1 * 60 * 1000, // 1 minute
+    ...options,
+  });
+};
+
+// Get inbound messages for a tracker entry (e.g. patient SMS)
+export const useTrackerEntryInboundMessages = (entryIdentifier, options = {}) => {
+  return useQuery({
+    queryKey: trackerKeys.entryInboundMessages(entryIdentifier),
+    queryFn: async () => {
+      const data = await trackersService.getTrackerEntryInboundMessages(entryIdentifier);
+      return data?.messages ?? [];
+    },
+    enabled: !!entryIdentifier,
+    staleTime: 1 * 60 * 1000,
     ...options,
   });
 };

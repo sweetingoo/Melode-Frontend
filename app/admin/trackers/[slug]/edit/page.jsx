@@ -319,12 +319,21 @@ const TrackerEditPage = () => {
   const searchParams = useSearchParams();
   const slug = params.slug;
   const tabFromUrl = searchParams?.get("tab");
-  const [activeTab, setActiveTab] = useState("basic");
+  const TRACKER_EDIT_TABS = ["sections", "fields", "stages", "basic", "statuses", "permissions", "notifications", "audit"];
+  const [activeTab, setActiveTab] = useState(() => {
+    if (typeof window === "undefined") return "basic";
+    const t = new URLSearchParams(window.location.search).get("tab");
+    return t && TRACKER_EDIT_TABS.includes(t) ? t : "basic";
+  });
   useEffect(() => {
-    if (tabFromUrl && ["sections", "fields", "stages", "basic", "statuses", "permissions", "notifications", "audit"].includes(tabFromUrl)) {
-      setActiveTab(tabFromUrl);
-    }
+    if (tabFromUrl && TRACKER_EDIT_TABS.includes(tabFromUrl)) setActiveTab(tabFromUrl);
   }, [tabFromUrl]);
+  const handleTabChange = (value) => {
+    setActiveTab(value);
+    const sp = new URLSearchParams(searchParams?.toString() || "");
+    sp.set("tab", value);
+    router.replace(`/admin/trackers/${slug}/edit?${sp.toString()}`, { scroll: false });
+  };
 
   const { data: tracker, isLoading: trackerLoading } = useTracker(slug);
   const updateMutation = useUpdateTracker();
@@ -474,6 +483,9 @@ const TrackerEditPage = () => {
   const [editingOption, setEditingOption] = useState({ value: "", label: "" });
   const [shareLinkCopied, setShareLinkCopied] = useState(false);
   const [provisionSmsLoading, setProvisionSmsLoading] = useState(false);
+  const [twilioActiveNumbers, setTwilioActiveNumbers] = useState([]);
+  const [twilioActiveNumbersLoading, setTwilioActiveNumbersLoading] = useState(false);
+  const [twilioActiveNumbersError, setTwilioActiveNumbersError] = useState(null);
 
   // Load tracker data
   useEffect(() => {
@@ -527,6 +539,29 @@ const TrackerEditPage = () => {
       });
     }
   }, [tracker]);
+
+  const fetchTwilioActiveNumbers = React.useCallback(() => {
+    if (!slug) return;
+    setTwilioActiveNumbersError(null);
+    setTwilioActiveNumbersLoading(true);
+    trackersService
+      .getTwilioActiveNumbers(slug)
+      .then((data) => {
+        setTwilioActiveNumbers(data?.numbers || []);
+        setTwilioActiveNumbersError(null);
+      })
+      .catch((err) => {
+        const detail = err?.response?.data?.detail;
+        const message = typeof detail === "string" ? detail : detail?.message || err?.message || "Failed to load numbers";
+        setTwilioActiveNumbers([]);
+        setTwilioActiveNumbersError(message);
+      })
+      .finally(() => setTwilioActiveNumbersLoading(false));
+  }, [slug]);
+
+  useEffect(() => {
+    fetchTwilioActiveNumbers();
+  }, [fetchTwilioActiveNumbers]);
 
   const handleSave = async (shouldRedirect = true) => {
     try {
@@ -1220,7 +1255,7 @@ const TrackerEditPage = () => {
         </Button>
       </header>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
         <div className="overflow-x-auto -mx-1 px-1 sm:overflow-x-visible sm:mx-0 sm:px-0">
           <TabsList className="inline-flex w-auto min-w-max sm:w-auto">
             <TabsTrigger value="basic">Basic Info</TabsTrigger>
@@ -1335,7 +1370,7 @@ const TrackerEditPage = () => {
                   type="button"
                   variant="link"
                   className="h-auto p-0 text-muted-foreground hover:text-primary text-sm font-normal"
-                  onClick={() => setActiveTab("stages")}
+                  onClick={() => handleTabChange("stages")}
                 >
                   Open Stages tab →
                 </Button>
@@ -4237,12 +4272,65 @@ const TrackerEditPage = () => {
             <CardHeader>
               <CardTitle>SMS sender number</CardTitle>
               <p className="text-sm text-muted-foreground mt-1">
-                Assign a dedicated phone number for this tracker. SMS can only be sent from entries when this number is set; the organisation default is not used. Generate a new number here (uses your organisation&apos;s Twilio account) or enter one manually.
+                Assign a dedicated phone number for this tracker. SMS can only be sent from entries when this number is set. Select an existing number from your Twilio account, generate a new one, or enter a number manually.
               </p>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="tracker-twilio-from">Sender number (E.164, required for SMS)</Label>
+                <Label>Select from Twilio account</Label>
+                <p className="text-xs text-muted-foreground -mt-0.5">
+                  Numbers you own. If a Messaging Service is set in Organisation settings, only numbers in that service are listed.
+                </p>
+                {twilioActiveNumbersLoading ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+                    <Loader2 className="h-4 w-4 animate-spin" /> Loading numbers…
+                  </div>
+                ) : twilioActiveNumbersError ? (
+                  <div className="rounded-md border border-destructive/50 bg-destructive/5 px-3 py-2 text-sm">
+                    <p className="text-destructive font-medium">Could not load numbers</p>
+                    <p className="text-muted-foreground mt-0.5">{twilioActiveNumbersError}</p>
+                    <Button type="button" variant="outline" size="sm" className="mt-2" onClick={fetchTwilioActiveNumbers}>
+                      Retry
+                    </Button>
+                  </div>
+                ) : twilioActiveNumbers.length > 0 ? (
+                  <Select
+                    value={formData.tracker_config?.twilio_from_number?.trim() || "__none__"}
+                    onValueChange={(value) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        tracker_config: {
+                          ...prev.tracker_config,
+                          twilio_from_number: value === "__none__" ? "" : value,
+                        },
+                      }))
+                    }
+                  >
+                    <SelectTrigger className="max-w-md font-mono">
+                      <SelectValue placeholder="Choose an active number" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">— No number selected —</SelectItem>
+                      {twilioActiveNumbers.map((n) => (
+                        <SelectItem key={n.phone_number} value={n.phone_number}>
+                          {n.friendly_name ? `${n.phone_number} (${n.friendly_name})` : n.phone_number}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground py-1">
+                      No numbers in this Twilio account yet. This list shows numbers you <strong>already own</strong>. Use &quot;Generate new number&quot; below to buy one, or buy a number in Twilio Console and it will appear here after you retry.
+                    </p>
+                    <Button type="button" variant="outline" size="sm" onClick={fetchTwilioActiveNumbers}>
+                      Retry loading numbers
+                    </Button>
+                  </div>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="tracker-twilio-from">Or enter / paste number manually (E.164)</Label>
                 <div className="flex flex-wrap items-center gap-2">
                   <Input
                     id="tracker-twilio-from"
@@ -4271,10 +4359,10 @@ const TrackerEditPage = () => {
                     Generate new number
                   </Button>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Each tracker must have its own number so replies are matched to the right tracker. &quot;Generate new number&quot; provisions a UK number from Twilio (organisation credentials required). Then click Save to assign it.
-                </p>
               </div>
+              <p className="text-xs text-muted-foreground">
+                Each tracker should have its own number so replies are matched to the right case. Click Save to assign the selected or entered number.
+              </p>
             </CardContent>
           </Card>
         </TabsContent>

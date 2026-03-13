@@ -294,6 +294,8 @@ function ConfigurationPageContent() {
       twilio_account_sid: null,
       twilio_auth_token: null,
       twilio_from_number: null,
+      twilio_messaging_service_sid: null,
+      twilio_bundle_id: null,
       from_email: null,
       from_name: null,
       app_name: null,
@@ -403,7 +405,13 @@ function ConfigurationPageContent() {
     if (modifiedFields.has('twilio_from_number') && !isMaskedValue(config.twilio_from_number)) {
       payload.twilio_from_number = config.twilio_from_number;
     }
-    
+    if (modifiedFields.has('twilio_messaging_service_sid')) {
+      payload.twilio_messaging_service_sid = config.twilio_messaging_service_sid || null;
+    }
+    if (modifiedFields.has('twilio_bundle_id')) {
+      payload.twilio_bundle_id = config.twilio_bundle_id || null;
+    }
+
     // Other non-sensitive fields
     if (modifiedFields.has('from_email')) {
       payload.from_email = config.from_email ?? null;
@@ -485,6 +493,8 @@ function ConfigurationPageContent() {
         twilio_account_sid: integrationConfig.twilio_account_sid || null,
         twilio_auth_token: integrationConfig.twilio_auth_token || null,
         twilio_from_number: integrationConfig.twilio_from_number || null,
+        twilio_messaging_service_sid: integrationConfig.twilio_messaging_service_sid || null,
+        twilio_bundle_id: integrationConfig.twilio_bundle_id || null,
         from_email: integrationConfig.from_email || null,
         from_name: integrationConfig.from_name || null,
         app_name: integrationConfig.app_name || null,
@@ -549,6 +559,8 @@ function ConfigurationPageContent() {
         twilio_account_sid: mergedIntegrationConfig.twilio_account_sid || null,
         twilio_auth_token: mergedIntegrationConfig.twilio_auth_token || null,
         twilio_from_number: mergedIntegrationConfig.twilio_from_number || null,
+        twilio_messaging_service_sid: mergedIntegrationConfig.twilio_messaging_service_sid || null,
+        twilio_bundle_id: mergedIntegrationConfig.twilio_bundle_id || null,
       });
       setOriginalS3Config(mergedIntegrationConfig.s3_storage || null);
       setS3SecretKeyChanged(false);
@@ -1254,6 +1266,8 @@ function ConfigurationPageContent() {
                           const fromNumber = originalSMSConfig?.twilio_from_number && !isMaskedValue(originalSMSConfig.twilio_from_number)
                             ? originalSMSConfig.twilio_from_number
                             : null;
+                          const messagingServiceSid = originalSMSConfig?.twilio_messaging_service_sid || null;
+                          const bundleId = originalSMSConfig?.twilio_bundle_id || null;
                           setOrganisationData((prev) => ({
                             ...prev,
                             integration_config: {
@@ -1261,6 +1275,8 @@ function ConfigurationPageContent() {
                               twilio_account_sid: accountSid,
                               twilio_auth_token: authToken,
                               twilio_from_number: fromNumber,
+                              twilio_messaging_service_sid: messagingServiceSid,
+                              twilio_bundle_id: bundleId,
                             },
                           }));
                         } else {
@@ -1269,15 +1285,19 @@ function ConfigurationPageContent() {
                             twilio_account_sid: organisationData.integration_config?.twilio_account_sid,
                             twilio_auth_token: organisationData.integration_config?.twilio_auth_token,
                             twilio_from_number: organisationData.integration_config?.twilio_from_number,
+                            twilio_messaging_service_sid: organisationData.integration_config?.twilio_messaging_service_sid,
                           };
                           // Only store if values exist and are not masked
                           if ((currentConfig.twilio_account_sid && !isMaskedValue(currentConfig.twilio_account_sid)) ||
                               (currentConfig.twilio_auth_token && !isMaskedValue(currentConfig.twilio_auth_token)) ||
-                              (currentConfig.twilio_from_number && !isMaskedValue(currentConfig.twilio_from_number))) {
+                              (currentConfig.twilio_from_number && !isMaskedValue(currentConfig.twilio_from_number)) ||
+                              currentConfig.twilio_messaging_service_sid) {
                             setOriginalSMSConfig({
                               twilio_account_sid: currentConfig.twilio_account_sid && !isMaskedValue(currentConfig.twilio_account_sid) ? currentConfig.twilio_account_sid : null,
                               twilio_auth_token: currentConfig.twilio_auth_token && !isMaskedValue(currentConfig.twilio_auth_token) ? currentConfig.twilio_auth_token : null,
                               twilio_from_number: currentConfig.twilio_from_number && !isMaskedValue(currentConfig.twilio_from_number) ? currentConfig.twilio_from_number : null,
+                              twilio_messaging_service_sid: currentConfig.twilio_messaging_service_sid || null,
+                              twilio_bundle_id: currentConfig.twilio_bundle_id || null,
                             });
                           }
                           setOrganisationData((prev) => ({
@@ -1287,6 +1307,8 @@ function ConfigurationPageContent() {
                               twilio_account_sid: null,
                               twilio_auth_token: null,
                               twilio_from_number: null,
+                              twilio_messaging_service_sid: null,
+                              twilio_bundle_id: null,
                             },
                           }));
                         }
@@ -1395,6 +1417,50 @@ function ConfigurationPageContent() {
                       />
                       <p className="text-sm text-muted-foreground">
                         Required for sending SMS. Get credentials from Twilio console. Format: E.164 (e.g., +1234567890)
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="twilio_messaging_service_sid">Twilio Messaging Service SID (optional)</Label>
+                      <Input
+                        id="twilio_messaging_service_sid"
+                        type="text"
+                        value={organisationData.integration_config?.twilio_messaging_service_sid || ""}
+                        onChange={(e) => {
+                          markFieldModified('twilio_messaging_service_sid');
+                          setOrganisationData((prev) => ({
+                            ...prev,
+                            integration_config: {
+                              ...prev.integration_config,
+                              twilio_messaging_service_sid: e.target.value?.trim() || null,
+                            },
+                          }));
+                        }}
+                        placeholder="MGxxxxxxxxxxxxxxxxxxxx"
+                      />
+                      <p className="text-sm text-muted-foreground">
+                        When set, tracker &quot;Select from Twilio account&quot; lists only numbers in this Messaging Service. New numbers from &quot;Generate new number&quot; are added to this service. Create a service in Twilio Console → Messaging → Services.
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="twilio_bundle_id">Twilio Bundle ID (optional)</Label>
+                      <Input
+                        id="twilio_bundle_id"
+                        type="text"
+                        value={organisationData.integration_config?.twilio_bundle_id || ""}
+                        onChange={(e) => {
+                          markFieldModified('twilio_bundle_id');
+                          setOrganisationData((prev) => ({
+                            ...prev,
+                            integration_config: {
+                              ...prev.integration_config,
+                              twilio_bundle_id: e.target.value?.trim() || null,
+                            },
+                          }));
+                        }}
+                        placeholder="e.g. BUxxxxxxxxxxxxxxxxxxxx"
+                      />
+                      <p className="text-sm text-muted-foreground">
+                        Regulatory Bundle ID for number compliance (e.g. UK). Find in Twilio Console → Phone Numbers → Regulatory Compliance → Bundles.
                       </p>
                     </div>
                   </>
