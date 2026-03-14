@@ -691,6 +691,15 @@ const TrackersPage = () => {
     return () => observer.disconnect();
   }, [loadMoreCallback]);
 
+  // When a patient replies via SMS, SSE fires – list is auto-refreshed via useSSE; show toast
+  useEffect(() => {
+    const handlePatientSms = () => {
+      toast.info("Patient replied – entry updated and needs attention.", { duration: 5000 });
+    };
+    window.addEventListener("sse-patient-sms-received", handlePatientSms);
+    return () => window.removeEventListener("sse-patient-sms-received", handlePatientSms);
+  }, []);
+
   const deleteEntryMutation = useDeleteTrackerEntry();
   const updateEntryMutation = useUpdateTrackerEntry();
 

@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { sseService } from "@/services/sse";
 import { messageKeys } from "@/hooks/useMessages";
 import { notificationKeys } from "@/hooks/useNotifications";
+import { trackerKeys } from "@/hooks/useTrackers";
 import { useCurrentUser } from "@/hooks/useAuth";
 
 /**
@@ -311,6 +312,20 @@ export const useSSE = () => {
           if (typeof window !== "undefined") {
             window.dispatchEvent(new CustomEvent("sse-user-offline", {
               detail: { type: "user:offline", data }
+            }));
+          }
+          break;
+        }
+
+        case "patient_sms_received": {
+          // Patient replied to a tracker case via SMS – entry now needs attention (chase_due updated)
+          const data = event.data || {};
+          console.log("SSE: Processing patient_sms_received event", data);
+          queryClient.invalidateQueries({ queryKey: trackerKeys.entries(), exact: false });
+          queryClient.invalidateQueries({ queryKey: trackerKeys.details(), exact: false });
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent("sse-patient-sms-received", {
+              detail: { type: "patient_sms_received", data }
             }));
           }
           break;
