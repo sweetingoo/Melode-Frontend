@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -141,6 +141,7 @@ const TrackerEntryDetailPage = () => {
   const [activeStageTab, setActiveStageTab] = useState("");
   const [formsSubTab, setFormsSubTab] = useState("entry_data");
   const [communicationsSubTab, setCommunicationsSubTab] = useState("sms");
+  const smsThreadScrollRef = useRef(null);
   const [entryLinkCopied, setEntryLinkCopied] = useState(false);
   const [shareableLinkCopied, setShareableLinkCopied] = useState(false);
   const [isLogActionOpen, setIsLogActionOpen] = useState(false);
@@ -673,6 +674,16 @@ const TrackerEntryDetailPage = () => {
     });
     return Array.from(dates).sort((a, b) => (a < b ? 1 : a > b ? -1 : 0));
   }, [entry?.formatted_data, entry?.submission_data, allTimelineEvents]);
+
+  // Scroll communication message thread to latest when thread loads or updates
+  useEffect(() => {
+    if (activeTab !== "communication" || communicationsSubTab !== "sms" || !smsThreadScrollRef.current) return;
+    const el = smsThreadScrollRef.current;
+    const id = requestAnimationFrame(() => {
+      el.scrollTop = el.scrollHeight;
+    });
+    return () => cancelAnimationFrame(id);
+  }, [activeTab, communicationsSubTab, smsThread]);
 
   // SMS thread from dedicated API (not timeline pagination) so Communications tab shows all messages
   const smsThread = useMemo(() => {
@@ -1533,13 +1544,15 @@ const TrackerEntryDetailPage = () => {
         {/* Main: 5 tabs – Activity, Forms, Communication, Notes & Files, Audit */}
         <main className="space-y-3 order-1 lg:order-2 min-w-0 lg:col-span-9">
           <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-            <TabsList className="bg-muted/50 flex flex-nowrap gap-1 overflow-x-auto scrollbar-hide w-full min-w-0 [&>*]:shrink-0">
-              <TabsTrigger value="activity"><Clock className="mr-2 h-4 w-4" />Activity</TabsTrigger>
-              <TabsTrigger value="forms"><FileText className="mr-2 h-4 w-4" />Forms</TabsTrigger>
-              <TabsTrigger value="communication"><MessageSquare className="mr-2 h-4 w-4" />Communications</TabsTrigger>
-              <TabsTrigger value="notes"><MessageSquare className="mr-2 h-4 w-4" />Notes & Files ({notesAndFilesComments.length})</TabsTrigger>
-              <TabsTrigger value="audit"><FileText className="mr-2 h-4 w-4" />Audit</TabsTrigger>
-            </TabsList>
+            <div className="overflow-x-auto scrollbar-hide -mx-2 px-2 min-w-0 w-full">
+              <TabsList className="bg-muted/50 flex flex-nowrap gap-1 px-3 py-1 w-max min-w-full [&>*]:shrink-0">
+                <TabsTrigger value="activity"><Clock className="mr-2 h-4 w-4" />Activity</TabsTrigger>
+                <TabsTrigger value="forms"><FileText className="mr-2 h-4 w-4" />Forms</TabsTrigger>
+                <TabsTrigger value="communication"><MessageSquare className="mr-2 h-4 w-4" />Communications</TabsTrigger>
+                <TabsTrigger value="notes"><MessageSquare className="mr-2 h-4 w-4" />Notes & Files ({notesAndFilesComments.length})</TabsTrigger>
+                <TabsTrigger value="audit"><FileText className="mr-2 h-4 w-4" />Audit</TabsTrigger>
+              </TabsList>
+            </div>
             <TabsContent value="activity" className="mt-4">
           <Card>
             <CardHeader className="py-3">
@@ -1767,13 +1780,15 @@ const TrackerEntryDetailPage = () => {
           )}
 
           <Tabs value={effectiveFormsSubTab} onValueChange={setFormsSubTab} className="w-full">
-            <TabsList className="bg-muted/50 flex flex-nowrap gap-1 mb-4 overflow-x-auto scrollbar-hide w-full min-w-0 [&>*]:shrink-0">
-              <TabsTrigger value="entry_data">Entry data</TabsTrigger>
-              {stageMapping?.map((s) => {
-                const n = String(s?.stage ?? s?.name ?? "").trim();
-                return n ? <TabsTrigger key={n} value={n}>{n}</TabsTrigger> : null;
-              })}
-            </TabsList>
+            <div className="overflow-x-auto scrollbar-hide -mx-2 px-2 min-w-0 w-full mb-4">
+              <TabsList className="bg-muted/50 flex flex-nowrap gap-1 px-3 py-1 w-max min-w-full [&>*]:shrink-0">
+                <TabsTrigger value="entry_data">Entry data</TabsTrigger>
+                {stageMapping?.map((s) => {
+                  const n = String(s?.stage ?? s?.name ?? "").trim();
+                  return n ? <TabsTrigger key={n} value={n}>{n}</TabsTrigger> : null;
+                })}
+              </TabsList>
+            </div>
             <TabsContent value="entry_data" className="mt-0 space-y-4">
           {isEditing ? (
             <div className="space-y-4">
@@ -2222,19 +2237,22 @@ const TrackerEntryDetailPage = () => {
             </CardHeader>
             <CardContent>
               <Tabs value={communicationsSubTab} onValueChange={setCommunicationsSubTab} className="w-full">
-                <div className="overflow-x-auto overflow-y-hidden mb-4 -mx-1 px-1 scrollbar-hide md:overflow-x-visible" style={{ WebkitOverflowScrolling: "touch" }}>
-                  <TabsList className="bg-muted/50 flex flex-nowrap gap-1 w-max min-w-full md:min-w-0 md:flex-wrap">
-                    <TabsTrigger value="sms" className="shrink-0"><Smartphone className="mr-1.5 h-3.5 w-3.5" />SMS</TabsTrigger>
-                    <TabsTrigger value="whatsapp" className="shrink-0"><MessageCircle className="mr-1.5 h-3.5 w-3.5" />WhatsApp</TabsTrigger>
-                    <TabsTrigger value="portal" className="shrink-0"><Globe className="mr-1.5 h-3.5 w-3.5" />Portal</TabsTrigger>
-                    <TabsTrigger value="email" className="shrink-0"><Mail className="mr-1.5 h-3.5 w-3.5" />Email</TabsTrigger>
-                    <TabsTrigger value="letter" className="shrink-0"><FileText className="mr-1.5 h-3.5 w-3.5" />Letter</TabsTrigger>
+                <div className="overflow-x-auto overflow-y-hidden mb-4 -mx-2 px-2 scrollbar-hide md:overflow-x-visible min-w-0" style={{ WebkitOverflowScrolling: "touch" }}>
+                  <TabsList className="bg-muted/50 flex flex-nowrap gap-1 w-max min-w-full md:min-w-0 md:flex-wrap px-3 py-1 [&>*]:shrink-0">
+                    <TabsTrigger value="sms"><Smartphone className="mr-1.5 h-3.5 w-3.5" />SMS</TabsTrigger>
+                    <TabsTrigger value="whatsapp"><MessageCircle className="mr-1.5 h-3.5 w-3.5" />WhatsApp</TabsTrigger>
+                    <TabsTrigger value="portal"><Globe className="mr-1.5 h-3.5 w-3.5" />Portal</TabsTrigger>
+                    <TabsTrigger value="email"><Mail className="mr-1.5 h-3.5 w-3.5" />Email</TabsTrigger>
+                    <TabsTrigger value="letter"><FileText className="mr-1.5 h-3.5 w-3.5" />Letter</TabsTrigger>
                   </TabsList>
                 </div>
                 <TabsContent value="sms" className="mt-0">
                   <div className="rounded-xl border border-border/60 bg-card shadow-sm overflow-hidden flex flex-col min-h-[320px] max-h-[520px]">
-                    {/* Message thread */}
-                    <div className="flex-1 min-h-[180px] max-h-[380px] overflow-y-auto p-4 flex flex-col gap-3 bg-gradient-to-b from-muted/20 to-muted/5">
+                    {/* Message thread – scroll to latest when thread loads or updates */}
+                    <div
+                      ref={smsThreadScrollRef}
+                      className="flex-1 min-h-[180px] max-h-[380px] overflow-y-auto p-4 flex flex-col gap-3 bg-gradient-to-b from-muted/20 to-muted/5"
+                    >
                       {smsThreadLoading ? (
                         <div className="flex flex-col items-center justify-center gap-3 py-12 text-muted-foreground">
                           <div className="rounded-full bg-muted/80 p-3">
