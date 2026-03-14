@@ -662,6 +662,23 @@ const TrackerEntryDetailPage = () => {
     });
   }, [entry?.notes]);
 
+  // Humanize action type for timeline display (e.g. patient_sms_received -> "Patient replied")
+  const getActionTimelineTitle = (event) => {
+    if (event.type !== "action") return event.title;
+    const actionTypes = tracker?.tracker_config?.action_types || [];
+    const configured = actionTypes.find((at) => (at.id || at.value) === event.action_type);
+    if (configured?.label) return configured.label;
+    const known = {
+      patient_sms_received: "Patient replied",
+      chase_phone: "Chase – Phone",
+      chase_letter: "Chase – Letter",
+    };
+    if (known[event.action_type]) return known[event.action_type];
+    if (event.action_type === "other" && event.free_text_label) return event.free_text_label;
+    if (!event.action_type) return event.title || "Action";
+    return event.action_type.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()).replace(/\bSms\b/gi, "SMS");
+  };
+
   // Chase dates: current chase_due/next_action_date from entry + chase_date from timeline actions (for left sidebar list)
   const chaseDatesList = useMemo(() => {
     const dates = new Set();
@@ -1625,7 +1642,7 @@ const TrackerEntryDetailPage = () => {
                           <div className="pb-4">
                             <div className="flex flex-wrap items-center gap-2 mb-1">
                               {(event.stage || event.status) && (<>{event.stage && <Badge variant="secondary" className="text-xs font-normal" style={getStageColor(tracker?.tracker_config?.stage_mapping || [], event.stage) ? { backgroundColor: getStageColor(tracker?.tracker_config?.stage_mapping || [], event.stage), color: "#fff" } : undefined}>{event.stage}</Badge>}{event.status && <Badge variant="outline" className="text-xs">{event.status}</Badge>}</>)}
-                              <span className="font-medium">{event.title}</span>
+                              <span className="font-medium">{event.type === "action" ? getActionTimelineTitle(event) : event.title}</span>
                               {event.message_source === "sms" && <Badge variant="outline" className="text-xs">SMS</Badge>}
                               {event.message_source === "comment" && <Badge variant="outline" className="text-xs">Comment</Badge>}
                               {event.note_category && <Badge variant="secondary" className="text-xs">{event.note_category}</Badge>}

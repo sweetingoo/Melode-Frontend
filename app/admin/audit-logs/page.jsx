@@ -203,6 +203,7 @@ const AuditLogsPage = () => {
     { value: "custom_form", label: "Form / Tracker" },
     { value: "form_submission", label: "Form submission / Tracker entry" },
     { value: "incoming_message", label: "Incoming message (webhook)" },
+    { value: "webhook_call", label: "Webhook call (all outcomes)" },
     { value: "entity_comment", label: "Comment" },
     { value: "document", label: "Document" },
     { value: "asset", label: "Asset" },
