@@ -675,16 +675,6 @@ const TrackerEntryDetailPage = () => {
     return Array.from(dates).sort((a, b) => (a < b ? 1 : a > b ? -1 : 0));
   }, [entry?.formatted_data, entry?.submission_data, allTimelineEvents]);
 
-  // Scroll communication message thread to latest when thread loads or updates
-  useEffect(() => {
-    if (activeTab !== "communication" || communicationsSubTab !== "sms" || !smsThreadScrollRef.current) return;
-    const el = smsThreadScrollRef.current;
-    const id = requestAnimationFrame(() => {
-      el.scrollTop = el.scrollHeight;
-    });
-    return () => cancelAnimationFrame(id);
-  }, [activeTab, communicationsSubTab, smsThread]);
-
   // SMS thread from dedicated API (not timeline pagination) so Communications tab shows all messages
   const smsThread = useMemo(() => {
     const inbound = smsThreadData?.inbound ?? [];
@@ -722,6 +712,16 @@ const TrackerEntryDetailPage = () => {
     });
     return items;
   }, [smsThreadData]);
+
+  // Scroll communication message thread to latest when thread loads or updates
+  useEffect(() => {
+    if (activeTab !== "communication" || communicationsSubTab !== "sms" || !smsThreadScrollRef.current) return;
+    const el = smsThreadScrollRef.current;
+    const id = requestAnimationFrame(() => {
+      el.scrollTop = el.scrollHeight;
+    });
+    return () => cancelAnimationFrame(id);
+  }, [activeTab, communicationsSubTab, smsThread]);
 
   // When multiple phones exist, default to first for inline SMS composer
   useEffect(() => {
