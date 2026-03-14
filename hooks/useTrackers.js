@@ -18,6 +18,7 @@ export const trackerKeys = {
   entryTimeline: (identifier, page, per_page) => [...trackerKeys.entries(), "timeline", identifier, page, per_page],
   entryAuditLogs: (identifier) => [...trackerKeys.entries(), "audit-logs", identifier],
   entryInboundMessages: (identifier) => [...trackerKeys.entries(), "inbound-messages", identifier],
+  entrySmsThread: (identifier) => [...trackerKeys.entries(), "sms-thread", identifier],
   queueCounts: (slug) => [...trackerKeys.details(), slug, "queue-counts"],
 };
 
@@ -417,6 +418,29 @@ export const useCreateTrackerAction = () => {
   });
 };
 
+// Mark tracker action as done (sets completed_at; recomputes case chase_due to next pending chase)
+export const useCompleteTrackerAction = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ entryIdentifier, actionId }) => {
+      const data = await trackersService.completeTrackerAction(entryIdentifier, actionId);
+      return { data, entryIdentifier };
+    },
+    onSuccess: ({ entryIdentifier }) => {
+      queryClient.invalidateQueries({ queryKey: trackerKeys.entryDetail(entryIdentifier) });
+      queryClient.invalidateQueries({ queryKey: trackerKeys.entryTimeline(entryIdentifier) });
+      queryClient.invalidateQueries({ queryKey: trackerKeys.entries() });
+      queryClient.invalidateQueries({ queryKey: trackerKeys.details() });
+      toast.success("Action marked as done");
+    },
+    onError: (error) => {
+      const msg = error?.response?.data?.detail || error?.message || "Failed to mark action done";
+      toast.error(Array.isArray(msg) ? msg.map((e) => e.msg || e).join(", ") : msg);
+    },
+  });
+};
+
 // Delete tracker entry mutation
 export const useDeleteTrackerEntry = () => {
   const queryClient = useQueryClient();
@@ -489,6 +513,21 @@ export const useTrackerEntryInboundMessages = (entryIdentifier, options = {}) =>
     },
     enabled: !!entryIdentifier,
     staleTime: 1 * 60 * 1000,
+    ...options,
+  });
+};
+
+// Get full SMS thread (inbound + sent) for Communications tab – not tied to timeline pagination
+export const useTrackerEntrySmsThread = (entryIdentifier, options = {}) => {
+  return useQuery({
+    queryKey: trackerKeys.entrySmsThread(entryIdentifier),
+    queryFn: async () => {
+      const data = await trackersService.getTrackerEntrySmsThread(entryIdentifier);
+      return data ?? { inbound: [], sent: [] };
+    },
+    enabled: !!entryIdentifier,
+    staleTime: 1 * 60 * 1000,
+    refetchInterval: options.refetchInterval ?? false,
     ...options,
   });
 };

@@ -384,13 +384,22 @@ export const trackersService = {
     }
   },
 
-  // Get tracker entry timeline by slug or ID
   createTrackerAction: async (entryIdentifier, body) => {
     try {
       const response = await api.post(`/trackers/entries/${entryIdentifier}/actions`, body);
       return response.data;
     } catch (error) {
       console.error(`Create tracker action for ${entryIdentifier} failed:`, error);
+      throw error;
+    }
+  },
+
+  completeTrackerAction: async (entryIdentifier, actionId) => {
+    try {
+      const response = await api.post(`/trackers/entries/${entryIdentifier}/actions/${actionId}/complete`);
+      return response.data;
+    } catch (error) {
+      console.error(`Complete tracker action ${actionId} for ${entryIdentifier} failed:`, error);
       throw error;
     }
   },
@@ -412,6 +421,16 @@ export const trackersService = {
       return response.data;
     } catch (error) {
       console.error(`Get tracker entry inbound messages ${entryIdentifier} failed:`, error);
+      throw error;
+    }
+  },
+
+  getTrackerEntrySmsThread: async (entryIdentifier) => {
+    try {
+      const response = await api.get(`/trackers/entries/${entryIdentifier}/sms-thread`);
+      return response.data;
+    } catch (error) {
+      console.error(`Get tracker entry SMS thread ${entryIdentifier} failed:`, error);
       throw error;
     }
   },

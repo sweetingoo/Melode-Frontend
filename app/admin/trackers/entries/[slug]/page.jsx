@@ -44,8 +44,10 @@ import {
   useTrackerEntryTimeline,
   useTrackerEntryAuditLogs,
   useTrackerEntryInboundMessages,
+  useTrackerEntrySmsThread,
   useUpdateTrackerEntry,
   useCreateTrackerAction,
+  useCompleteTrackerAction,
   useTrackers,
   useTrackerEntries,
   useTracker,
@@ -154,6 +156,7 @@ const TrackerEntryDetailPage = () => {
 
   const { data: entry, isLoading: entryLoading, error: entryError } = useTrackerEntry(entrySlug);
   const createTrackerActionMutation = useCreateTrackerAction();
+  const completeTrackerActionMutation = useCompleteTrackerAction();
   
   // Debug logging for API call
   useEffect(() => {
@@ -244,6 +247,15 @@ const TrackerEntryDetailPage = () => {
       });
     }
   }, [timelineData, timelinePage]);
+
+  // Activity tab: do not list Comments, Files, or SMS messages (they have their own tabs)
+  const activityTimelineEvents = useMemo(() => {
+    if (!allTimelineEvents?.length) return [];
+    return allTimelineEvents.filter(
+      (e) => e.type !== "comment" && e.type !== "attachment" && e.type !== "inbound_sms"
+    );
+  }, [allTimelineEvents]);
+
   const { data: auditLogsResponse, isLoading: auditLogsLoading } = useTrackerEntryAuditLogs(
     entrySlug,
     { 
@@ -255,7 +267,10 @@ const TrackerEntryDetailPage = () => {
   const { data: inboundMessages = [], isLoading: inboundMessagesLoading } = useTrackerEntryInboundMessages(entrySlug, {
     refetchInterval: activeTab === "communication" ? 10000 : false, // poll every 10s when on Communications tab
   });
-  
+  const { data: smsThreadData, isLoading: smsThreadLoading, refetch: refetchSmsThread } = useTrackerEntrySmsThread(entrySlug, {
+    refetchInterval: activeTab === "communication" ? 10000 : false,
+  });
+
   // Reset page when filter changes
   useEffect(() => {
     setAuditLogsPage(1);
@@ -659,10 +674,12 @@ const TrackerEntryDetailPage = () => {
     return Array.from(dates).sort((a, b) => (a < b ? 1 : a > b ? -1 : 0));
   }, [entry?.formatted_data, entry?.submission_data, allTimelineEvents]);
 
-  // SMS thread: only messages between patient and platform (Send SMS). Excludes general comments/notes.
+  // SMS thread from dedicated API (not timeline pagination) so Communications tab shows all messages
   const smsThread = useMemo(() => {
+    const inbound = smsThreadData?.inbound ?? [];
+    const sent = smsThreadData?.sent ?? [];
     const items = [];
-    (inboundMessages || []).forEach((msg) => {
+    inbound.forEach((msg) => {
       items.push({
         type: "inbound",
         id: `inbound_${msg.id}`,
@@ -671,24 +688,21 @@ const TrackerEntryDetailPage = () => {
         source_address: msg.source_address,
       });
     });
-    (allTimelineEvents || []).forEach((e) => {
-      if (e.note_category === "SMS sent" || (e.type === "comment" && e.title === "SMS sent")) {
-        // Use full comment_text so we can parse "Message: ..."; description is only the first sentence and omits the body
-        const raw = e.comment_text || e.description || "";
-        let content = "";
-        const msgIdx = raw.indexOf("Message:");
-        if (msgIdx !== -1) {
-          content = raw.slice(msgIdx + 8).trim().replace(/\s*\[SID:.*$/, "").replace(/\s*\[Error:.*$/, "").trim();
-        }
-        if (!content) content = "—";
-        items.push({
-          type: "sent",
-          id: `sent_${e.id}`,
-          timestamp: e.timestamp,
-          content,
-          user_name: e.user_name,
-        });
+    sent.forEach((c) => {
+      const raw = c.comment_text || "";
+      let content = "";
+      const msgIdx = raw.indexOf("Message:");
+      if (msgIdx !== -1) {
+        content = raw.slice(msgIdx + 8).trim().replace(/\s*\[SID:.*$/, "").replace(/\s*\[Error:.*$/, "").trim();
       }
+      if (!content) content = "—";
+      items.push({
+        type: "sent",
+        id: `sent_${c.id}`,
+        timestamp: c.created_at,
+        content,
+        user_name: c.user_name,
+      });
     });
     items.sort((a, b) => {
       const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
@@ -696,7 +710,7 @@ const TrackerEntryDetailPage = () => {
       return ta - tb;
     });
     return items;
-  }, [inboundMessages, allTimelineEvents]);
+  }, [smsThreadData]);
 
   // When multiple phones exist, default to first for inline SMS composer
   useEffect(() => {
@@ -865,7 +879,38 @@ const TrackerEntryDetailPage = () => {
   // Fields without section (section: null or undefined)
   const fieldsWithoutSection = trackerFields.filter((field) => !field.section || field.section === null);
 
+  // Form-entry-style read-only layout: sections with labels, ungrouped fields, and groups (like Forms submission view)
+  const trackerReadOnlyLayout = useMemo(() => {
+    return sections.map((section, index) => {
+      const sectionKey = section.id ?? section.title ?? section.label ?? `section-${index}`;
+      const sectionFields = (section.fields?.length)
+        ? (section.fields || []).map((fid) => trackerFields.find((f) => (f.id || f.name || f.field_id) === fid)).filter(Boolean)
+        : trackerFields.filter((f) => f.section === section.id || f.section === sectionKey);
+      const groups = section.groups && Array.isArray(section.groups) ? section.groups : [];
+      const sectionLabel = section.label || section.title || section.id || "Section";
+      const hasId = (f, id) => String(f?.id || f?.name || f?.field_id) === String(id);
+      let ungrouped = [];
+      let groupsWithFields = [];
+      if (groups.length > 0) {
+        const fieldIdsInGroups = new Set(groups.flatMap((g) => (g.fields || []).map(String)));
+        ungrouped = sectionFields.filter((f) => !Array.from(fieldIdsInGroups).some((id) => hasId(f, id)));
+        groupsWithFields = groups.map((g) => ({
+          group: g,
+          fields: sectionFields.filter((f) => (g.fields || []).some((id) => hasId(f, id))),
+        }));
+      } else {
+        ungrouped = sectionFields;
+      }
+      return { sectionKey, sectionLabel, ungrouped, groupsWithFields };
+    });
+  }, [sections, trackerFields]);
+
   const comments = commentsData?.comments || commentsData || [];
+  // Notes & Files tab: exclude "SMS sent" (those belong in Communications)
+  const notesAndFilesComments = useMemo(
+    () => (comments || []).filter((c) => c.note_category !== "SMS sent"),
+    [comments]
+  );
 
   // Handle field value changes
   const handleFieldChange = (fieldId, value) => {
@@ -1492,7 +1537,7 @@ const TrackerEntryDetailPage = () => {
               <TabsTrigger value="activity"><Clock className="mr-2 h-4 w-4" />Activity</TabsTrigger>
               <TabsTrigger value="forms"><FileText className="mr-2 h-4 w-4" />Forms</TabsTrigger>
               <TabsTrigger value="communication"><MessageSquare className="mr-2 h-4 w-4" />Communications</TabsTrigger>
-              <TabsTrigger value="notes"><MessageSquare className="mr-2 h-4 w-4" />Notes & Files ({comments.length})</TabsTrigger>
+              <TabsTrigger value="notes"><MessageSquare className="mr-2 h-4 w-4" />Notes & Files ({notesAndFilesComments.length})</TabsTrigger>
               <TabsTrigger value="audit"><FileText className="mr-2 h-4 w-4" />Audit</TabsTrigger>
             </TabsList>
             <TabsContent value="activity" className="mt-4">
@@ -1556,10 +1601,10 @@ const TrackerEntryDetailPage = () => {
               <div className="max-h-[min(400px,50vh)] overflow-y-auto">
                 {timelineLoading ? (
                   <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
-                ) : allTimelineEvents?.length > 0 ? (
+                ) : activityTimelineEvents?.length > 0 ? (
                   <div className="space-y-3">
-                    {allTimelineEvents.map((event, index) => {
-                      const prevEvent = allTimelineEvents[index - 1];
+                    {activityTimelineEvents.map((event, index) => {
+                      const prevEvent = activityTimelineEvents[index - 1];
                       const daysBetween = index > 0 && prevEvent?.timestamp && event.timestamp ? Math.abs(differenceInDays(parseUTCDate(prevEvent.timestamp), parseUTCDate(event.timestamp))) : null;
                       return (
                         <div key={event.id || index} className="relative pl-4 border-l-2 border-border ml-1">
@@ -1577,9 +1622,30 @@ const TrackerEntryDetailPage = () => {
                                 {event.type === "field_updates" && event.changes?.length > 0 ? event.changes.map((c, i) => `${c.field_label}: ${c.old_value ?? "—"} → ${c.new_value ?? "—"}`).join(" · ") : formatTimelineDescription(event.description, event)}
                               </p>
                             )}
-                            <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
+                            <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground flex-wrap">
                               <span>{format(parseUTCDate(event.timestamp), "d MMM yyyy, HH:mm")}</span>
                               {event.user_name && <span>by {event.user_name}</span>}
+                              {event.type === "action" && event.chase_date && (
+                                event.completed_at ? (
+                                  <Badge variant="secondary" className="text-xs font-normal">Done</Badge>
+                                ) : (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-6 text-xs"
+                                    disabled={completeTrackerActionMutation.isPending}
+                                    onClick={async () => {
+                                      const actionId = event.id?.startsWith("action_") ? Number(event.id.slice(7)) : null;
+                                      if (actionId == null || !entrySlug) return;
+                                      await completeTrackerActionMutation.mutateAsync({ entryIdentifier: entrySlug, actionId });
+                                      refetchTimeline();
+                                    }}
+                                  >
+                                    {completeTrackerActionMutation.isPending ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
+                                    Mark done
+                                  </Button>
+                                )
+                              )}
                             </div>
                           </div>
                         </div>
@@ -1590,7 +1656,7 @@ const TrackerEntryDetailPage = () => {
                     )}
                   </div>
                 ) : (
-                  <p className="text-sm text-muted-foreground text-center py-8">No activity yet. Use Add Action or log a note to start the timeline.</p>
+                  <p className="text-sm text-muted-foreground text-center py-8">No activity yet. Use Add Action to start the timeline.</p>
                 )}
               </div>
             </CardContent>
@@ -1886,36 +1952,25 @@ const TrackerEntryDetailPage = () => {
                       <p className="text-sm text-muted-foreground">Shared fields that apply across stages.</p>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                      {/* Metadata: created, created by, last updated, last updated by */}
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 py-3 px-4 rounded-lg bg-muted/40 text-sm">
-                        <div>
-                          <span className="text-muted-foreground">Created</span>
-                          <p className="font-medium">{entry?.created_at ? format(parseUTCDate(entry.created_at), "PPp") : "—"}</p>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">Created by</span>
-                          <p className="font-medium">{entry?.submitted_by_display_name || (entry?.submitted_by_user_id ? `User #${entry.submitted_by_user_id}` : null) || "—"}</p>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">Last updated</span>
-                          <p className="font-medium">{entry?.updated_at ? format(parseUTCDate(entry.updated_at), "PPp") : "—"}</p>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">Last updated by</span>
-                          <p className="font-medium">{entry?.updated_by_display_name || (entry?.updated_by_user_id ? `User #${entry.updated_by_user_id}` : null) || "—"}</p>
-                        </div>
+                        <div><span className="text-muted-foreground">Created</span><p className="font-medium">{entry?.created_at ? format(parseUTCDate(entry.created_at), "PPp") : "—"}</p></div>
+                        <div><span className="text-muted-foreground">Created by</span><p className="font-medium">{entry?.submitted_by_display_name || (entry?.submitted_by_user_id ? `User #${entry.submitted_by_user_id}` : null) || "—"}</p></div>
+                        <div><span className="text-muted-foreground">Last updated</span><p className="font-medium">{entry?.updated_at ? format(parseUTCDate(entry.updated_at), "PPp") : "—"}</p></div>
+                        <div><span className="text-muted-foreground">Last updated by</span><p className="font-medium">{entry?.updated_by_display_name || (entry?.updated_by_user_id ? `User #${entry.updated_by_user_id}` : null) || "—"}</p></div>
                       </div>
-                      {fieldsWithoutSection.map((field) => {
-                        const displayData = entry.formatted_data || entry.submission_data || entry.entry_data || {};
-                        const fieldId = field.id || field.name || field.field_id;
-                        const value = fieldId ? displayData[fieldId] : null;
-                        return (
-                          <div key={field.id || field.name || field.field_id}>
-                            <label className="text-sm font-medium text-muted-foreground">{field.label || "Untitled Field"}</label>
-                            <div className="mt-1 text-sm">{formatFieldValue(field, value)}</div>
-                          </div>
-                        );
-                      })}
+                      <div className="border-l-4 border-primary pl-3 py-1"><h3 className="text-sm font-semibold text-foreground">Entry data</h3></div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
+                        {fieldsWithoutSection.filter((f) => checkFieldVisibility(f, entry?.formatted_data || entry?.submission_data || {})).map((field) => {
+                          const displayData = entry.formatted_data || entry.submission_data || entry.entry_data || {};
+                          const fieldId = field.id || field.name || field.field_id;
+                          const mapped = { ...field, type: field.type || field.field_type, field_label: field.label || field.field_label || field.name, field_name: field.name || field.id, id: fieldId };
+                          return (
+                            <div key={fieldId} className="space-y-1">
+                              <CustomFieldRenderer field={mapped} value={displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} readOnly />
+                            </div>
+                          );
+                        })}
+                      </div>
                     </CardContent>
                   </Card>
                 ) : (
@@ -1938,45 +1993,70 @@ const TrackerEntryDetailPage = () => {
                         <CardTitle>Entry Data</CardTitle>
                       </CardHeader>
                       <CardContent className="space-y-4">
-                        {fieldsWithoutSection.map((field) => {
-                          const displayData = entry.formatted_data || entry.submission_data || entry.entry_data || {};
-                          const fieldId = field.id || field.name || field.field_id;
-                          const value = fieldId ? displayData[fieldId] : null;
-                          return (
-                            <div key={field.id || field.name || field.field_id}>
-                              <label className="text-sm font-medium text-muted-foreground">{field.label || "Untitled Field"}</label>
-                              <div className="mt-1 text-sm">{formatFieldValue(field, value)}</div>
-                            </div>
-                          );
-                        })}
+                        <div className="border-l-4 border-primary pl-3 py-1"><h3 className="text-sm font-semibold text-foreground">Entry data</h3></div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
+                          {fieldsWithoutSection.filter((f) => checkFieldVisibility(f, entry?.formatted_data || entry?.submission_data || {})).map((field) => {
+                            const displayData = entry.formatted_data || entry.submission_data || entry.entry_data || {};
+                            const fieldId = field.id || field.name || field.field_id;
+                            const mapped = { ...field, type: field.type || field.field_type, field_label: field.label || field.field_label || field.name, field_name: field.name || field.id, id: fieldId };
+                            return (
+                              <div key={fieldId} className="space-y-1">
+                                <CustomFieldRenderer field={mapped} value={displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} readOnly />
+                              </div>
+                            );
+                          })}
+                        </div>
                       </CardContent>
                     </Card>
                   )}
 
-                  {/* Render fields by section (all sections when not stage-filtered) – collapsed except active stage */}
-                  {sections.length > 0 ? (
-                    sections.map((section, sectionIndex) => {
+                  {/* Form-entry-style layout: sections with labels and groups (like Forms submission view) */}
+                  {trackerReadOnlyLayout.length > 0 ? (
+                    trackerReadOnlyLayout.map(({ sectionKey, sectionLabel, ungrouped, groupsWithFields }, sectionIndex) => {
                       const displayData = entry.formatted_data || entry.submission_data || entry.entry_data || {};
-                      const sectionKey = section.id ?? section.title ?? section.label ?? `section-${sectionIndex}`;
-                      const sectionFields = getVisibleSectionFields(sectionKey, displayData);
-                      if (sectionFields.length === 0) return null;
+                      const hasContent = ungrouped.some((f) => checkFieldVisibility(f, displayData)) || groupsWithFields.some(({ group, fields }) => checkGroupVisibility(group, displayData) && fields.some((f) => checkFieldVisibility(f, displayData)));
+                      if (!hasContent) return null;
                       const isActiveStage = sectionIndex === expandedSectionIndex;
-
+                      const mapFieldToMapped = (field) => {
+                        const fieldId = field.id || field.name || field.field_id;
+                        return { ...field, type: field.type || field.field_type, field_label: field.label || field.field_label || field.name, field_name: field.name || field.id, id: fieldId };
+                      };
                       return (
                         <Collapsible key={sectionKey} defaultOpen={isActiveStage} className="group rounded-lg border bg-card">
                           <CollapsibleTrigger className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-medium hover:bg-muted/50 rounded-t-lg data-[state=open]:rounded-b-none transition-colors">
-                            <span>{section.label || section.id}</span>
+                            <span>{sectionLabel}</span>
                             <ChevronDown className="h-4 w-4 shrink-0 transition-transform duration-200 group-data-[state=open]:rotate-180" />
                           </CollapsibleTrigger>
                           <CollapsibleContent>
-                            <div className="rounded-b-lg border border-t-0 bg-background px-4 pb-4 pt-3 space-y-3">
-                              {sectionFields.map((field) => {
+                            <div className="rounded-b-lg border border-t-0 bg-background px-4 pb-4 pt-3 space-y-4">
+                              <div className="border-l-4 border-primary pl-3 py-1">
+                                <h3 className="text-sm font-semibold text-foreground">{sectionLabel}</h3>
+                              </div>
+                              {ungrouped.filter((f) => checkFieldVisibility(f, displayData)).map((field) => {
                                 const fieldId = field.id || field.name || field.field_id;
-                                const value = fieldId ? displayData[fieldId] : null;
                                 return (
-                                  <div key={field.id || field.name || field.field_id}>
-                                    <label className="text-sm font-medium text-muted-foreground">{field.label || "Untitled Field"}</label>
-                                    <div className="mt-1 text-sm">{formatFieldValue(field, value)}</div>
+                                  <div key={fieldId} className="space-y-1">
+                                    <CustomFieldRenderer field={mapFieldToMapped(field)} value={displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} readOnly />
+                                  </div>
+                                );
+                              })}
+                              {groupsWithFields.map(({ group, fields: groupFields }) => {
+                                if (!checkGroupVisibility(group, displayData)) return null;
+                                const visibleFields = groupFields.filter((f) => checkFieldVisibility(f, displayData));
+                                if (visibleFields.length === 0) return null;
+                                return (
+                                  <div key={group.id || group.label || "g"} className="space-y-2">
+                                    {group.label && <h4 className="text-sm font-medium text-muted-foreground border-b pb-1">{group.label}</h4>}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
+                                      {visibleFields.map((field) => {
+                                        const fieldId = field.id || field.name || field.field_id;
+                                        return (
+                                          <div key={fieldId} className={cn("space-y-1", ["text_block", "image_block", "youtube_video_embed"].includes((field.type || field.field_type || "").toLowerCase()) && "md:col-span-2")}>
+                                            <CustomFieldRenderer field={mapFieldToMapped(field)} value={displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} readOnly />
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
                                   </div>
                                 );
                               })}
@@ -1995,17 +2075,21 @@ const TrackerEntryDetailPage = () => {
                       </CardHeader>
                       <CardContent className="space-y-4">
                         {trackerFields.length > 0 ? (
-                          trackerFields.map((field) => {
-                            const displayData = entry.formatted_data || entry.submission_data || entry.entry_data || {};
-                            const fieldId = field.id || field.name || field.field_id;
-                            const value = fieldId ? displayData[fieldId] : null;
-                            return (
-                              <div key={field.id || field.name || field.field_id}>
-                                <label className="text-sm font-medium text-muted-foreground">{field.label || "Untitled Field"}</label>
-                                <div className="mt-1 text-sm">{formatFieldValue(field, value)}</div>
-                              </div>
-                            );
-                          })
+                          <>
+                            <div className="border-l-4 border-primary pl-3 py-1"><h3 className="text-sm font-semibold text-foreground">Entry data</h3></div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
+                              {trackerFields.filter((f) => checkFieldVisibility(f, entry?.formatted_data || entry?.submission_data || {})).map((field) => {
+                                const displayData = entry.formatted_data || entry.submission_data || entry.entry_data || {};
+                                const fieldId = field.id || field.name || field.field_id;
+                                const mapped = { ...field, type: field.type || field.field_type, field_label: field.label || field.field_label || field.name, field_name: field.name || field.id, id: fieldId };
+                                return (
+                                  <div key={fieldId} className="space-y-1">
+                                    <CustomFieldRenderer field={mapped} value={displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} readOnly />
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </>
                         ) : (
                           <p className="text-sm text-muted-foreground">No fields defined for this tracker</p>
                         )}
@@ -2024,26 +2108,103 @@ const TrackerEntryDetailPage = () => {
               if (!section) return null;
               const sectionKey = section.id ?? section.title ?? section.label ?? `section-${sectionIndex}`;
               const displayData = entry?.formatted_data || entry?.submission_data || entry?.entry_data || {};
-              const sectionFields = getVisibleSectionFields(sectionKey, displayData);
+              const sectionFields = getVisibleSectionFields(sectionKey, isEditing ? effectiveEntryData : displayData);
+              const statusesForThisStage = (s?.statuses ?? s?.status_list ?? []).filter(Boolean);
+              const isThisStageTabActive = effectiveFormsSubTab === stageName;
               return (
                 <TabsContent key={stageName} value={stageName} className="mt-0 space-y-4">
                   <Card>
-                    <CardHeader><CardTitle>{section.label || section.id}</CardTitle></CardHeader>
+                    <CardHeader className="p-6">
+                      <div className="flex items-center justify-between gap-2 w-full">
+                        <CardTitle className="text-lg m-0">{section.label || section.id}</CardTitle>
+                        {canEditCase && !isClosed && !isEditing && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="shrink-0"
+                            onClick={() => {
+                            setEditModeStage(stageName);
+                            setFormsSubTab(stageName);
+                            const statuses = (s?.statuses ?? s?.status_list ?? []).filter(Boolean);
+                            if (statuses.length > 0 && entry?.status) {
+                              setEntryStatus(statuses.includes(entry.status) ? entry.status : statuses[0]);
+                            }
+                            setIsEditing(true);
+                          }}
+                        >
+                          <Edit className="mr-2 h-4 w-4" />
+                          Edit fields
+                        </Button>
+                        )}
+                      </div>
+                    </CardHeader>
                     <CardContent className="space-y-4">
                       {sectionFields.length === 0 ? (
                         <p className="text-sm text-muted-foreground">No fields in this stage.</p>
-                      ) : (
+                      ) : isEditing && isThisStageTabActive ? (
                         sectionFields.map((field) => {
                           const fieldId = field.id || field.name || field.field_id;
-                          const value = fieldId ? displayData[fieldId] : null;
+                          const value = effectiveEntryData[fieldId];
+                          const baseField = { ...field, type: field.type || field.field_type, field_label: field.label || field.field_label || field.name, field_name: field.name || field.id };
                           return (
-                            <div key={field.id || field.name || field.field_id}>
-                              <label className="text-sm font-medium text-muted-foreground">{field.label || "Untitled Field"}</label>
-                              <div className="mt-1 text-sm">{formatFieldValue(field, value)}</div>
-                            </div>
+                            <CustomFieldRenderer
+                              key={fieldId}
+                              field={getFieldWithStageFilteredStatusOptions(baseField, statusesForThisStage.length ? statusesForThisStage : statusesForEditModeStage)}
+                              value={value}
+                              otherTextValue={effectiveEntryData[`${fieldId}_other`]}
+                              onChange={handleFieldChange}
+                              error={fieldErrors[fieldId]}
+                              readOnly={isFieldDisabledByCondition(field, effectiveEntryData)}
+                            />
                           );
                         })
-                      )}
+                      ) : (() => {
+                        const layoutItem = trackerReadOnlyLayout[sectionIndex];
+                        if (!layoutItem) {
+                          return sectionFields.map((field) => {
+                            const fieldId = field.id || field.name || field.field_id;
+                            return (
+                              <div key={fieldId} className="space-y-1">
+                                <CustomFieldRenderer field={{ ...field, type: field.type || field.field_type, field_label: field.label || field.name, id: fieldId }} value={displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} readOnly />
+                              </div>
+                            );
+                          });
+                        }
+                        const { ungrouped: roUngrouped, groupsWithFields: roGroups } = layoutItem;
+                        const mapFieldToMapped = (field) => ({ ...field, type: field.type || field.field_type, field_label: field.label || field.field_label || field.name, field_name: field.name || field.id, id: field.id || field.name || field.field_id });
+                        return (
+                          <div className="space-y-4">
+                            {roUngrouped.filter((f) => checkFieldVisibility(f, displayData)).map((field) => {
+                              const fieldId = field.id || field.name || field.field_id;
+                              return (
+                                <div key={fieldId} className="space-y-1">
+                                  <CustomFieldRenderer field={mapFieldToMapped(field)} value={displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} readOnly />
+                                </div>
+                              );
+                            })}
+                            {roGroups.map(({ group, fields: groupFields }) => {
+                              if (!checkGroupVisibility(group, displayData)) return null;
+                              const visibleFields = groupFields.filter((f) => checkFieldVisibility(f, displayData));
+                              if (visibleFields.length === 0) return null;
+                              return (
+                                <div key={group.id || group.label || "g"} className="space-y-2">
+                                  {group.label && <h4 className="text-sm font-medium text-muted-foreground border-b pb-1">{group.label}</h4>}
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
+                                    {visibleFields.map((field) => {
+                                      const fieldId = field.id || field.name || field.field_id;
+                                      return (
+                                        <div key={fieldId} className={cn("space-y-1", ["text_block", "image_block", "youtube_video_embed"].includes((field.type || field.field_type || "").toLowerCase()) && "md:col-span-2")}>
+                                          <CustomFieldRenderer field={mapFieldToMapped(field)} value={displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} readOnly />
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      })()}
                     </CardContent>
                   </Card>
                 </TabsContent>
@@ -2074,7 +2235,7 @@ const TrackerEntryDetailPage = () => {
                   <div className="rounded-xl border border-border/60 bg-card shadow-sm overflow-hidden flex flex-col min-h-[320px] max-h-[520px]">
                     {/* Message thread */}
                     <div className="flex-1 min-h-[180px] max-h-[380px] overflow-y-auto p-4 flex flex-col gap-3 bg-gradient-to-b from-muted/20 to-muted/5">
-                      {inboundMessagesLoading || timelineLoading ? (
+                      {smsThreadLoading ? (
                         <div className="flex flex-col items-center justify-center gap-3 py-12 text-muted-foreground">
                           <div className="rounded-full bg-muted/80 p-3">
                             <Loader2 className="h-5 w-5 animate-spin" />
@@ -2181,6 +2342,7 @@ const TrackerEntryDetailPage = () => {
                               const res = await trackersService.sendSmsFromEntry(entrySlug, body);
                               if (res?.success) {
                                 setSendSmsMessage("");
+                                refetchSmsThread?.();
                                 refetchTimeline?.();
                                 toast.success("SMS sent.");
                               } else {
@@ -2256,6 +2418,7 @@ const TrackerEntryDetailPage = () => {
                 entityType="tracker_entry"
                 entitySlug={entry?.id?.toString() || entrySlug}
                 noteCategories={tracker?.tracker_config?.note_categories || []}
+                excludeNoteCategories={["SMS sent"]}
               />
             </CardContent>
           </Card>

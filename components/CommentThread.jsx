@@ -557,6 +557,7 @@ export const CommentThread = ({
   initialPage = 1,
   perPage = 50,
   noteCategories = [], // Note categories for tracker entries
+  excludeNoteCategories = [], // e.g. ["SMS sent"] so those appear only in Communications tab
 }) => {
   const [page, setPage] = useState(initialPage);
   const [newCommentText, setNewCommentText] = useState("");
@@ -649,7 +650,10 @@ export const CommentThread = ({
   const organizedComments = useMemo(() => {
     if (!commentsData?.comments) return [];
 
-    const comments = commentsData.comments || [];
+    let comments = commentsData.comments || [];
+    if (excludeNoteCategories?.length > 0) {
+      comments = comments.filter((c) => !excludeNoteCategories.includes(c.note_category));
+    }
     const topLevel = comments.filter((c) => !c.parent_comment_id);
     const repliesMap = new Map();
 
@@ -687,7 +691,7 @@ export const CommentThread = ({
     };
 
     return topLevel.map((comment) => buildThread(comment));
-  }, [commentsData]);
+  }, [commentsData, excludeNoteCategories]);
 
   if (isError) {
     return (
@@ -707,7 +711,7 @@ export const CommentThread = ({
           <MessageSquare className="h-5 w-5" />
           <h3 className="font-semibold">
             Comments
-            {commentsData?.total !== undefined && (
+            {commentsData?.total !== undefined && excludeNoteCategories?.length === 0 && (
               <span className="text-muted-foreground font-normal ml-2">
                 ({commentsData.total})
               </span>
@@ -879,8 +883,8 @@ export const CommentThread = ({
       {commentsData?.total_pages > 1 && (
         <div className="flex items-center justify-between pt-4 border-t">
           <div className="text-sm text-muted-foreground">
-            Page {commentsData.page} of {commentsData.total_pages} (
-            {commentsData.total} total)
+            Page {commentsData.page} of {commentsData.total_pages}
+            {excludeNoteCategories?.length === 0 && ` (${commentsData.total} total)`}
           </div>
           <div className="flex gap-2">
             <Button
