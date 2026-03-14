@@ -1533,7 +1533,7 @@ const TrackerEntryDetailPage = () => {
         {/* Main: 5 tabs – Activity, Forms, Communication, Notes & Files, Audit */}
         <main className="space-y-3 order-1 lg:order-2 min-w-0 lg:col-span-9">
           <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-            <TabsList className="bg-muted/50 flex flex-wrap gap-1">
+            <TabsList className="bg-muted/50 flex flex-nowrap gap-1 overflow-x-auto scrollbar-hide w-full min-w-0 [&>*]:shrink-0">
               <TabsTrigger value="activity"><Clock className="mr-2 h-4 w-4" />Activity</TabsTrigger>
               <TabsTrigger value="forms"><FileText className="mr-2 h-4 w-4" />Forms</TabsTrigger>
               <TabsTrigger value="communication"><MessageSquare className="mr-2 h-4 w-4" />Communications</TabsTrigger>
@@ -1767,7 +1767,7 @@ const TrackerEntryDetailPage = () => {
           )}
 
           <Tabs value={effectiveFormsSubTab} onValueChange={setFormsSubTab} className="w-full">
-            <TabsList className="bg-muted/50 flex flex-wrap gap-1 mb-4">
+            <TabsList className="bg-muted/50 flex flex-nowrap gap-1 mb-4 overflow-x-auto scrollbar-hide w-full min-w-0 [&>*]:shrink-0">
               <TabsTrigger value="entry_data">Entry data</TabsTrigger>
               {stageMapping?.map((s) => {
                 const n = String(s?.stage ?? s?.name ?? "").trim();
@@ -2222,7 +2222,7 @@ const TrackerEntryDetailPage = () => {
             </CardHeader>
             <CardContent>
               <Tabs value={communicationsSubTab} onValueChange={setCommunicationsSubTab} className="w-full">
-                <div className="overflow-x-auto overflow-y-hidden mb-4 -mx-1 px-1 scrollbar-thin md:overflow-x-visible" style={{ WebkitOverflowScrolling: "touch" }}>
+                <div className="overflow-x-auto overflow-y-hidden mb-4 -mx-1 px-1 scrollbar-hide md:overflow-x-visible" style={{ WebkitOverflowScrolling: "touch" }}>
                   <TabsList className="bg-muted/50 flex flex-nowrap gap-1 w-max min-w-full md:min-w-0 md:flex-wrap">
                     <TabsTrigger value="sms" className="shrink-0"><Smartphone className="mr-1.5 h-3.5 w-3.5" />SMS</TabsTrigger>
                     <TabsTrigger value="whatsapp" className="shrink-0"><MessageCircle className="mr-1.5 h-3.5 w-3.5" />WhatsApp</TabsTrigger>
