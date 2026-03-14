@@ -196,22 +196,27 @@ const AuditLogsPage = () => {
     "configuration_change",
   ];
 
-  // Available resources
+  // Available resources (value = API resource type, label = display in dropdown)
   const resources = [
-    "task",
-    "user",
-    "form",
-    "asset",
-    "role",
-    "permission",
-    "file",
-    "location",
-    "department",
-    "category_type",
-    "asset_type",
-    "location_type",
-    "task_type",
-    "form_type",
+    { value: "task", label: "Task" },
+    { value: "user", label: "User" },
+    { value: "custom_form", label: "Form / Tracker" },
+    { value: "form_submission", label: "Form submission / Tracker entry" },
+    { value: "incoming_message", label: "Incoming message (webhook)" },
+    { value: "entity_comment", label: "Comment" },
+    { value: "document", label: "Document" },
+    { value: "asset", label: "Asset" },
+    { value: "role", label: "Role" },
+    { value: "permission", label: "Permission" },
+    { value: "file", label: "File" },
+    { value: "form", label: "Form" },
+    { value: "location", label: "Location" },
+    { value: "department", label: "Department" },
+    { value: "category_type", label: "Category type" },
+    { value: "asset_type", label: "Asset type" },
+    { value: "location_type", label: "Location type" },
+    { value: "task_type", label: "Task type" },
+    { value: "form_type", label: "Form type" },
   ];
 
   // Severity levels
@@ -443,9 +448,9 @@ const AuditLogsPage = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__all__">All resources</SelectItem>
-                  {resources.map((resource) => (
-                    <SelectItem key={resource} value={resource}>
-                      {resource.charAt(0).toUpperCase() + resource.slice(1)}
+                  {resources.map((r) => (
+                    <SelectItem key={r.value} value={r.value}>
+                      {r.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
