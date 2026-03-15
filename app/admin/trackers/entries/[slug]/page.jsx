@@ -679,18 +679,25 @@ const TrackerEntryDetailPage = () => {
     return event.action_type.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()).replace(/\bSms\b/gi, "SMS");
   };
 
-  // Chase dates: current chase_due/next_action_date from entry + chase_date from timeline actions (for left sidebar list)
+  // Chase dates: current chase_due/next_action_date from entry + chase_date from timeline actions (for left sidebar list). Each item has { dateStr, type } so we can show chase type beside the date.
   const chaseDatesList = useMemo(() => {
-    const dates = new Set();
+    const items = [];
     const fd = entry?.formatted_data || entry?.submission_data || {};
     const current = fd.chase_due || fd.next_action_date || null;
-    if (current) dates.add(typeof current === "string" ? current.split("T")[0] : current);
+    if (current) {
+      const dateStr = typeof current === "string" ? current.split("T")[0] : current;
+      items.push({ dateStr, type: "Due" });
+    }
     (allTimelineEvents || []).forEach((ev) => {
       const d = ev.chase_date;
-      if (d) dates.add(typeof d === "string" ? d.split("T")[0] : d);
+      if (d) {
+        const dateStr = typeof d === "string" ? d.split("T")[0] : d;
+        const type = ev.type === "action" ? getActionTimelineTitle(ev) : (ev.title || "Action");
+        items.push({ dateStr, type });
+      }
     });
-    return Array.from(dates).sort((a, b) => (a < b ? 1 : a > b ? -1 : 0));
-  }, [entry?.formatted_data, entry?.submission_data, allTimelineEvents]);
+    return items.sort((a, b) => (a.dateStr < b.dateStr ? 1 : a.dateStr > b.dateStr ? -1 : 0));
+  }, [entry?.formatted_data, entry?.submission_data, allTimelineEvents, tracker?.tracker_config?.action_types]);
 
   // SMS thread from dedicated API (not timeline pagination) so Communications tab shows all messages
   const smsThread = useMemo(() => {
@@ -761,6 +768,23 @@ const TrackerEntryDetailPage = () => {
   // Phase 5.2: Send SMS only when tracker has an SMS sender number configured (backend also enforces)
   const hasSmsSenderNumber = !!(tracker?.tracker_config?.twilio_from_number?.trim());
   const canSendSms = canEditCase && hasSmsSenderNumber;
+
+  // SMS quick-reply templates: use tracker's custom templates or built-in
+  const smsTemplateOptions = useMemo(() => {
+    const custom = (tracker?.tracker_config?.sms_templates || []).filter((t) => t.key);
+    if (custom.length > 0) return custom.map((t) => ({ value: t.key, label: t.label || t.key }));
+    return [
+      { value: "appointment_reminder", label: "Appointment reminder" },
+      { value: "prep_reminder", label: "Prep reminder" },
+      { value: "please_contact_us", label: "Please contact us" },
+    ];
+  }, [tracker?.tracker_config?.sms_templates]);
+  const firstSmsTemplateValue = smsTemplateOptions[0]?.value ?? "please_contact_us";
+  useEffect(() => {
+    if (smsTemplateOptions.length > 0 && !smsTemplateOptions.some((o) => o.value === sendSmsTemplate)) {
+      setSendSmsTemplate(firstSmsTemplateValue);
+    }
+  }, [smsTemplateOptions, firstSmsTemplateValue, sendSmsTemplate]);
 
   // Format field value for read-only display
   const formatFieldValue = (field, value) => {
@@ -1508,19 +1532,7 @@ const TrackerEntryDetailPage = () => {
                         <X className="mr-2 h-4 w-4" />
                         Close case
                       </Button>
-                      {canSendSms && (
-                        <Button variant="outline" size="sm" onClick={handleOpenSendSms}>
-                          <Smartphone className="mr-2 h-4 w-4" />
-                          Send SMS
-                        </Button>
-                      )}
                     </span>
-                  )}
-                  {activeTab !== "forms" && (
-                    <Button variant="outline" size="sm" title="Copy link to this entry" onClick={copyEntryLink}>
-                      <Link2 className="h-4 w-4 mr-1" />
-                      {entryLinkCopied ? "Copied" : "Copy link"}
-                    </Button>
                   )}
                   {tracker?.tracker_config?.allow_public_submit && (
                     <Button variant="outline" size="sm" onClick={copyShareableLink}>
@@ -1565,11 +1577,15 @@ const TrackerEntryDetailPage = () => {
             <CardContent>
               {chaseDatesList.length > 0 ? (
                 <ul className="space-y-2 max-h-[min(240px,35vh)] overflow-y-auto text-sm">
-                  {chaseDatesList.map((dateStr) => (
-                    <li key={dateStr} className="font-medium">
-                      {format(parseUTCDate(dateStr + "T12:00:00"), "d MMM yyyy")}
-                    </li>
-                  ))}
+                  {chaseDatesList.map((item, idx) => {
+                    const reason = item.type.startsWith("Chase – ") ? item.type.slice(8).trim() : item.type;
+                    return (
+                      <li key={`${item.dateStr}-${idx}`} className="flex items-center justify-between gap-2 font-medium">
+                        <span>{format(parseUTCDate(item.dateStr + "T12:00:00"), "d MMM yyyy")}</span>
+                        <span className="text-muted-foreground text-xs font-normal shrink-0">{reason}</span>
+                      </li>
+                    );
+                  })}
                 </ul>
               ) : (
                 <p className="text-sm text-muted-foreground">No chase dates recorded.</p>
@@ -1593,15 +1609,7 @@ const TrackerEntryDetailPage = () => {
             <TabsContent value="activity" className="mt-4">
           <Card>
             <CardHeader className="py-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <CardTitle className="text-sm font-medium">Activity timeline</CardTitle>
-                {canEditCase && !isClosed && (
-                  <div className="flex flex-wrap gap-1">
-                    <Button variant="outline" size="sm" onClick={() => handleTabChange("notes")}><MessageSquare className="mr-1.5 h-3.5 w-3.5" />Note</Button>
-                    {canSendSms && <Button variant="outline" size="sm" onClick={() => handleTabChange("communication")}><Smartphone className="mr-1.5 h-3.5 w-3.5" />SMS</Button>}
-                  </div>
-                )}
-              </div>
+              <CardTitle className="text-sm font-medium">Activity timeline</CardTitle>
             </CardHeader>
             <CardContent>
               {stageChangeNotesList.length > 0 && (
@@ -2882,11 +2890,18 @@ const TrackerEntryDetailPage = () => {
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="appointment_reminder">Appointment reminder</SelectItem>
-                            <SelectItem value="prep_reminder">Prep reminder</SelectItem>
-                            <SelectItem value="please_contact_us">Please contact us</SelectItem>
+                            {smsTemplateOptions.map((o) => (
+                              <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
+                        {canManageTracker && tracker?.slug && (
+                          <Link href={`/admin/trackers/${tracker.slug}/edit?tab=communication`}>
+                            <Button type="button" variant="ghost" size="sm" className="h-8 text-xs text-muted-foreground">
+                              Manage templates
+                            </Button>
+                          </Link>
+                        )}
                         {!canSendSms && (
                           <span className="text-xs text-muted-foreground">
                             {!hasSmsSenderNumber && "SMS not configured."}

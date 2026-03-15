@@ -132,6 +132,27 @@ const generateUniqueId = (label) => {
 const COLUMNS = ["left", "center", "right"];
 const columnLabels = { left: "Left", center: "Center (full width)", right: "Right" };
 
+// Return all field ids already used in this section's layout (table cells, grid slots, stack group.fields) so dropdowns can exclude them.
+function getUsedFieldIdsInSection(section) {
+  const used = new Set();
+  (section?.groups || []).forEach((g) => {
+    if ((g.layout || "") === "table" && Array.isArray(g.table_rows)) {
+      (g.table_rows || []).forEach((row) => {
+        (row.cells || []).forEach((cell) => {
+          if (cell.field_id) used.add(String(cell.field_id));
+        });
+      });
+    } else if ((g.layout || "") === "grid" && Array.isArray(g.grid_rows)) {
+      (g.grid_rows || []).forEach((row) => {
+        [...(row.left || []), ...(row.center || []), ...(row.right || [])].forEach((id) => used.add(String(id)));
+      });
+    } else {
+      (g.fields || []).forEach((id) => used.add(String(id)));
+    }
+  });
+  return used;
+}
+
 function OneRowEditor({ row, rowIndex, sectionFields, allIdsInAnyGroup, onUpdateRow, onRemoveRow, canRemoveRow }) {
   const grid = row || { left: [], center: [], right: [] };
   const hasLeftOrRight = ((grid.left || []).length + (grid.right || []).length) > 0;
@@ -143,7 +164,7 @@ function OneRowEditor({ row, rowIndex, sectionFields, allIdsInAnyGroup, onUpdate
   const availableToAdd = sectionFields
     .map((f) => f.id || f.name || f.field_id)
     .filter(Boolean)
-    .filter((id) => !allIdsInAnyGroup.includes(id));
+    .filter((id) => !allIdsInAnyGroup.includes(String(id)));
 
   const updateRow = (newGrid) => {
     onUpdateRow(rowIndex, { ...grid, ...newGrid });
@@ -299,7 +320,8 @@ function GridColumnsEditor({ group, groupIdx, sectionFields, editingSection, set
     ? group.grid_rows
     : (group.grid_columns ? [{ ...group.grid_columns }] : [{ left: [], center: [], right: [] }]);
   const allIdsInGroup = gridRows.flatMap((r) => [...(r.left || []), ...(r.center || []), ...(r.right || [])]);
-  const allIdsInAnyGroup = (editingSection.groups || []).flatMap((g) => g.fields || []);
+  const usedInSection = getUsedFieldIdsInSection(editingSection);
+  const allIdsInAnyGroup = Array.from(usedInSection);
 
   React.useEffect(() => {
     if ((group.layout || "") !== "grid") return;
@@ -359,7 +381,7 @@ const TrackerEditPage = () => {
   const searchParams = useSearchParams();
   const slug = params.slug;
   const tabFromUrl = searchParams?.get("tab");
-  const TRACKER_EDIT_TABS = ["sections", "fields", "stages", "basic", "statuses", "permissions", "notifications", "audit"];
+  const TRACKER_EDIT_TABS = ["sections", "fields", "stages", "basic", "statuses", "communication", "permissions", "notifications", "audit"];
   const [activeTab, setActiveTab] = useState(() => {
     if (typeof window === "undefined") return "basic";
     const t = new URLSearchParams(window.location.search).get("tab");
@@ -568,6 +590,9 @@ const TrackerEditPage = () => {
               send_sms: tracker.tracker_config?.notification_settings?.send_sms ?? false,
             },
             twilio_from_number: tracker.tracker_config?.twilio_from_number ?? "",
+            sms_templates: Array.isArray(tracker.tracker_config?.sms_templates)
+              ? JSON.parse(JSON.stringify(tracker.tracker_config.sms_templates))
+              : [],
           },
         tracker_fields: tracker.tracker_fields || {
           fields: [],
@@ -1309,6 +1334,7 @@ const TrackerEditPage = () => {
               <TabsTrigger value="stages">Stages ({stageMapping.length})</TabsTrigger>
             )}
             <TabsTrigger value="permissions">Permissions</TabsTrigger>
+            <TabsTrigger value="communication">Communication</TabsTrigger>
             <TabsTrigger value="notifications">Notifications</TabsTrigger>
             <TabsTrigger value="audit">Audit Logs</TabsTrigger>
           </TabsList>
@@ -3618,6 +3644,14 @@ const TrackerEditPage = () => {
                     const linkedStageName = linkedStage?.stage ?? linkedStage?.name ?? null;
                     return editingSectionIndex === index ? (
                       // Edit Section Form
+                      (() => {
+                        const usedInSection = getUsedFieldIdsInSection(editingSection);
+                        const sectionFieldsNotUsedInLayout = (allowId) =>
+                          sectionFields.filter((f) => {
+                            const id = f.id ?? f.name ?? f.field_id;
+                            return id != null && (!usedInSection.has(String(id)) || (allowId != null && String(id) === String(allowId)));
+                          });
+                        return (
                       <div key={section.id || index} className="p-4 border rounded-md space-y-4 bg-card">
                         <div>
                           <Label htmlFor="edit-section-label">Section Label *</Label>
@@ -3820,7 +3854,7 @@ const TrackerEditPage = () => {
                                                       <div className="space-y-1 min-w-[100px]">
                                                         <Input className="h-8 text-xs w-full" placeholder="Text" value={cell.text ?? ""} onChange={(e) => setCell(rIdx, cIdx, "text", e.target.value)} />
                                                         <SearchableFieldSelect
-                                                          fields={sectionFields}
+                                                          fields={sectionFieldsNotUsedInLayout(cell.field_id ?? undefined)}
                                                           value={cell.field_id ?? "__none__"}
                                                           onValueChange={(v) => setCell(rIdx, cIdx, "field_id", v === "__none__" || !v ? null : v)}
                                                           placeholder="Field (optional)"
@@ -3903,11 +3937,7 @@ const TrackerEditPage = () => {
                                   );
                                 })}
                                 <SearchableFieldSelect
-                                  fields={sectionFields.filter((f) => {
-                                    const id = f.id ?? f.name ?? f.field_id;
-                                    const usedIds = (editingSection.groups || []).flatMap((g) => (g.fields || []).map(String));
-                                    return id != null && !usedIds.includes(String(id));
-                                  })}
+                                  fields={sectionFieldsNotUsedInLayout()}
                                   value=""
                                   onValueChange={(val) => {
                                     if (val) {
@@ -4072,6 +4102,8 @@ const TrackerEditPage = () => {
                           </Button>
                         </div>
                       </div>
+                        );
+                      })()
                     ) : (
                       // Section Display
                       <div
@@ -5043,6 +5075,120 @@ const TrackerEditPage = () => {
                   </div>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Communication Tab – SMS auto-reply / quick-reply templates */}
+        <TabsContent value="communication" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>SMS quick-reply templates</CardTitle>
+              <p className="text-sm text-muted-foreground mt-1">
+                Templates shown in the Communications tab when sending SMS from a case. Staff pick a template or type a custom message.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {(formData.tracker_config?.sms_templates || []).map((tpl, idx) => (
+                <div key={tpl.key || idx} className="flex flex-col gap-2 p-3 border rounded-md bg-muted/20">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
+                      <Input
+                        placeholder="Key (e.g. appointment_reminder)"
+                        value={tpl.key ?? ""}
+                        onChange={(e) => {
+                          const v = e.target.value.trim();
+                          setFormData((prev) => ({
+                            ...prev,
+                            tracker_config: {
+                              ...prev.tracker_config,
+                              sms_templates: (prev.tracker_config?.sms_templates || []).map((t, i) =>
+                                i === idx ? { ...t, key: v || t.key } : t
+                              ),
+                            },
+                          }));
+                        }}
+                        className="h-8 text-xs font-mono max-w-[200px]"
+                      />
+                      <Input
+                        placeholder="Label (e.g. Appointment reminder)"
+                        value={tpl.label ?? ""}
+                        onChange={(e) => {
+                          setFormData((prev) => ({
+                            ...prev,
+                            tracker_config: {
+                              ...prev.tracker_config,
+                              sms_templates: (prev.tracker_config?.sms_templates || []).map((t, i) =>
+                                i === idx ? { ...t, label: e.target.value } : t
+                              ),
+                            },
+                          }));
+                        }}
+                        className="h-8 text-xs flex-1 min-w-[140px]"
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 shrink-0 text-destructive"
+                      onClick={() => {
+                        setFormData((prev) => ({
+                          ...prev,
+                          tracker_config: {
+                            ...prev.tracker_config,
+                            sms_templates: (prev.tracker_config?.sms_templates || []).filter((_, i) => i !== idx),
+                          },
+                        }));
+                      }}
+                      title="Remove template"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <Textarea
+                    placeholder="Message body (e.g. Your appointment is coming up. Please contact us if you need to reschedule.)"
+                    value={tpl.body ?? ""}
+                    onChange={(e) => {
+                      setFormData((prev) => ({
+                        ...prev,
+                        tracker_config: {
+                          ...prev.tracker_config,
+                          sms_templates: (prev.tracker_config?.sms_templates || []).map((t, i) =>
+                            i === idx ? { ...t, body: e.target.value } : t
+                          ),
+                        },
+                      }));
+                    }}
+                    rows={2}
+                    className="text-xs resize-y min-h-[60px]"
+                  />
+                </div>
+              ))}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const list = formData.tracker_config?.sms_templates || [];
+                  const n = list.length + 1;
+                  const newKey = `template_${n}`;
+                  setFormData((prev) => ({
+                    ...prev,
+                    tracker_config: {
+                      ...prev.tracker_config,
+                      sms_templates: [...(prev.tracker_config?.sms_templates || []), { key: newKey, label: "", body: "" }],
+                    },
+                  }));
+                }}
+              >
+                <Plus className="h-4 w-4 mr-2" /> Add template
+              </Button>
+              {(!formData.tracker_config?.sms_templates || formData.tracker_config.sms_templates.length === 0) && (
+                <p className="text-sm text-muted-foreground">
+                  No custom templates. The case Communications tab will show built-in options (Appointment reminder, Prep reminder, Please contact us). Add templates here to override or add more.
+                </p>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
