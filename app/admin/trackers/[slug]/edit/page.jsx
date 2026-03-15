@@ -72,7 +72,9 @@ const fieldTypes = [
   { value: "date", label: "Date" },
   { value: "datetime", label: "Date & Time" },
   { value: "boolean", label: "Boolean/Checkbox" },
+  { value: "boolean_with_description", label: "Boolean with description" },
   { value: "select", label: "Select (Dropdown)" },
+  { value: "radio", label: "Radio (Single choice)" },
   { value: "multiselect", label: "Multi-Select" },
   { value: "people", label: "People (User Selection)" },
   { value: "file", label: "File Upload" },
@@ -80,12 +82,13 @@ const fieldTypes = [
   { value: "signature", label: "Signature" },
   { value: "rag", label: "RAG (Red / Amber / Green)" },
   { value: "calculated", label: "Calculated (Sum / Percentage)" },
-  { value: "repeatable_group", label: "Repeatable group (linked rows)" },
-  // Display-only (no page_break – Trackers use Stages for flow)
+  { value: "repeatable_group", label: "Repeatable group (Add more rows)" },
+  // Display-only (same as Forms)
   { value: "text_block", label: "Text Block (Display Only)" },
   { value: "image_block", label: "Image Block (Display Only)" },
   { value: "youtube_video_embed", label: "YouTube Video Embed (Display Only)" },
   { value: "line_break", label: "Line Break (Display Only)" },
+  { value: "page_break", label: "Page Break (Display Only)" },
   { value: "download_link", label: "Download Link (Display Only)" },
 ];
 
@@ -235,16 +238,17 @@ function OneRowEditor({ row, rowIndex, sectionFields, allIdsInAnyGroup, onUpdate
                 })}
               </div>
               {!disabled && availableToAdd.length > 0 && (
-                <Select value="__add__" onValueChange={(val) => { if (val && val !== "__add__") addToColumn(val, col); }}>
-                  <SelectTrigger className="h-7 text-xs mt-1"><SelectValue placeholder="+ Add field" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__add__">+ Add field</SelectItem>
-                    {availableToAdd.map((id) => {
-                      const f = sectionFields.find((x) => (x.id || x.name || x.field_id) === id);
-                      return <SelectItem key={id} value={id}>{f?.label || f?.name || id}</SelectItem>;
-                    })}
-                  </SelectContent>
-                </Select>
+                <SearchableFieldSelect
+                  fields={sectionFields.filter((f) => {
+                    const id = f.id ?? f.name ?? f.field_id;
+                    return id != null && availableToAdd.some((aid) => String(aid) === String(id));
+                  })}
+                  value=""
+                  onValueChange={(val) => { if (val) addToColumn(val, col); }}
+                  placeholder="+ Add field"
+                  className="h-7 text-xs mt-1 w-full min-w-0"
+                  compact
+                />
               )}
             </div>
           );
@@ -464,6 +468,9 @@ const TrackerEditPage = () => {
   const [editingSectionIndex, setEditingSectionIndex] = useState(null);
   const [editingSection, setEditingSection] = useState(null);
 
+  // Draft option label for repeatable group child (select/dropdown) so input stays controlled
+  const [repeatableOptionDraft, setRepeatableOptionDraft] = useState({});
+
   // Drag and drop state for section reordering
   const [draggedSectionIndex, setDraggedSectionIndex] = useState(null);
   const [dragOverSectionIndex, setDragOverSectionIndex] = useState(null);
@@ -630,8 +637,8 @@ const TrackerEditPage = () => {
     fieldId = ensureUniqueFieldId(fieldId, existingIds);
 
     // For select/multiselect, require options
-    if ((newField.type === "select" || newField.type === "multiselect") && newField.options.length === 0) {
-      toast.error(`${newField.type === "select" ? "Select" : "Multi-select"} fields require at least one option`);
+    if ((newField.type === "select" || newField.type === "radio" || newField.type === "multiselect") && newField.options.length === 0) {
+      toast.error(`${newField.type === "select" ? "Select" : newField.type === "radio" ? "Radio" : "Multi-select"} fields require at least one option`);
       return;
     }
 
@@ -718,8 +725,8 @@ const TrackerEditPage = () => {
     }
 
     // For select/multiselect, require options
-    if ((editingField.type === "select" || editingField.type === "multiselect") && editingField.options.length === 0) {
-      toast.error(`${editingField.type === "select" ? "Select" : "Multi-select"} fields require at least one option`);
+    if ((editingField.type === "select" || editingField.type === "radio" || editingField.type === "multiselect") && editingField.options.length === 0) {
+      toast.error(`${editingField.type === "select" ? "Select" : editingField.type === "radio" ? "Radio" : "Multi-select"} fields require at least one option`);
       return;
     }
 
@@ -1866,7 +1873,7 @@ const TrackerEditPage = () => {
                                 const depField = fields.find((f) => String(f.id || f.name || f.field_id) === String(depFieldId));
                                 const depType = (depField?.type || depField?.field_type || "").toLowerCase();
                                 const needsValue = ["equals", "not_equals", "contains"].includes(editingField.conditional_visibility?.show_when || "");
-                                const isBoolean = depType === "boolean" || depType === "checkbox";
+                                const isBoolean = depType === "boolean" || depType === "checkbox" || depType === "boolean_with_description";
                                 const isSelectLike = ["select", "dropdown", "radio", "radio_group"].includes(depType);
                                 const isMultiselect = depType === "multiselect";
                                 const isNumber = depType === "number" || depType === "integer";
@@ -2050,7 +2057,7 @@ const TrackerEditPage = () => {
                         )}
 
                         {/* Boolean display: checkbox or Yes/No radios */}
-                        {(editingField.type === "boolean" || editingField.type === "checkbox") && (
+                        {(editingField.type === "boolean" || editingField.type === "checkbox" || editingField.type === "boolean_with_description") && (
                           <div className="space-y-2">
                             <Label className="text-xs">Display as</Label>
                             <Select
@@ -2091,7 +2098,7 @@ const TrackerEditPage = () => {
                         )}
 
                         {/* Options for Select/Multi-select */}
-                        {(editingField.type === "select" || editingField.type === "multiselect") && (
+                        {(editingField.type === "select" || editingField.type === "radio" || editingField.type === "multiselect") && (
                           <div className="space-y-2">
                             <Label>Options</Label>
                             <div className="flex flex-wrap gap-2 items-end">
@@ -2349,7 +2356,8 @@ const TrackerEditPage = () => {
                           <div className="space-y-3 p-3 border rounded-md bg-muted/30">
                             <Label className="font-medium">Child fields (one per column in each row)</Label>
                             {(editingField.fields || []).map((child, childIdx) => (
-                              <div key={childIdx} className="flex flex-wrap items-center gap-2 p-2 rounded border bg-background">
+                              <React.Fragment key={childIdx}>
+                              <div className="flex flex-wrap items-center gap-2 p-2 rounded border bg-background">
                                 <Input
                                   className="flex-1 min-w-[100px]"
                                   placeholder="Label"
@@ -2381,7 +2389,8 @@ const TrackerEditPage = () => {
                                     <SelectItem value="text">Text</SelectItem>
                                     <SelectItem value="number">Number</SelectItem>
                                     <SelectItem value="date">Date</SelectItem>
-                                    <SelectItem value="select">Select</SelectItem>
+                                    <SelectItem value="boolean">Checkbox</SelectItem>
+                                    <SelectItem value="dropdown">Dropdown</SelectItem>
                                   </SelectContent>
                                 </Select>
                                 <span className="text-xs text-muted-foreground shrink-0">
@@ -2402,6 +2411,50 @@ const TrackerEditPage = () => {
                                   <X className="h-4 w-4" />
                                 </Button>
                               </div>
+                              {["select", "dropdown"].includes((child.type || child.field_type || "").toLowerCase()) && (
+                                <div className="ml-4 pl-3 border-l-2 border-muted space-y-2">
+                                  <Label className="text-xs font-medium">Options</Label>
+                                  <div className="flex flex-wrap gap-2 items-end">
+                                    <Input
+                                      placeholder="Option label"
+                                      className="h-8 text-xs flex-1 min-w-[100px]"
+                                      value={repeatableOptionDraft[`e-${editingFieldIndex}-${childIdx}`] ?? ""}
+                                      onChange={(e) => setRepeatableOptionDraft((prev) => ({ ...prev, [`e-${editingFieldIndex}-${childIdx}`]: e.target.value }))}
+                                    />
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-8 text-xs"
+                                      onClick={() => {
+                                        const label = (repeatableOptionDraft[`e-${editingFieldIndex}-${childIdx}`] ?? "").trim();
+                                        if (!label) return;
+                                        const val = generateFieldIdFromLabel(label) || `opt_${(child.options || []).length + 1}`;
+                                        setEditingField((prev) => ({
+                                          ...prev,
+                                          fields: (prev.fields || []).map((c, i) =>
+                                            i === childIdx ? { ...c, options: [...(c.options || []), { value: val, label }] } : c
+                                          ),
+                                        }));
+                                        setRepeatableOptionDraft((prev) => ({ ...prev, [`e-${editingFieldIndex}-${childIdx}`]: "" }));
+                                      }}
+                                    >
+                                      <Plus className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                  {(child.options || []).length > 0 && (
+                                    <ul className="space-y-1 text-xs">
+                                      {(child.options || []).map((opt, oIdx) => (
+                                        <li key={oIdx} className="flex items-center justify-between gap-2 py-1">
+                                          <span><strong>{opt.value}</strong>: {opt.label}</span>
+                                          <Button type="button" variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive" onClick={() => setEditingField((prev) => ({ ...prev, fields: (prev.fields || []).map((c, i) => i === childIdx ? { ...c, options: (c.options || []).filter((_, j) => j !== oIdx) } : c) }))}><X className="h-3 w-3" /></Button>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  )}
+                                </div>
+                              )}
+                              </React.Fragment>
                             ))}
                             <Button
                               type="button"
@@ -2428,7 +2481,7 @@ const TrackerEditPage = () => {
                         {editingField.type && editingField.type !== "rag" && !["line_break", "page_break", "text_block", "image_block"].includes(editingField.type) && (() => {
                           const isNumericRag = ["number", "integer", "calculated"].includes(editingField.type);
                           const isDateRag = ["date", "datetime", "date_time"].includes(editingField.type);
-                          const isOptionsRag = ["select", "multiselect", "dropdown"].includes(editingField.type);
+                          const isOptionsRag = ["select", "radio", "multiselect", "dropdown"].includes(editingField.type);
                           const opts = editingField.options || [];
                           if (!isNumericRag && !isDateRag && !isOptionsRag) return null;
                           const getRagForOption = (optionValue) => {
@@ -2896,7 +2949,7 @@ const TrackerEditPage = () => {
                     )}
 
                     {/* Boolean display: checkbox or Yes/No radios */}
-                    {(newField.type === "boolean" || newField.type === "checkbox") && (
+                    {(newField.type === "boolean" || newField.type === "checkbox" || newField.type === "boolean_with_description") && (
                       <div className="space-y-2">
                         <Label className="text-xs">Display as</Label>
                         <Select
@@ -2937,7 +2990,7 @@ const TrackerEditPage = () => {
                     )}
 
                     {/* Options for Select/Multi-select */}
-                    {(newField.type === "select" || newField.type === "multiselect") && (
+                    {(newField.type === "select" || newField.type === "radio" || newField.type === "multiselect") && (
                       <div className="space-y-2">
                         <Label>Options</Label>
                         <div className="flex flex-wrap gap-2 items-end">
@@ -3000,7 +3053,7 @@ const TrackerEditPage = () => {
                     {newField.type && newField.type !== "rag" && !["line_break", "page_break", "text_block", "image_block"].includes(newField.type) && (() => {
                       const isNumericRag = ["number", "integer", "calculated"].includes(newField.type);
                       const isDateRag = ["date", "datetime", "date_time"].includes(newField.type);
-                      const isOptionsRag = ["select", "multiselect", "dropdown"].includes(newField.type);
+                      const isOptionsRag = ["select", "radio", "multiselect", "dropdown"].includes(newField.type);
                       const opts = newField.options || [];
                       if (!isNumericRag && !isDateRag && !isOptionsRag) return null;
                       const getRagForOption = (optionValue) => {
@@ -3375,7 +3428,8 @@ const TrackerEditPage = () => {
                       <div className="space-y-3 p-3 border rounded-md bg-muted/30">
                         <Label className="font-medium">Child fields (one per column in each row)</Label>
                         {(newField.fields || []).map((child, childIdx) => (
-                          <div key={childIdx} className="flex flex-wrap items-center gap-2 p-2 rounded border bg-background">
+                          <React.Fragment key={childIdx}>
+                          <div className="flex flex-wrap items-center gap-2 p-2 rounded border bg-background">
                             <Input
                               className="flex-1 min-w-[100px]"
                               placeholder="Label"
@@ -3407,7 +3461,8 @@ const TrackerEditPage = () => {
                                 <SelectItem value="text">Text</SelectItem>
                                 <SelectItem value="number">Number</SelectItem>
                                 <SelectItem value="date">Date</SelectItem>
-                                <SelectItem value="select">Select</SelectItem>
+                                <SelectItem value="boolean">Checkbox</SelectItem>
+                                <SelectItem value="dropdown">Dropdown</SelectItem>
                               </SelectContent>
                             </Select>
                             <span className="text-xs text-muted-foreground shrink-0">
@@ -3428,6 +3483,50 @@ const TrackerEditPage = () => {
                               <X className="h-4 w-4" />
                             </Button>
                           </div>
+                          {["select", "dropdown"].includes((child.type || child.field_type || "").toLowerCase()) && (
+                            <div className="ml-4 pl-3 border-l-2 border-muted space-y-2">
+                              <Label className="text-xs font-medium">Options</Label>
+                              <div className="flex flex-wrap gap-2 items-end">
+                                <Input
+                                  placeholder="Option label"
+                                  className="h-8 text-xs flex-1 min-w-[100px]"
+                                  value={repeatableOptionDraft[`n-${childIdx}`] ?? ""}
+                                  onChange={(e) => setRepeatableOptionDraft((prev) => ({ ...prev, [`n-${childIdx}`]: e.target.value }))}
+                                />
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-8 text-xs"
+                                  onClick={() => {
+                                    const label = (repeatableOptionDraft[`n-${childIdx}`] ?? "").trim();
+                                    if (!label) return;
+                                    const val = generateFieldIdFromLabel(label) || `opt_${(child.options || []).length + 1}`;
+                                    setNewField((prev) => ({
+                                      ...prev,
+                                      fields: (prev.fields || []).map((c, i) =>
+                                        i === childIdx ? { ...c, options: [...(c.options || []), { value: val, label }] } : c
+                                      ),
+                                    }));
+                                    setRepeatableOptionDraft((prev) => ({ ...prev, [`n-${childIdx}`]: "" }));
+                                  }}
+                                >
+                                  <Plus className="h-3 w-3" />
+                                </Button>
+                              </div>
+                              {(child.options || []).length > 0 && (
+                                <ul className="space-y-1 text-xs">
+                                  {(child.options || []).map((opt, oIdx) => (
+                                    <li key={oIdx} className="flex items-center justify-between gap-2 py-1">
+                                      <span><strong>{opt.value}</strong>: {opt.label}</span>
+                                      <Button type="button" variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive" onClick={() => setNewField((prev) => ({ ...prev, fields: (prev.fields || []).map((c, i) => i === childIdx ? { ...c, options: (c.options || []).filter((_, j) => j !== oIdx) } : c) }))}><X className="h-3 w-3" /></Button>
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+                            </div>
+                          )}
+                          </React.Fragment>
                         ))}
                         <Button
                           type="button"
@@ -3684,15 +3783,16 @@ const TrackerEditPage = () => {
                                                     <td key={cIdx} className="border-r p-1 last:border-r-0 align-top">
                                                       <div className="space-y-1 min-w-[100px]">
                                                         <Input className="h-8 text-xs w-full" placeholder="Text" value={cell.text ?? ""} onChange={(e) => setCell(rIdx, cIdx, "text", e.target.value)} />
-                                                        <Select value={cell.field_id ?? "__none__"} onValueChange={(v) => setCell(rIdx, cIdx, "field_id", v === "__none__" || !v ? null : v)}>
-                                                          <SelectTrigger className="h-8 text-xs w-full"><SelectValue placeholder="Field (optional)" /></SelectTrigger>
-                                                          <SelectContent>
-                                                            <SelectItem value="__none__">— No field —</SelectItem>
-                                                            {sectionFields.map((f) => (
-                                                              <SelectItem key={f.id || f.name || f.field_id} value={String(f.id || f.name || f.field_id)}>{f.label || f.name || f.id}</SelectItem>
-                                                            ))}
-                                                          </SelectContent>
-                                                        </Select>
+                                                        <SearchableFieldSelect
+                                                          fields={sectionFields}
+                                                          value={cell.field_id ?? "__none__"}
+                                                          onValueChange={(v) => setCell(rIdx, cIdx, "field_id", v === "__none__" || !v ? null : v)}
+                                                          placeholder="Field (optional)"
+                                                          noneOption
+                                                          noneLabel="— No field —"
+                                                          className="h-8 text-xs w-full"
+                                                          compact
+                                                        />
                                                       </div>
                                                     </td>
                                                   ))}
@@ -3766,31 +3866,24 @@ const TrackerEditPage = () => {
                                     </Badge>
                                   );
                                 })}
-                                <Select
-                                  value="__add__"
+                                <SearchableFieldSelect
+                                  fields={sectionFields.filter((f) => {
+                                    const id = f.id ?? f.name ?? f.field_id;
+                                    const usedIds = (editingSection.groups || []).flatMap((g) => (g.fields || []).map(String));
+                                    return id != null && !usedIds.includes(String(id));
+                                  })}
+                                  value=""
                                   onValueChange={(val) => {
-                                    if (val && val !== "__add__") {
+                                    if (val) {
                                       const next = [...(editingSection.groups || [])];
                                       next[groupIdx] = { ...group, fields: [...(group.fields || []), val] };
                                       setEditingSection((prev) => ({ ...prev, groups: next }));
                                     }
                                   }}
-                                >
-                                  <SelectTrigger className="w-40 h-8 text-xs">
-                                    <SelectValue placeholder="+ Add field" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="__add__">+ Add field</SelectItem>
-                                    {sectionFields
-                                      .map((f) => f.id || f.name || f.field_id)
-                                      .filter(Boolean)
-                                      .filter((id) => !(editingSection.groups || []).flatMap((g) => g.fields || []).includes(id))
-                                      .map((id) => {
-                                        const f = sectionFields.find((x) => (x.id || x.name || x.field_id) === id);
-                                        return <SelectItem key={id} value={id}>{f?.label || f?.name || id}</SelectItem>;
-                                      })}
-                                  </SelectContent>
-                                </Select>
+                                  placeholder="+ Add field"
+                                  className="w-40 h-8 text-xs"
+                                  compact
+                                />
                               </div>
                               )}
                               {/* Group conditional visibility: show when any condition matches (OR) */}
@@ -3833,7 +3926,7 @@ const TrackerEditPage = () => {
                                           const depField = sectionFields.find((f) => String(f.id || f.name || f.field_id) === cond.depends_on_field);
                                           const depType = (depField?.type || depField?.field_type || "").toLowerCase();
                                           const needsValue = ["equals", "not_equals", "contains"].includes(cond.show_when || "");
-                                          const isBoolean = depType === "boolean" || depType === "checkbox";
+                                          const isBoolean = depType === "boolean" || depType === "checkbox" || depType === "boolean_with_description";
                                           const isSelectLike = ["select", "dropdown", "radio", "radio_group"].includes(depType);
                                           const isMultiselect = depType === "multiselect";
                                           const isNumber = depType === "number" || depType === "integer";

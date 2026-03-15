@@ -148,6 +148,7 @@ const fieldTypes = [
   { value: "date", label: "Date" },
   { value: "datetime", label: "Date & Time" },
   { value: "boolean", label: "Boolean/Checkbox" },
+  { value: "boolean_with_description", label: "Boolean with description" },
   { value: "select", label: "Select (Single)" },
   { value: "radio", label: "Radio (Single choice)" },
   { value: "multiselect", label: "Multi-Select" },
@@ -1372,14 +1373,14 @@ const NewFormPage = () => {
                                     setNewField({ ...newField, help_text: e.target.value })
                                   }
                                   placeholder={
-                                    ['boolean', 'checkbox'].includes(newField.field_type)
+                                    ['boolean', 'checkbox', 'boolean_with_description'].includes(newField.field_type)
                                       ? "This text will appear next to the checkbox"
                                       : "Additional instructions or guidance for users (shown as placeholder or helper text)"
                                   }
                                   rows={2}
                                 />
                                 <p className="text-xs text-muted-foreground mt-1">
-                                  {['boolean', 'checkbox'].includes(newField.field_type)
+                                  {['boolean', 'checkbox', 'boolean_with_description'].includes(newField.field_type)
                                     ? "This text will be displayed as the checkbox label"
                                     : "This text appears as placeholder text or helper text below the field"}
                                 </p>
@@ -1390,7 +1391,7 @@ const NewFormPage = () => {
                       )}
 
                       {/* Boolean display: checkbox or Yes/No radios */}
-                      {(newField.field_type === "boolean" || newField.field_type === "checkbox") && (
+                      {(newField.field_type === "boolean" || newField.field_type === "checkbox" || newField.field_type === "boolean_with_description") && (
                         <div className="space-y-2 pt-2 border-t">
                           <Label className="text-xs">Display as</Label>
                           <Select
@@ -1830,7 +1831,7 @@ const NewFormPage = () => {
                         )}
 
                       {/* Validation Options - Collapsible */}
-                      {!['text_block', 'image_block', 'line_break', 'page_break', 'download_link', 'boolean', 'signature'].includes(newField.field_type) &&
+                      {!['text_block', 'image_block', 'line_break', 'page_break', 'download_link', 'boolean', 'boolean_with_description', 'signature'].includes(newField.field_type) &&
                         (['text', 'textarea', 'email', 'phone', 'number', 'date'].includes(newField.field_type) ||
                           newField.validation.min ||
                           newField.validation.max ||
@@ -2303,7 +2304,7 @@ const NewFormPage = () => {
                                 const depField = formFields.find((f) => (f.field_id || f.field_name) === newField.conditional_visibility?.depends_on_field);
                                 const depType = (depField?.field_type || depField?.type || "").toLowerCase();
                                 const needsValue = ["equals", "not_equals", "contains"].includes(newField.conditional_visibility?.show_when || "");
-                                const isBoolean = depType === "boolean" || depType === "checkbox";
+                                const isBoolean = depType === "boolean" || depType === "checkbox" || depType === "boolean_with_description";
                                 const isSelectLike = ["select", "dropdown", "radio", "radio_group"].includes(depType);
                                 const isMultiselect = depType === "multiselect";
                                 const isNumber = depType === "number" || depType === "integer";
@@ -2505,6 +2506,7 @@ const NewFormPage = () => {
                             radio: List,
                             boolean: CheckSquare,
                             checkbox: CheckSquare,
+                            boolean_with_description: CheckSquare,
                             file: Upload,
                             signature: PenTool,
                             text_block: FileText,

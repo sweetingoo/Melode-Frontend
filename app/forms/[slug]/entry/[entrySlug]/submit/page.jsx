@@ -5,6 +5,8 @@ import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2, CheckCircle, Info } from "lucide-react";
 import { api } from "@/services/api-client";
 import { trackersService } from "@/services/trackers";
@@ -22,6 +24,8 @@ export default function PublicEntrySubmitPage() {
   const [submissionData, setSubmissionData] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
+  const [selectedNextStage, setSelectedNextStage] = useState("");
+  const [selectedStatus, setSelectedStatus] = useState("");
 
   useEffect(() => {
     if (!entrySlug) {
@@ -48,6 +52,12 @@ export default function PublicEntrySubmitPage() {
   const sections = form?.form_fields?.sections || [];
   const publicSubmitDisabled = Boolean(data?.public_submit_disabled);
   const entryCurrentStage = data?.entry_current_stage ?? entry?.formatted_data?.derived_stage ?? null;
+  const nextStages = data?.next_stages ?? [];
+  const currentStageStatuses = data?.current_stage_statuses ?? [];
+  // Status options: if a next stage is selected, show that stage's statuses; otherwise current stage statuses
+  const statusOptions = selectedNextStage
+    ? (nextStages.find((s) => (s.stage || "").trim() === (selectedNextStage || "").trim())?.statuses ?? [])
+    : currentStageStatuses;
   // API returns only the current stage's section when allowed; when entry moved to non-public stage, fields/sections are empty and public_submit_disabled is true
   const formStageLabel = sections.length > 0 ? sections.map((s) => s.label).filter(Boolean).join(", ") : null;
   const publicStageLabels = sections.map((s) => s.label).filter(Boolean);
@@ -79,6 +89,7 @@ export default function PublicEntrySubmitPage() {
         return parseFloat(value) || 0;
       case "boolean":
       case "checkbox":
+      case "boolean_with_description":
         return Boolean(value);
       case "date":
       case "datetime":
@@ -234,7 +245,10 @@ export default function PublicEntrySubmitPage() {
     }
 
     try {
-      await trackersService.publicSubmitEntry(entrySlug, { submission_data: processed });
+      const body = { submission_data: processed };
+      if (selectedNextStage?.trim()) body.next_stage = selectedNextStage.trim();
+      if (selectedStatus?.trim()) body.status = selectedStatus.trim();
+      await trackersService.publicSubmitEntry(entrySlug, body);
       toast.success("Form submitted successfully");
       router.push(`/forms/${params.slug}/entry/${entrySlug}/submitted`);
     } catch (err) {
@@ -364,6 +378,46 @@ export default function PublicEntrySubmitPage() {
                 </div>
               )}
 
+              {(nextStages.length > 0 || currentStageStatuses.length > 0) && (
+                <div className="space-y-4 pt-4 border-t">
+                  <div className="text-sm font-medium text-muted-foreground">Next stage &amp; status</div>
+                  <div className="flex flex-wrap gap-4 items-end">
+                    {nextStages.length > 0 && (
+                      <div className="space-y-2 min-w-[180px]">
+                        <Label htmlFor="next-stage" className="text-sm">Next Stage</Label>
+                        <Select value={selectedNextStage || "__none__"} onValueChange={(v) => { setSelectedNextStage(v === "__none__" ? "" : v); setSelectedStatus(""); }}>
+                          <SelectTrigger id="next-stage" className="w-full">
+                            <SelectValue placeholder="Stay in current stage" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">Stay in current stage</SelectItem>
+                            {nextStages.map((s) => (
+                              <SelectItem key={s.stage} value={s.stage || ""}>{s.stage}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                    {(statusOptions.length > 0) && (
+                      <div className="space-y-2 min-w-[180px]">
+                        <Label htmlFor="status" className="text-sm">Status</Label>
+                        <Select value={selectedStatus || "__none__"} onValueChange={(v) => setSelectedStatus(v === "__none__" ? "" : v)}>
+                          <SelectTrigger id="status" className="w-full">
+                            <SelectValue placeholder="Select status" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">— No change —</SelectItem>
+                            {statusOptions.map((statusVal) => (
+                              <SelectItem key={statusVal} value={statusVal}>{statusVal}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <div className="flex justify-end pt-4 border-t">
                 <Button type="submit" disabled={isSubmitting}>
                   {isSubmitting ? (
@@ -374,7 +428,7 @@ export default function PublicEntrySubmitPage() {
                   ) : (
                     <>
                       <CheckCircle className="mr-2 h-4 w-4" />
-                      Submit
+                      Submit Form
                     </>
                   )}
                 </Button>

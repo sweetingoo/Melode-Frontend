@@ -244,7 +244,8 @@ const CustomFieldRenderer = ({
         );
 
       case 'boolean':
-      case 'checkbox': {
+      case 'checkbox':
+      case 'boolean_with_description': {
         const booleanDisplay = field.field_options?.boolean_display || field.field_options?.display || 'checkbox';
         const displayStyle = field.field_options?.checkbox_display_style || field.field_options?.display_style || 'default';
         const isYesNoRadios = booleanDisplay === 'radio' || booleanDisplay === 'yes_no';

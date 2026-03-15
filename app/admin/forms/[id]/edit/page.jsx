@@ -174,6 +174,7 @@ const fieldTypes = [
   { value: "date", label: "Date" },
   { value: "datetime", label: "Date & Time" },
   { value: "boolean", label: "Boolean/Checkbox" },
+  { value: "boolean_with_description", label: "Boolean with description" },
   { value: "select", label: "Select (Single)" },
   { value: "radio", label: "Radio (Single choice)" },
   { value: "multiselect", label: "Multi-Select" },
@@ -723,7 +724,7 @@ function FormOneRowEditor({ row, rowIndex, fieldsList, allIdsInAnyGroup, onUpdat
             const depField = (fieldsList || []).find((f) => (f.field_id || f.id || f.name) === cvDisplay?.depends_on_field);
             const depType = (depField?.field_type || depField?.type || "").toLowerCase();
             const needsValue = ["equals", "not_equals", "contains"].includes(cvDisplay?.show_when || "");
-            const isBoolean = depType === "boolean" || depType === "checkbox";
+            const isBoolean = depType === "boolean" || depType === "checkbox" || depType === "boolean_with_description";
             const isSelectLike = ["select", "dropdown", "radio", "radio_group"].includes(depType);
             const isMultiselect = depType === "multiselect";
             const isNumber = depType === "number" || depType === "integer";
@@ -1001,6 +1002,7 @@ const EditFormPage = () => {
     fields: [],
   });
   const [newOption, setNewOption] = useState({ value: "", label: "" });
+  const [repeatableOptionDraft, setRepeatableOptionDraft] = useState({});
   const [allowAllFileTypes, setAllowAllFileTypes] = useState(false);
 
   // Assignment state
@@ -1875,14 +1877,14 @@ const EditFormPage = () => {
                           setNewField({ ...newField, help_text: e.target.value })
                         }
                         placeholder={
-                          ['boolean', 'checkbox'].includes(newField.field_type)
+                          ['boolean', 'checkbox', 'boolean_with_description'].includes(newField.field_type)
                             ? "This text will appear next to the checkbox"
                             : "Additional instructions or guidance for users (shown as placeholder or helper text)"
                         }
                         rows={2}
                       />
                       <p className="text-xs text-muted-foreground mt-1">
-                        {['boolean', 'checkbox'].includes(newField.field_type)
+                        {['boolean', 'checkbox', 'boolean_with_description'].includes(newField.field_type)
                           ? "This text will be displayed as the checkbox label"
                           : "This text appears as placeholder text or helper text below the field"}
                       </p>
@@ -1890,7 +1892,7 @@ const EditFormPage = () => {
                   )}
 
                   {/* Boolean display: checkbox or Yes/No radios */}
-                  {(newField.field_type === "boolean" || newField.field_type === "checkbox") && (
+                  {(newField.field_type === "boolean" || newField.field_type === "checkbox" || newField.field_type === "boolean_with_description") && (
                     <div className="space-y-2 pt-2 border-t">
                       <Label className="text-xs">Display as</Label>
                       <Select
@@ -2326,7 +2328,7 @@ const EditFormPage = () => {
                     )}
 
                   {/* Validation Options - only show when relevant and when there are validation fields */}
-                  {!['text_block', 'image_block', 'line_break', 'page_break', 'download_link', 'boolean', 'signature'].includes(newField.field_type) && 
+                  {!['text_block', 'image_block', 'line_break', 'page_break', 'download_link', 'boolean', 'boolean_with_description', 'signature'].includes(newField.field_type) && 
                    (['text', 'textarea', 'email', 'phone', 'number', 'date'].includes(newField.field_type) ||
                     newField.validation.min || 
                     newField.validation.max || 
@@ -2771,7 +2773,7 @@ const EditFormPage = () => {
                           const depField = formFields.find((f) => (f.field_id || f.field_name) === newField.conditional_visibility?.depends_on_field);
                           const depType = (depField?.field_type || depField?.type || "").toLowerCase();
                           const needsValue = ["equals", "not_equals", "contains"].includes(newField.conditional_visibility?.show_when || "");
-                          const isBoolean = depType === "boolean" || depType === "checkbox";
+                          const isBoolean = depType === "boolean" || depType === "checkbox" || depType === "boolean_with_description";
                           const isSelectLike = ["select", "dropdown", "radio", "radio_group"].includes(depType);
                           const isMultiselect = depType === "multiselect";
                           const isNumber = depType === "number" || depType === "integer";
@@ -2922,7 +2924,8 @@ const EditFormPage = () => {
                         Users will see a grid of these columns and can add multiple rows with &quot;Add row&quot;.
                       </p>
                       {(newField.fields || []).map((child, childIdx) => (
-                        <div key={childIdx} className="flex flex-wrap items-center gap-2 p-2 rounded border bg-muted/30">
+                        <React.Fragment key={childIdx}>
+                        <div className="flex flex-wrap items-center gap-2 p-2 rounded border bg-muted/30">
                           <Input
                             className="flex-1 min-w-[100px] h-8 text-sm"
                             placeholder="Label (e.g. Drug)"
@@ -2955,7 +2958,7 @@ const EditFormPage = () => {
                               <SelectItem value="number">Number</SelectItem>
                               <SelectItem value="date">Date</SelectItem>
                               <SelectItem value="boolean">Checkbox</SelectItem>
-                              <SelectItem value="select">Select</SelectItem>
+                              <SelectItem value="dropdown">Dropdown</SelectItem>
                             </SelectContent>
                           </Select>
                           <span className="text-xs text-muted-foreground shrink-0">
@@ -2976,6 +2979,50 @@ const EditFormPage = () => {
                             <X className="h-4 w-4" />
                           </Button>
                         </div>
+                        {["select", "dropdown"].includes((child.type || child.field_type || "").toLowerCase()) && (
+                          <div className="ml-4 pl-3 border-l-2 border-muted space-y-2">
+                            <Label className="text-xs font-medium">Options</Label>
+                            <div className="flex flex-wrap gap-2 items-end">
+                              <Input
+                                placeholder="Option label"
+                                className="h-8 text-xs flex-1 min-w-[100px]"
+                                value={repeatableOptionDraft[`f-${childIdx}`] ?? ""}
+                                onChange={(e) => setRepeatableOptionDraft((prev) => ({ ...prev, [`f-${childIdx}`]: e.target.value }))}
+                              />
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-8 text-xs"
+                                onClick={() => {
+                                  const label = (repeatableOptionDraft[`f-${childIdx}`] ?? "").trim();
+                                  if (!label) return;
+                                  const val = generateFieldIdFromLabel(label) || `opt_${(child.options || []).length + 1}`;
+                                  setNewField((prev) => ({
+                                    ...prev,
+                                    fields: (prev.fields || []).map((c, i) =>
+                                      i === childIdx ? { ...c, options: [...(c.options || []), { value: val, label }] } : c
+                                    ),
+                                  }));
+                                  setRepeatableOptionDraft((prev) => ({ ...prev, [`f-${childIdx}`]: "" }));
+                                }}
+                              >
+                                <Plus className="h-3 w-3" />
+                              </Button>
+                            </div>
+                            {(child.options || []).length > 0 && (
+                              <ul className="space-y-1 text-xs">
+                                {(child.options || []).map((opt, oIdx) => (
+                                  <li key={oIdx} className="flex items-center justify-between gap-2 py-1">
+                                    <span><strong>{opt.value}</strong>: {opt.label}</span>
+                                    <Button type="button" variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive" onClick={() => setNewField((prev) => ({ ...prev, fields: (prev.fields || []).map((c, i) => i === childIdx ? { ...c, options: (c.options || []).filter((_, j) => j !== oIdx) } : c) }))}><X className="h-3 w-3" /></Button>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                        )}
+                        </React.Fragment>
                       ))}
                       <Button
                         type="button"
@@ -3051,6 +3098,7 @@ const EditFormPage = () => {
                           radio: List,
                           boolean: CheckSquare,
                           checkbox: CheckSquare,
+                          boolean_with_description: CheckSquare,
                           repeatable_group: List,
                           file: Upload,
                           signature: PenTool,
@@ -4172,7 +4220,7 @@ const EditFormPage = () => {
                                     const depField = formFields.find((f) => (f.field_id || f.id || f.name) === cond.depends_on_field);
                                     const depType = (depField?.field_type || depField?.type || "").toLowerCase();
                                     const needsValue = ["equals", "not_equals", "contains"].includes(cond.show_when || "");
-                                    const isBoolean = depType === "boolean" || depType === "checkbox";
+                                    const isBoolean = depType === "boolean" || depType === "checkbox" || depType === "boolean_with_description";
                                     const isSelectLike = ["select", "dropdown", "radio", "radio_group"].includes(depType);
                                     const isMultiselect = depType === "multiselect";
                                     const isNumber = depType === "number" || depType === "integer";

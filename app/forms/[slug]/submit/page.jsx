@@ -104,7 +104,7 @@ const FormSubmitPage = () => {
     if (value === undefined || value === null) {
       // Check if this is a checkbox/boolean field by checking the field type
       const field = form?.form_fields?.fields?.find(f => (f.id || f.field_id || f.field_name || f.name) === fieldId);
-      if (field && (field.field_type?.toLowerCase() === 'checkbox' || field.field_type?.toLowerCase() === 'boolean')) {
+      if (field && (field.field_type?.toLowerCase() === 'checkbox' || field.field_type?.toLowerCase() === 'boolean' || field.field_type?.toLowerCase() === 'boolean_with_description')) {
         normalizedValue = false;
       }
     }
@@ -148,6 +148,7 @@ const FormSubmitPage = () => {
 
       case "boolean":
       case "checkbox":
+      case "boolean_with_description":
         return Boolean(value);
 
       case "date":
@@ -541,7 +542,7 @@ const FormSubmitPage = () => {
       const type = (field.type || field.field_type || "").toLowerCase();
       const isSelectOrDropdown = type === "select" || type === "dropdown";
       const isMultiselect = type === "multiselect";
-      const isBoolean = type === "boolean" || type === "checkbox";
+      const isBoolean = type === "boolean" || type === "checkbox" || type === "boolean_with_description";
       const isRadio = type === "radio" || type === "radio_group";
       if (isSelectOrDropdown) out[fieldId] = getNoneValue(field);
       else if (isMultiselect) out[fieldId] = [getNoneValue(field)];
