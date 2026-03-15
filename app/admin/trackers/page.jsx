@@ -2891,8 +2891,30 @@ const TrackersPage = () => {
                         <TableHead className="font-semibold min-w-[140px]">Stage</TableHead>
                       )}
                       <TableHead className="border-r font-semibold min-w-[100px]">Status</TableHead>
-                      <TableHead className="border-r font-semibold min-w-[120px]">Next action</TableHead>
-                      <TableHead className="border-r font-semibold min-w-[100px]">Chase due</TableHead>
+                      <TableHead className="border-r font-semibold min-w-[120px]">Chase Type</TableHead>
+                      <TableHead className="border-r font-semibold min-w-[100px]">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const isChase = sortBy === "field_chase_due";
+                            const nextOrder = isChase && sortOrder === "asc" ? "desc" : "asc";
+                            setSortBy("field_chase_due");
+                            setSortOrder(isChase ? nextOrder : "asc");
+                          }}
+                          className="flex items-center gap-1 hover:text-foreground transition-colors"
+                        >
+                          Chase due
+                          {sortBy === "field_chase_due" ? (
+                            sortOrder === "asc" ? (
+                              <ArrowUp className="h-3 w-3" />
+                            ) : (
+                              <ArrowDown className="h-3 w-3" />
+                            )
+                          ) : (
+                            <ArrowUpDown className="h-3 w-3 opacity-50" />
+                          )}
+                        </button>
+                      </TableHead>
                                 {/* Dynamic field columns (only visible) */}
                                 {visibleFields.map((field) => {
                                   const fieldId = field.id || field.field_id || field.name;
@@ -3161,7 +3183,8 @@ const TrackersPage = () => {
                             )}
                           </TableCell>
                           <TableCell className={cn("border-r text-muted-foreground", densityClass)}>
-                            {entry.next_action_label ?? "—"}
+                            {entry.next_action_label ??
+                              (entry.next_action_date || entry.formatted_data?.chase_due || entry.submission_data?.chase_due ? "Due" : "—")}
                           </TableCell>
                           <TableCell className={cn("border-r tabular-nums", densityClass)}>
                             {entry.next_action_date

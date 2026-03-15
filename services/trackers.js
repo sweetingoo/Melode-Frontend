@@ -319,6 +319,19 @@ export const trackersService = {
     }
   },
 
+  // Mark inbound (patient) message as dealt with (Communications tab)
+  acknowledgeInboundMessage: async (entryIdentifier, messageId) => {
+    try {
+      const response = await api.post(
+        `/trackers/entries/${entryIdentifier}/inbound-messages/${messageId}/acknowledge`
+      );
+      return response.data;
+    } catch (error) {
+      console.error(`Acknowledge inbound message ${messageId} failed:`, error);
+      throw error;
+    }
+  },
+
   // Get field value suggestions for query bar (distinct values from backend)
   getTrackerFieldSuggestions: async (params = {}) => {
     try {

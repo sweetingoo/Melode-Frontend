@@ -37,7 +37,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFo
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Loader2, ArrowLeft, Edit, Save, X, Clock, MessageSquare, FileText, User as UserIcon, Calendar, Paperclip, Smartphone, ChevronRight, ChevronDown, Link2, Share2, Bell, Phone, Mail, Plus, Send, MessageCircle, Globe } from "lucide-react";
+import { Loader2, ArrowLeft, Edit, Save, X, Clock, MessageSquare, FileText, User as UserIcon, Calendar, Paperclip, Smartphone, ChevronRight, ChevronDown, Link2, Share2, Bell, Phone, Mail, Plus, Send, MessageCircle, Globe, CheckCircle } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   useTrackerEntry,
@@ -131,6 +131,7 @@ const TrackerEntryDetailPage = () => {
   const [sendSmsMessage, setSendSmsMessage] = useState("");
   const [sendSmsPhoneField, setSendSmsPhoneField] = useState("");
   const [sendSmsSubmitting, setSendSmsSubmitting] = useState(false);
+  const [acknowledgingMessageId, setAcknowledgingMessageId] = useState(null);
   const [stageChangePending, setStageChangePending] = useState(null);
   const [stageChangeNotes, setStageChangeNotes] = useState("");
   const [stageChangeStatus, setStageChangeStatus] = useState("");
@@ -622,8 +623,13 @@ const TrackerEntryDetailPage = () => {
     }
   }, [entry, tracker]);
 
-  // Phone-like fields in entry (keys containing "phone" or "mobile") for Send SMS — must be before any early return (Rules of Hooks)
+  // Phone-like fields in entry (keys containing "phone" or "mobile") for Send SMS — only include values that are digits-only (optional leading +)
   const sendSmsPhoneCandidates = useMemo(() => {
+    const isDigitsOnly = (s) => {
+      if (!s || typeof s !== "string") return false;
+      const normalized = s.trim().replace(/^\+/, "").replace(/[\s\-\.\(\)]/g, "");
+      return /^\d+$/.test(normalized);
+    };
     const data = entry?.submission_data || entry?.formatted_data || {};
     const formatted = entry?.formatted_data || {};
     const out = [];
@@ -638,10 +644,10 @@ const TrackerEntryDetailPage = () => {
       else if (raw && typeof raw === "object" && (raw.value || raw.display)) value = raw.value || raw.display;
       else if (display && typeof display === "string" && display.trim()) value = display.trim();
       else if (display && typeof display === "object" && (display.value || display.display)) value = display.value || display.display;
-      if (value) {
+      if (value && isDigitsOnly(String(value))) {
         seen.add(key);
         const label = key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-        out.push({ fieldId: key, label, value: String(value) });
+        out.push({ fieldId: key, label, value: String(value).trim() });
       }
     });
     return out;
@@ -679,24 +685,31 @@ const TrackerEntryDetailPage = () => {
     return event.action_type.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()).replace(/\bSms\b/gi, "SMS");
   };
 
-  // Chase dates: current chase_due/next_action_date from entry + chase_date from timeline actions (for left sidebar list). Each item has { dateStr, type } so we can show chase type beside the date.
+  // Chase dates: current chase_due + timeline actions with chase_date. Each item has { dateStr, type, actionId, completed } so the left column can show Done button/lozenge and mark actions done (same as Activity tab).
   const chaseDatesList = useMemo(() => {
     const items = [];
     const fd = entry?.formatted_data || entry?.submission_data || {};
     const current = fd.chase_due || fd.next_action_date || null;
     if (current) {
       const dateStr = typeof current === "string" ? current.split("T")[0] : current;
-      items.push({ dateStr, type: "Due" });
+      items.push({ dateStr, type: "Due", actionId: null, completed: false });
     }
     (allTimelineEvents || []).forEach((ev) => {
       const d = ev.chase_date;
       if (d) {
         const dateStr = typeof d === "string" ? d.split("T")[0] : d;
         const type = ev.type === "action" ? getActionTimelineTitle(ev) : (ev.title || "Action");
-        items.push({ dateStr, type });
+        const actionId = ev.type === "action" && ev.id?.startsWith("action_") ? Number(ev.id.slice(7)) : null;
+        const completed = !!ev.completed_at;
+        items.push({ dateStr, type, actionId, completed });
       }
     });
-    return items.sort((a, b) => (a.dateStr < b.dateStr ? 1 : a.dateStr > b.dateStr ? -1 : 0));
+    // Sort earliest first, then pending before completed so "next" chase is at top
+    return items.sort((a, b) => {
+      if (a.dateStr !== b.dateStr) return a.dateStr < b.dateStr ? -1 : 1;
+      if (a.completed !== b.completed) return a.completed ? 1 : -1;
+      return (a.actionId ?? 0) - (b.actionId ?? 0);
+    });
   }, [entry?.formatted_data, entry?.submission_data, allTimelineEvents, tracker?.tracker_config?.action_types]);
 
   // SMS thread from dedicated API (not timeline pagination) so Communications tab shows all messages
@@ -708,9 +721,11 @@ const TrackerEntryDetailPage = () => {
       items.push({
         type: "inbound",
         id: `inbound_${msg.id}`,
+        messageId: msg.id,
         timestamp: msg.received_at,
         content: msg.content || "—",
         source_address: msg.source_address,
+        acknowledged_at: msg.acknowledged_at ?? null,
       });
     });
     sent.forEach((c) => {
@@ -737,14 +752,45 @@ const TrackerEntryDetailPage = () => {
     return items;
   }, [smsThreadData]);
 
-  // Scroll communication message thread to latest when thread loads or updates
+  // Count of inbound (patient) messages not yet marked "dealt with" — show on Communications tab badge
+  const communicationsPendingCount = useMemo(() => {
+    const inbound = smsThreadData?.inbound ?? [];
+    return inbound.filter((m) => !m.acknowledged_at).length;
+  }, [smsThreadData?.inbound]);
+
+  // When opening the Communication tab, auto-mark older unacknowledged inbound messages as dealt with (seen).
+  // The most recent inbound message is never auto-acknowledged — it must be replied to or manually marked.
+  const autoAckInProgressRef = useRef(false);
   useEffect(() => {
-    if (activeTab !== "communication" || communicationsSubTab !== "sms" || !smsThreadScrollRef.current) return;
-    const el = smsThreadScrollRef.current;
-    const id = requestAnimationFrame(() => {
-      el.scrollTop = el.scrollHeight;
-    });
-    return () => cancelAnimationFrame(id);
+    if (activeTab !== "communication" || !entrySlug || !smsThreadData?.inbound?.length || autoAckInProgressRef.current) return;
+    const inbound = smsThreadData.inbound;
+    const mostRecentId = inbound[inbound.length - 1]?.id;
+    const unacknowledged = inbound.filter((m) => !m.acknowledged_at);
+    const toAutoAck = mostRecentId != null ? unacknowledged.filter((m) => m.id !== mostRecentId) : unacknowledged;
+    if (toAutoAck.length === 0) return;
+    autoAckInProgressRef.current = true;
+    (async () => {
+      try {
+        await Promise.all(
+          toAutoAck.map((m) => trackersService.acknowledgeInboundMessage(entrySlug, m.id))
+        );
+        refetchSmsThread?.();
+      } catch (err) {
+        console.error("Auto-acknowledge inbound messages:", err);
+      } finally {
+        autoAckInProgressRef.current = false;
+      }
+    })();
+  }, [activeTab, entrySlug, smsThreadData?.inbound, refetchSmsThread]);
+
+  // Scroll communication message thread to latest when opening the tab or when thread updates
+  useEffect(() => {
+    if (activeTab !== "communication" || communicationsSubTab !== "sms") return;
+    const timeoutId = setTimeout(() => {
+      const el = smsThreadScrollRef.current;
+      if (el) el.scrollTop = el.scrollHeight;
+    }, 150);
+    return () => clearTimeout(timeoutId);
   }, [activeTab, communicationsSubTab, smsThread]);
 
   // When multiple phones exist, default to first for inline SMS composer
@@ -1491,7 +1537,7 @@ const TrackerEntryDetailPage = () => {
                     Next due: {format(parseUTCDate(nextDueDate), "d MMM yyyy")}
                   </span>
                 )}
-                {entry?.has_patient_message && (
+                {(communicationsPendingCount > 0 || (entry?.has_patient_message && smsThreadLoading)) && (
                   <Badge variant="secondary" className="text-xs bg-amber-100 text-amber-800 dark:bg-amber-900 dark:bg-opacity-40 dark:text-amber-200">
                     Patient messaged
                   </Badge>
@@ -1576,13 +1622,47 @@ const TrackerEntryDetailPage = () => {
             </CardHeader>
             <CardContent>
               {chaseDatesList.length > 0 ? (
-                <ul className="space-y-2 max-h-[min(240px,35vh)] overflow-y-auto text-sm">
+                <ul className="space-y-2 max-h-[min(280px,40vh)] overflow-y-auto text-sm">
                   {chaseDatesList.map((item, idx) => {
                     const reason = item.type.startsWith("Chase – ") ? item.type.slice(8).trim() : item.type;
+                    const isAction = item.actionId != null;
+                    const isPending = isAction && !item.completed;
                     return (
-                      <li key={`${item.dateStr}-${idx}`} className="flex items-center justify-between gap-2 font-medium">
-                        <span>{format(parseUTCDate(item.dateStr + "T12:00:00"), "d MMM yyyy")}</span>
-                        <span className="text-muted-foreground text-xs font-normal shrink-0">{reason}</span>
+                      <li
+                        key={isAction ? `action_${item.actionId}` : `due_${item.dateStr}_${idx}`}
+                        className={cn(
+                          "flex items-center justify-between gap-2 font-medium",
+                          item.completed && "opacity-70"
+                        )}
+                      >
+                        <div className="flex flex-col min-w-0 flex-1">
+                          <span className={item.completed ? "line-through text-muted-foreground" : ""}>
+                            {format(parseUTCDate(item.dateStr + "T12:00:00"), "d MMM yyyy")}
+                          </span>
+                          <span className="text-muted-foreground text-xs font-normal">{reason}</span>
+                        </div>
+                        {isPending && canEditCase && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 text-xs shrink-0"
+                            disabled={completeTrackerActionMutation.isPending}
+                            onClick={async () => {
+                              if (item.actionId == null || !entrySlug) return;
+                              await completeTrackerActionMutation.mutateAsync({ entryIdentifier: entrySlug, actionId: item.actionId });
+                              refetchTimeline();
+                              refetchEntry?.();
+                            }}
+                          >
+                            {completeTrackerActionMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Done"}
+                          </Button>
+                        )}
+                        {isAction && item.completed && (
+                          <Badge variant="secondary" className="text-[10px] font-normal shrink-0 py-0 px-1.5">
+                            <CheckCircle className="h-3 w-3 mr-0.5 inline" />
+                            Done
+                          </Badge>
+                        )}
                       </li>
                     );
                   })}
@@ -1601,7 +1681,15 @@ const TrackerEntryDetailPage = () => {
               <TabsList className="bg-muted/50 flex flex-nowrap gap-1 px-3 py-1 w-max min-w-full [&>*]:shrink-0">
                 <TabsTrigger value="activity"><Clock className="mr-2 h-4 w-4" />Activity</TabsTrigger>
                 <TabsTrigger value="forms"><FileText className="mr-2 h-4 w-4" />Forms</TabsTrigger>
-                <TabsTrigger value="communication"><MessageSquare className="mr-2 h-4 w-4" />Communications</TabsTrigger>
+                <TabsTrigger value="communication" className="flex items-center gap-2">
+                  <MessageSquare className="h-4 w-4 shrink-0" />
+                  <span>Communications</span>
+                  {communicationsPendingCount > 0 && (
+                    <Badge variant="destructive" className="ml-1 h-5 min-w-5 px-1.5 text-xs">
+                      {communicationsPendingCount}
+                    </Badge>
+                  )}
+                </TabsTrigger>
                 <TabsTrigger value="notes"><MessageSquare className="mr-2 h-4 w-4" />Notes & Files ({notesAndFilesComments.length})</TabsTrigger>
                 <TabsTrigger value="audit"><FileText className="mr-2 h-4 w-4" />Audit</TabsTrigger>
               </TabsList>
@@ -1697,6 +1785,7 @@ const TrackerEntryDetailPage = () => {
                                       if (actionId == null || !entrySlug) return;
                                       await completeTrackerActionMutation.mutateAsync({ entryIdentifier: entrySlug, actionId });
                                       refetchTimeline();
+                                      refetchEntry?.();
                                     }}
                                   >
                                     {completeTrackerActionMutation.isPending ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
@@ -2797,6 +2886,43 @@ const TrackerEntryDetailPage = () => {
                                 {item.type === "sent" && item.user_name ? ` · ${item.user_name}` : ""}
                               </p>
                             </div>
+                            {item.type === "inbound" && (
+                              <div className="shrink-0 flex flex-col items-center justify-center gap-0.5 mt-0.5">
+                                {item.acknowledged_at ? (
+                                  <Badge variant="secondary" className="text-[10px] font-normal py-0.5 px-1.5 whitespace-nowrap">
+                                    <CheckCircle className="h-3 w-3 mr-0.5 inline" />
+                                    Dealt with
+                                  </Badge>
+                                ) : canEditCase ? (
+                                  <Checkbox
+                                    id={`ack-${item.messageId}`}
+                                    checked={false}
+                                    disabled={acknowledgingMessageId === item.messageId}
+                                    onCheckedChange={async (checked) => {
+                                      if (!checked || !entrySlug || item.messageId == null) return;
+                                      setAcknowledgingMessageId(item.messageId);
+                                      try {
+                                        await trackersService.acknowledgeInboundMessage(entrySlug, item.messageId);
+                                        refetchSmsThread?.();
+                                        toast.success("Marked as dealt with.");
+                                      } catch (err) {
+                                        const d = err?.response?.data?.detail;
+                                        toast.error(typeof d === "string" ? d : d?.message || "Failed to mark as dealt with");
+                                      } finally {
+                                        setAcknowledgingMessageId(null);
+                                      }
+                                    }}
+                                    className="data-[state=checked]:bg-primary data-[state=checked]:border-primary"
+                                    aria-label="Mark as dealt with"
+                                  />
+                                ) : null}
+                                {canEditCase && !item.acknowledged_at && (
+                                  <label htmlFor={`ack-${item.messageId}`} className="text-[10px] text-muted-foreground cursor-pointer">
+                                    Dealt with
+                                  </label>
+                                )}
+                              </div>
+                            )}
                             {item.type === "sent" && (
                               <div className="shrink-0 w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center mt-0.5">
                                 <Send className="h-3.5 w-3.5 text-primary" />
@@ -2861,6 +2987,13 @@ const TrackerEntryDetailPage = () => {
                               const res = await trackersService.sendSmsFromEntry(entrySlug, body);
                               if (res?.success) {
                                 setSendSmsMessage("");
+                                const inbound = smsThreadData?.inbound ?? [];
+                                const latestInbound = inbound[inbound.length - 1];
+                                if (latestInbound && !latestInbound.acknowledged_at) {
+                                  try {
+                                    await trackersService.acknowledgeInboundMessage(entrySlug, latestInbound.id);
+                                  } catch (_) {}
+                                }
                                 refetchSmsThread?.();
                                 refetchTimeline?.();
                                 toast.success("SMS sent.");

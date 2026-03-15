@@ -390,12 +390,22 @@ const TrackerEditPage = () => {
   useEffect(() => {
     if (tabFromUrl && TRACKER_EDIT_TABS.includes(tabFromUrl)) setActiveTab(tabFromUrl);
   }, [tabFromUrl]);
+  const [smsTemplatesDraft, setSmsTemplatesDraft] = useState(null);
   const handleTabChange = (value) => {
+    if (activeTab === "communication" && smsTemplatesDraft !== null) {
+      setFormData((prev) => ({ ...prev, tracker_config: { ...prev.tracker_config, sms_templates: smsTemplatesDraft } }));
+      setSmsTemplatesDraft(null);
+    }
     setActiveTab(value);
     const sp = new URLSearchParams(searchParams?.toString() || "");
     sp.set("tab", value);
     router.replace(`/admin/trackers/${slug}/edit?${sp.toString()}`, { scroll: false });
   };
+  useEffect(() => {
+    if (activeTab === "communication" && smsTemplatesDraft === null) {
+      setSmsTemplatesDraft(JSON.parse(JSON.stringify(formData.tracker_config?.sms_templates || [])));
+    }
+  }, [activeTab, smsTemplatesDraft]);
 
   const { data: tracker, isLoading: trackerLoading } = useTracker(slug);
   const updateMutation = useUpdateTracker();
@@ -643,9 +653,12 @@ const TrackerEditPage = () => {
         });
       }
 
+      const dataToSave = smsTemplatesDraft !== null
+        ? { ...formData, tracker_config: { ...formData.tracker_config, sms_templates: smsTemplatesDraft } }
+        : formData;
       await updateMutation.mutateAsync({
         slug: slug,
-        trackerData: formData,
+        trackerData: dataToSave,
       });
       toast.success("Tracker updated successfully");
       if (shouldRedirect) {
@@ -5079,8 +5092,36 @@ const TrackerEditPage = () => {
           </Card>
         </TabsContent>
 
-        {/* Communication Tab – SMS auto-reply / quick-reply templates */}
+        {/* Communication Tab – Messaging settings + SMS quick-reply templates */}
         <TabsContent value="communication" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Messaging settings</CardTitle>
+              <p className="text-sm text-muted-foreground mt-1">
+                Optional signature appended to every SMS so patients know who the message is from.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="sms-signature">Message signature</Label>
+                <Input
+                  id="sms-signature"
+                  placeholder="e.g. From Beacon Medical"
+                  value={formData.tracker_config?.sms_signature ?? ""}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      tracker_config: { ...prev.tracker_config, sms_signature: e.target.value },
+                    }))
+                  }
+                  className="max-w-md"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Added to the end of each message (template or custom). Leave blank for no signature.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
           <Card>
             <CardHeader>
               <CardTitle>SMS quick-reply templates</CardTitle>
@@ -5089,7 +5130,7 @@ const TrackerEditPage = () => {
               </p>
             </CardHeader>
             <CardContent className="space-y-4">
-              {(formData.tracker_config?.sms_templates || []).map((tpl, idx) => (
+              {(smsTemplatesDraft ?? formData.tracker_config?.sms_templates ?? []).map((tpl, idx) => (
                 <div key={tpl.key || idx} className="flex flex-col gap-2 p-3 border rounded-md bg-muted/20">
                   <div className="flex items-center justify-between gap-2 flex-wrap">
                     <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
@@ -5098,15 +5139,9 @@ const TrackerEditPage = () => {
                         value={tpl.key ?? ""}
                         onChange={(e) => {
                           const v = e.target.value.trim();
-                          setFormData((prev) => ({
-                            ...prev,
-                            tracker_config: {
-                              ...prev.tracker_config,
-                              sms_templates: (prev.tracker_config?.sms_templates || []).map((t, i) =>
-                                i === idx ? { ...t, key: v || t.key } : t
-                              ),
-                            },
-                          }));
+                          setSmsTemplatesDraft((prev) =>
+                            (prev ?? formData.tracker_config?.sms_templates ?? []).map((t, i) => (i === idx ? { ...t, key: v || t.key } : t))
+                          );
                         }}
                         className="h-8 text-xs font-mono max-w-[200px]"
                       />
@@ -5114,15 +5149,9 @@ const TrackerEditPage = () => {
                         placeholder="Label (e.g. Appointment reminder)"
                         value={tpl.label ?? ""}
                         onChange={(e) => {
-                          setFormData((prev) => ({
-                            ...prev,
-                            tracker_config: {
-                              ...prev.tracker_config,
-                              sms_templates: (prev.tracker_config?.sms_templates || []).map((t, i) =>
-                                i === idx ? { ...t, label: e.target.value } : t
-                              ),
-                            },
-                          }));
+                          setSmsTemplatesDraft((prev) =>
+                            (prev ?? formData.tracker_config?.sms_templates ?? []).map((t, i) => (i === idx ? { ...t, label: e.target.value } : t))
+                          );
                         }}
                         className="h-8 text-xs flex-1 min-w-[140px]"
                       />
@@ -5133,13 +5162,7 @@ const TrackerEditPage = () => {
                       size="icon"
                       className="h-8 w-8 shrink-0 text-destructive"
                       onClick={() => {
-                        setFormData((prev) => ({
-                          ...prev,
-                          tracker_config: {
-                            ...prev.tracker_config,
-                            sms_templates: (prev.tracker_config?.sms_templates || []).filter((_, i) => i !== idx),
-                          },
-                        }));
+                        setSmsTemplatesDraft((prev) => (prev ?? formData.tracker_config?.sms_templates ?? []).filter((_, i) => i !== idx));
                       }}
                       title="Remove template"
                     >
@@ -5150,15 +5173,9 @@ const TrackerEditPage = () => {
                     placeholder="Message body (e.g. Your appointment is coming up. Please contact us if you need to reschedule.)"
                     value={tpl.body ?? ""}
                     onChange={(e) => {
-                      setFormData((prev) => ({
-                        ...prev,
-                        tracker_config: {
-                          ...prev.tracker_config,
-                          sms_templates: (prev.tracker_config?.sms_templates || []).map((t, i) =>
-                            i === idx ? { ...t, body: e.target.value } : t
-                          ),
-                        },
-                      }));
+                      setSmsTemplatesDraft((prev) =>
+                        (prev ?? formData.tracker_config?.sms_templates ?? []).map((t, i) => (i === idx ? { ...t, body: e.target.value } : t))
+                      );
                     }}
                     rows={2}
                     className="text-xs resize-y min-h-[60px]"
@@ -5170,21 +5187,15 @@ const TrackerEditPage = () => {
                 variant="outline"
                 size="sm"
                 onClick={() => {
-                  const list = formData.tracker_config?.sms_templates || [];
+                  const list = smsTemplatesDraft ?? formData.tracker_config?.sms_templates ?? [];
                   const n = list.length + 1;
                   const newKey = `template_${n}`;
-                  setFormData((prev) => ({
-                    ...prev,
-                    tracker_config: {
-                      ...prev.tracker_config,
-                      sms_templates: [...(prev.tracker_config?.sms_templates || []), { key: newKey, label: "", body: "" }],
-                    },
-                  }));
+                  setSmsTemplatesDraft([...(list || []), { key: newKey, label: "", body: "" }]);
                 }}
               >
                 <Plus className="h-4 w-4 mr-2" /> Add template
               </Button>
-              {(!formData.tracker_config?.sms_templates || formData.tracker_config.sms_templates.length === 0) && (
+              {((smsTemplatesDraft ?? formData.tracker_config?.sms_templates)?.length ?? 0) === 0 && (
                 <p className="text-sm text-muted-foreground">
                   No custom templates. The case Communications tab will show built-in options (Appointment reminder, Prep reminder, Please contact us). Add templates here to override or add more.
                 </p>
