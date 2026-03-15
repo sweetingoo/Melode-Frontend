@@ -2100,6 +2100,7 @@ const TrackerEntryDetailPage = () => {
                                       (() => {
                                         const tableCols = Array.isArray(group.table_columns) && group.table_columns.length > 0 ? group.table_columns : [{ id: "col_1", label: "Column 1" }];
                                         const rows = tableRows.length > 0 ? tableRows : [{ cells: tableCols.map(() => ({ text: "", field_id: null })) }];
+                                        const visibleRows = rows.filter((row) => checkRowVisibility(row, displayData));
                                         return (
                                           <div className="overflow-x-auto rounded-md border">
                                             <table className="w-full border-collapse text-sm">
@@ -2111,7 +2112,7 @@ const TrackerEntryDetailPage = () => {
                                                 </tr>
                                               </thead>
                                               <tbody>
-                                                {rows.map((row, rIdx) => {
+                                                {visibleRows.map((row, rIdx) => {
                                                   const cells = (row.cells || []).slice(0, tableCols.length);
                                                   while (cells.length < tableCols.length) cells.push({ text: "", field_id: null });
                                                   return (
@@ -2140,7 +2141,7 @@ const TrackerEntryDetailPage = () => {
                                       })()
                                     ) : isGrid ? (
                                       <div className="space-y-4">
-                                        {gridRows.map((gridRow, rowIdx) => {
+                                        {gridRows.filter((gridRow) => checkRowVisibility(gridRow, displayData)).map((gridRow, rowIdx) => {
                                           const leftF = (gridRow.left || []).map((fid) => getFieldById(fid)).filter(Boolean).filter((f) => checkFieldVisibility(f, displayData));
                                           const centerF = (gridRow.center || []).map((fid) => getFieldById(fid)).filter(Boolean).filter((f) => checkFieldVisibility(f, displayData));
                                           const rightF = (gridRow.right || []).map((fid) => getFieldById(fid)).filter(Boolean).filter((f) => checkFieldVisibility(f, displayData));
@@ -2446,6 +2447,7 @@ const TrackerEntryDetailPage = () => {
                                     (() => {
                                       const tableCols = Array.isArray(group.table_columns) && group.table_columns.length > 0 ? group.table_columns : [{ id: "col_1", label: "Column 1" }];
                                       const rows = tableRowsForGroup.length > 0 ? tableRowsForGroup : [{ cells: tableCols.map(() => ({ text: "", field_id: null })) }];
+                                      const visibleRows = rows.filter((row) => checkRowVisibility(row, displayData));
                                       return (
                                         <div className="overflow-x-auto rounded-md border">
                                           <table className="w-full border-collapse text-sm">
@@ -2457,7 +2459,7 @@ const TrackerEntryDetailPage = () => {
                                               </tr>
                                             </thead>
                                             <tbody>
-                                              {rows.map((row, rIdx) => {
+                                              {visibleRows.map((row, rIdx) => {
                                                 const cells = (row.cells || []).slice(0, tableCols.length);
                                                 while (cells.length < tableCols.length) cells.push({ text: "", field_id: null });
                                                 return (
@@ -2486,7 +2488,7 @@ const TrackerEntryDetailPage = () => {
                                     })()
                                   ) : isGrid ? (
                                     <div className="space-y-4">
-                                      {gridRows.map((gridRow, rowIdx) => {
+                                      {gridRows.filter((gridRow) => checkRowVisibility(gridRow, displayData)).map((gridRow, rowIdx) => {
                                         const leftF = (gridRow.left || []).map((fid) => getFieldById(fid)).filter(Boolean).filter((f) => checkFieldVisibility(f, displayData));
                                         const centerF = (gridRow.center || []).map((fid) => getFieldById(fid)).filter(Boolean).filter((f) => checkFieldVisibility(f, displayData));
                                         const rightF = (gridRow.right || []).map((fid) => getFieldById(fid)).filter(Boolean).filter((f) => checkFieldVisibility(f, displayData));

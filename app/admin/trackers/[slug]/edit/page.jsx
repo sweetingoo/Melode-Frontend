@@ -146,7 +146,7 @@ function OneRowEditor({ row, rowIndex, sectionFields, allIdsInAnyGroup, onUpdate
     .filter((id) => !allIdsInAnyGroup.includes(id));
 
   const updateRow = (newGrid) => {
-    onUpdateRow(rowIndex, newGrid);
+    onUpdateRow(rowIndex, { ...grid, ...newGrid });
   };
 
   const moveField = (fieldId, fromCol, toCol) => {
@@ -202,6 +202,9 @@ function OneRowEditor({ row, rowIndex, sectionFields, allIdsInAnyGroup, onUpdate
     if (fieldId && fromCol && String(fromRowIdx) === String(rowIndex)) moveField(fieldId, fromCol, toCol);
   };
 
+  const visibilityFields = sectionFields.filter((f) => !["text_block", "image_block", "line_break", "page_break", "download_link"].includes((f.type || f.field_type || "").toLowerCase()));
+  const cv = grid.conditional_visibility || {};
+
   return (
     <div className="relative p-3 rounded border border-border bg-muted/20 space-y-2">
       <div className="flex items-center justify-between">
@@ -254,6 +257,39 @@ function OneRowEditor({ row, rowIndex, sectionFields, allIdsInAnyGroup, onUpdate
           );
         })}
       </div>
+      {/* Show row when (optional) – same as Forms grid row visibility */}
+      <div className="pt-2 mt-2 border-t border-border/50">
+        <div className="flex flex-wrap items-center gap-2">
+          <Label className="text-xs font-medium text-muted-foreground shrink-0">Show row when:</Label>
+          <SearchableFieldSelect
+            fields={visibilityFields}
+            value={cv.depends_on_field ?? "__none__"}
+            onValueChange={(v) => updateRow({ conditional_visibility: v && v !== "__none__" ? { ...cv, depends_on_field: v } : undefined })}
+            placeholder="Always show"
+            noneOption
+            noneLabel="Always show"
+            compact
+            className="h-7 text-xs w-40 inline-flex"
+          />
+          {cv.depends_on_field && (
+            <>
+              <Select value={cv.show_when || ""} onValueChange={(v) => updateRow({ conditional_visibility: { ...cv, show_when: v || undefined } })}>
+                <SelectTrigger className="h-7 text-xs w-24 inline-flex"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="equals">Equals</SelectItem>
+                  <SelectItem value="not_equals">Not equals</SelectItem>
+                  <SelectItem value="contains">Contains</SelectItem>
+                  <SelectItem value="is_empty">Is empty</SelectItem>
+                  <SelectItem value="is_not_empty">Not empty</SelectItem>
+                </SelectContent>
+              </Select>
+              {["equals", "not_equals", "contains"].includes(cv.show_when) && (
+                <Input placeholder="Value" className="h-7 text-xs w-24" value={cv.value ?? ""} onChange={(e) => updateRow({ conditional_visibility: { ...cv, value: e.target.value } })} />
+              )}
+            </>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -288,7 +324,7 @@ function GridColumnsEditor({ group, groupIdx, sectionFields, editingSection, set
   };
 
   const addRow = () => {
-    updateRows([...gridRows, { left: [], center: [], right: [] }]);
+    updateRows([...gridRows, { left: [], center: [], right: [], conditional_visibility: undefined }]);
   };
 
   const removeRow = (rowIndex) => {
