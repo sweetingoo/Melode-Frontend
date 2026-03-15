@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useRef, Suspense } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -70,20 +71,131 @@ import { cn } from "@/lib/utils";
 import { formatDateTimeForAPI } from "@/utils/time";
 import { useIsMobile } from "@/hooks/use-mobile";
 
-const AuditLogsPage = () => {
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(50);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [selectedUser, setSelectedUser] = useState("");
-  const [selectedAction, setSelectedAction] = useState("");
-  const [selectedResource, setSelectedResource] = useState("");
-  const [selectedSeverity, setSelectedSeverity] = useState("");
-  const [startDate, setStartDate] = useState(null);
-  const [endDate, setEndDate] = useState(null);
+const AUDIT_LOGS_PARAM_PAGE = "page";
+const AUDIT_LOGS_PARAM_PER_PAGE = "per_page";
+const AUDIT_LOGS_PARAM_RESOURCE_ID = "resource_id";
+const AUDIT_LOGS_PARAM_USER_ID = "user_id";
+const AUDIT_LOGS_PARAM_ACTION = "action";
+const AUDIT_LOGS_PARAM_RESOURCE = "resource";
+const AUDIT_LOGS_PARAM_SEVERITY = "severity";
+const AUDIT_LOGS_PARAM_START_DATE = "start_date";
+const AUDIT_LOGS_PARAM_END_DATE = "end_date";
+
+function parseFiltersFromSearchParams(searchParams) {
+  const page = searchParams.get(AUDIT_LOGS_PARAM_PAGE);
+  const perPage = searchParams.get(AUDIT_LOGS_PARAM_PER_PAGE);
+  const resourceId = searchParams.get(AUDIT_LOGS_PARAM_RESOURCE_ID);
+  const userId = searchParams.get(AUDIT_LOGS_PARAM_USER_ID);
+  const action = searchParams.get(AUDIT_LOGS_PARAM_ACTION);
+  const resource = searchParams.get(AUDIT_LOGS_PARAM_RESOURCE);
+  const severity = searchParams.get(AUDIT_LOGS_PARAM_SEVERITY);
+  const start = searchParams.get(AUDIT_LOGS_PARAM_START_DATE);
+  const end = searchParams.get(AUDIT_LOGS_PARAM_END_DATE);
+  let startDate = null;
+  let endDate = null;
+  if (start) {
+    try {
+      const d = new Date(start);
+      if (!Number.isNaN(d.getTime())) startDate = d;
+    } catch {
+      // ignore
+    }
+  }
+  if (end) {
+    try {
+      const d = new Date(end);
+      if (!Number.isNaN(d.getTime())) endDate = d;
+    } catch {
+      // ignore
+    }
+  }
+  return {
+    currentPage: page != null ? Math.max(1, parseInt(page, 10) || 1) : 1,
+    pageSize: perPage != null ? Math.min(200, Math.max(1, parseInt(perPage, 10) || 50)) : 50,
+    searchTerm: resourceId ?? "",
+    selectedUser: userId ?? "",
+    selectedAction: action ?? "",
+    selectedResource: resource ?? "",
+    selectedSeverity: severity ?? "",
+    startDate,
+    endDate,
+  };
+}
+
+const AuditLogsContent = () => {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const isInitialMount = useRef(true);
+  const isFirstLoadFromUrl = useRef(true);
+
+  // Initialize filter state from URL so refresh keeps filters
+  const [filterState, setFilterState] = useState(() => parseFiltersFromSearchParams(searchParams));
+
+  const currentPage = filterState.currentPage;
+  const pageSize = filterState.pageSize;
+  const searchTerm = filterState.searchTerm;
+  const selectedUser = filterState.selectedUser;
+  const selectedAction = filterState.selectedAction;
+  const selectedResource = filterState.selectedResource;
+  const selectedSeverity = filterState.selectedSeverity;
+  const startDate = filterState.startDate;
+  const endDate = filterState.endDate;
+
+  const setCurrentPage = (v) => setFilterState((s) => ({ ...s, currentPage: typeof v === "function" ? v(s.currentPage) : v }));
+  const setPageSize = (v) => setFilterState((s) => ({ ...s, pageSize: typeof v === "function" ? v(s.pageSize) : v }));
+  const setSearchTerm = (v) => setFilterState((s) => ({ ...s, searchTerm: typeof v === "function" ? v(s.searchTerm) : v }));
+  const setSelectedUser = (v) => setFilterState((s) => ({ ...s, selectedUser: typeof v === "function" ? v(s.selectedUser) : v }));
+  const setSelectedAction = (v) => setFilterState((s) => ({ ...s, selectedAction: typeof v === "function" ? v(s.selectedAction) : v }));
+  const setSelectedResource = (v) => setFilterState((s) => ({ ...s, selectedResource: typeof v === "function" ? v(s.selectedResource) : v }));
+  const setSelectedSeverity = (v) => setFilterState((s) => ({ ...s, selectedSeverity: typeof v === "function" ? v(s.selectedSeverity) : v }));
+  const setStartDate = (v) => setFilterState((s) => ({ ...s, startDate: typeof v === "function" ? v(s.startDate) : v }));
+  const setEndDate = (v) => setFilterState((s) => ({ ...s, endDate: typeof v === "function" ? v(s.endDate) : v }));
+
   const [selectedLog, setSelectedLog] = useState(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [expandedRows, setExpandedRows] = useState(new Set());
   const isMobile = useIsMobile();
+
+  // When URL changes (e.g. back/forward), sync state from URL (skip first run; initial state already from URL)
+  useEffect(() => {
+    if (isFirstLoadFromUrl.current) {
+      isFirstLoadFromUrl.current = false;
+      return;
+    }
+    setFilterState(parseFiltersFromSearchParams(searchParams));
+  }, [searchParams]);
+
+  // Sync filters to URL when user changes them (so refresh restores them)
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+    const params = new URLSearchParams();
+    if (currentPage > 1) params.set(AUDIT_LOGS_PARAM_PAGE, String(currentPage));
+    if (pageSize !== 50) params.set(AUDIT_LOGS_PARAM_PER_PAGE, String(pageSize));
+    if (searchTerm?.trim()) params.set(AUDIT_LOGS_PARAM_RESOURCE_ID, searchTerm.trim());
+    if (selectedUser) params.set(AUDIT_LOGS_PARAM_USER_ID, selectedUser);
+    if (selectedAction) params.set(AUDIT_LOGS_PARAM_ACTION, selectedAction);
+    if (selectedResource) params.set(AUDIT_LOGS_PARAM_RESOURCE, selectedResource);
+    if (selectedSeverity) params.set(AUDIT_LOGS_PARAM_SEVERITY, selectedSeverity);
+    if (startDate) params.set(AUDIT_LOGS_PARAM_START_DATE, startDate.toISOString().slice(0, 10));
+    if (endDate) params.set(AUDIT_LOGS_PARAM_END_DATE, endDate.toISOString().slice(0, 10));
+    const qs = params.toString();
+    const url = qs ? `/admin/audit-logs?${qs}` : "/admin/audit-logs";
+    router.replace(url, { scroll: false });
+  }, [
+    currentPage,
+    pageSize,
+    searchTerm,
+    selectedUser,
+    selectedAction,
+    selectedResource,
+    selectedSeverity,
+    startDate,
+    endDate,
+    router,
+  ]);
 
   const { data: currentUserData } = useCurrentUser();
   const currentUserPermissions = currentUserData?.permissions || [];
@@ -310,7 +422,7 @@ const AuditLogsPage = () => {
     setIsDetailModalOpen(true);
   };
 
-  // Clear filters
+  // Clear filters and URL params
   const clearFilters = () => {
     setSelectedUser("");
     setSelectedAction("");
@@ -320,6 +432,7 @@ const AuditLogsPage = () => {
     setEndDate(null);
     setSearchTerm("");
     setCurrentPage(1);
+    router.replace("/admin/audit-logs", { scroll: false });
   };
 
   // Export to CSV
@@ -957,5 +1070,11 @@ const AuditLogsPage = () => {
   );
 };
 
-export default AuditLogsPage;
+export default function AuditLogsPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-[200px]"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}>
+      <AuditLogsContent />
+    </Suspense>
+  );
+}
 
