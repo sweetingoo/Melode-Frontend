@@ -1508,10 +1508,12 @@ const TrackerEntryDetailPage = () => {
                       )}
                     </span>
                   )}
-                  <Button variant="outline" size="sm" title="Copy link to this entry" onClick={copyEntryLink}>
-                    <Link2 className="h-4 w-4 mr-1" />
-                    {entryLinkCopied ? "Copied" : "Copy link"}
-                  </Button>
+                  {activeTab !== "forms" && (
+                    <Button variant="outline" size="sm" title="Copy link to this entry" onClick={copyEntryLink}>
+                      <Link2 className="h-4 w-4 mr-1" />
+                      {entryLinkCopied ? "Copied" : "Copy link"}
+                    </Button>
+                  )}
                   {tracker?.tracker_config?.allow_public_submit && (
                     <Button variant="outline" size="sm" onClick={copyShareableLink}>
                       <Share2 className="h-4 w-4 mr-1" />
@@ -2551,6 +2553,95 @@ const TrackerEntryDetailPage = () => {
               );
             })}
           </Tabs>
+
+          {/* Next stage & status at bottom of Forms tab (same as public submit page) */}
+          {isStageStyledTracker && stageMapping.length > 0 && (() => {
+            const curStage = String(entry?.formatted_data?.derived_stage ?? "").trim();
+            const curStageItem = stageMapping.find((s) => String(s?.stage ?? s?.name ?? "").trim() === curStage);
+            const currentStageStatusesList = (curStageItem?.statuses ?? curStageItem?.status_list ?? []).filter(Boolean);
+            const allowedNext = curStageItem?.allowed_next_stages ?? [];
+            const nextStagesList = Array.isArray(allowedNext) && allowedNext.length > 0
+              ? allowedNext.map((name) => {
+                  const item = stageMapping.find((s) => (s?.stage ?? s?.name ?? "").toString().trim() === (name ?? "").toString().trim());
+                  const statuses = (item?.statuses ?? item?.status_list ?? []).filter(Boolean);
+                  return { stage: (name ?? "").toString().trim(), statuses };
+                }).filter((s) => s.stage)
+              : stageMapping.filter((s, i) => i !== stageMapping.findIndex((m) => (m?.stage ?? m?.name ?? "").toString().trim() === curStage)).map((s) => ({
+                  stage: String(s?.stage ?? s?.name ?? "").trim(),
+                  statuses: (s?.statuses ?? s?.status_list ?? []).filter(Boolean),
+                })).filter((s) => s.stage);
+            const hasNextOrStatus = nextStagesList.length > 0 || currentStageStatusesList.length > 0;
+            if (!hasNextOrStatus) return null;
+            const statusOptionsForStage = isEditing && editModeStage
+              ? (stageMapping.find((s) => (s?.stage ?? s?.name ?? "").toString().trim() === (editModeStage ?? "").toString().trim())?.statuses ?? stageMapping.find((s) => (s?.stage ?? s?.name ?? "").toString().trim() === (editModeStage ?? "").toString().trim())?.status_list ?? []) || currentStageStatusesList
+              : currentStageStatusesList;
+            const statusOptionsFiltered = Array.isArray(statusOptionsForStage) ? statusOptionsForStage.filter(Boolean) : [];
+            return (
+              <Card className="mt-4">
+                <CardContent className="pt-6">
+                  <div className="space-y-4">
+                    <div className="text-sm font-medium text-muted-foreground">Next stage &amp; status</div>
+                    <div className="flex flex-wrap gap-4 items-end">
+                      {nextStagesList.length > 0 && (
+                        <div className="space-y-2 min-w-[180px]">
+                          <Label htmlFor="forms-next-stage" className="text-sm">Next stage</Label>
+                          <Select
+                            value={(editModeStage && editModeStage !== curStage) ? editModeStage : "__current__"}
+                            onValueChange={(v) => {
+                              if (!isEditing) return;
+                              if (v && v !== "__current__") {
+                                setEditModeStage(v);
+                                const item = stageMapping.find((s) => (s?.stage ?? s?.name ?? "").toString().trim() === v);
+                                const statuses = (item?.statuses ?? item?.status_list ?? []).filter(Boolean);
+                                setEntryStatus(statuses.includes(entry?.status) ? entry.status : (statuses[0] ?? ""));
+                              } else {
+                                setEditModeStage(curStage || "");
+                                setEntryStatus(entry?.status ?? (currentStageStatusesList[0] ?? ""));
+                              }
+                            }}
+                            disabled={!isEditing}
+                          >
+                            <SelectTrigger id="forms-next-stage" className="w-full">
+                              <SelectValue placeholder="Stay in current stage" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__current__">Stay in current stage</SelectItem>
+                              {nextStagesList.map((s) => (
+                                <SelectItem key={s.stage} value={s.stage}>{s.stage}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+                      {statusOptionsFiltered.length > 0 && (
+                        <div className="space-y-2 min-w-[180px]">
+                          <Label htmlFor="forms-status" className="text-sm">Status</Label>
+                          <Select
+                            value={entryStatus || "__none__"}
+                            onValueChange={(v) => isEditing && v && v !== "__none__" && setEntryStatus(v)}
+                            disabled={!isEditing}
+                          >
+                            <SelectTrigger id="forms-status" className="w-full">
+                              <SelectValue placeholder="Select status" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__none__">— No change —</SelectItem>
+                              {statusOptionsFiltered.map((statusVal) => (
+                                <SelectItem key={statusVal} value={statusVal}>{humanizeStatusForDisplay(statusVal)}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+                    </div>
+                    {!isEditing && (
+                      <p className="text-xs text-muted-foreground">Click &quot;Edit fields&quot; above to change stage or status and save.</p>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })()}
         </TabsContent>
 
         {/* Communications Tab – sub-tabs: SMS, WhatsApp, Portal, Email, Letter */}

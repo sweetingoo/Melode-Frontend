@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,6 +12,7 @@ import { api } from "@/services/api-client";
 import { trackersService } from "@/services/trackers";
 import CustomFieldRenderer from "@/components/CustomFieldRenderer";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 export default function PublicEntrySubmitPage() {
   const params = useParams();
@@ -134,6 +135,86 @@ export default function PublicEntrySubmitPage() {
     if (show_when === "is_not_empty") return dependentValue != null && dependentValue !== "" && dependentValue !== false;
     return true;
   };
+
+  const isGroupConditionMet = (condition, data) => {
+    if (!condition?.depends_on_field) return true;
+    const dependentValue = data?.[condition.depends_on_field];
+    const expectedValue = condition.value;
+    const normalize = (v) => {
+      if (v === true || v === "true" || v === "True" || v === "TRUE") return true;
+      if (v === false || v === "false" || v === "False" || v === "FALSE") return false;
+      if (v === "yes" || v === "Yes" || v === "YES") return true;
+      if (v === "no" || v === "No" || v === "NO") return false;
+      return v;
+    };
+    if (condition.show_when === "equals") return normalize(dependentValue) === normalize(expectedValue);
+    if (condition.show_when === "not_equals") return normalize(dependentValue) !== normalize(expectedValue);
+    if (condition.show_when === "contains") return Array.isArray(dependentValue) ? dependentValue.includes(expectedValue) : String(dependentValue || "").includes(String(expectedValue || ""));
+    if (condition.show_when === "is_empty") return !dependentValue || dependentValue === "" || dependentValue === false;
+    if (condition.show_when === "is_not_empty") return dependentValue != null && dependentValue !== "" && dependentValue !== false;
+    return true;
+  };
+
+  const checkGroupVisibility = (group, data) => {
+    const cv = group?.conditional_visibility;
+    if (!cv) return true;
+    const conditions = Array.isArray(cv.conditions) ? cv.conditions : null;
+    if (conditions?.length) return conditions.some((c) => isGroupConditionMet(c, data));
+    if (!cv.depends_on_field) return true;
+    return isGroupConditionMet(cv, data);
+  };
+
+  const checkRowVisibility = (row, data) => {
+    if (!row?.conditional_visibility?.depends_on_field) return true;
+    const { depends_on_field, show_when, value: expectedValue } = row.conditional_visibility;
+    const dependentValue = data?.[depends_on_field];
+    const normalize = (v) => {
+      if (v === true || v === "true" || v === "True" || v === "TRUE") return true;
+      if (v === false || v === "false" || v === "False" || v === "FALSE") return false;
+      if (v === "yes" || v === "Yes" || v === "YES") return true;
+      if (v === "no" || v === "No" || v === "NO") return false;
+      return v;
+    };
+    if (show_when === "equals") return normalize(dependentValue) === normalize(expectedValue);
+    if (show_when === "not_equals") return normalize(dependentValue) !== normalize(expectedValue);
+    if (show_when === "contains") return Array.isArray(dependentValue) ? dependentValue.includes(expectedValue) : String(dependentValue || "").includes(String(expectedValue || ""));
+    if (show_when === "is_empty") return !dependentValue || dependentValue === "" || dependentValue === false;
+    if (show_when === "is_not_empty") return dependentValue != null && dependentValue !== "" && dependentValue !== false;
+    return true;
+  };
+
+  const formLayout = useMemo(() => {
+    if (!sections.length || !fields.length) return null;
+    return sections.map((section, index) => {
+      const sectionKey = section.id ?? section.title ?? section.label ?? `section-${index}`;
+      const sectionFields = (section.fields?.length)
+        ? (section.fields || []).map((fid) => fields.find((f) => (f.id || f.name || f.field_id || f.field_name) === fid)).filter(Boolean)
+        : fields.filter((f) => f.section === section.id || f.section === sectionKey);
+      const groups = section.groups && Array.isArray(section.groups) ? section.groups : [];
+      const sectionLabel = section.label || section.title || section.id || "Section";
+      const hasId = (f, id) => String(f?.id || f?.name || f?.field_id || f?.field_name) === String(id);
+      let ungrouped = [];
+      let groupsWithFields = [];
+      if (groups.length > 0) {
+        const fieldIdsInGroups = new Set(
+          groups.flatMap((g) => {
+            const fromFields = (g.fields || []).map(String);
+            const fromTable = (g.table_rows || []).flatMap((row) => (row.cells || []).map((c) => c.field_id).filter(Boolean).map(String));
+            const fromGrid = (g.grid_rows || []).flatMap((row) => [...(row.left || []), ...(row.center || []), ...(row.right || [])].map(String));
+            return [...fromFields, ...fromTable, ...fromGrid];
+          })
+        );
+        ungrouped = sectionFields.filter((f) => !fieldIdsInGroups.has(String(f?.id || f?.name || f?.field_id || f?.field_name)));
+        groupsWithFields = groups.map((g) => ({
+          group: g,
+          fields: sectionFields.filter((f) => (g.fields || []).some((id) => hasId(f, id))),
+        }));
+      } else {
+        ungrouped = sectionFields;
+      }
+      return { sectionKey, sectionLabel, ungrouped, groupsWithFields, sectionFields };
+    });
+  }, [sections, fields]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -332,51 +413,203 @@ export default function PublicEntrySubmitPage() {
             <CardContent className="space-y-6">
               {fields.length === 0 ? (
                 <p className="text-muted-foreground text-center py-8">No fields to complete.</p>
-              ) : (
-                <div className="space-y-6">
-                  {fields.map((field) => {
-                    const fieldId = field.id || field.field_id || field.field_name || field.name;
-                    const fieldType = (field.type || field.field_type)?.toLowerCase();
-                    const isDisplayOnly = displayOnlyTypes.includes(fieldType);
-                    if (!checkFieldVisibility(field, submissionData)) return null;
+              ) : (() => {
+                const mapFieldToMapped = (field) => {
+                  const fieldId = field.id || field.field_id || field.field_name || field.name;
+                  const fieldType = (field.type || field.field_type)?.toLowerCase();
+                  const isDisplayOnly = displayOnlyTypes.includes(fieldType);
+                  return {
+                    ...field,
+                    id: fieldId,
+                    field_label: field.label || field.field_label,
+                    label: field.label,
+                    name: field.name || field.field_name || fieldId,
+                    field_description: field.help_text,
+                    field_type: field.type || field.field_type,
+                    is_required: field.required ?? field.is_required,
+                    required: field.required ?? field.is_required,
+                    content: field.content,
+                    image_url: field.image_url,
+                    conditional_visibility: field.conditional_visibility,
+                    validation: field.validation,
+                    field_options: {
+                      ...(field.field_options || {}),
+                      options: field.options || [],
+                      accept: field.field_options?.accept,
+                      maxSize: field.field_options?.maxSize || field.validation?.max_size_mb,
+                      allowMultiple: field.field_options?.allowMultiple || false,
+                    },
+                  };
+                };
+                const renderField = (field) => {
+                  const fieldId = field.id || field.field_id || field.field_name || field.name;
+                  const fieldType = (field.type || field.field_type)?.toLowerCase();
+                  const isDisplayOnly = displayOnlyTypes.includes(fieldType);
+                  if (!checkFieldVisibility(field, submissionData)) return null;
+                  const value = isDisplayOnly ? undefined : submissionData[fieldId];
+                  const error = isDisplayOnly ? undefined : fieldErrors[fieldId];
+                  return (
+                    <CustomFieldRenderer
+                      key={fieldId}
+                      field={mapFieldToMapped(field)}
+                      value={value}
+                      onChange={isDisplayOnly ? undefined : handleFieldChange}
+                      error={error}
+                    />
+                  );
+                };
 
-                    const value = isDisplayOnly ? undefined : submissionData[fieldId];
-                    const error = isDisplayOnly ? undefined : fieldErrors[fieldId];
-                    const mappedField = {
-                      ...field,
-                      id: fieldId,
-                      field_label: field.label || field.field_label,
-                      label: field.label,
-                      name: field.name || field.field_name || fieldId,
-                      field_description: field.help_text,
-                      field_type: field.type || field.field_type,
-                      is_required: field.required ?? field.is_required,
-                      required: field.required ?? field.is_required,
-                      content: field.content,
-                      image_url: field.image_url,
-                      conditional_visibility: field.conditional_visibility,
-                      validation: field.validation,
-                      field_options: {
-                        ...(field.field_options || {}),
-                        options: field.options || [],
-                        accept: field.field_options?.accept,
-                        maxSize: field.field_options?.maxSize || field.validation?.max_size_mb,
-                        allowMultiple: field.field_options?.allowMultiple || false,
-                      },
-                    };
-
-                    return (
-                      <CustomFieldRenderer
-                        key={fieldId}
-                        field={mappedField}
-                        value={value}
-                        onChange={isDisplayOnly ? undefined : handleFieldChange}
-                        error={error}
-                      />
-                    );
-                  })}
-                </div>
-              )}
+                if (formLayout && formLayout.length > 0) {
+                  return (
+                    <div className="space-y-6">
+                      {formLayout.map(({ sectionLabel, ungrouped, groupsWithFields, sectionFields }) => (
+                        <div key={sectionLabel} className="space-y-4">
+                          {groupsWithFields.map(({ group, fields: groupFields }) => {
+                            if (!checkGroupVisibility(group, submissionData)) return null;
+                            const layout = (group.layout || "stack").toLowerCase();
+                            const hasTableStructure = Array.isArray(group.table_columns) && group.table_columns.length > 0;
+                            const tableRowsForGroup = Array.isArray(group.table_rows) ? group.table_rows : [];
+                            const isTable = layout === "table" && (hasTableStructure || tableRowsForGroup.length > 0);
+                            const gridRows = (group.grid_rows && group.grid_rows.length > 0) ? group.grid_rows : (group.grid_columns ? [{ ...group.grid_columns }] : []);
+                            const isGrid = layout === "grid" && gridRows.length > 0;
+                            const allSectionFields = sectionFields || [];
+                            const getFieldById = (fid) => groupFields.find((f) => String(f.id || f.name || f.field_id || f.field_name) === String(fid)) ?? allSectionFields.find((f) => String(f.id || f.name || f.field_id || f.field_name) === String(fid));
+                            const visibleFields = groupFields.filter((f) => checkFieldVisibility(f, submissionData));
+                            if (!isTable && !isGrid && visibleFields.length === 0) return null;
+                            if (isTable && tableRowsForGroup.length === 0 && !hasTableStructure) return null;
+                            if (isGrid && gridRows.length === 0) return null;
+                            const groupLabel = group.label || group.title || group.name || "";
+                            return (
+                              <div key={group.id || group.label || "g"} className="space-y-2">
+                                {groupLabel ? <h4 className="text-sm font-medium text-muted-foreground border-b pb-1">{groupLabel}</h4> : null}
+                                {isTable ? (
+                                  <div className="overflow-x-auto rounded-md border">
+                                    <table className="w-full border-collapse text-sm">
+                                      <thead>
+                                        <tr className="border-b bg-muted/50">
+                                          {(Array.isArray(group.table_columns) && group.table_columns.length > 0 ? group.table_columns : [{ id: "col_1", label: "Column 1" }]).map((col) => (
+                                            <th key={col.id} className="text-left font-medium p-2">{col.label || col.id}</th>
+                                          ))}
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {(tableRowsForGroup.length > 0 ? tableRowsForGroup : [{ cells: (group.table_columns || [{ id: "c1" }]).map(() => ({ text: "", field_id: null })) }])
+                                          .filter((row) => checkRowVisibility(row, submissionData))
+                                          .map((row, rIdx) => {
+                                            const tableCols = Array.isArray(group.table_columns) && group.table_columns.length > 0 ? group.table_columns : [{ id: "col_1", label: "Column 1" }];
+                                            const cells = (row.cells || []).slice(0, tableCols.length);
+                                            while (cells.length < tableCols.length) cells.push({ text: "", field_id: null });
+                                            return (
+                                              <tr key={rIdx} className="border-b last:border-b-0">
+                                                {cells.map((cell, cIdx) => {
+                                                  const fieldId = cell.field_id ? String(cell.field_id) : null;
+                                                  const field = fieldId ? getFieldById(fieldId) : null;
+                                                  if (!field && !cell.text) return <td key={cIdx} className="p-2" />;
+                                                  if (field && !checkFieldVisibility(field, submissionData)) return <td key={cIdx} className="p-2" />;
+                                                  return (
+                                                    <td key={cIdx} className="p-2 align-top">
+                                                      <div className="space-y-1">
+                                                        {cell.text ? <span className="text-muted-foreground text-xs block">{cell.text}</span> : null}
+                                                        {field ? renderField(field) : null}
+                                                      </div>
+                                                    </td>
+                                                  );
+                                                })}
+                                              </tr>
+                                            );
+                                          })}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                ) : isGrid ? (
+                                  <div className="space-y-4">
+                                    {gridRows.filter((gridRow) => checkRowVisibility(gridRow, submissionData)).map((gridRow, rowIdx) => {
+                                      const leftF = (gridRow.left || []).map((fid) => getFieldById(fid)).filter(Boolean).filter((f) => checkFieldVisibility(f, submissionData));
+                                      const centerF = (gridRow.center || []).map((fid) => getFieldById(fid)).filter(Boolean).filter((f) => checkFieldVisibility(f, submissionData));
+                                      const rightF = (gridRow.right || []).map((fid) => getFieldById(fid)).filter(Boolean).filter((f) => checkFieldVisibility(f, submissionData));
+                                      const hasL = leftF.length > 0;
+                                      const hasR = rightF.length > 0;
+                                      const hasC = centerF.length > 0;
+                                      if (!hasL && !hasR && !hasC) return null;
+                                      return (
+                                        <div key={`row-${rowIdx}`} className="space-y-3">
+                                          {(hasL || hasR) && (
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                              <div className="space-y-2">{leftF.map((f) => renderField(f))}</div>
+                                              <div className="space-y-2">{rightF.map((f) => renderField(f))}</div>
+                                            </div>
+                                          )}
+                                          {hasC && <div className="space-y-2">{centerF.map((f) => renderField(f))}</div>}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                ) : (
+                                  <div className={layout === "stack" ? "space-y-3" : "grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3"}>
+                                    {visibleFields.map((field) => (
+                                      <div key={field.id || field.name || field.field_id} className={cn("space-y-1", ["text_block", "image_block", "youtube_video_embed"].includes((field.type || field.field_type || "").toLowerCase()) && "md:col-span-2")}>
+                                        {renderField(field)}
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                          {ungrouped.filter((f) => checkFieldVisibility(f, submissionData)).map((field) => (
+                            <div key={field.id || field.name || field.field_id} className="space-y-1">
+                              {renderField(field)}
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  );
+                }
+                return (
+                  <div className="space-y-6">
+                    {fields.map((field) => {
+                      const fieldId = field.id || field.field_id || field.field_name || field.name;
+                      const fieldType = (field.type || field.field_type)?.toLowerCase();
+                      const isDisplayOnly = displayOnlyTypes.includes(fieldType);
+                      if (!checkFieldVisibility(field, submissionData)) return null;
+                      const value = isDisplayOnly ? undefined : submissionData[fieldId];
+                      const error = isDisplayOnly ? undefined : fieldErrors[fieldId];
+                      const mappedField = {
+                        ...field,
+                        id: fieldId,
+                        field_label: field.label || field.field_label,
+                        label: field.label,
+                        name: field.name || field.field_name || fieldId,
+                        field_description: field.help_text,
+                        field_type: field.type || field.field_type,
+                        is_required: field.required ?? field.is_required,
+                        required: field.required ?? field.is_required,
+                        content: field.content,
+                        image_url: field.image_url,
+                        conditional_visibility: field.conditional_visibility,
+                        validation: field.validation,
+                        field_options: {
+                          ...(field.field_options || {}),
+                          options: field.options || [],
+                          accept: field.field_options?.accept,
+                          maxSize: field.field_options?.maxSize || field.validation?.max_size_mb,
+                          allowMultiple: field.field_options?.allowMultiple || false,
+                        },
+                      };
+                      return (
+                        <CustomFieldRenderer
+                          key={fieldId}
+                          field={mappedField}
+                          value={value}
+                          onChange={isDisplayOnly ? undefined : handleFieldChange}
+                          error={error}
+                        />
+                      );
+                    })}
+                  </div>
+                );
+              })()}
 
               {(nextStages.length > 0 || currentStageStatuses.length > 0) && (
                 <div className="space-y-4 pt-4 border-t">
