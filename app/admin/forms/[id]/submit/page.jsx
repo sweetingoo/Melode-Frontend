@@ -11,6 +11,8 @@ import { useForm, useCreateFormSubmission, useUpdateFormSubmission } from "@/hoo
 import { useUploadFile } from "@/hooks/useProfile";
 import CustomFieldRenderer from "@/components/CustomFieldRenderer";
 import { shouldShowTimeForDateField } from "@/utils/dateFieldUtils";
+import { humanizeStatusForDisplay } from "@/utils/slug";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 const FormSubmitPage = () => {
@@ -33,6 +35,7 @@ const FormSubmitPage = () => {
   const [fieldErrors, setFieldErrors] = useState({});
   const [currentPage, setCurrentPage] = useState(0);
   const [draftSubmissionId, setDraftSubmissionId] = useState(null);
+  const [activeTabByGroup, setActiveTabByGroup] = useState({});
   
   // Load saved submission data from sessionStorage on mount
   useEffect(() => {
@@ -218,54 +221,70 @@ const FormSubmitPage = () => {
     }
   };
 
-  // Check if field should be visible based on conditional logic
+  // Check if field should be visible based on conditional logic (action "hide" = hide when condition not met; "disable" = show but disabled)
   const checkFieldVisibility = (field, data) => {
-    // Check if field has conditional visibility rules
-    if (field.conditional_visibility) {
+    if (!field.conditional_visibility?.depends_on_field) return true;
+    const met = (() => {
       const { depends_on_field, show_when } = field.conditional_visibility;
-      const dependentValue = data[depends_on_field];
+      const dependentValue = data?.[depends_on_field];
       const expectedValue = field.conditional_visibility.value;
-      
-      // Normalize boolean values for comparison (handle boolean, true/false strings, and yes/no from condition UI)
       const normalizeValue = (val) => {
-        if (val === true || val === 'true' || val === 'True' || val === 'TRUE') return true;
-        if (val === false || val === 'false' || val === 'False' || val === 'FALSE') return false;
-        if (val === 'yes' || val === 'Yes' || val === 'YES') return true;
-        if (val === 'no' || val === 'No' || val === 'NO') return false;
+        if (val === true || val === "true" || val === "True" || val === "TRUE") return true;
+        if (val === false || val === "false" || val === "False" || val === "FALSE") return false;
+        if (val === "yes" || val === "Yes" || val === "YES") return true;
+        if (val === "no" || val === "No" || val === "NO") return false;
         return val;
       };
-      
       const normalizedDependent = normalizeValue(dependentValue);
       const normalizedExpected = normalizeValue(expectedValue);
-      
-      if (show_when === 'equals') {
-        return normalizedDependent === normalizedExpected;
-      } else if (show_when === 'not_equals') {
-        // For not_equals without a value, show if dependent field has any truthy value
-        // This is commonly used to show a field when another field is checked/selected
-        if (expectedValue === undefined || expectedValue === null || expectedValue === '') {
-          // Show if dependent field has any truthy value (true, non-empty string, non-zero number, etc.)
-          // For booleans: show when true
-          // For strings: show when not empty
-          // For numbers: show when not zero
-          if (typeof dependentValue === 'boolean') {
-            return dependentValue === true;
-          }
-          return dependentValue !== undefined && dependentValue !== null && dependentValue !== '' && dependentValue !== false && dependentValue !== 0;
+      if (show_when === "equals") return normalizedDependent === normalizedExpected;
+      if (show_when === "not_equals") {
+        if (expectedValue === undefined || expectedValue === null || expectedValue === "") {
+          if (typeof dependentValue === "boolean") return dependentValue === true;
+          return dependentValue !== undefined && dependentValue !== null && dependentValue !== "" && dependentValue !== false && dependentValue !== 0;
         }
         return normalizedDependent !== normalizedExpected;
-      } else if (show_when === 'contains') {
-        return Array.isArray(dependentValue) 
-          ? dependentValue.includes(expectedValue)
-          : String(dependentValue || '').includes(String(expectedValue || ''));
-      } else if (show_when === 'is_empty') {
-        return !dependentValue || dependentValue === '' || dependentValue === false;
-      } else if (show_when === 'is_not_empty') {
-        return dependentValue !== undefined && dependentValue !== null && dependentValue !== '' && dependentValue !== false;
       }
-    }
-    
-    return true; // Default: show field
+      if (show_when === "contains") return Array.isArray(dependentValue) ? dependentValue.includes(expectedValue) : String(dependentValue || "").includes(String(expectedValue || ""));
+      if (show_when === "is_empty") return !dependentValue || dependentValue === "" || dependentValue === false;
+      if (show_when === "is_not_empty") return dependentValue !== undefined && dependentValue !== null && dependentValue !== "" && dependentValue !== false;
+      return true;
+    })();
+    const action = (field.conditional_visibility.action || "hide").toLowerCase();
+    if (action === "disable") return true; // show field, will be disabled when condition not met
+    return met;
+  };
+
+  const isFieldDisabledByCondition = (field, data) => {
+    if (!field.conditional_visibility?.depends_on_field) return false;
+    const met = (() => {
+      const { depends_on_field, show_when } = field.conditional_visibility;
+      const dependentValue = data?.[depends_on_field];
+      const expectedValue = field.conditional_visibility.value;
+      const normalizeValue = (val) => {
+        if (val === true || val === "true" || val === "True" || val === "TRUE") return true;
+        if (val === false || val === "false" || val === "False" || val === "FALSE") return false;
+        if (val === "yes" || val === "Yes" || val === "YES") return true;
+        if (val === "no" || val === "No" || val === "NO") return false;
+        return val;
+      };
+      const normalizedDependent = normalizeValue(dependentValue);
+      const normalizedExpected = normalizeValue(expectedValue);
+      if (show_when === "equals") return normalizedDependent === normalizedExpected;
+      if (show_when === "not_equals") {
+        if (expectedValue === undefined || expectedValue === null || expectedValue === "") {
+          if (typeof dependentValue === "boolean") return dependentValue === true;
+          return dependentValue !== undefined && dependentValue !== null && dependentValue !== "" && dependentValue !== false && dependentValue !== 0;
+        }
+        return normalizedDependent !== normalizedExpected;
+      }
+      if (show_when === "contains") return Array.isArray(dependentValue) ? dependentValue.includes(expectedValue) : String(dependentValue || "").includes(String(expectedValue || ""));
+      if (show_when === "is_empty") return !dependentValue || dependentValue === "" || dependentValue === false;
+      if (show_when === "is_not_empty") return dependentValue !== undefined && dependentValue !== null && dependentValue !== "" && dependentValue !== false;
+      return true;
+    })();
+    const action = (field.conditional_visibility.action || "hide").toLowerCase();
+    return action === "disable" && !met;
   };
 
   const handleSubmit = async (e) => {
@@ -402,11 +421,116 @@ const FormSubmitPage = () => {
   const totalPages = pages.length;
   const currentPageFields = pages[currentPage] || [];
   // Calculate progress based on pages completed (not current page)
-  // On first page (0), show 0% - user hasn't completed any pages yet
-  // On last page, show progress based on pages completed
   const progressPercentage = totalPages > 1 
     ? (currentPage / totalPages) * 100 
     : 0;
+
+  // Defaults for form fields (conditional visibility)
+  const formDefaults = useMemo(() => {
+    const allFields = form?.form_fields?.fields || [];
+    const out = {};
+    const opts = (f) => f.field_options?.options || f.options || [];
+    const getNoneValue = (field) => {
+      const options = opts(field);
+      const o = options.find((opt) => String(opt?.value ?? "").toLowerCase().trim() === "none" || String(opt?.label ?? "").toLowerCase().trim() === "none");
+      return o && (o.value != null && o.value !== "") ? o.value : "none";
+    };
+    const firstOptionValue = (field) => {
+      const options = opts(field);
+      const o = options[0];
+      return o != null && (o.value != null && o.value !== "") ? o.value : o?.label;
+    };
+    allFields.forEach((field) => {
+      const fieldId = field.id || field.field_id || field.field_name || field.name;
+      if (!fieldId) return;
+      const type = (field.type || field.field_type || "").toLowerCase();
+      const isSelectOrDropdown = type === "select" || type === "dropdown";
+      const isMultiselect = type === "multiselect";
+      const isBoolean = type === "boolean" || type === "checkbox" || type === "boolean_with_description";
+      const isRadio = type === "radio" || type === "radio_group";
+      if (isSelectOrDropdown) out[fieldId] = getNoneValue(field);
+      else if (isMultiselect) out[fieldId] = [];
+      else if (isBoolean) out[fieldId] = false;
+      else if (isRadio && opts(field).length > 0) out[fieldId] = firstOptionValue(field);
+    });
+    return out;
+  }, [form?.id, form?.form_fields?.fields]);
+
+  const effectiveSubmissionData = useMemo(() => ({ ...formDefaults, ...submissionData }), [formDefaults, submissionData]);
+
+  useEffect(() => {
+    if (!form || Object.keys(formDefaults).length === 0) return;
+    setSubmissionData((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const [fieldId, defaultVal] of Object.entries(formDefaults)) {
+        if (next[fieldId] === undefined || next[fieldId] === null || next[fieldId] === "") {
+          next[fieldId] = defaultVal;
+          changed = true;
+        } else if (Array.isArray(defaultVal) && (!Array.isArray(next[fieldId]) || next[fieldId].length === 0)) {
+          next[fieldId] = defaultVal;
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [form?.id, formDefaults]);
+
+  // Layout: sections and groups (same as public form)
+  const formGroups = form?.form_fields?.groups || [];
+  const formSections = form?.form_fields?.sections || [];
+  const hasFormGroups = formGroups.length > 0 && !form?.is_tracker;
+  const hasFormSections = formSections.length > 0 && !form?.is_tracker && !hasFormGroups;
+
+  const currentPageLayout = useMemo(() => {
+    if (hasFormGroups && currentPageFields.length > 0) {
+      const FORM_GRID_COLS = ["left", "center", "right"];
+      const isGridSlotTable = (slot) => slot && typeof slot === "object" && (slot.layout || "") === "table" && Array.isArray(slot.table_rows);
+      const isGridSlotTabs = (slot) => slot && typeof slot === "object" && (slot.layout || "") === "tabs" && Array.isArray(slot.tabs);
+      const getGridSlotFieldIds = (slot) => {
+        if (Array.isArray(slot)) return slot;
+        if (isGridSlotTable(slot)) return (slot.table_rows || []).flatMap((r) => (r.cells || []).map((c) => c.field_id).filter(Boolean));
+        if (isGridSlotTabs(slot)) return (slot.tabs || []).flatMap((t) => (t.layout === "table" && t.table_rows) ? (t.table_rows || []).flatMap((r) => (r.cells || []).map((c) => c.field_id).filter(Boolean)) : (t.fields || []));
+        return [];
+      };
+      const gridFieldIds = (g) => (g.layout || "") === "grid" && (g.grid_rows || []).length > 0
+        ? (g.grid_rows || []).flatMap((r) => FORM_GRID_COLS.flatMap((col) => getGridSlotFieldIds(r[col])))
+        : (g.layout || "") === "grid" ? (g.fields || []) : [];
+      const hasGridTable = (g) => (g.layout || "") === "grid" && (g.grid_rows || []).some((r) => FORM_GRID_COLS.some((col) => isGridSlotTable(r[col]) || isGridSlotTabs(r[col])));
+      const tabFieldIds = (g) => (g.layout === "tabs" && g.tabs?.length) ? (g.tabs || []).flatMap((t) => (t.layout === "table" && t.table_rows) ? (t.table_rows || []).flatMap((r) => (r.cells || []).map((c) => c.field_id).filter(Boolean)) : (t.fields || [])) : [];
+      const tableFieldIds = (g) => ((g.layout || "") === "table" && (g.table_rows || []).length > 0) ? (g.table_rows || []).flatMap((r) => (r.cells || []).map((c) => c.field_id).filter(Boolean)) : [];
+      const fieldIdsInGroups = new Set(formGroups.flatMap((g) =>
+        (g.layout === "tabs" && g.tabs?.length) ? tabFieldIds(g) : (g.layout || "") === "table" ? tableFieldIds(g) : (g.layout || "") === "grid" ? gridFieldIds(g) : (g.fields || [])
+      ));
+      const fieldsNotInAnyGroup = currentPageFields.filter((f) => !fieldIdsInGroups.has(f.id || f.field_id || f.name));
+      const hasTableRows = (g) => (g.layout || "") === "table" && Array.isArray(g.table_rows) && g.table_rows.length > 0;
+      const groupsWithFields = formGroups
+        .map((g) => {
+          const fieldIds = (g.layout === "tabs" && g.tabs?.length) ? new Set(tabFieldIds(g)) : (g.layout || "") === "table" ? new Set(tableFieldIds(g)) : (g.layout || "") === "grid" ? new Set(gridFieldIds(g)) : new Set(g.fields || []);
+          const groupFields = currentPageFields.filter((f) => fieldIds.has(f.id || f.field_id || f.name));
+          return { group: g, fields: groupFields };
+        })
+        .filter((g) => (g.group.layout === "tabs" && g.group.tabs?.length) || g.fields.length > 0 || hasTableRows(g.group) || hasGridTable(g.group));
+      return { fieldsNotInAnySection: fieldsNotInAnyGroup, sectionsWithContent: groupsWithFields.length > 0 || fieldsNotInAnyGroup.length > 0 ? [{ sectionLabel: null, ungrouped: fieldsNotInAnyGroup, groupsWithFields }] : null };
+    }
+    if (hasFormSections && currentPageFields.length > 0) {
+      const fieldIdsInSections = new Set(formSections.flatMap((s) => s.fields || []));
+      const fieldsNotInAnySection = currentPageFields.filter((f) => !fieldIdsInSections.has(f.id || f.field_id || f.name));
+      const sectionsWithContent = formSections.map((section) => {
+        const sectionFieldIds = section.fields || [];
+        const sectionFieldsOnPage = currentPageFields.filter((f) => sectionFieldIds.includes(f.id || f.field_id || f.name));
+        if (sectionFieldsOnPage.length === 0) return null;
+        const groupFieldIds = (g) => ((g.layout || "") === "table" && (g.table_rows || []).length > 0) ? (g.table_rows || []).flatMap((r) => (r.cells || []).map((c) => c.field_id).filter(Boolean)) : (g.fields || []);
+        const fieldIdsInGroups = new Set((section.groups || []).flatMap((g) => groupFieldIds(g)));
+        const ungrouped = sectionFieldsOnPage.filter((f) => !fieldIdsInGroups.has(f.id || f.field_id || f.name));
+        const hasTableRows = (g) => (g.layout || "") === "table" && Array.isArray(g.table_rows) && g.table_rows.length > 0;
+        const groupsWithFields = (section.groups || []).map((g) => ({ group: g, fields: sectionFieldsOnPage.filter((f) => groupFieldIds(g).includes(f.id || f.field_id || f.name)) })).filter((g) => g.fields.length > 0 || hasTableRows(g.group));
+        return { sectionLabel: section.title || section.label || section.id || "Section", ungrouped, groupsWithFields };
+      }).filter(Boolean);
+      return { fieldsNotInAnySection, sectionsWithContent };
+    }
+    return null;
+  }, [hasFormGroups, hasFormSections, formGroups, formSections, currentPageFields]);
 
   // Load draft data if resuming
   useEffect(() => {
@@ -676,6 +800,133 @@ const FormSubmitPage = () => {
     return errors;
   };
 
+  // Group/row visibility helpers for layout (same as public form)
+  const isGroupConditionMet = (condition, data) => {
+    if (!condition?.depends_on_field) return false;
+    const dependentValue = data?.[condition.depends_on_field];
+    const expectedValue = condition.value;
+    const normalize = (v) => {
+      if (v === true || v === "true" || v === "True" || v === "TRUE") return true;
+      if (v === false || v === "false" || v === "False" || v === "FALSE") return false;
+      if (v === "yes" || v === "Yes" || v === "YES") return true;
+      if (v === "no" || v === "No" || v === "NO") return false;
+      return v;
+    };
+    if (condition.show_when === "equals") return normalize(dependentValue) === normalize(expectedValue);
+    if (condition.show_when === "not_equals") return normalize(dependentValue) !== normalize(expectedValue);
+    if (condition.show_when === "contains") return Array.isArray(dependentValue) ? dependentValue.includes(expectedValue) : String(dependentValue || "").includes(String(expectedValue || ""));
+    if (condition.show_when === "is_empty") return !dependentValue || dependentValue === "" || dependentValue === false;
+    if (condition.show_when === "is_not_empty") return dependentValue != null && dependentValue !== "" && dependentValue !== false;
+    return true;
+  };
+  const checkGroupVisibility = (group, data) => {
+    const cv = group?.conditional_visibility;
+    if (!cv) return true;
+    const conditions = Array.isArray(cv.conditions) ? cv.conditions : null;
+    if (conditions?.length > 0) return conditions.some((c) => isGroupConditionMet(c, data));
+    if (!cv.depends_on_field) return true;
+    return isGroupConditionMet(cv, data);
+  };
+  const checkRowVisibility = (row, data) => {
+    if (!row?.conditional_visibility?.depends_on_field) return true;
+    const { depends_on_field, show_when, value: expectedValue } = row.conditional_visibility;
+    const dependentValue = data?.[depends_on_field];
+    const normalize = (v) => {
+      if (v === true || v === "true" || v === "True" || v === "TRUE") return true;
+      if (v === false || v === "false" || v === "False" || v === "FALSE") return false;
+      if (v === "yes" || v === "Yes" || v === "YES") return true;
+      if (v === "no" || v === "No" || v === "NO") return false;
+      return v;
+    };
+    if (show_when === "equals") return normalize(dependentValue) === normalize(expectedValue);
+    if (show_when === "not_equals") return normalize(dependentValue) !== normalize(expectedValue);
+    if (show_when === "contains") return Array.isArray(dependentValue) ? dependentValue.includes(expectedValue) : String(dependentValue || "").includes(String(expectedValue || ""));
+    if (show_when === "is_empty") return !dependentValue || dependentValue === "" || dependentValue === false;
+    if (show_when === "is_not_empty") return dependentValue != null && dependentValue !== "" && dependentValue !== false;
+    return true;
+  };
+  const isFieldInHiddenGroup = (fieldId, data) => {
+    const groups = form?.form_fields?.groups || [];
+    if (groups.length > 0) {
+      for (const group of groups) {
+        if (!group?.conditional_visibility?.depends_on_field) continue;
+        const fieldIds = group.fields || [];
+        if (!fieldIds.includes(fieldId)) continue;
+        if (!checkGroupVisibility(group, data)) return true;
+      }
+      return false;
+    }
+    const sections = form?.form_fields?.sections || [];
+    for (const section of sections) {
+      for (const group of section?.groups || []) {
+        if (!group?.conditional_visibility?.depends_on_field) continue;
+        const fieldIds = group.fields || [];
+        if (!fieldIds.includes(fieldId)) continue;
+        if (!checkGroupVisibility(group, data)) return true;
+      }
+    }
+    return false;
+  };
+
+  const renderOneField = (field) => {
+    const fieldId = field.id || field.field_id || field.field_name || field.name;
+    const fieldType = (field.type || field.field_type)?.toLowerCase();
+    const isDisplayOnly = ["text_block", "image_block", "youtube_video_embed", "line_break", "page_break", "download_link"].includes(fieldType);
+    if (!checkFieldVisibility(field, effectiveSubmissionData) || isFieldInHiddenGroup(fieldId, effectiveSubmissionData)) return null;
+    const value = isDisplayOnly ? undefined : effectiveSubmissionData[fieldId];
+    const error = fieldErrors[fieldId];
+    const statusFieldId = form?.form_config?.status_field_id ? String(form.form_config.status_field_id).trim() : "";
+    const isStatusField = statusFieldId && String(fieldId).trim() === statusFieldId;
+    let optionsForField = field.options || field.field_options?.options || [];
+    if (isStatusField && form?.is_tracker && form?.form_config?.stage_mapping?.length && form?.form_fields?.sections?.length) {
+      const sections = form.form_fields.sections || [];
+      const stageMapping = form.form_config.stage_mapping || [];
+      const sectionIndex = sections.findIndex((sec) => (sec?.fields || []).includes(fieldId));
+      const stageConfig = sectionIndex >= 0 && sectionIndex < stageMapping.length ? stageMapping[sectionIndex] : null;
+      const stageStatuses = (stageConfig?.statuses ?? stageConfig?.status_list ?? []).filter(Boolean);
+      const allTrackerStatuses = Array.isArray(form.form_config?.statuses) ? form.form_config.statuses : [];
+      optionsForField = (stageStatuses.length > 0 ? stageStatuses : allTrackerStatuses).map((s) => ({ value: s, label: humanizeStatusForDisplay(s) }));
+    }
+    const mappedField = {
+      ...field,
+      id: fieldId,
+      field_label: field.label || field.field_label,
+      label: field.label,
+      name: field.name || field.field_name || fieldId,
+      field_description: field.help_text,
+      field_type: field.type || field.field_type,
+      is_required: field.required ?? field.is_required,
+      required: field.required ?? field.is_required,
+      content: field.content,
+      image_url: field.image_url,
+      image_file_id: field.image_file_id,
+      alt_text: field.alt_text,
+      download_url: field.download_url,
+      conditional_visibility: field.conditional_visibility,
+      validation: field.validation,
+      field_options: {
+        ...(field.field_options || {}),
+        options: optionsForField,
+        accept: field.field_options?.accept || (field.validation?.allowed_types ? (Array.isArray(field.validation.allowed_types) ? field.validation.allowed_types.join(",") : field.validation.allowed_types) : undefined),
+        maxSize: field.field_options?.maxSize || field.validation?.max_size_mb,
+        allowMultiple: field.field_options?.allowMultiple || false,
+        requireExpiryDate: field.file_expiry_date || false,
+      },
+      ...(optionsForField.length > 0 ? { options: optionsForField } : {}),
+    };
+    return (
+      <CustomFieldRenderer
+        key={fieldId}
+        field={mappedField}
+        value={value}
+        otherTextValue={effectiveSubmissionData[`${fieldId}_other`]}
+        onChange={isDisplayOnly ? undefined : handleFieldChange}
+        error={error}
+        readOnly={isFieldDisabledByCondition(field, effectiveSubmissionData)}
+      />
+    );
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -705,7 +956,7 @@ const FormSubmitPage = () => {
       )}
 
       <form onSubmit={handleSubmit}>
-        <Card>
+        <Card className={currentPageLayout?.sectionsWithContent?.length ? "bg-transparent border-0 shadow-none" : undefined}>
           <CardHeader>
             <CardTitle>
               {totalPages > 1 ? `Step ${currentPage + 1} of ${totalPages}` : "Form Submission"}
@@ -722,82 +973,259 @@ const FormSubmitPage = () => {
               <p className="text-muted-foreground text-center py-8">
                 This page has no fields defined.
               </p>
+            ) : currentPageLayout ? (
+              (() => {
+                const { fieldsNotInAnySection, sectionsWithContent } = currentPageLayout;
+                const allFormFields = form?.form_fields?.fields || [];
+                const getFieldById = (id) => allFormFields.find((f) => (f.field_id || f.id || f.name) === id);
+                return (
+                  <div className="space-y-6 p-4">
+                    {sectionsWithContent?.flatMap(({ sectionLabel, ungrouped, groupsWithFields }, sectionIdx) => [
+                      sectionLabel ? (
+                        <div key={`section-${sectionIdx}`} className="border-b pb-1.5">
+                          <h3 className="text-sm font-semibold text-muted-foreground">{sectionLabel}</h3>
+                        </div>
+                      ) : null,
+                      ...(groupsWithFields || []).map(({ group, fields: groupFields }) => {
+                        if (!checkGroupVisibility(group, effectiveSubmissionData)) return null;
+                        const isTabs = (group.layout || "") === "tabs" && (group.tabs || []).length > 0;
+                        const groupKey = group.id || group.label || "tabs";
+                        const activeTabId = activeTabByGroup[groupKey] ?? group.tabs?.[0]?.id;
+                        if (isTabs) {
+                          return (
+                            <Card key={group.id || group.label}>
+                              {group.label && (
+                                <CardHeader className="py-3">
+                                  <CardTitle className="text-lg font-bold">{group.label}</CardTitle>
+                                </CardHeader>
+                              )}
+                              <CardContent className={group.label ? "pt-4 space-y-4" : "space-y-4"}>
+                                <nav className="flex gap-4 border-b border-border mb-4 -mb-px">
+                                  {(group.tabs || []).map((tab) => (
+                                    <button
+                                      key={tab.id || tab.label}
+                                      type="button"
+                                      onClick={() => setActiveTabByGroup((prev) => ({ ...prev, [groupKey]: tab.id || tab.label }))}
+                                      className={cn(
+                                        "py-2 px-1 border-b-2 text-sm font-medium transition-colors",
+                                        activeTabId === (tab.id || tab.label) ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground"
+                                      )}
+                                    >
+                                      {tab.label || tab.id || "Tab"}
+                                    </button>
+                                  ))}
+                                </nav>
+                                <div className="space-y-4">
+                                  {(group.tabs || []).map((tab) => {
+                                    if (activeTabId !== (tab.id || tab.label)) return null;
+                                    const tabHasTable = (tab.layout || "") === "table" && Array.isArray(tab.table_rows) && tab.table_rows.length > 0;
+                                    if (tabHasTable) {
+                                      const tableCols = Array.isArray(tab.table_columns) && tab.table_columns.length > 0 ? tab.table_columns : [{ id: "col_1", label: "Column 1" }];
+                                      const tableRows = tab.table_rows || [];
+                                      return (
+                                        <div key={tab.id || tab.label} className="overflow-x-auto">
+                                          <table className="w-full border-collapse text-sm">
+                                            <thead>
+                                              <tr className="border-b border-border">
+                                                {tableCols.map((col) => (
+                                                  <th key={col.id} className="text-left font-medium p-2 pr-4">{col.label || col.id}</th>
+                                                ))}
+                                              </tr>
+                                            </thead>
+                                            <tbody>
+                                              {tableRows.filter((row) => checkRowVisibility(row, effectiveSubmissionData)).map((row, rIdx) => {
+                                                const cells = (row.cells || []).slice(0, tableCols.length);
+                                                while (cells.length < tableCols.length) cells.push({ text: "", field_id: null });
+                                                return (
+                                                  <tr key={rIdx} className="border-b border-border">
+                                                    {cells.map((cell, cIdx) => {
+                                                      const fieldId = cell.field_id ? String(cell.field_id) : null;
+                                                      const field = fieldId ? getFieldById(fieldId) : null;
+                                                      const isVisible = !field || (checkFieldVisibility(field, effectiveSubmissionData) && !isFieldInHiddenGroup(fieldId, effectiveSubmissionData));
+                                                      if (!isVisible) return <td key={cIdx} className="p-2 pr-4 align-middle" />;
+                                                      const textPart = cell.text ? <span className="block">{cell.text}</span> : null;
+                                                      const fieldPart = field ? (
+                                                        <CustomFieldRenderer
+                                                          field={{ ...field, id: field.id || field.field_id || field.field_name || field.name, field_label: field.label, field_type: field.type || field.field_type, field_options: { ...field.field_options, options: field.options || field.field_options?.options || [] } }}
+                                                          value={effectiveSubmissionData[field.id || field.field_id || field.field_name || field.name]}
+                                                          otherTextValue={effectiveSubmissionData[`${field.id || field.field_id}_other`]}
+                                                          onChange={handleFieldChange}
+                                                          hideLabel
+                                                          error={fieldErrors[field.id || field.field_id || field.field_name || field.name]}
+                                                          readOnly={isFieldDisabledByCondition(field, effectiveSubmissionData)}
+                                                        />
+                                                      ) : null;
+                                                      return (
+                                                        <td key={cIdx} className="p-2 pr-4 align-middle">
+                                                          <div className="space-y-1">{textPart}{fieldPart}</div>
+                                                        </td>
+                                                      );
+                                                    })}
+                                                  </tr>
+                                                );
+                                              })}
+                                            </tbody>
+                                          </table>
+                                        </div>
+                                      );
+                                    }
+                                    const tabFieldIds = new Set(tab.fields || []);
+                                    const tabFields = groupFields.filter((f) => tabFieldIds.has(f.id || f.field_id || f.name));
+                                    return (
+                                      <div key={tab.id || tab.label} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        {tabFields.map((field) => <div key={field.id || field.field_id || field.name}>{renderOneField(field)}</div>)}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </CardContent>
+                            </Card>
+                          );
+                        }
+                        if ((group.layout || "") === "table") {
+                          const tableCols = Array.isArray(group.table_columns) && group.table_columns.length > 0 ? group.table_columns : [{ id: "col_1", label: "Column 1" }];
+                          const tableRows = Array.isArray(group.table_rows) ? group.table_rows : [];
+                          return (
+                            <Card key={group.id || group.label}>
+                              {group.label && (
+                                <CardHeader className="py-3">
+                                  <CardTitle className="text-lg font-bold">{group.label}</CardTitle>
+                                </CardHeader>
+                              )}
+                              <CardContent className={group.label ? "pt-4" : ""}>
+                                <div className="overflow-x-auto">
+                                  <table className="w-full border-collapse text-sm">
+                                    <thead>
+                                      <tr className="border-b border-border">
+                                        {tableCols.map((col) => (
+                                          <th key={col.id} className="text-left font-medium p-2 pr-4">{col.label || col.id}</th>
+                                        ))}
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {tableRows.filter((row) => checkRowVisibility(row, effectiveSubmissionData)).map((row, rIdx) => {
+                                        const cells = (row.cells || []).slice(0, tableCols.length);
+                                        while (cells.length < tableCols.length) cells.push({ text: "", field_id: null });
+                                        return (
+                                          <tr key={rIdx} className="border-b border-border">
+                                            {cells.map((cell, cIdx) => {
+                                              const fieldId = cell.field_id ? String(cell.field_id) : null;
+                                              const field = fieldId ? getFieldById(fieldId) : null;
+                                              const isVisible = !field || (checkFieldVisibility(field, effectiveSubmissionData) && !isFieldInHiddenGroup(fieldId, effectiveSubmissionData));
+                                              if (!isVisible) return <td key={cIdx} className="p-2 pr-4 align-middle" />;
+                                              const fid = field?.id || field?.field_id || field?.field_name || field?.name;
+                                              const fieldPart = field ? (
+                                                <CustomFieldRenderer
+                                                  field={{ ...field, id: fid, field_label: field.label, field_type: field.type || field.field_type, field_options: { ...field.field_options, options: field.options || field.field_options?.options || [] } }}
+                                                  value={effectiveSubmissionData[fid]}
+                                                  otherTextValue={effectiveSubmissionData[`${fid}_other`]}
+                                                  onChange={handleFieldChange}
+                                                  hideLabel
+                                                  error={fieldErrors[fid]}
+                                                  readOnly={isFieldDisabledByCondition(field, effectiveSubmissionData)}
+                                                />
+                                              ) : null;
+                                              return (
+                                                <td key={cIdx} className="p-2 pr-4 align-middle">
+                                                  <div className="space-y-1">{cell.text ? <span className="block">{cell.text}</span> : null}{fieldPart}</div>
+                                                </td>
+                                              );
+                                            })}
+                                          </tr>
+                                        );
+                                      })}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          );
+                        }
+                        const isGrid = (group.layout || "") === "grid" && (group.grid_rows?.length > 0 || group.grid_columns);
+                        const rows = (group.grid_rows && group.grid_rows.length > 0) ? group.grid_rows : (group.grid_columns ? [group.grid_columns] : []);
+                        if (isGrid && rows.length > 0) {
+                          return (
+                            <Card key={group.id || group.label}>
+                              {group.label && (
+                                <CardHeader className="py-3">
+                                  <CardTitle className="text-lg font-bold">{group.label}</CardTitle>
+                                </CardHeader>
+                              )}
+                              <CardContent className={group.label ? "pt-4 space-y-4" : "space-y-4"}>
+                                <div className="space-y-4">
+                                  {rows.filter((gridRow) => checkRowVisibility(gridRow, effectiveSubmissionData)).map((gridRow, rowIdx) => {
+                                    const leftSlot = gridRow.left;
+                                    const rightSlot = gridRow.right;
+                                    const centerSlot = gridRow.center;
+                                    const hasLeftOrRight = (Array.isArray(leftSlot) && leftSlot.length > 0) || (Array.isArray(rightSlot) && rightSlot.length > 0);
+                                    const hasCenter = (Array.isArray(centerSlot) && centerSlot.length > 0);
+                                    const renderSlot = (slot) => {
+                                      if (!slot) return null;
+                                      if (Array.isArray(slot)) {
+                                        const slotFields = slot.map((fid) => groupFields.find((f) => (f.id || f.field_id || f.name) === fid)).filter(Boolean);
+                                        return <div className="space-y-3">{slotFields.map((f) => <div key={f.id || f.field_id || f.name}>{renderOneField(f)}</div>)}</div>;
+                                      }
+                                      return null;
+                                    };
+                                    return (
+                                      <div key={`row-${rowIdx}`} className="space-y-4">
+                                        {hasLeftOrRight && (
+                                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div>{renderSlot(leftSlot)}</div>
+                                            <div>{renderSlot(rightSlot)}</div>
+                                          </div>
+                                        )}
+                                        {hasCenter && <div className="w-full">{renderSlot(centerSlot)}</div>}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </CardContent>
+                            </Card>
+                          );
+                        }
+                        return (
+                          <Card key={group.id || group.label}>
+                            {group.label && (
+                              <CardHeader className="py-3">
+                                <CardTitle className="text-lg font-bold">{group.label}</CardTitle>
+                              </CardHeader>
+                            )}
+                            <CardContent className={group.label ? "pt-4" : ""}>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {groupFields.map((field) => <div key={field.id || field.field_id || field.name}>{renderOneField(field)}</div>)}
+                              </div>
+                            </CardContent>
+                          </Card>
+                        );
+                      }).filter(Boolean),
+                      (ungrouped?.length > 0) ? (
+                        <Card key={`ungrouped-${sectionIdx}`}>
+                          <CardContent className="pt-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              {ungrouped.map((field) => <div key={field.id || field.field_id || field.name}>{renderOneField(field)}</div>)}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ) : null,
+                    ].filter(Boolean))}
+                    {fieldsNotInAnySection?.length > 0 && (
+                      <Card>
+                        <CardContent className="pt-6">
+                          <div className="space-y-4">
+                            {fieldsNotInAnySection.map((field) => <div key={field.id || field.field_id || field.name}>{renderOneField(field)}</div>)}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+                  </div>
+                );
+              })()
             ) : (
               <div className="space-y-6">
-                {currentPageFields.map((field) => {
-                  const fieldId = field.field_id || field.field_name;
-                  const fieldType = field.field_type?.toLowerCase();
-                  
-                  // Display-only fields don't need value, onChange, or error handling
-                  const isDisplayOnly = ['text_block', 'image_block', 'youtube_video_embed', 'line_break', 'page_break', 'download_link'].includes(fieldType);
-                  
-                  // Debug logging for image blocks
-                  if (fieldType === 'image_block' && process.env.NODE_ENV === 'development') {
-                    console.log('Image block field in submit page:', {
-                      fieldId,
-                      fieldType,
-                      field,
-                      image_url: field.image_url,
-                      image_file_id: field.image_file_id,
-                      alt_text: field.alt_text
-                    });
-                  }
-                  
-                  // Check conditional visibility
-                  const isVisible = checkFieldVisibility(field, submissionData);
-                  if (!isVisible) {
-                    return null;
-                  }
-                  
-                  const value = isDisplayOnly ? undefined : submissionData[fieldId];
-                  const error = isDisplayOnly ? undefined : fieldErrors[fieldId];
-
-                  // Map field structure for CustomFieldRenderer
-                  const mappedField = {
-                    ...field,
-                    id: fieldId,
-                    field_label: field.label,
-                    field_description: field.help_text,
-                    field_type: field.field_type,
-                    is_required: field.required,
-                    required: field.required,
-                    // Preserve display-only field properties
-                    content: field.content,
-                    image_url: field.image_url,
-                    image_file_id: field.image_file_id,
-                    alt_text: field.alt_text,
-                    download_url: field.download_url,
-                    // Preserve conditional visibility
-                    conditional_visibility: field.conditional_visibility,
-                    // Preserve validation object for file fields
-                    validation: field.validation,
-                    field_options: {
-                      ...(field.field_options || {}), // Preserve all original field_options
-                      options: field.options || [],
-                      // For file fields, also map validation to field_options for backward compatibility
-                      accept: field.field_options?.accept || (field.validation?.allowed_types
-                        ? Array.isArray(field.validation.allowed_types)
-                          ? field.validation.allowed_types.join(",")
-                          : field.validation.allowed_types
-                        : undefined),
-                      maxSize: field.field_options?.maxSize || field.validation?.max_size_mb,
-                      // Preserve allowMultiple setting
-                      allowMultiple: field.field_options?.allowMultiple || false,
-                      // File expiry date support
-                      requireExpiryDate: field.file_expiry_date || false,
-                    },
-                  };
-
-                  return (
-                    <CustomFieldRenderer
-                      key={fieldId}
-                      field={mappedField}
-                      value={value}
-                      onChange={isDisplayOnly ? undefined : handleFieldChange}
-                      error={error}
-                    />
-                  );
-                })}
+                {currentPageFields.map((field) => (
+                  <div key={field.id || field.field_id || field.field_name || field.name}>{renderOneField(field)}</div>
+                ))}
               </div>
             )}
 

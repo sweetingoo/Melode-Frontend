@@ -95,22 +95,21 @@ const CustomFieldRenderer = ({
   // When None is selected, other options are hidden until user expands (radio/select)
   const [expandedOptionFields, setExpandedOptionFields] = useState({});
 
-  // Set default to "none" when value is empty for select/dropdown/multiselect only (not radio)
+  // Set default to "none" when value is empty for select/dropdown only (not radio, not multiselect)
   const fieldTypeLower = fieldType?.toLowerCase();
   const isSelectOrDropdown = ['select', 'dropdown'].includes(fieldTypeLower);
   const isMultiselect = fieldTypeLower === 'multiselect';
   const optionsLength = (field.field_options?.options || field.options)?.length ?? 0;
   useEffect(() => {
     if ((!isSelectOrDropdown && !isMultiselect) || onChange == null) return;
+    if (isMultiselect) return; // Multiselect: no default selection; show all options, leave empty as []
     const opts = field.field_options?.options || field.options || [];
     if (!Array.isArray(opts) || opts.length === 0) return;
     const emptySingle = value === undefined || value === null || value === '';
-    const emptyMulti = !Array.isArray(value) || value.length === 0;
-    const empty = isMultiselect ? emptyMulti : emptySingle;
-    if (!empty) return;
+    if (!emptySingle) return;
     const noneOpt = opts.find((o) => String(o?.value ?? '').toLowerCase().trim() === 'none' || String(o?.label ?? '').toLowerCase().trim() === 'none');
     const noneVal = noneOpt?.value != null && noneOpt?.value !== '' ? noneOpt.value : 'none';
-    onChange(field.id, isMultiselect ? [noneVal] : noneVal);
+    onChange(field.id, noneVal);
   }, [field.id, value, isSelectOrDropdown, isMultiselect, onChange, optionsLength]);
 
   const handleChange = (newValue) => {
@@ -569,9 +568,6 @@ const CustomFieldRenderer = ({
         const multiObj = value && typeof value === 'object' && 'rag' in value ? value : { value, rag: null };
         const selectedValues = Array.isArray(multiObj.value) ? multiObj.value : (multiObj.value ? [multiObj.value] : []);
         const multiRag = multiObj.rag?.toLowerCase();
-        const isOnlyNoneSelected = selectedValues.length === 0 || (selectedValues.length === 1 && String(selectedValues[0]) === String(multiNoneValue));
-        const multiExpanded = expandedOptionFields[fieldId] === true || !isOnlyNoneSelected;
-        const multiOptionsToShow = multiExpanded ? multiOptions : (multiOptions.length > 0 ? [multiOptions[0]] : []);
         if (readOnly && multiRag) {
           const labels = selectedValues.map((v) => {
             const o = multiOptions.find((opt) => (opt.value ?? opt) === v);
@@ -590,11 +586,7 @@ const CustomFieldRenderer = ({
             </div>
           );
         }
-        const setMultiValue = (next) => {
-          const isOnlyNone = next.length === 0 || (next.length === 1 && String(next[0]) === String(multiNoneValue));
-          if (isOnlyNone) setExpandedOptionFields((prev) => ({ ...prev, [fieldId]: false }));
-          handleChange(next.length ? next : [multiNoneValue]);
-        };
+        const setMultiValue = (next) => handleChange(next.length ? next : []);
         const selectedOtherOption = multiOptions.find((o) => {
           const v = o.value ?? o;
           return selectedValues.includes(v) && isOptionOther(o.value, o.label);
@@ -603,7 +595,7 @@ const CustomFieldRenderer = ({
         return (
           <div className="space-y-2 w-full">
             <div className="grid w-full grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4 min-w-0">
-              {multiOptionsToShow.map((option, index) => {
+              {multiOptions.map((option, index) => {
                 const optionValue = option.value ?? option;
                 const optionLabel = typeof option === 'object' && option !== null ? (option.label ?? option.value ?? '') : (option ?? '');
                 const isSelected = selectedValues.some((v) => String(v) === String(optionValue) || String(v) === String(optionLabel));
@@ -625,9 +617,8 @@ const CustomFieldRenderer = ({
                           const next = selectedValues.filter((v) => String(v) !== String(optionValue) && String(v) !== String(optionLabel));
                           if (isNoneOption) {
                             handleChange(next.length ? next : []);
-                            setExpandedOptionFields((prev) => ({ ...prev, [fieldId]: true }));
                           } else {
-                            setMultiValue(next.length ? next : [multiNoneValue]);
+                            setMultiValue(next);
                           }
                         }
                       }}
@@ -654,17 +645,6 @@ const CustomFieldRenderer = ({
                   disabled={readOnly}
                 />
               </div>
-            )}
-            {!readOnly && isOnlyNoneSelected && !multiExpanded && multiOptions.length > 1 && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="text-muted-foreground h-8 text-xs"
-                onClick={() => setExpandedOptionFields((prev) => ({ ...prev, [fieldId]: true }))}
-              >
-                Choose options
-              </Button>
             )}
             {selectedValues.length > 0 && (
               <div className="text-sm text-muted-foreground">
