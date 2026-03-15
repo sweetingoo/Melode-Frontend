@@ -155,7 +155,7 @@ const TrackerEntryDetailPage = () => {
   const [logActionNoChase, setLogActionNoChase] = useState(false);
   const [isCloseCaseDialogOpen, setIsCloseCaseDialogOpen] = useState(false);
 
-  const { data: entry, isLoading: entryLoading, error: entryError } = useTrackerEntry(entrySlug);
+  const { data: entry, isLoading: entryLoading, error: entryError, refetch: refetchEntry } = useTrackerEntry(entrySlug);
   const createTrackerActionMutation = useCreateTrackerAction();
   const completeTrackerActionMutation = useCompleteTrackerAction();
   
@@ -1022,12 +1022,20 @@ const TrackerEntryDetailPage = () => {
       if (isStageStyledTracker && editModeStage && editModeStage.trim() !== currentStage) {
         payload.stage = editModeStage.trim();
       }
-      await updateEntryMutation.mutateAsync({
+      const updatedEntry = await updateEntryMutation.mutateAsync({
         entryIdentifier: entrySlug,
         entryData: payload,
       });
       setIsEditing(false);
-      toast.success("Entry updated successfully");
+      // Sync UI to new stage so Forms tab and header show updated stage without refresh
+      const newStage = (updatedEntry?.formatted_data?.derived_stage ?? editModeStage ?? "").toString().trim();
+      if (newStage && isStageStyledTracker) {
+        setActiveStageTab(newStage);
+        setFormsSubTab(newStage);
+        setEditModeStage(newStage);
+      }
+      if (updatedEntry?.status != null) setEntryStatus(updatedEntry.status);
+      await refetchEntry?.();
     } catch (error) {
       const detail = error?.response?.data?.detail;
       const message = typeof detail === "object" ? detail?.message : detail;
@@ -2554,7 +2562,7 @@ const TrackerEntryDetailPage = () => {
             })}
           </Tabs>
 
-          {/* Next stage & status at bottom of Forms tab (same as public submit page) */}
+          {/* Next stage & status at bottom of Forms tab (same as public submit page). When current stage has no fields, allow editing without "Edit fields". */}
           {isStageStyledTracker && stageMapping.length > 0 && (() => {
             const curStage = String(entry?.formatted_data?.derived_stage ?? "").trim();
             const curStageItem = stageMapping.find((s) => String(s?.stage ?? s?.name ?? "").trim() === curStage);
@@ -2571,10 +2579,14 @@ const TrackerEntryDetailPage = () => {
                   statuses: (s?.statuses ?? s?.status_list ?? []).filter(Boolean),
                 })).filter((s) => s.stage);
             const hasNextOrStatus = nextStagesList.length > 0 || currentStageStatusesList.length > 0;
+            const curStageSectionIndex = stageMapping.findIndex((m) => String(m?.stage ?? m?.name ?? "").trim() === curStage);
+            const curSectionKey = curStageSectionIndex >= 0 && sections[curStageSectionIndex] ? (sections[curStageSectionIndex].id ?? sections[curStageSectionIndex].title ?? sections[curStageSectionIndex].label ?? `section-${curStageSectionIndex}`) : null;
+            const currentStageHasNoFields = curSectionKey ? !(fieldsBySection[curSectionKey]?.fields?.length > 0) : false;
+            const canEditStageStatusWithoutForm = currentStageHasNoFields && canEditCase && !isClosed;
+            const dropdownsEnabled = isEditing || canEditStageStatusWithoutForm;
             if (!hasNextOrStatus) return null;
-            const statusOptionsForStage = isEditing && editModeStage
-              ? (stageMapping.find((s) => (s?.stage ?? s?.name ?? "").toString().trim() === (editModeStage ?? "").toString().trim())?.statuses ?? stageMapping.find((s) => (s?.stage ?? s?.name ?? "").toString().trim() === (editModeStage ?? "").toString().trim())?.status_list ?? []) || currentStageStatusesList
-              : currentStageStatusesList;
+            const effectiveStageForStatus = dropdownsEnabled ? (editModeStage || curStage) : curStage;
+            const statusOptionsForStage = (stageMapping.find((s) => (s?.stage ?? s?.name ?? "").toString().trim() === (effectiveStageForStatus ?? "").toString().trim())?.statuses ?? stageMapping.find((s) => (s?.stage ?? s?.name ?? "").toString().trim() === (effectiveStageForStatus ?? "").toString().trim())?.status_list ?? []) || currentStageStatusesList;
             const statusOptionsFiltered = Array.isArray(statusOptionsForStage) ? statusOptionsForStage.filter(Boolean) : [];
             return (
               <Card className="mt-4">
@@ -2588,7 +2600,7 @@ const TrackerEntryDetailPage = () => {
                           <Select
                             value={(editModeStage && editModeStage !== curStage) ? editModeStage : "__current__"}
                             onValueChange={(v) => {
-                              if (!isEditing) return;
+                              if (!dropdownsEnabled) return;
                               if (v && v !== "__current__") {
                                 setEditModeStage(v);
                                 const item = stageMapping.find((s) => (s?.stage ?? s?.name ?? "").toString().trim() === v);
@@ -2599,7 +2611,7 @@ const TrackerEntryDetailPage = () => {
                                 setEntryStatus(entry?.status ?? (currentStageStatusesList[0] ?? ""));
                               }
                             }}
-                            disabled={!isEditing}
+                            disabled={!dropdownsEnabled}
                           >
                             <SelectTrigger id="forms-next-stage" className="w-full">
                               <SelectValue placeholder="Stay in current stage" />
@@ -2618,8 +2630,8 @@ const TrackerEntryDetailPage = () => {
                           <Label htmlFor="forms-status" className="text-sm">Status</Label>
                           <Select
                             value={entryStatus || "__none__"}
-                            onValueChange={(v) => isEditing && v && v !== "__none__" && setEntryStatus(v)}
-                            disabled={!isEditing}
+                            onValueChange={(v) => dropdownsEnabled && v && v !== "__none__" && setEntryStatus(v)}
+                            disabled={!dropdownsEnabled}
                           >
                             <SelectTrigger id="forms-status" className="w-full">
                               <SelectValue placeholder="Select status" />
@@ -2634,8 +2646,37 @@ const TrackerEntryDetailPage = () => {
                         </div>
                       )}
                     </div>
-                    {!isEditing && (
+                    {!dropdownsEnabled && (
                       <p className="text-xs text-muted-foreground">Click &quot;Edit fields&quot; above to change stage or status and save.</p>
+                    )}
+                    {canEditStageStatusWithoutForm && !isEditing && (
+                      <div className="flex flex-wrap items-center justify-end gap-2 pt-2 border-t">
+                        <Button
+                          size="sm"
+                          onClick={async () => {
+                            try {
+                              const payload = { submission_data: entry?.submission_data || entry?.formatted_data || entry?.entry_data || {}, status: entryStatus };
+                              if (editModeStage && editModeStage.trim() !== curStage) payload.stage = editModeStage.trim();
+                              const updatedEntry = await updateEntryMutation.mutateAsync({ entryIdentifier: entrySlug, entryData: payload });
+                              const newStage = (updatedEntry?.formatted_data?.derived_stage ?? editModeStage ?? "").toString().trim();
+                              if (newStage && isStageStyledTracker) {
+                                setActiveStageTab(newStage);
+                                setFormsSubTab(newStage);
+                                setEditModeStage(newStage);
+                              }
+                              if (updatedEntry?.status != null) setEntryStatus(updatedEntry.status);
+                              await refetchEntry?.();
+                            } catch (e) {
+                              // Error toast handled by mutation
+                            }
+                          }}
+                          disabled={updateEntryMutation.isPending}
+                        >
+                          {updateEntryMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                          <Save className="mr-2 h-4 w-4" />
+                          Update stage &amp; status
+                        </Button>
+                      </div>
                     )}
                   </div>
                 </CardContent>
