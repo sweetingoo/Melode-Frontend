@@ -747,10 +747,12 @@ const TrackerEntryDetailPage = () => {
     }
   }, [sendSmsPhoneCandidates, sendSmsPhoneField]);
 
-  const trackerFields = tracker?.tracker_fields?.fields || [];
-  const trackerConfig = tracker?.tracker_config || {};
-  // Sections can live in form_config (tracker_config) or in form_fields (tracker_fields) for patient-referral-style configs
-  const sections = (trackerConfig.sections?.length ? trackerConfig.sections : tracker?.tracker_fields?.sections) || [];
+  // Prefer fullTracker (GET by slug) for sections/fields so we have complete group layout (stack/grid/table)
+  const displayTracker = fullTracker ?? tracker;
+  const trackerFields = displayTracker?.tracker_fields?.fields || [];
+  const trackerConfig = displayTracker?.tracker_config || {};
+  // Use same source as tracker edit (Fields per stage): prefer tracker_fields.sections, else tracker_config.sections (from GET /trackers/:slug)
+  const sections = (displayTracker?.tracker_fields?.sections?.length ? displayTracker.tracker_fields.sections : trackerConfig.sections) || [];
 
   // Phase 5.4: Closed cases are read-only (no edit, no status change, no actions)
   const isClosed = Boolean(entry?.status && String(entry.status).startsWith("Closed"));
@@ -920,8 +922,16 @@ const TrackerEntryDetailPage = () => {
       let ungrouped = [];
       let groupsWithFields = [];
       if (groups.length > 0) {
-        const fieldIdsInGroups = new Set(groups.flatMap((g) => (g.fields || []).map(String)));
-        ungrouped = sectionFields.filter((f) => !Array.from(fieldIdsInGroups).some((id) => hasId(f, id)));
+        // Fields "in layout": in group.fields OR in table_rows[].cells[].field_id OR in grid_rows[].left/center/right
+        const fieldIdsInGroups = new Set(
+          groups.flatMap((g) => {
+            const fromFields = (g.fields || []).map(String);
+            const fromTable = (g.table_rows || []).flatMap((row) => (row.cells || []).map((c) => c.field_id).filter(Boolean).map(String));
+            const fromGrid = (g.grid_rows || []).flatMap((row) => [...(row.left || []), ...(row.center || []), ...(row.right || [])].map(String));
+            return [...fromFields, ...fromTable, ...fromGrid];
+          })
+        );
+        ungrouped = sectionFields.filter((f) => !fieldIdsInGroups.has(String(f?.id || f?.name || f?.field_id)));
         groupsWithFields = groups.map((g) => ({
           group: g,
           fields: sectionFields.filter((f) => (g.fields || []).some((id) => hasId(f, id))),
@@ -2076,19 +2086,102 @@ const TrackerEntryDetailPage = () => {
                                 if (!checkGroupVisibility(group, displayData)) return null;
                                 const visibleFields = groupFields.filter((f) => checkFieldVisibility(f, displayData));
                                 if (visibleFields.length === 0) return null;
+                                const getFieldById = (fid) => groupFields.find((f) => String(f.id || f.name || f.field_id) === String(fid));
+                                const layout = (group.layout || "stack").toLowerCase();
+                                const hasTableStructure = Array.isArray(group.table_columns) && group.table_columns.length > 0;
+                                const tableRows = Array.isArray(group.table_rows) ? group.table_rows : [];
+                                const isTable = layout === "table" && (hasTableStructure || tableRows.length > 0);
+                                const gridRows = (group.grid_rows && group.grid_rows.length > 0) ? group.grid_rows : (group.grid_columns ? [{ ...group.grid_columns }] : []);
+                                const isGrid = layout === "grid" && gridRows.length > 0;
                                 return (
                                   <div key={group.id || group.label || "g"} className="space-y-2">
                                     {group.label && <h4 className="text-sm font-medium text-muted-foreground border-b pb-1">{group.label}</h4>}
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
-                                      {visibleFields.map((field) => {
-                                        const fieldId = field.id || field.name || field.field_id;
+                                    {isTable ? (
+                                      (() => {
+                                        const tableCols = Array.isArray(group.table_columns) && group.table_columns.length > 0 ? group.table_columns : [{ id: "col_1", label: "Column 1" }];
+                                        const rows = tableRows.length > 0 ? tableRows : [{ cells: tableCols.map(() => ({ text: "", field_id: null })) }];
                                         return (
-                                          <div key={fieldId} className={cn("space-y-1", ["text_block", "image_block", "youtube_video_embed"].includes((field.type || field.field_type || "").toLowerCase()) && "md:col-span-2")}>
-                                            <CustomFieldRenderer field={mapFieldToMapped(field)} value={displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} readOnly />
+                                          <div className="overflow-x-auto rounded-md border">
+                                            <table className="w-full border-collapse text-sm">
+                                              <thead>
+                                                <tr className="border-b bg-muted/50">
+                                                  {tableCols.map((col) => (
+                                                    <th key={col.id} className="text-left font-medium p-2">{col.label || col.id}</th>
+                                                  ))}
+                                                </tr>
+                                              </thead>
+                                              <tbody>
+                                                {rows.map((row, rIdx) => {
+                                                  const cells = (row.cells || []).slice(0, tableCols.length);
+                                                  while (cells.length < tableCols.length) cells.push({ text: "", field_id: null });
+                                                  return (
+                                                    <tr key={rIdx} className="border-b last:border-b-0">
+                                                      {cells.map((cell, cIdx) => {
+                                                        const fieldId = cell.field_id ? String(cell.field_id) : null;
+                                                        const field = fieldId ? getFieldById(fieldId) : null;
+                                                        if (!field && !cell.text) return <td key={cIdx} className="p-2" />;
+                                                        if (field && !checkFieldVisibility(field, displayData)) return <td key={cIdx} className="p-2" />;
+                                                        return (
+                                                          <td key={cIdx} className="p-2 align-top">
+                                                            <div className="space-y-1">
+                                                              {cell.text ? <span className="text-muted-foreground text-xs block">{cell.text}</span> : null}
+                                                              {field && <CustomFieldRenderer field={mapFieldToMapped(field)} value={displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} readOnly />}
+                                                            </div>
+                                                          </td>
+                                                        );
+                                                      })}
+                                                    </tr>
+                                                  );
+                                                })}
+                                              </tbody>
+                                            </table>
                                           </div>
                                         );
-                                      })}
-                                    </div>
+                                      })()
+                                    ) : isGrid ? (
+                                      <div className="space-y-4">
+                                        {gridRows.map((gridRow, rowIdx) => {
+                                          const leftF = (gridRow.left || []).map((fid) => getFieldById(fid)).filter(Boolean).filter((f) => checkFieldVisibility(f, displayData));
+                                          const centerF = (gridRow.center || []).map((fid) => getFieldById(fid)).filter(Boolean).filter((f) => checkFieldVisibility(f, displayData));
+                                          const rightF = (gridRow.right || []).map((fid) => getFieldById(fid)).filter(Boolean).filter((f) => checkFieldVisibility(f, displayData));
+                                          const hasL = leftF.length > 0;
+                                          const hasR = rightF.length > 0;
+                                          const hasC = centerF.length > 0;
+                                          if (!hasL && !hasR && !hasC) return null;
+                                          return (
+                                            <div key={`row-${rowIdx}`} className="space-y-3">
+                                              {(hasL || hasR) && (
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                  <div className="space-y-2">{leftF.map((field) => {
+                                                    const fieldId = field.id || field.name || field.field_id;
+                                                    return <div key={fieldId} className={cn(["text_block", "image_block", "youtube_video_embed"].includes((field.type || field.field_type || "").toLowerCase()) && "md:col-span-2")}><CustomFieldRenderer field={mapFieldToMapped(field)} value={displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} readOnly /></div>;
+                                                  })}</div>
+                                                  <div className="space-y-2">{rightF.map((field) => {
+                                                    const fieldId = field.id || field.name || field.field_id;
+                                                    return <div key={fieldId} className={cn(["text_block", "image_block", "youtube_video_embed"].includes((field.type || field.field_type || "").toLowerCase()) && "md:col-span-2")}><CustomFieldRenderer field={mapFieldToMapped(field)} value={displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} readOnly /></div>;
+                                                  })}</div>
+                                                </div>
+                                              )}
+                                              {hasC && <div className="space-y-2">{centerF.map((field) => {
+                                                const fieldId = field.id || field.name || field.field_id;
+                                                return <div key={fieldId}><CustomFieldRenderer field={mapFieldToMapped(field)} value={displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} readOnly /></div>;
+                                              })}</div>}
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    ) : (
+                                      <div className={layout === "stack" ? "space-y-3" : "grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3"}>
+                                        {visibleFields.map((field) => {
+                                          const fieldId = field.id || field.name || field.field_id;
+                                          return (
+                                            <div key={fieldId} className={cn("space-y-1", ["text_block", "image_block", "youtube_video_embed"].includes((field.type || field.field_type || "").toLowerCase()) && "md:col-span-2")}>
+                                              <CustomFieldRenderer field={mapFieldToMapped(field)} value={displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} readOnly />
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
                                   </div>
                                 );
                               })}
@@ -2140,9 +2233,11 @@ const TrackerEntryDetailPage = () => {
               if (!section) return null;
               const sectionKey = section.id ?? section.title ?? section.label ?? `section-${sectionIndex}`;
               const displayData = entry?.formatted_data || entry?.submission_data || entry?.entry_data || {};
+              const allSectionFieldsForStage = fieldsBySection[sectionKey]?.fields || [];
               const sectionFields = getVisibleSectionFields(sectionKey, isEditing ? effectiveEntryData : displayData);
               const statusesForThisStage = (s?.statuses ?? s?.status_list ?? []).filter(Boolean);
               const isThisStageTabActive = effectiveFormsSubTab === stageName;
+              const hasAnyFieldsInStage = allSectionFieldsForStage.length > 0;
               return (
                 <TabsContent key={stageName} value={stageName} className="mt-0 space-y-4">
                   <Card>
@@ -2171,25 +2266,144 @@ const TrackerEntryDetailPage = () => {
                       </div>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                      {sectionFields.length === 0 ? (
+                      {!hasAnyFieldsInStage ? (
                         <p className="text-sm text-muted-foreground">No fields in this stage.</p>
                       ) : isEditing && isThisStageTabActive ? (
-                        sectionFields.map((field) => {
-                          const fieldId = field.id || field.name || field.field_id;
-                          const value = effectiveEntryData[fieldId];
-                          const baseField = { ...field, type: field.type || field.field_type, field_label: field.label || field.field_label || field.name, field_name: field.name || field.id };
+                        (() => {
+                          const layoutItemEdit = trackerReadOnlyLayout[sectionIndex];
+                          const allFieldsForEdit = allSectionFieldsForStage;
+                          if (!layoutItemEdit || !layoutItemEdit.groupsWithFields?.length) {
+                            return allFieldsForEdit.map((field) => {
+                              const fieldId = field.id || field.name || field.field_id;
+                              const value = effectiveEntryData[fieldId];
+                              const baseField = { ...field, type: field.type || field.field_type, field_label: field.label || field.field_label || field.name, field_name: field.name || field.id };
+                              return (
+                                <div key={fieldId} className="space-y-1">
+                                  <CustomFieldRenderer
+                                    field={getFieldWithStageFilteredStatusOptions(baseField, statusesForThisStage.length ? statusesForThisStage : statusesForEditModeStage)}
+                                    value={value}
+                                    otherTextValue={effectiveEntryData[`${fieldId}_other`]}
+                                    onChange={handleFieldChange}
+                                    error={fieldErrors[fieldId]}
+                                    readOnly={isFieldDisabledByCondition(field, effectiveEntryData)}
+                                  />
+                                </div>
+                              );
+                            });
+                          }
+                          const { ungrouped: editUngrouped, groupsWithFields: editGroups } = layoutItemEdit;
+                          const getFieldByIdEdit = (fid) => allFieldsForEdit.find((f) => String(f.id || f.name || f.field_id) === String(fid));
+                          const renderEditableField = (field) => {
+                            const fieldId = field.id || field.name || field.field_id;
+                            const value = effectiveEntryData[fieldId];
+                            const baseField = { ...field, type: field.type || field.field_type, field_label: field.label || field.field_label || field.name, field_name: field.name || field.id };
+                            return (
+                              <CustomFieldRenderer
+                                key={fieldId}
+                                field={getFieldWithStageFilteredStatusOptions(baseField, statusesForThisStage.length ? statusesForThisStage : statusesForEditModeStage)}
+                                value={value}
+                                otherTextValue={effectiveEntryData[`${fieldId}_other`]}
+                                onChange={handleFieldChange}
+                                error={fieldErrors[fieldId]}
+                                readOnly={isFieldDisabledByCondition(field, effectiveEntryData)}
+                              />
+                            );
+                          };
                           return (
-                            <CustomFieldRenderer
-                              key={fieldId}
-                              field={getFieldWithStageFilteredStatusOptions(baseField, statusesForThisStage.length ? statusesForThisStage : statusesForEditModeStage)}
-                              value={value}
-                              otherTextValue={effectiveEntryData[`${fieldId}_other`]}
-                              onChange={handleFieldChange}
-                              error={fieldErrors[fieldId]}
-                              readOnly={isFieldDisabledByCondition(field, effectiveEntryData)}
-                            />
+                            <div className="space-y-4">
+                              {editGroups.map(({ group, fields: groupFields }) => {
+                                if (!checkGroupVisibility(group, effectiveEntryData)) return null;
+                                const layout = (group.layout || "stack").toLowerCase();
+                                const hasTableStructure = Array.isArray(group.table_columns) && group.table_columns.length > 0;
+                                const tableRowsForGroup = Array.isArray(group.table_rows) ? group.table_rows : [];
+                                const isTable = layout === "table" && (hasTableStructure || tableRowsForGroup.length > 0);
+                                const gridRows = (group.grid_rows && group.grid_rows.length > 0) ? group.grid_rows : (group.grid_columns ? [{ ...group.grid_columns }] : []);
+                                const isGrid = layout === "grid" && gridRows.length > 0;
+                                const groupLabel = group.label || group.title || group.name || "";
+                                if (isTable && tableRowsForGroup.length === 0 && !hasTableStructure) return null;
+                                if (isGrid && gridRows.length === 0) return null;
+                                return (
+                                  <div key={group.id || group.label || "g"} className="space-y-2">
+                                    {groupLabel ? <h4 className="text-sm font-medium text-muted-foreground border-b pb-1">{groupLabel}</h4> : null}
+                                    {isTable ? (
+                                      <div className="overflow-x-auto rounded-md border">
+                                        <table className="w-full border-collapse text-sm">
+                                          <thead>
+                                            <tr className="border-b bg-muted/50">
+                                            {(Array.isArray(group.table_columns) && group.table_columns.length > 0 ? group.table_columns : [{ id: "col_1", label: "Column 1" }]).map((col) => (
+                                              <th key={col.id} className="text-left font-medium p-2">{col.label || col.id}</th>
+                                            ))}
+                                            </tr>
+                                          </thead>
+                                          <tbody>
+                                            {(tableRowsForGroup.length > 0 ? tableRowsForGroup : [{ cells: (group.table_columns || [{ id: "c1" }]).map(() => ({ text: "", field_id: null })) }]).map((row, rIdx) => {
+                                              const tableCols = Array.isArray(group.table_columns) && group.table_columns.length > 0 ? group.table_columns : [{ id: "col_1", label: "Column 1" }];
+                                              const cells = (row.cells || []).slice(0, tableCols.length);
+                                              while (cells.length < tableCols.length) cells.push({ text: "", field_id: null });
+                                              return (
+                                                <tr key={rIdx} className="border-b last:border-b-0">
+                                                  {cells.map((cell, cIdx) => {
+                                                    const fieldId = cell.field_id ? String(cell.field_id) : null;
+                                                    const field = fieldId ? getFieldByIdEdit(fieldId) : null;
+                                                    if (!field && !cell.text) return <td key={cIdx} className="p-2" />;
+                                                    return (
+                                                      <td key={cIdx} className="p-2 align-top">
+                                                        <div className="space-y-1">
+                                                          {cell.text ? <span className="text-muted-foreground text-xs block">{cell.text}</span> : null}
+                                                          {field && renderEditableField(field)}
+                                                        </div>
+                                                      </td>
+                                                    );
+                                                  })}
+                                                </tr>
+                                              );
+                                            })}
+                                          </tbody>
+                                        </table>
+                                      </div>
+                                    ) : isGrid ? (
+                                      <div className="space-y-4">
+                                        {gridRows.map((gridRow, rowIdx) => {
+                                          const leftF = (gridRow.left || []).map((fid) => getFieldByIdEdit(fid)).filter(Boolean);
+                                          const centerF = (gridRow.center || []).map((fid) => getFieldByIdEdit(fid)).filter(Boolean);
+                                          const rightF = (gridRow.right || []).map((fid) => getFieldByIdEdit(fid)).filter(Boolean);
+                                          const hasL = leftF.length > 0;
+                                          const hasR = rightF.length > 0;
+                                          const hasC = centerF.length > 0;
+                                          if (!hasL && !hasR && !hasC) return null;
+                                          return (
+                                            <div key={`row-${rowIdx}`} className="space-y-3">
+                                              {(hasL || hasR) && (
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                  <div className="space-y-2">{leftF.map((f) => renderEditableField(f))}</div>
+                                                  <div className="space-y-2">{rightF.map((f) => renderEditableField(f))}</div>
+                                                </div>
+                                              )}
+                                              {hasC && <div className="space-y-2">{centerF.map((f) => renderEditableField(f))}</div>}
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    ) : (
+                                      <div className={layout === "stack" ? "space-y-3" : "grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3"}>
+                                        {groupFields.map((field) => (
+                                          <div key={field.id || field.name || field.field_id} className={cn("space-y-1", ["text_block", "image_block", "youtube_video_embed"].includes((field.type || field.field_type || "").toLowerCase()) && "md:col-span-2")}>
+                                            {renderEditableField(field)}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                              {editUngrouped.map((field) => (
+                                <div key={field.id || field.name || field.field_id} className="space-y-1">
+                                  {renderEditableField(field)}
+                                </div>
+                              ))}
+                            </div>
                           );
-                        })
+                        })()
                       ) : (() => {
                         const layoutItem = trackerReadOnlyLayout[sectionIndex];
                         if (!layoutItem) {
@@ -2204,33 +2418,125 @@ const TrackerEntryDetailPage = () => {
                         }
                         const { ungrouped: roUngrouped, groupsWithFields: roGroups } = layoutItem;
                         const mapFieldToMapped = (field) => ({ ...field, type: field.type || field.field_type, field_label: field.label || field.field_label || field.name, field_name: field.name || field.id, id: field.id || field.name || field.field_id });
+                        // Full section fields for resolving table/grid cell field_id when group.fields is empty (e.g. Procedure(s) table)
+                        const allSectionFields = fieldsBySection[sectionKey]?.fields || [];
+                        // Priority: layout first (groups with Stack/Grid/Table), then ungrouped stage fields at the end
                         return (
                           <div className="space-y-4">
+                            {roGroups.map(({ group, fields: groupFields }) => {
+                              if (!checkGroupVisibility(group, displayData)) return null;
+                              const layout = (group.layout || "stack").toLowerCase();
+                              const hasTableStructure = Array.isArray(group.table_columns) && group.table_columns.length > 0;
+                              const tableRowsForGroup = Array.isArray(group.table_rows) ? group.table_rows : [];
+                              const isTable = layout === "table" && (hasTableStructure || tableRowsForGroup.length > 0);
+                              const gridRows = (group.grid_rows && group.grid_rows.length > 0) ? group.grid_rows : (group.grid_columns ? [{ ...group.grid_columns }] : []);
+                              const isGrid = layout === "grid" && gridRows.length > 0;
+                              // Resolve field by id: group.fields first, then section fields (for table/grid where group.fields can be empty)
+                              const getFieldById = (fid) => groupFields.find((f) => String(f.id || f.name || f.field_id) === String(fid)) ?? allSectionFields.find((f) => String(f.id || f.name || f.field_id) === String(fid));
+                              const visibleFields = groupFields.filter((f) => checkFieldVisibility(f, displayData));
+                              // Skip only when stack and no visible fields; table/grid can have fields only in table_rows/grid_rows
+                              if (!isTable && !isGrid && visibleFields.length === 0) return null;
+                              if (isTable && tableRowsForGroup.length === 0 && !hasTableStructure) return null;
+                              if (isGrid && gridRows.length === 0) return null;
+                              const groupLabelRo = group.label || group.title || group.name || "";
+                              return (
+                                <div key={group.id || group.label || "g"} className="space-y-2">
+                                  {groupLabelRo ? <h4 className="text-sm font-medium text-muted-foreground border-b pb-1">{groupLabelRo}</h4> : null}
+                                  {isTable ? (
+                                    (() => {
+                                      const tableCols = Array.isArray(group.table_columns) && group.table_columns.length > 0 ? group.table_columns : [{ id: "col_1", label: "Column 1" }];
+                                      const rows = tableRowsForGroup.length > 0 ? tableRowsForGroup : [{ cells: tableCols.map(() => ({ text: "", field_id: null })) }];
+                                      return (
+                                        <div className="overflow-x-auto rounded-md border">
+                                          <table className="w-full border-collapse text-sm">
+                                            <thead>
+                                              <tr className="border-b bg-muted/50">
+                                                {tableCols.map((col) => (
+                                                  <th key={col.id} className="text-left font-medium p-2">{col.label || col.id}</th>
+                                                ))}
+                                              </tr>
+                                            </thead>
+                                            <tbody>
+                                              {rows.map((row, rIdx) => {
+                                                const cells = (row.cells || []).slice(0, tableCols.length);
+                                                while (cells.length < tableCols.length) cells.push({ text: "", field_id: null });
+                                                return (
+                                                  <tr key={rIdx} className="border-b last:border-b-0">
+                                                    {cells.map((cell, cIdx) => {
+                                                      const fieldId = cell.field_id ? String(cell.field_id) : null;
+                                                      const field = fieldId ? getFieldById(fieldId) : null;
+                                                      if (!field && !cell.text) return <td key={cIdx} className="p-2" />;
+                                                      if (field && !checkFieldVisibility(field, displayData)) return <td key={cIdx} className="p-2" />;
+                                                      return (
+                                                        <td key={cIdx} className="p-2 align-top">
+                                                          <div className="space-y-1">
+                                                            {cell.text ? <span className="text-muted-foreground text-xs block">{cell.text}</span> : null}
+                                                            {field && <CustomFieldRenderer field={mapFieldToMapped(field)} value={displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} readOnly />}
+                                                          </div>
+                                                        </td>
+                                                      );
+                                                    })}
+                                                  </tr>
+                                                );
+                                              })}
+                                            </tbody>
+                                          </table>
+                                        </div>
+                                      );
+                                    })()
+                                  ) : isGrid ? (
+                                    <div className="space-y-4">
+                                      {gridRows.map((gridRow, rowIdx) => {
+                                        const leftF = (gridRow.left || []).map((fid) => getFieldById(fid)).filter(Boolean).filter((f) => checkFieldVisibility(f, displayData));
+                                        const centerF = (gridRow.center || []).map((fid) => getFieldById(fid)).filter(Boolean).filter((f) => checkFieldVisibility(f, displayData));
+                                        const rightF = (gridRow.right || []).map((fid) => getFieldById(fid)).filter(Boolean).filter((f) => checkFieldVisibility(f, displayData));
+                                        const hasL = leftF.length > 0;
+                                        const hasR = rightF.length > 0;
+                                        const hasC = centerF.length > 0;
+                                        if (!hasL && !hasR && !hasC) return null;
+                                        return (
+                                          <div key={`row-${rowIdx}`} className="space-y-3">
+                                            {(hasL || hasR) && (
+                                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div className="space-y-2">{leftF.map((field) => {
+                                                  const fieldId = field.id || field.name || field.field_id;
+                                                  return <div key={fieldId} className={cn(["text_block", "image_block", "youtube_video_embed"].includes((field.type || field.field_type || "").toLowerCase()) && "md:col-span-2")}><CustomFieldRenderer field={mapFieldToMapped(field)} value={displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} readOnly /></div>;
+                                                })}</div>
+                                                <div className="space-y-2">{rightF.map((field) => {
+                                                  const fieldId = field.id || field.name || field.field_id;
+                                                  return <div key={fieldId} className={cn(["text_block", "image_block", "youtube_video_embed"].includes((field.type || field.field_type || "").toLowerCase()) && "md:col-span-2")}><CustomFieldRenderer field={mapFieldToMapped(field)} value={displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} readOnly /></div>;
+                                                })}</div>
+                                              </div>
+                                            )}
+                                            {hasC && <div className="space-y-2">{centerF.map((field) => {
+                                              const fieldId = field.id || field.name || field.field_id;
+                                              return <div key={fieldId}><CustomFieldRenderer field={mapFieldToMapped(field)} value={displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} readOnly /></div>;
+                                            })}</div>}
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  ) : (
+                                    <div className={layout === "stack" ? "space-y-3" : "grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3"}>
+                                      {visibleFields.map((field) => {
+                                        const fieldId = field.id || field.name || field.field_id;
+                                        return (
+                                          <div key={fieldId} className={cn("space-y-1", ["text_block", "image_block", "youtube_video_embed"].includes((field.type || field.field_type || "").toLowerCase()) && "md:col-span-2")}>
+                                            <CustomFieldRenderer field={mapFieldToMapped(field)} value={displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} readOnly />
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                            {/* All stage fields not in any layout group, shown at the end */}
                             {roUngrouped.filter((f) => checkFieldVisibility(f, displayData)).map((field) => {
                               const fieldId = field.id || field.name || field.field_id;
                               return (
                                 <div key={fieldId} className="space-y-1">
                                   <CustomFieldRenderer field={mapFieldToMapped(field)} value={displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} readOnly />
-                                </div>
-                              );
-                            })}
-                            {roGroups.map(({ group, fields: groupFields }) => {
-                              if (!checkGroupVisibility(group, displayData)) return null;
-                              const visibleFields = groupFields.filter((f) => checkFieldVisibility(f, displayData));
-                              if (visibleFields.length === 0) return null;
-                              return (
-                                <div key={group.id || group.label || "g"} className="space-y-2">
-                                  {group.label && <h4 className="text-sm font-medium text-muted-foreground border-b pb-1">{group.label}</h4>}
-                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
-                                    {visibleFields.map((field) => {
-                                      const fieldId = field.id || field.name || field.field_id;
-                                      return (
-                                        <div key={fieldId} className={cn("space-y-1", ["text_block", "image_block", "youtube_video_embed"].includes((field.type || field.field_type || "").toLowerCase()) && "md:col-span-2")}>
-                                          <CustomFieldRenderer field={mapFieldToMapped(field)} value={displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} readOnly />
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
                                 </div>
                               );
                             })}
