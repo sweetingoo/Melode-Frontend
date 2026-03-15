@@ -2278,7 +2278,28 @@ const TrackerEntryDetailPage = () => {
                     </CardHeader>
                     <CardContent className="space-y-4">
                       {!hasAnyFieldsInStage ? (
-                        <p className="text-sm text-muted-foreground">No fields in this stage.</p>
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                          <p className="text-sm text-muted-foreground m-0">No fields in this stage.</p>
+                          {canEditCase && !isClosed && !isEditing && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="shrink-0 w-fit"
+                              onClick={() => {
+                                setEditModeStage(stageName);
+                                setFormsSubTab(stageName);
+                                const statuses = (s?.statuses ?? s?.status_list ?? []).filter(Boolean);
+                                if (statuses.length > 0 && entry?.status) {
+                                  setEntryStatus(statuses.includes(entry.status) ? entry.status : statuses[0]);
+                                }
+                                setIsEditing(true);
+                              }}
+                            >
+                              <Edit className="mr-2 h-4 w-4" />
+                              Edit fields
+                            </Button>
+                          )}
+                        </div>
                       ) : isEditing && isThisStageTabActive ? (
                         (() => {
                           const layoutItemEdit = trackerReadOnlyLayout[sectionIndex];
