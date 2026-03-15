@@ -2642,6 +2642,21 @@ const TrackerEntryDetailPage = () => {
               </Card>
             );
           })()}
+
+          {/* Save and Cancel at bottom of Forms tab when editing */}
+          {isEditing && activeTab === "forms" && (
+            <div className="mt-4 flex flex-wrap items-center justify-end gap-2 pt-4 border-t">
+              <Button onClick={handleSave} disabled={updateEntryMutation.isPending} size="sm">
+                {updateEntryMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                <Save className="mr-2 h-4 w-4" />
+                Save
+              </Button>
+              <Button onClick={handleCancel} variant="outline" size="sm">
+                <X className="mr-2 h-4 w-4" />
+                Cancel
+              </Button>
+            </div>
+          )}
         </TabsContent>
 
         {/* Communications Tab – sub-tabs: SMS, WhatsApp, Portal, Email, Letter */}
