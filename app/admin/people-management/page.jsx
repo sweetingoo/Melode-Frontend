@@ -102,9 +102,19 @@ const ALL_FILTER_VALUE = "__all__";
 const UserManagementPage = () => {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [roleFilter, setRoleFilter] = useState(ALL_FILTER_VALUE);
   const [departmentFilter, setDepartmentFilter] = useState(ALL_FILTER_VALUE);
+
+  // Debounce search so we don't refetch on every keystroke (avoids focus loss and reload feel)
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+      setCurrentPage(1);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [userFormData, setUserFormData] = useState({
     email: "",
@@ -122,16 +132,16 @@ const UserManagementPage = () => {
   const [validationErrors, setValidationErrors] = useState({});
   const itemsPerPage = 20;
 
-  // API hooks - pass page, per_page, search, role_id, department_id for server-side filtering and pagination
+  // API hooks - pass page, per_page, search (debounced), role_id, department_id for server-side filtering and pagination
   const usersParams = React.useMemo(
     () => ({
       page: currentPage,
       per_page: itemsPerPage,
-      search: searchTerm.trim() || undefined,
+      search: debouncedSearchTerm.trim() || undefined,
       role_id: roleFilter && roleFilter !== ALL_FILTER_VALUE ? parseInt(roleFilter, 10) : undefined,
       department_id: departmentFilter && departmentFilter !== ALL_FILTER_VALUE ? parseInt(departmentFilter, 10) : undefined,
     }),
-    [currentPage, searchTerm, roleFilter, departmentFilter]
+    [currentPage, debouncedSearchTerm, roleFilter, departmentFilter]
   );
   const { data: usersResponse, isLoading, error, refetch } = useUsers(usersParams);
   const { data: departmentsData, isLoading: departmentsLoading } = useDepartments();
@@ -274,10 +284,9 @@ const UserManagementPage = () => {
     setCurrentPage(page);
   };
 
-  // Reset to page 1 when search or filters change
   const handleSearchChange = (value) => {
     setSearchTerm(value);
-    setCurrentPage(1);
+    // Page reset happens when debounced value updates (in useEffect)
   };
   const handleRoleFilterChange = (value) => {
     setRoleFilter(value);
@@ -488,39 +497,7 @@ const UserManagementPage = () => {
     });
   };
 
-  // Loading state
-  if (isLoading) {
-    return (
-      <div className="space-y-6">
-        <div className="grid gap-4 md:grid-cols-4">
-          {[...Array(4)].map((_, i) => (
-            <Card key={i}>
-              <CardContent className="p-6">
-                <div className="animate-pulse">
-                  <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
-                  <div className="h-8 bg-gray-200 rounded w-1/2"></div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-        <Card>
-          <CardContent className="p-6">
-            <div className="animate-pulse">
-              <div className="h-4 bg-gray-200 rounded w-1/4 mb-4"></div>
-              <div className="space-y-3">
-                {[...Array(5)].map((_, i) => (
-                  <div key={i} className="h-12 bg-gray-200 rounded"></div>
-                ))}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  // Error state
+  // Error state (keep before main return so search bar never unmounts on refetch)
   if (error) {
     return (
       <div className="space-y-6">
@@ -775,7 +752,22 @@ const UserManagementPage = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {currentUsers.map((user) => (
+                {isLoading ? (
+                  [...Array(5)].map((_, i) => (
+                    <TableRow key={`skeleton-${i}`}>
+                      <TableCell><div className="animate-pulse h-10 bg-muted rounded" /></TableCell>
+                      <TableCell><div className="animate-pulse h-4 bg-muted rounded w-20" /></TableCell>
+                      <TableCell><div className="animate-pulse h-4 bg-muted rounded w-24" /></TableCell>
+                      <TableCell><div className="animate-pulse h-4 bg-muted rounded w-24" /></TableCell>
+                      <TableCell><div className="animate-pulse h-6 bg-muted rounded w-16" /></TableCell>
+                      <TableCell><div className="animate-pulse h-6 bg-muted rounded w-16" /></TableCell>
+                      <TableCell><div className="animate-pulse h-4 bg-muted rounded w-20" /></TableCell>
+                      <TableCell><div className="animate-pulse h-4 bg-muted rounded w-24" /></TableCell>
+                      <TableCell className="text-right"><div className="animate-pulse h-8 bg-muted rounded w-8 ml-auto" /></TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  currentUsers.map((user) => (
                   <TableRow 
                     key={user.id}
                     className="cursor-pointer hover:bg-muted/50 transition-colors"
@@ -1131,7 +1123,7 @@ const UserManagementPage = () => {
                       </DropdownMenu>
                     </TableCell>
                   </TableRow>
-                ))}
+                )))}
               </TableBody>
             </Table>
           </div>

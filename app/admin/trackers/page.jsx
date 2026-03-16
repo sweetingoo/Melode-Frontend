@@ -59,6 +59,8 @@ import {
   X,
   ChevronRight,
   Link2,
+  Mail,
+  MailOpen,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -178,6 +180,7 @@ const TrackersPage = () => {
   const [committedSearchTerm, setCommittedSearchTerm] = useState(""); // only pushed to URL on Enter
   const [statusFilter, setStatusFilter] = useState("all");
   const [chaseFilter, setChaseFilter] = useState("all"); // "all" | "due_or_overdue"
+  const [unseenFilter, setUnseenFilter] = useState("all"); // "all" | "unseen" — filter to cases with unread patient message
   const [sortBy, setSortBy] = useState("created_at");
   const [sortOrder, setSortOrder] = useState("desc");
   const [isCreateEntryDialogOpen, setIsCreateEntryDialogOpen] = useState(false);
@@ -616,9 +619,10 @@ const TrackersPage = () => {
     if (updatedAtBefore) params.updated_at_before = updatedAtBefore;
     if (nextAppointmentDateAfter) params.next_appointment_date_after = nextAppointmentDateAfter;
     if (nextAppointmentDateBefore) params.next_appointment_date_before = nextAppointmentDateBefore;
+    if (unseenFilter === "unseen") params.has_unacknowledged_inbound = true;
 
     return params;
-  }, [selectedTracker, statusFilter, statusesFilter, chaseFilter, searchTerm, sortBy, sortOrder, columnFilters, itemsPerPage, updatedAtAfter, updatedAtBefore, nextAppointmentDateAfter, nextAppointmentDateBefore]);
+  }, [selectedTracker, statusFilter, statusesFilter, chaseFilter, unseenFilter, searchTerm, sortBy, sortOrder, columnFilters, itemsPerPage, updatedAtAfter, updatedAtBefore, nextAppointmentDateAfter, nextAppointmentDateBefore]);
 
   // Get tracker entries with infinite scroll
   const {
@@ -2264,6 +2268,21 @@ const TrackersPage = () => {
                     </Select>
                   </div>
                   <div className="flex-1">
+                    <Label>Message</Label>
+                    <Select
+                      value={unseenFilter}
+                      onValueChange={(value) => setUnseenFilter(value)}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Message" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All</SelectItem>
+                        <SelectItem value="unseen">Unseen only</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex-1">
                     <Label>Sort By</Label>
                     <Select
                       value={`${sortBy}:${sortOrder}`}
@@ -2887,6 +2906,9 @@ const TrackersPage = () => {
                   <TableHeader className="sticky top-0 z-10 bg-background shadow-sm">
                     <TableRow className="border-b bg-muted/50 hover:bg-muted/50">
                       <TableHead className="border-r font-semibold min-w-[72px]">#</TableHead>
+                      <TableHead className="border-r w-10 text-center" title="Unread patient message">
+                        <Mail className="h-4 w-4 mx-auto text-muted-foreground" />
+                      </TableHead>
                       {tracker?.tracker_config?.use_stages !== false && (tracker?.tracker_config?.stage_mapping?.length > 0 || tracker?.tracker_config?.is_patient_referral) && (
                         <TableHead className="font-semibold min-w-[140px]">Stage</TableHead>
                       )}
@@ -3040,6 +3062,20 @@ const TrackersPage = () => {
                             >
                                       #{entryNumber}
                             </Link>
+                          </TableCell>
+                          <TableCell
+                            className={cn(
+                              "border-r w-10 text-center",
+                              densityClass,
+                              index % 2 === 0 ? "bg-background hover:bg-muted/40" : "bg-muted/20 hover:bg-muted/50"
+                            )}
+                            title={entry.has_unacknowledged_inbound ? "Unread patient message" : "Patient message (read)"}
+                          >
+                            {entry.has_unacknowledged_inbound ? (
+                              <Mail className="h-4 w-4 mx-auto text-amber-600 dark:text-amber-400 shrink-0" aria-label="Unread patient message" />
+                            ) : (
+                              <span className="text-muted-foreground/30"><MailOpen className="h-4 w-4 mx-auto" aria-label="Patient message (read)" /></span>
+                            )}
                           </TableCell>
                           {(tracker?.tracker_config?.use_stages !== false && (tracker?.tracker_config?.stage_mapping?.length > 0 || tracker?.tracker_config?.is_patient_referral)) && (
                             <TableCell

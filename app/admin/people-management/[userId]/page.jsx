@@ -1146,6 +1146,17 @@ const UserEditPage = () => {
     return map;
   }, [rolesArray]);
 
+  // Role label for dropdowns: "Role name - Department name" (department replaces "No description")
+  const getRoleDisplayLabel = React.useCallback(
+    (role) => {
+      const deptId = role.department_id ?? role.departmentId ?? role.department?.id;
+      const dept = deptId != null ? departmentById.get(Number(deptId)) : null;
+      const suffix = dept?.name ?? role.department?.name ?? role.description ?? "No description";
+      return `${role.display_name || role.name || ""} - ${suffix}`;
+    },
+    [departmentById]
+  );
+
   const { data: contractTypesData } = useContractTypes({});
   const contractTypesList = Array.isArray(contractTypesData) ? contractTypesData : contractTypesData?.data ?? [];
   const contractTypeById = React.useMemo(() => {
@@ -1843,14 +1854,19 @@ const UserEditPage = () => {
     return departments.filter((dept) => !assignedDeptIds.includes(dept.id));
   }, [departments, assignmentsByDepartment]);
 
-  // Roles available in the Assign Department modal: only roles that belong to the selected department (or system roles with no department)
+  // Roles available in the Assign Department modal: only roles that belong to the selected department (or system roles with no department), sorted A–Z
   const rolesForAssignDepartmentModal = React.useMemo(() => {
     if (!selectedDepartmentId || !availableRoles.length) return [];
     const deptIdNum = Number(selectedDepartmentId);
-    return availableRoles.filter((role) => {
-      const roleDeptId = role.department_id ?? role.departmentId ?? role.department?.id;
-      return roleDeptId == null || roleDeptId === undefined || Number(roleDeptId) === deptIdNum;
-    });
+    return availableRoles
+      .filter((role) => {
+        const roleDeptId = role.department_id ?? role.departmentId ?? role.department?.id;
+        return roleDeptId == null || roleDeptId === undefined || Number(roleDeptId) === deptIdNum;
+      })
+      .slice()
+      .sort((a, b) =>
+        (a.display_name || a.name || "").localeCompare(b.display_name || b.name || "", undefined, { sensitivity: "base" })
+      );
   }, [selectedDepartmentId, availableRoles]);
 
   // Get available roles for a department (not already assigned in that department)
@@ -1884,13 +1900,21 @@ const UserEditPage = () => {
       });
     }
 
-    // Show all non-shift roles not already assigned in this department (do not filter by role's department)
-    return availableRoles.filter(
-      (role) =>
-        !assignedRoleIds.has(role.id) &&
-        role.role_type !== "shift_role" &&
-        role.roleType !== "shift_role"
-    );
+    // Only show job roles that belong to this department (and not already assigned here)
+    const deptIdNum = Number(departmentId);
+    return availableRoles
+      .filter(
+        (role) =>
+          !assignedRoleIds.has(role.id) &&
+          role.role_type !== "shift_role" &&
+          role.roleType !== "shift_role" &&
+          (role.department_id ?? role.departmentId ?? role.department?.id) != null &&
+          Number(role.department_id ?? role.departmentId ?? role.department?.id) === deptIdNum
+      )
+      .slice()
+      .sort((a, b) =>
+        (a.display_name || a.name || "").localeCompare(b.display_name || b.name || "", undefined, { sensitivity: "base" })
+      );
   };
 
   // Filter permissions based on search term (for both assigned and available)
@@ -4476,8 +4500,7 @@ const UserEditPage = () => {
                 <SelectContent>
                   {rolesForAssignDepartmentModal.map((role) => (
                     <SelectItem key={role.id} value={role.id.toString()}>
-                      {role.display_name || role.name} -{" "}
-                      {role.description || "No description"}
+                      {getRoleDisplayLabel(role)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -4541,8 +4564,7 @@ const UserEditPage = () => {
                       selectedDepartmentForRole.department.id
                     ).map((role) => (
                       <SelectItem key={role.id} value={role.id.toString()}>
-                        {role.display_name || role.name} -{" "}
-                        {role.description || "No description"}
+                        {getRoleDisplayLabel(role)}
                       </SelectItem>
                     ))}
                 </SelectContent>
