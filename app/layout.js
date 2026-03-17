@@ -56,7 +56,7 @@ export default function RootLayout({ children }) {
         <ThemeProvider>
           <QueryProvider>
             {children}
-            <Toaster />
+            <Toaster position="top-right" />
           </QueryProvider>
         </ThemeProvider>
       </body>

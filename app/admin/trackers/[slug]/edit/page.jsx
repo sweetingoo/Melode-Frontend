@@ -130,7 +130,8 @@ const generateUniqueId = (label) => {
 };
 
 const COLUMNS = ["left", "center", "right"];
-const columnLabels = { left: "Left", center: "Center (full width)", right: "Right" };
+const columnLabels = { left: "Left", center: "Center", right: "Right" };
+const centerLabelFullWidth = "Center (full width)";
 
 // Return all field ids already used in this section's layout (table cells, grid slots, stack group.fields) so dropdowns can exclude them.
 function getUsedFieldIdsInSection(section) {
@@ -156,10 +157,8 @@ function getUsedFieldIdsInSection(section) {
 function OneRowEditor({ row, rowIndex, sectionFields, allIdsInAnyGroup, onUpdateRow, onRemoveRow, canRemoveRow }) {
   const grid = row || { left: [], center: [], right: [] };
   const hasLeftOrRight = ((grid.left || []).length + (grid.right || []).length) > 0;
-  const hasCenter = (grid.center || []).length > 0;
-  const centerDisabled = hasLeftOrRight;
-  const leftRightDisabled = hasCenter;
-  const isColDisabled = (col) => (col === "center" && centerDisabled) || (col !== "center" && leftRightDisabled);
+  const centerLabel = hasLeftOrRight ? columnLabels.center : centerLabelFullWidth;
+  const isColDisabled = () => false;
 
   const availableToAdd = sectionFields
     .map((f) => f.id || f.name || f.field_id)
@@ -228,10 +227,20 @@ function OneRowEditor({ row, rowIndex, sectionFields, allIdsInAnyGroup, onUpdate
 
   return (
     <div className="relative p-3 rounded border border-border bg-muted/20 space-y-2">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-muted-foreground">Row {rowIndex + 1}</span>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          <Input
+            placeholder="Row title (optional)"
+            value={grid.label ?? ""}
+            onChange={(e) => updateRow({ label: e.target.value.trim() || undefined })}
+            className="h-8 text-xs max-w-[200px]"
+          />
+          {!grid.label && (
+            <span className="text-xs text-muted-foreground shrink-0">Row {rowIndex + 1}</span>
+          )}
+        </div>
         {canRemoveRow && (
-          <Button type="button" variant="ghost" size="sm" className="h-6 text-xs text-destructive" onClick={() => onRemoveRow(rowIndex)}>
+          <Button type="button" variant="ghost" size="sm" className="h-6 text-xs text-destructive shrink-0" onClick={() => onRemoveRow(rowIndex)}>
             <Trash2 className="h-3 w-3 mr-1" /> Remove row
           </Button>
         )}
@@ -247,8 +256,7 @@ function OneRowEditor({ row, rowIndex, sectionFields, allIdsInAnyGroup, onUpdate
               className={`min-h-[72px] rounded border border-dashed p-2 flex flex-col ${disabled ? "border-muted-foreground/20 bg-muted/10 opacity-80" : "border-muted-foreground/40"}`}
             >
               <div className="text-xs font-medium text-muted-foreground mb-1">
-                {columnLabels[col]}
-                {disabled && <span className="block text-muted-foreground/70 font-normal">({col === "center" ? "use left/right" : "use center"} in this row)</span>}
+                {col === "center" ? centerLabel : columnLabels[col]}
               </div>
               <div className="flex flex-wrap gap-1 flex-1">
                 {(grid[col] || []).map((fid) => {
@@ -323,6 +331,9 @@ function GridColumnsEditor({ group, groupIdx, sectionFields, editingSection, set
   const usedInSection = getUsedFieldIdsInSection(editingSection);
   const allIdsInAnyGroup = Array.from(usedInSection);
 
+  const [draggedGridRowIndex, setDraggedGridRowIndex] = React.useState(null);
+  const [dragOverGridRowIndex, setDragOverGridRowIndex] = React.useState(null);
+
   React.useEffect(() => {
     if ((group.layout || "") !== "grid") return;
     if (gridRows.length > 0 && allIdsInGroup.length > 0) return;
@@ -353,20 +364,75 @@ function GridColumnsEditor({ group, groupIdx, sectionFields, editingSection, set
     updateRows(gridRows.filter((_, i) => i !== rowIndex));
   };
 
+  const handleGridRowDragStart = (e, rowIndex) => {
+    setDraggedGridRowIndex(rowIndex);
+    e.dataTransfer?.setData?.("text/plain", String(rowIndex));
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleGridRowDragOver = (e, rowIndex) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDragOverGridRowIndex(rowIndex);
+  };
+
+  const handleGridRowDrop = (e, dropIndex) => {
+    e.preventDefault();
+    setDragOverGridRowIndex(null);
+    if (draggedGridRowIndex === null || draggedGridRowIndex === dropIndex) {
+      setDraggedGridRowIndex(null);
+      return;
+    }
+    const newRows = [...gridRows];
+    const [dragged] = newRows.splice(draggedGridRowIndex, 1);
+    newRows.splice(dropIndex, 0, dragged);
+    updateRows(newRows);
+    setDraggedGridRowIndex(null);
+    toast.success("Grid row order updated");
+  };
+
+  const handleGridRowDragEnd = () => {
+    setDraggedGridRowIndex(null);
+    setDragOverGridRowIndex(null);
+  };
+
   return (
     <div className="space-y-3 mt-2">
-      {gridRows.map((row, rowIndex) => (
-        <OneRowEditor
-          key={rowIndex}
-          row={row}
-          rowIndex={rowIndex}
-          sectionFields={sectionFields}
-          allIdsInAnyGroup={allIdsInAnyGroup}
-          onUpdateRow={updateRowAt}
-          onRemoveRow={removeRow}
-          canRemoveRow={gridRows.length > 1}
-        />
-      ))}
+      <p className="text-xs text-muted-foreground">Drag the grip to reorder rows.</p>
+      {gridRows.map((row, rowIndex) => {
+        const isDragging = draggedGridRowIndex === rowIndex;
+        const isDropTarget = dragOverGridRowIndex === rowIndex && !isDragging;
+        return (
+          <div
+            key={rowIndex}
+            className={`flex gap-2 items-start transition-colors rounded ${isDragging ? "opacity-50" : ""} ${isDropTarget ? "ring-2 ring-primary ring-offset-2 bg-primary/5 rounded-md" : ""}`}
+            onDragOver={(e) => handleGridRowDragOver(e, rowIndex)}
+            onDragLeave={() => setDragOverGridRowIndex(null)}
+            onDrop={(e) => handleGridRowDrop(e, rowIndex)}
+          >
+            <div
+              className="shrink-0 pt-3 text-muted-foreground cursor-grab active:cursor-grabbing hover:text-foreground"
+              draggable
+              onDragStart={(e) => handleGridRowDragStart(e, rowIndex)}
+              onDragEnd={handleGridRowDragEnd}
+              title="Drag to reorder row"
+            >
+              <GripVertical className="h-4 w-4" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <OneRowEditor
+                row={row}
+                rowIndex={rowIndex}
+                sectionFields={sectionFields}
+                allIdsInAnyGroup={allIdsInAnyGroup}
+                onUpdateRow={updateRowAt}
+                onRemoveRow={removeRow}
+                canRemoveRow={gridRows.length > 1}
+              />
+            </div>
+          </div>
+        );
+      })}
       <Button type="button" variant="outline" size="sm" onClick={addRow} className="w-full">
         <Plus className="h-4 w-4 mr-2" />
         Add row
@@ -542,6 +608,12 @@ const TrackerEditPage = () => {
   // Drag and drop state for section reordering
   const [draggedSectionIndex, setDraggedSectionIndex] = useState(null);
   const [dragOverSectionIndex, setDragOverSectionIndex] = useState(null);
+  // Drag and drop for groups (within section being edited)
+  const [draggedGroupIndex, setDraggedGroupIndex] = useState(null);
+  const [dragOverGroupIndex, setDragOverGroupIndex] = useState(null);
+  // Drag and drop for table rows: { groupIdx, rowIdx }
+  const [draggedTableRow, setDraggedTableRow] = useState(null);
+  const [dragOverTableRow, setDragOverTableRow] = useState(null);
 
   const [newSection, setNewSection] = useState({
     id: "",
@@ -983,6 +1055,10 @@ const TrackerEditPage = () => {
   const handleCancelEditSection = () => {
     setEditingSectionIndex(null);
     setEditingSection(null);
+    setDraggedGroupIndex(null);
+    setDragOverGroupIndex(null);
+    setDraggedTableRow(null);
+    setDragOverTableRow(null);
   };
 
   const handleUpdateSection = async () => {
@@ -1067,6 +1143,75 @@ const TrackerEditPage = () => {
   const handleSectionDragEnd = () => {
     setDraggedSectionIndex(null);
     setDragOverSectionIndex(null);
+  };
+
+  // Drag and drop for reordering groups (within editing section)
+  const handleGroupDragStart = (e, groupIdx) => {
+    setDraggedGroupIndex(groupIdx);
+    e.dataTransfer?.setData?.("text/plain", String(groupIdx));
+    e.dataTransfer.effectAllowed = "move";
+  };
+  const handleGroupDragOver = (e, groupIdx) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDragOverGroupIndex(groupIdx);
+  };
+  const handleGroupDragLeave = () => setDragOverGroupIndex(null);
+  const handleGroupDrop = (e, dropIdx) => {
+    e.preventDefault();
+    setDragOverGroupIndex(null);
+    if (draggedGroupIndex === null || !editingSection || draggedGroupIndex === dropIdx) {
+      setDraggedGroupIndex(null);
+      return;
+    }
+    const next = [...(editingSection.groups || [])];
+    const [dragged] = next.splice(draggedGroupIndex, 1);
+    next.splice(dropIdx, 0, dragged);
+    setEditingSection((prev) => ({ ...prev, groups: next }));
+    setDraggedGroupIndex(null);
+    toast.success("Group order updated");
+  };
+  const handleGroupDragEnd = () => {
+    setDraggedGroupIndex(null);
+    setDragOverGroupIndex(null);
+  };
+
+  // Drag and drop for reordering table rows (within a group)
+  const handleTableRowDragStart = (e, groupIdx, rowIdx) => {
+    setDraggedTableRow({ groupIdx, rowIdx });
+    e.dataTransfer?.setData?.("text/plain", `${groupIdx}-${rowIdx}`);
+    e.dataTransfer.effectAllowed = "move";
+  };
+  const handleTableRowDragOver = (e, groupIdx, rowIdx) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDragOverTableRow({ groupIdx, rowIdx });
+  };
+  const handleTableRowDragLeave = () => setDragOverTableRow(null);
+  const handleTableRowDrop = (e, groupIdx, dropRowIdx) => {
+    e.preventDefault();
+    setDragOverTableRow(null);
+    if (!draggedTableRow || draggedTableRow.groupIdx !== groupIdx || draggedTableRow.rowIdx === dropRowIdx) {
+      setDraggedTableRow(null);
+      return;
+    }
+    const group = (editingSection?.groups || [])[groupIdx];
+    if (!group) {
+      setDraggedTableRow(null);
+      return;
+    }
+    const rows = Array.isArray(group.table_rows) ? [...group.table_rows] : [];
+    const [draggedRow] = rows.splice(draggedTableRow.rowIdx, 1);
+    rows.splice(dropRowIdx, 0, draggedRow);
+    const next = [...(editingSection.groups || [])];
+    next[groupIdx] = { ...group, table_rows: rows };
+    setEditingSection((prev) => ({ ...prev, groups: next }));
+    setDraggedTableRow(null);
+    toast.success("Row order updated");
+  };
+  const handleTableRowDragEnd = () => {
+    setDraggedTableRow(null);
+    setDragOverTableRow(null);
   };
 
   // Status Management
@@ -3700,8 +3845,22 @@ const TrackerEditPage = () => {
                             Group fields under sub-headings in the form. Order of groups is the order they appear.
                           </p>
                           {(editingSection.groups || []).map((group, groupIdx) => (
-                            <div key={group.id || groupIdx} className="p-3 rounded border bg-muted/30 space-y-2">
+                            <div
+                              key={group.id || groupIdx}
+                              draggable
+                              onDragStart={(e) => handleGroupDragStart(e, groupIdx)}
+                              onDragOver={(e) => handleGroupDragOver(e, groupIdx)}
+                              onDragLeave={handleGroupDragLeave}
+                              onDrop={(e) => handleGroupDrop(e, groupIdx)}
+                              onDragEnd={handleGroupDragEnd}
+                              className={`p-3 rounded border space-y-2 transition-colors ${
+                                draggedGroupIndex === groupIdx ? "opacity-50 cursor-grabbing bg-muted/50" : "cursor-grab bg-muted/30 hover:bg-muted/50"
+                              } ${dragOverGroupIndex === groupIdx && draggedGroupIndex !== groupIdx ? "border-primary border-2 ring-2 ring-primary/20" : ""}`}
+                            >
                               <div className="flex items-center gap-2">
+                                <div className="flex flex-col gap-0 shrink-0 text-muted-foreground cursor-grab active:cursor-grabbing" title="Drag to reorder">
+                                  <GripVertical className="h-4 w-4" />
+                                </div>
                                 <div className="flex flex-col gap-0">
                                   <Button type="button" variant="ghost" size="icon" className="h-6 w-6" disabled={groupIdx === 0} onClick={() => {
                                     const next = [...(editingSection.groups || [])];
@@ -3838,11 +3997,12 @@ const TrackerEditPage = () => {
                                   };
                                   return (
                                     <div className="space-y-2">
-                                      <p className="text-xs text-muted-foreground">Edit the table. Each cell can have text and/or a field.</p>
+                                      <p className="text-xs text-muted-foreground">Edit the table. Each cell can have text and/or a field. Drag the grip to reorder rows.</p>
                                       <div className="overflow-x-auto border rounded-md">
                                         <table className="w-full border-collapse text-sm">
                                           <thead>
                                             <tr className="border-b bg-muted/50">
+                                              <th className="w-8 p-1 border-r bg-muted/70" title="Drag to reorder rows" />
                                               {cols.map((col, cIdx) => (
                                                 <th key={col.id} className="border-r p-1 last:border-r-0">
                                                   <div className="flex items-center gap-1">
@@ -3851,6 +4011,7 @@ const TrackerEditPage = () => {
                                                   </div>
                                                 </th>
                                               ))}
+                                              <th className="w-8 p-1" title="Remove row" />
                                             </tr>
                                           </thead>
                                           <tbody>
@@ -3859,9 +4020,25 @@ const TrackerEditPage = () => {
                                               while (cells.length < cols.length) cells.push({ text: "", field_id: null });
                                               const cv = row.conditional_visibility;
                                               const trackerVisibilityFields = sectionFields.filter((x) => !["text_block", "image_block", "line_break", "page_break", "download_link"].includes((x.type || x.field_type || "").toLowerCase()));
+                                              const isDragging = draggedTableRow?.groupIdx === groupIdx && draggedTableRow?.rowIdx === rIdx;
+                                              const isDropTarget = dragOverTableRow?.groupIdx === groupIdx && dragOverTableRow?.rowIdx === rIdx && !isDragging;
                                               return (
                                                 <React.Fragment key={rIdx}>
-                                                <tr className="border-b">
+                                                <tr
+                                                  className={`border-b ${isDragging ? "opacity-50" : ""} ${isDropTarget ? "ring-2 ring-primary bg-primary/5" : ""}`}
+                                                  onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; handleTableRowDragOver(e, groupIdx, rIdx); }}
+                                                  onDragLeave={handleTableRowDragLeave}
+                                                  onDrop={(e) => handleTableRowDrop(e, groupIdx, rIdx)}
+                                                >
+                                                  <td
+                                                    className="w-8 p-1 border-r align-top cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground"
+                                                    draggable
+                                                    onDragStart={(e) => handleTableRowDragStart(e, groupIdx, rIdx)}
+                                                    onDragEnd={handleTableRowDragEnd}
+                                                    title="Drag to reorder row"
+                                                  >
+                                                    <GripVertical className="h-4 w-4" />
+                                                  </td>
                                                   {cells.map((cell, cIdx) => (
                                                     <td key={cIdx} className="border-r p-1 last:border-r-0 align-top">
                                                       <div className="space-y-1 min-w-[100px]">
@@ -3884,7 +4061,7 @@ const TrackerEditPage = () => {
                                                   </td>
                                                 </tr>
                                                 <tr className="border-b bg-muted/20">
-                                                  <td colSpan={cols.length + 1} className="p-1.5 text-xs">
+                                                  <td colSpan={cols.length + 2} className="p-1.5 text-xs">
                                                     <span className="text-muted-foreground mr-1.5">Show row when:</span>
                                                     <SearchableFieldSelect
                                                       fields={trackerVisibilityFields}

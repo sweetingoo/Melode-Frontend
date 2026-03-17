@@ -685,15 +685,9 @@ const TrackerEntryDetailPage = () => {
     return event.action_type.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()).replace(/\bSms\b/gi, "SMS");
   };
 
-  // Chase dates: current chase_due + timeline actions with chase_date. Each item has { dateStr, type, actionId, completed } so the left column can show Done button/lozenge and mark actions done (same as Activity tab).
+  // Chase dates: timeline actions with chase_date only (no standalone "Due" row — actions have their own dates and can be marked done).
   const chaseDatesList = useMemo(() => {
     const items = [];
-    const fd = entry?.formatted_data || entry?.submission_data || {};
-    const current = fd.chase_due || fd.next_action_date || null;
-    if (current) {
-      const dateStr = typeof current === "string" ? current.split("T")[0] : current;
-      items.push({ dateStr, type: "Due", actionId: null, completed: false });
-    }
     (allTimelineEvents || []).forEach((ev) => {
       const d = ev.chase_date;
       if (d) {
@@ -710,7 +704,7 @@ const TrackerEntryDetailPage = () => {
       if (a.completed !== b.completed) return a.completed ? 1 : -1;
       return (a.actionId ?? 0) - (b.actionId ?? 0);
     });
-  }, [entry?.formatted_data, entry?.submission_data, allTimelineEvents, tracker?.tracker_config?.action_types]);
+  }, [allTimelineEvents, tracker?.tracker_config?.action_types]);
 
   // SMS thread from dedicated API (not timeline pagination) so Communications tab shows all messages
   const smsThread = useMemo(() => {
@@ -1002,10 +996,18 @@ const TrackerEntryDetailPage = () => {
           })
         );
         ungrouped = sectionFields.filter((f) => !fieldIdsInGroups.has(String(f?.id || f?.name || f?.field_id)));
-        groupsWithFields = groups.map((g) => ({
-          group: g,
-          fields: sectionFields.filter((f) => (g.fields || []).some((id) => hasId(f, id))),
-        }));
+        groupsWithFields = groups.map((g) => {
+          // Include fields that are in group.fields OR in table_rows[].cells[].field_id OR in grid_rows (so table/grid cells resolve in view mode)
+          const groupFieldIds = new Set([
+            ...(g.fields || []).map(String),
+            ...(g.table_rows || []).flatMap((row) => (row.cells || []).map((c) => c.field_id).filter(Boolean).map(String)),
+            ...(g.grid_rows || []).flatMap((row) => [...(row.left || []), ...(row.center || []), ...(row.right || [])].map(String)),
+          ]);
+          return {
+            group: g,
+            fields: sectionFields.filter((f) => groupFieldIds.has(String(f?.id || f?.name || f?.field_id))),
+          };
+        });
       } else {
         ungrouped = sectionFields;
       }
@@ -1499,9 +1501,8 @@ const TrackerEntryDetailPage = () => {
     );
   }
 
-  // Case cockpit: key dates and assignee from entry data
+  // Case cockpit: assignee from entry data
   const fd = entry?.formatted_data || entry?.submission_data || {};
-  const nextDueDate = fd.chase_due || fd.next_action_date || null;
   const assignedToDisplay = (() => {
     const v = fd.assigned_to ?? fd.owner ?? fd.assigned_user;
     if (typeof v === "object" && v !== null) return v?.display_name || [v?.first_name, v?.last_name].filter(Boolean).join(" ") || v?.email || null;
@@ -1531,11 +1532,6 @@ const TrackerEntryDetailPage = () => {
                   <Badge variant="secondary" className="text-xs" style={getStageColor(tracker?.tracker_config?.stage_mapping || [], currentStage) ? { borderLeft: `3px solid ${getStageColor(tracker?.tracker_config?.stage_mapping || [], currentStage)}` } : undefined}>
                     {currentStage}
                   </Badge>
-                )}
-                {nextDueDate && (
-                  <span className="text-sm text-muted-foreground">
-                    Next due: {format(parseUTCDate(nextDueDate), "d MMM yyyy")}
-                  </span>
                 )}
                 {(communicationsPendingCount > 0 || (entry?.has_patient_message && smsThreadLoading)) && (
                   <Badge variant="secondary" className="text-xs bg-amber-100 text-amber-800 dark:bg-amber-900 dark:bg-opacity-40 dark:text-amber-200">
@@ -1612,7 +1608,6 @@ const TrackerEntryDetailPage = () => {
               {currentStage && <div><span className="text-muted-foreground">Stage</span><p className="font-medium">{currentStage}</p></div>}
               {assignedToDisplay && <div><span className="text-muted-foreground">Assigned to</span><p className="font-medium flex items-center gap-1"><UserIcon className="h-3.5 w-3.5" />{assignedToDisplay}</p></div>}
               <div><span className="text-muted-foreground">Opened</span><p className="font-medium">{entry?.created_at ? format(parseUTCDate(entry.created_at), "d MMM yyyy") : "—"}</p></div>
-              {nextDueDate && <div><span className="text-muted-foreground">Next due</span><p className="font-medium">{format(parseUTCDate(nextDueDate), "d MMM yyyy")}</p></div>}
               {(formFileAttachments.length + attachments.length) > 0 && <div><span className="text-muted-foreground">Attachments</span><p className="font-medium">{formFileAttachments.length + attachments.length} file(s)</p></div>}
             </CardContent>
           </Card>
@@ -2162,7 +2157,9 @@ const TrackerEntryDetailPage = () => {
                   {/* Form-entry-style layout: sections with labels and groups (like Forms submission view) */}
                   {trackerReadOnlyLayout.length > 0 ? (
                     trackerReadOnlyLayout.map(({ sectionKey, sectionLabel, ungrouped, groupsWithFields }, sectionIndex) => {
-                      const displayData = entry.formatted_data || entry.submission_data || entry.entry_data || {};
+                      const submissionRaw = entry.submission_data || entry.entry_data || {};
+                      const formatted = entry.formatted_data || {};
+                      const displayData = { ...submissionRaw, ...formatted, ...effectiveEntryData };
                       const hasContent = ungrouped.some((f) => checkFieldVisibility(f, displayData)) || groupsWithFields.some(({ group, fields }) => checkGroupVisibility(group, displayData) && fields.some((f) => checkFieldVisibility(f, displayData)));
                       if (!hasContent) return null;
                       const isActiveStage = sectionIndex === expandedSectionIndex;
@@ -2207,7 +2204,6 @@ const TrackerEntryDetailPage = () => {
                                       (() => {
                                         const tableCols = Array.isArray(group.table_columns) && group.table_columns.length > 0 ? group.table_columns : [{ id: "col_1", label: "Column 1" }];
                                         const rows = tableRows.length > 0 ? tableRows : [{ cells: tableCols.map(() => ({ text: "", field_id: null })) }];
-                                        const visibleRows = rows.filter((row) => checkRowVisibility(row, displayData));
                                         return (
                                           <div className="overflow-x-auto rounded-md border">
                                             <table className="w-full border-collapse text-sm">
@@ -2219,21 +2215,26 @@ const TrackerEntryDetailPage = () => {
                                                 </tr>
                                               </thead>
                                               <tbody>
-                                                {visibleRows.map((row, rIdx) => {
+                                                {rows.map((row, originalIdx) => {
+                                                  if (!checkRowVisibility(row, displayData)) return null;
                                                   const cells = (row.cells || []).slice(0, tableCols.length);
                                                   while (cells.length < tableCols.length) cells.push({ text: "", field_id: null });
                                                   return (
-                                                    <tr key={rIdx} className="border-b last:border-b-0">
+                                                    <tr key={originalIdx} className="border-b last:border-b-0">
                                                       {cells.map((cell, cIdx) => {
                                                         const fieldId = cell.field_id ? String(cell.field_id) : null;
                                                         const field = fieldId ? getFieldById(fieldId) : null;
                                                         if (!field && !cell.text) return <td key={cIdx} className="p-2" />;
                                                         if (field && !checkFieldVisibility(field, displayData)) return <td key={cIdx} className="p-2" />;
+                                                        const rawVal = fieldId != null ? displayData[fieldId] : undefined;
+                                                        const rawOther = fieldId != null ? displayData[`${fieldId}_other`] : undefined;
+                                                        const cellValue = Array.isArray(rawVal) ? rawVal[originalIdx] : rawVal;
+                                                        const cellOtherValue = Array.isArray(rawOther) ? rawOther[originalIdx] : rawOther;
                                                         return (
                                                           <td key={cIdx} className="p-2 align-top">
                                                             <div className="space-y-1">
                                                               {cell.text ? <span className="text-muted-foreground text-xs block">{cell.text}</span> : null}
-                                                              {field && <CustomFieldRenderer field={mapFieldToMapped(field)} value={displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} readOnly />}
+                                                              {field && <CustomFieldRenderer field={mapFieldToMapped(field)} value={cellValue} otherTextValue={cellOtherValue} readOnly />}
                                                             </div>
                                                           </td>
                                                         );
@@ -2256,8 +2257,12 @@ const TrackerEntryDetailPage = () => {
                                           const hasR = rightF.length > 0;
                                           const hasC = centerF.length > 0;
                                           if (!hasL && !hasR && !hasC) return null;
+                                          const rowTitle = gridRow.label || gridRow.title;
                                           return (
                                             <div key={`row-${rowIdx}`} className="space-y-3">
+                                              {rowTitle && (
+                                                <h4 className="text-sm font-medium text-foreground border-b pb-1">{rowTitle}</h4>
+                                              )}
                                               {(hasL || hasR) && (
                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                   <div className="space-y-2">{leftF.map((field) => {
@@ -2340,7 +2345,9 @@ const TrackerEntryDetailPage = () => {
               const section = sections[sectionIndex];
               if (!section) return null;
               const sectionKey = section.id ?? section.title ?? section.label ?? `section-${sectionIndex}`;
-              const displayData = entry?.formatted_data || entry?.submission_data || entry?.entry_data || {};
+              const submissionRaw = entry?.submission_data || entry?.entry_data || {};
+              const formatted = entry?.formatted_data || {};
+              const displayData = { ...submissionRaw, ...formatted, ...effectiveEntryData };
               const allSectionFieldsForStage = fieldsBySection[sectionKey]?.fields || [];
               const sectionFields = getVisibleSectionFields(sectionKey, isEditing ? effectiveEntryData : displayData);
               const statusesForThisStage = (s?.statuses ?? s?.status_list ?? []).filter(Boolean);
@@ -2500,8 +2507,12 @@ const TrackerEntryDetailPage = () => {
                                           const hasR = rightF.length > 0;
                                           const hasC = centerF.length > 0;
                                           if (!hasL && !hasR && !hasC) return null;
+                                          const rowTitleEdit = gridRow.label || gridRow.title;
                                           return (
                                             <div key={`row-${rowIdx}`} className="space-y-3">
+                                              {rowTitleEdit && (
+                                                <h4 className="text-sm font-medium text-foreground border-b pb-1">{rowTitleEdit}</h4>
+                                              )}
                                               {(hasL || hasR) && (
                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                   <div className="space-y-2">{leftF.map((f) => renderEditableField(f))}</div>
@@ -2575,7 +2586,6 @@ const TrackerEntryDetailPage = () => {
                                     (() => {
                                       const tableCols = Array.isArray(group.table_columns) && group.table_columns.length > 0 ? group.table_columns : [{ id: "col_1", label: "Column 1" }];
                                       const rows = tableRowsForGroup.length > 0 ? tableRowsForGroup : [{ cells: tableCols.map(() => ({ text: "", field_id: null })) }];
-                                      const visibleRows = rows.filter((row) => checkRowVisibility(row, displayData));
                                       return (
                                         <div className="overflow-x-auto rounded-md border">
                                           <table className="w-full border-collapse text-sm">
@@ -2587,21 +2597,26 @@ const TrackerEntryDetailPage = () => {
                                               </tr>
                                             </thead>
                                             <tbody>
-                                              {visibleRows.map((row, rIdx) => {
+                                              {rows.map((row, originalIdx) => {
+                                                if (!checkRowVisibility(row, displayData)) return null;
                                                 const cells = (row.cells || []).slice(0, tableCols.length);
                                                 while (cells.length < tableCols.length) cells.push({ text: "", field_id: null });
                                                 return (
-                                                  <tr key={rIdx} className="border-b last:border-b-0">
+                                                  <tr key={originalIdx} className="border-b last:border-b-0">
                                                     {cells.map((cell, cIdx) => {
                                                       const fieldId = cell.field_id ? String(cell.field_id) : null;
                                                       const field = fieldId ? getFieldById(fieldId) : null;
                                                       if (!field && !cell.text) return <td key={cIdx} className="p-2" />;
                                                       if (field && !checkFieldVisibility(field, displayData)) return <td key={cIdx} className="p-2" />;
+                                                      const rawVal = fieldId != null ? displayData[fieldId] : undefined;
+                                                      const rawOther = fieldId != null ? displayData[`${fieldId}_other`] : undefined;
+                                                      const cellValue = Array.isArray(rawVal) ? rawVal[originalIdx] : rawVal;
+                                                      const cellOtherValue = Array.isArray(rawOther) ? rawOther[originalIdx] : rawOther;
                                                       return (
                                                         <td key={cIdx} className="p-2 align-top">
                                                           <div className="space-y-1">
                                                             {cell.text ? <span className="text-muted-foreground text-xs block">{cell.text}</span> : null}
-                                                            {field && <CustomFieldRenderer field={mapFieldToMapped(field)} value={displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} readOnly />}
+                                                            {field && <CustomFieldRenderer field={mapFieldToMapped(field)} value={cellValue} otherTextValue={cellOtherValue} readOnly />}
                                                           </div>
                                                         </td>
                                                       );
@@ -2624,8 +2639,12 @@ const TrackerEntryDetailPage = () => {
                                         const hasR = rightF.length > 0;
                                         const hasC = centerF.length > 0;
                                         if (!hasL && !hasR && !hasC) return null;
+                                        const rowTitleStage = gridRow.label || gridRow.title;
                                         return (
                                           <div key={`row-${rowIdx}`} className="space-y-3">
+                                            {rowTitleStage && (
+                                              <h4 className="text-sm font-medium text-foreground border-b pb-1">{rowTitleStage}</h4>
+                                            )}
                                             {(hasL || hasR) && (
                                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                 <div className="space-y-2">{leftF.map((field) => {

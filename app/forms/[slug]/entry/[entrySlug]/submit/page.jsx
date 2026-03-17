@@ -531,8 +531,12 @@ export default function PublicEntrySubmitPage() {
                                       const hasR = rightF.length > 0;
                                       const hasC = centerF.length > 0;
                                       if (!hasL && !hasR && !hasC) return null;
+                                      const rowTitle = gridRow.label || gridRow.title;
                                       return (
                                         <div key={`row-${rowIdx}`} className="space-y-3">
+                                          {rowTitle && (
+                                            <h4 className="text-sm font-medium text-foreground border-b pb-1">{rowTitle}</h4>
+                                          )}
                                           {(hasL || hasR) && (
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                               <div className="space-y-2">{leftF.map((f) => renderField(f))}</div>
