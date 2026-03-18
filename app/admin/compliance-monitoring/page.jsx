@@ -79,11 +79,17 @@ export default function ComplianceMonitoringPage() {
   const { hasPermission } = usePermissionsCheck();
   const canManageCompliance = hasPermission("compliance_monitoring:manage");
 
-  // Get roles for filter dropdown
+  // Get roles for filter dropdown — job roles only (exclude shift roles)
   const { data: rolesData } = useRoles();
-  const roles = Array.isArray(rolesData) 
+  const allRoles = Array.isArray(rolesData) 
     ? rolesData 
     : rolesData?.roles || rolesData?.items || [];
+  const roles = useMemo(() => {
+    return allRoles.filter((r) => {
+      const rt = r.role_type ?? r.roleType ?? "job_role";
+      return rt === "job_role";
+    });
+  }, [allRoles]);
 
   // Build query filters (only include non-default values)
   const queryFilters = useMemo(() => {
@@ -204,6 +210,39 @@ export default function ComplianceMonitoringPage() {
     }
   };
 
+  // Humanized labels for filter options (display only; values sent to API unchanged)
+  const FILTER_LABELS = {
+    daysAhead: "Time window",
+    search: "Search",
+    approvalStatus: "Status",
+    entityType: "Entity type",
+    roleSlug: "Job role",
+    isCompliance: "Document type",
+  };
+  const APPROVAL_OPTIONS = [
+    { value: "all", label: "Any status" },
+    { value: "pending", label: "Pending review" },
+    { value: "approved", label: "Approved" },
+    { value: "declined", label: "Declined" },
+  ];
+  const ENTITY_TYPE_OPTIONS = [
+    { value: "all", label: "Any type" },
+    { value: "user", label: "People" },
+    { value: "asset", label: "Assets" },
+    { value: "task", label: "Tasks" },
+    { value: "project", label: "Projects" },
+  ];
+  const COMPLIANCE_TYPE_OPTIONS = [
+    { value: "all", label: "All documents" },
+    { value: "true", label: "Compliance documents only" },
+    { value: "false", label: "Other documents only" },
+  ];
+  const DAYS_AHEAD_OPTIONS = [
+    { value: "30", label: "Next 30 days" },
+    { value: "60", label: "Next 60 days" },
+    { value: "90", label: "Next 90 days" },
+  ];
+
   const getStatusIcon = (status) => {
     switch (status) {
       case "approved":
@@ -297,28 +336,28 @@ export default function ComplianceMonitoringPage() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="days-ahead-filter-expiring">Days Ahead</Label>
+                    <Label htmlFor="days-ahead-filter-expiring">{FILTER_LABELS.daysAhead}</Label>
                     <Select
                       value={daysAhead.toString()}
                       onValueChange={(value) => setDaysAhead(parseInt(value, 10))}
                     >
                       <SelectTrigger id="days-ahead-filter-expiring">
-                        <SelectValue placeholder="30 days" />
+                        <SelectValue placeholder="Next 30 days" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="30">30 Days</SelectItem>
-                        <SelectItem value="60">60 Days</SelectItem>
-                        <SelectItem value="90">90 Days</SelectItem>
+                        {DAYS_AHEAD_OPTIONS.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="search-expiring">Search</Label>
+                    <Label htmlFor="search-expiring">{FILTER_LABELS.search}</Label>
                     <div className="relative">
                       <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                       <Input
                         id="search-expiring"
-                        placeholder="Search fields, entities..."
+                        placeholder="Search by field or entity..."
                         value={filters.searchTerm}
                         onChange={(e) => handleFilterChange("searchTerm", e.target.value)}
                         className="pl-9"
@@ -326,62 +365,59 @@ export default function ComplianceMonitoringPage() {
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="approval-status-filter-expiring">Approval Status</Label>
+                    <Label htmlFor="approval-status-filter-expiring">{FILTER_LABELS.approvalStatus}</Label>
                     <Select
                       value={filters.approvalStatus}
                       onValueChange={(value) => handleFilterChange("approvalStatus", value)}
                     >
                       <SelectTrigger id="approval-status-filter-expiring">
-                        <SelectValue placeholder="All Statuses" />
+                        <SelectValue placeholder="Any status" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all">All Statuses</SelectItem>
-                        <SelectItem value="pending">Pending</SelectItem>
-                        <SelectItem value="approved">Approved</SelectItem>
-                        <SelectItem value="declined">Declined</SelectItem>
+                        {APPROVAL_OPTIONS.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="entity-type-filter-expiring">Entity Type</Label>
+                    <Label htmlFor="entity-type-filter-expiring">{FILTER_LABELS.entityType}</Label>
                     <Select
                       value={filters.entityType}
                       onValueChange={(value) => handleFilterChange("entityType", value)}
                     >
                       <SelectTrigger id="entity-type-filter-expiring">
-                        <SelectValue placeholder="All Entities" />
+                        <SelectValue placeholder="Any type" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all">All Entities</SelectItem>
-                        <SelectItem value="user">User</SelectItem>
-                        <SelectItem value="asset">Asset</SelectItem>
-                        <SelectItem value="task">Task</SelectItem>
-                        <SelectItem value="project">Project</SelectItem>
+                        {ENTITY_TYPE_OPTIONS.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="role-filter-expiring">Job Role</Label>
+                    <Label htmlFor="role-filter-expiring">{FILTER_LABELS.roleSlug}</Label>
                     <Select
                       value={filters.roleSlug}
                       onValueChange={(value) => handleFilterChange("roleSlug", value)}
                     >
                       <SelectTrigger id="role-filter-expiring">
-                        <SelectValue placeholder="All Roles" />
+                        <SelectValue placeholder="Any role" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all">All Roles</SelectItem>
+                        <SelectItem value="all">Any role</SelectItem>
                         {roles.map((role) => (
                           <SelectItem key={role.slug || role.id} value={role.slug}>
-                            {role.name || role.role_name || role.slug}
-                            {role.shift_name && ` - ${role.shift_name}`}
+                            {role.display_name || role.name || role.role_name || role.slug}
+                            {role.shift_name && ` — ${role.shift_name}`}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="compliance-filter-expiring">Is Compliance</Label>
+                    <Label htmlFor="compliance-filter-expiring">{FILTER_LABELS.isCompliance}</Label>
                     <Select
                       value={filters.isCompliance === null ? "all" : filters.isCompliance.toString()}
                       onValueChange={(value) => {
@@ -393,12 +429,12 @@ export default function ComplianceMonitoringPage() {
                       }}
                     >
                       <SelectTrigger id="compliance-filter-expiring">
-                        <SelectValue placeholder="All Fields" />
+                        <SelectValue placeholder="All documents" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all">All Fields</SelectItem>
-                        <SelectItem value="true">Compliance Only</SelectItem>
-                        <SelectItem value="false">Non-Compliance Only</SelectItem>
+                        {COMPLIANCE_TYPE_OPTIONS.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -603,12 +639,12 @@ export default function ComplianceMonitoringPage() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="search-pending">Search</Label>
+                    <Label htmlFor="search-pending">{FILTER_LABELS.search}</Label>
                     <div className="relative">
                       <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                       <Input
                         id="search-pending"
-                        placeholder="Search fields, entities..."
+                        placeholder="Search by field or entity..."
                         value={filters.searchTerm}
                         onChange={(e) => handleFilterChange("searchTerm", e.target.value)}
                         className="pl-9"
@@ -616,45 +652,43 @@ export default function ComplianceMonitoringPage() {
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="entity-type-filter-pending">Entity Type</Label>
+                    <Label htmlFor="entity-type-filter-pending">{FILTER_LABELS.entityType}</Label>
                     <Select
                       value={filters.entityType}
                       onValueChange={(value) => handleFilterChange("entityType", value)}
                     >
                       <SelectTrigger id="entity-type-filter-pending">
-                        <SelectValue placeholder="All Entities" />
+                        <SelectValue placeholder="Any type" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all">All Entities</SelectItem>
-                        <SelectItem value="user">User</SelectItem>
-                        <SelectItem value="asset">Asset</SelectItem>
-                        <SelectItem value="task">Task</SelectItem>
-                        <SelectItem value="project">Project</SelectItem>
+                        {ENTITY_TYPE_OPTIONS.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="role-filter-pending">Job Role</Label>
+                    <Label htmlFor="role-filter-pending">{FILTER_LABELS.roleSlug}</Label>
                     <Select
                       value={filters.roleSlug}
                       onValueChange={(value) => handleFilterChange("roleSlug", value)}
                     >
                       <SelectTrigger id="role-filter-pending">
-                        <SelectValue placeholder="All Roles" />
+                        <SelectValue placeholder="Any role" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all">All Roles</SelectItem>
+                        <SelectItem value="all">Any role</SelectItem>
                         {roles.map((role) => (
                           <SelectItem key={role.slug || role.id} value={role.slug}>
-                            {role.name || role.role_name || role.slug}
-                            {role.shift_name && ` - ${role.shift_name}`}
+                            {role.display_name || role.name || role.role_name || role.slug}
+                            {role.shift_name && ` — ${role.shift_name}`}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="compliance-filter-pending">Is Compliance</Label>
+                    <Label htmlFor="compliance-filter-pending">{FILTER_LABELS.isCompliance}</Label>
                     <Select
                       value={filters.isCompliance === null ? "all" : filters.isCompliance.toString()}
                       onValueChange={(value) => {
@@ -666,12 +700,12 @@ export default function ComplianceMonitoringPage() {
                       }}
                     >
                       <SelectTrigger id="compliance-filter-pending">
-                        <SelectValue placeholder="All Fields" />
+                        <SelectValue placeholder="All documents" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all">All Fields</SelectItem>
-                        <SelectItem value="true">Compliance Only</SelectItem>
-                        <SelectItem value="false">Non-Compliance Only</SelectItem>
+                        {COMPLIANCE_TYPE_OPTIONS.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -867,12 +901,12 @@ export default function ComplianceMonitoringPage() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="search-non-submitted">Search</Label>
+                    <Label htmlFor="search-non-submitted">{FILTER_LABELS.search}</Label>
                     <div className="relative">
                       <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                       <Input
                         id="search-non-submitted"
-                        placeholder="Search fields, entities..."
+                        placeholder="Search by field or entity..."
                         value={filters.searchTerm}
                         onChange={(e) => handleFilterChange("searchTerm", e.target.value)}
                         className="pl-9"
@@ -880,45 +914,43 @@ export default function ComplianceMonitoringPage() {
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="entity-type-filter-non-submitted">Entity Type</Label>
+                    <Label htmlFor="entity-type-filter-non-submitted">{FILTER_LABELS.entityType}</Label>
                     <Select
                       value={filters.entityType}
                       onValueChange={(value) => handleFilterChange("entityType", value)}
                     >
                       <SelectTrigger id="entity-type-filter-non-submitted">
-                        <SelectValue placeholder="All Entities" />
+                        <SelectValue placeholder="Any type" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all">All Entities</SelectItem>
-                        <SelectItem value="user">User</SelectItem>
-                        <SelectItem value="asset">Asset</SelectItem>
-                        <SelectItem value="task">Task</SelectItem>
-                        <SelectItem value="project">Project</SelectItem>
+                        {ENTITY_TYPE_OPTIONS.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="role-filter-non-submitted">Job Role</Label>
+                    <Label htmlFor="role-filter-non-submitted">{FILTER_LABELS.roleSlug}</Label>
                     <Select
                       value={filters.roleSlug}
                       onValueChange={(value) => handleFilterChange("roleSlug", value)}
                     >
                       <SelectTrigger id="role-filter-non-submitted">
-                        <SelectValue placeholder="All Roles" />
+                        <SelectValue placeholder="Any role" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all">All Roles</SelectItem>
+                        <SelectItem value="all">Any role</SelectItem>
                         {roles.map((role) => (
                           <SelectItem key={role.slug || role.id} value={role.slug}>
-                            {role.name || role.role_name || role.slug}
-                            {role.shift_name && ` - ${role.shift_name}`}
+                            {role.display_name || role.name || role.role_name || role.slug}
+                            {role.shift_name && ` — ${role.shift_name}`}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="compliance-filter-non-submitted">Is Compliance</Label>
+                    <Label htmlFor="compliance-filter-non-submitted">{FILTER_LABELS.isCompliance}</Label>
                     <Select
                       value={filters.isCompliance === null ? "all" : filters.isCompliance.toString()}
                       onValueChange={(value) => {
@@ -930,12 +962,12 @@ export default function ComplianceMonitoringPage() {
                       }}
                     >
                       <SelectTrigger id="compliance-filter-non-submitted">
-                        <SelectValue placeholder="All Fields" />
+                        <SelectValue placeholder="All documents" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all">All Fields</SelectItem>
-                        <SelectItem value="true">Compliance Only</SelectItem>
-                        <SelectItem value="false">Non-Compliance Only</SelectItem>
+                        {COMPLIANCE_TYPE_OPTIONS.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
