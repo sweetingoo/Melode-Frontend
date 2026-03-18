@@ -3724,13 +3724,13 @@ const TrackerEntryDetailPage = () => {
                               />
                             </div>
                             <div className="space-y-2">
-                              <Label className="text-muted-foreground">Chase days (optional)</Label>
+                              <Label className="text-muted-foreground">Default reminder days (optional)</Label>
                               <Input
                                 type="number"
                                 min={0}
                                 value={newActionTypeChaseDays}
                                 onChange={(e) => setNewActionTypeChaseDays(e.target.value)}
-                                placeholder="Days"
+                                placeholder="Days (can be overridden per entry)"
                               />
                             </div>
                             <Button
@@ -3872,7 +3872,18 @@ const TrackerEntryDetailPage = () => {
                     <div className="space-y-2">
                       <Label className="text-muted-foreground">Type</Label>
                       <div className="flex gap-2 items-center">
-                        <Select value={logAppointmentType} onValueChange={setLogAppointmentType}>
+                        <Select
+                          value={logAppointmentType}
+                          onValueChange={(v) => {
+                            setLogAppointmentType(v);
+                            const type = appointmentTypes.find((t) => t.id === v);
+                            if (type?.default_duration_minutes != null) {
+                              setLogAppointmentDuration(String(type.default_duration_minutes));
+                            } else {
+                              setLogAppointmentDuration("");
+                            }
+                          }}
+                        >
                           <SelectTrigger className="min-w-0 flex-1"><SelectValue placeholder="Select type" /></SelectTrigger>
                           <SelectContent>
                             {appointmentTypes.map((t) => (

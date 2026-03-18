@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/pagination";
 import { useExpiringCompliance, usePendingApprovals, useNonSubmittedCompliance, useApproveCompliance } from "@/hooks/useCompliance";
 import { useRoles } from "@/hooks/useRoles";
+import { useDepartments } from "@/hooks/useDepartments";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
 import { Loader2, AlertTriangle, CheckCircle, XCircle, Clock, FileText, Download, User, Calendar, Search, Filter, X, Eye, Package } from "lucide-react";
 import { format } from "date-fns";
@@ -72,6 +73,7 @@ export default function ComplianceMonitoringPage() {
     approvalStatus: "all",
     entityType: "all",
     roleSlug: "all", // "all" = all roles, otherwise specific role slug
+    departmentId: "all", // "all" = all departments, otherwise department id
     isCompliance: null, // null = all, true = compliance only, false = non-compliance only
   });
 
@@ -91,6 +93,12 @@ export default function ComplianceMonitoringPage() {
     });
   }, [allRoles]);
 
+  // Get departments for filter dropdown
+  const { data: departmentsData } = useDepartments({ is_active: true, per_page: 200 });
+  const departments = Array.isArray(departmentsData)
+    ? departmentsData
+    : departmentsData?.departments || departmentsData?.items || [];
+
   // Build query filters (only include non-default values)
   const queryFilters = useMemo(() => {
     const result = {};
@@ -105,6 +113,9 @@ export default function ComplianceMonitoringPage() {
     }
     if (filters.roleSlug && filters.roleSlug !== "all") {
       result.roleSlug = filters.roleSlug;
+    }
+    if (filters.departmentId && filters.departmentId !== "all") {
+      result.departmentId = filters.departmentId;
     }
     if (filters.isCompliance !== null) {
       result.isCompliance = filters.isCompliance;
@@ -174,6 +185,7 @@ export default function ComplianceMonitoringPage() {
       approvalStatus: "all",
       entityType: "all",
       roleSlug: "all",
+      departmentId: "all",
       isCompliance: null,
     });
   };
@@ -182,6 +194,7 @@ export default function ComplianceMonitoringPage() {
     filters.approvalStatus !== "all" || 
     filters.entityType !== "all" ||
     filters.roleSlug !== "all" ||
+    filters.departmentId !== "all" ||
     filters.isCompliance !== null;
 
   const handleApprove = (item) => {
@@ -217,6 +230,7 @@ export default function ComplianceMonitoringPage() {
     approvalStatus: "Status",
     entityType: "Entity type",
     roleSlug: "Job role",
+    department: "Department",
     isCompliance: "Document type",
   };
   const APPROVAL_OPTIONS = [
@@ -334,7 +348,7 @@ export default function ComplianceMonitoringPage() {
                   <Filter className="h-4 w-4 text-muted-foreground" />
                   <h3 className="text-sm font-semibold">Filters</h3>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="days-ahead-filter-expiring">{FILTER_LABELS.daysAhead}</Label>
                     <Select
@@ -411,6 +425,25 @@ export default function ComplianceMonitoringPage() {
                           <SelectItem key={role.slug || role.id} value={role.slug}>
                             {role.display_name || role.name || role.role_name || role.slug}
                             {role.shift_name && ` — ${role.shift_name}`}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="department-filter-expiring">{FILTER_LABELS.department}</Label>
+                    <Select
+                      value={filters.departmentId}
+                      onValueChange={(value) => handleFilterChange("departmentId", value)}
+                    >
+                      <SelectTrigger id="department-filter-expiring">
+                        <SelectValue placeholder="Any department" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Any department</SelectItem>
+                        {departments.map((dept) => (
+                          <SelectItem key={dept.id} value={dept.id.toString()}>
+                            {dept.name || dept.display_name || `Department ${dept.id}`}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -637,7 +670,7 @@ export default function ComplianceMonitoringPage() {
                   <Filter className="h-4 w-4 text-muted-foreground" />
                   <h3 className="text-sm font-semibold">Filters</h3>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="search-pending">{FILTER_LABELS.search}</Label>
                     <div className="relative">
@@ -682,6 +715,25 @@ export default function ComplianceMonitoringPage() {
                           <SelectItem key={role.slug || role.id} value={role.slug}>
                             {role.display_name || role.name || role.role_name || role.slug}
                             {role.shift_name && ` — ${role.shift_name}`}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="department-filter-pending">{FILTER_LABELS.department}</Label>
+                    <Select
+                      value={filters.departmentId}
+                      onValueChange={(value) => handleFilterChange("departmentId", value)}
+                    >
+                      <SelectTrigger id="department-filter-pending">
+                        <SelectValue placeholder="Any department" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Any department</SelectItem>
+                        {departments.map((dept) => (
+                          <SelectItem key={dept.id} value={dept.id.toString()}>
+                            {dept.name || dept.display_name || `Department ${dept.id}`}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -899,7 +951,7 @@ export default function ComplianceMonitoringPage() {
                   <Filter className="h-4 w-4 text-muted-foreground" />
                   <h3 className="text-sm font-semibold">Filters</h3>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="search-non-submitted">{FILTER_LABELS.search}</Label>
                     <div className="relative">
@@ -944,6 +996,25 @@ export default function ComplianceMonitoringPage() {
                           <SelectItem key={role.slug || role.id} value={role.slug}>
                             {role.display_name || role.name || role.role_name || role.slug}
                             {role.shift_name && ` — ${role.shift_name}`}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="department-filter-non-submitted">{FILTER_LABELS.department}</Label>
+                    <Select
+                      value={filters.departmentId}
+                      onValueChange={(value) => handleFilterChange("departmentId", value)}
+                    >
+                      <SelectTrigger id="department-filter-non-submitted">
+                        <SelectValue placeholder="Any department" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Any department</SelectItem>
+                        {departments.map((dept) => (
+                          <SelectItem key={dept.id} value={dept.id.toString()}>
+                            {dept.name || dept.display_name || `Department ${dept.id}`}
                           </SelectItem>
                         ))}
                       </SelectContent>

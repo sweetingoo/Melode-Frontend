@@ -463,8 +463,10 @@ const TrackerEditPage = () => {
   const [smsTemplateOpenKeys, setSmsTemplateOpenKeys] = useState(() => new Set());
   const [addAppointmentSection, setAddAppointmentSection] = useState(null);
   const [newAppointmentOptionLabel, setNewAppointmentOptionLabel] = useState("");
+  const [newAppointmentTypeDuration, setNewAppointmentTypeDuration] = useState("");
   const [editingAppointmentOption, setEditingAppointmentOption] = useState(null);
   const [editingAppointmentLabel, setEditingAppointmentLabel] = useState("");
+  const [editingAppointmentDuration, setEditingAppointmentDuration] = useState("");
   const [editingAppointmentId, setEditingAppointmentId] = useState("");
   const generateAppointmentOptionId = (label) => {
     if (!label) return "";
@@ -4588,7 +4590,7 @@ const TrackerEditPage = () => {
                       >
                         {at.label || at.id}
                         {at.default_chase_days != null && (
-                          <span className="text-xs text-muted-foreground">({at.default_chase_days}d chase)</span>
+                          <span className="text-xs text-muted-foreground">({at.default_chase_days}d reminder)</span>
                         )}
                         <Button
                           variant="ghost"
@@ -4621,7 +4623,7 @@ const TrackerEditPage = () => {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="new-action-type-chase">Chase days (optional)</Label>
+                    <Label htmlFor="new-action-type-chase">Default reminder days (optional)</Label>
                     <Input
                       id="new-action-type-chase"
                       type="number"
@@ -4630,6 +4632,7 @@ const TrackerEditPage = () => {
                       onChange={(e) => setNewActionTypeChaseDays(e.target.value)}
                       placeholder="e.g. 7"
                     />
+                    <p className="text-xs text-muted-foreground mt-1">Default next chase/reminder date when this action is logged; can be overridden per entry.</p>
                   </div>
                   <Button onClick={handleAddActionType} disabled={!newActionTypeLabel.trim()}>
                     <Plus className="h-4 w-4 mr-1" />
@@ -5507,23 +5510,36 @@ const TrackerEditPage = () => {
                         className="h-8 w-40 text-sm"
                         autoFocus
                       />
+                      <Input
+                        type="number"
+                        min={1}
+                        placeholder="Duration (min)"
+                        value={newAppointmentTypeDuration}
+                        onChange={(e) => setNewAppointmentTypeDuration(e.target.value)}
+                        className="h-8 w-24 text-sm"
+                        title="Default duration in minutes (e.g. 10)"
+                      />
                       <Button type="button" size="sm" className="h-8 text-xs" disabled={!newAppointmentOptionLabel?.trim()} onClick={() => {
                         const label = newAppointmentOptionLabel.trim();
                         if (!label) return;
                         const id = generateAppointmentOptionId(label) || label.toLowerCase().replace(/\s+/g, "_");
+                        const dur = newAppointmentTypeDuration.trim() ? parseInt(newAppointmentTypeDuration, 10) : undefined;
+                        const entry = { id, label };
+                        if (dur !== undefined && !Number.isNaN(dur) && dur > 0) entry.default_duration_minutes = dur;
                         setFormData((prev) => ({
                           ...prev,
                           tracker_config: {
                             ...prev.tracker_config,
-                            appointment_types: [...(prev.tracker_config?.appointment_types ?? []), { id, label }],
+                            appointment_types: [...(prev.tracker_config?.appointment_types ?? []), entry],
                           },
                         }));
                         setNewAppointmentOptionLabel("");
+                        setNewAppointmentTypeDuration("");
                         setAddAppointmentSection(null);
                       }}>
                         Add
                       </Button>
-                      <Button type="button" variant="ghost" size="sm" className="h-8 text-xs" onClick={() => { setAddAppointmentSection(null); setNewAppointmentOptionLabel(""); }}>Cancel</Button>
+                      <Button type="button" variant="ghost" size="sm" className="h-8 text-xs" onClick={() => { setAddAppointmentSection(null); setNewAppointmentOptionLabel(""); setNewAppointmentTypeDuration(""); }}>Cancel</Button>
                     </div>
                   )}
                 </div>
@@ -5534,15 +5550,19 @@ const TrackerEditPage = () => {
                         <div className="flex flex-1 items-center gap-2 flex-wrap">
                           <Input value={editingAppointmentLabel} onChange={(e) => setEditingAppointmentLabel(e.target.value)} className="h-8 flex-1 min-w-[100px] text-sm" placeholder="Label" />
                           <Input value={editingAppointmentId} onChange={(e) => setEditingAppointmentId(e.target.value)} className="h-8 w-28 text-xs font-mono" placeholder="id" />
+                          <Input type="number" min={1} className="h-8 w-20 text-sm" placeholder="Min" title="Default duration (minutes)" value={editingAppointmentDuration} onChange={(e) => setEditingAppointmentDuration(e.target.value)} />
                           <Button size="sm" className="h-8 text-xs" onClick={() => {
                             const label = editingAppointmentLabel.trim();
                             const id = (editingAppointmentId || generateAppointmentOptionId(label)).trim() || t.id;
                             if (!id) return;
+                            const dur = editingAppointmentDuration.trim() ? parseInt(editingAppointmentDuration, 10) : undefined;
+                            const updated = { id, label: label || t.label };
+                            if (dur !== undefined && !Number.isNaN(dur) && dur > 0) updated.default_duration_minutes = dur;
                             setFormData((prev) => ({
                               ...prev,
                               tracker_config: {
                                 ...prev.tracker_config,
-                                appointment_types: (prev.tracker_config?.appointment_types ?? []).map((x, i) => i === idx ? { id, label: label || x.label } : x),
+                                appointment_types: (prev.tracker_config?.appointment_types ?? []).map((x, i) => i === idx ? updated : x),
                               },
                             }));
                             setEditingAppointmentOption(null);
@@ -5552,8 +5572,9 @@ const TrackerEditPage = () => {
                       ) : (
                         <>
                           <span className="text-sm truncate flex-1 min-w-0">{t.label || t.id || "—"}</span>
+                          {t.default_duration_minutes != null && <span className="text-xs text-muted-foreground shrink-0">{t.default_duration_minutes} min</span>}
                           <span className="text-xs text-muted-foreground font-mono shrink-0">{t.id}</span>
-                          <Button type="button" variant="ghost" size="sm" className="h-7 shrink-0 opacity-70 group-hover:opacity-100" title="Edit" onClick={() => { setEditingAppointmentOption({ section: "types", index: idx }); setEditingAppointmentLabel(t.label ?? ""); setEditingAppointmentId(t.id ?? ""); }}>
+                          <Button type="button" variant="ghost" size="sm" className="h-7 shrink-0 opacity-70 group-hover:opacity-100" title="Edit" onClick={() => { setEditingAppointmentOption({ section: "types", index: idx }); setEditingAppointmentLabel(t.label ?? ""); setEditingAppointmentId(t.id ?? ""); setEditingAppointmentDuration(t.default_duration_minutes != null ? String(t.default_duration_minutes) : ""); }}>
                             <Edit2 className="h-3.5 w-3.5" />
                           </Button>
                           <Button

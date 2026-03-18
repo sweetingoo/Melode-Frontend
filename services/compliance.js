@@ -154,6 +154,9 @@ export const complianceService = {
       if (filters.isCompliance !== null && filters.isCompliance !== undefined) {
         params.append("is_compliance", filters.isCompliance.toString());
       }
+      if (filters.departmentId && filters.departmentId !== "all") {
+        params.append("department_id", filters.departmentId.toString());
+      }
       
       const response = await api.get(`/compliance/expiring?${params.toString()}`);
       return response.data || response;
@@ -183,6 +186,9 @@ export const complianceService = {
       }
       if (filters.isCompliance !== null && filters.isCompliance !== undefined) {
         params.append("is_compliance", filters.isCompliance.toString());
+      }
+      if (filters.departmentId && filters.departmentId !== "all") {
+        params.append("department_id", filters.departmentId.toString());
       }
       
       const response = await api.get(`/compliance/pending?${params.toString()}`);
@@ -216,6 +222,9 @@ export const complianceService = {
       }
       if (filters.isCompliance !== null && filters.isCompliance !== undefined) {
         params.append("is_compliance", filters.isCompliance.toString());
+      }
+      if (filters.departmentId && filters.departmentId !== "all") {
+        params.append("department_id", filters.departmentId.toString());
       }
       
       const response = await api.get(`/compliance/non-submitted?${params.toString()}`);
