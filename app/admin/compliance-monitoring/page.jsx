@@ -94,7 +94,7 @@ export default function ComplianceMonitoringPage() {
   }, [allRoles]);
 
   // Get departments for filter dropdown
-  const { data: departmentsData } = useDepartments({ is_active: true, per_page: 200 });
+  const { data: departmentsData } = useDepartments({ is_active: true, per_page: 50 });
   const departments = Array.isArray(departmentsData)
     ? departmentsData
     : departmentsData?.departments || departmentsData?.items || [];
