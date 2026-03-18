@@ -3219,8 +3219,7 @@ const TrackersPage = () => {
                             )}
                           </TableCell>
                           <TableCell className={cn("border-r text-muted-foreground", densityClass)}>
-                            {entry.next_action_label ??
-                              (entry.next_action_date || entry.formatted_data?.chase_due || entry.submission_data?.chase_due ? "Due" : "—")}
+                            {entry.next_action_label ?? "—"}
                           </TableCell>
                           <TableCell className={cn("border-r tabular-nums", densityClass)}>
                             {entry.next_action_date

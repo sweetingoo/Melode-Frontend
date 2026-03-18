@@ -34,9 +34,11 @@ import {
   GripVertical,
   X,
   ChevronDown,
+  ChevronRight,
   ChevronUp,
   Copy,
   Link2,
+  MessageSquare,
 } from "lucide-react";
 import {
   Pagination,
@@ -457,6 +459,7 @@ const TrackerEditPage = () => {
     if (tabFromUrl && TRACKER_EDIT_TABS.includes(tabFromUrl)) setActiveTab(tabFromUrl);
   }, [tabFromUrl]);
   const [smsTemplatesDraft, setSmsTemplatesDraft] = useState(null);
+  const [smsTemplateOpenKeys, setSmsTemplateOpenKeys] = useState(() => new Set());
   const handleTabChange = (value) => {
     if (activeTab === "communication" && smsTemplatesDraft !== null) {
       setFormData((prev) => ({ ...prev, tracker_config: { ...prev.tracker_config, sms_templates: smsTemplatesDraft } }));
@@ -467,14 +470,17 @@ const TrackerEditPage = () => {
     sp.set("tab", value);
     router.replace(`/admin/trackers/${slug}/edit?${sp.toString()}`, { scroll: false });
   };
-  useEffect(() => {
-    if (activeTab === "communication" && smsTemplatesDraft === null) {
-      setSmsTemplatesDraft(JSON.parse(JSON.stringify(formData.tracker_config?.sms_templates || [])));
-    }
-  }, [activeTab, smsTemplatesDraft]);
 
   const { data: tracker, isLoading: trackerLoading } = useTracker(slug);
   const updateMutation = useUpdateTracker();
+
+  // Sync SMS templates from tracker when opening Communication tab. Only run when tracker has loaded
+  // so we don't overwrite with empty data before fetch completes.
+  useEffect(() => {
+    if (activeTab === "communication" && smsTemplatesDraft === null && tracker) {
+      setSmsTemplatesDraft(JSON.parse(JSON.stringify(tracker.tracker_config?.sms_templates || [])));
+    }
+  }, [activeTab, smsTemplatesDraft, tracker]);
   const { data: rolesData } = useRoles();
   const { data: rolesAllData } = useRolesAll(100);
   const { data: usersResponse } = useUsers();
@@ -713,7 +719,7 @@ const TrackerEditPage = () => {
     fetchTwilioActiveNumbers();
   }, [fetchTwilioActiveNumbers]);
 
-  const handleSave = async (shouldRedirect = true) => {
+  const handleSave = async () => {
     try {
       const defaultStatuses = formData.tracker_config?.statuses || [];
       const stageMapping = formData.tracker_config?.stage_mapping || [];
@@ -733,9 +739,6 @@ const TrackerEditPage = () => {
         trackerData: dataToSave,
       });
       toast.success("Tracker updated successfully");
-      if (shouldRedirect) {
-        router.push("/admin/trackers/manage");
-      }
     } catch (error) {
       // Error handled by mutation
     }
@@ -5301,64 +5304,133 @@ const TrackerEditPage = () => {
           </Card>
           <Card>
             <CardHeader>
-              <CardTitle>SMS quick-reply templates</CardTitle>
-              <p className="text-sm text-muted-foreground mt-1">
-                Templates shown in the Communications tab when sending SMS from a case. Staff pick a template or type a custom message.
-              </p>
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div>
+                  <CardTitle>SMS quick-reply templates</CardTitle>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Templates shown when sending SMS from a case. Staff pick a template or type a custom message.
+                  </p>
+                </div>
+                {(() => {
+                  const list = smsTemplatesDraft ?? formData.tracker_config?.sms_templates ?? [];
+                  const saved = formData.tracker_config?.sms_templates ?? [];
+                  const hasDraft = smsTemplatesDraft !== null;
+                  const isSame = hasDraft && list.length === saved.length && list.every((t, i) => (saved[i]?.key === t?.key && saved[i]?.label === t?.label && saved[i]?.body === t?.body));
+                  const unsaved = hasDraft && !isSame;
+                  return unsaved ? (
+                    <span className="text-xs font-medium text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-2 py-1 rounded">
+                      Unsaved changes
+                    </span>
+                  ) : list.length > 0 ? (
+                    <span className="text-xs text-muted-foreground">Saved</span>
+                  ) : null;
+                })()}
+              </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              {(smsTemplatesDraft ?? formData.tracker_config?.sms_templates ?? []).map((tpl, idx) => (
-                <div key={tpl.key || idx} className="flex flex-col gap-2 p-3 border rounded-md bg-muted/20">
-                  <div className="flex items-center justify-between gap-2 flex-wrap">
-                    <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
-                      <Input
-                        placeholder="Key (e.g. appointment_reminder)"
-                        value={tpl.key ?? ""}
-                        onChange={(e) => {
-                          const v = e.target.value.trim();
-                          setSmsTemplatesDraft((prev) =>
-                            (prev ?? formData.tracker_config?.sms_templates ?? []).map((t, i) => (i === idx ? { ...t, key: v || t.key } : t))
-                          );
-                        }}
-                        className="h-8 text-xs font-mono max-w-[200px]"
-                      />
-                      <Input
-                        placeholder="Label (e.g. Appointment reminder)"
-                        value={tpl.label ?? ""}
-                        onChange={(e) => {
-                          setSmsTemplatesDraft((prev) =>
-                            (prev ?? formData.tracker_config?.sms_templates ?? []).map((t, i) => (i === idx ? { ...t, label: e.target.value } : t))
-                          );
-                        }}
-                        className="h-8 text-xs flex-1 min-w-[140px]"
-                      />
-                    </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 shrink-0 text-destructive"
-                      onClick={() => {
-                        setSmsTemplatesDraft((prev) => (prev ?? formData.tracker_config?.sms_templates ?? []).filter((_, i) => i !== idx));
-                      }}
-                      title="Remove template"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  <Textarea
-                    placeholder="Message body (e.g. Your appointment is coming up. Please contact us if you need to reschedule.)"
-                    value={tpl.body ?? ""}
-                    onChange={(e) => {
-                      setSmsTemplatesDraft((prev) =>
-                        (prev ?? formData.tracker_config?.sms_templates ?? []).map((t, i) => (i === idx ? { ...t, body: e.target.value } : t))
-                      );
+              {(smsTemplatesDraft ?? formData.tracker_config?.sms_templates ?? []).map((tpl, idx) => {
+                const tplKey = tpl.key || `tpl-${idx}`;
+                const isOpen = smsTemplateOpenKeys.has(tplKey);
+                const title = tpl.label?.trim() || tpl.key || "New template";
+                const subtitle = tpl.label?.trim() && tpl.key ? tpl.key : null;
+                return (
+                  <Collapsible
+                    key={tplKey}
+                    open={isOpen}
+                    onOpenChange={(open) => {
+                      setSmsTemplateOpenKeys((prev) => {
+                        const next = new Set(prev);
+                        if (open) next.add(tplKey);
+                        else next.delete(tplKey);
+                        return next;
+                      });
                     }}
-                    rows={2}
-                    className="text-xs resize-y min-h-[60px]"
-                  />
-                </div>
-              ))}
+                  >
+                    <div className="border border-border/80 rounded-xl bg-card shadow-sm overflow-hidden transition-shadow hover:shadow-md">
+                      <CollapsibleTrigger className="flex w-full items-center gap-3 px-4 py-3.5 text-left hover:bg-muted/40 rounded-xl transition-colors [&[data-state=open]_svg.chevron]:rotate-90">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                          <MessageSquare className="h-4 w-4" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-sm truncate">{title}</p>
+                          {subtitle && (
+                            <p className="text-xs text-muted-foreground font-mono truncate mt-0.5">{subtitle}</p>
+                          )}
+                        </div>
+                        <ChevronRight className="chevron h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200" />
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <div className="flex flex-col gap-4 px-4 pb-4 pt-1 border-t bg-muted/20">
+                          <div className="grid gap-4 sm:grid-cols-2 pt-3">
+                            <div className="space-y-2">
+                              <Label className="text-xs font-medium text-muted-foreground">Label (shown to staff)</Label>
+                              <Input
+                                placeholder="e.g. Appointment reminder"
+                                value={tpl.label ?? ""}
+                                onChange={(e) => {
+                                  setSmsTemplatesDraft((prev) =>
+                                    (prev ?? formData.tracker_config?.sms_templates ?? []).map((t, i) => (i === idx ? { ...t, label: e.target.value } : t))
+                                  );
+                                }}
+                                className="h-9 bg-background"
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label className="text-xs font-medium text-muted-foreground">Key (internal)</Label>
+                              <Input
+                                placeholder="e.g. appointment_reminder"
+                                value={tpl.key ?? ""}
+                                onChange={(e) => {
+                                  const v = e.target.value.trim();
+                                  setSmsTemplatesDraft((prev) =>
+                                    (prev ?? formData.tracker_config?.sms_templates ?? []).map((t, i) => (i === idx ? { ...t, key: v || t.key } : t))
+                                  );
+                                }}
+                                className="h-9 text-sm font-mono bg-background"
+                              />
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <Label className="text-xs font-medium text-muted-foreground">Message body</Label>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  setSmsTemplatesDraft((prev) => (prev ?? formData.tracker_config?.sms_templates ?? []).filter((_, i) => i !== idx));
+                                  setSmsTemplateOpenKeys((prev) => {
+                                    const next = new Set(prev);
+                                    next.delete(tplKey);
+                                    return next;
+                                  });
+                                }}
+                                title="Remove template"
+                              >
+                                <Trash2 className="h-3.5 w-3.5 mr-1" />
+                                Remove
+                              </Button>
+                            </div>
+                            <Textarea
+                              placeholder="e.g. Your appointment is coming up. Please contact us if you need to reschedule."
+                              value={tpl.body ?? ""}
+                              onChange={(e) => {
+                                setSmsTemplatesDraft((prev) =>
+                                  (prev ?? formData.tracker_config?.sms_templates ?? []).map((t, i) => (i === idx ? { ...t, body: e.target.value } : t))
+                                );
+                              }}
+                              rows={3}
+                              className="resize-y min-h-[80px] text-sm bg-background"
+                            />
+                          </div>
+                        </div>
+                      </CollapsibleContent>
+                    </div>
+                  </Collapsible>
+                );
+              })}
               <Button
                 type="button"
                 variant="outline"
@@ -5368,6 +5440,7 @@ const TrackerEditPage = () => {
                   const n = list.length + 1;
                   const newKey = `template_${n}`;
                   setSmsTemplatesDraft([...(list || []), { key: newKey, label: "", body: "" }]);
+                  setSmsTemplateOpenKeys((prev) => new Set(prev).add(newKey));
                 }}
               >
                 <Plus className="h-4 w-4 mr-2" /> Add template

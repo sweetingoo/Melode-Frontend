@@ -690,10 +690,13 @@ const TrackerEntryDetailPage = () => {
     const items = [];
     (allTimelineEvents || []).forEach((ev) => {
       const d = ev.chase_date;
-      if (d) {
+      // Only show chase dates that come from real tracker actions.
+      // This prevents standalone "Due" rows that can't be marked done from appearing in the sidebar.
+      if (d && ev.type === "action") {
         const dateStr = typeof d === "string" ? d.split("T")[0] : d;
-        const type = ev.type === "action" ? getActionTimelineTitle(ev) : (ev.title || "Action");
-        const actionId = ev.type === "action" && ev.id?.startsWith("action_") ? Number(ev.id.slice(7)) : null;
+        const type = getActionTimelineTitle(ev);
+        const actionId = ev.id?.startsWith("action_") ? Number(ev.id.slice(7)) : null;
+        if (actionId == null) return;
         const completed = !!ev.completed_at;
         items.push({ dateStr, type, actionId, completed });
       }
