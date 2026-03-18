@@ -1212,6 +1212,11 @@ const CustomFieldsAdminPage = () => {
   const { data: rolesAllData } = useRolesAll(100, { enabled: true });
   const { data: assetTypesData } = useActiveAssetTypes();
   const roles = Array.isArray(rolesAllData) ? rolesAllData : rolesAllData?.roles || rolesAllData?.data || [];
+  // For compliance field linking, only job roles apply (shift roles are under a job role and don't define who the field applies to)
+  const jobRolesForCompliance = React.useMemo(
+    () => (roles || []).filter((r) => (r.role_type ?? r.roleType ?? "job_role") === "job_role"),
+    [roles]
+  );
   const assetTypes = assetTypesData?.asset_types || assetTypesData || [];
 
   // Fetch forms and trackers for usage tracking (page-by-page to avoid large per_page)
@@ -4369,21 +4374,22 @@ const CustomFieldsAdminPage = () => {
                         </div>
                       </div>
 
-                      {/* Role Linking - Only for user entity type */}
+                      {/* Role Linking - Only for user entity type; job roles only (shift roles are not used for compliance scope) */}
                       {fieldFormData.entity_type === "user" && (
                         <div className="space-y-3 border-t pt-4 mt-4">
                           <div className="flex items-center gap-2">
                             <Shield className="h-4 w-4 text-primary" />
-                            <Label className="text-sm font-semibold">Link to Job Roles / Shift Roles</Label>
+                            <Label className="text-sm font-semibold">Link to Job Roles</Label>
                           </div>
                           <p className="text-xs text-muted-foreground">
-                            Select which roles this compliance field applies to. Leave empty to apply to all roles.
+                            Select which job roles this compliance field applies to. Leave empty to apply to all job roles. Only job roles are shown; shift roles are not used for compliance scope.
                           </p>
                           <div className="space-y-2 max-h-48 overflow-y-auto border rounded-md p-3">
-                            {roles.length === 0 ? (
-                              <p className="text-sm text-muted-foreground text-center py-2">No roles available</p>
+                            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Job roles</p>
+                            {jobRolesForCompliance.length === 0 ? (
+                              <p className="text-sm text-muted-foreground text-center py-2">No job roles available</p>
                             ) : (
-                              roles.map((role) => {
+                              jobRolesForCompliance.map((role) => {
                                 const roleSlug = role.slug || role.id?.toString();
                                 if (!roleSlug) {
                                   console.warn("Role missing slug:", role);
@@ -4420,7 +4426,12 @@ const CustomFieldsAdminPage = () => {
                                       className="rounded"
                                     />
                                     <Label htmlFor={`role-${roleSlug}`} className="flex-1 cursor-pointer text-sm">
-                                      {role.display_name || role.name || role.role_name || roleSlug}
+                                      {(() => {
+                                        const dept = role.department;
+                                        const deptName = dept?.name ?? dept?.display_name ?? dept?.code;
+                                        const roleName = role.display_name || role.name || role.role_name || roleSlug;
+                                        return deptName ? `${roleName} (${deptName})` : roleName;
+                                      })()}
                                     </Label>
                                     {isSelected && (
                                       <div className="flex items-center gap-2">
