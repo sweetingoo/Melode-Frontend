@@ -107,8 +107,8 @@ const DepartmentsPage = () => {
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
-  // API hooks - use debounced search term
-  const { data: departmentsResponse, isLoading, error, refetch } = useDepartments({
+  // API hooks - use debounced search term (placeholderData keeps previous list visible while refetching)
+  const { data: departmentsResponse, isLoading, isFetching, error, refetch } = useDepartments({
     page: currentPage,
     per_page: itemsPerPage,
     search: debouncedSearchTerm || undefined,
@@ -352,8 +352,9 @@ const DepartmentsPage = () => {
     }
   };
 
-  // Loading state
-  if (isLoading) {
+  // Full-page loading only on initial load (no data yet). When typing in search we keep showing previous data.
+  const hasData = (departmentsResponse?.departments || departmentsResponse?.data || []).length > 0;
+  if (isLoading && !hasData) {
     return (
       <div className="space-y-6">
         <Card>
@@ -491,7 +492,12 @@ const DepartmentsPage = () => {
         <CardHeader>
           <CardTitle>All Departments</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="relative">
+          {isFetching && (
+            <div className="absolute inset-0 z-10 flex items-center justify-center rounded-md bg-background/80 backdrop-blur-[1px] min-h-[200px]">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" aria-hidden />
+            </div>
+          )}
           {filteredDepartments.length === 0 ? (
             <div className="text-center py-12">
               <Building2 className="h-12 w-12 text-muted-foreground mx-auto mb-4" />

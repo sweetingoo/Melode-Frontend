@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { departmentsService } from "@/services/departments";
 import { toast } from "sonner";
 import { extractErrorMessage } from "@/utils/error-handler";
@@ -21,6 +21,7 @@ export const useDepartments = (params = {}) => {
       return response.data;
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
+    placeholderData: keepPreviousData, // keep previous list visible while search/pagination refetches
   });
 };
 
