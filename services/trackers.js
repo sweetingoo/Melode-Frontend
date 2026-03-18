@@ -417,6 +417,45 @@ export const trackersService = {
     }
   },
 
+  getTrackerEntryAppointments: async (entryIdentifier) => {
+    try {
+      const response = await api.get(`/trackers/entries/${entryIdentifier}/appointments`);
+      return response.data;
+    } catch (error) {
+      console.error(`Get appointments for ${entryIdentifier} failed:`, error);
+      throw error;
+    }
+  },
+
+  createTrackerAppointment: async (entryIdentifier, body) => {
+    try {
+      const response = await api.post(`/trackers/entries/${entryIdentifier}/appointments`, body);
+      return response.data;
+    } catch (error) {
+      console.error(`Create appointment for ${entryIdentifier} failed:`, error);
+      throw error;
+    }
+  },
+
+  updateTrackerAppointment: async (entryIdentifier, appointmentId, body) => {
+    try {
+      const response = await api.patch(`/trackers/entries/${entryIdentifier}/appointments/${appointmentId}`, body);
+      return response.data;
+    } catch (error) {
+      console.error(`Update appointment ${appointmentId} for ${entryIdentifier} failed:`, error);
+      throw error;
+    }
+  },
+
+  deleteTrackerAppointment: async (entryIdentifier, appointmentId) => {
+    try {
+      await api.delete(`/trackers/entries/${entryIdentifier}/appointments/${appointmentId}`);
+    } catch (error) {
+      console.error(`Delete appointment ${appointmentId} for ${entryIdentifier} failed:`, error);
+      throw error;
+    }
+  },
+
   getTrackerEntryTimeline: async (entryIdentifier, page = 1, per_page = 50) => {
     try {
       return await api.get(`/trackers/entries/${entryIdentifier}/timeline`, {

@@ -39,6 +39,7 @@ import {
   Copy,
   Link2,
   MessageSquare,
+  CalendarClock,
 } from "lucide-react";
 import {
   Pagination,
@@ -460,6 +461,23 @@ const TrackerEditPage = () => {
   }, [tabFromUrl]);
   const [smsTemplatesDraft, setSmsTemplatesDraft] = useState(null);
   const [smsTemplateOpenKeys, setSmsTemplateOpenKeys] = useState(() => new Set());
+  const [addAppointmentSection, setAddAppointmentSection] = useState(null);
+  const [newAppointmentOptionLabel, setNewAppointmentOptionLabel] = useState("");
+  const [editingAppointmentOption, setEditingAppointmentOption] = useState(null);
+  const [editingAppointmentLabel, setEditingAppointmentLabel] = useState("");
+  const [editingAppointmentId, setEditingAppointmentId] = useState("");
+  const generateAppointmentOptionId = (label) => {
+    if (!label) return "";
+    return String(label)
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9\s_-]/g, "")
+      .replace(/\s+/g, "_")
+      .replace(/-+/g, "_")
+      .replace(/_+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .substring(0, 100);
+  };
   const handleTabChange = (value) => {
     if (activeTab === "communication" && smsTemplatesDraft !== null) {
       setFormData((prev) => ({ ...prev, tracker_config: { ...prev.tracker_config, sms_templates: smsTemplatesDraft } }));
@@ -1485,8 +1503,8 @@ const TrackerEditPage = () => {
       </header>
 
       <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-        <div className="overflow-x-auto -mx-1 px-1 sm:overflow-x-visible sm:mx-0 sm:px-0">
-          <TabsList className="inline-flex w-auto min-w-max sm:w-auto">
+        <div className="overflow-x-auto scrollbar-hide -mx-2 px-2 min-w-0 w-full">
+          <TabsList className="inline-flex flex-nowrap w-max gap-0.5 [&>*]:shrink-0">
             <TabsTrigger value="basic">Basic Info</TabsTrigger>
             <TabsTrigger value="fields">Fields ({fields.length})</TabsTrigger>
             <TabsTrigger value="sections">Fields per stage ({sections.length})</TabsTrigger>
@@ -1496,6 +1514,10 @@ const TrackerEditPage = () => {
             )}
             <TabsTrigger value="permissions">Permissions</TabsTrigger>
             <TabsTrigger value="communication">Communication</TabsTrigger>
+            <TabsTrigger value="appointments">
+              <CalendarClock className="h-4 w-4 mr-2 shrink-0" />
+              Appointments
+            </TabsTrigger>
             <TabsTrigger value="notifications">Notifications</TabsTrigger>
             <TabsTrigger value="audit">Audit Logs</TabsTrigger>
           </TabsList>
@@ -5378,7 +5400,7 @@ const TrackerEditPage = () => {
                             <div className="space-y-2">
                               <Label className="text-xs font-medium text-muted-foreground">Key (internal)</Label>
                               <Input
-                                placeholder="e.g. appointment_reminder"
+                                placeholder="e.g. general"
                                 value={tpl.key ?? ""}
                                 onChange={(e) => {
                                   const v = e.target.value.trim();
@@ -5447,9 +5469,241 @@ const TrackerEditPage = () => {
               </Button>
               {((smsTemplatesDraft ?? formData.tracker_config?.sms_templates)?.length ?? 0) === 0 && (
                 <p className="text-sm text-muted-foreground">
-                  No custom templates. The case Communications tab will show built-in options (Appointment reminder, Prep reminder, Please contact us). Add templates here to override or add more.
+                  No custom templates. The case Communications tab will show the default template &quot;General&quot; (no message). Add templates here to add more options.
                 </p>
               )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Appointments tab – types, locations, statuses for case appointments */}
+        <TabsContent value="appointments" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <CalendarClock className="h-4 w-4 text-muted-foreground" />
+                <div>
+                  <CardTitle>Appointment options</CardTitle>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Types, locations, and statuses used when logging appointments on a case. Add and edit options here, or add from a case (click + next to the dropdown when adding an appointment).
+                  </p>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Types</Label>
+                  {addAppointmentSection !== "types" ? (
+                    <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={() => { setAddAppointmentSection("types"); setNewAppointmentOptionLabel(""); }}>
+                      <Plus className="h-3.5 w-3.5 mr-1" /> Add
+                    </Button>
+                  ) : (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Input
+                        placeholder="Label (e.g. Consultation)"
+                        value={newAppointmentOptionLabel}
+                        onChange={(e) => setNewAppointmentOptionLabel(e.target.value)}
+                        className="h-8 w-40 text-sm"
+                        autoFocus
+                      />
+                      <Button type="button" size="sm" className="h-8 text-xs" disabled={!newAppointmentOptionLabel?.trim()} onClick={() => {
+                        const label = newAppointmentOptionLabel.trim();
+                        if (!label) return;
+                        const id = generateAppointmentOptionId(label) || label.toLowerCase().replace(/\s+/g, "_");
+                        setFormData((prev) => ({
+                          ...prev,
+                          tracker_config: {
+                            ...prev.tracker_config,
+                            appointment_types: [...(prev.tracker_config?.appointment_types ?? []), { id, label }],
+                          },
+                        }));
+                        setNewAppointmentOptionLabel("");
+                        setAddAppointmentSection(null);
+                      }}>
+                        Add
+                      </Button>
+                      <Button type="button" variant="ghost" size="sm" className="h-8 text-xs" onClick={() => { setAddAppointmentSection(null); setNewAppointmentOptionLabel(""); }}>Cancel</Button>
+                    </div>
+                  )}
+                </div>
+                <ul className="space-y-1.5">
+                  {(formData.tracker_config?.appointment_types ?? []).map((t, idx) => (
+                    <li key={t.id ?? idx} className="flex items-center justify-between gap-2 py-1.5 px-2 rounded-md bg-muted/40 group">
+                      {editingAppointmentOption?.section === "types" && editingAppointmentOption?.index === idx ? (
+                        <div className="flex flex-1 items-center gap-2 flex-wrap">
+                          <Input value={editingAppointmentLabel} onChange={(e) => setEditingAppointmentLabel(e.target.value)} className="h-8 flex-1 min-w-[100px] text-sm" placeholder="Label" />
+                          <Input value={editingAppointmentId} onChange={(e) => setEditingAppointmentId(e.target.value)} className="h-8 w-28 text-xs font-mono" placeholder="id" />
+                          <Button size="sm" className="h-8 text-xs" onClick={() => {
+                            const label = editingAppointmentLabel.trim();
+                            const id = (editingAppointmentId || generateAppointmentOptionId(label)).trim() || t.id;
+                            if (!id) return;
+                            setFormData((prev) => ({
+                              ...prev,
+                              tracker_config: {
+                                ...prev.tracker_config,
+                                appointment_types: (prev.tracker_config?.appointment_types ?? []).map((x, i) => i === idx ? { id, label: label || x.label } : x),
+                              },
+                            }));
+                            setEditingAppointmentOption(null);
+                          }}>Save</Button>
+                          <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => setEditingAppointmentOption(null)}>Cancel</Button>
+                        </div>
+                      ) : (
+                        <>
+                          <span className="text-sm truncate flex-1 min-w-0">{t.label || t.id || "—"}</span>
+                          <span className="text-xs text-muted-foreground font-mono shrink-0">{t.id}</span>
+                          <Button type="button" variant="ghost" size="sm" className="h-7 shrink-0 opacity-70 group-hover:opacity-100" title="Edit" onClick={() => { setEditingAppointmentOption({ section: "types", index: idx }); setEditingAppointmentLabel(t.label ?? ""); setEditingAppointmentId(t.id ?? ""); }}>
+                            <Edit2 className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 text-destructive hover:bg-destructive/10 hover:text-destructive shrink-0 opacity-70 group-hover:opacity-100"
+                            onClick={() => {
+                              setFormData((prev) => ({
+                                ...prev,
+                                tracker_config: {
+                                  ...prev.tracker_config,
+                                  appointment_types: (prev.tracker_config?.appointment_types ?? []).filter((_, i) => i !== idx),
+                                },
+                              }));
+                              if (editingAppointmentOption?.section === "types" && editingAppointmentOption?.index === idx) setEditingAppointmentOption(null);
+                            }}
+                            title="Remove this type"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+                {(formData.tracker_config?.appointment_types ?? []).length === 0 && addAppointmentSection !== "types" && (
+                  <p className="text-sm text-muted-foreground py-1">No types yet. Add above or from a case.</p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Locations</Label>
+                  {addAppointmentSection !== "locations" ? (
+                    <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={() => { setAddAppointmentSection("locations"); setNewAppointmentOptionLabel(""); }}>
+                      <Plus className="h-3.5 w-3.5 mr-1" /> Add
+                    </Button>
+                  ) : (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Input placeholder="Label (e.g. Main site)" value={newAppointmentOptionLabel} onChange={(e) => setNewAppointmentOptionLabel(e.target.value)} className="h-8 w-40 text-sm" autoFocus />
+                      <Button type="button" size="sm" className="h-8 text-xs" disabled={!newAppointmentOptionLabel?.trim()} onClick={() => {
+                        const label = newAppointmentOptionLabel.trim();
+                        if (!label) return;
+                        const id = generateAppointmentOptionId(label) || label.toLowerCase().replace(/\s+/g, "_");
+                        setFormData((prev) => ({ ...prev, tracker_config: { ...prev.tracker_config, appointment_locations: [...(prev.tracker_config?.appointment_locations ?? []), { id, label }] } }));
+                        setNewAppointmentOptionLabel("");
+                        setAddAppointmentSection(null);
+                      }}>Add</Button>
+                      <Button type="button" variant="ghost" size="sm" className="h-8 text-xs" onClick={() => { setAddAppointmentSection(null); setNewAppointmentOptionLabel(""); }}>Cancel</Button>
+                    </div>
+                  )}
+                </div>
+                <ul className="space-y-1.5">
+                  {(formData.tracker_config?.appointment_locations ?? []).map((l, idx) => (
+                    <li key={l.id ?? idx} className="flex items-center justify-between gap-2 py-1.5 px-2 rounded-md bg-muted/40 group">
+                      {editingAppointmentOption?.section === "locations" && editingAppointmentOption?.index === idx ? (
+                        <div className="flex flex-1 items-center gap-2 flex-wrap">
+                          <Input value={editingAppointmentLabel} onChange={(e) => setEditingAppointmentLabel(e.target.value)} className="h-8 flex-1 min-w-[100px] text-sm" placeholder="Label" />
+                          <Input value={editingAppointmentId} onChange={(e) => setEditingAppointmentId(e.target.value)} className="h-8 w-28 text-xs font-mono" placeholder="id" />
+                          <Button size="sm" className="h-8 text-xs" onClick={() => {
+                            const label = editingAppointmentLabel.trim();
+                            const id = (editingAppointmentId || generateAppointmentOptionId(label)).trim() || l.id;
+                            if (!id) return;
+                            setFormData((prev) => ({ ...prev, tracker_config: { ...prev.tracker_config, appointment_locations: (prev.tracker_config?.appointment_locations ?? []).map((x, i) => i === idx ? { id, label: label || x.label } : x) } }));
+                            setEditingAppointmentOption(null);
+                          }}>Save</Button>
+                          <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => setEditingAppointmentOption(null)}>Cancel</Button>
+                        </div>
+                      ) : (
+                        <>
+                          <span className="text-sm truncate flex-1 min-w-0">{l.label || l.id || "—"}</span>
+                          <span className="text-xs text-muted-foreground font-mono shrink-0">{l.id}</span>
+                          <Button type="button" variant="ghost" size="sm" className="h-7 shrink-0 opacity-70 group-hover:opacity-100" title="Edit" onClick={() => { setEditingAppointmentOption({ section: "locations", index: idx }); setEditingAppointmentLabel(l.label ?? ""); setEditingAppointmentId(l.id ?? ""); }}>
+                            <Edit2 className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button type="button" variant="ghost" size="sm" className="h-7 text-destructive hover:bg-destructive/10 hover:text-destructive shrink-0 opacity-70 group-hover:opacity-100" title="Remove this location" onClick={() => {
+                            setFormData((prev) => ({ ...prev, tracker_config: { ...prev.tracker_config, appointment_locations: (prev.tracker_config?.appointment_locations ?? []).filter((_, i) => i !== idx) } }));
+                            if (editingAppointmentOption?.section === "locations" && editingAppointmentOption?.index === idx) setEditingAppointmentOption(null);
+                          }}>
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+                {(formData.tracker_config?.appointment_locations ?? []).length === 0 && addAppointmentSection !== "locations" && (
+                  <p className="text-sm text-muted-foreground py-1">No locations yet. Add above or from a case.</p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Statuses</Label>
+                  {addAppointmentSection !== "statuses" ? (
+                    <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={() => { setAddAppointmentSection("statuses"); setNewAppointmentOptionLabel(""); }}>
+                      <Plus className="h-3.5 w-3.5 mr-1" /> Add
+                    </Button>
+                  ) : (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Input placeholder="Label (e.g. Booked)" value={newAppointmentOptionLabel} onChange={(e) => setNewAppointmentOptionLabel(e.target.value)} className="h-8 w-40 text-sm" autoFocus />
+                      <Button type="button" size="sm" className="h-8 text-xs" disabled={!newAppointmentOptionLabel?.trim()} onClick={() => {
+                        const label = newAppointmentOptionLabel.trim();
+                        if (!label) return;
+                        const id = generateAppointmentOptionId(label) || label.toLowerCase().replace(/\s+/g, "_");
+                        setFormData((prev) => ({ ...prev, tracker_config: { ...prev.tracker_config, appointment_statuses: [...(prev.tracker_config?.appointment_statuses ?? []), { id, label }] } }));
+                        setNewAppointmentOptionLabel("");
+                        setAddAppointmentSection(null);
+                      }}>Add</Button>
+                      <Button type="button" variant="ghost" size="sm" className="h-8 text-xs" onClick={() => { setAddAppointmentSection(null); setNewAppointmentOptionLabel(""); }}>Cancel</Button>
+                    </div>
+                  )}
+                </div>
+                <ul className="space-y-1.5">
+                  {(formData.tracker_config?.appointment_statuses ?? []).map((s, idx) => (
+                    <li key={s.id ?? idx} className="flex items-center justify-between gap-2 py-1.5 px-2 rounded-md bg-muted/40 group">
+                      {editingAppointmentOption?.section === "statuses" && editingAppointmentOption?.index === idx ? (
+                        <div className="flex flex-1 items-center gap-2 flex-wrap">
+                          <Input value={editingAppointmentLabel} onChange={(e) => setEditingAppointmentLabel(e.target.value)} className="h-8 flex-1 min-w-[100px] text-sm" placeholder="Label" />
+                          <Input value={editingAppointmentId} onChange={(e) => setEditingAppointmentId(e.target.value)} className="h-8 w-28 text-xs font-mono" placeholder="id" />
+                          <Button size="sm" className="h-8 text-xs" onClick={() => {
+                            const label = editingAppointmentLabel.trim();
+                            const id = (editingAppointmentId || generateAppointmentOptionId(label)).trim() || s.id;
+                            if (!id) return;
+                            setFormData((prev) => ({ ...prev, tracker_config: { ...prev.tracker_config, appointment_statuses: (prev.tracker_config?.appointment_statuses ?? []).map((x, i) => i === idx ? { id, label: label || x.label } : x) } }));
+                            setEditingAppointmentOption(null);
+                          }}>Save</Button>
+                          <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => setEditingAppointmentOption(null)}>Cancel</Button>
+                        </div>
+                      ) : (
+                        <>
+                          <span className="text-sm truncate flex-1 min-w-0">{s.label || s.id || "—"}</span>
+                          <span className="text-xs text-muted-foreground font-mono shrink-0">{s.id}</span>
+                          <Button type="button" variant="ghost" size="sm" className="h-7 shrink-0 opacity-70 group-hover:opacity-100" title="Edit" onClick={() => { setEditingAppointmentOption({ section: "statuses", index: idx }); setEditingAppointmentLabel(s.label ?? ""); setEditingAppointmentId(s.id ?? ""); }}>
+                            <Edit2 className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button type="button" variant="ghost" size="sm" className="h-7 text-destructive hover:bg-destructive/10 hover:text-destructive shrink-0 opacity-70 group-hover:opacity-100" title="Remove this status" onClick={() => {
+                            setFormData((prev) => ({ ...prev, tracker_config: { ...prev.tracker_config, appointment_statuses: (prev.tracker_config?.appointment_statuses ?? []).filter((_, i) => i !== idx) } }));
+                            if (editingAppointmentOption?.section === "statuses" && editingAppointmentOption?.index === idx) setEditingAppointmentOption(null);
+                          }}>
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+                {(formData.tracker_config?.appointment_statuses ?? []).length === 0 && addAppointmentSection !== "statuses" && (
+                  <p className="text-sm text-muted-foreground py-1">No statuses yet. Add above or from a case.</p>
+                )}
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

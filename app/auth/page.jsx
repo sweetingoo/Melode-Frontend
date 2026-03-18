@@ -153,6 +153,7 @@ const LoginPage = () => {
     const credentials = {
       email: formData.email,
       password: formData.password,
+      remember_me: rememberMe,
       ...(requiresMFA && formData.mfa_token && { mfa_token: formData.mfa_token }),
     };
 

@@ -17,6 +17,7 @@ export const trackerKeys = {
   entryDetail: (identifier) => [...trackerKeys.entries(), "detail", identifier],
   entryTimeline: (identifier, page, per_page) => [...trackerKeys.entries(), "timeline", identifier, page, per_page],
   entryAuditLogs: (identifier) => [...trackerKeys.entries(), "audit-logs", identifier],
+  entryAppointments: (identifier) => [...trackerKeys.entries(), "appointments", identifier],
   entryInboundMessages: (identifier) => [...trackerKeys.entries(), "inbound-messages", identifier],
   entrySmsThread: (identifier) => [...trackerKeys.entries(), "sms-thread", identifier],
   queueCounts: (slug) => [...trackerKeys.details(), slug, "queue-counts"],
@@ -436,6 +437,60 @@ export const useCompleteTrackerAction = () => {
     },
     onError: (error) => {
       const msg = error?.response?.data?.detail || error?.message || "Failed to mark action done";
+      toast.error(Array.isArray(msg) ? msg.map((e) => e.msg || e).join(", ") : msg);
+    },
+  });
+};
+
+// Get tracker entry appointments query
+export const useTrackerEntryAppointments = (entryIdentifier, options = {}) => {
+  return useQuery({
+    queryKey: trackerKeys.entryAppointments(entryIdentifier),
+    queryFn: async () => {
+      const data = await trackersService.getTrackerEntryAppointments(entryIdentifier);
+      return Array.isArray(data) ? data : [];
+    },
+    enabled: !!entryIdentifier,
+    staleTime: 1 * 60 * 1000,
+    ...options,
+  });
+};
+
+// Create tracker appointment mutation
+export const useCreateTrackerAppointment = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ entryIdentifier, body }) => {
+      const data = await trackersService.createTrackerAppointment(entryIdentifier, body);
+      return { data, entryIdentifier };
+    },
+    onSuccess: ({ entryIdentifier }) => {
+      queryClient.invalidateQueries({ queryKey: trackerKeys.entryAppointments(entryIdentifier) });
+      queryClient.invalidateQueries({ queryKey: trackerKeys.entryDetail(entryIdentifier) });
+      toast.success("Appointment added");
+    },
+    onError: (error) => {
+      const msg = error?.response?.data?.detail || error?.message || "Failed to add appointment";
+      toast.error(Array.isArray(msg) ? msg.map((e) => e.msg || e).join(", ") : msg);
+    },
+  });
+};
+
+// Update tracker appointment mutation (e.g. status change)
+export const useUpdateTrackerAppointment = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ entryIdentifier, appointmentId, body }) => {
+      const data = await trackersService.updateTrackerAppointment(entryIdentifier, appointmentId, body);
+      return { data, entryIdentifier };
+    },
+    onSuccess: ({ entryIdentifier }) => {
+      queryClient.invalidateQueries({ queryKey: trackerKeys.entryAppointments(entryIdentifier) });
+      queryClient.invalidateQueries({ queryKey: trackerKeys.entryDetail(entryIdentifier) });
+      toast.success("Appointment updated");
+    },
+    onError: (error) => {
+      const msg = error?.response?.data?.detail || error?.message || "Failed to update appointment";
       toast.error(Array.isArray(msg) ? msg.map((e) => e.msg || e).join(", ") : msg);
     },
   });

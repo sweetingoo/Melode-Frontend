@@ -37,7 +37,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFo
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Loader2, ArrowLeft, Edit, Save, X, Clock, MessageSquare, FileText, User as UserIcon, Calendar, Paperclip, Smartphone, ChevronRight, ChevronDown, Link2, Share2, Bell, Phone, Mail, Plus, Send, MessageCircle, Globe, CheckCircle } from "lucide-react";
+import { Loader2, ArrowLeft, Edit, Save, X, Clock, MessageSquare, FileText, User as UserIcon, Calendar, CalendarClock, Paperclip, Smartphone, ChevronRight, ChevronDown, Link2, Share2, Bell, Phone, Mail, Plus, Send, MessageCircle, Globe, CheckCircle } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   useTrackerEntry,
@@ -48,6 +48,9 @@ import {
   useUpdateTrackerEntry,
   useCreateTrackerAction,
   useCompleteTrackerAction,
+  useTrackerEntryAppointments,
+  useCreateTrackerAppointment,
+  useUpdateTrackerAppointment,
   useTrackers,
   useTrackerEntries,
   useTracker,
@@ -127,7 +130,7 @@ const TrackerEntryDetailPage = () => {
   const [attachments, setAttachments] = useState([]);
   const [attachmentsLoading, setAttachmentsLoading] = useState(false);
   const [attachmentUploading, setAttachmentUploading] = useState(false);
-  const [sendSmsTemplate, setSendSmsTemplate] = useState("please_contact_us");
+  const [sendSmsTemplate, setSendSmsTemplate] = useState("general");
   const [sendSmsMessage, setSendSmsMessage] = useState("");
   const [sendSmsPhoneField, setSendSmsPhoneField] = useState("");
   const [sendSmsSubmitting, setSendSmsSubmitting] = useState(false);
@@ -155,10 +158,27 @@ const TrackerEntryDetailPage = () => {
   const [logActionChaseDate, setLogActionChaseDate] = useState("");
   const [logActionNoChase, setLogActionNoChase] = useState(false);
   const [isCloseCaseDialogOpen, setIsCloseCaseDialogOpen] = useState(false);
+  const [logSheetTab, setLogSheetTab] = useState("actions");
+  const [logAppointmentDate, setLogAppointmentDate] = useState("");
+  const [logAppointmentTime, setLogAppointmentTime] = useState("");
+  const [logAppointmentType, setLogAppointmentType] = useState("");
+  const [logAppointmentLocation, setLogAppointmentLocation] = useState("__none__");
+  const [logAppointmentDuration, setLogAppointmentDuration] = useState("");
+  const [logAppointmentStatus, setLogAppointmentStatus] = useState("");
+  const [logAppointmentNote, setLogAppointmentNote] = useState("");
+  const [addAppointmentTypeOpen, setAddAppointmentTypeOpen] = useState(false);
+  const [newAppointmentTypeLabel, setNewAppointmentTypeLabel] = useState("");
+  const [addAppointmentLocationOpen, setAddAppointmentLocationOpen] = useState(false);
+  const [newAppointmentLocationLabel, setNewAppointmentLocationLabel] = useState("");
+  const [addAppointmentStatusOpen, setAddAppointmentStatusOpen] = useState(false);
+  const [newAppointmentStatusLabel, setNewAppointmentStatusLabel] = useState("");
 
   const { data: entry, isLoading: entryLoading, error: entryError, refetch: refetchEntry } = useTrackerEntry(entrySlug);
   const createTrackerActionMutation = useCreateTrackerAction();
   const completeTrackerActionMutation = useCompleteTrackerAction();
+  const { data: appointmentsList = [], refetch: refetchAppointments } = useTrackerEntryAppointments(entrySlug);
+  const createTrackerAppointmentMutation = useCreateTrackerAppointment();
+  const updateTrackerAppointmentMutation = useUpdateTrackerAppointment();
   
   // Debug logging for API call
   useEffect(() => {
@@ -812,17 +832,13 @@ const TrackerEntryDetailPage = () => {
   const hasSmsSenderNumber = !!(tracker?.tracker_config?.twilio_from_number?.trim());
   const canSendSms = canEditCase && hasSmsSenderNumber;
 
-  // SMS quick-reply templates: use tracker's custom templates or built-in
+  // SMS quick-reply templates: use tracker's custom templates or single built-in "General" (no message)
   const smsTemplateOptions = useMemo(() => {
     const custom = (tracker?.tracker_config?.sms_templates || []).filter((t) => t.key);
     if (custom.length > 0) return custom.map((t) => ({ value: t.key, label: t.label || t.key }));
-    return [
-      { value: "appointment_reminder", label: "Appointment reminder" },
-      { value: "prep_reminder", label: "Prep reminder" },
-      { value: "please_contact_us", label: "Please contact us" },
-    ];
+    return [{ value: "general", label: "General" }];
   }, [tracker?.tracker_config?.sms_templates]);
-  const firstSmsTemplateValue = smsTemplateOptions[0]?.value ?? "please_contact_us";
+  const firstSmsTemplateValue = smsTemplateOptions[0]?.value ?? "general";
   useEffect(() => {
     if (smsTemplateOptions.length > 0 && !smsTemplateOptions.some((o) => o.value === sendSmsTemplate)) {
       setSendSmsTemplate(firstSmsTemplateValue);
@@ -1399,6 +1415,7 @@ const TrackerEntryDetailPage = () => {
   };
 
   const handleOpenLogAction = () => {
+    setLogSheetTab("actions");
     const types = tracker?.tracker_config?.action_types || [];
     setLogActionType(types.length ? "" : "other");
     setLogActionFreeText("");
@@ -1408,13 +1425,27 @@ const TrackerEntryDetailPage = () => {
     setIsLogActionOpen(true);
   };
 
+  const handleOpenLogAppointment = () => {
+    setLogSheetTab("dates");
+    const types = tracker?.tracker_config?.appointment_types ?? [];
+    const statuses = tracker?.tracker_config?.appointment_statuses ?? [];
+    setLogAppointmentDate(format(new Date(), "yyyy-MM-dd"));
+    setLogAppointmentTime("09:00");
+    setLogAppointmentType(types[0]?.id ?? "");
+    setLogAppointmentLocation("__none__");
+    setLogAppointmentDuration("");
+    setLogAppointmentStatus(statuses[0]?.id ?? "");
+    setLogAppointmentNote("");
+    setIsLogActionOpen(true);
+  };
+
   const handleChangeStatusOrEdit = () => {
     if (isStageStyledTracker) openChangeStatusDialog();
     else setIsEditing(true);
   };
 
   const handleOpenSendSms = () => {
-    setSendSmsTemplate("please_contact_us");
+    setSendSmsTemplate("general");
     setIsSendSmsModalOpen(true);
   };
 
@@ -1569,6 +1600,10 @@ const TrackerEntryDetailPage = () => {
                         <MessageSquare className="mr-2 h-4 w-4" />
                         Add Action
                       </Button>
+                      <Button variant="outline" size="sm" onClick={handleOpenLogAppointment}>
+                        <CalendarClock className="mr-2 h-4 w-4" />
+                        Add appointment
+                      </Button>
                       <Button variant="outline" size="sm" onClick={handleChangeStatusOrEdit}>
                         <Edit className="mr-2 h-4 w-4" />
                         Change Status
@@ -1599,28 +1634,111 @@ const TrackerEntryDetailPage = () => {
 
       {/* Two-column full-width: Sidebar (Summary + Tasks) | Main (Timeline) – like Documents */}
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 p-4 w-full">
-        {/* Left: Case summary, then Chase dates */}
-        <aside className="space-y-4 order-2 lg:order-1 lg:col-span-3">
-          <Card>
-            <CardHeader className="py-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Case summary</CardTitle>
+        {/* Left: Case summary, Appointments, Chase dates */}
+        <aside className="space-y-3 order-2 lg:order-1 lg:col-span-3">
+          <Card className="overflow-hidden">
+            <CardHeader className="py-2.5 px-3">
+              <CardTitle className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Case summary</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3 text-sm">
-              <div><span className="text-muted-foreground">Case ID</span><p className="font-medium">#{entryNumber}</p></div>
-              <div><span className="text-muted-foreground">Status</span><div className="font-medium"><Badge variant="outline" className="font-normal">{humanizeStatusForDisplay(entry?.status || "open")}</Badge></div></div>
-              {currentStage && <div><span className="text-muted-foreground">Stage</span><p className="font-medium">{currentStage}</p></div>}
-              {assignedToDisplay && <div><span className="text-muted-foreground">Assigned to</span><p className="font-medium flex items-center gap-1"><UserIcon className="h-3.5 w-3.5" />{assignedToDisplay}</p></div>}
-              <div><span className="text-muted-foreground">Opened</span><p className="font-medium">{entry?.created_at ? format(parseUTCDate(entry.created_at), "d MMM yyyy") : "—"}</p></div>
-              {(formFileAttachments.length + attachments.length) > 0 && <div><span className="text-muted-foreground">Attachments</span><p className="font-medium">{formFileAttachments.length + attachments.length} file(s)</p></div>}
+            <CardContent className="px-3 pb-3 pt-0">
+              <dl className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs">
+                <dt className="text-muted-foreground truncate">Case ID</dt>
+                <dd className="font-medium truncate">#{entryNumber}</dd>
+                <dt className="text-muted-foreground truncate">Status</dt>
+                <dd>
+                  <Badge variant="outline" className="font-normal text-[11px] py-0 px-1.5 h-5">{humanizeStatusForDisplay(entry?.status || "open")}</Badge>
+                </dd>
+                {currentStage && (
+                  <>
+                    <dt className="text-muted-foreground truncate">Stage</dt>
+                    <dd className="font-medium truncate">{currentStage}</dd>
+                  </>
+                )}
+                {assignedToDisplay && (
+                  <>
+                    <dt className="text-muted-foreground truncate col-span-2">Assigned to</dt>
+                    <dd className="font-medium flex items-center gap-1 truncate col-span-2"><UserIcon className="h-3 w-3 shrink-0" />{assignedToDisplay}</dd>
+                  </>
+                )}
+                <dt className="text-muted-foreground truncate">Opened</dt>
+                <dd className="font-medium truncate">{entry?.created_at ? format(parseUTCDate(entry.created_at), "d MMM yyyy") : "—"}</dd>
+                {(formFileAttachments.length + attachments.length) > 0 && (
+                  <>
+                    <dt className="text-muted-foreground truncate">Attachments</dt>
+                    <dd className="font-medium truncate">{formFileAttachments.length + attachments.length} file(s)</dd>
+                  </>
+                )}
+              </dl>
             </CardContent>
           </Card>
-          <Card>
-            <CardHeader className="py-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Chase dates</CardTitle>
+          <Card className="overflow-hidden">
+            <CardHeader className="py-2.5 px-3 flex flex-row items-center justify-between gap-2">
+              <CardTitle className="text-xs font-medium uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+                <CalendarClock className="h-3.5 w-3.5 shrink-0" /> Appointments
+              </CardTitle>
+              {canEditCase && (
+                <Button variant="ghost" size="sm" className="h-6 text-xs px-2 -mr-1" onClick={handleOpenLogAppointment}>
+                  <Plus className="h-3 w-3 mr-1 shrink-0" /> Add
+                </Button>
+              )}
             </CardHeader>
-            <CardContent>
+            <CardContent className="px-3 pb-3 pt-0">
+              {appointmentsList.length > 0 ? (
+                <ul className="space-y-1.5 max-h-[min(200px,32vh)] overflow-y-auto text-xs">
+                  {appointmentsList.map((apt) => {
+                    const typeLabel = (tracker?.tracker_config?.appointment_types ?? []).find((t) => t.id === apt.appointment_type)?.label ?? apt.appointment_type;
+                    const locationLabel = (tracker?.tracker_config?.appointment_locations ?? []).find((l) => l.id === apt.location)?.label ?? apt.location ?? "—";
+                    const statusOptions = tracker?.tracker_config?.appointment_statuses ?? [];
+                    const statusLabel = statusOptions.find((s) => s.id === apt.status)?.label ?? apt.status;
+                    const aptAt = apt.appointment_at ? (typeof apt.appointment_at === "string" ? new Date(apt.appointment_at) : apt.appointment_at) : null;
+                    return (
+                      <li key={apt.id} className="flex items-start justify-between gap-2 py-1.5 border-b border-border/50 last:border-0 last:pb-0 first:pt-0">
+                        <div className="min-w-0 flex-1">
+                          <div className="font-medium text-foreground leading-tight">
+                            {aptAt ? format(aptAt, "d MMM HH:mm") : "—"}
+                          </div>
+                          <div className="text-muted-foreground mt-0.5 truncate">
+                            {typeLabel}{locationLabel ? ` · ${locationLabel}` : ""}
+                            {!canEditCase && statusLabel ? ` · ${statusLabel}` : ""}
+                          </div>
+                        </div>
+                        {canEditCase && (
+                          <Select
+                            value={apt.status}
+                            onValueChange={(value) => {
+                              updateTrackerAppointmentMutation.mutate(
+                                { entryIdentifier: entrySlug, appointmentId: apt.id, body: { status: value } },
+                                { onSuccess: () => refetchAppointments() }
+                              );
+                            }}
+                            disabled={updateTrackerAppointmentMutation.isPending}
+                          >
+                            <SelectTrigger className="h-6 text-[11px] w-[100px] py-0 shrink-0 border-muted-foreground/30">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {statusOptions.map((s) => (
+                                <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <p className="text-xs text-muted-foreground py-1">No appointments</p>
+              )}
+            </CardContent>
+          </Card>
+          <Card className="overflow-hidden">
+            <CardHeader className="py-2.5 px-3">
+              <CardTitle className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Chase dates</CardTitle>
+            </CardHeader>
+            <CardContent className="px-3 pb-3 pt-0">
               {chaseDatesList.length > 0 ? (
-                <ul className="space-y-2 max-h-[min(280px,40vh)] overflow-y-auto text-sm">
+                <ul className="space-y-1.5 max-h-[min(240px,36vh)] overflow-y-auto text-xs">
                   {chaseDatesList.map((item, idx) => {
                     const reason = item.type.startsWith("Chase – ") ? item.type.slice(8).trim() : item.type;
                     const isAction = item.actionId != null;
@@ -1629,21 +1747,21 @@ const TrackerEntryDetailPage = () => {
                       <li
                         key={isAction ? `action_${item.actionId}` : `due_${item.dateStr}_${idx}`}
                         className={cn(
-                          "flex items-center justify-between gap-2 font-medium",
+                          "flex items-center justify-between gap-2 py-1.5 border-b border-border/50 last:border-0 first:pt-0",
                           item.completed && "opacity-70"
                         )}
                       >
-                        <div className="flex flex-col min-w-0 flex-1">
-                          <span className={item.completed ? "line-through text-muted-foreground" : ""}>
+                        <div className="min-w-0 flex-1">
+                          <span className={cn("font-medium leading-tight", item.completed && "line-through text-muted-foreground")}>
                             {format(parseUTCDate(item.dateStr + "T12:00:00"), "d MMM yyyy")}
                           </span>
-                          <span className="text-muted-foreground text-xs font-normal">{reason}</span>
+                          <div className="text-muted-foreground font-normal mt-0.5 truncate">{reason}</div>
                         </div>
                         {isPending && canEditCase && (
                           <Button
                             variant="outline"
                             size="sm"
-                            className="h-7 text-xs shrink-0"
+                            className="h-6 text-[11px] px-2 shrink-0"
                             disabled={completeTrackerActionMutation.isPending}
                             onClick={async () => {
                               if (item.actionId == null || !entrySlug) return;
@@ -1656,7 +1774,7 @@ const TrackerEntryDetailPage = () => {
                           </Button>
                         )}
                         {isAction && item.completed && (
-                          <Badge variant="secondary" className="text-[10px] font-normal shrink-0 py-0 px-1.5">
+                          <Badge variant="secondary" className="text-[10px] font-normal shrink-0 py-0 px-1.5 h-5">
                             <CheckCircle className="h-3 w-3 mr-0.5 inline" />
                             Done
                           </Badge>
@@ -1666,7 +1784,7 @@ const TrackerEntryDetailPage = () => {
                   })}
                 </ul>
               ) : (
-                <p className="text-sm text-muted-foreground">No chase dates recorded.</p>
+                <p className="text-xs text-muted-foreground py-1">No chase dates</p>
               )}
             </CardContent>
           </Card>
@@ -3526,16 +3644,26 @@ const TrackerEntryDetailPage = () => {
         </main>
       </div>
 
-      {/* Log Action drawer */}
+      {/* Log Action / Add appointment drawer */}
       <Sheet open={isLogActionOpen} onOpenChange={setIsLogActionOpen}>
         <SheetContent className="flex flex-col sm:max-w-lg">
           <SheetHeader className="space-y-1 px-6 pt-6 pb-2">
-            <SheetTitle className="text-lg">Log action</SheetTitle>
+            <SheetTitle className="text-lg">{logSheetTab === "dates" ? "Add appointment" : "Log action"}</SheetTitle>
             <SheetDescription>
-              Record what you did on this case. Optionally set a chase or reminder date.
+              {logSheetTab === "dates"
+                ? "Record a date or event for this case. Set type, location, duration and status."
+                : "Record what you did on this case. Optionally set a chase or reminder date."}
             </SheetDescription>
           </SheetHeader>
+          <Tabs value={logSheetTab} onValueChange={setLogSheetTab} className="flex-1 flex flex-col min-h-0">
+            <div className="px-6 pt-2">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="actions">Actions</TabsTrigger>
+                <TabsTrigger value="dates">Dates</TabsTrigger>
+              </TabsList>
+            </div>
           <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6">
+          <TabsContent value="actions" className="mt-0 space-y-6 border-0 p-0">
             <section className="space-y-3">
               <h4 className="text-sm font-medium text-foreground">Action</h4>
               <div className="space-y-3">
@@ -3693,27 +3821,232 @@ const TrackerEntryDetailPage = () => {
                 </div>
               )}
             </section>
+          </TabsContent>
+          <TabsContent value="dates" className="mt-0 space-y-6 border-0 p-0">
+            {(() => {
+              const appointmentTypes = tracker?.tracker_config?.appointment_types ?? [];
+              const appointmentLocations = tracker?.tracker_config?.appointment_locations ?? [];
+              const appointmentStatuses = tracker?.tracker_config?.appointment_statuses ?? [];
+              const baseTracker = fullTracker ?? tracker;
+              const addOption = async (kind, labelKey, configKey, setOpen, setLabel, setSelectedId) => {
+                const label = (labelKey === "type" ? newAppointmentTypeLabel : labelKey === "location" ? newAppointmentLocationLabel : newAppointmentStatusLabel)?.trim();
+                if (!label || !tracker?.slug) return;
+                const id = generateActionTypeId(label) || label.toLowerCase().replace(/\s+/g, "_");
+                const newEntry = { id, label };
+                const existing = baseTracker?.tracker_config?.[configKey] ?? [];
+                const updated = {
+                  ...baseTracker,
+                  tracker_config: { ...(baseTracker?.tracker_config || {}), [configKey]: [...existing, newEntry] },
+                };
+                await updateTrackerMutation.mutateAsync({ slug: tracker.slug, trackerData: updated });
+                setSelectedId(id);
+                setOpen(false);
+                setLabel("");
+                toast.success("Added");
+              };
+              return (
+                <>
+                  <section className="space-y-3">
+                    <h4 className="text-sm font-medium text-foreground">Date & time</h4>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-2">
+                        <Label className="text-muted-foreground">Date</Label>
+                        <Input
+                          type="date"
+                          value={logAppointmentDate}
+                          onChange={(e) => setLogAppointmentDate(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-muted-foreground">Time</Label>
+                        <Input
+                          type="time"
+                          value={logAppointmentTime}
+                          onChange={(e) => setLogAppointmentTime(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </section>
+                  <section className="space-y-3">
+                    <h4 className="text-sm font-medium text-foreground">Type & location</h4>
+                    <div className="space-y-2">
+                      <Label className="text-muted-foreground">Type</Label>
+                      <div className="flex gap-2 items-center">
+                        <Select value={logAppointmentType} onValueChange={setLogAppointmentType}>
+                          <SelectTrigger className="min-w-0 flex-1"><SelectValue placeholder="Select type" /></SelectTrigger>
+                          <SelectContent>
+                            {appointmentTypes.map((t) => (
+                              <SelectItem key={t.id} value={t.id}>{t.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {canManageTracker && tracker?.slug && (
+                          <Popover open={addAppointmentTypeOpen} onOpenChange={setAddAppointmentTypeOpen}>
+                            <PopoverTrigger asChild>
+                              <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" aria-label="Add type">
+                                <Plus className="h-4 w-4" />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-72" align="start">
+                              <div className="space-y-3">
+                                <p className="text-sm font-medium">Add appointment type</p>
+                                <div className="space-y-2">
+                                  <Label className="text-muted-foreground">Label</Label>
+                                  <Input value={newAppointmentTypeLabel} onChange={(e) => setNewAppointmentTypeLabel(e.target.value)} placeholder="e.g. Consultation" />
+                                </div>
+                                <Button size="sm" className="w-full" disabled={!newAppointmentTypeLabel?.trim() || updateTrackerMutation.isPending} onClick={async () => { await addOption("type", "type", "appointment_types", setAddAppointmentTypeOpen, setNewAppointmentTypeLabel, setLogAppointmentType); }}>
+                                  {updateTrackerMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Add
+                                </Button>
+                              </div>
+                            </PopoverContent>
+                          </Popover>
+                        )}
+                      </div>
+                      <Label className="text-muted-foreground">Location</Label>
+                      <div className="flex gap-2 items-center">
+                        <Select value={logAppointmentLocation} onValueChange={setLogAppointmentLocation}>
+                          <SelectTrigger className="min-w-0 flex-1"><SelectValue placeholder="Select location" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">—</SelectItem>
+                            {appointmentLocations.map((l) => (
+                              <SelectItem key={l.id} value={l.id}>{l.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {canManageTracker && tracker?.slug && (
+                          <Popover open={addAppointmentLocationOpen} onOpenChange={setAddAppointmentLocationOpen}>
+                            <PopoverTrigger asChild>
+                              <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" aria-label="Add location">
+                                <Plus className="h-4 w-4" />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-72" align="start">
+                              <div className="space-y-3">
+                                <p className="text-sm font-medium">Add location</p>
+                                <div className="space-y-2">
+                                  <Label className="text-muted-foreground">Label</Label>
+                                  <Input value={newAppointmentLocationLabel} onChange={(e) => setNewAppointmentLocationLabel(e.target.value)} placeholder="e.g. Main site" />
+                                </div>
+                                <Button size="sm" className="w-full" disabled={!newAppointmentLocationLabel?.trim() || updateTrackerMutation.isPending} onClick={async () => { await addOption("location", "location", "appointment_locations", setAddAppointmentLocationOpen, setNewAppointmentLocationLabel, setLogAppointmentLocation); }}>
+                                  {updateTrackerMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Add
+                                </Button>
+                              </div>
+                            </PopoverContent>
+                          </Popover>
+                        )}
+                      </div>
+                    </div>
+                  </section>
+                  <section className="space-y-3">
+                    <h4 className="text-sm font-medium text-foreground">Duration & status</h4>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-2">
+                        <Label className="text-muted-foreground">Duration (minutes)</Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          value={logAppointmentDuration}
+                          onChange={(e) => setLogAppointmentDuration(e.target.value)}
+                          placeholder="Optional"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-muted-foreground">Status</Label>
+                        <div className="flex gap-2 items-center">
+                          <Select value={logAppointmentStatus} onValueChange={setLogAppointmentStatus}>
+                            <SelectTrigger className="min-w-0 flex-1"><SelectValue placeholder="Select status" /></SelectTrigger>
+                            <SelectContent>
+                              {appointmentStatuses.map((s) => (
+                                <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {canManageTracker && tracker?.slug && (
+                            <Popover open={addAppointmentStatusOpen} onOpenChange={setAddAppointmentStatusOpen}>
+                              <PopoverTrigger asChild>
+                                <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" aria-label="Add status">
+                                  <Plus className="h-4 w-4" />
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-72" align="start">
+                                <div className="space-y-3">
+                                  <p className="text-sm font-medium">Add status</p>
+                                  <div className="space-y-2">
+                                    <Label className="text-muted-foreground">Label</Label>
+                                    <Input value={newAppointmentStatusLabel} onChange={(e) => setNewAppointmentStatusLabel(e.target.value)} placeholder="e.g. Booked" />
+                                  </div>
+                                  <Button size="sm" className="w-full" disabled={!newAppointmentStatusLabel?.trim() || updateTrackerMutation.isPending} onClick={async () => { await addOption("status", "status", "appointment_statuses", setAddAppointmentStatusOpen, setNewAppointmentStatusLabel, setLogAppointmentStatus); }}>
+                                    {updateTrackerMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Add
+                                  </Button>
+                                </div>
+                              </PopoverContent>
+                            </Popover>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+                  <section className="space-y-3">
+                    <h4 className="text-sm font-medium text-foreground">Note</h4>
+                    <Textarea
+                      value={logAppointmentNote}
+                      onChange={(e) => setLogAppointmentNote(e.target.value)}
+                      placeholder="Add details (optional)"
+                      rows={2}
+                      className="resize-none"
+                    />
+                  </section>
+                </>
+              );
+            })()}
+          </TabsContent>
           </div>
+          </Tabs>
           <SheetFooter className="flex-row gap-2 sm:justify-end border-t px-6 py-4">
             <Button variant="outline" onClick={() => setIsLogActionOpen(false)}>
               Cancel
             </Button>
-            <Button
-              disabled={!logActionType || (logActionType === "other" && !logActionFreeText?.trim()) || createTrackerActionMutation.isPending}
-              onClick={async () => {
-                const action_type = logActionType === "other" ? "other" : logActionType;
-                const free_text_label = logActionType === "other" ? (logActionFreeText?.trim() || null) : null;
-                const chase_date = logActionNoChase ? null : (logActionChaseDate ? logActionChaseDate : null);
-                await createTrackerActionMutation.mutateAsync({
-                  entryIdentifier: entrySlug,
-                  body: { action_type, free_text_label, note: logActionNote?.trim() || null, chase_date: chase_date || undefined },
-                });
-                setIsLogActionOpen(false);
-              }}
-            >
-              {createTrackerActionMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Log action
-            </Button>
+            {logSheetTab === "dates" ? (
+              <Button
+                disabled={!logAppointmentDate || !logAppointmentType || !logAppointmentStatus || createTrackerAppointmentMutation.isPending}
+                onClick={async () => {
+                  const appointmentAt = new Date(`${logAppointmentDate}T${logAppointmentTime || "00:00"}:00`);
+                  await createTrackerAppointmentMutation.mutateAsync({
+                    entryIdentifier: entrySlug,
+                    body: {
+                      appointment_at: appointmentAt.toISOString(),
+                      appointment_type: logAppointmentType,
+                      location: (logAppointmentLocation && logAppointmentLocation !== "__none__") ? logAppointmentLocation : undefined,
+                      duration_minutes: logAppointmentDuration ? parseInt(logAppointmentDuration, 10) : undefined,
+                      status: logAppointmentStatus,
+                      note: logAppointmentNote?.trim() || undefined,
+                    },
+                  });
+                  setIsLogActionOpen(false);
+                  refetchAppointments();
+                }}
+              >
+                {createTrackerAppointmentMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Log appointment
+              </Button>
+            ) : (
+              <Button
+                disabled={!logActionType || (logActionType === "other" && !logActionFreeText?.trim()) || createTrackerActionMutation.isPending}
+                onClick={async () => {
+                  const action_type = logActionType === "other" ? "other" : logActionType;
+                  const free_text_label = logActionType === "other" ? (logActionFreeText?.trim() || null) : null;
+                  const chase_date = logActionNoChase ? null : (logActionChaseDate ? logActionChaseDate : null);
+                  await createTrackerActionMutation.mutateAsync({
+                    entryIdentifier: entrySlug,
+                    body: { action_type, free_text_label, note: logActionNote?.trim() || null, chase_date: chase_date || undefined },
+                  });
+                  setIsLogActionOpen(false);
+                }}
+              >
+                {createTrackerActionMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Log action
+              </Button>
+            )}
           </SheetFooter>
         </SheetContent>
       </Sheet>
