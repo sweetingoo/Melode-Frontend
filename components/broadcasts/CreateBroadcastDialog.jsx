@@ -61,7 +61,7 @@ const CreateBroadcastDialog = ({
   const [step, setStep] = useState("compose"); // "select" or "compose"
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedUserIds, setSelectedUserIds] = useState([]);
-  const [selectedRoleId, setSelectedRoleId] = useState(null);
+  const [selectedRoleIds, setSelectedRoleIds] = useState([]);
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [category, setCategory] = useState("");
@@ -126,7 +126,10 @@ const CreateBroadcastDialog = ({
   };
 
   const handleRoleSelect = (roleId) => {
-    setSelectedRoleId(roleId === selectedRoleId ? null : roleId);
+    const id = roleId.toString();
+    setSelectedRoleIds((prev) =>
+      prev.includes(id) ? prev.filter((r) => r !== id) : [...prev, id]
+    );
     setSelectedUserIds([]); // Clear user selection when role is selected
   };
 
@@ -147,8 +150,8 @@ const CreateBroadcastDialog = ({
       return;
     }
 
-    if (formData.target_type === "role" && !selectedRoleId) {
-      toast.error("Please select a role");
+    if (formData.target_type === "role" && selectedRoleIds.length === 0) {
+      toast.error("Please select at least one role");
       return;
     }
 
@@ -172,10 +175,10 @@ const CreateBroadcastDialog = ({
     };
 
     // Set target based on selection
-    // Backend expects target_type to be one of: 'user', 'role', 'department'
-    if (formData.target_type === "role" && selectedRoleId) {
+    // Backend expects target_type 'user' with target_user_ids, or 'role' with target_role_ids (multiple roles supported)
+    if (formData.target_type === "role" && selectedRoleIds.length > 0) {
       submitData.target_type = "role";
-      submitData.target_id = parseInt(selectedRoleId);
+      submitData.target_role_ids = selectedRoleIds.map((id) => (typeof id === "string" ? parseInt(id, 10) : id));
     } else if (formData.target_type === "user" && selectedUserIds.length > 0) {
       submitData.target_type = "user";
       submitData.target_user_ids = selectedUserIds.map((id) =>
@@ -196,7 +199,7 @@ const CreateBroadcastDialog = ({
     setStep("compose");
     setSearchTerm("");
     setSelectedUserIds([]);
-    setSelectedRoleId(null);
+    setSelectedRoleIds([]);
     setTitle("");
     setContent("");
     setCategory("");
@@ -217,9 +220,9 @@ const CreateBroadcastDialog = ({
     return users.filter((u) => selectedUserIds.includes(u.id));
   }, [users, selectedUserIds]);
 
-  const selectedRole = useMemo(() => {
-    return roles.find((r) => r.id.toString() === selectedRoleId?.toString());
-  }, [roles, selectedRoleId]);
+  const selectedRoles = useMemo(() => {
+    return roles.filter((r) => selectedRoleIds.includes(r.id.toString()));
+  }, [roles, selectedRoleIds]);
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -277,7 +280,7 @@ const CreateBroadcastDialog = ({
                   onValueChange={(value) => {
                     setFormData({ ...formData, target_type: value });
                     setSelectedUserIds([]);
-                    setSelectedRoleId(null);
+                    setSelectedRoleIds([]);
                   }}
                 >
                   <SelectTrigger>
@@ -293,7 +296,7 @@ const CreateBroadcastDialog = ({
               {/* Target Selection */}
               {formData.target_type === "role" && (
                 <div className="space-y-2">
-                  <Label>Select Role</Label>
+                  <Label>Select Role(s)</Label>
                   <div className="space-y-2">
                     <div className="relative">
                       <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -307,7 +310,7 @@ const CreateBroadcastDialog = ({
                     <ScrollArea className="h-48 border rounded-md">
                       <div className="divide-y">
                         {filteredRoles.map((role) => {
-                          const isSelected = selectedRoleId === role.id.toString();
+                          const isSelected = selectedRoleIds.includes(role.id.toString());
                           return (
                             <div
                               key={role.id}
@@ -338,11 +341,15 @@ const CreateBroadcastDialog = ({
                         })}
                       </div>
                     </ScrollArea>
-                    {selectedRole && (
-                      <Badge variant="default" className="flex items-center gap-1.5 w-fit">
-                        <Users className="h-3 w-3" />
-                        {selectedRole.display_name || selectedRole.name}
-                      </Badge>
+                    {selectedRoles.length > 0 && (
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {selectedRoles.map((role) => (
+                          <Badge key={role.id} variant="default" className="flex items-center gap-1.5 w-fit">
+                            <Users className="h-3 w-3" />
+                            {role.display_name || role.name}
+                          </Badge>
+                        ))}
+                      </div>
                     )}
                   </div>
                 </div>
@@ -583,7 +590,7 @@ const CreateBroadcastDialog = ({
                 !title.trim() ||
                 !content.trim() ||
                 (formData.target_type === "user" && selectedUserIds.length === 0) ||
-                (formData.target_type === "role" && !selectedRoleId) ||
+                (formData.target_type === "role" && selectedRoleIds.length === 0) ||
                 (!formData.send_email && !formData.send_sms && !formData.send_push)
               }
             >
