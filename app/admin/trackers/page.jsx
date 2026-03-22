@@ -1163,6 +1163,7 @@ const TrackersPage = () => {
       };
       const rows = entriesToExport.map((entry) => {
         const data = entry.formatted_data || entry.submission_data || {};
+        const hasPendingChase = Boolean(entry.next_action_date);
         const num = entry.tracker_entry_number ?? entry.id ?? "";
         const status = entry.status ?? "";
         const cells = [
@@ -1170,7 +1171,9 @@ const TrackersPage = () => {
           status,
           ...fields.map((f) => {
             const fieldId = f.id || f.field_id || f.name;
-            return formatFieldValue(f, data[fieldId]);
+            const raw = data[fieldId];
+            const v = fieldId === "chase_due" && !hasPendingChase ? null : raw;
+            return formatFieldValue(f, v);
           }),
         ];
         return cells.map(escape).join(",");
@@ -3026,6 +3029,8 @@ const TrackersPage = () => {
                   <TableBody>
                             {entries.map((entry, index) => {
                               const submissionData = entry.submission_data || entry.formatted_data || {};
+                              // List API sets next_action_* only when there is a pending (incomplete) chase action.
+                              const hasPendingChase = Boolean(entry.next_action_date);
                               
                               // Use persistent tracker entry number from backend
                               // This is calculated based on creation order within the tracker
@@ -3035,7 +3040,10 @@ const TrackersPage = () => {
                               const displayValues = {};
                               trackerDisplayableFields.forEach((field) => {
                                 const fieldId = field.id || field.field_id || field.name;
-                                displayValues[fieldId] = submissionData[fieldId];
+                                const raw = submissionData[fieldId];
+                                // Hide stored chase_due when every chase is done (avoids stale dates in list).
+                                displayValues[fieldId] =
+                                  fieldId === "chase_due" && !hasPendingChase ? null : raw;
                               });
                               
                       return (
@@ -3231,17 +3239,7 @@ const TrackersPage = () => {
                                     return entry.next_action_date;
                                   }
                                 })()
-                              : (entry.formatted_data?.chase_due || entry.submission_data?.chase_due)
-                                ? (() => {
-                                    const v = entry.formatted_data?.chase_due || entry.submission_data?.chase_due;
-                                    try {
-                                      const d = new Date(String(v).split("T")[0]);
-                                      return Number.isNaN(d.getTime()) ? v : format(d, "d MMM yyyy");
-                                    } catch {
-                                      return v;
-                                    }
-                                  })()
-                                : "—"}
+                              : "—"}
                           </TableCell>
                                   {/* Dynamic field values - only visible columns */}
                                   {visibleFields.map((field) => {
@@ -3252,6 +3250,7 @@ const TrackersPage = () => {
                                     const isChaseDue = fieldId === "chase_due";
                                     const isOverdue =
                                       isChaseDue &&
+                                      hasPendingChase &&
                                       tracker?.tracker_config?.is_patient_referral &&
                                       value != null &&
                                       String(value).trim() !== "" &&
