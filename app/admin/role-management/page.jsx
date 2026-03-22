@@ -386,7 +386,10 @@ const RoleManagementPage = () => {
       setFormData({
         displayName: role.name,
         roleName: role.slug,
-        description: role.description,
+        description:
+          !role.description || role.description === "No description available"
+            ? ""
+            : role.description,
         priority: role.priority,
         roleType: role.roleType || "job_role",
         departmentId: role.departmentId || null,
@@ -851,9 +854,10 @@ const RoleManagementPage = () => {
 
   return (
     <div className="space-y-6">
-      {/* Filters and Create */}
-      <Card>
-        <CardContent className="pt-6">
+      {/* Filters and Create — stay visible while scrolling the role list */}
+      <div className="sticky top-0 z-30 -mx-4 px-4 py-2 bg-background/95 backdrop-blur border-b border-border/80 shadow-sm supports-[backdrop-filter]:bg-background/85">
+        <Card>
+          <CardContent className="pt-6">
           <div className="flex flex-col gap-4">
             <div className="flex items-center justify-end">
               {canCreateRole && (
@@ -917,6 +921,7 @@ const RoleManagementPage = () => {
           </div>
         </CardContent>
       </Card>
+      </div>
 
       {/* Loading State */}
       {rolesLoading && (
