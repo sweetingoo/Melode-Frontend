@@ -1059,9 +1059,6 @@ const PermissionsManagementPage = () => {
                   <p className="text-sm text-muted-foreground mt-1 font-mono">
                     {viewingPermission.slug}
                   </p>
-                  <p className="text-sm text-muted-foreground mt-0.5">
-                    Permission ID: {viewingPermission.id}
-                  </p>
                 </div>
                 <Badge
                   className={`text-sm ${getTypeColor(

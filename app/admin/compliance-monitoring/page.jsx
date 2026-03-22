@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import React, { useState, useMemo, Suspense } from "react";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -34,6 +34,7 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination";
 import { useExpiringCompliance, usePendingApprovals, useNonSubmittedCompliance, useApproveCompliance } from "@/hooks/useCompliance";
+import { useCustomFields } from "@/hooks/useCustomFieldsFields";
 import { useRoles } from "@/hooks/useRoles";
 import { useDepartments } from "@/hooks/useDepartments";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
@@ -50,13 +51,32 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 
-export default function ComplianceMonitoringPage() {
+const COMPLIANCE_TAB_VALUES = ["expiring", "pending", "non-submitted"];
+const COMPLIANCE_TAB_DEFAULT = "expiring";
+
+function ComplianceMonitoringPageContent() {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const tabParam = searchParams.get("tab");
+  const activeTab = COMPLIANCE_TAB_VALUES.includes(tabParam) ? tabParam : COMPLIANCE_TAB_DEFAULT;
+
+  const handleTabChange = (value) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (value === COMPLIANCE_TAB_DEFAULT) {
+      params.delete("tab");
+    } else {
+      params.set("tab", value);
+    }
+    const q = params.toString();
+    router.replace(q ? `${pathname}?${q}` : pathname, { scroll: false });
+  };
+
   const [approvalModalOpen, setApprovalModalOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
   const [approvalNotes, setApprovalNotes] = useState("");
   const [isApproving, setIsApproving] = useState(false);
-  const [activeTab, setActiveTab] = useState("expiring");
   
   // Days ahead for expiring items
   const [daysAhead, setDaysAhead] = useState(30);
@@ -75,7 +95,30 @@ export default function ComplianceMonitoringPage() {
     roleSlug: "all", // "all" = all roles, otherwise specific role slug
     departmentId: "all", // "all" = all departments, otherwise department id
     isCompliance: null, // null = all, true = compliance only, false = non-compliance only
+    fieldSlug: "all", // non-submitted: filter to one compliance field by slug
   });
+
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
+  React.useEffect(() => {
+    const id = setTimeout(() => setDebouncedSearchTerm((filters.searchTerm || "").trim()), 350);
+    return () => clearTimeout(id);
+  }, [filters.searchTerm]);
+
+  const complianceFieldListParams = useMemo(
+    () => ({ page: 1, per_page: 200, is_compliance: true, is_active: true }),
+    []
+  );
+  const { data: complianceFieldsRaw = [] } = useCustomFields(complianceFieldListParams);
+  const complianceFieldOptions = useMemo(() => {
+    const list = Array.isArray(complianceFieldsRaw) ? complianceFieldsRaw : [];
+    return [...list]
+      .filter((f) => f?.slug && (f.is_compliance || f.isCompliance))
+      .sort((a, b) =>
+        (a.field_label || a.field_name || "").localeCompare(b.field_label || b.field_name || "", undefined, {
+          sensitivity: "base",
+        })
+      );
+  }, [complianceFieldsRaw]);
 
   // Permission checks
   const { hasPermission } = usePermissionsCheck();
@@ -102,8 +145,8 @@ export default function ComplianceMonitoringPage() {
   // Build query filters (only include non-default values)
   const queryFilters = useMemo(() => {
     const result = {};
-    if (filters.searchTerm) {
-      result.searchTerm = filters.searchTerm;
+    if (debouncedSearchTerm) {
+      result.searchTerm = debouncedSearchTerm;
     }
     if (filters.approvalStatus && filters.approvalStatus !== "all") {
       result.approvalStatus = filters.approvalStatus;
@@ -120,8 +163,11 @@ export default function ComplianceMonitoringPage() {
     if (filters.isCompliance !== null) {
       result.isCompliance = filters.isCompliance;
     }
+    if (filters.fieldSlug && filters.fieldSlug !== "all") {
+      result.fieldSlug = filters.fieldSlug;
+    }
     return result;
-  }, [filters]);
+  }, [filters.approvalStatus, filters.entityType, filters.roleSlug, filters.departmentId, filters.isCompliance, filters.fieldSlug, debouncedSearchTerm]);
 
   // Reset to page 1 when filters or daysAhead change
   React.useEffect(() => {
@@ -187,6 +233,7 @@ export default function ComplianceMonitoringPage() {
       roleSlug: "all",
       departmentId: "all",
       isCompliance: null,
+      fieldSlug: "all",
     });
   };
 
@@ -195,7 +242,8 @@ export default function ComplianceMonitoringPage() {
     filters.entityType !== "all" ||
     filters.roleSlug !== "all" ||
     filters.departmentId !== "all" ||
-    filters.isCompliance !== null;
+    filters.isCompliance !== null ||
+    (filters.fieldSlug && filters.fieldSlug !== "all");
 
   const handleApprove = (item) => {
     setSelectedItem(item);
@@ -232,6 +280,7 @@ export default function ComplianceMonitoringPage() {
     roleSlug: "Job role",
     department: "Department",
     isCompliance: "Document type",
+    complianceField: "Outstanding field",
   };
   const APPROVAL_OPTIONS = [
     { value: "all", label: "Any status" },
@@ -321,7 +370,7 @@ export default function ComplianceMonitoringPage() {
   return (
     <div className="container mx-auto py-6 space-y-6">
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
         <div className="overflow-x-auto -mx-1 px-1 sm:overflow-x-visible sm:mx-0 sm:px-0">
           <TabsList className="inline-flex w-auto min-w-max sm:w-auto">
             <TabsTrigger value="expiring">Expiring Items</TabsTrigger>
@@ -951,7 +1000,7 @@ export default function ComplianceMonitoringPage() {
                   <Filter className="h-4 w-4 text-muted-foreground" />
                   <h3 className="text-sm font-semibold">Filters</h3>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="search-non-submitted">{FILTER_LABELS.search}</Label>
                     <div className="relative">
@@ -964,6 +1013,25 @@ export default function ComplianceMonitoringPage() {
                         className="pl-9"
                       />
                     </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="field-slug-filter-non-submitted">{FILTER_LABELS.complianceField}</Label>
+                    <Select
+                      value={filters.fieldSlug}
+                      onValueChange={(value) => handleFilterChange("fieldSlug", value)}
+                    >
+                      <SelectTrigger id="field-slug-filter-non-submitted">
+                        <SelectValue placeholder="Any field" />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-72">
+                        <SelectItem value="all">Any field</SelectItem>
+                        {complianceFieldOptions.map((f) => (
+                          <SelectItem key={f.slug} value={f.slug}>
+                            {f.field_label || f.field_name || f.slug}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="entity-type-filter-non-submitted">{FILTER_LABELS.entityType}</Label>
@@ -1073,59 +1141,76 @@ export default function ComplianceMonitoringPage() {
                 </div>
               ) : nonSubmittedData?.items && nonSubmittedData.items.length > 0 ? (
                 <>
-                  <div className="mb-4 flex items-center justify-between">
-                    <div className="text-sm text-muted-foreground">
+                  <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="text-sm text-muted-foreground space-y-0.5">
                       {(() => {
-                        const entityCount = new Set(nonSubmittedData.items.map(item => `${item.entity_type}-${item.entity_id}`)).size;
+                        const entityCountOnPage = new Set(
+                          nonSubmittedData.items.map((item) => `${item.entity_type}-${item.entity_id}`)
+                        ).size;
+                        const missingOnPage = nonSubmittedData.items.length;
+                        const orgWideGaps = nonSubmittedPagination.total;
+                        const orgWideEntities =
+                          typeof nonSubmittedData.total_entities === "number"
+                            ? nonSubmittedData.total_entities
+                            : entityCountOnPage;
+                        const byEntity = nonSubmittedData.paginate_by_entity !== false;
                         return (
                           <>
-                            {entityCount} {entityCount === 1 ? 'entity' : 'entities'} with {nonSubmittedPagination.total} missing compliance {nonSubmittedPagination.total === 1 ? 'item' : 'items'}
+                            <div>
+                              This page:{" "}
+                              <span className="text-foreground font-medium">
+                                {entityCountOnPage} {entityCountOnPage === 1 ? "entity" : "entities"}
+                              </span>
+                              ,{" "}
+                              <span className="text-foreground font-medium">
+                                {missingOnPage} missing {missingOnPage === 1 ? "item" : "items"}
+                              </span>
+                              {byEntity ? " (grouped per person/asset)" : ""}.
+                            </div>
+                            <div>
+                              Organisation-wide:{" "}
+                              <span className="text-foreground font-medium">
+                                {orgWideEntities} {orgWideEntities === 1 ? "entity" : "entities"} with gaps
+                              </span>
+                              ,{" "}
+                              <span className="text-foreground font-medium">
+                                {orgWideGaps} missing {orgWideGaps === 1 ? "item" : "items"} total
+                              </span>
+                              .
+                            </div>
                           </>
                         );
                       })()}
                     </div>
-                    <div className="text-xs text-muted-foreground">
+                    <div className="text-xs text-muted-foreground shrink-0">
                       Page {nonSubmittedPagination.page} of {nonSubmittedPagination.total_pages}
+                      {nonSubmittedData.paginate_by_entity !== false && (
+                        <span className="block text-[11px] mt-0.5">Pagination is by entity (not per missing row)</span>
+                      )}
                     </div>
                   </div>
                   
                   {/* Group by entity */}
                   {(() => {
-                    // Group items by entity - use a more robust key
-                    const groupedByEntity = nonSubmittedData.items.reduce((acc, item) => {
-                      // Create a unique key combining entity_type, entity_id, and entity_slug if available
-                      const entityKey = item.entity_slug 
+                    const groupedMap = {};
+                    const entityKeyOrder = [];
+                    for (const item of nonSubmittedData.items) {
+                      const entityKey = item.entity_slug
                         ? `${item.entity_type}-${item.entity_slug}-${item.entity_id}`
                         : `${item.entity_type}-${item.entity_id}`;
-                      
-                      if (!acc[entityKey]) {
-                        acc[entityKey] = {
+                      if (!groupedMap[entityKey]) {
+                        groupedMap[entityKey] = {
                           entity_type: item.entity_type,
                           entity_id: item.entity_id,
                           entity_name: item.entity_name || `${item.entity_type} #${item.entity_id}`,
                           entity_slug: item.entity_slug,
-                          items: []
+                          items: [],
                         };
+                        entityKeyOrder.push(entityKey);
                       }
-                      acc[entityKey].items.push(item);
-                      return acc;
-                    }, {});
-
-                    // Sort entity groups: users first, then assets, then others
-                    // Within each type, sort by name
-                    const entityGroups = Object.values(groupedByEntity).sort((a, b) => {
-                      // First sort by entity type
-                      const typeOrder = { user: 0, asset: 1 };
-                      const aTypeOrder = typeOrder[a.entity_type] ?? 2;
-                      const bTypeOrder = typeOrder[b.entity_type] ?? 2;
-                      if (aTypeOrder !== bTypeOrder) {
-                        return aTypeOrder - bTypeOrder;
-                      }
-                      // Then sort by name
-                      const aName = (a.entity_name || '').toLowerCase();
-                      const bName = (b.entity_name || '').toLowerCase();
-                      return aName.localeCompare(bName);
-                    });
+                      groupedMap[entityKey].items.push(item);
+                    }
+                    const entityGroups = entityKeyOrder.map((k) => groupedMap[k]);
 
                     return (
                       <div className="space-y-4">
@@ -1372,5 +1457,19 @@ export default function ComplianceMonitoringPage() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+export default function ComplianceMonitoringPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-[50vh] w-full items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      }
+    >
+      <ComplianceMonitoringPageContent />
+    </Suspense>
   );
 }

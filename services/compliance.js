@@ -226,7 +226,13 @@ export const complianceService = {
       if (filters.departmentId && filters.departmentId !== "all") {
         params.append("department_id", filters.departmentId.toString());
       }
-      
+      if (filters.fieldSlug && filters.fieldSlug !== "all") {
+        params.append("field_slug", filters.fieldSlug);
+      }
+      if (filters.paginateByEntity === false) {
+        params.append("paginate_by_entity", "false");
+      }
+
       const response = await api.get(`/compliance/non-submitted?${params.toString()}`);
       return response.data || response;
     } catch (error) {
