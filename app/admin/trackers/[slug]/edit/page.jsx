@@ -680,7 +680,6 @@ const TrackerEditPage = () => {
             }),
             use_stages: tracker.tracker_config?.use_stages ?? (!!(tracker.tracker_config?.stage_mapping?.length || tracker.tracker_config?.is_patient_referral)),
             list_view_fields: tracker.tracker_config?.list_view_fields || [],
-            create_view_fields: tracker.tracker_config?.create_view_fields || [],
             note_categories: tracker.tracker_config?.note_categories || [],
             action_types: (tracker.tracker_config?.action_types && Array.isArray(tracker.tracker_config.action_types))
               ? JSON.parse(JSON.stringify(tracker.tracker_config.action_types))
@@ -739,6 +738,13 @@ const TrackerEditPage = () => {
     fetchTwilioActiveNumbers();
   }, [fetchTwilioActiveNumbers]);
 
+  /** Remove deprecated keys so they are not re-persisted from loaded tracker_config. */
+  const sanitizeTrackerPayload = (data) => {
+    const tc = { ...(data.tracker_config || {}) };
+    delete tc.create_view_fields;
+    return { ...data, tracker_config: tc };
+  };
+
   const handleSave = async () => {
     try {
       const defaultStatuses = formData.tracker_config?.statuses || [];
@@ -756,7 +762,7 @@ const TrackerEditPage = () => {
         : formData;
       await updateMutation.mutateAsync({
         slug: slug,
-        trackerData: dataToSave,
+        trackerData: sanitizeTrackerPayload(dataToSave),
       });
       toast.success("Tracker updated successfully");
     } catch (error) {
@@ -934,7 +940,7 @@ const TrackerEditPage = () => {
     try {
       await updateMutation.mutateAsync({
         slug: slug,
-        trackerData: updatedFormData,
+        trackerData: sanitizeTrackerPayload(updatedFormData),
       });
       toast.success("Field updated and saved successfully");
     } catch (error) {
@@ -1114,7 +1120,7 @@ const TrackerEditPage = () => {
     try {
       await updateMutation.mutateAsync({
         slug: slug,
-        trackerData: updatedFormData,
+        trackerData: sanitizeTrackerPayload(updatedFormData),
       });
       toast.success("Section updated and saved successfully");
     } catch (error) {
@@ -1866,87 +1872,6 @@ const TrackerEditPage = () => {
                                 </SelectContent>
                               </Select>
                             )}
-                          </div>
-                        );
-                      })}
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-          
-          {/* Create View Fields Configuration */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Create View Fields</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div>
-                <Label className="text-base font-semibold mb-2 block">
-                  Creation Modal Fields
-                </Label>
-                <p className="text-sm text-muted-foreground mb-4">
-                  Select which fields should be displayed in the creation modal/popup. If none selected, all fields will be shown. Fields not selected here can still be added later when editing the entry.
-                </p>
-                {fields.length === 0 ? (
-                  <p className="text-sm text-muted-foreground italic">
-                    Add fields first to configure creation view
-                  </p>
-                ) : (
-                  <div className="space-y-2 max-h-[300px] overflow-y-auto">
-                    {fields
-                      .filter((field) => {
-                        const fieldType = field.type || field.field_type;
-                        return !['text_block', 'image_block', 'line_break', 'page_break', 'youtube_video_embed'].includes(fieldType);
-                      })
-                      .map((field) => {
-                        const fieldId = field.id || field.field_id || field.name;
-                        const createViewFields = formData.tracker_config?.create_view_fields || [];
-                        const isSelected = createViewFields.includes(fieldId);
-                        
-                        return (
-                          <div
-                            key={fieldId}
-                            className="flex items-center gap-2 p-2 border rounded-md hover:bg-muted/50"
-                          >
-                            <input
-                              type="checkbox"
-                              id={`create_view_${fieldId}`}
-                              checked={isSelected}
-                              onChange={(e) => {
-                                const currentFields = formData.tracker_config?.create_view_fields || [];
-                                let newFields;
-                                
-                                if (e.target.checked) {
-                                  newFields = [...currentFields, fieldId];
-                                } else {
-                                  newFields = currentFields.filter((id) => id !== fieldId);
-                                }
-                                
-                                setFormData((prev) => ({
-                                  ...prev,
-                                  tracker_config: {
-                                    ...prev.tracker_config,
-                                    create_view_fields: newFields,
-                                  },
-                                }));
-                              }}
-                              className="rounded"
-                            />
-                            <Label
-                              htmlFor={`create_view_${fieldId}`}
-                              className="cursor-pointer flex-1 flex items-center gap-2"
-                            >
-                              <span className="font-medium">{field.label || field.name}</span>
-                              <Badge variant="outline" className="text-xs">
-                                {field.type}
-                              </Badge>
-                              {(field.required || field.is_required) && (
-                                <Badge variant="destructive" className="text-xs">
-                                  Required
-                                </Badge>
-                              )}
-                            </Label>
                           </div>
                         );
                       })}

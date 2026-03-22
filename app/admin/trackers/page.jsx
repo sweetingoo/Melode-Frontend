@@ -1364,14 +1364,7 @@ const TrackersPage = () => {
                             return !['text_block', 'image_block', 'line_break', 'page_break', 'youtube_video_embed'].includes(fieldType);
                     });
                     
-                    // Check if create_view_fields is configured
-                    const createViewFields = trackerDetails.tracker_config?.create_view_fields;
-                    const fieldsToShow = createViewFields && Array.isArray(createViewFields) && createViewFields.length > 0
-                      ? allFields.filter((field) => {
-                          const fieldId = field.id || field.field_id || field.name;
-                          return createViewFields.includes(fieldId);
-                        })
-                      : allFields; // Show all fields if not configured (backward compatibility)
+                    const fieldsToShow = allFields;
                     
                     // Group by section (stage) when tracker has sections
                     const sections = trackerDetails.tracker_fields?.sections || [];
@@ -1476,7 +1469,7 @@ const TrackersPage = () => {
                       <div className="space-y-4">
                         {fieldsToShow.length === 0 ? (
                           <p className="text-sm text-muted-foreground">
-                            No fields configured for creation. Please configure "Create View Fields" in tracker settings.
+                            No creatable fields on this tracker (only layout blocks may be defined).
                           </p>
                         ) : wizardSteps.length > 0 ? (
                           // One stage at a time: steps from stage_mapping (or sections); fields from sections by index
@@ -1708,13 +1701,7 @@ const TrackersPage = () => {
                         const fieldType = field.type || field.field_type;
                         return !['text_block', 'image_block', 'line_break', 'page_break', 'youtube_video_embed'].includes(fieldType);
                       }) || [];
-                      const createViewFields = trackerDetails.tracker_config?.create_view_fields;
-                      const fieldsToValidate = createViewFields && Array.isArray(createViewFields) && createViewFields.length > 0
-                        ? allFields.filter((field) => {
-                            const fieldId = field.id || field.field_id || field.name;
-                            return createViewFields.includes(fieldId);
-                          })
-                        : allFields;
+                      const fieldsToValidate = allFields;
                       const sm = trackerDetails.tracker_config?.stage_mapping || [];
                       const wizardStepCount = sm.length > 0 ? sm.length : (trackerDetails.tracker_fields?.sections?.length || 0);
                       const statusFieldId = trackerDetails.tracker_config?.status_field_id;
@@ -2940,6 +2927,7 @@ const TrackersPage = () => {
                           )}
                         </button>
                       </TableHead>
+                      <TableHead className="border-r font-semibold min-w-[110px]">Next appointment</TableHead>
                                 {/* Dynamic field columns (only visible) */}
                                 {visibleFields.map((field) => {
                                   const fieldId = field.id || field.field_id || field.name;
@@ -3241,6 +3229,33 @@ const TrackersPage = () => {
                                 })()
                               : "—"}
                           </TableCell>
+                          <TableCell className={cn("border-r tabular-nums", densityClass)}>
+                            {entry.next_appointment_date
+                              ? (() => {
+                                  try {
+                                    const d = new Date(String(entry.next_appointment_date).split("T")[0]);
+                                    const dateStr = Number.isNaN(d.getTime())
+                                      ? entry.next_appointment_date
+                                      : format(d, "d MMM yyyy");
+                                    return (
+                                      <div className="flex flex-col gap-0.5 min-w-0">
+                                        <span>{dateStr}</span>
+                                        {entry.next_appointment_type_label ? (
+                                          <span
+                                            className="text-xs text-muted-foreground truncate max-w-[200px]"
+                                            title={entry.next_appointment_type_label}
+                                          >
+                                            {entry.next_appointment_type_label}
+                                          </span>
+                                        ) : null}
+                                      </div>
+                                    );
+                                  } catch {
+                                    return entry.next_appointment_date;
+                                  }
+                                })()
+                              : "—"}
+                          </TableCell>
                                   {/* Dynamic field values - only visible columns */}
                                   {visibleFields.map((field) => {
                                     const fieldId = field.id || field.field_id || field.name;
@@ -3344,6 +3359,7 @@ const TrackersPage = () => {
                         {(tracker?.tracker_config?.use_stages !== false && (tracker?.tracker_config?.stage_mapping?.length > 0 || tracker?.tracker_config?.is_patient_referral)) && (
                           <TableCell className="bg-muted border-r" />
                         )}
+                        <TableCell className="bg-muted border-r" />
                         <TableCell className="bg-muted border-r" />
                         <TableCell className="bg-muted border-r" />
                         <TableCell className="bg-muted border-r" />
