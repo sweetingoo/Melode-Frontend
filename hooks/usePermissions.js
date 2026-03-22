@@ -3,6 +3,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { permissionsService } from "@/services/permissions";
+import { roleKeys } from "@/hooks/useRoles";
 import { parseUTCDate } from "@/utils/time";
 
 // Query keys for permissions
@@ -200,13 +201,85 @@ export const useRolesWithPermission = (permissionSlug) => {
   return useQuery({
     queryKey: permissionKeys.rolesWithPermission(permissionSlug),
     queryFn: async () => {
-      const response = await permissionsService.getRolesWithPermission(
-        permissionSlug
-      );
-      return response.data;
+      const data = await permissionsService.getRolesWithPermission(permissionSlug);
+      return Array.isArray(data) ? data : data?.data ?? [];
     },
     enabled: !!permissionSlug,
     staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+};
+
+const invalidatePermissionRoleQueries = (queryClient, permissionSlug) => {
+  queryClient.invalidateQueries({ queryKey: permissionKeys.rolesWithPermission(permissionSlug) });
+  queryClient.invalidateQueries({ queryKey: ["permission-roles", permissionSlug] });
+  queryClient.invalidateQueries({ queryKey: roleKeys.lists() });
+};
+
+/** Bulk-add this permission to roles (requires role:update). */
+export const useAddPermissionToRolesMutation = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ slug, roleIds }) => {
+      return permissionsService.addPermissionToRoles(slug, roleIds);
+    },
+    onSuccess: (data, { slug, quiet }) => {
+      invalidatePermissionRoleQueries(queryClient, slug);
+      if (quiet) return;
+      const updated = data?.updated ?? 0;
+      const skipped = data?.skipped ?? 0;
+      toast.success(
+        updated ? `Permission added to ${updated} role(s).` : "No roles updated.",
+        skipped || data?.errors?.length
+          ? {
+              description: [
+                skipped ? `${skipped} skipped (system or already had permission).` : "",
+                ...(data?.errors || []),
+              ]
+                .filter(Boolean)
+                .join(" "),
+            }
+          : undefined
+      );
+    },
+    onError: (error) => {
+      toast.error("Failed to add permission to role(s)", {
+        description: error?.response?.data?.detail || error?.message,
+      });
+    },
+  });
+};
+
+/** Bulk-remove this permission from roles (requires role:update). */
+export const useRemovePermissionFromRolesMutation = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ slug, roleIds }) => {
+      return permissionsService.removePermissionFromRoles(slug, roleIds);
+    },
+    onSuccess: (data, { slug, quiet }) => {
+      invalidatePermissionRoleQueries(queryClient, slug);
+      if (quiet) return;
+      const updated = data?.updated ?? 0;
+      const skipped = data?.skipped ?? 0;
+      toast.success(
+        updated ? `Permission removed from ${updated} role(s).` : "No roles updated.",
+        skipped || data?.errors?.length
+          ? {
+              description: [
+                skipped ? `${skipped} skipped.` : "",
+                ...(data?.errors || []),
+              ]
+                .filter(Boolean)
+                .join(" "),
+            }
+          : undefined
+      );
+    },
+    onError: (error) => {
+      toast.error("Failed to remove permission from role(s)", {
+        description: error?.response?.data?.detail || error?.message,
+      });
+    },
   });
 };
 

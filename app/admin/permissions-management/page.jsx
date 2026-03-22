@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -41,6 +41,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Pagination,
   PaginationContent,
@@ -60,6 +61,7 @@ import {
   Settings,
   AlertCircle,
   Trash2,
+  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -67,13 +69,171 @@ import {
   useResources,
   useActions,
   useRolesWithPermission,
+  useAddPermissionToRolesMutation,
+  useRemovePermissionFromRolesMutation,
   useCreatePermission,
   useUpdatePermission,
   useDeletePermission,
   permissionUtils,
 } from "@/hooks/usePermissions";
+import { useRolesAll } from "@/hooks/useRoles";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
 import { PageSearchBar } from "@/components/admin/PageSearchBar";
+
+/** Summary counts (shares React Query cache with PermissionUsageRolesPanel). */
+function PermissionUsageStats({ permissionSlug }) {
+  const { data: rolesWithPermission = [], isLoading } = useRolesWithPermission(permissionSlug);
+  const totalUserAssignments = useMemo(
+    () => (rolesWithPermission || []).reduce((sum, r) => sum + (Number(r.user_count) || 0), 0),
+    [rolesWithPermission]
+  );
+  const roleCount = (rolesWithPermission || []).length;
+
+  return (
+    <div className="border-t pt-4">
+      <h4 className="text-sm font-medium text-muted-foreground mb-3">Usage information</h4>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="text-center p-3 bg-muted rounded-md">
+          <p className="text-2xl font-bold text-primary">{isLoading ? "…" : roleCount}</p>
+          <p className="text-xs text-muted-foreground">Roles with this permission</p>
+        </div>
+        <div className="text-center p-3 bg-muted rounded-md">
+          <p className="text-2xl font-bold text-blue-600">{isLoading ? "…" : totalUserAssignments}</p>
+          <p className="text-xs text-muted-foreground">Active user–role assignments (sum)</p>
+        </div>
+        <div className="text-center p-3 bg-muted rounded-md">
+          <p className="text-2xl font-bold text-green-600">Active</p>
+          <p className="text-xs text-muted-foreground">Permission status</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Live role assignment for one permission (API: GET /permissions/{slug}/roles). */
+function PermissionUsageRolesPanel({ permissionSlug, canManageRolePermissions }) {
+  const { data: rolesWithPermission = [], isLoading, isError, error } = useRolesWithPermission(permissionSlug);
+  const { data: allRoles = [], isLoading: loadingAllRoles } = useRolesAll(100);
+  const addMutation = useAddPermissionToRolesMutation();
+  const removeMutation = useRemovePermissionFromRolesMutation();
+  const busy = addMutation.isPending || removeMutation.isPending;
+
+  const roleIdsWithPermission = useMemo(
+    () => new Set((rolesWithPermission || []).map((r) => r.role_id)),
+    [rolesWithPermission]
+  );
+
+  const manageableRoles = useMemo(() => {
+    return [...(allRoles || [])]
+      .filter((r) => !r.is_system)
+      .sort((a, b) =>
+        String(a.display_name || a.name || "").localeCompare(String(b.display_name || b.name || ""), undefined, {
+          sensitivity: "base",
+        })
+      );
+  }, [allRoles]);
+
+  const systemRolesWithPermission = useMemo(
+    () => (rolesWithPermission || []).filter((r) => r.is_system),
+    [rolesWithPermission]
+  );
+
+  const totalUserAssignments = useMemo(
+    () => (rolesWithPermission || []).reduce((sum, r) => sum + (Number(r.user_count) || 0), 0),
+    [rolesWithPermission]
+  );
+
+  const toggleRole = (roleId, hasPermissionNow) => {
+    if (!canManageRolePermissions || busy) return;
+    if (hasPermissionNow) {
+      removeMutation.mutate({ slug: permissionSlug, roleIds: [roleId], quiet: true });
+    } else {
+      addMutation.mutate({ slug: permissionSlug, roleIds: [roleId], quiet: true });
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        Loading roles that use this permission…
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <p className="text-sm text-destructive py-2">
+        {error?.response?.data?.detail || error?.message || "Could not load roles for this permission."}
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h4 className="text-sm font-medium mb-2">Roles (non-system)</h4>
+        <p className="text-xs text-muted-foreground mb-2">
+          {canManageRolePermissions
+            ? "Tick or untick to add or remove this permission from each role. System roles are listed separately below."
+            : "You need role update rights to change assignments. System roles are managed separately."}
+        </p>
+        {loadingAllRoles ? (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            Loading all roles…
+          </div>
+        ) : (
+          <div className="border rounded-lg max-h-[min(280px,40vh)] overflow-y-auto divide-y">
+            {manageableRoles.length === 0 ? (
+              <p className="p-3 text-sm text-muted-foreground">No assignable roles found.</p>
+            ) : (
+              manageableRoles.map((role) => {
+                const checked = roleIdsWithPermission.has(role.id);
+                return (
+                  <label
+                    key={role.id}
+                    className="flex items-center gap-3 p-2.5 hover:bg-muted/50 cursor-pointer text-sm"
+                  >
+                    <Checkbox
+                      checked={checked}
+                      disabled={!canManageRolePermissions || busy}
+                      onCheckedChange={() => toggleRole(role.id, checked)}
+                      className="shrink-0"
+                    />
+                    <span className="font-medium truncate">{role.display_name || role.name}</span>
+                    <span className="text-xs text-muted-foreground truncate">({role.name})</span>
+                  </label>
+                );
+              })
+            )}
+          </div>
+        )}
+      </div>
+
+      {systemRolesWithPermission.length > 0 && (
+        <div>
+          <h4 className="text-sm font-medium mb-1">System roles with this permission</h4>
+          <p className="text-xs text-muted-foreground mb-2">
+            These cannot be changed here (skipped by the API). Shown for visibility only.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {systemRolesWithPermission.map((r) => (
+              <Badge key={r.role_id} variant="secondary" className="text-xs font-normal">
+                {r.display_name || r.role_name}
+                {r.user_count != null ? ` · ${r.user_count} user(s)` : ""}
+              </Badge>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <p className="text-xs text-muted-foreground">
+        Active assignment totals are in &quot;Usage information&quot; above (one user in multiple roles may be counted more than once).
+      </p>
+    </div>
+  );
+}
 
 const PermissionsManagementPage = () => {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -110,6 +270,7 @@ const PermissionsManagementPage = () => {
   const canCreatePermission = hasPermission("permission:create");
   const canUpdatePermission = hasPermission("permission:update");
   const canDeletePermission = hasPermission("permission:delete");
+  const canManageRolePermissions = hasPermission("role:update");
 
   // Transform API data
   // Handle new paginated response structure: { permissions: [], total: 96, page: 1, per_page: 50, total_pages: 2 }
@@ -879,7 +1040,7 @@ const PermissionsManagementPage = () => {
 
       {/* View Permission Modal */}
       <Dialog open={isViewModalOpen} onOpenChange={setIsViewModalOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Eye className="h-5 w-5" />
@@ -895,7 +1056,10 @@ const PermissionsManagementPage = () => {
                   <h3 className="text-xl font-semibold">
                     {viewingPermission.name}
                   </h3>
-                  <p className="text-sm text-muted-foreground mt-1">
+                  <p className="text-sm text-muted-foreground mt-1 font-mono">
+                    {viewingPermission.slug}
+                  </p>
+                  <p className="text-sm text-muted-foreground mt-0.5">
                     Permission ID: {viewingPermission.id}
                   </p>
                 </div>
@@ -985,29 +1149,15 @@ const PermissionsManagementPage = () => {
                 </div>
               )}
 
-              {/* Permission Usage Info */}
+              {/* Permission usage: live from API (was previously hardcoded zeros). */}
+              <PermissionUsageStats permissionSlug={viewingPermission.slug} />
+
               <div className="border-t pt-4">
-                <h4 className="text-sm font-medium text-muted-foreground mb-3">
-                  Usage Information
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="text-center p-3 bg-muted rounded-md">
-                    <p className="text-2xl font-bold text-primary">0</p>
-                    <p className="text-xs text-muted-foreground">
-                      Roles Using This Permission
-                    </p>
-                  </div>
-                  <div className="text-center p-3 bg-muted rounded-md">
-                    <p className="text-2xl font-bold text-blue-600">0</p>
-                    <p className="text-xs text-muted-foreground">
-                      Users With This Permission
-                    </p>
-                  </div>
-                  <div className="text-center p-3 bg-muted rounded-md">
-                    <p className="text-2xl font-bold text-green-600">Active</p>
-                    <p className="text-xs text-muted-foreground">Status</p>
-                  </div>
-                </div>
+                <h4 className="text-sm font-medium mb-2">Role assignments</h4>
+                <PermissionUsageRolesPanel
+                  permissionSlug={viewingPermission.slug}
+                  canManageRolePermissions={canManageRolePermissions}
+                />
               </div>
             </div>
           )}
