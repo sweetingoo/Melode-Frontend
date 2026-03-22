@@ -3,6 +3,7 @@ import { usersService } from "@/services/users";
 import { rolesService } from "@/services/roles";
 import { toast } from "sonner";
 import { parseUTCDate } from "@/utils/time";
+import { sortUsersListResponse } from "@/utils/picker-sort";
 
 // Role query keys
 export const roleKeys = {
@@ -48,7 +49,8 @@ export const useUsersAll = (perPage = 100, params = {}, options = {}) => {
     queryKey: [...userKeys.lists(), "all-pages", perPage, params],
     queryFn: async () => {
       const response = await usersService.getUsersAllPages(perPage, params);
-      return response.data;
+      const body = response.data;
+      return body?.users ? sortUsersListResponse(body) : body;
     },
     staleTime: 5 * 60 * 1000,
     ...options,
@@ -56,25 +58,25 @@ export const useUsersAll = (perPage = 100, params = {}, options = {}) => {
 };
 
 export const useUsers = (params = {}, options = {}) => {
+  const { alphabeticalSort, ...queryOptions } = options;
+  const sortUsersList =
+    alphabeticalSort === false ? false : params.page === undefined;
+
   return useQuery({
     queryKey: userKeys.list(params),
     queryFn: async () => {
       try {
         const response = await usersService.getUsers(params);
-        console.log("🔍 [useUsers] Raw axios response:", response);
-        console.log("🔍 [useUsers] response.data:", response?.data);
-        console.log("🔍 [useUsers] response.data?.data:", response?.data?.data);
-
-        // The axios response has a 'data' property, so response.data contains the actual API response
-        // Handle both cases: if response.data exists, use it; otherwise use response directly
         const apiData = response?.data || response;
-        console.log("🔍 [useUsers] apiData:", apiData);
-
-        // If the API response itself has a 'data' key, extract it
-        const finalData = apiData?.data || apiData;
-        console.log("🔍 [useUsers] finalData to return:", finalData);
-        console.log("🔍 [useUsers] finalData?.users:", finalData?.users);
-
+        let finalData = apiData?.data || apiData;
+        if (
+          sortUsersList &&
+          finalData &&
+          typeof finalData === "object" &&
+          Array.isArray(finalData.users)
+        ) {
+          finalData = sortUsersListResponse(finalData);
+        }
         return finalData;
       } catch (error) {
         console.error("Failed to fetch users:", error);
@@ -103,7 +105,7 @@ export const useUsers = (params = {}, options = {}) => {
       return failureCount < 3;
     },
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
-    ...options, // Allow passing query options like enabled, etc.
+    ...queryOptions,
   });
 };
 

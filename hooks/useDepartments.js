@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tansta
 import { departmentsService } from "@/services/departments";
 import { toast } from "sonner";
 import { extractErrorMessage } from "@/utils/error-handler";
+import { sortDepartmentsResponse } from "@/utils/picker-sort";
 
 // Department query keys
 export const departmentKeys = {
@@ -13,15 +14,23 @@ export const departmentKeys = {
 };
 
 // Get all departments query
-export const useDepartments = (params = {}) => {
+/** @param queryOptions.alphabeticalSort - default true when `params.page` is omitted (dropdowns); set false to keep server order */
+export const useDepartments = (params = {}, queryOptions = {}) => {
+  const { alphabeticalSort, ...restQuery } = queryOptions;
+  const sort =
+    alphabeticalSort === false ? false : params.page === undefined;
+
   return useQuery({
     queryKey: departmentKeys.list(params),
     queryFn: async () => {
       const response = await departmentsService.getDepartments(params);
-      return response.data;
+      let data = response.data;
+      if (sort && data) data = sortDepartmentsResponse(data);
+      return data;
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
     placeholderData: keepPreviousData, // keep previous list visible while search/pagination refetches
+    ...restQuery,
   });
 };
 

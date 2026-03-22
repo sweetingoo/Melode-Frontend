@@ -26,7 +26,9 @@ export const useRoles = (params = {}, options = {}) => {
     queryKey: roleKeys.list(params),
     queryFn: async () => {
       const response = await rolesService.getRoles(params);
-      return response.data;
+      const data = response.data;
+      if (Array.isArray(data)) return sortRolesForPicker(data);
+      return data;
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
     ...options,
@@ -39,7 +41,7 @@ export const useRolesAll = (perPage = 20, options = {}) => {
     queryKey: [...roleKeys.lists(), "all-pages", perPage],
     queryFn: async () => {
       const response = await rolesService.getRolesAllPages(perPage);
-      return response.data;
+      return sortRolesForPicker(normalizeRolesList(response.data));
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
     ...options,
