@@ -12,6 +12,28 @@ export const usersService = {
     }
   },
 
+  /** Fetch every page from GET /users (max per_page 100 on API). Omit is_active to include inactive users. */
+  getUsersAllPages: async (perPage = 100, params = {}) => {
+    const all = [];
+    let page = 1;
+    let totalPages = 1;
+    for (;;) {
+      const response = await api.get("/users", {
+        params: { page, per_page: perPage, ...params },
+      });
+      const body = response.data ?? response;
+      const chunk = Array.isArray(body.users) ? body.users : [];
+      all.push(...chunk);
+      totalPages =
+        typeof body.total_pages === "number" && body.total_pages >= 1
+          ? body.total_pages
+          : 1;
+      if (page >= totalPages || chunk.length === 0) break;
+      page += 1;
+    }
+    return { data: { users: all, total: all.length } };
+  },
+
   // Create user
   createUser: async (userData) => {
     try {

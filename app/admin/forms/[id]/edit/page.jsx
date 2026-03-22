@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -111,8 +111,16 @@ const FILE_TYPE_CATEGORIES = {
 };
 import { useForm, useUpdateForm } from "@/hooks/useForms";
 import { generateSlug } from "@/utils/slug";
-import { useRoles, useRolesAll, useCreateRole } from "@/hooks/useRoles";
-import { useUsers } from "@/hooks/useUsers";
+import {
+  useRolesAll,
+  useCreateRole,
+  sortRolesForPicker,
+  formatRolePickerLabel,
+  normalizeRolesList,
+  splitRolesJobShiftGroups,
+} from "@/hooks/useRoles";
+import { JobShiftRoleAccessPicker } from "@/components/forms/JobShiftRoleAccessPicker";
+import { useUsersAll } from "@/hooks/useUsers";
 import { useActiveFormTypes } from "@/hooks/useFormTypes";
 import { useUploadFile } from "@/hooks/useProfile";
 import { toast } from "sonner";
@@ -870,12 +878,28 @@ const EditFormPage = () => {
 
   const { data: form, isLoading: formLoading } = useForm(formSlug);
   const updateFormMutation = useUpdateForm();
-  const { data: rolesData } = useRoles();
+  const { data: rolesDataAll } = useRolesAll(100);
   const createRoleMutation = useCreateRole();
-  const { data: usersResponse } = useUsers();
+  const { data: usersResponse } = useUsersAll(100);
   const uploadFileMutation = useUploadFile({ silent: true });
   const { data: activeFormTypes = [], isLoading: isLoadingFormTypes } = useActiveFormTypes();
-  const roles = rolesData || [];
+  const allRolesRaw = useMemo(() => normalizeRolesList(rolesDataAll), [rolesDataAll]);
+  const { standaloneRoles: standRaw, jobRoleGroups: jobsRaw } = useMemo(
+    () => splitRolesJobShiftGroups(allRolesRaw),
+    [allRolesRaw]
+  );
+  const standaloneRoles = useMemo(() => sortRolesForPicker(standRaw), [standRaw]);
+  const jobRoleGroups = useMemo(
+    () =>
+      jobsRaw.map((job) => ({
+        ...job,
+        shiftRolesForPicker: sortRolesForPicker(
+          job.shift_roles || job.shiftRoles || []
+        ),
+      })),
+    [jobsRaw]
+  );
+  const roles = useMemo(() => sortRolesForPicker(allRolesRaw), [allRolesRaw]);
   const users = usersResponse?.users || usersResponse || [];
 
   const [formData, setFormData] = useState(null);
@@ -3497,81 +3521,21 @@ const EditFormPage = () => {
                   <div className="space-y-3">
                     <div>
                       <Label>Allowed Roles</Label>
-                      <Select
-                        value=""
-                        onValueChange={(value) => {
-                          if (value && !formData.access_config.allowed_roles.includes(value)) {
-                            setFormData({
-                              ...formData,
-                              access_config: {
-                                ...formData.access_config,
-                                allowed_roles: [...formData.access_config.allowed_roles, value],
-                              },
-                            });
-                          }
-                        }}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select role to add" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {roles
-                            .filter(
-                              (role) =>
-                                !formData.access_config.allowed_roles.includes(
-                                  role.name || role.slug
-                                )
-                            )
-                            .map((role) => (
-                              <SelectItem
-                                key={role.id}
-                                value={role.name || role.slug}
-                              >
-                                {role.display_name || role.name}
-                              </SelectItem>
-                            ))}
-                        </SelectContent>
-                      </Select>
-                      {formData.access_config.allowed_roles.length > 0 && (
-                        <div className="flex flex-wrap gap-2 mt-2">
-                          {formData.access_config.allowed_roles.map((roleName) => {
-                            const role = roles.find(
-                              (r) => (r.name || r.slug) === roleName
-                            );
-                            return (
-                              <Badge
-                                key={roleName}
-                                variant="secondary"
-                                className="flex items-center gap-1 pr-1"
-                              >
-                                <Shield className="h-3 w-3" />
-                                <span className="text-xs">
-                                  {role?.display_name || role?.name || roleName}
-                                </span>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-4 w-4 p-0 hover:bg-destructive hover:text-destructive-foreground"
-                                  onClick={() => {
-                                    setFormData({
-                                      ...formData,
-                                      access_config: {
-                                        ...formData.access_config,
-                                        allowed_roles:
-                                          formData.access_config.allowed_roles.filter(
-                                            (r) => r !== roleName
-                                          ),
-                                      },
-                                    });
-                                  }}
-                                >
-                                  <X className="h-3 w-3" />
-                                </Button>
-                              </Badge>
-                            );
-                          })}
-                        </div>
-                      )}
+                      <JobShiftRoleAccessPicker
+                        idPrefix="form-allowed"
+                        selectedRoleNames={formData.access_config.allowed_roles || []}
+                        onChange={(names) =>
+                          setFormData({
+                            ...formData,
+                            access_config: {
+                              ...formData.access_config,
+                              allowed_roles: names,
+                            },
+                          })
+                        }
+                        standaloneRoles={standaloneRoles}
+                        jobRoleGroups={jobRoleGroups}
+                      />
                     </div>
 
                     <div>
@@ -3611,70 +3575,13 @@ const EditFormPage = () => {
                     <div className="space-y-3">
                       <div>
                         <Label>View Submissions Roles</Label>
-                        <Select
-                          value=""
-                          onValueChange={(value) => {
-                            if (value && !viewSubmissionsRoleIds.includes(value)) {
-                              setViewSubmissionsRoleIds([...viewSubmissionsRoleIds, value]);
-                            }
-                          }}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select role to add" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {roles
-                              .filter(
-                                (role) =>
-                                  !viewSubmissionsRoleIds.includes(
-                                    role.name || role.slug
-                                  )
-                              )
-                              .map((role) => (
-                                <SelectItem
-                                  key={role.id}
-                                  value={role.name || role.slug}
-                                >
-                                  {role.display_name || role.name}
-                                </SelectItem>
-                              ))}
-                          </SelectContent>
-                        </Select>
-                        {viewSubmissionsRoleIds.length > 0 && (
-                          <div className="flex flex-wrap gap-2 mt-2">
-                            {viewSubmissionsRoleIds.map((roleName) => {
-                              const role = roles.find(
-                                (r) => (r.name || r.slug) === roleName
-                              );
-                              return (
-                                <Badge
-                                  key={roleName}
-                                  variant="secondary"
-                                  className="flex items-center gap-1 pr-1"
-                                >
-                                  <Shield className="h-3 w-3" />
-                                  <span className="text-xs">
-                                    {role?.display_name || role?.name || roleName}
-                                  </span>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-4 w-4 p-0 hover:bg-destructive hover:text-destructive-foreground"
-                                    onClick={() => {
-                                      setViewSubmissionsRoleIds(
-                                        viewSubmissionsRoleIds.filter(
-                                          (r) => r !== roleName
-                                        )
-                                      );
-                                    }}
-                                  >
-                                    <X className="h-3 w-3" />
-                                  </Button>
-                                </Badge>
-                              );
-                            })}
-                          </div>
-                        )}
+                        <JobShiftRoleAccessPicker
+                          idPrefix="form-view-sub"
+                          selectedRoleNames={viewSubmissionsRoleIds}
+                          onChange={setViewSubmissionsRoleIds}
+                          standaloneRoles={standaloneRoles}
+                          jobRoleGroups={jobRoleGroups}
+                        />
                       </div>
 
                       <div>
@@ -3757,7 +3664,7 @@ const EditFormPage = () => {
                           <SelectContent>
                             {roles.map((role) => (
                               <SelectItem key={role.id} value={role.id.toString()}>
-                                {role.display_name || role.name}
+                                {formatRolePickerLabel(role)}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -3938,7 +3845,7 @@ const EditFormPage = () => {
                         <SelectContent>
                           {roles.map((role) => (
                             <SelectItem key={role.id} value={role.name || role.slug}>
-                              {role.display_name || role.name}
+                              {formatRolePickerLabel(role)}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -4574,11 +4481,8 @@ const EditFormPage = () => {
 
 // People Field Role Selector Component
 const PeopleFieldRoleSelector = ({ selectedRoleIds, onChange }) => {
-  const { data: rolesData, isLoading } = useRolesAll();
-  // Handle both array and object response formats
-  const roles = Array.isArray(rolesData)
-    ? rolesData
-    : rolesData?.roles || rolesData?.items || [];
+  const { data: rolesData, isLoading } = useRolesAll(100);
+  const roles = useMemo(() => sortRolesForPicker(rolesData), [rolesData]);
 
   const handleRoleToggle = (roleId) => {
     const roleIdNum = typeof roleId === 'string' ? parseInt(roleId) : roleId;
@@ -4612,7 +4516,7 @@ const PeopleFieldRoleSelector = ({ selectedRoleIds, onChange }) => {
                   onCheckedChange={() => handleRoleToggle(roleId)}
                 />
                 <Label htmlFor={`role-${roleId}`} className="cursor-pointer text-sm flex-1">
-                  {role.display_name || role.name || `Role ${roleId}`}
+                  {formatRolePickerLabel(role)}
                 </Label>
               </div>
             );

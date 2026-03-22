@@ -8,6 +8,75 @@ import { X, User, Search, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getUserDisplayName } from "@/utils/user";
 
+/** Account flags from full or minimal GET /users rows */
+function UserStatusInline({ user, compact = false }) {
+  if (!user) return null;
+  const chips = [];
+
+  if (user.is_active === false) {
+    chips.push(
+      <span
+        key="inactive"
+        className="text-[10px] font-medium uppercase tracking-wide text-destructive border border-destructive/35 rounded px-1.5 py-0 shrink-0"
+      >
+        Inactive
+      </span>
+    );
+  } else if (user.is_active === true && !compact) {
+    chips.push(
+      <span
+        key="active"
+        className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground border border-border rounded px-1.5 py-0 shrink-0"
+      >
+        Active
+      </span>
+    );
+  }
+
+  if (user.is_verified === false) {
+    chips.push(
+      <span
+        key="unverified"
+        className="text-[10px] font-medium uppercase tracking-wide text-amber-700 dark:text-amber-400 border border-amber-500/40 rounded px-1.5 py-0 shrink-0"
+      >
+        Unverified
+      </span>
+    );
+  } else if (user.is_verified === true && !compact) {
+    chips.push(
+      <span
+        key="verified"
+        className="text-[10px] font-medium uppercase tracking-wide text-emerald-700 dark:text-emerald-400 border border-emerald-500/35 rounded px-1.5 py-0 shrink-0"
+      >
+        Verified
+      </span>
+    );
+  }
+
+  if (user.is_superuser) {
+    chips.push(
+      <span
+        key="super"
+        className="text-[10px] font-medium uppercase tracking-wide text-primary border border-primary/40 rounded px-1.5 py-0 shrink-0"
+      >
+        Superuser
+      </span>
+    );
+  }
+
+  if (chips.length === 0) return null;
+  return (
+    <div
+      className={cn(
+        "flex flex-wrap items-center gap-1",
+        compact ? "inline-flex" : "shrink-0"
+      )}
+    >
+      {chips}
+    </div>
+  );
+}
+
 const UserMentionSelector = ({
   users = [],
   selectedUserIds = [],
@@ -28,8 +97,18 @@ const UserMentionSelector = ({
     if (!searchTerm) return true;
     const searchLower = searchTerm.toLowerCase();
     const displayName = getUserDisplayName(user);
+    const statusBlob = [
+      user.is_active === false ? "inactive" : "",
+      user.is_active === true ? "active" : "",
+      user.is_verified === true ? "verified" : "",
+      user.is_verified === false ? "unverified" : "",
+      user.is_superuser ? "superuser" : "",
+    ]
+      .join(" ")
+      .toLowerCase();
     return (
       displayName.toLowerCase().includes(searchLower) ||
+      statusBlob.includes(searchLower) ||
       user.email?.toLowerCase().includes(searchLower) ||
       user.username?.toLowerCase().includes(searchLower)
     );
@@ -95,10 +174,11 @@ const UserMentionSelector = ({
             <Badge
               key={user.id}
               variant="secondary"
-              className="flex items-center gap-1 pr-1"
+              className="flex items-center gap-1.5 pr-1 max-w-full flex-wrap h-auto py-1"
             >
-              <User className="h-3 w-3" />
-              <span className="text-xs">{getUserDisplayName(user)}</span>
+              <User className="h-3 w-3 shrink-0" />
+              <span className="text-xs break-words text-left">{getUserDisplayName(user)}</span>
+              <UserStatusInline user={user} compact />
               <Button
                 variant="ghost"
                 size="icon"
@@ -157,8 +237,11 @@ const UserMentionSelector = ({
                         <User className="h-4 w-4 text-primary" />
                       </div>
                       <div className="flex-1 min-w-0 text-left">
-                        <div className="font-medium truncate">
-                          {getUserDisplayName(user)}
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <span className="font-medium truncate min-w-0">
+                            {getUserDisplayName(user)}
+                          </span>
+                          <UserStatusInline user={user} />
                         </div>
                         {user.email && user.email !== getUserDisplayName(user) && (
                           <div className="text-xs text-muted-foreground truncate">

@@ -387,3 +387,96 @@ export const roleUtils = {
     return "gray";
   },
 };
+
+/** Flatten roles from API / useRolesAll hook response */
+export function normalizeRolesList(data) {
+  if (!data) return [];
+  if (Array.isArray(data)) return data;
+  if (typeof data === "object") {
+    if (Array.isArray(data.roles)) return data.roles;
+    if (Array.isArray(data.items)) return data.items;
+    if (Array.isArray(data.data)) return data.data;
+  }
+  return [];
+}
+
+/**
+ * Split API roles into job groups (with shift children) vs standalone rows for access pickers.
+ * Shift roles that belong to a listed job are omitted from standalone (same pattern as tracker admin).
+ */
+export function splitRolesJobShiftGroups(rolesList) {
+  const all = normalizeRolesList(rolesList);
+  const jobRoleGroups = all.filter(
+    (r) =>
+      (r.role_type || r.roleType) === "job_role" &&
+      (r.shift_roles || r.shiftRoles || []).length > 0
+  );
+  const standalone = all.filter((r) => {
+    const rt = r.role_type || r.roleType;
+    if (rt === "shift_role") return false;
+    if (rt === "job_role" && (r.shift_roles || r.shiftRoles || []).length > 0) return false;
+    return true;
+  });
+  const byLabel = (a, b) => {
+    const la = (a.display_name || a.name || "").toString();
+    const lb = (b.display_name || b.name || "").toString();
+    return la.localeCompare(lb, undefined, { sensitivity: "base" });
+  };
+  jobRoleGroups.sort(byLabel);
+  standalone.sort(byLabel);
+  return { standaloneRoles: standalone, jobRoleGroups };
+}
+
+/**
+ * All roles, A–Z by display label. Sets _pickerDuplicate when the same display name appears on multiple roles
+ * (e.g. several "General" job roles) so the UI can show slug/id for disambiguation.
+ */
+export function sortRolesForPicker(list) {
+  const raw = normalizeRolesList(list);
+  const sorted = [...raw].sort((a, b) => {
+    const la = (a.display_name || a.name || a.slug || "").toString();
+    const lb = (b.display_name || b.name || b.slug || "").toString();
+    return la.localeCompare(lb, undefined, { sensitivity: "base" });
+  });
+  const labelKey = (r) => {
+    const t = (r.display_name || r.name || "").toString().trim().toLowerCase();
+    return t || `__id_${r.id}`;
+  };
+  const counts = new Map();
+  sorted.forEach((r) => {
+    const k = labelKey(r);
+    counts.set(k, (counts.get(k) || 0) + 1);
+  });
+  return sorted.map((r) => ({
+    ...r,
+    _pickerDuplicate: (counts.get(labelKey(r)) || 0) > 1,
+  }));
+}
+
+/** Human-readable department label from nested `department` or flat API fields */
+export function getRoleDepartmentLabel(role) {
+  if (!role) return "";
+  const d = role.department;
+  if (d && typeof d === "object") {
+    return String(d.name || d.display_name || d.code || "").trim();
+  }
+  return String(role.department_name || role.departmentName || "").trim();
+}
+
+/**
+ * Label for role pickers: includes " - {Department}" when present; otherwise duplicate display
+ * names get a "(slug)" suffix. Used by forms, folder permissions, etc.
+ */
+export function formatRolePickerLabel(role) {
+  const main = role.display_name || role.name || role.slug || `Role ${role.id}`;
+  const dept = getRoleDepartmentLabel(role);
+  if (dept) return `${main} - ${dept}`;
+  if (role._pickerDuplicate) {
+    const suffix = role.slug || role.name || role.id;
+    return `${main} (${suffix})`;
+  }
+  return main;
+}
+
+/** Same as formatRolePickerLabel (kept for imports that name department explicitly). */
+export const formatRoleWithDepartment = formatRolePickerLabel;

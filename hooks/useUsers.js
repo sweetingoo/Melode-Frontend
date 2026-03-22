@@ -42,6 +42,19 @@ export const useRoles = (params = {}) => {
  * (id, slug, display_name, is_active) only. Use getUserDisplayName(user) from
  * @/utils/user when displaying names so both full and minimal responses work.
  */
+/** Load all users across pages (active + inactive unless params.is_active is set). */
+export const useUsersAll = (perPage = 100, params = {}, options = {}) => {
+  return useQuery({
+    queryKey: [...userKeys.lists(), "all-pages", perPage, params],
+    queryFn: async () => {
+      const response = await usersService.getUsersAllPages(perPage, params);
+      return response.data;
+    },
+    staleTime: 5 * 60 * 1000,
+    ...options,
+  });
+};
+
 export const useUsers = (params = {}, options = {}) => {
   return useQuery({
     queryKey: userKeys.list(params),

@@ -21,7 +21,12 @@ import {
 } from "@/hooks/useDocumentCategories";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useUsers } from "@/hooks/useUsers";
-import { useRoles } from "@/hooks/useRoles";
+import {
+  useRolesAll,
+  formatRoleWithDepartment,
+  getRoleDepartmentLabel,
+  sortRolesForPicker,
+} from "@/hooks/useRoles";
 import { Loader2, User, Users, Search, Shield, X, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -146,7 +151,9 @@ const CategoryPermissionsDialog = ({ open, onOpenChange, category }) => {
     }
   }, [open, activeCategoryIdentifier, refetchPermissions]);
   const updatePermissions = useUpdateDocumentCategoryPermissions();
-  const { data: rolesData, isLoading: rolesLoading, error: rolesError } = useRoles({}, { enabled: open });
+  const { data: rolesDataAll, isLoading: rolesLoading, error: rolesError } = useRolesAll(100, {
+    enabled: open,
+  });
 
   // New format: { read: { roles: [], users: [], permissions: [] }, write: {...}, delete: {...} }
   const [permissions, setPermissions] = useState({
@@ -182,38 +189,38 @@ const CategoryPermissionsDialog = ({ open, onOpenChange, category }) => {
   const allPermissions = permissionsData?.permissions || [];
   const users = usersData?.users || usersData || [];
   
-  // Handle different response formats for roles - API returns List[RoleResponse] directly
-  const roles = useMemo(() => {
-    if (!rolesData) return [];
-    
-    // If it's already an array, use it
-    if (Array.isArray(rolesData)) {
-      return rolesData;
+  // All roles (every page) — used to resolve names on saved badges
+  const allRoles = useMemo(() => {
+    if (!rolesDataAll) return [];
+    if (Array.isArray(rolesDataAll)) return rolesDataAll;
+    if (typeof rolesDataAll === "object") {
+      if (Array.isArray(rolesDataAll.roles)) return rolesDataAll.roles;
+      if (Array.isArray(rolesDataAll.items)) return rolesDataAll.items;
+      if (Array.isArray(rolesDataAll.data)) return rolesDataAll.data;
     }
-    
-    // If it's an object, check common keys
-    if (typeof rolesData === 'object') {
-      if (Array.isArray(rolesData.roles)) return rolesData.roles;
-      if (Array.isArray(rolesData.items)) return rolesData.items;
-      if (Array.isArray(rolesData.data)) return rolesData.data;
-    }
-    
-    console.warn("Unexpected roles data format:", rolesData);
     return [];
-  }, [rolesData]);
+  }, [rolesDataAll]);
+
+  // Job roles only — shift roles are auto-assigned and should not be folder targets here
+  const roles = useMemo(() => {
+    const job = allRoles.filter(
+      (r) => (r.role_type ?? r.roleType ?? "job_role") === "job_role"
+    );
+    return sortRolesForPicker(job);
+  }, [allRoles]);
   
   // Debug roles loading
   useEffect(() => {
     if (open) {
       console.log("CategoryPermissionsDialog - Roles data:", {
-        rolesData,
-        roles,
-        rolesCount: roles.length,
+        rolesDataAll,
+        allRolesCount: allRoles.length,
+        jobRolesCount: roles.length,
         rolesLoading,
         rolesError,
       });
     }
-  }, [open, rolesData, roles, rolesLoading, rolesError]);
+  }, [open, rolesDataAll, allRoles, roles, rolesLoading, rolesError]);
 
   // Convert API response to component state format
   // API returns: { read: { roles: [], users: [], permissions: [] }, write: {...}, delete: {...} }
@@ -285,9 +292,14 @@ const CategoryPermissionsDialog = ({ open, onOpenChange, category }) => {
     if (!roleSearchQuery) return roles;
     const query = roleSearchQuery.toLowerCase();
     return roles.filter((role) => {
-      const name = (role.name || role.display_name || '').toLowerCase();
-      const description = (role.description || '').toLowerCase();
-      return name.includes(query) || description.includes(query);
+      const name = (role.name || role.display_name || "").toLowerCase();
+      const description = (role.description || "").toLowerCase();
+      const dept = getRoleDepartmentLabel(role).toLowerCase();
+      return (
+        name.includes(query) ||
+        description.includes(query) ||
+        dept.includes(query)
+      );
     });
   }, [roles, roleSearchQuery]);
 
@@ -480,7 +492,7 @@ const CategoryPermissionsDialog = ({ open, onOpenChange, category }) => {
                   >
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-sm">
-                        {role.display_name || role.name}
+                        {formatRoleWithDepartment(role)}
                       </p>
                       {role.description && (
                         <p className="text-xs text-muted-foreground truncate">
@@ -497,11 +509,13 @@ const CategoryPermissionsDialog = ({ open, onOpenChange, category }) => {
           {selectedRoleIds.length > 0 && (
             <div className="flex flex-wrap gap-2">
               {selectedRoleIds.map((roleId) => {
-                const role = roles.find((r) => r.id === roleId);
+                const role =
+                  roles.find((r) => r.id === roleId) ||
+                  allRoles.find((r) => r.id === roleId);
                 if (!role) return null;
                 return (
                   <Badge key={roleId} variant="secondary" className="flex items-center gap-1">
-                    {role.display_name || role.name}
+                    {formatRoleWithDepartment(role)}
                     <button
                       type="button"
                       onClick={() => handleToggleRole(action, roleId)}
@@ -598,12 +612,17 @@ const CategoryPermissionsDialog = ({ open, onOpenChange, category }) => {
           )}
         </div>
 
-        {/* Permissions Section (Optional) */}
+        {/* Permissions Section (Optional) — grant by permission held, not only by role */}
         <div className="space-y-2">
           <Label className="text-sm font-semibold flex items-center gap-2">
             <Shield className="h-4 w-4" />
-            Permission Slugs (Advanced)
+            Also allow by permission (advanced)
           </Label>
+          <p className="text-xs text-muted-foreground leading-snug">
+            Optional. Users who already have any of these permission <span className="font-mono">slug</span> values
+            (e.g. <span className="font-mono">document:read</span>) get this action on the folder even if their role
+            is not ticked above. Leave empty if you only want role/user lists to apply.
+          </p>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
@@ -692,13 +711,24 @@ const CategoryPermissionsDialog = ({ open, onOpenChange, category }) => {
       <DialogContent className="sm:max-w-[800px] max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Manage Permissions: {category?.name || "Category"}</DialogTitle>
-          <DialogDescription>
-            Set which roles, users, and permissions can read, write, and delete documents in this category.
-            {category?.inherit_permissions && (
-              <span className="block mt-2 text-xs text-muted-foreground">
-                Note: This category inherits permissions from its parent. Changes here will override inheritance.
-              </span>
-            )}
+          <DialogDescription asChild>
+            <div className="space-y-2 text-sm text-muted-foreground">
+              <p>
+                Choose <strong className="text-foreground">job roles</strong> (shift roles are not listed), specific
+                users, and optionally permission slugs for each action: read, write, delete.
+              </p>
+              <p>
+                <strong className="text-foreground">If everything is left empty</strong> for an action,{" "}
+                <strong className="text-foreground">nobody</strong> gets that action from this folder alone (except
+                superusers). Parent categories can still grant access when{" "}
+                <span className="italic">inherit permissions</span> is on.
+              </p>
+              {category?.inherit_permissions && (
+                <p className="text-xs">
+                  This category inherits from its parent; explicit settings here apply on top of that.
+                </p>
+              )}
+            </div>
           </DialogDescription>
         </DialogHeader>
         {isLoading ? (
