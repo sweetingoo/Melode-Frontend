@@ -34,6 +34,8 @@ export const customFieldsUtils = {
     sortOrder: field.sort_order,
     organizationId: field.organization_id || field.organisation_id,
     sectionId: field.section_id,
+    is_compliance: field.is_compliance || false,
+    entity_type: field.entity_type,
     // Additional computed fields for UI
     name: field.field_label || field.field_name || "Untitled Field",
     type: field.field_type || "Text",

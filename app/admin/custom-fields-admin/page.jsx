@@ -1225,6 +1225,21 @@ const CustomFieldsAdminPage = () => {
   const forms = formsData?.forms || [];
   const trackers = trackersData?.forms || trackersData?.trackers || [];
 
+  // Fetch compliance links for the field shown in usage dialog (who must submit)
+  const usageDialogFieldSlug =
+    usageDialogOpen && selectedFieldForUsage?.is_compliance
+      ? selectedFieldForUsage.slug || selectedFieldForUsage.field_name || null
+      : null;
+  const { data: usageComplianceLinks, isLoading: usageComplianceLinksLoading } = useQuery({
+    queryKey: ["compliance-links-usage", usageDialogFieldSlug],
+    queryFn: async () => {
+      const response = await complianceService.getComplianceLinksForField(usageDialogFieldSlug);
+      return Array.isArray(response) ? response : response?.data ?? [];
+    },
+    enabled: !!usageDialogFieldSlug,
+  });
+  const usageLinksList = Array.isArray(usageComplianceLinks) ? usageComplianceLinks : [];
+
   // Compliance linking mutations
   const queryClient = useQueryClient();
   const linkToRoleMutation = useLinkComplianceToRole();
@@ -5256,22 +5271,181 @@ const CustomFieldsAdminPage = () => {
             </DialogDescription>
           </DialogHeader>
           
-          {formsLoading || trackersLoading ? (
+          {formsLoading || trackersLoading || (selectedFieldForUsage?.is_compliance && usageDialogFieldSlug && usageComplianceLinksLoading) ? (
             <div className="flex items-center justify-center py-8">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               <span className="ml-2 text-sm text-muted-foreground">Loading usages...</span>
             </div>
-          ) : fieldUsages.length === 0 ? (
-            <div className="text-center py-8">
-              <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-sm text-muted-foreground">
-                This field is not currently used in any forms or trackers.
-              </p>
-            </div>
           ) : (
             <div className="space-y-4">
-              {/* Group by type */}
-              {(() => {
+              {/* Compliance fields: show where they are used (Compliance monitoring, profiles) */}
+              {selectedFieldForUsage?.is_compliance && (
+                <div>
+                  <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
+                    <Shield className="h-4 w-4" />
+                    Compliance
+                  </h3>
+                  <p className="text-xs text-muted-foreground mb-3">
+                    This compliance field is used in the following areas (not in forms or trackers):
+                  </p>
+                  <div className="space-y-2">
+                    <Card className="hover:bg-muted/50 transition-colors">
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <h4 className="text-sm font-medium">Compliance Monitoring</h4>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Expiring items, pending approvals, non-submitted items
+                            </p>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => window.open("/admin/compliance-monitoring", "_blank")}
+                            className="ml-2"
+                          >
+                            <ExternalLink className="h-4 w-4 mr-1" />
+                            View
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    {(selectedFieldForUsage?.entity_type || selectedFieldForUsage?.entityType) === "user" && (
+                      <Card className="hover:bg-muted/50 transition-colors">
+                        <CardContent className="p-4">
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1">
+                              <h4 className="text-sm font-medium">User profiles (People)</h4>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                Shown on user profile compliance section
+                              </p>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => window.open("/admin/people-management", "_blank")}
+                              className="ml-2"
+                            >
+                              <ExternalLink className="h-4 w-4 mr-1" />
+                              View
+                            </Button>
+                          </div>
+                        </CardContent>
+                    </Card>
+                    )}
+                    {(selectedFieldForUsage?.entity_type || selectedFieldForUsage?.entityType) === "asset" && (
+                      <Card className="hover:bg-muted/50 transition-colors">
+                        <CardContent className="p-4">
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1">
+                              <h4 className="text-sm font-medium">Asset profiles</h4>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                Shown on asset profile compliance section
+                              </p>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => window.open("/admin/assets", "_blank")}
+                              className="ml-2"
+                            >
+                              <ExternalLink className="h-4 w-4 mr-1" />
+                              View
+                            </Button>
+                          </div>
+                        </CardContent>
+                    </Card>
+                    )}
+
+                    {/* Who must submit: roles and asset types this field is linked to */}
+                    <div className="mt-3 pt-3 border-t">
+                      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Who must submit</h4>
+                      {usageLinksList.length > 0 ? (
+                        <>
+                          <p className="text-sm text-muted-foreground mb-2">
+                            This field applies to the following. Users in these job roles (or assets of these types) must submit this compliance item.
+                          </p>
+                          <div className="space-y-2">
+                            {usageLinksList.filter((l) => l.link_type === "role").length > 0 && (
+                              <div>
+                                <p className="text-xs font-medium text-muted-foreground mb-1">Job roles</p>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {usageLinksList.filter((l) => l.link_type === "role").map((link) => (
+                                    <Badge key={link.id} variant={link.is_required ? "default" : "secondary"} className="text-xs">
+                                      {link.link_name || link.link_slug}
+                                      {link.is_required && " (Required)"}
+                                    </Badge>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            {usageLinksList.filter((l) => l.link_type === "asset_type").length > 0 && (
+                              <div>
+                                <p className="text-xs font-medium text-muted-foreground mb-1">Asset types</p>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {usageLinksList.filter((l) => l.link_type === "asset_type").map((link) => (
+                                    <Badge key={link.id} variant={link.is_required ? "default" : "outline"} className="text-xs">
+                                      {link.link_name || link.link_slug}
+                                      {link.is_required && " (Required)"}
+                                    </Badge>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">
+                          Applies to all roles. Any user (or asset) can have this compliance item; no specific job roles or asset types are linked. Users submit from their profile or Compliance Monitoring.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Non-compliance fields with no form/tracker usage: show where the field lives and how it can be used */}
+              {!selectedFieldForUsage?.is_compliance && fieldUsages.length === 0 && (
+                <div>
+                  <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
+                    <Database className="h-4 w-4" />
+                    Custom Fields
+                  </h3>
+                  <Card className="hover:bg-muted/50 transition-colors">
+                    <CardContent className="p-4">
+                      <p className="text-sm text-muted-foreground mb-2">
+                        This field is defined in Custom Fields for{" "}
+                        <strong>{(selectedFieldForUsage?.entity_type || selectedFieldForUsage?.entityType) === "user" ? "User" : (selectedFieldForUsage?.entity_type || selectedFieldForUsage?.entityType) === "asset" ? "Asset" : (selectedFieldForUsage?.entity_type || selectedFieldForUsage?.entityType) || "this entity type"}</strong>.
+                        It is not currently used in any form or tracker.
+                      </p>
+                      <p className="text-xs text-muted-foreground mb-3">
+                        Add this field to a form or tracker to use it in submissions.
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => window.open("/admin/forms", "_blank")}
+                        >
+                          <ExternalLink className="h-4 w-4 mr-1" />
+                          Forms
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => window.open("/admin/trackers", "_blank")}
+                        >
+                          <ExternalLink className="h-4 w-4 mr-1" />
+                          Trackers
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
+
+              {/* Forms and Trackers (only when this field is actually used there) */}
+              {fieldUsages.length > 0 && (() => {
                 const forms = fieldUsages.filter(u => u.type === 'form' && !u.is_tracker);
                 const trackers = fieldUsages.filter(u => u.type === 'tracker' || u.is_tracker);
                 
