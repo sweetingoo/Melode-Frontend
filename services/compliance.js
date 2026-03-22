@@ -151,9 +151,6 @@ export const complianceService = {
       if (filters.roleSlug && filters.roleSlug !== "all") {
         params.append("role_slug", filters.roleSlug);
       }
-      if (filters.isCompliance !== null && filters.isCompliance !== undefined) {
-        params.append("is_compliance", filters.isCompliance.toString());
-      }
       if (filters.departmentId && filters.departmentId !== "all") {
         params.append("department_id", filters.departmentId.toString());
       }
@@ -183,9 +180,6 @@ export const complianceService = {
       }
       if (filters.roleSlug && filters.roleSlug !== "all") {
         params.append("role_slug", filters.roleSlug);
-      }
-      if (filters.isCompliance !== null && filters.isCompliance !== undefined) {
-        params.append("is_compliance", filters.isCompliance.toString());
       }
       if (filters.departmentId && filters.departmentId !== "all") {
         params.append("department_id", filters.departmentId.toString());
@@ -219,9 +213,6 @@ export const complianceService = {
       }
       if (filters.roleSlug && filters.roleSlug !== "all") {
         params.append("role_slug", filters.roleSlug);
-      }
-      if (filters.isCompliance !== null && filters.isCompliance !== undefined) {
-        params.append("is_compliance", filters.isCompliance.toString());
       }
       if (filters.departmentId && filters.departmentId !== "all") {
         params.append("department_id", filters.departmentId.toString());

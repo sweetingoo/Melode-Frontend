@@ -94,7 +94,6 @@ function ComplianceMonitoringPageContent() {
     entityType: "all",
     roleSlug: "all", // "all" = all roles, otherwise specific role slug
     departmentId: "all", // "all" = all departments, otherwise department id
-    isCompliance: null, // null = all, true = compliance only, false = non-compliance only
     fieldSlug: "all", // non-submitted: filter to one compliance field by slug
   });
 
@@ -105,14 +104,20 @@ function ComplianceMonitoringPageContent() {
   }, [filters.searchTerm]);
 
   const complianceFieldListParams = useMemo(
-    () => ({ page: 1, per_page: 200, is_compliance: true, is_active: true }),
+    () => ({ page: 1, per_page: 500, is_compliance: true, is_active: true }),
     []
   );
-  const { data: complianceFieldsRaw = [] } = useCustomFields(complianceFieldListParams);
+  const {
+    data: complianceFieldsRaw = [],
+    isLoading: complianceFieldsLoading,
+    isError: complianceFieldsError,
+  } = useCustomFields(complianceFieldListParams, {
+    enabled: activeTab === "non-submitted",
+  });
   const complianceFieldOptions = useMemo(() => {
     const list = Array.isArray(complianceFieldsRaw) ? complianceFieldsRaw : [];
     return [...list]
-      .filter((f) => f?.slug && (f.is_compliance || f.isCompliance))
+      .filter((f) => f?.slug)
       .sort((a, b) =>
         (a.field_label || a.field_name || "").localeCompare(b.field_label || b.field_name || "", undefined, {
           sensitivity: "base",
@@ -160,14 +165,11 @@ function ComplianceMonitoringPageContent() {
     if (filters.departmentId && filters.departmentId !== "all") {
       result.departmentId = filters.departmentId;
     }
-    if (filters.isCompliance !== null) {
-      result.isCompliance = filters.isCompliance;
-    }
     if (filters.fieldSlug && filters.fieldSlug !== "all") {
       result.fieldSlug = filters.fieldSlug;
     }
     return result;
-  }, [filters.approvalStatus, filters.entityType, filters.roleSlug, filters.departmentId, filters.isCompliance, filters.fieldSlug, debouncedSearchTerm]);
+  }, [filters.approvalStatus, filters.entityType, filters.roleSlug, filters.departmentId, filters.fieldSlug, debouncedSearchTerm]);
 
   // Reset to page 1 when filters or daysAhead change
   React.useEffect(() => {
@@ -232,7 +234,6 @@ function ComplianceMonitoringPageContent() {
       entityType: "all",
       roleSlug: "all",
       departmentId: "all",
-      isCompliance: null,
       fieldSlug: "all",
     });
   };
@@ -242,7 +243,6 @@ function ComplianceMonitoringPageContent() {
     filters.entityType !== "all" ||
     filters.roleSlug !== "all" ||
     filters.departmentId !== "all" ||
-    filters.isCompliance !== null ||
     (filters.fieldSlug && filters.fieldSlug !== "all");
 
   const handleApprove = (item) => {
@@ -279,8 +279,7 @@ function ComplianceMonitoringPageContent() {
     entityType: "Entity type",
     roleSlug: "Job role",
     department: "Department",
-    isCompliance: "Document type",
-    complianceField: "Outstanding field",
+    complianceField: "Outstanding requirement",
   };
   const APPROVAL_OPTIONS = [
     { value: "all", label: "Any status" },
@@ -294,11 +293,6 @@ function ComplianceMonitoringPageContent() {
     { value: "asset", label: "Assets" },
     { value: "task", label: "Tasks" },
     { value: "project", label: "Projects" },
-  ];
-  const COMPLIANCE_TYPE_OPTIONS = [
-    { value: "all", label: "All documents" },
-    { value: "true", label: "Compliance documents only" },
-    { value: "false", label: "Other documents only" },
   ];
   const DAYS_AHEAD_OPTIONS = [
     { value: "30", label: "Next 30 days" },
@@ -397,7 +391,7 @@ function ComplianceMonitoringPageContent() {
                   <Filter className="h-4 w-4 text-muted-foreground" />
                   <h3 className="text-sm font-semibold">Filters</h3>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="days-ahead-filter-expiring">{FILTER_LABELS.daysAhead}</Label>
                     <Select
@@ -494,28 +488,6 @@ function ComplianceMonitoringPageContent() {
                           <SelectItem key={dept.id} value={dept.id.toString()}>
                             {dept.name || dept.display_name || `Department ${dept.id}`}
                           </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="compliance-filter-expiring">{FILTER_LABELS.isCompliance}</Label>
-                    <Select
-                      value={filters.isCompliance === null ? "all" : filters.isCompliance.toString()}
-                      onValueChange={(value) => {
-                        if (value === "all") {
-                          handleFilterChange("isCompliance", null);
-                        } else {
-                          handleFilterChange("isCompliance", value === "true");
-                        }
-                      }}
-                    >
-                      <SelectTrigger id="compliance-filter-expiring">
-                        <SelectValue placeholder="All documents" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {COMPLIANCE_TYPE_OPTIONS.map((opt) => (
-                          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -719,7 +691,7 @@ function ComplianceMonitoringPageContent() {
                   <Filter className="h-4 w-4 text-muted-foreground" />
                   <h3 className="text-sm font-semibold">Filters</h3>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="search-pending">{FILTER_LABELS.search}</Label>
                     <div className="relative">
@@ -784,28 +756,6 @@ function ComplianceMonitoringPageContent() {
                           <SelectItem key={dept.id} value={dept.id.toString()}>
                             {dept.name || dept.display_name || `Department ${dept.id}`}
                           </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="compliance-filter-pending">{FILTER_LABELS.isCompliance}</Label>
-                    <Select
-                      value={filters.isCompliance === null ? "all" : filters.isCompliance.toString()}
-                      onValueChange={(value) => {
-                        if (value === "all") {
-                          handleFilterChange("isCompliance", null);
-                        } else {
-                          handleFilterChange("isCompliance", value === "true");
-                        }
-                      }}
-                    >
-                      <SelectTrigger id="compliance-filter-pending">
-                        <SelectValue placeholder="All documents" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {COMPLIANCE_TYPE_OPTIONS.map((opt) => (
-                          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -1000,7 +950,7 @@ function ComplianceMonitoringPageContent() {
                   <Filter className="h-4 w-4 text-muted-foreground" />
                   <h3 className="text-sm font-semibold">Filters</h3>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="search-non-submitted">{FILTER_LABELS.search}</Label>
                     <div className="relative">
@@ -1019,9 +969,10 @@ function ComplianceMonitoringPageContent() {
                     <Select
                       value={filters.fieldSlug}
                       onValueChange={(value) => handleFilterChange("fieldSlug", value)}
+                      disabled={complianceFieldsLoading}
                     >
                       <SelectTrigger id="field-slug-filter-non-submitted">
-                        <SelectValue placeholder="Any field" />
+                        <SelectValue placeholder={complianceFieldsLoading ? "Loading fields…" : "Any field"} />
                       </SelectTrigger>
                       <SelectContent className="max-h-72">
                         <SelectItem value="all">Any field</SelectItem>
@@ -1032,6 +983,9 @@ function ComplianceMonitoringPageContent() {
                         ))}
                       </SelectContent>
                     </Select>
+                    {complianceFieldsError ? (
+                      <p className="text-xs text-destructive">Could not load fields.</p>
+                    ) : null}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="entity-type-filter-non-submitted">{FILTER_LABELS.entityType}</Label>
@@ -1084,28 +1038,6 @@ function ComplianceMonitoringPageContent() {
                           <SelectItem key={dept.id} value={dept.id.toString()}>
                             {dept.name || dept.display_name || `Department ${dept.id}`}
                           </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="compliance-filter-non-submitted">{FILTER_LABELS.isCompliance}</Label>
-                    <Select
-                      value={filters.isCompliance === null ? "all" : filters.isCompliance.toString()}
-                      onValueChange={(value) => {
-                        if (value === "all") {
-                          handleFilterChange("isCompliance", null);
-                        } else {
-                          handleFilterChange("isCompliance", value === "true");
-                        }
-                      }}
-                    >
-                      <SelectTrigger id="compliance-filter-non-submitted">
-                        <SelectValue placeholder="All documents" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {COMPLIANCE_TYPE_OPTIONS.map((opt) => (
-                          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>

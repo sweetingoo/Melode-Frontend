@@ -75,23 +75,11 @@ export const customFieldsUtils = {
 };
 
 // Get all custom fields query
-export const useCustomFields = (params = {}) => {
+export const useCustomFields = (params = {}, queryOptions = {}) => {
   return useQuery({
     queryKey: customFieldsKeys.list(params),
     queryFn: async () => {
       const response = await customFieldsFieldsService.getCustomFields(params);
-
-      // Debug logging to see what we're getting
-      console.log("Custom Fields API Response:", {
-        response,
-        params,
-        isArray: Array.isArray(response),
-        hasData: !!response?.data,
-        hasFields: !!response?.fields,
-        hasDataFields: !!response?.data?.fields,
-        type: typeof response,
-        keys: response ? Object.keys(response) : "null",
-      });
 
       // Handle different response formats
       if (Array.isArray(response)) {
@@ -113,6 +101,7 @@ export const useCustomFields = (params = {}) => {
       }
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
+    ...queryOptions,
   });
 };
 
