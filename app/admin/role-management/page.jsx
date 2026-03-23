@@ -90,6 +90,7 @@ const RoleManagementPage = () => {
   const [isQuickCreateRoleOpen, setIsQuickCreateRoleOpen] = useState(false);
   const [selectedDepartmentFilter, setSelectedDepartmentFilter] = useState(null);
   const [selectedRoleTypeFilter, setSelectedRoleTypeFilter] = useState(null);
+  const [roleSearchTerm, setRoleSearchTerm] = useState("");
   const [editingRole, setEditingRole] = useState(null);
   const [managingRole, setManagingRole] = useState(null);
   const [searchPermissionTerm, setSearchPermissionTerm] = useState("");
@@ -245,6 +246,28 @@ const RoleManagementPage = () => {
   const roles = React.useMemo(() => {
     let filtered = allRoles;
 
+    // Filter by role search
+    const q = roleSearchTerm.trim().toLowerCase();
+    if (q) {
+      filtered = filtered.filter((role) => {
+        const deptId = role.departmentId ?? role.department_id ?? role.department?.id;
+        const dept = deptId != null ? departmentById.get(Number(deptId)) : null;
+        const haystack = [
+          role.name,
+          role.display_name,
+          role.displayName,
+          role.slug,
+          role.description,
+          dept?.name,
+          role.department?.name,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        return haystack.includes(q);
+      });
+    }
+
     // Filter by department
     if (selectedDepartmentFilter) {
       filtered = filtered.filter((role) => role.departmentId === selectedDepartmentFilter);
@@ -254,7 +277,7 @@ const RoleManagementPage = () => {
     // to preserve the hierarchical structure of job roles and shift roles
 
     return filtered;
-  }, [allRoles, selectedDepartmentFilter]);
+  }, [allRoles, selectedDepartmentFilter, roleSearchTerm, departmentById]);
 
   // Group roles by department and job role (hierarchical structure)
   const rolesByDepartment = React.useMemo(() => {
@@ -884,7 +907,16 @@ const RoleManagementPage = () => {
               )}
             </div>
             
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                <Input
+                  value={roleSearchTerm}
+                  onChange={(e) => setRoleSearchTerm(e.target.value)}
+                  placeholder="Search roles..."
+                  className="pl-9 w-full"
+                />
+              </div>
               <Select
                 value={selectedDepartmentFilter?.toString() || "all"}
                 onValueChange={(value) =>
@@ -920,10 +952,11 @@ const RoleManagementPage = () => {
                 </SelectContent>
               </Select>
 
-              {(selectedDepartmentFilter || selectedRoleTypeFilter) && (
+              {(roleSearchTerm.trim() || selectedDepartmentFilter || selectedRoleTypeFilter) && (
                 <Button
                   variant="outline"
                   onClick={() => {
+                    setRoleSearchTerm("");
                     setSelectedDepartmentFilter(null);
                     setSelectedRoleTypeFilter(null);
                   }}
