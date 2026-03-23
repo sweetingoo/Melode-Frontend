@@ -445,7 +445,7 @@ const Dashboard = () => {
               <section className="mb-10">
                 <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">This period</h2>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
-                  <Link href="/admin/clock/history" className="rounded-2xl border bg-card shadow-sm p-5 hover:bg-muted/50 hover:shadow transition-colors">
+                  <Link href="/admin/attendance?tab=shift-records" className="rounded-2xl border bg-card shadow-sm p-5 hover:bg-muted/50 hover:shadow transition-colors">
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Clocked in</p>
                     <p className="text-2xl font-bold mt-1 tabular-nums">
                       {dashboardData?.operational?.clock_ins_today ?? dashboardData?.active_now?.clocked_in_now_count ?? 0}

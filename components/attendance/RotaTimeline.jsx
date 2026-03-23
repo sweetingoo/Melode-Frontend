@@ -223,7 +223,25 @@ export function RotaTimeline({ departmentId: departmentIdProp = null, initialRan
         Object.entries(dayEntry.by_role || {}).forEach(([roleKey, roleData]) => {
           if (!roleKey.startsWith("job_role_")) return;
           const name = roleData.role_name || roleKey;
-          if (!roleMap.has(roleKey)) roleMap.set(roleKey, { id: roleKey, name, key: roleKey });
+          const departmentId =
+            roleData.department_id ??
+            roleData.department?.id ??
+            null;
+          const departmentName =
+            roleData.department_name ??
+            roleData.department?.name ??
+            null;
+          if (!roleMap.has(roleKey)) {
+            roleMap.set(roleKey, {
+              id: roleKey,
+              name,
+              key: roleKey,
+              departmentId,
+              departmentName,
+            });
+          } else if (departmentName && !roleMap.get(roleKey)?.departmentName) {
+            roleMap.set(roleKey, { ...roleMap.get(roleKey), departmentId, departmentName });
+          }
           byDateRoleOut[d][roleKey] = roleData;
         });
       });
@@ -235,7 +253,26 @@ export function RotaTimeline({ departmentId: departmentIdProp = null, initialRan
         const roleId = r.job_role_id ?? r.job_role?.id;
         const roleKey = roleId != null && roleId !== "" ? `job_role_${roleId}` : "job_role_unspecified";
         const name = r.job_role?.display_name ?? r.job_role?.name ?? (roleKey === "job_role_unspecified" ? "Other" : `Role ${roleId}`);
-        if (!roleMap.has(roleKey)) roleMap.set(roleKey, { id: roleKey, name, key: roleKey });
+        const departmentId =
+          r.job_role?.department_id ??
+          r.job_role?.department?.id ??
+          r.department_id ??
+          null;
+        const departmentName =
+          r.job_role?.department?.name ??
+          r.department?.name ??
+          null;
+        if (!roleMap.has(roleKey)) {
+          roleMap.set(roleKey, {
+            id: roleKey,
+            name,
+            key: roleKey,
+            departmentId,
+            departmentName,
+          });
+        } else if (departmentName && !roleMap.get(roleKey)?.departmentName) {
+          roleMap.set(roleKey, { ...roleMap.get(roleKey), departmentId, departmentName });
+        }
         const d = typeof r.shift_date === "string" ? r.shift_date : r.shift_date?.slice(0, 10);
         if (d && !byDateRoleOut[d]?.[roleKey]) {
           if (!byDateRoleOut[d]) byDateRoleOut[d] = {};
@@ -246,6 +283,30 @@ export function RotaTimeline({ departmentId: departmentIdProp = null, initialRan
     const roleRowsOut = Array.from(roleMap.values()).sort((a, b) => a.name.localeCompare(b.name));
     return { roleRows: roleRowsOut, byDateRole: byDateRoleOut };
   }, [coverageData, shiftData, visibleCategories]);
+
+  const roleRowsSorted = useMemo(() => {
+    return [...roleRows].sort((a, b) => {
+      const deptA = (a.departmentName || "Unassigned").toLowerCase();
+      const deptB = (b.departmentName || "Unassigned").toLowerCase();
+      if (deptA !== deptB) return deptA.localeCompare(deptB);
+      return (a.name || "").localeCompare(b.name || "");
+    });
+  }, [roleRows]);
+
+  const departmentRoleGroups = useMemo(() => {
+    const groups = [];
+    roleRowsSorted.forEach((role) => {
+      const groupKey = role.departmentId != null ? `dept_${role.departmentId}` : `dept_name_${role.departmentName || "unassigned"}`;
+      const groupLabel = role.departmentName || "Unassigned";
+      const last = groups[groups.length - 1];
+      if (!last || last.key !== groupKey) {
+        groups.push({ key: groupKey, label: groupLabel, roles: [role] });
+      } else {
+        last.roles.push(role);
+      }
+    });
+    return groups;
+  }, [roleRowsSorted]);
 
   const provisionalByDateRole = useMemo(() => {
     const records = shiftData?.records ?? shiftData ?? [];
@@ -719,30 +780,59 @@ export function RotaTimeline({ departmentId: departmentIdProp = null, initialRan
             <table className="w-full border-collapse text-sm">
               <thead>
                 <tr className="border-b border-border/80 bg-muted/40">
-                  <th className="sticky left-0 z-10 w-[100px] min-w-[100px] bg-muted/60 px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  <th
+                    rowSpan={departmentRoleGroups.length > 0 ? 2 : 1}
+                    className="sticky left-0 z-10 w-[100px] min-w-[100px] bg-muted/60 px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+                  >
                     Date
                   </th>
-                  {roleRows.map((row) => (
-                    <th
-                      key={row.id}
-                      className="min-w-[160px] border-l border-border/60 px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground"
-                    >
-                      {row.name}
-                    </th>
-                  ))}
+                  {departmentRoleGroups.length > 0 ? (
+                    departmentRoleGroups.map((group) => (
+                      <th
+                        key={group.key}
+                        colSpan={group.roles.length}
+                        className="border-l border-border/60 px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
+                      >
+                        {group.label}
+                      </th>
+                    ))
+                  ) : (
+                    roleRowsSorted.map((row) => (
+                      <th
+                        key={row.id}
+                        className="min-w-[160px] border-l border-border/60 px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+                      >
+                        {row.name}
+                      </th>
+                    ))
+                  )}
                 </tr>
+                {departmentRoleGroups.length > 0 && (
+                  <tr className="border-b border-border/70 bg-muted/25">
+                    {departmentRoleGroups.flatMap((group) =>
+                      group.roles.map((row) => (
+                        <th
+                          key={row.id}
+                          className="min-w-[160px] border-l border-border/60 px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+                        >
+                          {row.name}
+                        </th>
+                      ))
+                    )}
+                  </tr>
+                )}
               </thead>
               <tbody>
                 {days.length === 0 && (
                   <tr>
-                    <td colSpan={Math.max(roleRows.length + 1, 1)} className="py-16 text-center">
+                    <td colSpan={Math.max(roleRowsSorted.length + 1, 1)} className="py-16 text-center">
                       <p className="text-muted-foreground">Pick a date range above to view the rota.</p>
                     </td>
                   </tr>
                 )}
-                {roleRows.length === 0 && days.length > 0 && (
+                {roleRowsSorted.length === 0 && days.length > 0 && (
                   <tr>
-                    <td colSpan={days.length + 1} className="py-16 text-center">
+                    <td colSpan={Math.max(roleRowsSorted.length + 1, 1)} className="py-16 text-center">
                       <p className="text-muted-foreground">No coverage data for this range.</p>
                       <p className="mt-1 text-xs text-muted-foreground">
                         Add required patterns (Required Templates) and allocated shifts (Allocated tab).
@@ -766,7 +856,7 @@ export function RotaTimeline({ departmentId: departmentIdProp = null, initialRan
                         <span className="block text-[11px] uppercase tracking-wider opacity-80">{format(d, "EEE")}</span>
                         <span className="block text-base">{format(d, "d")}</span>
                       </td>
-                      {roleRows.map((row) => {
+                      {roleRowsSorted.map((row) => {
                         const roleData = byDateRole[dateStr]?.[row.key];
                         const required = roleData?.required ?? [];
                         const allocated = roleData?.allocated ?? [];
