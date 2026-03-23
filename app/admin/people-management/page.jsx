@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { Suspense, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -100,23 +100,54 @@ import {
 import { PageSearchBar } from "@/components/admin/PageSearchBar";
 
 const ALL_FILTER_VALUE = "__all__";
+const Q_PARAM = "q";
+const PAGE_PARAM = "page";
+const ROLE_PARAM = "role";
+const DEPT_PARAM = "dept";
 
-const UserManagementPage = () => {
+const UserManagementPageContent = () => {
   const router = useRouter();
-  const [searchTerm, setSearchTerm] = useState("");
-  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
-  const [currentPage, setCurrentPage] = useState(1);
-  const [roleFilter, setRoleFilter] = useState(ALL_FILTER_VALUE);
-  const [departmentFilter, setDepartmentFilter] = useState(ALL_FILTER_VALUE);
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [searchTerm, setSearchTerm] = useState(() => searchParams.get(Q_PARAM) || "");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState(() => searchParams.get(Q_PARAM) || "");
+  const [currentPage, setCurrentPage] = useState(() => {
+    const parsed = parseInt(searchParams.get(PAGE_PARAM) || "1", 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+  });
+  const [roleFilter, setRoleFilter] = useState(() => searchParams.get(ROLE_PARAM) || ALL_FILTER_VALUE);
+  const [departmentFilter, setDepartmentFilter] = useState(() => searchParams.get(DEPT_PARAM) || ALL_FILTER_VALUE);
 
   // Debounce search so we don't refetch on every keystroke (avoids focus loss and reload feel)
   React.useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearchTerm(searchTerm);
-      setCurrentPage(1);
     }, 300);
     return () => clearTimeout(timer);
   }, [searchTerm]);
+
+  // Persist list state in URL so refresh/back keeps filters and page.
+  React.useEffect(() => {
+    const next = new URLSearchParams(searchParams.toString());
+    const q = debouncedSearchTerm.trim();
+    if (q) next.set(Q_PARAM, q);
+    else next.delete(Q_PARAM);
+
+    if (currentPage > 1) next.set(PAGE_PARAM, String(currentPage));
+    else next.delete(PAGE_PARAM);
+
+    if (roleFilter && roleFilter !== ALL_FILTER_VALUE) next.set(ROLE_PARAM, roleFilter);
+    else next.delete(ROLE_PARAM);
+
+    if (departmentFilter && departmentFilter !== ALL_FILTER_VALUE) next.set(DEPT_PARAM, departmentFilter);
+    else next.delete(DEPT_PARAM);
+
+    const nextSearch = next.toString();
+    const currentSearch = typeof window !== "undefined" ? window.location.search.slice(1) : "";
+    if (nextSearch !== currentSearch) {
+      router.replace(nextSearch ? `${pathname}?${nextSearch}` : pathname, { scroll: false });
+    }
+  }, [debouncedSearchTerm, currentPage, roleFilter, departmentFilter, pathname, router, searchParams]);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [userFormData, setUserFormData] = useState({
     email: "",
@@ -293,7 +324,7 @@ const UserManagementPage = () => {
 
   const handleSearchChange = (value) => {
     setSearchTerm(value);
-    // Page reset happens when debounced value updates (in useEffect)
+    setCurrentPage(1);
   };
   const handleRoleFilterChange = (value) => {
     setRoleFilter(value);
@@ -1695,6 +1726,14 @@ const UserManagementPage = () => {
       </Dialog>
 
     </div>
+  );
+};
+
+const UserManagementPage = () => {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Loading people management...</div>}>
+      <UserManagementPageContent />
+    </Suspense>
   );
 };
 

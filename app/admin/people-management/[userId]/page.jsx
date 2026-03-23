@@ -2178,6 +2178,14 @@ const UserEditPage = () => {
   const filteredAvailablePermissions =
     availablePermissions.filter(filterPermission);
 
+  const handleBackToPeopleManagement = React.useCallback(() => {
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      router.back();
+      return;
+    }
+    router.push("/admin/people-management");
+  }, [router]);
+
   // Loading state
   if (userLoading || currentUserLoading) {
     return (
@@ -2253,6 +2261,16 @@ const UserEditPage = () => {
       {/* Header Section */}
       <div className="flex flex-wrap items-start md:items-center justify-between gap-3">
         <div className="flex items-start md:items-center gap-4 min-w-0 flex-1">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="shrink-0"
+            onClick={handleBackToPeopleManagement}
+          >
+            <ArrowLeft className="h-4 w-4 mr-1" />
+            Back
+          </Button>
           {transformedUser && (
             <AvatarWithUrl
               avatarValue={transformedUser.avatarUrl}

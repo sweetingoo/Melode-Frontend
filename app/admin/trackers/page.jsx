@@ -2167,7 +2167,10 @@ const TrackersPage = () => {
             {selectedTrackerObj && allFieldsForQueryBar.length > 0 ? (
               <TrackerQuerySearchBar
                 searchValue={searchTerm}
-                onSearchChange={(value) => setSearchTerm(value)}
+                onSearchChange={(value) => {
+                  setSearchTerm(value);
+                  setCommittedSearchTerm(value);
+                }}
                 onSearchCommit={(value) => setCommittedSearchTerm(value)}
                 fields={allFieldsForQueryBar}
                 formId={selectedTrackerObj.id}
@@ -2190,7 +2193,10 @@ const TrackersPage = () => {
             ) : (
               <PageSearchBar
                 searchValue={searchTerm}
-                onSearchChange={(value) => setSearchTerm(value)}
+                onSearchChange={(value) => {
+                  setSearchTerm(value);
+                  setCommittedSearchTerm(value);
+                }}
                 searchPlaceholder="Search entries... (press / to focus)"
                 showSearch={true}
                 showFilters={true}
