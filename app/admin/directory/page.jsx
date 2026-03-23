@@ -151,36 +151,53 @@ const DirectoryPage = () => {
   const filteredDirectoryData = useMemo(() => {
     if (!directoryData || !searchTerm) return directoryData;
 
-    const searchLower = searchTerm.toLowerCase();
+    const searchLower = searchTerm.trim().toLowerCase();
+    if (!searchLower) return directoryData;
+
+    const includesSearch = (value) =>
+      String(value ?? "").toLowerCase().includes(searchLower);
+
+    const matchesUser = (user) => {
+      const first = user.first_name || "";
+      const last = user.last_name || "";
+      const fullName = `${first} ${last}`.trim();
+      const reverseFullName = `${last} ${first}`.trim();
+      return (
+        includesSearch(user.display_name) ||
+        includesSearch(first) ||
+        includesSearch(last) ||
+        includesSearch(fullName) ||
+        includesSearch(reverseFullName) ||
+        includesSearch(user.job_title)
+      );
+    };
+
     const filtered = {
       ...directoryData,
       departments: directoryData.departments
         .map((dept) => {
+          const departmentName = dept.department?.name || "";
+
           // Filter job roles
           const filteredJobRoles = dept.job_roles
             ?.map((jobRoleGroup) => {
+              const jobRoleName = jobRoleGroup.job_role?.role?.display_name || jobRoleGroup.job_role?.role?.name || "";
+              const matchesJobRoleOrDept =
+                includesSearch(jobRoleName) || includesSearch(departmentName);
+
               // Filter job role users
               const filteredJobUsers = jobRoleGroup.job_role?.users?.filter(
-                (user) =>
-                  user.display_name?.toLowerCase().includes(searchLower) ||
-                  user.first_name?.toLowerCase().includes(searchLower) ||
-                  user.last_name?.toLowerCase().includes(searchLower) ||
-                  user.job_title?.toLowerCase().includes(searchLower) ||
-                  jobRoleGroup.job_role.role.display_name?.toLowerCase().includes(searchLower) ||
-                  dept.department.name?.toLowerCase().includes(searchLower)
+                (user) => matchesUser(user) || matchesJobRoleOrDept
               ) || [];
 
               // Filter shift roles under job role
               const filteredShiftRoles = jobRoleGroup.shift_roles
                 ?.map((shiftRoleGroup) => {
+                  const shiftRoleName = shiftRoleGroup.role?.display_name || shiftRoleGroup.role?.name || "";
+                  const matchesShiftRoleOrDept =
+                    includesSearch(shiftRoleName) || includesSearch(departmentName);
                   const filteredShiftUsers = shiftRoleGroup.users?.filter(
-                    (user) =>
-                      user.display_name?.toLowerCase().includes(searchLower) ||
-                      user.first_name?.toLowerCase().includes(searchLower) ||
-                      user.last_name?.toLowerCase().includes(searchLower) ||
-                      user.job_title?.toLowerCase().includes(searchLower) ||
-                      shiftRoleGroup.role.display_name?.toLowerCase().includes(searchLower) ||
-                      dept.department.name?.toLowerCase().includes(searchLower)
+                    (user) => matchesUser(user) || matchesShiftRoleOrDept
                   ) || [];
                   return filteredShiftUsers.length > 0
                     ? { ...shiftRoleGroup, users: filteredShiftUsers }
@@ -190,7 +207,7 @@ const DirectoryPage = () => {
 
               const hasJobUsers = filteredJobUsers.length > 0;
               const hasShiftRoles = filteredShiftRoles.length > 0;
-              const matchesJobRole = jobRoleGroup.job_role.role.display_name?.toLowerCase().includes(searchLower);
+              const matchesJobRole = includesSearch(jobRoleName);
 
               if (hasJobUsers || hasShiftRoles || matchesJobRole) {
                 return {
@@ -206,14 +223,11 @@ const DirectoryPage = () => {
           // Filter orphan shift roles
           const filteredOrphanShiftRoles = dept.orphan_shift_roles
             ?.map((shiftRoleGroup) => {
+              const shiftRoleName = shiftRoleGroup.role?.display_name || shiftRoleGroup.role?.name || "";
+              const matchesShiftRoleOrDept =
+                includesSearch(shiftRoleName) || includesSearch(departmentName);
               const filteredUsers = shiftRoleGroup.users?.filter(
-                (user) =>
-                  user.display_name?.toLowerCase().includes(searchLower) ||
-                  user.first_name?.toLowerCase().includes(searchLower) ||
-                  user.last_name?.toLowerCase().includes(searchLower) ||
-                  user.job_title?.toLowerCase().includes(searchLower) ||
-                  shiftRoleGroup.role.display_name?.toLowerCase().includes(searchLower) ||
-                  dept.department.name?.toLowerCase().includes(searchLower)
+                (user) => matchesUser(user) || matchesShiftRoleOrDept
               ) || [];
               return filteredUsers.length > 0
                 ? { ...shiftRoleGroup, users: filteredUsers }
@@ -221,7 +235,7 @@ const DirectoryPage = () => {
             })
             .filter(Boolean) || [];
 
-          const matchesDept = dept.department.name?.toLowerCase().includes(searchLower);
+          const matchesDept = includesSearch(departmentName);
           const hasJobRoles = filteredJobRoles.length > 0;
           const hasOrphanShiftRoles = filteredOrphanShiftRoles.length > 0;
 
