@@ -64,6 +64,7 @@ import {
   Loader2,
   Mail,
   Plus,
+  KeyRound,
 } from "lucide-react";
 import {
   useUsers,
@@ -72,6 +73,7 @@ import {
   useActivateUser,
   useCreateUser,
   useSendInvitationToUser,
+  useResetUserPassword,
   userUtils,
 } from "@/hooks/useUsers";
 import { useHijackUser, useCurrentUser } from "@/hooks/useAuth";
@@ -163,6 +165,11 @@ const UserManagementPage = () => {
   const createUserMutation = useCreateUser();
   const hijackUserMutation = useHijackUser();
   const sendInvitationMutation = useSendInvitationToUser();
+  const resetUserPasswordMutation = useResetUserPassword();
+  const [isResetPasswordModalOpen, setIsResetPasswordModalOpen] = useState(false);
+  const [selectedUserForPasswordReset, setSelectedUserForPasswordReset] = useState(null);
+  const [resetPasswordForm, setResetPasswordForm] = useState({ new_password: "", confirm_password: "" });
+  const [resetPasswordError, setResetPasswordError] = useState("");
 
   // Get current user for permission checks
   const { data: currentUserData } = useCurrentUser();
@@ -354,6 +361,46 @@ const UserManagementPage = () => {
       );
     } catch (error) {
       console.error("Unexpected error in handleSendInvitation:", error);
+    }
+  };
+
+  const openResetPasswordModal = (user) => {
+    setSelectedUserForPasswordReset(user);
+    setResetPasswordForm({ new_password: "", confirm_password: "" });
+    setResetPasswordError("");
+    setIsResetPasswordModalOpen(true);
+  };
+
+  const handleManualPasswordReset = async () => {
+    const newPassword = resetPasswordForm.new_password || "";
+    const confirm = resetPasswordForm.confirm_password || "";
+    if (newPassword.length < 8) {
+      setResetPasswordError("Password must be at least 8 characters.");
+      return;
+    }
+    if (newPassword !== confirm) {
+      setResetPasswordError("Password confirmation does not match.");
+      return;
+    }
+    if (!selectedUserForPasswordReset) {
+      setResetPasswordError("No user selected.");
+      return;
+    }
+
+    try {
+      await resetUserPasswordMutation.mutateAsync({
+        userSlug: selectedUserForPasswordReset.slug || selectedUserForPasswordReset.id,
+        newPassword,
+      });
+      setIsResetPasswordModalOpen(false);
+      setSelectedUserForPasswordReset(null);
+      setResetPasswordForm({ new_password: "", confirm_password: "" });
+      setResetPasswordError("");
+      refetch();
+    } catch (error) {
+      // Error toast handled by mutation hook
+      const detail = error?.response?.data?.detail;
+      if (detail) setResetPasswordError(detail);
     }
   };
 
@@ -1011,6 +1058,19 @@ const UserManagementPage = () => {
 
                           <DropdownMenuSeparator />
 
+                          {canUpdateUser && (
+                            <DropdownMenuItem
+                              className="text-amber-600 focus:text-amber-600"
+                              onSelect={(e) => {
+                                e.preventDefault();
+                                openResetPasswordModal(user);
+                              }}
+                            >
+                              <KeyRound className="mr-2 h-4 w-4" />
+                              Set Password Manually
+                            </DropdownMenuItem>
+                          )}
+
                           {/* Invite to Set Password - Available for all users to allow password setup via invitation */}
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
@@ -1166,6 +1226,89 @@ const UserManagementPage = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* Manual Password Reset Dialog */}
+      <Dialog open={isResetPasswordModalOpen} onOpenChange={setIsResetPasswordModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <KeyRound className="h-5 w-5" />
+              Set Password Manually
+            </DialogTitle>
+            <DialogDescription>
+              Set a new password directly when email reset is unavailable.
+              {selectedUserForPasswordReset && (
+                <>
+                  <br />
+                  <strong>User:</strong> {selectedUserForPasswordReset.name}
+                  {selectedUserForPasswordReset.email ? ` (${selectedUserForPasswordReset.email})` : ""}
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label htmlFor="manual-reset-password">New password</Label>
+              <Input
+                id="manual-reset-password"
+                type="password"
+                value={resetPasswordForm.new_password}
+                onChange={(e) => {
+                  setResetPasswordForm((prev) => ({ ...prev, new_password: e.target.value }));
+                  if (resetPasswordError) setResetPasswordError("");
+                }}
+                placeholder="Enter new password"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="manual-reset-password-confirm">Confirm new password</Label>
+              <Input
+                id="manual-reset-password-confirm"
+                type="password"
+                value={resetPasswordForm.confirm_password}
+                onChange={(e) => {
+                  setResetPasswordForm((prev) => ({ ...prev, confirm_password: e.target.value }));
+                  if (resetPasswordError) setResetPasswordError("");
+                }}
+                placeholder="Re-enter new password"
+              />
+            </div>
+            {resetPasswordError ? (
+              <p className="text-sm text-red-600">{resetPasswordError}</p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Password must meet the configured system policy.
+              </p>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsResetPasswordModalOpen(false);
+                setResetPasswordError("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleManualPasswordReset} disabled={resetUserPasswordMutation.isPending}>
+              {resetUserPasswordMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <KeyRound className="mr-2 h-4 w-4" />
+                  Set Password
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Create User Dialog */}
       <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>

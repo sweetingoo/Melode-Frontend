@@ -209,4 +209,16 @@ export const usersService = {
       throw error;
     }
   },
+
+  // Admin manual password reset for a user
+  resetUserPassword: async (userSlug, newPassword) => {
+    try {
+      return await api.post(`/users/${userSlug}/reset-password`, {
+        new_password: newPassword,
+      });
+    } catch (error) {
+      console.error(`Reset password for user ${userSlug} failed:`, error);
+      throw error;
+    }
+  },
 };

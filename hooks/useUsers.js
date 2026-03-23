@@ -568,6 +568,36 @@ export const useSendInvitationToUser = () => {
   });
 };
 
+// Manual admin password reset mutation
+export const useResetUserPassword = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ userSlug, newPassword }) => {
+      const response = await usersService.resetUserPassword(userSlug, newPassword);
+      return response.data;
+    },
+    onSuccess: (data, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: userKeys.detail(variables.userSlug),
+      });
+      queryClient.invalidateQueries({
+        queryKey: userKeys.lists(),
+      });
+      toast.success("Password reset successfully", {
+        description: "The user can now log in with the new password.",
+      });
+    },
+    onError: (error) => {
+      console.error("Reset user password error:", error);
+      const errorMessage = error?.response?.data?.detail || "Failed to reset password";
+      toast.error("Failed to reset password", {
+        description: errorMessage,
+      });
+    },
+  });
+};
+
 // Utility functions for data transformation
 export const userUtils = {
   // Transform API user data to display format

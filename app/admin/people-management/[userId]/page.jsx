@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -89,6 +89,7 @@ import {
   useUserRoles,
   useAssignDirectPermission,
   useRemoveDirectPermission,
+  useResetUserPassword,
   userUtils,
 } from "@/hooks/useUsers";
 import { useRolesAll } from "@/hooks/useRoles";
@@ -305,6 +306,7 @@ const TasksForUser = ({ userSlug }) => {
 
 const UserEditPage = () => {
   const params = useParams();
+  const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
   const userSlug = params.userId || params.slug;
@@ -359,6 +361,17 @@ const UserEditPage = () => {
     }
   }, [activeTab, userSlug]);
 
+  // Persist active tab in URL query (?tab=...) so refresh keeps the active tab via GET.
+  useEffect(() => {
+    if (!activeTab || !pathname) return;
+    if (tabParam === activeTab) return;
+
+    const nextParams = new URLSearchParams(searchParams?.toString() || "");
+    nextParams.set("tab", activeTab);
+    const nextQuery = nextParams.toString();
+    router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
+  }, [activeTab, tabParam, pathname, router, searchParams]);
+
   // Persist activeSectionTab to localStorage
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -392,6 +405,10 @@ const UserEditPage = () => {
   const [entitlementFilterYearId, setEntitlementFilterYearId] = useState("all");
   const [leaveApproverSelectedIds, setLeaveApproverSelectedIds] = useState([]);
   const [isPersonnelDocDialogOpen, setIsPersonnelDocDialogOpen] = useState(false);
+  const [isResetPasswordDialogOpen, setIsResetPasswordDialogOpen] = useState(false);
+  const [manualResetPassword, setManualResetPassword] = useState("");
+  const [manualResetPasswordConfirm, setManualResetPasswordConfirm] = useState("");
+  const [manualResetPasswordError, setManualResetPasswordError] = useState("");
   const [personnelCategoryId, setPersonnelCategoryId] = useState(null);
   const [personnelTitle, setPersonnelTitle] = useState("");
   const [personnelDescription, setPersonnelDescription] = useState("");
@@ -423,6 +440,7 @@ const UserEditPage = () => {
   const deactivateUserMutation = useDeactivateUser();
   const activateUserMutation = useActivateUser();
   const verifyUserMutation = useVerifyUser();
+  const resetUserPasswordMutation = useResetUserPassword();
   const assignDirectPermissionMutation = useAssignDirectPermission();
   const removeDirectPermissionMutation = useRemoveDirectPermission();
 
@@ -1696,6 +1714,35 @@ const UserEditPage = () => {
     }
   };
 
+  const handleManualResetPassword = async () => {
+    const pwd = (manualResetPassword || "").trim();
+    const confirm = (manualResetPasswordConfirm || "").trim();
+
+    if (pwd.length < 8) {
+      setManualResetPasswordError("Password must be at least 8 characters.");
+      return;
+    }
+    if (pwd !== confirm) {
+      setManualResetPasswordError("Password confirmation does not match.");
+      return;
+    }
+
+    try {
+      await resetUserPasswordMutation.mutateAsync({
+        userSlug: actualUserSlug,
+        newPassword: pwd,
+      });
+      setIsResetPasswordDialogOpen(false);
+      setManualResetPassword("");
+      setManualResetPasswordConfirm("");
+      setManualResetPasswordError("");
+      refetch();
+    } catch (error) {
+      const detail = error?.response?.data?.detail;
+      if (detail) setManualResetPasswordError(detail);
+    }
+  };
+
   const handleDelete = async () => {
     if (!transformedUser) return;
 
@@ -2041,49 +2088,54 @@ const UserEditPage = () => {
 
       {/* Tabs Section */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <div className="overflow-x-auto scrollbar-hide">
-            <TabsList className={cn("inline-flex w-auto flex-nowrap gap-1 sm:gap-0 lg:grid lg:w-full", canViewAttendance ? "lg:grid-cols-6" : "lg:grid-cols-5")}>
-            <TabsTrigger value="basic" className="flex items-center gap-2 whitespace-nowrap">
+        <div>
+          <TabsList
+            className={cn(
+              "grid w-full h-auto gap-1 p-1",
+              canViewAttendance ? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-6" : "grid-cols-2 sm:grid-cols-3 lg:grid-cols-5"
+            )}
+          >
+            <TabsTrigger value="basic" className="flex items-center justify-center gap-2 whitespace-nowrap">
               <User className="h-4 w-4" />
-              <span className="hidden sm:inline">Basic Information</span>
-              <span className="sm:hidden">Basic</span>
+              <span className="hidden sm:inline">Profile</span>
+              <span className="sm:hidden">Profile</span>
             </TabsTrigger>
-            <TabsTrigger value="roles" className="flex items-center gap-2 whitespace-nowrap">
+            <TabsTrigger value="roles" className="flex items-center justify-center gap-2 whitespace-nowrap">
               <Shield className="h-4 w-4" />
               <span className="hidden sm:inline">Roles & Permissions</span>
               <span className="sm:hidden">Roles</span>
             </TabsTrigger>
-            <TabsTrigger value="compliance" className="flex items-center gap-2 whitespace-nowrap">
+            <TabsTrigger value="compliance" className="flex items-center justify-center gap-2 whitespace-nowrap">
               <FileCheck className="h-4 w-4" />
-              <span className="hidden sm:inline">Information</span>
-              <span className="sm:hidden">Information</span>
+              <span className="hidden sm:inline">Info & Compliance</span>
+              <span className="sm:hidden">Info</span>
             </TabsTrigger>
-            <TabsTrigger value="tasks" className="flex items-center gap-2 whitespace-nowrap">
+            <TabsTrigger value="tasks" className="flex items-center justify-center gap-2 whitespace-nowrap">
               <CheckCircle className="h-4 w-4" />
               <span className="hidden sm:inline">Tasks</span>
               <span className="sm:hidden">Tasks</span>
             </TabsTrigger>
-            <TabsTrigger value="notes" className="flex items-center gap-2 whitespace-nowrap">
+            <TabsTrigger value="notes" className="flex items-center justify-center gap-2 whitespace-nowrap">
               <MessageSquare className="h-4 w-4" />
               <span className="hidden sm:inline">Notes</span>
               <span className="sm:hidden">Notes</span>
             </TabsTrigger>
             {canViewAttendance && (
-              <TabsTrigger value="attendance" className="flex items-center gap-2 whitespace-nowrap">
+              <TabsTrigger value="attendance" className="flex items-center justify-center gap-2 whitespace-nowrap">
                 <ClipboardList className="h-4 w-4" />
                 <span className="hidden sm:inline">Shifts & Attendance</span>
                 <span className="sm:hidden">Attendance</span>
               </TabsTrigger>
             )}
-            <TabsTrigger value="status" className="flex items-center gap-2 whitespace-nowrap">
+            <TabsTrigger value="status" className="flex items-center justify-center gap-2 whitespace-nowrap">
               <Eye className="h-4 w-4" />
-              <span className="hidden sm:inline">Account Status</span>
-              <span className="sm:hidden">Status</span>
+              <span className="hidden sm:inline">Account & Security</span>
+              <span className="sm:hidden">Account</span>
             </TabsTrigger>
-            <TabsTrigger value="activity" className="flex items-center gap-2 whitespace-nowrap">
+            <TabsTrigger value="activity" className="flex items-center justify-center gap-2 whitespace-nowrap">
               <Info className="h-4 w-4" />
-              <span className="hidden sm:inline">Activity History</span>
-              <span className="sm:hidden">Activity</span>
+              <span className="hidden sm:inline">Audit & Activity</span>
+              <span className="sm:hidden">Audit</span>
             </TabsTrigger>
           </TabsList>
         </div>
@@ -3135,7 +3187,7 @@ const UserEditPage = () => {
               <CardTitle>Account Status Management</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
                 {/* Active Status */}
                 <div className="relative p-6 border rounded-lg">
                   <div className="absolute top-4 right-4">
@@ -3282,6 +3334,28 @@ const UserEditPage = () => {
                       : "Regular User"}
                   </Button>
                 </div>
+
+                {/* MFA Status */}
+                <div className="relative p-6 border rounded-lg">
+                  <div className="absolute top-4 right-4">
+                    {transformedUser.mfaEnabled ? (
+                      <Check className="h-5 w-5 text-green-600" />
+                    ) : (
+                      <X className="h-5 w-5 text-amber-600" />
+                    )}
+                  </div>
+                  <h3 className="font-semibold text-lg mb-2">
+                    {transformedUser.mfaEnabled ? "MFA Enabled" : "MFA Not Enabled"}
+                  </h3>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    {transformedUser.mfaEnabled
+                      ? "User has set up multi-factor authentication."
+                      : "User can log in without MFA unless policy requires it."}
+                  </p>
+                  <Button variant="outline" size="sm" disabled>
+                    {transformedUser.mfaEnabled ? "Enabled" : "Disabled"}
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -3324,6 +3398,109 @@ const UserEditPage = () => {
               </div>
             </CardContent>
           </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Password Access</CardTitle>
+              <CardDescription>
+                Manually set a password when email reset is unavailable.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button
+                variant="outline"
+                className="flex items-center gap-2"
+                onClick={() => {
+                  setManualResetPassword("");
+                  setManualResetPasswordConfirm("");
+                  setManualResetPasswordError("");
+                  setIsResetPasswordDialogOpen(true);
+                }}
+              >
+                <Key className="h-4 w-4" />
+                Set Password Manually
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Dialog
+            open={isResetPasswordDialogOpen}
+            onOpenChange={(open) => {
+              setIsResetPasswordDialogOpen(open);
+              if (!open) setManualResetPasswordError("");
+            }}
+          >
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Key className="h-5 w-5" />
+                  Set Password Manually
+                </DialogTitle>
+                <DialogDescription>
+                  User: <strong>{transformedUser.name}</strong>
+                  {transformedUser.email ? ` (${transformedUser.email})` : ""}
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <Label htmlFor="user-detail-manual-password">New password</Label>
+                  <Input
+                    id="user-detail-manual-password"
+                    type="password"
+                    value={manualResetPassword}
+                    onChange={(e) => {
+                      setManualResetPassword(e.target.value);
+                      if (manualResetPasswordError) setManualResetPasswordError("");
+                    }}
+                    placeholder="Enter new password"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="user-detail-manual-password-confirm">Confirm new password</Label>
+                  <Input
+                    id="user-detail-manual-password-confirm"
+                    type="password"
+                    value={manualResetPasswordConfirm}
+                    onChange={(e) => {
+                      setManualResetPasswordConfirm(e.target.value);
+                      if (manualResetPasswordError) setManualResetPasswordError("");
+                    }}
+                    placeholder="Re-enter new password"
+                  />
+                </div>
+                {manualResetPasswordError ? (
+                  <p className="text-sm text-red-600">{manualResetPasswordError}</p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Password must satisfy the system password policy.
+                  </p>
+                )}
+              </div>
+
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsResetPasswordDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleManualResetPassword}
+                  disabled={resetUserPasswordMutation.isPending}
+                >
+                  {resetUserPasswordMutation.isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Key className="mr-2 h-4 w-4" />
+                      Set Password
+                    </>
+                  )}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
           {/* Danger Zone */}
           <Card className="bg-red-500/5 border-red-500/50">
