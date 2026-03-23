@@ -20,6 +20,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { useCoverage, useAttendanceEmployeeSuggest } from "@/hooks/useAttendance";
 import { useDeleteProvisionalShift, useShiftRecordsAllPages } from "@/hooks/useShiftRecords";
 import { useDepartments } from "@/hooks/useDepartments";
+import { useRolesAll } from "@/hooks/useRoles";
 import { formatDateForAPI } from "@/utils/time";
 import { getUserDisplayName } from "@/utils/user";
 import { ProvisionalShiftForm } from "./ProvisionalShiftForm";
@@ -89,7 +90,13 @@ const defaultWeekRange = () => {
   return { from: mon, to: addDays(mon, 6) };
 };
 
-export function RotaTimeline({ departmentId: departmentIdProp = null, initialRange = null, userId: lockedUserId = null, userDisplayName: lockedUserDisplayName = null }) {
+export function RotaTimeline({
+  departmentId: departmentIdProp = null,
+  initialRange = null,
+  userId: lockedUserId = null,
+  userDisplayName: lockedUserDisplayName = null,
+  includeAll = false,
+}) {
   const defaultRange = useMemo(defaultWeekRange, []);
   const [customRange, setCustomRange] = useState(defaultRange);
   const [committedRange, setCommittedRange] = useState(defaultRange);
@@ -193,12 +200,14 @@ export function RotaTimeline({ departmentId: departmentIdProp = null, initialRan
     () => ({
       ...coverageParams,
       ...(userIdNum != null ? { user_id: userIdNum } : {}),
+      ...(includeAll ? { include_all: true } : {}),
     }),
-    [coverageParams, userIdNum]
+    [coverageParams, userIdNum, includeAll]
   );
 
   const { data: coverageData, isLoading: coverageLoading } = useCoverage(coverageParams);
   const { data: shiftData, isLoading: shiftsLoading } = useShiftRecordsAllPages(shiftParams);
+  const { data: allRolesData = [] } = useRolesAll(100);
 
   const [visibleCategories, setVisibleCategories] = useState(() => new Set(DEFAULT_VISIBLE_CATEGORIES));
 
@@ -213,6 +222,26 @@ export function RotaTimeline({ departmentId: departmentIdProp = null, initialRan
 
   const isLoading = coverageLoading || shiftsLoading;
 
+  const roleDepartmentById = useMemo(() => {
+    const map = new Map();
+    const roles = Array.isArray(allRolesData) ? allRolesData : [];
+    roles.forEach((role) => {
+      const roleId = role?.id;
+      if (roleId == null) return;
+      const roleType = String(role?.role_type || "").toLowerCase();
+      if (roleType && roleType !== "job_role") return;
+      const departmentId =
+        role?.department_id ??
+        role?.department?.id ??
+        null;
+      const departmentName =
+        role?.department?.name ??
+        null;
+      map.set(Number(roleId), { departmentId, departmentName });
+    });
+    return map;
+  }, [allRolesData]);
+
   const { roleRows, byDateRole } = useMemo(() => {
     const roleMap = new Map();
     const byDateRoleOut = {};
@@ -223,13 +252,17 @@ export function RotaTimeline({ departmentId: departmentIdProp = null, initialRan
         Object.entries(dayEntry.by_role || {}).forEach(([roleKey, roleData]) => {
           if (!roleKey.startsWith("job_role_")) return;
           const name = roleData.role_name || roleKey;
+          const roleIdNum = Number(String(roleKey).replace("job_role_", ""));
+          const roleLookup = Number.isFinite(roleIdNum) ? roleDepartmentById.get(roleIdNum) : null;
           const departmentId =
             roleData.department_id ??
             roleData.department?.id ??
+            roleLookup?.departmentId ??
             null;
           const departmentName =
             roleData.department_name ??
             roleData.department?.name ??
+            roleLookup?.departmentName ??
             null;
           if (!roleMap.has(roleKey)) {
             roleMap.set(roleKey, {
@@ -253,14 +286,17 @@ export function RotaTimeline({ departmentId: departmentIdProp = null, initialRan
         const roleId = r.job_role_id ?? r.job_role?.id;
         const roleKey = roleId != null && roleId !== "" ? `job_role_${roleId}` : "job_role_unspecified";
         const name = r.job_role?.display_name ?? r.job_role?.name ?? (roleKey === "job_role_unspecified" ? "Other" : `Role ${roleId}`);
+        const roleLookup = roleId != null ? roleDepartmentById.get(Number(roleId)) : null;
         const departmentId =
           r.job_role?.department_id ??
           r.job_role?.department?.id ??
           r.department_id ??
+          roleLookup?.departmentId ??
           null;
         const departmentName =
           r.job_role?.department?.name ??
           r.department?.name ??
+          roleLookup?.departmentName ??
           null;
         if (!roleMap.has(roleKey)) {
           roleMap.set(roleKey, {
@@ -282,12 +318,12 @@ export function RotaTimeline({ departmentId: departmentIdProp = null, initialRan
     }
     const roleRowsOut = Array.from(roleMap.values()).sort((a, b) => a.name.localeCompare(b.name));
     return { roleRows: roleRowsOut, byDateRole: byDateRoleOut };
-  }, [coverageData, shiftData, visibleCategories]);
+  }, [coverageData, shiftData, visibleCategories, roleDepartmentById]);
 
   const roleRowsSorted = useMemo(() => {
     return [...roleRows].sort((a, b) => {
-      const deptA = (a.departmentName || "Unassigned").toLowerCase();
-      const deptB = (b.departmentName || "Unassigned").toLowerCase();
+      const deptA = (a.departmentName || "No department").toLowerCase();
+      const deptB = (b.departmentName || "No department").toLowerCase();
       if (deptA !== deptB) return deptA.localeCompare(deptB);
       return (a.name || "").localeCompare(b.name || "");
     });
@@ -296,8 +332,8 @@ export function RotaTimeline({ departmentId: departmentIdProp = null, initialRan
   const departmentRoleGroups = useMemo(() => {
     const groups = [];
     roleRowsSorted.forEach((role) => {
-      const groupKey = role.departmentId != null ? `dept_${role.departmentId}` : `dept_name_${role.departmentName || "unassigned"}`;
-      const groupLabel = role.departmentName || "Unassigned";
+      const groupKey = role.departmentId != null ? `dept_${role.departmentId}` : `dept_name_${role.departmentName || "no_department"}`;
+      const groupLabel = role.departmentName || "No department";
       const last = groups[groups.length - 1];
       if (!last || last.key !== groupKey) {
         groups.push({ key: groupKey, label: groupLabel, roles: [role] });

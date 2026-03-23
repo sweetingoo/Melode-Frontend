@@ -228,7 +228,7 @@ function AttendancePageContent() {
         )}
 
         <TabsContent value="rota" className="mt-0 focus-visible:outline-none">
-          <RotaTimeline initialRange={initialRotaRange} />
+          <RotaTimeline initialRange={initialRotaRange} includeAll={canManageAllShiftRecords} />
         </TabsContent>
 
         <TabsContent value="now" className="mt-0 focus-visible:outline-none">
