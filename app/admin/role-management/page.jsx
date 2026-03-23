@@ -235,6 +235,11 @@ const RoleManagementPage = () => {
     () => [...departments].sort((a, b) => (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" })),
     [departments]
   );
+  const departmentById = React.useMemo(() => {
+    const map = new Map();
+    departments.forEach((dept) => map.set(Number(dept.id), dept));
+    return map;
+  }, [departments]);
 
   // Filter roles based on selected filters
   const roles = React.useMemo(() => {
@@ -334,6 +339,17 @@ const RoleManagementPage = () => {
   // Include roles with roleType === "job_role" or roles without roleType (legacy roles default to job_role)
   const jobRoles = allRoles.filter(
     (role) => role.roleType === "job_role" || !role.roleType
+  );
+
+  const formatJobRoleWithDepartment = React.useCallback(
+    (role) => {
+      const roleName = role.display_name || role.displayName || role.name || "";
+      const deptId = role.departmentId ?? role.department_id ?? role.department?.id;
+      const dept = deptId != null ? departmentById.get(Number(deptId)) : null;
+      const deptName = dept?.name || role.department?.name;
+      return deptName ? `${roleName} - ${deptName}` : roleName;
+    },
+    [departmentById]
   );
 
   const getRoleIconClasses = (color) => {
@@ -1885,7 +1901,7 @@ const RoleManagementPage = () => {
                             ) : (
                               filteredJobRoles.map((role) => (
                                 <SelectItem key={role.id} value={role.id.toString()}>
-                                  {role.name}
+                                  {formatJobRoleWithDepartment(role)}
                                 </SelectItem>
                               ))
                             )}
@@ -1901,7 +1917,7 @@ const RoleManagementPage = () => {
                       ) : (
                         filteredJobRoles.map((role) => (
                           <SelectItem key={role.id} value={role.id.toString()}>
-                            {role.name}
+                            {formatJobRoleWithDepartment(role)}
                           </SelectItem>
                         ))
                       );

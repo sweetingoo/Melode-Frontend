@@ -137,7 +137,11 @@ import {
 } from "@/hooks/useAttendance";
 import { filesService } from "@/services/files";
 import { useDocuments, useCreateDocument } from "@/hooks/useDocuments";
-import { useDocumentCategories } from "@/hooks/useDocumentCategories";
+import {
+  useCreateDocumentCategory,
+  useDeleteDocumentCategory,
+  useDocumentCategories,
+} from "@/hooks/useDocumentCategories";
 import { useTasksByUser } from "@/hooks/useTasks";
 import { Calendar } from "@/components/ui/calendar";
 import CommentThread from "@/components/CommentThread";
@@ -304,6 +308,102 @@ const TasksForUser = ({ userSlug }) => {
   );
 };
 
+const PersonnelCategoryManagerDialog = ({
+  open,
+  onOpenChange,
+  personnelRootCategory,
+  personnelFlatCategories,
+  onCreateRoot,
+  onCreateChild,
+  onDeleteCategory,
+  isCreating,
+  isDeleting,
+}) => {
+  const [newCategoryName, setNewCategoryName] = useState("");
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const name = newCategoryName.trim();
+    if (!name) return;
+    const created = await onCreateChild(name);
+    if (created) {
+      setNewCategoryName("");
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Manage personnel file categories</DialogTitle>
+          <DialogDescription>
+            These categories are used only for Personnel File documents.
+          </DialogDescription>
+        </DialogHeader>
+
+        {!personnelRootCategory ? (
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              A root category named "Personnel File" is required before adding personnel
+              categories.
+            </p>
+            <Button onClick={onCreateRoot} disabled={isCreating}>
+              {isCreating ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                "Create Personnel File category set"
+              )}
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <form className="flex gap-2" onSubmit={handleSubmit}>
+              <Input
+                value={newCategoryName}
+                onChange={(e) => setNewCategoryName(e.target.value)}
+                placeholder="New personnel category name"
+              />
+              <Button type="submit" disabled={!newCategoryName.trim() || isCreating}>
+                Add
+              </Button>
+            </form>
+
+            <div className="space-y-2 max-h-72 overflow-y-auto">
+              {personnelFlatCategories.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No personnel categories yet. Add one above.
+                </p>
+              ) : (
+                personnelFlatCategories.map((cat) => (
+                  <div
+                    key={cat.id}
+                    className="flex items-center justify-between border rounded-md px-3 py-2"
+                  >
+                    <span className="text-sm">{cat.displayName}</span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => onDeleteCategory(cat.slug)}
+                      disabled={isDeleting}
+                      title="Delete category"
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+};
+
 const UserEditPage = () => {
   const params = useParams();
   const pathname = usePathname();
@@ -412,6 +512,9 @@ const UserEditPage = () => {
   const [personnelCategoryId, setPersonnelCategoryId] = useState(null);
   const [personnelTitle, setPersonnelTitle] = useState("");
   const [personnelDescription, setPersonnelDescription] = useState("");
+  const [isManagePersonnelCategoriesOpen, setIsManagePersonnelCategoriesOpen] = useState(false);
+  const isCreatingPersonnelRootRef = useRef(false);
+  const isCreatingPersonnelChildRef = useRef(false);
 
   const {
     data: userData,
@@ -1164,13 +1267,20 @@ const UserEditPage = () => {
     return map;
   }, [rolesArray]);
 
-  // Role label for dropdowns: "Role name - Department name" (department replaces "No description")
+  // Role label for dropdowns: always include department when available
   const getRoleDisplayLabel = React.useCallback(
     (role) => {
       const deptId = role.department_id ?? role.departmentId ?? role.department?.id;
       const dept = deptId != null ? departmentById.get(Number(deptId)) : null;
-      const suffix = dept?.name ?? role.department?.name ?? role.description ?? "No description";
-      return `${role.display_name || role.name || ""} - ${suffix}`;
+      const deptName = dept?.name ?? role.department?.name;
+      const roleName = role.display_name || role.name || "";
+      if (deptName) {
+        return `${roleName} - ${deptName}`;
+      }
+      if (role.description) {
+        return `${roleName} - ${role.description}`;
+      }
+      return roleName;
     },
     [departmentById]
   );
@@ -1249,15 +1359,42 @@ const UserEditPage = () => {
   const personnelUserId = userData?.id ?? null;
 
   const { data: personnelCategoriesData } = useDocumentCategories();
+  const createDocumentCategoryMutation = useCreateDocumentCategory();
+  const deleteDocumentCategoryMutation = useDeleteDocumentCategory();
+
+  const personnelRootCategory = React.useMemo(() => {
+    const categories = personnelCategoriesData?.categories || [];
+    const queue = [...categories];
+
+    while (queue.length > 0) {
+      const cat = queue.shift();
+      const slug = String(cat?.slug || "").trim().toLowerCase();
+      const name = String(cat?.name || "").trim().toLowerCase();
+      if (
+        slug === "personnel-file" ||
+        slug === "personnel-files" ||
+        slug === "personnel-file-categories" ||
+        name === "personnel file" ||
+        name === "personnel files"
+      ) {
+        return cat;
+      }
+      if (Array.isArray(cat?.children) && cat.children.length > 0) {
+        queue.push(...cat.children);
+      }
+    }
+    return null;
+  }, [personnelCategoriesData]);
 
   const personnelFlatCategories = React.useMemo(() => {
-    const categories = personnelCategoriesData?.categories || [];
+    const categories = personnelRootCategory?.children || [];
     const result = [];
 
     const flatten = (cats, depth = 0) => {
       cats.forEach((cat) => {
         result.push({
           id: cat.id,
+          slug: cat.slug,
           name: cat.name,
           displayName: `${"  ".repeat(depth)}${cat.name}`,
         });
@@ -1269,7 +1406,12 @@ const UserEditPage = () => {
 
     flatten(categories);
     return result;
-  }, [personnelCategoriesData]);
+  }, [personnelRootCategory]);
+
+  const personnelCategoryIds = React.useMemo(
+    () => new Set(personnelFlatCategories.map((cat) => cat.id)),
+    [personnelFlatCategories]
+  );
 
   const personnelCategoryNameById = React.useMemo(() => {
     const map = new Map();
@@ -1300,9 +1442,10 @@ const UserEditPage = () => {
     return docs.filter(
       (doc) =>
         Array.isArray(doc.shared_with_user_ids) &&
-        doc.shared_with_user_ids.includes(personnelUserId)
+        doc.shared_with_user_ids.includes(personnelUserId) &&
+        personnelCategoryIds.has(doc.category_id)
     );
-  }, [personnelDocumentsResponse, personnelUserId]);
+  }, [personnelDocumentsResponse, personnelUserId, personnelCategoryIds]);
 
   const createPersonnelDocument = useCreateDocument();
 
@@ -1327,6 +1470,61 @@ const UserEditPage = () => {
       setPersonnelCategoryId(null);
     } catch (error) {
       // Errors are handled by the mutation's toast
+    }
+  };
+
+  const handleCreatePersonnelRootCategory = async () => {
+    if (createDocumentCategoryMutation.isPending || isCreatingPersonnelRootRef.current) {
+      return;
+    }
+    isCreatingPersonnelRootRef.current = true;
+    try {
+      await createDocumentCategoryMutation.mutateAsync({
+        name: "Personnel File",
+        description: "Root category for personnel file categories",
+        parent_id: null,
+      });
+      toast.success("Personnel category set created");
+      return true;
+    } catch (error) {
+      // handled by mutation toast
+      return false;
+    } finally {
+      isCreatingPersonnelRootRef.current = false;
+    }
+  };
+
+  const handleCreatePersonnelChildCategory = async (name) => {
+    const normalizedName = String(name || "").trim();
+    if (
+      createDocumentCategoryMutation.isPending ||
+      isCreatingPersonnelChildRef.current
+    ) {
+      return false;
+    }
+    const categoryName = normalizedName;
+    if (!personnelRootCategory?.id || !categoryName) return false;
+    isCreatingPersonnelChildRef.current = true;
+    try {
+      await createDocumentCategoryMutation.mutateAsync({
+        name: categoryName,
+        parent_id: personnelRootCategory.id,
+      });
+      return true;
+    } catch (error) {
+      // handled by mutation toast
+      return false;
+    } finally {
+      isCreatingPersonnelChildRef.current = false;
+    }
+  };
+
+  const handleDeletePersonnelCategory = async (categorySlug) => {
+    if (!categorySlug) return;
+    try {
+      await deleteDocumentCategoryMutation.mutateAsync(categorySlug);
+    } catch (error) {
+      // handled by mutation toast
     }
   };
 
@@ -2053,8 +2251,8 @@ const UserEditPage = () => {
   return (
     <div className="space-y-6">
       {/* Header Section */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-start md:items-center justify-between gap-3">
+        <div className="flex items-start md:items-center gap-4 min-w-0 flex-1">
           {transformedUser && (
             <AvatarWithUrl
               avatarValue={transformedUser.avatarUrl}
@@ -2069,8 +2267,8 @@ const UserEditPage = () => {
               className="h-12 w-12"
             />
           )}
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">
+          <div className="min-w-0">
+            <h1 className="text-3xl font-bold tracking-tight break-words md:break-normal">
               {transformedUser?.name || transformedUser?.email || "Loading..."}
             </h1>
             <p className="text-muted-foreground mt-1">Manage Person</p>
@@ -2078,7 +2276,7 @@ const UserEditPage = () => {
         </div>
         <Button
           onClick={handleSave}
-          className="flex items-center gap-2"
+          className="flex items-center justify-center gap-2 w-auto max-w-full shrink-0 whitespace-nowrap"
           disabled={updateUserMutation.isPending}
         >
           <Save className="h-4 w-4" />
@@ -3558,10 +3756,16 @@ const UserEditPage = () => {
         {/* Compliance Tab */}
         <TabsContent value="compliance" className="space-y-6">
           <Tabs value={complianceSubTab} onValueChange={setComplianceSubTab} className="space-y-6">
-            <TabsList>
-              <TabsTrigger value="additional">My Information</TabsTrigger>
-              <TabsTrigger value="compliance">My Compliance</TabsTrigger>
-              <TabsTrigger value="personnel">Personnel File</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-3 h-auto gap-1">
+              <TabsTrigger value="additional" className="whitespace-normal text-center px-2 py-2 text-xs sm:text-sm">
+                My Information
+              </TabsTrigger>
+              <TabsTrigger value="compliance" className="whitespace-normal text-center px-2 py-2 text-xs sm:text-sm">
+                My Compliance
+              </TabsTrigger>
+              <TabsTrigger value="personnel" className="whitespace-normal text-center px-2 py-2 text-xs sm:text-sm">
+                Personnel File
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="compliance" className="space-y-6">
@@ -4095,8 +4299,8 @@ const UserEditPage = () => {
             <TabsContent value="personnel" className="space-y-6">
               <Card>
                 <CardHeader>
-                  <div className="flex items-center justify-between gap-4">
-                    <div>
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 min-w-0">
+                    <div className="min-w-0">
                       <CardTitle className="flex items-center gap-2">
                         <FileText className="h-5 w-5" />
                         Personnel File
@@ -4106,10 +4310,24 @@ const UserEditPage = () => {
                       </CardDescription>
                     </div>
                     {canManagePersonnelDocuments && (
-                      <Button size="sm" onClick={() => setIsPersonnelDocDialogOpen(true)}>
-                        <Plus className="mr-2 h-4 w-4" />
-                        Add Document
-                      </Button>
+                      <div className="flex w-full sm:w-auto flex-wrap justify-end gap-2 min-w-0">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="w-full sm:w-auto max-w-full shrink-0 whitespace-normal text-center"
+                          onClick={() => setIsManagePersonnelCategoriesOpen(true)}
+                        >
+                          Manage Categories
+                        </Button>
+                        <Button
+                          size="sm"
+                          className="w-full sm:w-auto max-w-full shrink-0 whitespace-normal text-center"
+                          onClick={() => setIsPersonnelDocDialogOpen(true)}
+                        >
+                          <Plus className="mr-2 h-4 w-4" />
+                          Add Document
+                        </Button>
+                      </div>
                     )}
                   </div>
                 </CardHeader>
@@ -4125,10 +4343,24 @@ const UserEditPage = () => {
                         No documents have been added to this person&apos;s personnel file yet.
                       </p>
                       {canManagePersonnelDocuments && (
-                        <Button size="sm" onClick={() => setIsPersonnelDocDialogOpen(true)}>
-                          <Plus className="mr-2 h-4 w-4" />
-                          Add first document
-                        </Button>
+                        <div className="flex w-full flex-wrap items-stretch sm:items-center justify-center gap-2 min-w-0">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="w-full sm:w-auto max-w-full shrink-0 whitespace-normal text-center"
+                            onClick={() => setIsManagePersonnelCategoriesOpen(true)}
+                          >
+                            Manage Categories
+                          </Button>
+                          <Button
+                            size="sm"
+                            className="w-full sm:w-auto max-w-full shrink-0 whitespace-normal text-center"
+                            onClick={() => setIsPersonnelDocDialogOpen(true)}
+                          >
+                            <Plus className="mr-2 h-4 w-4" />
+                            Add first document
+                          </Button>
+                        </div>
                       )}
                     </div>
                   ) : (
@@ -4210,7 +4442,7 @@ const UserEditPage = () => {
                   <form className="space-y-4" onSubmit={handleCreatePersonnelDocument}>
                     <div className="space-y-2">
                       <Label htmlFor="personnel-category">Category</Label>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                         <Select
                           value={personnelCategoryId ? String(personnelCategoryId) : ""}
                           onValueChange={(value) => setPersonnelCategoryId(Number(value))}
@@ -4219,7 +4451,11 @@ const UserEditPage = () => {
                             <SelectValue placeholder="Select category" />
                           </SelectTrigger>
                           <SelectContent>
-                            {personnelFlatCategories.length === 0 ? (
+                            {!personnelRootCategory ? (
+                              <SelectItem value="none" disabled>
+                                Create "Personnel File" category set first
+                              </SelectItem>
+                            ) : personnelFlatCategories.length === 0 ? (
                               <SelectItem value="none" disabled>
                                 No categories available
                               </SelectItem>
@@ -4235,12 +4471,10 @@ const UserEditPage = () => {
                         <Button
                           type="button"
                           variant="outline"
-                          size="icon"
-                          className="shrink-0"
-                          onClick={() => router.push("/admin/documents")}
-                          title="Create or manage categories"
+                          className="w-full sm:w-auto sm:shrink-0 max-w-full whitespace-normal text-center"
+                          onClick={() => setIsManagePersonnelCategoriesOpen(true)}
                         >
-                          <Plus className="h-4 w-4" />
+                          Manage
                         </Button>
                       </div>
                     </div>
@@ -4293,6 +4527,17 @@ const UserEditPage = () => {
                   </form>
                 </DialogContent>
               </Dialog>
+              <PersonnelCategoryManagerDialog
+                open={isManagePersonnelCategoriesOpen}
+                onOpenChange={setIsManagePersonnelCategoriesOpen}
+                personnelRootCategory={personnelRootCategory}
+                personnelFlatCategories={personnelFlatCategories}
+                onCreateRoot={handleCreatePersonnelRootCategory}
+                onCreateChild={handleCreatePersonnelChildCategory}
+                onDeleteCategory={handleDeletePersonnelCategory}
+                isCreating={createDocumentCategoryMutation.isPending}
+                isDeleting={deleteDocumentCategoryMutation.isPending}
+              />
             </TabsContent>
           </Tabs>
         </TabsContent>
