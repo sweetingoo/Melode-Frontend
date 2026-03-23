@@ -621,8 +621,8 @@ export const ShiftRecordList = ({
                       onSelect={setDateRange}
                       numberOfMonths={2}
                       classNames={{
-                        months: "flex flex-col gap-4 sm:flex-row sm:gap-4",
-                        month: "space-y-4 min-w-0",
+                        months: "flex w-full flex-wrap gap-4",
+                        month: "min-w-0 flex-1 space-y-4",
                       }}
                     />
                   </div>

@@ -431,8 +431,10 @@ export const LeaveRequestFormContent = ({
                   disabled={(date) => !leaveRequest && isPastDate(date)}
                   className="max-w-full rounded-md border"
                   classNames={{
-                    months: "flex flex-col sm:flex-row gap-4 justify-center",
+                    months: "flex w-full flex-wrap gap-4 justify-center",
                     nav: "hidden",
+                    button_previous: "hidden",
+                    button_next: "hidden",
                     nav_button_previous: "hidden",
                     nav_button_next: "hidden",
                   }}

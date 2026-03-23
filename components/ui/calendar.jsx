@@ -23,21 +23,30 @@ function Calendar({
       toYear={toYear}
       className={cn("p-3", className)}
       classNames={{
-        months: "flex flex-col sm:flex-row space-y-4 sm:space-x-4 sm:space-y-0",
-        month: "space-y-4",
+        // Wrap so the nav row is full width above month grids (sm:flex-row put nav beside months).
+        months: "flex w-full flex-wrap gap-4",
+        month: "min-w-0 flex-1 space-y-4",
         caption: "flex justify-center pt-1 relative items-center",
         caption_label: "text-sm font-medium hidden",
         caption_dropdowns: "flex justify-center gap-1",
         dropdown: "h-7 rounded-md border border-input bg-background px-2 text-sm font-medium",
         dropdown_month: "h-7 rounded-md border border-input bg-background px-2 text-sm font-medium",
         dropdown_year: "h-7 rounded-md border border-input bg-background px-2 text-sm font-medium",
-        nav: "space-x-1 flex items-center",
+        nav: "relative flex w-full min-w-0 shrink-0 basis-full items-center justify-between gap-1",
+        button_previous: cn(
+          buttonVariants({ variant: "outline" }),
+          "h-7 w-7 shrink-0 bg-transparent p-0 opacity-50 hover:opacity-100"
+        ),
+        button_next: cn(
+          buttonVariants({ variant: "outline" }),
+          "h-7 w-7 shrink-0 bg-transparent p-0 opacity-50 hover:opacity-100"
+        ),
         nav_button: cn(
           buttonVariants({ variant: "outline" }),
-          "h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100"
+          "h-7 w-7 shrink-0 bg-transparent p-0 opacity-50 hover:opacity-100"
         ),
-        nav_button_previous: "absolute left-1",
-        nav_button_next: "absolute right-1",
+        nav_button_previous: "",
+        nav_button_next: "",
         table: "w-full border-collapse space-y-1",
         weekdays: "flex w-full",
         weekday:
