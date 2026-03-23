@@ -46,6 +46,8 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import Link from "next/link";
+import { formatDistanceToNow } from "date-fns";
+import { parseUTCDate } from "@/utils/time";
 import {
   ArrowLeft,
   ArrowRight,
@@ -1358,7 +1360,8 @@ const UserEditPage = () => {
   // Personnel File: shared documents for this user
   const personnelUserId = userData?.id ?? null;
 
-  const { data: personnelCategoriesData } = useDocumentCategories({ include_personnel: true });
+  const { data: personnelCategoriesData, refetch: refetchPersonnelCategories } =
+    useDocumentCategories({ include_personnel: true });
   const createDocumentCategoryMutation = useCreateDocumentCategory();
   const deleteDocumentCategoryMutation = useDeleteDocumentCategory();
 
@@ -1485,6 +1488,7 @@ const UserEditPage = () => {
         description: "Root category for personnel file categories",
         parent_id: null,
       });
+      await refetchPersonnelCategories();
       toast.success("Personnel category set created");
       return true;
     } catch (error) {
@@ -1511,6 +1515,7 @@ const UserEditPage = () => {
         name: categoryName,
         parent_id: personnelRootCategory.id,
       });
+      await refetchPersonnelCategories();
       return true;
     } catch (error) {
       // handled by mutation toast
@@ -1524,6 +1529,7 @@ const UserEditPage = () => {
     if (!categorySlug) return;
     try {
       await deleteDocumentCategoryMutation.mutateAsync(categorySlug);
+      await refetchPersonnelCategories();
     } catch (error) {
       // handled by mutation toast
     }
@@ -4431,7 +4437,11 @@ const UserEditPage = () => {
                                     <Button
                                       variant="ghost"
                                       size="sm"
-                                      onClick={() => router.push(`/documents/${doc.slug || doc.id}`)}
+                                      onClick={() =>
+                                        router.push(
+                                          `/admin/people-management/${actualUserSlug}/personnel-files/${doc.slug || doc.id}`
+                                        )
+                                      }
                                     >
                                       <Eye className="h-4 w-4" />
                                     </Button>
@@ -4490,10 +4500,13 @@ const UserEditPage = () => {
                         <Button
                           type="button"
                           variant="outline"
-                          className="w-full sm:w-auto sm:shrink-0 max-w-full whitespace-normal text-center"
+                          size="icon"
+                          className="h-9 w-9 shrink-0"
                           onClick={() => setIsManagePersonnelCategoriesOpen(true)}
+                          title="Add/manage categories"
+                          aria-label="Add/manage categories"
                         >
-                          Manage
+                          <Plus className="h-4 w-4" />
                         </Button>
                       </div>
                     </div>
