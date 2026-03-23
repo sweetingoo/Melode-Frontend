@@ -2,8 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import Link from "next/link";
-import { ArrowLeft, Globe, Loader2, Save, Users } from "lucide-react";
+import { ArrowLeft, Check, Copy, Loader2, Save, Users } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { parseUTCDate } from "@/utils/time";
 import { useDocument, useShareDocument, useUnshareDocument, useUpdateDocument } from "@/hooks/useDocuments";
@@ -13,10 +12,12 @@ import { useCurrentUser } from "@/hooks/useAuth";
 import { useFileReferences } from "@/hooks/useFileReferences";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import UserMentionSelector from "@/components/UserMentionSelector";
+import MultiFileUpload from "@/components/MultiFileUpload";
 import FileAttachmentList from "@/components/FileAttachmentList";
 import ResourceAuditLogs from "@/components/ResourceAuditLogs";
 import { toast } from "sonner";
@@ -39,6 +40,7 @@ export default function PersonnelFileDetailPage() {
   const users = usersAllResponse?.users || usersAllResponse || [];
   const [isPublic, setIsPublic] = useState(false);
   const [sharedUserIds, setSharedUserIds] = useState([]);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (!document) return;
@@ -50,6 +52,23 @@ export default function PersonnelFileDetailPage() {
     () => users.filter((u) => sharedUserIds.includes(u.id)),
     [users, sharedUserIds]
   );
+  const shareUrl = useMemo(() => {
+    if (!document) return "";
+    if (typeof window === "undefined") return "";
+    return `${window.location.origin}/documents/${document.slug || document.id}/preview`;
+  }, [document]);
+
+  const handleCopyShareLink = async () => {
+    if (!shareUrl) return;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      toast.success("Share link copied");
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      toast.error("Failed to copy share link");
+    }
+  };
 
   const handleSaveSharing = async () => {
     if (!document) return;
@@ -88,7 +107,13 @@ export default function PersonnelFileDetailPage() {
       if (toRemove.length > 0) {
         await unshareDocument.mutateAsync({ slug, userIds: toRemove });
       }
-      toast.success("Sharing settings updated");
+      if (toAdd.length > 0) {
+        toast.success(
+          `Sharing updated. ${toAdd.length} user${toAdd.length === 1 ? "" : "s"} notified.`
+        );
+      } else {
+        toast.success("Sharing settings updated");
+      }
     } catch (error) {
       // mutation hooks show proper toast errors
     }
@@ -184,6 +209,19 @@ export default function PersonnelFileDetailPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-5">
+          <div className="space-y-2 rounded-md border p-3">
+            <Label className="font-medium">Shareable URL</Label>
+            <p className="text-xs text-muted-foreground">
+              Use this non-admin URL when sharing access to this personnel file.
+            </p>
+            <div className="flex items-center gap-2">
+              <Input value={shareUrl} readOnly className="font-mono text-xs" />
+              <Button type="button" variant="outline" size="icon" onClick={handleCopyShareLink} title="Copy link">
+                {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+              </Button>
+            </div>
+          </div>
+
           <div className="flex items-center justify-between rounded-md border p-3">
             <div>
               <Label htmlFor="personnel-public" className="font-medium">
@@ -202,6 +240,9 @@ export default function PersonnelFileDetailPage() {
 
           <div className="space-y-2">
             <Label className="font-medium">Share with specific users</Label>
+            <p className="text-xs text-muted-foreground">
+              Newly added users will receive an in-app notification that this document was shared with them.
+            </p>
             <UserMentionSelector
               users={users}
               selectedUserIds={sharedUserIds}
@@ -228,7 +269,24 @@ export default function PersonnelFileDetailPage() {
         </CardContent>
       </Card>
 
-      <FileAttachmentList entityType="document" entitySlug={document.slug || String(document.id)} showTitle />
+      <Card>
+        <CardHeader>
+          <CardTitle>Attachments</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <MultiFileUpload
+            entityType="document"
+            entitySlug={document.slug || String(document.id)}
+            maxFiles={10}
+            maxSizeMB={50}
+          />
+          <FileAttachmentList
+            entityType="document"
+            entitySlug={document.slug || String(document.id)}
+            showTitle={false}
+          />
+        </CardContent>
+      </Card>
 
       {(document.slug || document.id) && (
         <ResourceAuditLogs
