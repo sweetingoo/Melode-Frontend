@@ -141,7 +141,7 @@ export function RotaTimeline({
   const departmentIdNum = departmentFilter === "all" ? null : (parseInt(departmentFilter, 10) || null);
   const userIdNum = userFilter === "all" ? null : (parseInt(userFilter, 10) || null);
 
-  const { data: departmentsData } = useDepartments({ per_page: 50 });
+  const { data: departmentsData } = useDepartments({ per_page: 200 });
   const departments = useMemo(() => {
     if (!departmentsData) return [];
     if (Array.isArray(departmentsData)) return departmentsData;
@@ -149,6 +149,17 @@ export function RotaTimeline({
     if (Array.isArray(departmentsData.data)) return departmentsData.data;
     return [];
   }, [departmentsData]);
+
+  /** id → display name for stable department row headers when role payloads omit name */
+  const departmentNameById = useMemo(() => {
+    const m = new Map();
+    departments.forEach((d) => {
+      if (d?.id == null) return;
+      const label = String(d.name || "").trim();
+      m.set(Number(d.id), label || `Department #${d.id}`);
+    });
+    return m;
+  }, [departments]);
 
   const { data: employeeSuggestList, isLoading: userSuggestLoading } = useAttendanceEmployeeSuggest(
     {
@@ -209,6 +220,20 @@ export function RotaTimeline({
   const { data: shiftData, isLoading: shiftsLoading } = useShiftRecordsAllPages(shiftParams);
   const { data: allRolesData = [] } = useRolesAll(100);
 
+  /** Job role id → column title (avoid using shift role / coverage role_name which is often "General"). */
+  const jobRoleColumnNameById = useMemo(() => {
+    const m = new Map();
+    const roles = Array.isArray(allRolesData) ? allRolesData : [];
+    roles.forEach((role) => {
+      const rt = String(role?.role_type || "job_role").toLowerCase();
+      if (rt !== "job_role") return;
+      if (role?.id == null) return;
+      const label = String(role.display_name || role.name || "").trim();
+      m.set(Number(role.id), label || `Role ${role.id}`);
+    });
+    return m;
+  }, [allRolesData]);
+
   const [visibleCategories, setVisibleCategories] = useState(() => new Set(DEFAULT_VISIBLE_CATEGORIES));
 
   const toggleCategory = (value) => {
@@ -229,7 +254,8 @@ export function RotaTimeline({
       const roleId = role?.id;
       if (roleId == null) return;
       const roleType = String(role?.role_type || "").toLowerCase();
-      if (roleType && roleType !== "job_role") return;
+      // Job roles and shift roles both carry department_id (shift roles sync from parent job role).
+      if (roleType && roleType !== "job_role" && roleType !== "shift_role") return;
       const departmentId =
         role?.department_id ??
         role?.department?.id ??
@@ -243,6 +269,20 @@ export function RotaTimeline({
   }, [allRolesData]);
 
   const { roleRows, byDateRole } = useMemo(() => {
+    const mergeCoverageDayRole = (existing, incoming) => {
+      if (!existing) return incoming;
+      return {
+        ...existing,
+        required: [...(existing.required || []), ...(incoming.required || [])],
+        allocated: [...(existing.allocated || []), ...(incoming.allocated || [])],
+        attended: [...(existing.attended || []), ...(incoming.attended || [])],
+        role_name: existing.role_name || incoming.role_name,
+        department_id: existing.department_id ?? incoming.department_id,
+        department_name: existing.department_name ?? incoming.department_name,
+        shift_role_id: existing.shift_role_id ?? incoming.shift_role_id,
+        job_role_id: existing.job_role_id ?? incoming.job_role_id,
+      };
+    };
     const roleMap = new Map();
     const byDateRoleOut = {};
     if (coverageData?.by_date?.length) {
@@ -250,9 +290,17 @@ export function RotaTimeline({
         const d = dayEntry.date;
         if (!byDateRoleOut[d]) byDateRoleOut[d] = {};
         Object.entries(dayEntry.by_role || {}).forEach(([roleKey, roleData]) => {
-          if (!roleKey.startsWith("job_role_")) return;
-          const name = roleData.role_name || roleKey;
-          const roleIdNum = Number(String(roleKey).replace("job_role_", ""));
+          let canonicalKey = roleKey;
+          if (roleKey.startsWith("shift_role_") && roleData.job_role_id != null) {
+            canonicalKey = `job_role_${roleData.job_role_id}`;
+          } else if (!roleKey.startsWith("job_role_")) {
+            return;
+          }
+          const roleIdNum = Number(String(canonicalKey).replace("job_role_", ""));
+          const name =
+            jobRoleColumnNameById.get(roleIdNum) ||
+            roleData.role_name ||
+            canonicalKey;
           const roleLookup = Number.isFinite(roleIdNum) ? roleDepartmentById.get(roleIdNum) : null;
           const departmentId =
             roleData.department_id ??
@@ -264,18 +312,18 @@ export function RotaTimeline({
             roleData.department?.name ??
             roleLookup?.departmentName ??
             null;
-          if (!roleMap.has(roleKey)) {
-            roleMap.set(roleKey, {
-              id: roleKey,
+          if (!roleMap.has(canonicalKey)) {
+            roleMap.set(canonicalKey, {
+              id: canonicalKey,
               name,
-              key: roleKey,
+              key: canonicalKey,
               departmentId,
               departmentName,
             });
-          } else if (departmentName && !roleMap.get(roleKey)?.departmentName) {
-            roleMap.set(roleKey, { ...roleMap.get(roleKey), departmentId, departmentName });
+          } else if (departmentName && !roleMap.get(canonicalKey)?.departmentName) {
+            roleMap.set(canonicalKey, { ...roleMap.get(canonicalKey), departmentId, departmentName });
           }
-          byDateRoleOut[d][roleKey] = roleData;
+          byDateRoleOut[d][canonicalKey] = mergeCoverageDayRole(byDateRoleOut[d][canonicalKey], roleData);
         });
       });
     }
@@ -285,7 +333,14 @@ export function RotaTimeline({
         if (!visibleCategories.has(r?.category)) return;
         const roleId = r.job_role_id ?? r.job_role?.id;
         const roleKey = roleId != null && roleId !== "" ? `job_role_${roleId}` : "job_role_unspecified";
-        const name = r.job_role?.display_name ?? r.job_role?.name ?? (roleKey === "job_role_unspecified" ? "Other" : `Role ${roleId}`);
+        const roleIdN = roleId != null && roleId !== "" ? Number(roleId) : NaN;
+        const name =
+          roleKey === "job_role_unspecified"
+            ? "Other"
+            : jobRoleColumnNameById.get(roleIdN) ||
+              r.job_role?.display_name ||
+              r.job_role?.name ||
+              `Role ${roleId}`;
         const roleLookup = roleId != null ? roleDepartmentById.get(Number(roleId)) : null;
         const departmentId =
           r.job_role?.department_id ??
@@ -318,22 +373,36 @@ export function RotaTimeline({
     }
     const roleRowsOut = Array.from(roleMap.values()).sort((a, b) => a.name.localeCompare(b.name));
     return { roleRows: roleRowsOut, byDateRole: byDateRoleOut };
-  }, [coverageData, shiftData, visibleCategories, roleDepartmentById]);
+  }, [coverageData, shiftData, visibleCategories, roleDepartmentById, jobRoleColumnNameById]);
+
+  /** Resolve department label for headers (fix blank cells when only id is present or name is whitespace). */
+  const roleRowsResolved = useMemo(() => {
+    return roleRows.map((row) => {
+      const raw = row.departmentName != null ? String(row.departmentName).trim() : "";
+      const fromId =
+        row.departmentId != null ? departmentNameById.get(Number(row.departmentId)) : null;
+      const departmentDisplayName = raw || fromId || "No department";
+      return { ...row, departmentDisplayName };
+    });
+  }, [roleRows, departmentNameById]);
 
   const roleRowsSorted = useMemo(() => {
-    return [...roleRows].sort((a, b) => {
-      const deptA = (a.departmentName || "No department").toLowerCase();
-      const deptB = (b.departmentName || "No department").toLowerCase();
+    return [...roleRowsResolved].sort((a, b) => {
+      const deptA = (a.departmentDisplayName || "No department").toLowerCase();
+      const deptB = (b.departmentDisplayName || "No department").toLowerCase();
       if (deptA !== deptB) return deptA.localeCompare(deptB);
       return (a.name || "").localeCompare(b.name || "");
     });
-  }, [roleRows]);
+  }, [roleRowsResolved]);
 
   const departmentRoleGroups = useMemo(() => {
     const groups = [];
     roleRowsSorted.forEach((role) => {
-      const groupKey = role.departmentId != null ? `dept_${role.departmentId}` : `dept_name_${role.departmentName || "no_department"}`;
-      const groupLabel = role.departmentName || "No department";
+      const groupKey =
+        role.departmentId != null
+          ? `dept_${role.departmentId}`
+          : `dept_name_${(role.departmentDisplayName || "no_department").toLowerCase()}`;
+      const groupLabel = role.departmentDisplayName || "No department";
       const last = groups[groups.length - 1];
       if (!last || last.key !== groupKey) {
         groups.push({ key: groupKey, label: groupLabel, roles: [role] });
