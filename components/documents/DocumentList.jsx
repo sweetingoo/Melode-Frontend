@@ -44,6 +44,61 @@ import { formatDistanceToNow } from "date-fns";
 import { parseUTCDate } from "@/utils/time";
 import { useRouter } from "next/navigation";
 
+const PERSONNEL_ROOT_MATCH = new Set([
+  "personnel-file",
+  "personnel-files",
+  "personnel-file-categories",
+  "personnel file",
+  "personnel files",
+]);
+
+const getPersonnelCategoryIds = (categories) => {
+  const all = [];
+  const walk = (items) => {
+    (items || []).forEach((item) => {
+      all.push(item);
+      if (Array.isArray(item.children) && item.children.length > 0) {
+        walk(item.children);
+      }
+    });
+  };
+  walk(categories);
+
+  const byId = new Map(all.map((c) => [Number(c.id), c]));
+  const roots = all.filter((c) => {
+    const slug = String(c.slug || "").trim().toLowerCase();
+    const name = String(c.name || "").trim().toLowerCase();
+    return PERSONNEL_ROOT_MATCH.has(slug) || PERSONNEL_ROOT_MATCH.has(name);
+  });
+
+  const excluded = new Set();
+  const queue = roots.map((r) => Number(r.id)).filter((id) => Number.isFinite(id));
+
+  while (queue.length > 0) {
+    const currentId = queue.shift();
+    if (excluded.has(currentId)) continue;
+    excluded.add(currentId);
+
+    const current = byId.get(currentId);
+    if (current?.children?.length) {
+      current.children.forEach((child) => {
+        const childId = Number(child.id);
+        if (Number.isFinite(childId) && !excluded.has(childId)) queue.push(childId);
+      });
+    }
+
+    all.forEach((c) => {
+      const parentId = Number(c.parent_id);
+      const cid = Number(c.id);
+      if (parentId === currentId && Number.isFinite(cid) && !excluded.has(cid)) {
+        queue.push(cid);
+      }
+    });
+  }
+
+  return excluded;
+};
+
 // Helper function to get author display name with priority: name > username > slug (NOT email)
 const getAuthorDisplayName = (author) => {
   if (!author) return "Unknown";
@@ -108,6 +163,11 @@ const DocumentList = ({
 
   const deleteDocumentMutation = useDeleteDocument();
   const { data: categoriesData } = useDocumentCategories();
+  const categories = categoriesData?.categories || [];
+  const excludedPersonnelCategoryIds = useMemo(
+    () => getPersonnelCategoryIds(categories),
+    [categories]
+  );
 
   // Create a map of category_id to category name
   const categoryMap = useMemo(() => {
@@ -122,9 +182,12 @@ const DocumentList = ({
     };
     if (categoriesData?.categories) {
       flattenCategories(categoriesData.categories);
+      for (const excludedId of excludedPersonnelCategoryIds) {
+        map.delete(excludedId);
+      }
     }
     return map;
-  }, [categoriesData]);
+  }, [categoriesData, excludedPersonnelCategoryIds]);
 
   // Debounce search term
   React.useEffect(() => {
@@ -160,8 +223,14 @@ const DocumentList = ({
   );
 
   const data = debouncedSearchTerm ? searchData : documentsData;
-  const documents = data?.documents || [];
-  const total = data?.total || 0;
+  const documents = useMemo(
+    () =>
+      (data?.documents || []).filter(
+        (document) => !excludedPersonnelCategoryIds.has(Number(document.category_id))
+      ),
+    [data?.documents, excludedPersonnelCategoryIds]
+  );
+  const total = documents.length;
   const totalPages = data?.total_pages || 1;
   const currentPageNum = data?.page || currentPage;
 

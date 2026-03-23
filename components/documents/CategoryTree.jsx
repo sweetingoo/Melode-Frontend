@@ -14,6 +14,61 @@ import { ChevronRight, ChevronDown, Folder, FolderOpen, MoreHorizontal, Edit, Tr
 import { useDocumentCategories, useDeleteDocumentCategory } from "@/hooks/useDocumentCategories";
 import { Badge } from "@/components/ui/badge";
 
+const PERSONNEL_ROOT_MATCH = new Set([
+  "personnel-file",
+  "personnel-files",
+  "personnel-file-categories",
+  "personnel file",
+  "personnel files",
+]);
+
+const getPersonnelCategoryIds = (categories) => {
+  const all = [];
+  const walk = (items) => {
+    (items || []).forEach((item) => {
+      all.push(item);
+      if (Array.isArray(item.children) && item.children.length > 0) {
+        walk(item.children);
+      }
+    });
+  };
+  walk(categories);
+
+  const byId = new Map(all.map((c) => [Number(c.id), c]));
+  const roots = all.filter((c) => {
+    const slug = String(c.slug || "").trim().toLowerCase();
+    const name = String(c.name || "").trim().toLowerCase();
+    return PERSONNEL_ROOT_MATCH.has(slug) || PERSONNEL_ROOT_MATCH.has(name);
+  });
+
+  const excluded = new Set();
+  const queue = roots.map((r) => Number(r.id)).filter((id) => Number.isFinite(id));
+
+  while (queue.length > 0) {
+    const currentId = queue.shift();
+    if (excluded.has(currentId)) continue;
+    excluded.add(currentId);
+
+    const current = byId.get(currentId);
+    if (current?.children?.length) {
+      current.children.forEach((child) => {
+        const childId = Number(child.id);
+        if (Number.isFinite(childId) && !excluded.has(childId)) queue.push(childId);
+      });
+    }
+
+    all.forEach((c) => {
+      const parentId = Number(c.parent_id);
+      const cid = Number(c.id);
+      if (parentId === currentId && Number.isFinite(cid) && !excluded.has(cid)) {
+        queue.push(cid);
+      }
+    });
+  }
+
+  return excluded;
+};
+
 const CategoryTree = ({
   onSelectCategory,
   selectedCategoryId,
@@ -27,6 +82,14 @@ const CategoryTree = ({
   const [expandedNodes, setExpandedNodes] = useState(new Set());
 
   const categories = data?.categories || [];
+  const excludedPersonnelCategoryIds = useMemo(
+    () => getPersonnelCategoryIds(categories),
+    [categories]
+  );
+  const visibleCategories = useMemo(
+    () => categories.filter((c) => !excludedPersonnelCategoryIds.has(Number(c.id))),
+    [categories, excludedPersonnelCategoryIds]
+  );
 
   const toggleNode = (categoryId) => {
     const newExpanded = new Set(expandedNodes);
@@ -44,7 +107,7 @@ const CategoryTree = ({
     }
     try {
       // Find the category to get its slug
-      const category = categories.find(c => c.id === categoryId || c.slug === categoryId);
+      const category = visibleCategories.find(c => c.id === categoryId || c.slug === categoryId);
       const categorySlug = category?.slug || categoryId;
       await deleteCategoryMutation.mutateAsync(categorySlug);
     } catch (error) {
@@ -53,7 +116,7 @@ const CategoryTree = ({
   };
 
   const renderTreeNode = (category, depth = 0) => {
-    const children = categories.filter((c) => c.parent_id === category.id);
+    const children = visibleCategories.filter((c) => c.parent_id === category.id);
     const hasChildren = children.length > 0;
     const isExpanded = expandedNodes.has(category.id.toString());
     const isSelected = selectedCategoryId === category.id;
@@ -183,7 +246,7 @@ const CategoryTree = ({
     );
   }
 
-  const rootCategories = categories.filter((c) => !c.parent_id);
+  const rootCategories = visibleCategories.filter((c) => !c.parent_id);
 
   if (rootCategories.length === 0) {
     return (

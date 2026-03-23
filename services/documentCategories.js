@@ -3,9 +3,9 @@ import { api } from "./api-client";
 // Document Categories API service
 export const documentCategoriesService = {
   // Get category tree
-  getCategories: async () => {
+  getCategories: async (params = {}) => {
     try {
-      return await api.get("/documents/categories");
+      return await api.get("/documents/categories", { params });
     } catch (error) {
       console.error("Get categories failed:", error);
       throw error;

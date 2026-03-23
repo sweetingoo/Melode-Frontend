@@ -25,6 +25,61 @@ import { useDocumentCategories } from "@/hooks/useDocumentCategories";
 import { generateSlug } from "@/utils/slug";
 import { Loader2, Save, Plus, Trash2, GripVertical } from "lucide-react";
 
+const PERSONNEL_ROOT_MATCH = new Set([
+  "personnel-file",
+  "personnel-files",
+  "personnel-file-categories",
+  "personnel file",
+  "personnel files",
+]);
+
+const getPersonnelCategoryIds = (categories) => {
+  const all = [];
+  const walk = (items) => {
+    (items || []).forEach((item) => {
+      all.push(item);
+      if (Array.isArray(item.children) && item.children.length > 0) {
+        walk(item.children);
+      }
+    });
+  };
+  walk(categories);
+
+  const byId = new Map(all.map((c) => [Number(c.id), c]));
+  const roots = all.filter((c) => {
+    const slug = String(c.slug || "").trim().toLowerCase();
+    const name = String(c.name || "").trim().toLowerCase();
+    return PERSONNEL_ROOT_MATCH.has(slug) || PERSONNEL_ROOT_MATCH.has(name);
+  });
+
+  const excluded = new Set();
+  const queue = roots.map((r) => Number(r.id)).filter((id) => Number.isFinite(id));
+
+  while (queue.length > 0) {
+    const currentId = queue.shift();
+    if (excluded.has(currentId)) continue;
+    excluded.add(currentId);
+
+    const current = byId.get(currentId);
+    if (current?.children?.length) {
+      current.children.forEach((child) => {
+        const childId = Number(child.id);
+        if (Number.isFinite(childId) && !excluded.has(childId)) queue.push(childId);
+      });
+    }
+
+    all.forEach((c) => {
+      const parentId = Number(c.parent_id);
+      const cid = Number(c.id);
+      if (parentId === currentId && Number.isFinite(cid) && !excluded.has(cid)) {
+        queue.push(cid);
+      }
+    });
+  }
+
+  return excluded;
+};
+
 const DocumentEditor = ({ documentId, documentSlug, initialCategoryId = null, onSave, onCancel }) => {
   const { data: document, isLoading: documentLoading } = useDocument(documentSlug || documentId, {
     enabled: !!(documentSlug || documentId),
@@ -43,6 +98,14 @@ const DocumentEditor = ({ documentId, documentSlug, initialCategoryId = null, on
   });
 
   const categories = categoriesData?.categories || [];
+  const excludedPersonnelCategoryIds = React.useMemo(
+    () => getPersonnelCategoryIds(categories),
+    [categories]
+  );
+  const visibleCategories = React.useMemo(
+    () => categories.filter((c) => !excludedPersonnelCategoryIds.has(Number(c.id))),
+    [categories, excludedPersonnelCategoryIds]
+  );
 
   // Flatten categories for select
   const flattenCategories = (cats, depth = 0) => {
@@ -59,7 +122,7 @@ const DocumentEditor = ({ documentId, documentSlug, initialCategoryId = null, on
     return result;
   };
 
-  const flatCategories = flattenCategories(categories);
+  const flatCategories = flattenCategories(visibleCategories);
 
   useEffect(() => {
     if (document) {

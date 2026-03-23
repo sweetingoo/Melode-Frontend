@@ -27,6 +27,61 @@ import {
   useDocumentCategories,
 } from "@/hooks/useDocumentCategories";
 
+const PERSONNEL_ROOT_MATCH = new Set([
+  "personnel-file",
+  "personnel-files",
+  "personnel-file-categories",
+  "personnel file",
+  "personnel files",
+]);
+
+const getPersonnelCategoryIds = (categories) => {
+  const all = [];
+  const walk = (items) => {
+    (items || []).forEach((item) => {
+      all.push(item);
+      if (Array.isArray(item.children) && item.children.length > 0) {
+        walk(item.children);
+      }
+    });
+  };
+  walk(categories);
+
+  const byId = new Map(all.map((c) => [Number(c.id), c]));
+  const roots = all.filter((c) => {
+    const slug = String(c.slug || "").trim().toLowerCase();
+    const name = String(c.name || "").trim().toLowerCase();
+    return PERSONNEL_ROOT_MATCH.has(slug) || PERSONNEL_ROOT_MATCH.has(name);
+  });
+
+  const excluded = new Set();
+  const queue = roots.map((r) => Number(r.id)).filter((id) => Number.isFinite(id));
+
+  while (queue.length > 0) {
+    const currentId = queue.shift();
+    if (excluded.has(currentId)) continue;
+    excluded.add(currentId);
+
+    const current = byId.get(currentId);
+    if (current?.children?.length) {
+      current.children.forEach((child) => {
+        const childId = Number(child.id);
+        if (Number.isFinite(childId) && !excluded.has(childId)) queue.push(childId);
+      });
+    }
+
+    all.forEach((c) => {
+      const parentId = Number(c.parent_id);
+      const cid = Number(c.id);
+      if (parentId === currentId && Number.isFinite(cid) && !excluded.has(cid)) {
+        queue.push(cid);
+      }
+    });
+  }
+
+  return excluded;
+};
+
 const CategoryDialog = ({ open, onOpenChange, category = null, parentCategory = null }) => {
   const { data: categoriesData } = useDocumentCategories();
   const createCategory = useCreateDocumentCategory();
@@ -41,14 +96,22 @@ const CategoryDialog = ({ open, onOpenChange, category = null, parentCategory = 
   });
 
   const categories = categoriesData?.categories || [];
+  const excludedPersonnelCategoryIds = React.useMemo(
+    () => getPersonnelCategoryIds(categories),
+    [categories]
+  );
+  const visibleCategories = React.useMemo(
+    () => categories.filter((c) => !excludedPersonnelCategoryIds.has(Number(c.id))),
+    [categories, excludedPersonnelCategoryIds]
+  );
 
   // Filter out current category and its descendants from parent options
-  const availableParents = categories.filter((cat) => {
+  const availableParents = visibleCategories.filter((cat) => {
     if (!category) return true;
     if (cat.id === category.id) return false;
     // Check if cat is a descendant of current category
     const isDescendant = (catId, parentId) => {
-      const cat = categories.find((c) => c.id === catId);
+      const cat = visibleCategories.find((c) => c.id === catId);
       if (!cat || !cat.parent_id) return false;
       if (cat.parent_id === parentId) return true;
       return isDescendant(cat.parent_id, parentId);
@@ -101,7 +164,7 @@ const CategoryDialog = ({ open, onOpenChange, category = null, parentCategory = 
   };
 
   const buildCategoryPath = (catId) => {
-    const findCategory = (id) => categories.find((c) => c.id === id);
+    const findCategory = (id) => visibleCategories.find((c) => c.id === id);
     const path = [];
     let currentId = catId;
     while (currentId) {

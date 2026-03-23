@@ -6,18 +6,18 @@ import { toast } from "sonner";
 export const documentCategoryKeys = {
   all: ["document-categories"],
   lists: () => [...documentCategoryKeys.all, "list"],
-  list: () => [...documentCategoryKeys.lists()],
+  list: (params = {}) => [...documentCategoryKeys.lists(), params],
   details: () => [...documentCategoryKeys.all, "detail"],
   detail: (id) => [...documentCategoryKeys.details(), id],
   permissions: (id) => [...documentCategoryKeys.all, "permissions", id],
 };
 
 // Get category tree query
-export const useDocumentCategories = (options = {}) => {
+export const useDocumentCategories = (params = {}, options = {}) => {
   return useQuery({
-    queryKey: documentCategoryKeys.list(),
+    queryKey: documentCategoryKeys.list(params),
     queryFn: async () => {
-      const response = await documentCategoriesService.getCategories();
+      const response = await documentCategoriesService.getCategories(params);
       // Handle response with categories array
       if (response?.data && typeof response.data === 'object' && 'categories' in response.data) {
         return response.data;

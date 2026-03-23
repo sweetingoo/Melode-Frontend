@@ -1358,7 +1358,7 @@ const UserEditPage = () => {
   // Personnel File: shared documents for this user
   const personnelUserId = userData?.id ?? null;
 
-  const { data: personnelCategoriesData } = useDocumentCategories();
+  const { data: personnelCategoriesData } = useDocumentCategories({ include_personnel: true });
   const createDocumentCategoryMutation = useCreateDocumentCategory();
   const deleteDocumentCategoryMutation = useDeleteDocumentCategory();
 
@@ -1425,6 +1425,7 @@ const UserEditPage = () => {
     () => ({
       page: 1,
       per_page: 100,
+      include_personnel: true,
     }),
     []
   );
