@@ -20,7 +20,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-const DEFAULT_STATUS = "pending_review";
+const DEFAULT_STATUS = "submitted";
 
 function SubmissionsListContent() {
   const router = useRouter();
@@ -120,7 +120,9 @@ function SubmissionsListContent() {
                   filteredSubmissions.map((submission) => {
                     const submissionId = submission.slug || submission.id;
                     const formSlug = submission.form_slug || submission.form_id;
-                    const isPendingReview = String(submission.status || "").toLowerCase() === "pending_review";
+                    const statusValue = String(submission.status || "").toLowerCase();
+                    const isPendingReview =
+                      statusValue === "pending_review" || statusValue === "submitted";
                     return (
                       <TableRow
                         key={submissionId}

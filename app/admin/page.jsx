@@ -483,7 +483,7 @@ const Dashboard = () => {
                       </Link>
                     )}
                     {(dashboardData.needs_attention.submissions_pending_review ?? 0) > 0 && (
-                      <Link href="/admin/forms/submissions?status=pending_review" className="text-sm font-medium text-amber-800 dark:text-amber-200 hover:underline">
+                      <Link href="/admin/forms/submissions?status=submitted" className="text-sm font-medium text-amber-800 dark:text-amber-200 hover:underline">
                         {dashboardData.needs_attention.submissions_pending_review} submission{dashboardData.needs_attention.submissions_pending_review !== 1 ? "s" : ""} pending review
                       </Link>
                     )}

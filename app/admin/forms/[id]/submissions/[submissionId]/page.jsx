@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -346,12 +346,12 @@ const FormSubmissionDetailPage = () => {
   };
 
   // Build form layout for read-only view (same structure as submit page, all fields in one "page")
-  const fullPageFields = useMemo(() => {
+  const fullPageFields = (() => {
     const all = form?.form_fields?.fields || [];
     return all.filter((f) => (f.type || f.field_type || "")?.toLowerCase() !== "page_break");
-  }, [form?.form_fields?.fields]);
+  })();
 
-  const fullLayout = useMemo(() => {
+  const fullLayout = (() => {
     const formGroups = form?.form_fields?.groups || [];
     const formSections = form?.form_fields?.sections || [];
     const hasFormGroups = formGroups.length > 0;
@@ -406,7 +406,7 @@ const FormSubmissionDetailPage = () => {
       return { fieldsNotInAnySection, sectionsWithContent };
     }
     return null;
-  }, [form?.form_fields?.groups, form?.form_fields?.sections, fullPageFields]);
+  })();
 
   // Helper function to format field value for display
   const formatFieldValue = (field, value) => {
@@ -536,7 +536,7 @@ const FormSubmissionDetailPage = () => {
           <img 
             src={value} 
             alt="Signature" 
-            className="max-w-full h-auto border rounded-md bg-white"
+            className="max-w-full h-auto border rounded-md bg-background"
             style={{ maxHeight: '200px' }}
           />
         </div>
@@ -1025,8 +1025,8 @@ const FormSubmissionDetailPage = () => {
         {/* Main Content */}
         <div className="md:col-span-2 space-y-6">
           {/* Submission Data – form-style read-only view (PDF-like, NHS-friendly); only this shows when printing */}
-          <Card className="submission-print-form-only overflow-hidden border border-gray-200 bg-white shadow-sm">
-            <CardHeader className="border-b border-gray-100 bg-gray-50/50 py-4">
+          <Card className="submission-print-form-only overflow-hidden border border-border bg-card shadow-sm">
+            <CardHeader className="border-b border-border bg-muted/40 py-4">
               <CardTitle className="text-xl font-semibold text-[#005eb8]">
                 {form?.form_title || form?.form_name || "Form"}
               </CardTitle>
@@ -1034,7 +1034,7 @@ const FormSubmissionDetailPage = () => {
             </CardHeader>
             <CardContent className="p-0">
               {fullLayout ? (
-                <div className="min-h-[400px] bg-[#f8f9fa]">
+                <div className="min-h-[400px] bg-muted/30">
                   <div className="max-w-4xl mx-auto px-6 py-6 space-y-6">
                     {fullLayout.sectionsWithContent?.map(({ sectionLabel, ungrouped, groupsWithFields }, sectionIdx) => (
                       <React.Fragment key={sectionIdx}>
@@ -1065,7 +1065,7 @@ const FormSubmissionDetailPage = () => {
                                     const cells = (row.cells || []).slice(0, tableCols.length);
                                     while (cells.length < tableCols.length) cells.push({ text: "", field_id: null });
                                     return (
-                                      <tr key={rIdx} className="border-b border-gray-100 hover:bg-gray-50/50">
+                                      <tr key={rIdx} className="border-b border-border hover:bg-muted/30">
                                         {cells.map((cell, cIdx) => {
                                           const fieldId = cell.field_id ? String(cell.field_id) : null;
                                           const field = fieldId ? getFieldById(fieldId) : null;
@@ -1094,10 +1094,10 @@ const FormSubmissionDetailPage = () => {
                           );
                           if (isTabs) {
                             return (
-                              <section key={group.id || group.label} className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+                              <section key={group.id || group.label} className="bg-card rounded-lg border border-border shadow-sm overflow-hidden">
                                 {group.label && (
-                                  <div className="px-5 py-3 border-b border-gray-100">
-                                    <h4 className="font-semibold text-gray-800">{group.label}</h4>
+                                  <div className="px-5 py-3 border-b border-border">
+                                    <h4 className="font-semibold text-foreground">{group.label}</h4>
                                   </div>
                                 )}
                                 <div className="p-5 space-y-6">
@@ -1143,10 +1143,10 @@ const FormSubmissionDetailPage = () => {
                             const tableCols = Array.isArray(group.table_columns) && group.table_columns.length > 0 ? group.table_columns : [{ id: "col_1", label: "Column 1" }];
                             const tableRows = group.table_rows || [];
                             return (
-                              <section key={group.id || group.label} className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+                              <section key={group.id || group.label} className="bg-card rounded-lg border border-border shadow-sm overflow-hidden">
                                 {group.label && (
-                                  <div className="px-5 py-3 border-b border-gray-100">
-                                    <h4 className="font-semibold text-gray-800">{group.label}</h4>
+                                  <div className="px-5 py-3 border-b border-border">
+                                    <h4 className="font-semibold text-foreground">{group.label}</h4>
                                   </div>
                                 )}
                                 <div className="p-5">
@@ -1225,10 +1225,10 @@ const FormSubmissionDetailPage = () => {
                             };
                             const rows = group.grid_rows || [];
                             return (
-                              <section key={group.id || group.label} className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+                              <section key={group.id || group.label} className="bg-card rounded-lg border border-border shadow-sm overflow-hidden">
                                 {group.label && (
-                                  <div className="px-5 py-3 border-b border-gray-100">
-                                    <h4 className="font-semibold text-gray-800">{group.label}</h4>
+                                  <div className="px-5 py-3 border-b border-border">
+                                    <h4 className="font-semibold text-foreground">{group.label}</h4>
                                   </div>
                                 )}
                                 <div className="p-5 space-y-4">
@@ -1255,10 +1255,10 @@ const FormSubmissionDetailPage = () => {
                             );
                           }
                           return (
-                            <section key={group.id || group.label} className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+                            <section key={group.id || group.label} className="bg-card rounded-lg border border-border shadow-sm overflow-hidden">
                               {group.label && (
-                                <div className="px-5 py-3 border-b border-gray-100">
-                                  <h4 className="font-semibold text-gray-800">{group.label}</h4>
+                                <div className="px-5 py-3 border-b border-border">
+                                  <h4 className="font-semibold text-foreground">{group.label}</h4>
                                 </div>
                               )}
                               <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
@@ -1278,7 +1278,7 @@ const FormSubmissionDetailPage = () => {
                           );
                         })}
                         {ungrouped.length > 0 && (
-                          <section className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+                          <section className="bg-card rounded-lg border border-border shadow-sm overflow-hidden">
                             <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
                               {ungrouped.filter((f) => checkFieldVisibility(f, dataForVisibility) && !isFieldInHiddenGroup(f.id || f.field_id || f.name, dataForVisibility)).map((field) => {
                                 const fieldId = field.id || field.field_id || field.field_name || field.name;
@@ -1297,8 +1297,8 @@ const FormSubmissionDetailPage = () => {
                       </React.Fragment>
                     ))}
                     {fullLayout.fieldsNotInAnySection?.length > 0 && (
-                      <section className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
-                        <div className="px-5 py-4 border-b border-gray-100">
+                      <section className="bg-card rounded-lg border border-border shadow-sm overflow-hidden">
+                        <div className="px-5 py-4 border-b border-border">
                           <h3 className="text-sm font-semibold text-[#005eb8] border-l-4 border-[#005eb8] pl-3">Details</h3>
                         </div>
                         <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
@@ -1321,7 +1321,7 @@ const FormSubmissionDetailPage = () => {
                   </div>
                 </div>
               ) : fields.length > 0 ? (
-                <div className="p-6 space-y-4 bg-[#f8f9fa]">
+                <div className="p-6 space-y-4 bg-muted/30">
                   {fields.map((field) => {
                     const fieldId = field.field_id || field.field_name;
                     const fieldType = field.field_type?.toLowerCase();
@@ -1333,9 +1333,9 @@ const FormSubmissionDetailPage = () => {
                     }
                     const value = displayData[fieldId];
                     return (
-                      <div key={fieldId} className="p-4 bg-white border border-gray-200 rounded-lg">
+                      <div key={fieldId} className="p-4 bg-card border border-border rounded-lg">
                         <div className="flex items-center justify-between mb-2">
-                          <label className="font-medium text-gray-800">{field.label || fieldId}</label>
+                          <label className="font-medium text-foreground">{field.label || fieldId}</label>
                           {field.required && <Badge className="bg-[#da291c] text-white text-xs">Required</Badge>}
                         </div>
                         <div className="text-sm">{renderFieldValue(field, value)}</div>
@@ -1344,12 +1344,12 @@ const FormSubmissionDetailPage = () => {
                   })}
                 </div>
               ) : (
-                <div className="p-6 space-y-2 bg-[#f8f9fa]">
+                <div className="p-6 space-y-2 bg-muted/30">
                   {Object.entries(displayData).map(([key, value]) => {
                     const field = fields.find((f) => (f.field_id || f.field_name) === key);
                     return (
-                      <div key={key} className="p-4 bg-white border border-gray-200 rounded-lg">
-                        <label className="font-medium text-sm text-gray-600">{field?.label || key}</label>
+                      <div key={key} className="p-4 bg-card border border-border rounded-lg">
+                        <label className="font-medium text-sm text-muted-foreground">{field?.label || key}</label>
                         <div className="mt-1 text-sm">{renderFieldValue(field || { field_type: "text" }, value)}</div>
                       </div>
                     );

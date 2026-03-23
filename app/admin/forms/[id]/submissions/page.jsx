@@ -143,6 +143,14 @@ const FormSubmissionsPage = () => {
   const formStatuses = form?.form_config?.statuses && form.form_config.statuses.length > 0
     ? form.form_config.statuses
     : DEFAULT_STATUSES;
+  const statusOptions = useMemo(() => {
+    const unique = Array.from(new Set(formStatuses));
+    if (!unique.includes("submitted")) {
+      // Special workflow bucket used in dashboard links.
+      unique.unshift("submitted");
+    }
+    return unique;
+  }, [formStatuses]);
   
   // Filter submissions client-side if needed (backend should handle most filtering)
   const filteredSubmissions = useMemo(() => {
@@ -164,7 +172,14 @@ const FormSubmissionsPage = () => {
     }
     
     if (statusFilter !== "all") {
-      filtered = filtered.filter((s) => s.status === statusFilter);
+      if (statusFilter === "submitted") {
+        // Keep this page aligned with dashboard "pending review" semantics.
+        filtered = filtered.filter((s) =>
+          ["pending_review", "submitted"].includes(String(s.status || "").toLowerCase())
+        );
+      } else {
+        filtered = filtered.filter((s) => s.status === statusFilter);
+      }
     }
     
     return filtered;
@@ -215,6 +230,13 @@ const FormSubmissionsPage = () => {
     
     // Default for unknown statuses
     return "bg-muted text-muted-foreground";
+  };
+
+  const toHumanLabel = (value) => {
+    if (!value) return "";
+    return String(value)
+      .replace(/_/g, " ")
+      .replace(/\b\w/g, (char) => char.toUpperCase());
   };
 
   if (formLoading || submissionsLoading) {
@@ -347,10 +369,10 @@ const FormSubmissionsPage = () => {
                   <SelectValue placeholder="Status" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Statuses</SelectItem>
-                  {formStatuses.map((status) => (
+                    <SelectItem value="all">All Statuses</SelectItem>
+                  {statusOptions.map((status) => (
                     <SelectItem key={status} value={status}>
-                      {status}
+                      {toHumanLabel(status)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -387,7 +409,7 @@ const FormSubmissionsPage = () => {
               )}
               {statusFilter !== "all" && (
                 <Badge variant="secondary" className="flex items-center gap-1">
-                  Status: {statusFilter}
+                  Status: {toHumanLabel(statusFilter)}
                   <button
                     onClick={() => setStatusFilter("all")}
                     className="ml-1 hover:bg-secondary/80 rounded-full p-0.5"
@@ -443,7 +465,7 @@ const FormSubmissionsPage = () => {
                       </TableCell>
                       <TableCell>
                         <Badge className={getStatusColor(submission.status)}>
-                          {submission.status || "N/A"}
+                          {submission.status ? toHumanLabel(submission.status) : "N/A"}
                         </Badge>
                       </TableCell>
                       {formCategories.length > 0 && (
