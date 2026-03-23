@@ -612,7 +612,7 @@ const DepartmentsPage = () => {
                                       Edit
                                     </DropdownMenuItem>
                                   )}
-                                  (<> {canDeleteDepartment && (
+                                  {canDeleteDepartment && (
                                     <AlertDialog>
                                       <AlertDialogTrigger asChild>
                                         <DropdownMenuItem
@@ -648,7 +648,6 @@ const DepartmentsPage = () => {
                                       </AlertDialogContent>
                                     </AlertDialog>
                                   )}
-                                  </>)
                                 </DropdownMenuContent>
                               </DropdownMenu>
                             </TableCell>

@@ -1032,7 +1032,7 @@ const RoleManagementPage = () => {
       )}
 
       {/* Roles by Department Hierarchy */}
-      {!rolesLoading && !rolesError && (
+      {!rolesLoading && !rolesError && false && (
         <div className="space-y-6">
           {/* System Roles Section (roles without departments, e.g., Superuser) */}
           {Object.keys(rolesByDepartment.systemRoles || {}).length > 0 && (
@@ -1743,6 +1743,250 @@ const RoleManagementPage = () => {
             })
           )}
         </div>
+      )}
+
+      {/* Roles Table (department-style layout) */}
+      {!rolesLoading && !rolesError && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between gap-2">
+              <CardTitle>All Roles</CardTitle>
+              <Badge variant="secondary">{roles.length} role(s)</Badge>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="rounded-md border overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-12"></TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Department</TableHead>
+                    <TableHead>Parent</TableHead>
+                    <TableHead>Permissions</TableHead>
+                    <TableHead>Users</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(() => {
+                    const renderedRows = [];
+                    const sortGroups = (a, b) =>
+                      (a.jobRole?.display_name || a.jobRole?.name || "").localeCompare(
+                        b.jobRole?.display_name || b.jobRole?.name || "",
+                        undefined,
+                        { sensitivity: "base" }
+                      );
+
+                    const renderRoleActions = (role) => (
+                      <div className="flex items-center justify-end gap-1">
+                        {canUpdateRole && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0"
+                            onClick={() => handleEditRole(role.id)}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                        )}
+                        {canManagePermissions && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0"
+                            onClick={() => handleManagePermissions(role.id)}
+                          >
+                            <Key className="h-4 w-4" />
+                          </Button>
+                        )}
+                        {canDeleteRole && !role.is_system && !role.isSystem && (
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>
+                                  Are you sure you want to delete this role?
+                                </AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  This action cannot be undone. This will permanently
+                                  delete the role "{role.name}".
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => handleDeleteRole(role.id)}
+                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                >
+                                  Delete
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        )}
+                      </div>
+                    );
+
+                    const pushGroupRows = (group, departmentLabel = "System") => {
+                      const role = group.jobRole;
+                      const sortedShiftRoles = [...(group.shiftRoles || [])].sort((a, b) =>
+                        (a.display_name || a.name || "").localeCompare(
+                          b.display_name || b.name || "",
+                          undefined,
+                          { sensitivity: "base" }
+                        )
+                      );
+                      const showJob = true;
+                      const showShift = selectedRoleTypeFilter !== "job_role";
+                      const expanded = expandedShiftRoles.has(role.id);
+                      const showExpandedDetails =
+                        showShift &&
+                        sortedShiftRoles.length > 0 &&
+                        (selectedRoleTypeFilter === "shift_role" || expanded);
+
+                      renderedRows.push(
+                        <React.Fragment key={`group-${role.id}`}>
+                          <TableRow>
+                            <TableCell>
+                              {sortedShiftRoles.length > 0 && showShift ? (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 w-6 p-0"
+                                  onClick={() => {
+                                    setExpandedShiftRoles((prev) => {
+                                      const next = new Set(prev);
+                                      if (next.has(role.id)) next.delete(role.id);
+                                      else next.add(role.id);
+                                      return next;
+                                    });
+                                  }}
+                                >
+                                  {showExpandedDetails ? (
+                                    <ChevronDown className="h-4 w-4" />
+                                  ) : (
+                                    <ChevronRight className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              ) : null}
+                            </TableCell>
+                            <TableCell className="font-medium">
+                              {role.display_name || role.name}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="secondary">Job Role</Badge>
+                            </TableCell>
+                            <TableCell>{departmentLabel}</TableCell>
+                            <TableCell className="text-muted-foreground">-</TableCell>
+                            <TableCell>{getRolePermissions(role).length}</TableCell>
+                            <TableCell>{role.userCount || 0}</TableCell>
+                            <TableCell className="text-right">
+                              {renderRoleActions(role)}
+                            </TableCell>
+                          </TableRow>
+
+                          {showExpandedDetails && (
+                            <TableRow>
+                              <TableCell colSpan={8} className="bg-muted/30 p-0">
+                                <div className="relative p-4 pl-10 space-y-3">
+                                  <div className="absolute left-0 top-0 bottom-0 w-7 border-r bg-muted/40 flex items-center justify-center">
+                                    <span className="text-[10px] font-semibold tracking-wide text-muted-foreground [writing-mode:vertical-rl] rotate-180">
+                                      SHIFT
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <Network className="h-4 w-4 text-muted-foreground" />
+                                    <h4 className="text-sm font-semibold">
+                                      Shift Roles under {role.display_name || role.name}
+                                    </h4>
+                                    <Badge variant="outline" className="text-[10px]">
+                                      {sortedShiftRoles.length}
+                                    </Badge>
+                                  </div>
+                                  <div className="space-y-2">
+                                    {sortedShiftRoles.map((shiftRole) => (
+                                      <div
+                                        key={`shift-${role.id}-${shiftRole.id}`}
+                                        className="flex items-center justify-between gap-3 rounded-md border bg-background px-3 py-2"
+                                      >
+                                        <div className="min-w-0 flex items-center gap-2">
+                                          <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                          <span className="truncate text-sm font-medium">
+                                            {shiftRole.display_name || shiftRole.name}
+                                          </span>
+                                          <Badge variant="outline" className="text-[10px]">
+                                            Shift Role
+                                          </Badge>
+                                          <Badge variant="secondary" className="text-[10px]">
+                                            {getRolePermissions(shiftRole).length} perms
+                                          </Badge>
+                                          <Badge variant="secondary" className="text-[10px]">
+                                            {shiftRole.userCount || 0} users
+                                          </Badge>
+                                        </div>
+                                        <div className="shrink-0">
+                                          {renderRoleActions(shiftRole)}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </React.Fragment>
+                      );
+
+                    };
+
+                    Object.values(rolesByDepartment.systemRoles || {})
+                      .sort(sortGroups)
+                      .forEach((group) => pushGroupRows(group, "System"));
+
+                    filteredDepartments.forEach((department) => {
+                      const groups = Object.values(
+                        rolesByDepartment.grouped?.[department.id] || {}
+                      ).sort(sortGroups);
+                      groups.forEach((group) =>
+                        pushGroupRows(
+                          group,
+                          department.code
+                            ? `${department.name} (${department.code})`
+                            : department.name
+                        )
+                      );
+                    });
+
+                    if (renderedRows.length === 0) {
+                      return (
+                        <TableRow>
+                          <TableCell
+                            colSpan={8}
+                            className="h-24 text-center text-muted-foreground"
+                          >
+                            No roles found for the current filters.
+                          </TableCell>
+                        </TableRow>
+                      );
+                    }
+
+                    return renderedRows;
+                  })()}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* Create Role Modal */}
