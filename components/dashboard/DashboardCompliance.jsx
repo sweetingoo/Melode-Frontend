@@ -1,13 +1,13 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useExpiringCompliance } from "@/hooks/useCompliance";
+import { useMyExpiringCompliance } from "@/hooks/useCompliance";
 import { ShieldAlert, ArrowRight } from "lucide-react";
 import Link from "next/link";
 
 /** Outstanding compliance: within 30 days of expiry / expired. Uses existing compliance API. */
 export function DashboardCompliance() {
-  const { data, isLoading, isError } = useExpiringCompliance(30, 1, 10, {});
+  const { data, isLoading, isError } = useMyExpiringCompliance(30, 1, 10);
 
   if (isError) return null;
 

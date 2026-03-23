@@ -154,11 +154,30 @@ export const complianceService = {
       if (filters.departmentId && filters.departmentId !== "all") {
         params.append("department_id", filters.departmentId.toString());
       }
+      if (filters.includeAll === true) {
+        params.append("include_all", "true");
+      }
       
       const response = await api.get(`/compliance/expiring?${params.toString()}`);
       return response.data || response;
     } catch (error) {
       console.error("Get expiring compliance failed:", error);
+      throw error;
+    }
+  },
+
+  // Get current user's expiring compliance items (dashboard-safe)
+  getMyExpiringCompliance: async (daysAhead = 30, page = 1, perPage = 50) => {
+    try {
+      const params = new URLSearchParams({
+        days_ahead: daysAhead.toString(),
+        page: page.toString(),
+        per_page: perPage.toString(),
+      });
+      const response = await api.get(`/compliance/expiring/me?${params.toString()}`);
+      return response.data || response;
+    } catch (error) {
+      console.error("Get my expiring compliance failed:", error);
       throw error;
     }
   },

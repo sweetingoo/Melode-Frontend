@@ -78,6 +78,10 @@ const Dashboard = () => {
     limit: 5,
     status: "pending"
   });
+  const { data: myOverdueTasksData } = useMyTasks({
+    limit: 1,
+    status: "overdue",
+  });
   const { data: recentClockRecords } = useClockRecords(
     { page: 1, per_page: 5, user_id: currentUserData?.id },
     { enabled: !!currentUserData?.id }
@@ -188,6 +192,16 @@ const Dashboard = () => {
       })
       .slice(0, 10); // Keep only 10 most recent
   }, [recentTasksData, recentClockRecords]);
+
+  const myOverdueTasksCount = React.useMemo(() => {
+    if (!myOverdueTasksData) return 0;
+    if (typeof myOverdueTasksData.total === "number") return myOverdueTasksData.total;
+    if (Array.isArray(myOverdueTasksData.items)) return myOverdueTasksData.items.length;
+    if (Array.isArray(myOverdueTasksData.tasks)) return myOverdueTasksData.tasks.length;
+    if (Array.isArray(myOverdueTasksData.data)) return myOverdueTasksData.data.length;
+    if (Array.isArray(myOverdueTasksData)) return myOverdueTasksData.length;
+    return 0;
+  }, [myOverdueTasksData]);
 
   // Get all permission names/slugs that the user has
   const userPermissionNames = React.useMemo(() => {
@@ -459,17 +473,17 @@ const Dashboard = () => {
               </section>
 
               {/* Needs attention: only when there is something */}
-              {dashboardData?.needs_attention && ((dashboardData.needs_attention.overdue_tasks ?? 0) + (dashboardData.needs_attention.submissions_pending_review ?? 0)) > 0 && (
+              {dashboardData?.needs_attention && (myOverdueTasksCount + (dashboardData.needs_attention.submissions_pending_review ?? 0)) > 0 && (
                 <section className="mb-10">
                   <div className="rounded-2xl border border-amber-200 dark:border-amber-900/50 bg-amber-50/30 dark:bg-amber-950/20 px-5 py-4 flex flex-wrap items-center gap-3">
                     <span className="text-xs font-semibold text-amber-800 dark:text-amber-200 uppercase tracking-wider">Needs attention</span>
-                    {(dashboardData.needs_attention.overdue_tasks ?? 0) > 0 && (
+                    {myOverdueTasksCount > 0 && (
                       <Link href="/admin/tasks?status=overdue" className="text-sm font-medium text-red-700 dark:text-red-300 hover:underline">
-                        {dashboardData.needs_attention.overdue_tasks} overdue task{dashboardData.needs_attention.overdue_tasks !== 1 ? "s" : ""}
+                        {myOverdueTasksCount} overdue task{myOverdueTasksCount !== 1 ? "s" : ""}
                       </Link>
                     )}
                     {(dashboardData.needs_attention.submissions_pending_review ?? 0) > 0 && (
-                      <Link href="/admin/forms?filter=pending_review" className="text-sm font-medium text-amber-800 dark:text-amber-200 hover:underline">
+                      <Link href="/admin/forms/submissions?status=pending_review" className="text-sm font-medium text-amber-800 dark:text-amber-200 hover:underline">
                         {dashboardData.needs_attention.submissions_pending_review} submission{dashboardData.needs_attention.submissions_pending_review !== 1 ? "s" : ""} pending review
                       </Link>
                     )}
@@ -504,8 +518,8 @@ const Dashboard = () => {
                     <Link href="/admin/tasks" className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm hover:bg-muted/50 transition-colors">
                       <CheckSquare className="h-4 w-4 text-muted-foreground" />
                       <span>Tasks</span>
-                      {(dashboardData?.needs_attention?.overdue_tasks ?? 0) > 0 && (
-                        <Badge variant="destructive" className="ml-auto text-xs">{dashboardData.needs_attention.overdue_tasks}</Badge>
+                      {myOverdueTasksCount > 0 && (
+                        <Badge variant="destructive" className="ml-auto text-xs">{myOverdueTasksCount}</Badge>
                       )}
                     </Link>
                     <Link href="/admin/forms" className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm hover:bg-muted/50 transition-colors">

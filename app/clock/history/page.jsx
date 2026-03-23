@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
-import { useRouter } from "next/navigation";
+import React, { Suspense, useState } from "react";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -47,20 +47,85 @@ import Link from "next/link";
 import { formatDateForAPI, startOfDay, endOfDay } from "@/utils/time";
 import { PageSearchBar } from "@/components/admin/PageSearchBar";
 
-export default function ClockHistoryPage() {
+function ClockHistoryPageContent() {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const parseDateParam = (value, fallback) => {
+    if (!value) return fallback;
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+    if (!match) {
+      const parsed = new Date(value);
+      return Number.isNaN(parsed.getTime()) ? fallback : parsed;
+    }
+    const year = Number.parseInt(match[1], 10);
+    const month = Number.parseInt(match[2], 10);
+    const day = Number.parseInt(match[3], 10);
+    const parsedLocalDate = new Date(year, month - 1, day);
+    return Number.isNaN(parsedLocalDate.getTime()) ? fallback : parsedLocalDate;
+  };
+  const parseTimeParam = (value, fallback) => {
+    if (!value) return fallback;
+    return /^\d{2}:\d{2}$/.test(value) ? value : fallback;
+  };
+  const parseIntParam = (value, fallback, min = 1) => {
+    const parsed = Number.parseInt(value ?? "", 10);
+    if (Number.isNaN(parsed) || parsed < min) return fallback;
+    return parsed;
+  };
+
+  const defaultEndDate = new Date();
+  const defaultStartDate = new Date();
+  defaultStartDate.setDate(defaultStartDate.getDate() - 30);
+
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
-  const [startDate, setStartDate] = useState(() => {
-    const date = new Date();
-    date.setDate(date.getDate() - 30); // Default to last 30 days
-    return date;
-  });
-  const [endDate, setEndDate] = useState(new Date());
-  const [startTime, setStartTime] = useState("00:00");
-  const [endTime, setEndTime] = useState("23:59");
-  const [page, setPage] = useState(1);
-  const [perPage, setPerPage] = useState(20);
+  const [startDate, setStartDate] = useState(() =>
+    parseDateParam(searchParams.get("start_date"), defaultStartDate)
+  );
+  const [endDate, setEndDate] = useState(() =>
+    parseDateParam(searchParams.get("end_date"), defaultEndDate)
+  );
+  const [startTime, setStartTime] = useState(() =>
+    parseTimeParam(searchParams.get("start_time"), "00:00")
+  );
+  const [endTime, setEndTime] = useState(() =>
+    parseTimeParam(searchParams.get("end_time"), "23:59")
+  );
+  const [page, setPage] = useState(() =>
+    parseIntParam(searchParams.get("page"), 1)
+  );
+  const [perPage, setPerPage] = useState(() =>
+    parseIntParam(searchParams.get("per_page"), 20)
+  );
   const [selectedRecordForBreaks, setSelectedRecordForBreaks] = useState(null);
+
+  React.useEffect(() => {
+    const nextParams = new URLSearchParams(searchParams.toString());
+
+    nextParams.set("start_date", formatDateForAPI(startDate));
+    nextParams.set("end_date", formatDateForAPI(endDate));
+    nextParams.set("start_time", startTime);
+    nextParams.set("end_time", endTime);
+    nextParams.set("page", String(page));
+    nextParams.set("per_page", String(perPage));
+
+    const nextQuery = nextParams.toString();
+    const currentQuery = searchParams.toString();
+    if (nextQuery !== currentQuery) {
+      router.replace(`${pathname}?${nextQuery}`, { scroll: false });
+    }
+  }, [
+    pathname,
+    router,
+    searchParams,
+    startDate,
+    endDate,
+    startTime,
+    endTime,
+    page,
+    perPage,
+  ]);
 
   // Build params with date/time formatting
   // Send dates as-is - backend should handle timezone interpretation correctly
@@ -764,6 +829,20 @@ export default function ClockHistoryPage() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+export default function ClockHistoryPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin" />
+        </div>
+      }
+    >
+      <ClockHistoryPageContent />
+    </Suspense>
   );
 }
 

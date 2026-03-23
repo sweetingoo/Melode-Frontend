@@ -1,8 +1,7 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useClockRecords } from "@/hooks/useClock";
-import { useCurrentUser } from "@/hooks/useAuth";
+import { useMyClockRecords } from "@/hooks/useClock";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { Clock } from "lucide-react";
 
@@ -22,17 +21,11 @@ export function DashboardChartHoursWeek() {
   const weekAgo = new Date(today);
   weekAgo.setDate(weekAgo.getDate() - 6);
 
-  const { data: currentUser } = useCurrentUser();
-  const currentUserId = currentUser?.id;
-
-  const { data } = useClockRecords({
+  const { data } = useMyClockRecords({
     start_date: toYYYYMMDD(weekAgo),
     end_date: toYYYYMMDD(today),
-    user_id: currentUserId,
     per_page: 100,
     page: 1,
-  }, {
-    enabled: !!currentUserId,
   });
 
   const records = data?.records ?? data?.items ?? data?.data ?? [];

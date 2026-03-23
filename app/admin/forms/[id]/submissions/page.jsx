@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,10 +30,11 @@ import { format } from "date-fns";
 const FormSubmissionsPage = () => {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const formSlug = params.id || params.slug;
   const [filterType, setFilterType] = useState("all"); // "all" or "my"
   const [categoryFilter, setCategoryFilter] = useState("all"); // "all", "uncategorized", or specific category
-  const [statusFilter, setStatusFilter] = useState("all"); // "all" or specific status
+  const [statusFilter, setStatusFilter] = useState(searchParams.get("status") || "all"); // "all" or specific status
 
   const { data: form, isLoading: formLoading, error: formError } = useForm(formSlug);
   

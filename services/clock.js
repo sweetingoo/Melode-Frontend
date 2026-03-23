@@ -68,6 +68,16 @@ export const clockService = {
     }
   },
 
+  // Get current user's clock records (dashboard-safe)
+  getMyClockRecords: async (params = {}) => {
+    try {
+      return await api.get("/clock/records/me", { params });
+    } catch (error) {
+      console.error("Get my clock records failed:", error);
+      throw error;
+    }
+  },
+
   // Get active clocks (manager view)
   getActiveClocks: async (params = {}) => {
     try {

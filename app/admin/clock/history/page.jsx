@@ -147,6 +147,7 @@ function ClockHistoryPageContent() {
             allowUserSelect={false}
             defaultCategory="all"
             compactHeader
+            syncWithUrl
           />
         </CardContent>
       </Card>

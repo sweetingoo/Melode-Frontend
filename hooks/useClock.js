@@ -10,6 +10,7 @@ export const clockKeys = {
   all: ["clock"],
   status: () => [...clockKeys.all, "status"],
   records: (params) => [...clockKeys.all, "records", params],
+  myRecords: (params) => [...clockKeys.all, "my-records", params],
   active: (params) => [...clockKeys.all, "active", params],
 };
 
@@ -54,6 +55,19 @@ export const useClockRecords = (params = {}, options = {}) => {
     queryKey: clockKeys.records(params),
     queryFn: async () => {
       const response = await clockService.getClockRecords(params);
+      return response.data;
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    ...options,
+  });
+};
+
+// Get current user's clock records query (dashboard-safe)
+export const useMyClockRecords = (params = {}, options = {}) => {
+  return useQuery({
+    queryKey: clockKeys.myRecords(params),
+    queryFn: async () => {
+      const response = await clockService.getMyClockRecords(params);
       return response.data;
     },
     staleTime: 5 * 60 * 1000, // 5 minutes

@@ -23,6 +23,7 @@ export const complianceKeys = {
   ],
   item: (valueSlug) => [...complianceKeys.all, "item", valueSlug],
   expiring: (daysAhead) => [...complianceKeys.all, "expiring", daysAhead],
+  myExpiring: (daysAhead) => [...complianceKeys.all, "my-expiring", daysAhead],
   roleFields: (roleSlug) => [...complianceKeys.all, "role", roleSlug],
   assetTypeFields: (assetTypeSlug) => [...complianceKeys.all, "asset-type", assetTypeSlug],
 };
@@ -215,6 +216,19 @@ export const useExpiringCompliance = (daysAhead = 30, page = 1, perPage = 50, fi
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
     refetchOnMount: false, // Prevent double API calls on mount (e.g., from React StrictMode)
+  });
+};
+
+// Get current user's expiring compliance items (dashboard-safe)
+export const useMyExpiringCompliance = (daysAhead = 30, page = 1, perPage = 50) => {
+  return useQuery({
+    queryKey: [...complianceKeys.myExpiring(daysAhead), page, perPage],
+    queryFn: async () => {
+      const response = await complianceService.getMyExpiringCompliance(daysAhead, page, perPage);
+      return response;
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    refetchOnMount: false,
   });
 };
 

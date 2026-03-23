@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useEffect } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -75,18 +76,52 @@ export const ShiftRecordList = ({
   allowUserSelect = false,
   defaultCategory = "all",
   compactHeader = false,
+  syncWithUrl = false,
 }) => {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const parseDateParam = (value) => {
+    if (!value) return undefined;
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+    if (!match) {
+      const parsed = new Date(value);
+      return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+    }
+    const year = Number.parseInt(match[1], 10);
+    const month = Number.parseInt(match[2], 10);
+    const day = Number.parseInt(match[3], 10);
+    const parsedLocalDate = new Date(year, month - 1, day);
+    return Number.isNaN(parsedLocalDate.getTime()) ? undefined : parsedLocalDate;
+  };
+  const parsePositiveInt = (value, fallback) => {
+    const parsed = Number.parseInt(value ?? "", 10);
+    return Number.isNaN(parsed) || parsed < 1 ? fallback : parsed;
+  };
+
   const { user } = useAuth();
   const { hasPermission } = usePermissionsCheck();
   const canManageOwn = hasPermission(PERM_MANAGE_OWN);
   const canAddOwnOrAll = allowUserSelect || canManageOwn;
   const effectiveShowCreate = showCreateButton && canAddOwnOrAll;
-  const [categoryFilter, setCategoryFilter] = useState(defaultCategory);
-  const [dateRange, setDateRange] = useState(undefined);
-  const [userFilter, setUserFilter] = useState(ALL_FILTER_VALUE);
-  const [roleFilter, setRoleFilter] = useState(ALL_FILTER_VALUE);
-  const [departmentFilter, setDepartmentFilter] = useState(ALL_FILTER_VALUE);
-  const [page, setPage] = useState(1);
+  const initialCategory = syncWithUrl ? searchParams.get("category") || defaultCategory : defaultCategory;
+  const initialStartDate = syncWithUrl ? parseDateParam(searchParams.get("start_date")) : undefined;
+  const initialEndDate = syncWithUrl ? parseDateParam(searchParams.get("end_date")) : undefined;
+  const initialUserFilter = syncWithUrl ? searchParams.get("user_id") || ALL_FILTER_VALUE : ALL_FILTER_VALUE;
+  const initialRoleFilter = syncWithUrl ? searchParams.get("role_id") || ALL_FILTER_VALUE : ALL_FILTER_VALUE;
+  const initialDepartmentFilter = syncWithUrl ? searchParams.get("department_id") || ALL_FILTER_VALUE : ALL_FILTER_VALUE;
+  const initialPage = syncWithUrl ? parsePositiveInt(searchParams.get("page"), 1) : 1;
+
+  const [categoryFilter, setCategoryFilter] = useState(initialCategory);
+  const [dateRange, setDateRange] = useState(
+    initialStartDate || initialEndDate
+      ? { from: initialStartDate, to: initialEndDate || initialStartDate }
+      : undefined
+  );
+  const [userFilter, setUserFilter] = useState(initialUserFilter);
+  const [roleFilter, setRoleFilter] = useState(initialRoleFilter);
+  const [departmentFilter, setDepartmentFilter] = useState(initialDepartmentFilter);
+  const [page, setPage] = useState(initialPage);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [departmentComboboxOpen, setDepartmentComboboxOpen] = useState(false);
   const [departmentSearch, setDepartmentSearch] = useState("");
@@ -108,6 +143,48 @@ export const ShiftRecordList = ({
   useEffect(() => {
     setPage(1);
   }, [categoryFilter, dateRange, userFilter, roleFilter, departmentFilter]);
+
+  useEffect(() => {
+    if (!syncWithUrl) return;
+    const nextParams = new URLSearchParams(searchParams.toString());
+
+    if (categoryFilter && categoryFilter !== "all") nextParams.set("category", categoryFilter);
+    else nextParams.delete("category");
+
+    if (dateRange?.from) nextParams.set("start_date", formatDateForAPI(dateRange.from));
+    else nextParams.delete("start_date");
+
+    if (dateRange?.to) nextParams.set("end_date", formatDateForAPI(dateRange.to));
+    else nextParams.delete("end_date");
+
+    if (userFilter && userFilter !== ALL_FILTER_VALUE) nextParams.set("user_id", userFilter);
+    else nextParams.delete("user_id");
+
+    if (roleFilter && roleFilter !== ALL_FILTER_VALUE) nextParams.set("role_id", roleFilter);
+    else nextParams.delete("role_id");
+
+    if (departmentFilter && departmentFilter !== ALL_FILTER_VALUE) nextParams.set("department_id", departmentFilter);
+    else nextParams.delete("department_id");
+
+    nextParams.set("page", String(page));
+
+    const nextQuery = nextParams.toString();
+    const currentQuery = searchParams.toString();
+    if (nextQuery !== currentQuery) {
+      router.replace(`${pathname}?${nextQuery}`, { scroll: false });
+    }
+  }, [
+    syncWithUrl,
+    pathname,
+    router,
+    searchParams,
+    categoryFilter,
+    dateRange,
+    userFilter,
+    roleFilter,
+    departmentFilter,
+    page,
+  ]);
 
   const { data: rolesData } = useRoles({}, { enabled: allowUserSelect });
   const { data: departments } = useAttendanceDepartments({ enabled: true });
@@ -175,6 +252,7 @@ export const ShiftRecordList = ({
   const params = useMemo(
     () => ({
       user_id: allowUserSelect && userFilter && userFilter !== ALL_FILTER_VALUE ? parseInt(userFilter, 10) : userId || undefined,
+      include_all: allowUserSelect ? true : undefined,
       category: categoryFilter !== "all" ? categoryFilter : undefined,
       start_date: dateRange?.from ? formatDateForAPI(dateRange.from) : undefined,
       end_date: dateRange?.to ? formatDateForAPI(dateRange.to) : undefined,
