@@ -22,8 +22,9 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { formatDateForAPI } from "@/utils/time";
 import { getUserDisplayName } from "@/utils/user";
-import { useCreateShiftRecord, useUpdateShiftRecord } from "@/hooks/useShiftRecords";
+import { useCreateShiftRecord, useUpdateShiftRecord, useCreateProvisionalShiftsRecurring } from "@/hooks/useShiftRecords";
 import { useShiftLeaveTypes, useAttendanceEmployeeSuggest, useAttendanceDepartments } from "@/hooks/useAttendance";
+import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
 import { useAssignments, useEmployeeAssignments } from "@/hooks/useAssignments";
 import { useAuth } from "@/hooks/useAuth";
 import { ATTENDANCE_CATEGORY_OPTIONS, getCategoryDescription } from "@/lib/attendanceLabels";
@@ -33,6 +34,29 @@ const ALL_CATEGORIES = ATTENDANCE_CATEGORY_OPTIONS;
 
 /** When allowUserSelect is false, user can only add/edit attendance (not leave) - leave must go through request workflow */
 const CATEGORIES_ATTENDANCE_ONLY = ALL_CATEGORIES.filter((c) => c.value === "attendance");
+
+const PERM_MANAGE_ALL = "attendance:manage_all";
+
+/** Parse "HH:mm" to minutes since midnight. Returns null if invalid. */
+function parseTimeToMinutes(timeStr) {
+  if (!timeStr || typeof timeStr !== "string") return null;
+  const parts = timeStr.trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (!parts) return null;
+  const h = parseInt(parts[1], 10);
+  const m = parseInt(parts[2], 10);
+  if (h < 0 || h > 23 || m < 0 || m > 59) return null;
+  return h * 60 + m;
+}
+
+/** Hours between start and end (overnight = end + 24h - start). For allocated/required shifts. */
+function hoursBetween(startTime, endTime) {
+  const startM = parseTimeToMinutes(startTime);
+  const endM = parseTimeToMinutes(endTime);
+  if (startM == null || endM == null) return null;
+  let diffM = endM - startM;
+  if (diffM < 0) diffM += 24 * 60;
+  return Math.round((diffM / 60) * 100) / 100;
+}
 
 /** Parse "HH:mm" to decimal hours (e.g. "09:00" and "17:30" -> 8.5). Returns null if invalid. */
 function hoursFromStartEnd(startStr, endStr) {
@@ -46,8 +70,19 @@ function hoursFromStartEnd(startStr, endStr) {
   return Math.round(hours * 100) / 100;
 }
 
-export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId = null, allowUserSelect = false }) => {
+export const ShiftRecordForm = ({
+  open,
+  onOpenChange,
+  shiftRecord = null,
+  userId = null,
+  allowUserSelect = false,
+  initialValues = null,
+  defaultNewCategory = "attendance",
+  restrictCategories = null,
+}) => {
   const { user } = useAuth();
+  const { hasPermission } = usePermissionsCheck();
+  const canUseRecurring = hasPermission(PERM_MANAGE_ALL) || user?.is_superuser;
   const [shiftDate, setShiftDate] = useState(null);
   const [category, setCategory] = useState("attendance");
   const [shiftLeaveTypeId, setShiftLeaveTypeId] = useState("");
@@ -64,6 +99,29 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
   const [endTime, setEndTime] = useState("17:00");
   const [notes, setNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [recurInterval, setRecurInterval] = useState("none");
+  const [weeksAhead, setWeeksAhead] = useState(12);
+
+  const createShiftRecord = useCreateShiftRecord();
+  const updateShiftRecord = useUpdateShiftRecord();
+  const createRecurringShifts = useCreateProvisionalShiftsRecurring();
+
+  const RECUR_OPTIONS = [
+    { value: "none", label: "None" },
+    { value: "1", label: "Every 1 week" },
+    { value: "2", label: "Every 2 weeks" },
+    { value: "4", label: "Every 4 weeks" },
+  ];
+  const WEEKS_AHEAD_MIN = 1;
+  const WEEKS_AHEAD_MAX = 52;
+
+  const categoryOptions = useMemo(() => {
+    if (restrictCategories?.length) {
+      const allowed = new Set(restrictCategories);
+      return ALL_CATEGORIES.filter((c) => allowed.has(c.value));
+    }
+    return allowUserSelect ? ALL_CATEGORIES : CATEGORIES_ATTENDANCE_ONLY;
+  }, [allowUserSelect, restrictCategories]);
 
   const targetUserId = userId || selectedUserId || user?.id;
   // When editing, use the record's user so assignments load for that user from first render (state lags)
@@ -73,8 +131,6 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
       : targetUserId
         ? parseInt(targetUserId, 10)
         : undefined;
-  const createShiftRecord = useCreateShiftRecord();
-  const updateShiftRecord = useUpdateShiftRecord();
 
   const getAssignmentRoleId = (a) => a?.role_id ?? a?.job_role_id ?? a?.role?.id ?? a?.roleId;
   const getRoleType = (a) => a?.role?.role_type ?? a?.role?.roleType ?? "job_role";
@@ -225,12 +281,40 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
       setStartTime(shiftRecord.start_time ? String(shiftRecord.start_time).slice(0, 5) : "09:00");
       setEndTime(shiftRecord.end_time ? String(shiftRecord.end_time).slice(0, 5) : "17:00");
       setNotes(shiftRecord.notes || "");
+      setRecurInterval("none");
+      setWeeksAhead(12);
       // Keep "on change" effects from clearing user/job role when opening edit
       prevSelectedUserIdRef.current = uid;
       prevDepartmentIdRef.current = deptId;
+    } else if (open && initialValues) {
+      const nextCat =
+        initialValues.defaultCategory ||
+        defaultNewCategory ||
+        (restrictCategories?.length === 1 ? restrictCategories[0] : "attendance");
+      setShiftDate(initialValues.shiftDate ? new Date(initialValues.shiftDate + "T12:00:00") : null);
+      setCategory(nextCat);
+      setShiftLeaveTypeId("");
+      setSelectedUserId(initialValues.userId?.toString() || userId?.toString() || "");
+      setSelectedUserForDisplay(null);
+      setUserSearch("");
+      setDebouncedUserSearch("");
+      setUserComboboxOpen(false);
+      setJobRoleId(initialValues.jobRoleId?.toString() || "");
+      setShiftRoleId(initialValues.shiftRoleId?.toString() || "");
+      setDepartmentId(initialValues.departmentId?.toString() || "");
+      setHours("7.5");
+      setStartTime("09:00");
+      setEndTime("17:00");
+      setNotes("");
+      setRecurInterval("none");
+      setWeeksAhead(12);
+      prevSelectedUserIdRef.current = initialValues.userId?.toString() || userId?.toString() || "";
+      prevDepartmentIdRef.current = initialValues.departmentId?.toString() || "";
     } else {
       setShiftDate(null);
-      setCategory("attendance");
+      setCategory(
+        restrictCategories?.length === 1 ? restrictCategories[0] : defaultNewCategory || "attendance"
+      );
       setShiftLeaveTypeId("");
       setSelectedUserId(userId?.toString() || "");
       setSelectedUserForDisplay(null);
@@ -244,8 +328,10 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
       setStartTime("09:00");
       setEndTime("17:00");
       setNotes("");
+      setRecurInterval("none");
+      setWeeksAhead(12);
     }
-  }, [shiftRecord, open, userId, user?.id]);
+  }, [shiftRecord, open, userId, user?.id, initialValues, defaultNewCategory, restrictCategories]);
 
   useEffect(() => {
     if (prevSelectedUserIdRef.current !== selectedUserId) {
@@ -309,20 +395,32 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
     }
   }, [departmentId, jobRoleId, jobRoleOptions]);
 
-  // Auto-calculate hours when both start and end time are set; clear to 0 when end time is removed (start-only)
+  // Auto-calculate hours: overnight span for allocated/required; same-day for attended leave paths; 0 when start-only (attendance)
   useEffect(() => {
+    if (category === "provisional" || category === "mapped") {
+      const computed = hoursBetween(startTime, endTime);
+      if (computed != null) setHours(String(computed));
+      return;
+    }
     const calculated = hoursFromStartEnd(startTime, endTime);
     if (calculated != null) setHours(String(calculated));
     else if (startTime && !endTime) setHours("0");
-  }, [startTime, endTime]);
+  }, [startTime, endTime, category]);
+
+  useEffect(() => {
+    if (category !== "provisional" && category !== "mapped") {
+      setRecurInterval("none");
+    }
+  }, [category]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!shiftDate || !shiftLeaveTypeId || !jobRoleId || !departmentId) return;
     const numHours = hours === "" || hours == null ? 0 : parseFloat(hours);
     if (numHours < 0 || numHours > 24) return;
-    // When only start time is set (no end time), allow 0 hours so user can add end time later
-    if (numHours === 0 && (!startTime || endTime)) return;
+    const plannedCategory = category === "provisional" || category === "mapped";
+    if (plannedCategory && numHours <= 0) return;
+    if (!plannedCategory && numHours === 0 && (!startTime || endTime)) return;
 
     setIsSubmitting(true);
     try {
@@ -351,6 +449,18 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
             notes: notes || null,
           },
         });
+      } else if (
+        canUseRecurring &&
+        plannedCategory &&
+        recurInterval &&
+        recurInterval !== "none"
+      ) {
+        const numWeeks = Math.min(WEEKS_AHEAD_MAX, Math.max(WEEKS_AHEAD_MIN, Number(weeksAhead) || 12));
+        await createRecurringShifts.mutateAsync({
+          ...payload,
+          recur_interval_weeks: parseInt(recurInterval, 10),
+          weeks_ahead: numWeeks,
+        });
       } else {
         await createShiftRecord.mutateAsync(payload);
       }
@@ -363,14 +473,18 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
   };
 
   const numHoursParsed = hours === "" || hours == null ? 0 : parseFloat(hours);
+  const plannedCategory = category === "provisional" || category === "mapped";
+  const hoursValid = plannedCategory
+    ? numHoursParsed > 0 && numHoursParsed <= 24
+    : numHoursParsed >= 0 &&
+      numHoursParsed <= 24 &&
+      (numHoursParsed > 0 || (startTime && !endTime));
   const canSubmit =
     shiftDate &&
     shiftLeaveTypeId &&
     jobRoleId &&
     departmentId &&
-    numHoursParsed >= 0 &&
-    numHoursParsed <= 24 &&
-    (numHoursParsed > 0 || (startTime && !endTime)) &&
+    hoursValid &&
     (!allowUserSelect || !!selectedUserId);
 
   return (
@@ -378,7 +492,10 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
       <DialogContent className="max-w-lg max-h-[90vh] flex flex-col p-0 gap-0">
         <DialogHeader className="shrink-0 px-6 pt-6 pb-2">
           <DialogTitle>{shiftRecord ? "Edit Shift Record" : "Add Shift Record"}</DialogTitle>
-          <DialogDescription>Record attendance, leave, or allocated shift. Hours are required.</DialogDescription>
+          <DialogDescription>
+            Add or edit attended time, authorised or unauthorised leave, allocated shifts, or required slots. Choose a category,
+            then pick the matching shift type. Recurring options apply to allocated and required shifts (admin).
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
           <div className="overflow-y-auto px-6 pb-4 space-y-4 flex-1 min-h-0">
@@ -528,7 +645,7 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {(allowUserSelect ? ALL_CATEGORIES : CATEGORIES_ATTENDANCE_ONLY).map((c) => (
+                {categoryOptions.map((c) => (
                   <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
                 ))}
               </SelectContent>
@@ -536,7 +653,7 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
             {getCategoryDescription(category) && (
               <p className="text-xs text-muted-foreground">{getCategoryDescription(category)}</p>
             )}
-            {!allowUserSelect && (
+            {!allowUserSelect && !restrictCategories?.length && (
               <p className="text-xs text-muted-foreground">Leave must be requested via the leave request workflow.</p>
             )}
           </div>
@@ -664,6 +781,50 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
             </div>
           </div>
 
+          {!shiftRecord && canUseRecurring && allowUserSelect && plannedCategory && (
+            <>
+              <div className="space-y-2">
+                <Label>Recur this shift</Label>
+                <Select value={recurInterval} onValueChange={setRecurInterval}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="None — single record only" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {RECUR_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  For <strong className="font-medium text-foreground">Allocated</strong> and{" "}
+                  <strong className="font-medium text-foreground">Required</strong> only. Requires attendance admin permission.
+                </p>
+              </div>
+              {recurInterval && recurInterval !== "none" && (
+                <div className="space-y-2">
+                  <Label htmlFor="shift-form-weeks-ahead">Create for how many weeks ahead?</Label>
+                  <Input
+                    id="shift-form-weeks-ahead"
+                    type="number"
+                    min={WEEKS_AHEAD_MIN}
+                    max={WEEKS_AHEAD_MAX}
+                    value={weeksAhead}
+                    onChange={(e) => {
+                      const v = parseInt(e.target.value, 10);
+                      if (!Number.isNaN(v)) setWeeksAhead(Math.min(WEEKS_AHEAD_MAX, Math.max(WEEKS_AHEAD_MIN, v)));
+                    }}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Records are created from the start date forward (1–52 weeks). You can adjust or remove individual dates on
+                    the Rota later.
+                  </p>
+                </div>
+              )}
+            </>
+          )}
+
           <div className="space-y-2">
             <Label>Notes (optional)</Label>
             <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
@@ -674,8 +835,19 @@ export const ShiftRecordForm = ({ open, onOpenChange, shiftRecord = null, userId
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={!canSubmit || isSubmitting}>
-              {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            <Button
+              type="submit"
+              disabled={
+                !canSubmit ||
+                isSubmitting ||
+                createShiftRecord.isPending ||
+                updateShiftRecord.isPending ||
+                createRecurringShifts.isPending
+              }
+            >
+              {(isSubmitting || createShiftRecord.isPending || updateShiftRecord.isPending || createRecurringShifts.isPending) && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
               {shiftRecord ? "Update" : "Create"}
             </Button>
           </DialogFooter>

@@ -18,12 +18,12 @@ import { Separator } from "@/components/ui/separator";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { useCoverage, useAttendanceEmployeeSuggest } from "@/hooks/useAttendance";
-import { useDeleteProvisionalShift, useShiftRecordsAllPages } from "@/hooks/useShiftRecords";
+import { useDeleteShiftRecord, useShiftRecordsAllPages } from "@/hooks/useShiftRecords";
 import { useDepartments } from "@/hooks/useDepartments";
 import { useRolesAll } from "@/hooks/useRoles";
 import { formatDateForAPI } from "@/utils/time";
 import { getUserDisplayName } from "@/utils/user";
-import { ProvisionalShiftForm } from "./ProvisionalShiftForm";
+import { ShiftRecordForm } from "./ShiftRecordForm";
 import { cn } from "@/lib/utils";
 import { CATEGORY_LABELS } from "@/lib/attendanceLabels";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -439,16 +439,16 @@ export function RotaTimeline({
   }, [shiftData, visibleCategories]);
 
   const [selectedBlock, setSelectedBlock] = useState(null);
-  const [editShiftRecord, setEditShiftRecord] = useState(null); // when set, open ProvisionalShiftForm in edit mode
-  const deleteProvisionalShift = useDeleteProvisionalShift();
+  const [editShiftRecord, setEditShiftRecord] = useState(null); // when set, open ShiftRecordForm in edit mode
+  const deleteShiftRecord = useDeleteShiftRecord();
 
   const handleDeleteShift = async () => {
     if (!selectedBlock?.record) return;
     const slug = selectedBlock.record.slug ?? selectedBlock.record.id;
     if (!slug) return;
-    if (!window.confirm("Remove this allocated shift? This cannot be undone.")) return;
+    if (!window.confirm("Remove this shift record? This cannot be undone.")) return;
     try {
-      await deleteProvisionalShift.mutateAsync(slug);
+      await deleteShiftRecord.mutateAsync(slug);
       setSelectedBlock(null);
     } catch (err) {
       console.error("Delete shift failed:", err);
@@ -737,7 +737,7 @@ export function RotaTimeline({
                 className="h-9 gap-2"
               >
                 <Plus className="h-4 w-4 shrink-0" />
-                Add Allocated shift
+                Add Shift Record
               </Button>
             )}
             <Popover open={rangeCalendarOpen} onOpenChange={setRangeCalendarOpen}>
@@ -1128,21 +1128,21 @@ export function RotaTimeline({
                   </>
                 )}
               </div>
-              {selectedBlock.record?.category === "provisional" && (
+              {includeAll && selectedBlock.record && (
                 <DialogFooter className="border-t pt-4 mt-4 flex-row justify-between sm:justify-between">
                   <Button
                     type="button"
                     variant="destructive"
                     onClick={handleDeleteShift}
-                    disabled={deleteProvisionalShift.isPending}
+                    disabled={deleteShiftRecord.isPending}
                     className="gap-2"
                   >
-                    {deleteProvisionalShift.isPending ? (
+                    {deleteShiftRecord.isPending ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
                       <Trash2 className="h-4 w-4" />
                     )}
-                    Remove shift
+                    Remove record
                   </Button>
                   <Button
                     type="button"
@@ -1154,7 +1154,7 @@ export function RotaTimeline({
                     className="gap-2"
                   >
                     <Pencil className="h-4 w-4" />
-                    Edit shift
+                    Edit record
                   </Button>
                 </DialogFooter>
               )}
@@ -1162,7 +1162,7 @@ export function RotaTimeline({
           )}
         </DialogContent>
       </Dialog>
-      <ProvisionalShiftForm
+      <ShiftRecordForm
         open={addShiftOpen || !!editShiftRecord}
         onOpenChange={(open) => {
           if (!open) {
@@ -1173,6 +1173,8 @@ export function RotaTimeline({
         }}
         shiftRecord={editShiftRecord ?? null}
         initialValues={addShiftInitial}
+        allowUserSelect={includeAll}
+        defaultNewCategory="provisional"
       />
     </Card>
   );

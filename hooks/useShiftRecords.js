@@ -304,14 +304,14 @@ export const useCreateProvisionalShiftsRecurring = () => {
       queryClient.invalidateQueries({ queryKey: [...attendanceKeys.all, "provisional-shifts"] });
       queryClient.invalidateQueries({ queryKey: [...attendanceKeys.all, "shift-records"] });
       const count = Array.isArray(data) ? data.length : 0;
-      toast.success(`${count} allocated shift${count === 1 ? "" : "s"} created`);
+      toast.success(`${count} recurring shift record${count === 1 ? "" : "s"} created`);
     },
     onError: (error) => {
       const errorMessage =
         error?.response?.data?.message ||
         error?.response?.data?.detail ||
-        "Failed to create recurring allocated shifts";
-      toast.error("Failed to create recurring allocated shifts", {
+        "Failed to create recurring shifts";
+      toast.error("Failed to create recurring shifts", {
         description: Array.isArray(errorMessage) ? errorMessage.map((e) => e.msg || e).join(", ") : errorMessage,
       });
     },
