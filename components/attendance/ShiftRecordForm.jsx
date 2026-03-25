@@ -82,7 +82,7 @@ export const ShiftRecordForm = ({
 }) => {
   const { user } = useAuth();
   const { hasPermission } = usePermissionsCheck();
-  const canUseRecurring = hasPermission(PERM_MANAGE_ALL) || user?.is_superuser;
+  const canUseRecurring = hasPermission(PERM_MANAGE_ALL);
   const [shiftDate, setShiftDate] = useState(null);
   const [category, setCategory] = useState("attendance");
   const [shiftLeaveTypeId, setShiftLeaveTypeId] = useState("");
@@ -639,7 +639,7 @@ export const ShiftRecordForm = ({
             <Select
               value={category}
               onValueChange={(v) => { setCategory(v); setShiftLeaveTypeId(""); }}
-              disabled={!allowUserSelect && !!shiftRecord && shiftRecord.category !== "attendance"}
+              disabled={!!shiftRecord}
             >
               <SelectTrigger>
                 <SelectValue />

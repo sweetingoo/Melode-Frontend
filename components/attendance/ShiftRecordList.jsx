@@ -633,7 +633,7 @@ export const ShiftRecordList = ({
           {effectiveShowCreate && (
             <Button onClick={handleAdd} size="sm" className="h-9 gap-2 shadow-sm">
               <Plus className="h-4 w-4 shrink-0" />
-              Add shift record
+              Add Shift Record
             </Button>
           )}
         </div>

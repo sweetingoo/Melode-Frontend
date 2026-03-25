@@ -31,14 +31,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
-/** Categories that can appear as blocks on the rota (excludes mapped = required slots from coverage). */
+/** Categories that can appear as blocks on the rota (shift records). */
 const ROTA_CATEGORY_OPTIONS = [
+  { value: "mapped", label: CATEGORY_LABELS.mapped },
   { value: "provisional", label: CATEGORY_LABELS.provisional },
   { value: "authorised_leave", label: CATEGORY_LABELS.authorised_leave },
   { value: "unauthorised_leave", label: CATEGORY_LABELS.unauthorised_leave },
   { value: "attendance", label: CATEGORY_LABELS.attendance },
 ];
-const DEFAULT_VISIBLE_CATEGORIES = ["provisional", "authorised_leave", "unauthorised_leave", "attendance"];
+const DEFAULT_VISIBLE_CATEGORIES = ["mapped", "provisional", "authorised_leave", "unauthorised_leave", "attendance"];
 
 const RANGE_PRESETS = [
   { id: "today", label: "Today" },
@@ -63,6 +64,7 @@ const SHIFT_TYPE_COLOR_SETS = [
 
 /** Fixed color per category so filter legend and rota blocks match. */
 const CATEGORY_COLORS = {
+  mapped: SHIFT_TYPE_COLOR_SETS[4],           // rose – Required
   provisional: SHIFT_TYPE_COLOR_SETS[0],      // blue – Allocated
   authorised_leave: SHIFT_TYPE_COLOR_SETS[1], // emerald
   unauthorised_leave: SHIFT_TYPE_COLOR_SETS[2], // amber

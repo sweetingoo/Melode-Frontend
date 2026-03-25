@@ -16,7 +16,7 @@ import { format } from "date-fns";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { useProvisionalShifts, useDeleteProvisionalShift } from "@/hooks/useShiftRecords";
-import { ProvisionalShiftForm } from "./ProvisionalShiftForm";
+import { ShiftRecordForm } from "./ShiftRecordForm";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -221,10 +221,13 @@ export const ProvisionalShiftList = ({ userId = null, showCreateButton = true, c
         </div>
       )}
 
-      <ProvisionalShiftForm
+      <ShiftRecordForm
         open={isFormOpen}
         onOpenChange={handleFormClose}
         shiftRecord={selectedRecord}
+        allowUserSelect
+        defaultNewCategory="provisional"
+        restrictCategories={["provisional"]}
       />
 
       <Dialog open={!!detailRecord} onOpenChange={(open) => !open && setDetailRecord(null)}>
