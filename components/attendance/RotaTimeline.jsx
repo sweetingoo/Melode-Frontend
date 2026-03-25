@@ -518,8 +518,11 @@ export function RotaTimeline({
 
   const todayStr = formatDateForAPI(new Date());
 
+  /** Second header row sits under first (~dept row height) inside the table scroll pane. */
+  const stickyRoleRowTop = "top-[2.75rem]";
+
   return (
-    <Card className="overflow-hidden border-0 shadow-sm bg-card">
+    <Card className="border-0 shadow-sm bg-card">
       <CardHeader className="space-y-3 border-b bg-muted/20 px-4 py-5 sm:px-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="space-y-1">
@@ -874,20 +877,21 @@ export function RotaTimeline({
           </div>
         </div>
       </CardHeader>
-      <CardContent className="overflow-x-auto p-0 sm:p-0">
+      <CardContent className="p-0">
         {isLoading ? (
           <div className="flex flex-col items-center justify-center gap-3 py-16">
             <Loader2 className="h-9 w-9 animate-spin text-muted-foreground" />
             <p className="text-sm text-muted-foreground">Loading rota…</p>
           </div>
         ) : (
-          <div className="min-w-[640px] rounded-b-lg">
-            <table className="w-full border-collapse text-sm">
+          <div className="max-h-[min(70vh,calc(100dvh-11rem))] min-h-[200px] overflow-auto overscroll-contain rounded-b-lg">
+            <div className="min-w-[640px]">
+              <table className="w-full border-separate border-spacing-0 text-sm">
               <thead>
                 <tr className="border-b border-border/80 bg-muted/40">
                   <th
                     rowSpan={departmentRoleGroups.length > 0 ? 2 : 1}
-                    className="sticky left-0 z-10 w-[100px] min-w-[100px] bg-muted/60 px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+                    className="sticky top-0 left-0 z-[25] w-[100px] min-w-[100px] bg-muted/95 px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground shadow-[1px_0_0_0_hsl(var(--border)_/_0.6)] backdrop-blur supports-[backdrop-filter]:bg-muted/80"
                   >
                     Date
                   </th>
@@ -896,7 +900,7 @@ export function RotaTimeline({
                       <th
                         key={group.key}
                         colSpan={group.roles.length}
-                        className="border-l border-border/60 px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
+                        className="sticky top-0 z-24 border-l border-border/60 bg-card/95 px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground shadow-sm backdrop-blur supports-[backdrop-filter]:bg-card/90"
                       >
                         {group.label}
                       </th>
@@ -905,7 +909,7 @@ export function RotaTimeline({
                     roleRowsSorted.map((row) => (
                       <th
                         key={row.id}
-                        className="min-w-[160px] border-l border-border/60 px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+                        className="sticky top-0 z-24 min-w-[160px] border-l border-border/60 bg-card/95 px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground shadow-sm backdrop-blur supports-[backdrop-filter]:bg-card/90"
                       >
                         {row.name}
                       </th>
@@ -918,7 +922,10 @@ export function RotaTimeline({
                       group.roles.map((row) => (
                         <th
                           key={row.id}
-                          className="min-w-[160px] border-l border-border/60 px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+                          className={cn(
+                            "sticky z-[23] min-w-[160px] border-l border-border/60 bg-muted/95 px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground shadow-sm backdrop-blur supports-[backdrop-filter]:bg-muted/85",
+                            stickyRoleRowTop
+                          )}
                         >
                           {row.name}
                         </th>
@@ -940,7 +947,7 @@ export function RotaTimeline({
                     <td colSpan={Math.max(roleRowsSorted.length + 1, 1)} className="py-16 text-center">
                       <p className="text-muted-foreground">No coverage data for this range.</p>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        Add required patterns (Required Templates) and allocated shifts (Allocated tab).
+                        Add required patterns (Required Templates) and allocated shifts on the Rota.
                       </p>
                     </td>
                   </tr>
@@ -954,7 +961,7 @@ export function RotaTimeline({
                       className={`border-b border-border/50 transition-colors hover:bg-muted/15 ${dayIndex % 2 === 0 ? "bg-background" : "bg-muted/5"}`}
                     >
                       <td
-                        className={`sticky left-0 z-10 min-w-[100px] border-r border-border/50 px-3 py-3 align-top ${
+                        className={`sticky left-0 z-[20] min-w-[100px] border-r border-border/50 px-3 py-3 align-top shadow-[1px_0_0_0_hsl(var(--border)_/_0.5)] ${
                           isToday ? "bg-primary/10 font-semibold text-foreground" : "bg-muted/30 font-medium text-muted-foreground"
                         }`}
                       >
@@ -1034,6 +1041,7 @@ export function RotaTimeline({
                 })}
               </tbody>
             </table>
+            </div>
           </div>
         )}
       </CardContent>

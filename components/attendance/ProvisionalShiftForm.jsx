@@ -333,7 +333,7 @@ export const ProvisionalShiftForm = ({ open, onOpenChange, shiftRecord = null, i
                     }}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Shifts will be created from the start date up to this many weeks in the future (1–52). You can remove individual occurrences later from the Rota or Allocated tab.
+                    Shifts will be created from the start date up to this many weeks in the future (1–52). You can remove individual occurrences later from the Rota.
                   </p>
                 </div>
               )}

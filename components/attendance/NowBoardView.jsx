@@ -364,7 +364,7 @@ export function NowBoardView({ departmentId: initialDepartmentId = null }) {
           </div>
         ) : byRole.length === 0 && clockedInNow.length === 0 ? (
           <div className="py-12 text-center text-sm text-muted-foreground">
-            No roles with expected shifts today. Add provisional shifts for today on the Rota or Allocated tab.
+            No roles with expected shifts today. Add provisional shifts for today on the Rota.
           </div>
         ) : (
           <div className="space-y-6 p-4 sm:p-6">

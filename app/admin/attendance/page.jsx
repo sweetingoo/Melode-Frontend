@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { LeaveApprovalList } from "@/components/attendance/LeaveApprovalList";
 import { ShiftRecordList } from "@/components/attendance/ShiftRecordList";
-import { ProvisionalShiftList } from "@/components/attendance/ProvisionalShiftList";
 import { RotaTimeline } from "@/components/attendance/RotaTimeline";
 import { NowBoardView } from "@/components/attendance/NowBoardView";
 import {
@@ -21,7 +20,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
-import { ClipboardList, UserCheck, MapPin, LayoutGrid, Radio, ChevronLeft, ChevronRight, Info } from "lucide-react";
+import { ClipboardList, UserCheck, LayoutGrid, Radio, ChevronLeft, ChevronRight, Info } from "lucide-react";
 import {
   Popover,
   PopoverContent,
@@ -38,7 +37,6 @@ import { CATEGORY_LABELS, CATEGORY_DESCRIPTIONS } from "@/lib/attendanceLabels";
  * (My Leave is on My Time page: /admin/clock/history?tab=my-leave)
  * - Approvals     – leave:approve
  * - Shift Records – no extra permission (everyone); content scope = own vs all (see below)
- * - Provisional   – attendance:manage_all
  *
  * (Required Templates tab removed: may do differently / not use. Calendar tab removed: rota tab now covers shift/leave view. Balance removed: users see their balance on My Time → My Leave; admins can view anyone's in People Management → Edit Person.)
  *
@@ -53,7 +51,7 @@ const PERM = {
   MANAGE_ALL_SHIFT_RECORDS: "attendance:manage_all_shift_records",
 };
 
-const TAB_VALUES = ["approvals", "shift-records", "rota", "now", "provisional"];
+const TAB_VALUES = ["approvals", "shift-records", "rota", "now"];
 
 function AttendancePageContent() {
   const router = useRouter();
@@ -69,11 +67,8 @@ function AttendancePageContent() {
   const allowedTabs = useMemo(() => {
     const allowed = new Set(["shift-records", "rota", "now"]);
     if (canApprove) allowed.add("approvals");
-    if (canManageAll) {
-      allowed.add("provisional");
-    }
     return allowed;
-  }, [canApprove, canManageAll]);
+  }, [canApprove]);
 
   const [activeTab, setActiveTab] = useState(() => {
     if (typeof window === "undefined") return "shift-records";
@@ -145,7 +140,7 @@ function AttendancePageContent() {
     <div className="w-full space-y-4 px-2 py-4 sm:space-y-6 sm:px-0 sm:py-6">
       <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-4 sm:space-y-6">
         {/* Sticky bar: on mobile tabs first row, Reports/Settings second row; desktop single row */}
-        <div className="sticky top-0 z-0 -mx-2 border-b bg-background px-3 pb-3 pt-2 shadow-[0_1px_0_0_hsl(var(--border))] sm:-mx-4 sm:px-4 sm:pb-2 sm:pt-1">
+        <div className="sticky top-0 z-30 -mx-2 border-b bg-background px-3 pb-3 pt-2 shadow-[0_1px_0_0_hsl(var(--border))] sm:-mx-4 sm:px-4 sm:pb-2 sm:pt-1">
           <div className="flex flex-col gap-3 md:flex-row md:flex-nowrap md:items-center md:justify-between md:gap-2">
             <div className="min-w-0 flex-1">
               <div
@@ -185,14 +180,6 @@ function AttendancePageContent() {
             <Radio className="mr-2 h-4 w-4 shrink-0" />
             Now
           </TabsTrigger>
-          {canManageAll && (
-            <>
-              <TabsTrigger value="provisional" className="min-h-[2.75rem] touch-manipulation rounded-md px-3 py-2 data-[state=active]:bg-background sm:min-h-0">
-                <MapPin className="mr-2 h-4 w-4 shrink-0" />
-                Allocated
-              </TabsTrigger>
-            </>
-          )}
                 </TabsList>
                 {scrollIndicators.right && (
                   <div className="sticky right-0 z-10 flex w-8 shrink-0 items-center justify-center bg-gradient-to-l from-background via-background/80 to-transparent pl-1">
@@ -276,32 +263,6 @@ function AttendancePageContent() {
             </CardContent>
           </Card>
         </TabsContent>
-
-        {canManageAll && (
-          <>
-            <TabsContent value="provisional" className="mt-0 focus-visible:outline-none">
-              <Card className="overflow-hidden">
-                <CardHeader className="space-y-1.5 p-4 sm:p-6">
-                  <CardTitle className="text-lg sm:text-xl">
-                    {canManageAll ? "Allocated Shifts (All Users)" : "Allocated Shifts"}
-                  </CardTitle>
-                  <CardDescription className="text-sm">
-                    {canManageAll
-                      ? "View and manage planned shifts for everyone. Add shifts and assign to any user."
-                      : "Planned shifts not yet confirmed"}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="p-4 sm:p-6">
-                  <ProvisionalShiftList
-                    userId={canManageAll ? undefined : user?.id}
-                    showCreateButton={true}
-                    compactHeader
-                  />
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </>
-        )}
 
       </Tabs>
     </div>
