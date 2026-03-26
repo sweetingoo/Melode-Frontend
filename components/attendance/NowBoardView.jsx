@@ -192,6 +192,9 @@ export function NowBoardView({ departmentId: initialDepartmentId = null }) {
   const [debouncedUserSearch, setDebouncedUserSearch] = useState("");
   const [calendarOpen, setCalendarOpen] = useState(false);
 
+  // "Here now" table sorting (default: most recent clock-in first)
+  const [nowSort, setNowSort] = useState({ column: "clock_in_time", direction: "desc" });
+
   useEffect(() => {
     const t = setTimeout(() => setDebouncedUserSearch(userSearch), 300);
     return () => clearTimeout(t);
@@ -291,6 +294,72 @@ export function NowBoardView({ departmentId: initialDepartmentId = null }) {
   const byRole = data?.by_role ?? [];
   const clockedInNow = data?.clocked_in_now ?? [];
   const boardDate = data?.date ?? dateStr;
+
+  const sortedClockedInNow = useMemo(() => {
+    const arr = Array.isArray(clockedInNow) ? [...clockedInNow] : [];
+    const dir = nowSort.direction === "asc" ? 1 : -1;
+
+    const getName = (u) => u?.display_name ?? `User ${u?.user_id ?? ""}`;
+    const getTimeMs = (u) => {
+      try {
+        const d = u?.clock_in_time ? parseUTCDate(u.clock_in_time) : null;
+        const ms = d ? d.getTime() : null;
+        return Number.isFinite(ms) ? ms : null;
+      } catch {
+        return null;
+      }
+    };
+
+    const getVal = (u) => {
+      switch (nowSort.column) {
+        case "user":
+          return getName(u);
+        case "department":
+          return u?.department_name ?? "";
+        case "location":
+          return u?.location_name ?? "";
+        case "role":
+          return u?.role_name ?? "";
+        case "clock_in_time":
+          return getTimeMs(u);
+        default:
+          return getTimeMs(u);
+      }
+    };
+
+    arr.sort((a, b) => {
+      const av = getVal(a);
+      const bv = getVal(b);
+
+      // Time sort: nulls last
+      if (nowSort.column === "clock_in_time") {
+        const aNull = av == null;
+        const bNull = bv == null;
+        if (aNull && bNull) return 0;
+        if (aNull) return 1;
+        if (bNull) return -1;
+        return (av - bv) * dir;
+      }
+
+      // String sort
+      const as = String(av ?? "");
+      const bs = String(bv ?? "");
+      return as.localeCompare(bs, undefined, { sensitivity: "base" }) * dir;
+    });
+
+    return arr;
+  }, [clockedInNow, nowSort]);
+
+  const toggleNowSort = (column) => {
+    setNowSort((prev) => {
+      if (prev.column === column) {
+        return { column, direction: prev.direction === "asc" ? "desc" : "asc" };
+      }
+      // Default direction per column
+      const direction = column === "clock_in_time" ? "desc" : "asc";
+      return { column, direction };
+    });
+  };
 
   const shiftRecords = shiftData?.records ?? [];
 
@@ -861,16 +930,66 @@ export function NowBoardView({ departmentId: initialDepartmentId = null }) {
             <div className="rounded-xl border bg-card shadow-sm overflow-x-auto">
               <table className="w-full min-w-[600px] text-sm">
                 <thead>
-                  <tr className="border-b bg-muted/30 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    <th className="px-4 py-3">User</th>
-                    <th className="px-4 py-3">Department</th>
-                    <th className="px-4 py-3">Location</th>
-                    <th className="px-4 py-3">Role</th>
-                    <th className="px-4 py-3 text-right whitespace-nowrap">Logged in at</th>
+                  <tr className="bg-muted/30 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    <th className="px-4 py-3 border-b border-border/60">
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1 cursor-pointer hover:text-foreground"
+                        onClick={() => toggleNowSort("user")}
+                        aria-label="Sort by user"
+                      >
+                        User
+                        {nowSort.column === "user" && <span className="text-[10px]">{nowSort.direction === "asc" ? "▲" : "▼"}</span>}
+                      </button>
+                    </th>
+                    <th className="px-4 py-3 border-b border-border/60">
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1 cursor-pointer hover:text-foreground"
+                        onClick={() => toggleNowSort("department")}
+                        aria-label="Sort by department"
+                      >
+                        Department
+                        {nowSort.column === "department" && <span className="text-[10px]">{nowSort.direction === "asc" ? "▲" : "▼"}</span>}
+                      </button>
+                    </th>
+                    <th className="px-4 py-3 border-b border-border/60">
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1 cursor-pointer hover:text-foreground"
+                        onClick={() => toggleNowSort("location")}
+                        aria-label="Sort by location"
+                      >
+                        Location
+                        {nowSort.column === "location" && <span className="text-[10px]">{nowSort.direction === "asc" ? "▲" : "▼"}</span>}
+                      </button>
+                    </th>
+                    <th className="px-4 py-3 border-b border-border/60">
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1 cursor-pointer hover:text-foreground"
+                        onClick={() => toggleNowSort("role")}
+                        aria-label="Sort by role"
+                      >
+                        Role
+                        {nowSort.column === "role" && <span className="text-[10px]">{nowSort.direction === "asc" ? "▲" : "▼"}</span>}
+                      </button>
+                    </th>
+                    <th className="px-4 py-3 text-right whitespace-nowrap border-b border-border/60">
+                      <button
+                        type="button"
+                        className="inline-flex items-center justify-end gap-1 cursor-pointer hover:text-foreground"
+                        onClick={() => toggleNowSort("clock_in_time")}
+                        aria-label="Sort by logged in time"
+                      >
+                        Logged in at
+                        {nowSort.column === "clock_in_time" && <span className="text-[10px]">{nowSort.direction === "asc" ? "▲" : "▼"}</span>}
+                      </button>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {clockedInNow.map((u, i) => {
+                  {sortedClockedInNow.map((u, i) => {
                     const name = u.display_name ?? `User ${u.user_id}`;
                     const initials =
                       name
