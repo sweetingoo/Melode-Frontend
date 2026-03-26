@@ -81,7 +81,10 @@ export function NowDayTimeline({
       ? ((tickNow - windowStartMin) / span) * 100
       : null;
 
-  const nameColW = 200;
+  const deptColW = 90;
+  const roleColW = 140;
+  const rowHClass = "h-[72px]";
+  const rowH = 72;
   const gridMinW = 640;
 
   if (!rows.length) {
@@ -95,18 +98,95 @@ export function NowDayTimeline({
   return (
     <div className={cn("rounded-xl border bg-card shadow-sm overflow-hidden", className)}>
       <div className="flex w-full">
-        <div className="w-[200px] shrink-0 border-r bg-muted/20">
+        <div className="shrink-0 border-r bg-muted/20" style={{ width: deptColW + roleColW }}>
           <div className="h-10 border-b" />
-          {rows.map((row) => (
-            <div
-              key={row.userId}
-              className="flex h-14 items-center border-b border-border/60 px-3 text-sm font-medium last:border-0"
-            >
-              <span className="truncate" title={row.displayName}>
-                {row.displayName}
-              </span>
-            </div>
-          ))}
+          <table className="w-full border-collapse table-fixed">
+            <colgroup>
+              <col style={{ width: deptColW }} />
+              <col style={{ width: roleColW }} />
+            </colgroup>
+            <tbody>
+              {(() => {
+                const deptKey = (v) => String(v ?? "—");
+
+                const out = [];
+                let i = 0;
+                while (i < rows.length) {
+                  const dept = rows[i].departmentName || "—";
+                  let deptEnd = i + 1;
+                  while (deptEnd < rows.length && deptKey(rows[deptEnd].departmentName) === deptKey(dept)) {
+                    deptEnd++;
+                  }
+                  const deptRowSpan = deptEnd - i;
+
+                  let j = i;
+                  while (j < deptEnd) {
+                    const role = rows[j].roleName || "—";
+                    let roleEnd = j + 1;
+                    while (roleEnd < deptEnd && deptKey(rows[roleEnd].roleName) === deptKey(role)) {
+                      roleEnd++;
+                    }
+                    const roleRowSpan = roleEnd - j;
+
+                    for (let k = j; k < roleEnd; k++) {
+                      out.push(
+                        <tr
+                          key={`left-${rows[k].groupId ?? "grp"}-${rows[k].laneIndex ?? k}-${k}`}
+                          style={{ height: rowH, minHeight: rowH, maxHeight: rowH, lineHeight: 1 }}
+                          className={rowHClass}
+                        >
+                          {k === i ? (
+                            <td
+                              rowSpan={deptRowSpan}
+                              className="align-middle text-center border-r border-border/60 border-b border-border/60"
+                              style={{ padding: 0, height: rowH, minHeight: rowH, maxHeight: rowH, verticalAlign: "middle" }}
+                            >
+                              <span
+                                className="text-[7px] font-semibold uppercase tracking-normal text-muted-foreground leading-none inline-block"
+                                style={{
+                                  writingMode: "vertical-rl",
+                                  textOrientation: "mixed",
+                                  transform: "rotate(180deg)",
+                                }}
+                                title={dept}
+                              >
+                                {dept}
+                              </span>
+                            </td>
+                          ) : null}
+                          {k === j ? (
+                            <td
+                              rowSpan={roleRowSpan}
+                              className="align-middle text-center border-l border-border/60 border-b border-border/60"
+                              style={{ padding: 0, height: rowH, minHeight: rowH, maxHeight: rowH, verticalAlign: "middle" }}
+                            >
+                              <span
+                                className="text-[7px] font-semibold uppercase tracking-normal text-muted-foreground leading-none inline-block"
+                                style={{
+                                  writingMode: "vertical-rl",
+                                  textOrientation: "mixed",
+                                  transform: "rotate(180deg)",
+                                }}
+                                title={role}
+                              >
+                                {role}
+                              </span>
+                            </td>
+                          ) : null}
+                        </tr>
+                      );
+                    }
+
+                    j = roleEnd;
+                  }
+
+                  i = deptEnd;
+                }
+
+                return out;
+              })()}
+            </tbody>
+          </table>
         </div>
         <div className="min-w-0 flex-1 overflow-x-auto">
           <div className="relative" style={{ minWidth: gridMinW }}>
@@ -128,11 +208,22 @@ export function NowDayTimeline({
                 </div>
               ))}
             </div>
-            {rows.map((row) => (
-              <div key={row.userId} className="relative h-14 border-b border-border/60 last:border-0">
+            {rows.map((row, rowIndex) => {
+              const nextRow = rows[rowIndex + 1];
+              const isLastRow = rowIndex === rows.length - 1;
+              const roleBoundary = !nextRow || nextRow.roleName !== row.roleName;
+              const deptBoundary = !nextRow || nextRow.departmentName !== row.departmentName;
+              const showBottomBorder = !isLastRow && (roleBoundary || deptBoundary);
+
+              return (
+              <div
+                key={`${row.groupId ?? row.userId ?? "row"}-${row.laneIndex ?? rowIndex}`}
+                className={`relative ${rowHClass} ${showBottomBorder ? "border-b border-border/60" : ""}`}
+                style={{ height: rowH, minHeight: rowH, maxHeight: rowH }}
+              >
                 {hourTicks.map((t) => (
                   <div
-                    key={`g-${row.userId}-${t.m}`}
+                    key={`g-${row.groupId ?? row.userId ?? rowIndex}-${t.m}`}
                     className="pointer-events-none absolute top-0 bottom-0 border-l border-border/15"
                     style={{ left: `${t.leftPct}%` }}
                   />
@@ -161,7 +252,8 @@ export function NowDayTimeline({
                   })}
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </div>

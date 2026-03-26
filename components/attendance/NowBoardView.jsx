@@ -300,7 +300,7 @@ export function NowBoardView({ departmentId: initialDepartmentId = null }) {
   }, [clockData]);
 
   const timelineRows = useMemo(() => {
-    const userMap = new Map();
+    const groupMap = new Map();
 
     const passesUser = (uid) => {
       if (userFilter === "all") return true;
@@ -313,12 +313,42 @@ export function NowBoardView({ departmentId: initialDepartmentId = null }) {
       return Number(locId) === Number(locationId);
     };
 
+    const getShiftGroupDepartment = (record) => record?.department_name || "—";
+    const getShiftGroupRole = (record) => {
+      const jobRole = record?.job_role?.display_name || record?.job_role?.name;
+      if (jobRole) return jobRole;
+      const shiftRole = record?.shift_role?.display_name || record?.shift_role?.name;
+      if (shiftRole) return shiftRole;
+      return record?.job_role_id || record?.shift_role_id ? `Role ${record.job_role_id ?? record.shift_role_id}` : "—";
+    };
+
+    const mergeGroupSegments = (groupKey, departmentName, roleName, segment) => {
+      if (!segment) return;
+      if (!groupMap.has(groupKey)) {
+        groupMap.set(groupKey, {
+          groupId: groupKey,
+          departmentName: departmentName || "—",
+          roleName: roleName || "—",
+          segments: [],
+        });
+      }
+      groupMap.get(groupKey).segments.push(segment);
+    };
+
     for (const r of shiftRecords) {
       if (!passesUser(r.user_id)) continue;
       if (!passesLocationShift(r.location_id)) continue;
       const name = getUserDisplayName(r.user) || `User ${r.user_id}`;
+      const departmentName = getShiftGroupDepartment(r);
+      const roleName = getShiftGroupRole(r);
+      const groupKey = `${departmentName}||${roleName}`;
       const seg = shiftRecordToSegment(r, dateStr);
-      if (seg) mergeUserSegments(userMap, r.user_id, name, seg);
+      if (seg) {
+        seg.userDisplayName = name;
+        // Ensure hover shows who the segment belongs to (important now that rows are grouped).
+        seg.title = seg.title ? `${name} • ${seg.title}` : name;
+        mergeGroupSegments(groupKey, departmentName, roleName, seg);
+      }
     }
 
     const seenOpenClockUsers = new Set();
@@ -330,9 +360,14 @@ export function NowBoardView({ departmentId: initialDepartmentId = null }) {
         cr.user_name ||
         (cr.user && (cr.user.display_name || cr.user.full_name)) ||
         `User ${cr.user_id}`;
+      const departmentName = cr?.department_name || "—";
+      const roleName = cr?.job_role_name || cr?.current_shift_role_name || cr?.initial_shift_role_name || "—";
+      const groupKey = `${departmentName}||${roleName}`;
       const seg = clockRecordToSegment(cr, dateStr, isToday);
       if (seg) {
-        mergeUserSegments(userMap, cr.user_id, name, seg);
+        seg.userDisplayName = name;
+        seg.title = seg.title ? `${name} • ${seg.title}` : name;
+        mergeGroupSegments(groupKey, departmentName, roleName, seg);
         if (!cr.clock_out_time) seenOpenClockUsers.add(cr.user_id);
       }
     }
@@ -341,18 +376,75 @@ export function NowBoardView({ departmentId: initialDepartmentId = null }) {
       if (!passesUser(u.user_id)) continue;
       if (seenOpenClockUsers.has(u.user_id)) continue;
       const name = u.display_name || `User ${u.user_id}`;
+      const departmentName = u?.department_name || "—";
+      const roleName = u?.role_name || "—";
+      const groupKey = `${departmentName}||${roleName}`;
       const seg = openClockToSegment(u, dateStr, boardDate, isToday);
-      if (seg) mergeUserSegments(userMap, u.user_id, name, seg);
+      if (seg) {
+        seg.userDisplayName = name;
+        seg.title = seg.title ? `${name} • ${seg.title}` : name;
+        mergeGroupSegments(groupKey, departmentName, roleName, seg);
+      }
     }
 
-    const rows = Array.from(userMap.values()).map((row) => ({
-      ...row,
-      displayName: row.displayName,
-      segments: sortSegments(row.segments),
+    const rows = Array.from(groupMap.values()).map((g) => ({
+      groupId: g.groupId,
+      departmentName: g.departmentName,
+      roleName: g.roleName,
+      segments: sortSegments(g.segments),
     }));
 
-    rows.sort((a, b) => a.displayName.localeCompare(b.displayName, undefined, { sensitivity: "base" }));
-    return rows;
+    // Avoid overlapping bars by splitting each (dept, role) group into stacked "lanes".
+    // Lanes are extra rows in the timeline so concurrent clock-ins become visible on the next line.
+    const laneRows = [];
+    for (const gRow of rows) {
+      const segs = Array.isArray(gRow.segments) ? [...gRow.segments] : [];
+      segs.sort((a, b) => (a.startMin ?? 0) - (b.startMin ?? 0) || (a.endMin ?? 0) - (b.endMin ?? 0));
+
+      const lanes = [];
+      const laneLastEnd = [];
+
+      for (const seg of segs) {
+        // Find the first lane that ends before this segment starts.
+        let laneIdx = -1;
+        for (let i = 0; i < lanes.length; i++) {
+          const lastEnd = laneLastEnd[i];
+          if (lastEnd == null || (seg.startMin ?? 0) >= lastEnd) {
+            laneIdx = i;
+            break;
+          }
+        }
+
+        if (laneIdx === -1) {
+          laneIdx = lanes.length;
+          lanes.push([]);
+          laneLastEnd.push(null);
+        }
+
+        lanes[laneIdx].push(seg);
+        laneLastEnd[laneIdx] = seg.endMin ?? laneLastEnd[laneIdx];
+      }
+
+      for (let laneIndex = 0; laneIndex < lanes.length; laneIndex++) {
+        laneRows.push({
+          groupId: gRow.groupId,
+          laneIndex,
+          departmentName: gRow.departmentName,
+          roleName: gRow.roleName,
+          segments: sortSegments(lanes[laneIndex]),
+        });
+      }
+    }
+
+    laneRows.sort((a, b) => {
+      const deptCmp = String(a.departmentName).localeCompare(String(b.departmentName), undefined, { sensitivity: "base" });
+      if (deptCmp !== 0) return deptCmp;
+      const roleCmp = String(a.roleName).localeCompare(String(b.roleName), undefined, { sensitivity: "base" });
+      if (roleCmp !== 0) return roleCmp;
+      return (a.laneIndex ?? 0) - (b.laneIndex ?? 0);
+    });
+
+    return laneRows;
   }, [
     shiftRecords,
     clockRecords,
