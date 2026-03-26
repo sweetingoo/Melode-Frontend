@@ -721,10 +721,10 @@ const TrackerEntryDetailPage = () => {
         items.push({ dateStr, type, actionId, completed });
       }
     });
-    // Sort earliest first, then pending before completed so "next" chase is at top
-    return items.sort((a, b) => {
+    // Only pending chases in the sidebar — completed ones (e.g. SMS marked dealt with) clear from this list
+    const pending = items.filter((x) => !x.completed);
+    return pending.sort((a, b) => {
       if (a.dateStr !== b.dateStr) return a.dateStr < b.dateStr ? -1 : 1;
-      if (a.completed !== b.completed) return a.completed ? 1 : -1;
       return (a.actionId ?? 0) - (b.actionId ?? 0);
     });
   }, [allTimelineEvents, tracker?.tracker_config?.action_types]);
@@ -792,13 +792,15 @@ const TrackerEntryDetailPage = () => {
           toAutoAck.map((m) => trackersService.acknowledgeInboundMessage(entrySlug, m.id))
         );
         refetchSmsThread?.();
+        refetchTimeline?.();
+        refetchEntry?.();
       } catch (err) {
         console.error("Auto-acknowledge inbound messages:", err);
       } finally {
         autoAckInProgressRef.current = false;
       }
     })();
-  }, [activeTab, entrySlug, smsThreadData?.inbound, refetchSmsThread]);
+  }, [activeTab, entrySlug, smsThreadData?.inbound, refetchSmsThread, refetchTimeline, refetchEntry]);
 
   // Scroll communication message thread to latest when opening the tab or when thread updates
   useEffect(() => {
@@ -3044,6 +3046,8 @@ const TrackerEntryDetailPage = () => {
                                       try {
                                         await trackersService.acknowledgeInboundMessage(entrySlug, item.messageId);
                                         refetchSmsThread?.();
+                                        refetchTimeline?.();
+                                        refetchEntry?.();
                                         toast.success("Marked as dealt with.");
                                       } catch (err) {
                                         const d = err?.response?.data?.detail;
