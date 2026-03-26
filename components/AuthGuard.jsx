@@ -66,6 +66,9 @@ const AuthGuard = ({ children }) => {
         if (typeof window !== 'undefined' && pathname) {
           const redirectUrl = pathname + (window.location.search || '');
           localStorage.setItem('authRedirectUrl', redirectUrl);
+          const encodedNext = encodeURIComponent(redirectUrl);
+          router.push(`/auth?next=${encodedNext}`);
+          return;
         }
         router.push('/auth');
         return;
@@ -89,7 +92,8 @@ const AuthGuard = ({ children }) => {
           // Store the intended destination URL for redirect after login
           const redirectUrl = pathname + (window.location.search || '');
           localStorage.setItem('authRedirectUrl', redirectUrl);
-          router.push('/auth');
+          const encodedNext = encodeURIComponent(redirectUrl);
+          router.push(`/auth?next=${encodedNext}`);
         }
         return;
       }

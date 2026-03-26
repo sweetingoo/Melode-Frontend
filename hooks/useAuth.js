@@ -4,6 +4,19 @@ import { apiUtils } from "@/services/api-client";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 
+const resolvePostLoginRedirectUrl = () => {
+  if (typeof window === "undefined") return null;
+  const params = new URLSearchParams(window.location.search || "");
+  const nextFromQuery = params.get("next");
+  const fromQuery = nextFromQuery ? decodeURIComponent(nextFromQuery) : null;
+  const fromStorage = localStorage.getItem("authRedirectUrl");
+  const candidate = fromQuery || fromStorage;
+  if (!candidate || !candidate.startsWith("/") || candidate.startsWith("/auth")) {
+    return null;
+  }
+  return candidate;
+};
+
 // Auth mutation keys
 export const authKeys = {
   all: ["auth"],
@@ -164,7 +177,13 @@ export const useLogin = () => {
       // Redirect to admin page with a small delay
       if (typeof window !== "undefined") {
         setTimeout(() => {
-          window.location.href = "/admin";
+          const redirectUrl = resolvePostLoginRedirectUrl();
+          if (redirectUrl) {
+            localStorage.removeItem("authRedirectUrl");
+            window.location.href = redirectUrl;
+          } else {
+            window.location.href = "/admin";
+          }
         }, 100);
       }
     },
@@ -374,8 +393,8 @@ export const useMFALogin = () => {
       // Redirect to stored redirect URL or admin page with a small delay
       if (typeof window !== "undefined") {
         setTimeout(() => {
-          const redirectUrl = localStorage.getItem('authRedirectUrl');
-          if (redirectUrl && !redirectUrl.startsWith('/auth')) {
+          const redirectUrl = resolvePostLoginRedirectUrl();
+          if (redirectUrl) {
             // Clear the stored redirect URL and redirect to it
             localStorage.removeItem('authRedirectUrl');
             window.location.href = redirectUrl;

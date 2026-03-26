@@ -39,8 +39,19 @@ const LoginPage = () => {
   useEffect(() => {
     if (typeof window !== "undefined") {
       const urlParams = new URLSearchParams(window.location.search);
+      const next = urlParams.get("next");
       const roleId = urlParams.get("role_id");
       const email = urlParams.get("email");
+
+      // Persist ?next=... so post-login redirect works across MFA/role-selection flows.
+      if (next) {
+        try {
+          const decodedNext = decodeURIComponent(next);
+          if (decodedNext.startsWith("/") && !decodedNext.startsWith("/auth")) {
+            localStorage.setItem("authRedirectUrl", decodedNext);
+          }
+        } catch (_) {}
+      }
 
       if (roleId && email) {
         // Pre-fill email and attempt login with role_id
@@ -67,9 +78,16 @@ const LoginPage = () => {
     // Only redirect if we have valid user data (not just a token)
     // If there's an error, the token is likely expired, so don't redirect
     if (currentUser && !userError && !userLoading) {
-      // Check for stored redirect URL
-      const redirectUrl = localStorage.getItem('authRedirectUrl');
-      if (redirectUrl && !redirectUrl.startsWith('/auth')) {
+      const urlParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+      const nextParam = urlParams?.get("next");
+      const redirectUrl = (() => {
+        const fromQuery = nextParam ? decodeURIComponent(nextParam) : null;
+        if (fromQuery && fromQuery.startsWith("/") && !fromQuery.startsWith("/auth")) return fromQuery;
+        const fromStorage = localStorage.getItem('authRedirectUrl');
+        if (fromStorage && fromStorage.startsWith("/") && !fromStorage.startsWith("/auth")) return fromStorage;
+        return null;
+      })();
+      if (redirectUrl) {
         // Clear the stored redirect URL and redirect to it
         localStorage.removeItem('authRedirectUrl');
         router.push(redirectUrl);

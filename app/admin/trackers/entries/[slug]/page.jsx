@@ -1866,27 +1866,46 @@ const TrackerEntryDetailPage = () => {
                 {timelineLoading ? (
                   <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
                 ) : activityTimelineEvents?.length > 0 ? (
-                  <div className="space-y-3">
+                  <div className="space-y-4">
                     {activityTimelineEvents.map((event, index) => {
                       const prevEvent = activityTimelineEvents[index - 1];
                       const daysBetween = index > 0 && prevEvent?.timestamp && event.timestamp ? Math.abs(differenceInDays(parseUTCDate(prevEvent.timestamp), parseUTCDate(event.timestamp))) : null;
                       return (
-                        <div key={event.id || index} className="relative pl-4 border-l-2 border-border ml-1">
-                          {daysBetween != null && daysBetween > 0 && <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">{daysBetween} day{daysBetween === 1 ? "" : "s"} later</span>}
+                        <div key={event.id || index} className="relative pl-5 border-l-2 border-border/70 ml-1">
+                          <span className="absolute -left-[6px] top-1.5 h-2.5 w-2.5 rounded-full bg-primary/70" />
+                          {daysBetween != null && daysBetween > 0 && <span className="inline-block mb-2 text-[11px] text-muted-foreground bg-muted px-2 py-0.5 rounded">{daysBetween} day{daysBetween === 1 ? "" : "s"} later</span>}
                           <div className="pb-4">
-                            <div className="flex flex-wrap items-center gap-2 mb-1">
+                            <div className="flex flex-wrap items-center gap-2 mb-2">
                               {(event.stage || event.status) && (<>{event.stage && <Badge variant="secondary" className="text-xs font-normal" style={getStageColor(tracker?.tracker_config?.stage_mapping || [], event.stage) ? { backgroundColor: getStageColor(tracker?.tracker_config?.stage_mapping || [], event.stage), color: "#fff" } : undefined}>{event.stage}</Badge>}{event.status && <Badge variant="outline" className="text-xs">{event.status}</Badge>}</>)}
-                              <span className="font-medium">{event.type === "action" ? getActionTimelineTitle(event) : event.title}</span>
+                              <span className="font-medium text-sm leading-tight">{event.type === "action" ? getActionTimelineTitle(event) : event.title}</span>
                               {event.message_source === "sms" && <Badge variant="outline" className="text-xs">SMS</Badge>}
                               {event.message_source === "comment" && <Badge variant="outline" className="text-xs">Comment</Badge>}
                               {event.note_category && <Badge variant="secondary" className="text-xs">{event.note_category}</Badge>}
                             </div>
                             {(event.description || (event.type === "field_updates" && event.changes?.length)) && (
-                              <p className="text-sm text-muted-foreground break-words">
-                                {event.type === "field_updates" && event.changes?.length > 0 ? event.changes.map((c, i) => `${c.field_label}: ${c.old_value ?? "—"} → ${c.new_value ?? "—"}`).join(" · ") : formatTimelineDescription(event.description, event)}
-                              </p>
+                              event.type === "field_updates" && event.changes?.length > 0 ? (
+                                <div className="text-sm text-muted-foreground break-words space-y-2">
+                                  {event.changes.map((c, i) => (
+                                    <div
+                                      key={`${event.id || index}-change-${i}`}
+                                      className="rounded-md border border-border/60 bg-muted/30 px-2.5 py-1.5"
+                                    >
+                                      <div className="text-xs font-medium text-foreground mb-0.5">{c.field_label}</div>
+                                      <div className="text-xs leading-snug">
+                                        <span className="text-muted-foreground/90">{c.old_value ?? "—"}</span>
+                                        <span className="px-1 text-muted-foreground">→</span>
+                                        <span className="text-foreground">{c.new_value ?? "—"}</span>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="text-sm text-muted-foreground break-words leading-relaxed">
+                                  {formatTimelineDescription(event.description, event)}
+                                </p>
+                              )
                             )}
-                            <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground flex-wrap">
+                            <div className="flex items-center gap-2 mt-2.5 text-xs text-muted-foreground flex-wrap">
                               <span>{format(parseUTCDate(event.timestamp), "d MMM yyyy, HH:mm")}</span>
                               {event.user_name && <span>by {event.user_name}</span>}
                               {event.type === "action" && event.chase_date && (
