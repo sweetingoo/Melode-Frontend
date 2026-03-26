@@ -78,6 +78,7 @@ import {
   MessageSquare,
   FileText,
   CheckCircle,
+  FolderTree,
 } from "lucide-react";
 import {
   useUser,
@@ -138,7 +139,7 @@ import {
   useSetLeaveApproverDepartments,
 } from "@/hooks/useAttendance";
 import { filesService } from "@/services/files";
-import { useDocuments, useCreateDocument } from "@/hooks/useDocuments";
+import { useCreateDocument } from "@/hooks/useDocuments";
 import {
   useCreateDocumentCategory,
   useDeleteDocumentCategory,
@@ -148,6 +149,9 @@ import { useTasksByUser } from "@/hooks/useTasks";
 import { Calendar } from "@/components/ui/calendar";
 import CommentThread from "@/components/CommentThread";
 import { api } from "@/services/api-client";
+import CategoryTree from "@/components/documents/CategoryTree";
+import DocumentList from "@/components/documents/DocumentList";
+import { PageSearchBar } from "@/components/admin/PageSearchBar";
 
 const TasksForUser = ({ userSlug }) => {
   const [statusFilter, setStatusFilter] = React.useState("pending");
@@ -512,6 +516,10 @@ const UserEditPage = () => {
   const [manualResetPasswordConfirm, setManualResetPasswordConfirm] = useState("");
   const [manualResetPasswordError, setManualResetPasswordError] = useState("");
   const [personnelCategoryId, setPersonnelCategoryId] = useState(null);
+  const [selectedPersonnelCategoryId, setSelectedPersonnelCategoryId] = useState(null);
+  const [personnelFileSearch, setPersonnelFileSearch] = useState("");
+  const [personnelFileStatus, setPersonnelFileStatus] = useState("all");
+  const [personnelFiltersOpen, setPersonnelFiltersOpen] = useState(false);
   const [personnelTitle, setPersonnelTitle] = useState("");
   const [personnelDescription, setPersonnelDescription] = useState("");
   const [isManagePersonnelCategoriesOpen, setIsManagePersonnelCategoriesOpen] = useState(false);
@@ -1415,41 +1423,6 @@ const UserEditPage = () => {
     () => new Set(personnelFlatCategories.map((cat) => cat.id)),
     [personnelFlatCategories]
   );
-
-  const personnelCategoryNameById = React.useMemo(() => {
-    const map = new Map();
-    personnelFlatCategories.forEach((cat) => {
-      map.set(cat.id, cat.name);
-    });
-    return map;
-  }, [personnelFlatCategories]);
-
-  const personnelDocumentsParams = React.useMemo(
-    () => ({
-      page: 1,
-      per_page: 100,
-      include_personnel: true,
-    }),
-    []
-  );
-
-  const {
-    data: personnelDocumentsResponse,
-    isLoading: personnelDocsLoading,
-  } = useDocuments(personnelDocumentsParams, {
-    enabled: !!personnelUserId && activeTab === "compliance",
-  });
-
-  const personnelDocuments = React.useMemo(() => {
-    const docs = personnelDocumentsResponse?.documents || [];
-    if (!personnelUserId) return [];
-    return docs.filter(
-      (doc) =>
-        Array.isArray(doc.shared_with_user_ids) &&
-        doc.shared_with_user_ids.includes(personnelUserId) &&
-        personnelCategoryIds.has(doc.category_id)
-    );
-  }, [personnelDocumentsResponse, personnelUserId, personnelCategoryIds]);
 
   const createPersonnelDocument = useCreateDocument();
 
@@ -4322,143 +4295,143 @@ const UserEditPage = () => {
             </TabsContent>
 
             <TabsContent value="personnel" className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 min-w-0">
-                    <div className="min-w-0">
-                      <CardTitle className="flex items-center gap-2">
-                        <FileText className="h-5 w-5" />
-                        Personnel File
-                      </CardTitle>
-                      <CardDescription>
-                        Store HR documents for this person, such as reviews, grievances, and disciplinary records.
-                      </CardDescription>
-                    </div>
-                    {canManagePersonnelDocuments && (
-                      <div className="flex w-full sm:w-auto flex-wrap justify-end gap-2 min-w-0">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="w-full sm:w-auto max-w-full shrink-0 whitespace-normal text-center"
-                          onClick={() => setIsManagePersonnelCategoriesOpen(true)}
-                        >
-                          Manage Categories
-                        </Button>
-                        <Button
-                          size="sm"
-                          className="w-full sm:w-auto max-w-full shrink-0 whitespace-normal text-center"
-                          onClick={() => setIsPersonnelDocDialogOpen(true)}
-                        >
-                          <Plus className="mr-2 h-4 w-4" />
-                          Add Document
-                        </Button>
+              <div className="space-y-2">
+                <h2 className="text-lg font-semibold flex items-center gap-2">
+                  <FileText className="h-5 w-5" />
+                  Personnel File
+                </h2>
+                <p className="text-sm text-muted-foreground max-w-3xl">
+                  Confidential HR documents for this person. Categories are managed separately from the Library. Documents are not shareable and are only available to authorised People Management users.
+                </p>
+              </div>
+
+              <PageSearchBar
+                searchValue={personnelFileSearch}
+                onSearchChange={setPersonnelFileSearch}
+                searchPlaceholder="Search personnel documents..."
+                showSearch={true}
+                showFilters={true}
+                isFiltersOpen={personnelFiltersOpen}
+                onToggleFilters={() => setPersonnelFiltersOpen(!personnelFiltersOpen)}
+                showCreateButton={canManagePersonnelDocuments}
+                onCreateClick={() => setIsPersonnelDocDialogOpen(true)}
+                createButtonText="Add Document"
+                createButtonIcon={Plus}
+              />
+
+              {personnelFiltersOpen && (
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">Filters</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex flex-col md:flex-row gap-4">
+                      <div className="flex-1 space-y-2">
+                        <Label>Status</Label>
+                        <Select value={personnelFileStatus} onValueChange={setPersonnelFileStatus}>
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Filter by status" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All Status</SelectItem>
+                            <SelectItem value="published">Published</SelectItem>
+                            <SelectItem value="draft">Draft</SelectItem>
+                            <SelectItem value="archived">Archived</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </div>
-                    )}
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  {personnelDocsLoading ? (
-                    <div className="flex items-center justify-center py-8">
-                      <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                     </div>
-                  ) : personnelDocuments.length === 0 ? (
-                    <div className="text-center py-10 text-muted-foreground space-y-3">
-                      <FileText className="h-10 w-10 mx-auto opacity-50" />
-                      <p className="text-sm">
-                        No documents have been added to this person&apos;s personnel file yet.
-                      </p>
-                      {canManagePersonnelDocuments && (
-                        <div className="flex w-full flex-wrap items-stretch sm:items-center justify-center gap-2 min-w-0">
+                  </CardContent>
+                </Card>
+              )}
+
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                <div className="lg:col-span-3">
+                  <Card className="h-fit sticky top-6">
+                    <CardHeader className="pb-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <CardTitle className="text-base">Categories</CardTitle>
+                        {canManagePersonnelDocuments && (
                           <Button
-                            size="sm"
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 shrink-0"
+                            onClick={() => setIsManagePersonnelCategoriesOpen(true)}
+                            title="Manage personnel categories"
+                          >
+                            <Plus className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                      <Button
+                        type="button"
+                        variant={selectedPersonnelCategoryId == null ? "secondary" : "ghost"}
+                        size="sm"
+                        className="w-full justify-start mt-2"
+                        onClick={() => setSelectedPersonnelCategoryId(null)}
+                      >
+                        <FolderTree className="mr-2 h-4 w-4" />
+                        All categories
+                      </Button>
+                    </CardHeader>
+                    <CardContent className="p-4 pt-0">
+                      <CategoryTree
+                        variant="personnel"
+                        onSelectCategory={(category) => setSelectedPersonnelCategoryId(category?.id ?? null)}
+                        selectedCategoryId={selectedPersonnelCategoryId}
+                        canManage={false}
+                      />
+                      {canManagePersonnelDocuments && (
+                        <div className="mt-4 pt-4 border-t">
+                          <Button
                             variant="outline"
-                            className="w-full sm:w-auto max-w-full shrink-0 whitespace-normal text-center"
+                            size="sm"
+                            className="w-full"
                             onClick={() => setIsManagePersonnelCategoriesOpen(true)}
                           >
-                            Manage Categories
-                          </Button>
-                          <Button
-                            size="sm"
-                            className="w-full sm:w-auto max-w-full shrink-0 whitespace-normal text-center"
-                            onClick={() => setIsPersonnelDocDialogOpen(true)}
-                          >
-                            <Plus className="mr-2 h-4 w-4" />
-                            Add first document
+                            <FolderTree className="mr-2 h-4 w-4" />
+                            Manage categories
                           </Button>
                         </div>
                       )}
-                    </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <div className="lg:col-span-9">
+                  {personnelUserId ? (
+                    <DocumentList
+                      categoryId={selectedPersonnelCategoryId}
+                      searchTerm={personnelFileSearch}
+                      statusFilter={personnelFileStatus}
+                      personnelSubjectUserId={personnelUserId}
+                      personnelCategoryIds={personnelCategoryIds}
+                      onViewDocument={(doc) =>
+                        router.push(
+                          `/admin/people-management/${actualUserSlug}/personnel-files/${doc.slug || doc.id}`
+                        )
+                      }
+                      onEditDocument={(doc) =>
+                        router.push(
+                          `/admin/people-management/${actualUserSlug}/personnel-files/${doc.slug || doc.id}`
+                        )
+                      }
+                      canEdit={canEditPersonnelDocuments}
+                      canDelete={canDeletePersonnelDocuments}
+                      listTitle="Documents"
+                    />
                   ) : (
-                    <div className="space-y-4">
-                      <div className="border rounded-md overflow-hidden">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Title</TableHead>
-                              <TableHead>Category</TableHead>
-                              <TableHead>Status</TableHead>
-                              <TableHead>Views</TableHead>
-                              <TableHead>Last Updated</TableHead>
-                              <TableHead className="text-right">Actions</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {personnelDocuments.map((doc) => (
-                              <TableRow key={doc.id}>
-                                <TableCell className="font-medium">
-                                  <div className="flex items-center gap-2">
-                                    <FileText className="h-4 w-4 text-muted-foreground" />
-                                    {doc.title}
-                                  </div>
-                                </TableCell>
-                                <TableCell>
-                                  <Badge variant="secondary">
-                                    {personnelCategoryNameById.get(doc.category_id) ||
-                                      (doc.category_id ? `Category ${doc.category_id}` : "N/A")}
-                                  </Badge>
-                                </TableCell>
-                                <TableCell>
-                                  <Badge variant="outline" className="text-xs">
-                                    {doc.status || "published"}
-                                  </Badge>
-                                </TableCell>
-                                <TableCell className="text-sm text-muted-foreground">
-                                  {doc.access_count || 0}
-                                </TableCell>
-                                <TableCell className="text-sm text-muted-foreground">
-                                  {doc.updated_at
-                                    ? formatDistanceToNow(parseUTCDate(doc.updated_at), {
-                                        addSuffix: true,
-                                      })
-                                    : "N/A"}
-                                </TableCell>
-                                <TableCell className="text-right">
-                                  <div className="flex items-center justify-end gap-2">
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() =>
-                                        router.push(
-                                          `/admin/people-management/${actualUserSlug}/personnel-files/${doc.slug || doc.id}`
-                                        )
-                                      }
-                                    >
-                                      <Eye className="h-4 w-4" />
-                                    </Button>
-                                  </div>
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        Open a document to upload files and view detailed access history. All actions are audited.
-                      </p>
-                    </div>
+                    <Card>
+                      <CardContent className="py-10 text-center text-muted-foreground text-sm">
+                        Loading person…
+                      </CardContent>
+                    </Card>
                   )}
-                </CardContent>
-              </Card>
+                  <p className="text-xs text-muted-foreground mt-3">
+                    Personnel files are restricted. Open a document to add attachments or view audit history. Sharing is disabled.
+                  </p>
+                </div>
+              </div>
 
               <Dialog open={isPersonnelDocDialogOpen} onOpenChange={setIsPersonnelDocDialogOpen}>
                 <DialogContent className="max-w-lg">

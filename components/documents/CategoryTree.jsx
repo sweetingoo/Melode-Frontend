@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -22,17 +22,35 @@ const PERSONNEL_ROOT_MATCH = new Set([
   "personnel files",
 ]);
 
-const getPersonnelCategoryIds = (categories) => {
-  const all = [];
+/** API returns nested trees; flatten for parent_id lookups and tree rendering. */
+export const flattenDocumentCategoriesTree = (nodes) => {
+  const out = [];
   const walk = (items) => {
     (items || []).forEach((item) => {
-      all.push(item);
-      if (Array.isArray(item.children) && item.children.length > 0) {
-        walk(item.children);
+      const { children, ...rest } = item;
+      out.push(rest);
+      if (Array.isArray(children) && children.length > 0) {
+        walk(children);
       }
     });
   };
-  walk(categories);
+  walk(nodes);
+  return out;
+};
+
+const findPersonnelRootCategory = (flatCategories) => {
+  for (const cat of flatCategories) {
+    const slug = String(cat?.slug || "").trim().toLowerCase();
+    const name = String(cat?.name || "").trim().toLowerCase();
+    if (PERSONNEL_ROOT_MATCH.has(slug) || PERSONNEL_ROOT_MATCH.has(name)) {
+      return cat;
+    }
+  }
+  return null;
+};
+
+const getPersonnelCategoryIds = (categories) => {
+  const all = flattenDocumentCategoriesTree(categories);
 
   const byId = new Map(all.map((c) => [Number(c.id), c]));
   const roots = all.filter((c) => {
@@ -49,14 +67,6 @@ const getPersonnelCategoryIds = (categories) => {
     if (excluded.has(currentId)) continue;
     excluded.add(currentId);
 
-    const current = byId.get(currentId);
-    if (current?.children?.length) {
-      current.children.forEach((child) => {
-        const childId = Number(child.id);
-        if (Number.isFinite(childId) && !excluded.has(childId)) queue.push(childId);
-      });
-    }
-
     all.forEach((c) => {
       const parentId = Number(c.parent_id);
       const cid = Number(c.id);
@@ -70,6 +80,7 @@ const getPersonnelCategoryIds = (categories) => {
 };
 
 const CategoryTree = ({
+  variant = "library",
   onSelectCategory,
   selectedCategoryId,
   onEditCategory,
@@ -77,19 +88,59 @@ const CategoryTree = ({
   onManagePermissions,
   canManage = false,
 }) => {
-  const { data, isLoading, error } = useDocumentCategories();
+  const { data, isLoading, error } = useDocumentCategories(
+    variant === "personnel" ? { include_personnel: true } : {}
+  );
   const deleteCategoryMutation = useDeleteDocumentCategory();
   const [expandedNodes, setExpandedNodes] = useState(new Set());
 
-  const categories = data?.categories || [];
-  const excludedPersonnelCategoryIds = useMemo(
-    () => getPersonnelCategoryIds(categories),
-    [categories]
-  );
-  const visibleCategories = useMemo(
-    () => categories.filter((c) => !excludedPersonnelCategoryIds.has(Number(c.id))),
-    [categories, excludedPersonnelCategoryIds]
-  );
+  const rawCategories = data?.categories || [];
+  const flatCategories = useMemo(() => flattenDocumentCategoriesTree(rawCategories), [rawCategories]);
+
+  const visibleCategories = useMemo(() => {
+    if (variant === "personnel") {
+      const root = findPersonnelRootCategory(flatCategories);
+      if (!root) return [];
+      const personnelRootId = Number(root.id);
+      const descendantIds = new Set();
+      const queue = [personnelRootId];
+      while (queue.length) {
+        const pid = queue.shift();
+        flatCategories.forEach((c) => {
+          if (Number(c.parent_id) === pid) {
+            const cid = Number(c.id);
+            if (!Number.isFinite(cid)) return;
+            if (!descendantIds.has(cid)) {
+              descendantIds.add(cid);
+              queue.push(cid);
+            }
+          }
+        });
+      }
+      return flatCategories.filter((c) => descendantIds.has(Number(c.id)) && Number(c.id) !== personnelRootId);
+    }
+    const excludedPersonnelCategoryIds = getPersonnelCategoryIds(rawCategories);
+    return flatCategories.filter((c) => !excludedPersonnelCategoryIds.has(Number(c.id)));
+  }, [variant, flatCategories, rawCategories]);
+
+  const rootCategories = useMemo(() => {
+    if (variant === "personnel") {
+      const root = findPersonnelRootCategory(flatCategories);
+      if (!root) return [];
+      const personnelRootId = Number(root.id);
+      return visibleCategories.filter((c) => Number(c.parent_id) === personnelRootId);
+    }
+    return visibleCategories.filter((c) => !c.parent_id);
+  }, [variant, flatCategories, visibleCategories]);
+
+  useEffect(() => {
+    if (variant !== "personnel" || rootCategories.length === 0) return;
+    setExpandedNodes((prev) => {
+      const next = new Set(prev);
+      rootCategories.forEach((c) => next.add(String(c.id)));
+      return next;
+    });
+  }, [variant, rootCategories]);
 
   const toggleNode = (categoryId) => {
     const newExpanded = new Set(expandedNodes);
@@ -107,7 +158,7 @@ const CategoryTree = ({
     }
     try {
       // Find the category to get its slug
-      const category = visibleCategories.find(c => c.id === categoryId || c.slug === categoryId);
+      const category = visibleCategories.find((c) => c.id === categoryId || c.slug === categoryId);
       const categorySlug = category?.slug || categoryId;
       await deleteCategoryMutation.mutateAsync(categorySlug);
     } catch (error) {
@@ -201,7 +252,7 @@ const CategoryTree = ({
                     Edit Category
                   </DropdownMenuItem>
                 )}
-                {onManagePermissions && (
+                {variant !== "personnel" && onManagePermissions && (
                   <DropdownMenuItem onClick={(e) => {
                     e.stopPropagation();
                     onManagePermissions(category);
@@ -246,12 +297,12 @@ const CategoryTree = ({
     );
   }
 
-  const rootCategories = visibleCategories.filter((c) => !c.parent_id);
-
   if (rootCategories.length === 0) {
     return (
       <div className="p-4 text-sm text-muted-foreground text-center">
-        No categories found. Create one to get started.
+        {variant === "personnel"
+          ? "No personnel categories yet. Use Manage categories to add subcategories under Personnel File."
+          : "No categories found. Create one to get started."}
       </div>
     );
   }

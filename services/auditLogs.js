@@ -25,9 +25,19 @@ export const auditLogsService = {
   // Get audit logs for a specific resource
   getResourceAuditLogs: async (resource, resourceIdOrSlug, params = {}) => {
     try {
-      // Use the resource-specific endpoint: /audit-logs/resource/{resource}/{resource_slug}
+      const { limit, offset, page: pageIn, per_page: perPageIn, ...rest } = params;
+      const query = { ...rest };
+      if (pageIn != null || perPageIn != null) {
+        if (pageIn != null) query.page = pageIn;
+        if (perPageIn != null) query.per_page = perPageIn;
+      } else if (limit != null) {
+        const perPage = Number(limit) || 50;
+        const off = Number(offset) || 0;
+        query.per_page = perPage;
+        query.page = Math.max(1, Math.floor(off / perPage) + 1);
+      }
       return await api.get(`/audit-logs/resource/${resource}/${resourceIdOrSlug}`, {
-        params,
+        params: query,
       });
     } catch (error) {
       console.error(

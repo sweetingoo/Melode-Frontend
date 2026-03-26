@@ -37,12 +37,14 @@ import {
   Globe,
   Users,
   Loader2,
+  Lock,
 } from "lucide-react";
 import { useDocuments, useSearchDocuments, useDeleteDocument } from "@/hooks/useDocuments";
 import { useDocumentCategories } from "@/hooks/useDocumentCategories";
 import { formatDistanceToNow } from "date-fns";
 import { parseUTCDate } from "@/utils/time";
 import { useRouter } from "next/navigation";
+import { flattenDocumentCategoriesTree } from "@/components/documents/CategoryTree";
 
 const PERSONNEL_ROOT_MATCH = new Set([
   "personnel-file",
@@ -53,18 +55,8 @@ const PERSONNEL_ROOT_MATCH = new Set([
 ]);
 
 const getPersonnelCategoryIds = (categories) => {
-  const all = [];
-  const walk = (items) => {
-    (items || []).forEach((item) => {
-      all.push(item);
-      if (Array.isArray(item.children) && item.children.length > 0) {
-        walk(item.children);
-      }
-    });
-  };
-  walk(categories);
+  const all = flattenDocumentCategoriesTree(categories);
 
-  const byId = new Map(all.map((c) => [Number(c.id), c]));
   const roots = all.filter((c) => {
     const slug = String(c.slug || "").trim().toLowerCase();
     const name = String(c.name || "").trim().toLowerCase();
@@ -78,14 +70,6 @@ const getPersonnelCategoryIds = (categories) => {
     const currentId = queue.shift();
     if (excluded.has(currentId)) continue;
     excluded.add(currentId);
-
-    const current = byId.get(currentId);
-    if (current?.children?.length) {
-      current.children.forEach((child) => {
-        const childId = Number(child.id);
-        if (Number.isFinite(childId) && !excluded.has(childId)) queue.push(childId);
-      });
-    }
 
     all.forEach((c) => {
       const parentId = Number(c.parent_id);
@@ -151,6 +135,11 @@ const DocumentList = ({
   onShareDocument,
   canEdit = false,
   canDelete = false,
+  /** When set, lists only personnel-file documents for this subject user (strict private list). */
+  personnelSubjectUserId = null,
+  /** IDs of categories under the Personnel File root (from parent). */
+  personnelCategoryIds = null,
+  listTitle,
 }) => {
   const router = useRouter();
   // Use external searchTerm and statusFilter if provided, otherwise use internal state
@@ -162,18 +151,24 @@ const DocumentList = ({
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
 
   const deleteDocumentMutation = useDeleteDocument();
-  const { data: categoriesData } = useDocumentCategories();
+  const { data: categoriesData } = useDocumentCategories(
+    personnelSubjectUserId ? { include_personnel: true } : {}
+  );
   const categories = categoriesData?.categories || [];
   const excludedPersonnelCategoryIds = useMemo(
     () => getPersonnelCategoryIds(categories),
     [categories]
   );
 
-  // Create a map of category_id to category name
+  // Create a map of category_id to category (Library mode strips personnel ids; personnel list needs those names)
   const categoryMap = useMemo(() => {
     const map = new Map();
     const flattenCategories = (cats) => {
       cats.forEach((cat) => {
+        const id = Number(cat.id);
+        if (Number.isFinite(id)) {
+          map.set(id, cat);
+        }
         map.set(cat.id, cat);
         if (cat.children && cat.children.length > 0) {
           flattenCategories(cat.children);
@@ -182,12 +177,14 @@ const DocumentList = ({
     };
     if (categoriesData?.categories) {
       flattenCategories(categoriesData.categories);
-      for (const excludedId of excludedPersonnelCategoryIds) {
-        map.delete(excludedId);
+      if (!personnelSubjectUserId) {
+        for (const excludedId of excludedPersonnelCategoryIds) {
+          map.delete(excludedId);
+        }
       }
     }
     return map;
-  }, [categoriesData, excludedPersonnelCategoryIds]);
+  }, [categoriesData, excludedPersonnelCategoryIds, personnelSubjectUserId]);
 
   // Debounce search term
   React.useEffect(() => {
@@ -201,12 +198,15 @@ const DocumentList = ({
   const params = useMemo(() => {
     const baseParams = {
       page: currentPage,
-      per_page: 20,
+      per_page: personnelSubjectUserId ? 100 : 20,
     };
+    if (personnelSubjectUserId) {
+      baseParams.include_personnel = true;
+    }
     if (categoryId) baseParams.category_id = categoryId;
     if (statusFilter !== "all") baseParams.status = statusFilter;
     return baseParams;
-  }, [categoryId, statusFilter, currentPage]);
+  }, [categoryId, statusFilter, currentPage, personnelSubjectUserId]);
 
   const { data: documentsData, isLoading } = useDocuments(params, {
     enabled: !debouncedSearchTerm,
@@ -223,16 +223,38 @@ const DocumentList = ({
   );
 
   const data = debouncedSearchTerm ? searchData : documentsData;
-  const documents = useMemo(
-    () =>
-      (data?.documents || []).filter(
-        (document) => !excludedPersonnelCategoryIds.has(Number(document.category_id))
-      ),
-    [data?.documents, excludedPersonnelCategoryIds]
-  );
+  const personnelIdSet = useMemo(() => {
+    if (!personnelCategoryIds) return null;
+    return personnelCategoryIds instanceof Set ? personnelCategoryIds : new Set(personnelCategoryIds);
+  }, [personnelCategoryIds]);
+
+  const documents = useMemo(() => {
+    const raw = data?.documents || [];
+    if (personnelSubjectUserId) {
+      if (!personnelIdSet || personnelIdSet.size === 0) {
+        return [];
+      }
+      return raw.filter((doc) => {
+        if (!personnelIdSet.has(Number(doc.category_id))) return false;
+        if (!Array.isArray(doc.shared_with_user_ids) || !doc.shared_with_user_ids.includes(personnelSubjectUserId)) {
+          return false;
+        }
+        return true;
+      });
+    }
+    return raw.filter((document) => !excludedPersonnelCategoryIds.has(Number(document.category_id)));
+  }, [
+    data?.documents,
+    excludedPersonnelCategoryIds,
+    personnelSubjectUserId,
+    personnelIdSet,
+  ]);
+  const isPersonnelList = Boolean(personnelSubjectUserId);
   const total = documents.length;
-  const totalPages = data?.total_pages || 1;
-  const currentPageNum = data?.page || currentPage;
+  const totalPages = isPersonnelList
+    ? Math.max(1, Math.ceil(total / (params.per_page || 20)))
+    : data?.total_pages || 1;
+  const currentPageNum = isPersonnelList ? currentPage : data?.page || currentPage;
 
   const handleDelete = async (document) => {
     if (!confirm(`Are you sure you want to delete "${document.title}"? This action cannot be undone.`)) {
@@ -286,11 +308,13 @@ const DocumentList = ({
     );
   }
 
+  const showShareAction = onShareDocument && !isPersonnelList;
+
   return (
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
-          <CardTitle>Documents</CardTitle>
+          <CardTitle>{listTitle || (isPersonnelList ? "Personnel documents" : "Documents")}</CardTitle>
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">
               {total} {total === 1 ? "document" : "documents"}
@@ -333,11 +357,15 @@ const DocumentList = ({
                         </TableCell>
                         <TableCell>
                           {(() => {
-                            // Try to get category from document.category first, then from categoryMap
-                            const category = document.category || (document.category_id ? categoryMap.get(document.category_id) : null);
+                            const cid = document.category_id;
+                            const category =
+                              document.category ||
+                              (cid != null
+                                ? categoryMap.get(Number(cid)) ?? categoryMap.get(cid)
+                                : null);
                             return (
                               <Badge variant="secondary">
-                                {category?.name || (document.category_id ? `Category ${document.category_id}` : "N/A")}
+                                {category?.name || (cid != null ? `Category ${cid}` : "N/A")}
                               </Badge>
                             );
                           })()}
@@ -348,7 +376,12 @@ const DocumentList = ({
                         <TableCell>{getStatusBadge(document.status)}</TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
-                            {document.is_public ? (
+                            {isPersonnelList ? (
+                              <Badge variant="outline" className="text-xs border-muted-foreground/60">
+                                <Lock className="h-3 w-3 mr-1" />
+                                Restricted
+                              </Badge>
+                            ) : document.is_public ? (
                               <Badge variant="outline" className="text-xs">
                                 <Globe className="h-3 w-3 mr-1" />
                                 Public
@@ -399,7 +432,7 @@ const DocumentList = ({
                                 <Edit className="h-4 w-4" />
                               </Button>
                             )}
-                            {onShareDocument && (
+                            {showShareAction && (
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -427,7 +460,7 @@ const DocumentList = ({
               </div>
 
               {/* Pagination */}
-              {totalPages > 1 && (
+              {!isPersonnelList && totalPages > 1 && (
                 <Pagination>
                   <PaginationContent>
                     <PaginationItem>

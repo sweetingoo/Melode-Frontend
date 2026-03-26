@@ -100,9 +100,14 @@ const ResourceAuditLogs = ({ resource, resourceId, resourceSlug, title = "Activi
     return [];
   }, [auditLogsData]);
 
-  // Extract pagination info
-  const totalCount = auditLogsData?.total_count || auditLogsData?.total || auditLogs.length;
-  const totalPages = Math.ceil(totalCount / pageSize);
+  // Extract pagination info (API returns total for full result set, not current page length)
+  const totalCount =
+    typeof auditLogsData?.total === "number"
+      ? auditLogsData.total
+      : typeof auditLogsData?.total_count === "number"
+        ? auditLogsData.total_count
+        : auditLogs.length;
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
   // Get severity color
   const getSeverityColor = (severity) => {
