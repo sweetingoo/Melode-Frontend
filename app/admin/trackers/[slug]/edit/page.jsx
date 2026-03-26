@@ -5247,7 +5247,30 @@ const TrackerEditPage = () => {
                   className="max-w-md"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Added to the end of each message (template or custom). Leave blank for no signature.
+                  Optional extra text added to each SMS (template or custom). Leave blank for none.
+                </p>
+              </div>
+              <div className="space-y-2 max-w-xs">
+                <Label htmlFor="sms-signature-position">Signature position</Label>
+                <Select
+                  value={formData.tracker_config?.sms_signature_position || "top"}
+                  onValueChange={(value) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      tracker_config: { ...prev.tracker_config, sms_signature_position: value },
+                    }))
+                  }
+                >
+                  <SelectTrigger id="sms-signature-position">
+                    <SelectValue placeholder="Select position" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="top">Top (header)</SelectItem>
+                    <SelectItem value="bottom">Bottom (footer)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Top adds signature, line break, then message. Bottom keeps message then signature.
                 </p>
               </div>
             </CardContent>
