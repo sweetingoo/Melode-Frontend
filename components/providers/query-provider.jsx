@@ -3,6 +3,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { useState } from "react";
+import { GlobalLoadingProvider } from "@/components/providers/global-loading-provider";
 
 export default function QueryProvider({ children }) {
   const [queryClient] = useState(
@@ -57,8 +58,10 @@ export default function QueryProvider({ children }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {children}
-      <ReactQueryDevtools initialIsOpen={false} />
+      <GlobalLoadingProvider>
+        {children}
+        <ReactQueryDevtools initialIsOpen={false} />
+      </GlobalLoadingProvider>
     </QueryClientProvider>
   );
 }
