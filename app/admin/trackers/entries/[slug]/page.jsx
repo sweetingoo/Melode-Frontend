@@ -3388,6 +3388,24 @@ const TrackerEntryDetailPage = () => {
                     // Format audit log changes
                     const formatAuditChanges = () => {
                       const changes = [];
+
+                      const formatUnknownValue = (val) => {
+                        if (val === null || val === undefined || val === "") return "—";
+                        if (typeof val === "object") {
+                          try {
+                            return JSON.stringify(val);
+                          } catch (e) {
+                            return String(val);
+                          }
+                        }
+                        return String(val);
+                      };
+
+                      const findFieldByKey = (fieldKey) =>
+                        trackerFields.find((f) => f.id === fieldKey || f.name === fieldKey || f.field_id === fieldKey);
+
+                      const formatValue = (field, val) =>
+                        field ? formatFieldValue(field, val) : formatUnknownValue(val);
                       
                       // Handle submission_data changes (tracker entry field changes)
                       if (log.old_values?.submission_data || log.new_values?.submission_data) {
@@ -3400,12 +3418,10 @@ const TrackerEntryDetailPage = () => {
                           const newVal = newData[key];
                           
                           if (oldVal !== newVal) {
-                            const field = trackerFields.find(
-                              (f) => f.id === key || f.name === key || f.field_id === key
-                            );
+                            const field = findFieldByKey(key);
                             const fieldLabel = field?.label || key;
-                            const formattedOld = field ? formatFieldValue(field, oldVal) : (oldVal ?? "—");
-                            const formattedNew = field ? formatFieldValue(field, newVal) : (newVal ?? "—");
+                            const formattedOld = formatValue(field, oldVal);
+                            const formattedNew = formatValue(field, newVal);
                             
                             changes.push({
                               field: fieldLabel,
@@ -3449,11 +3465,12 @@ const TrackerEntryDetailPage = () => {
                           
                           // Only show changes, not when both are null/undefined
                           if (oldVal !== newVal && (oldVal != null || newVal != null)) {
-                            const fieldLabel = getFieldLabel(key);
+                            const field = findFieldByKey(key);
+                            const fieldLabel = field?.label || getFieldLabel(key);
                             changes.push({
                               field: fieldLabel,
-                              old: oldVal ?? "—",
-                              new: newVal ?? "—",
+                              old: formatValue(field, oldVal),
+                              new: formatValue(field, newVal),
                             });
                           }
                         });
@@ -3564,11 +3581,14 @@ const TrackerEntryDetailPage = () => {
                         {changes.length > 0 ? (
                           <div className="mt-3 space-y-2">
                             {changes.map((change, changeIndex) => (
-                              <div key={changeIndex} className="text-sm">
-                                <span className="font-medium text-foreground">{change.field}:</span>{" "}
-                                <span className="text-muted-foreground line-through">{change.old}</span>{" "}
-                                <span className="text-muted-foreground">→</span>{" "}
-                                <span className="text-foreground font-medium">{change.new}</span>
+                              <div
+                                key={changeIndex}
+                                className="text-sm flex items-start gap-2"
+                              >
+                                <span className="font-medium text-foreground shrink-0">{change.field}:</span>
+                                <div className="text-muted-foreground line-through">{change.old}</div>
+                                <span className="text-muted-foreground shrink-0 mt-0.5">→</span>
+                                <div className="text-foreground font-medium">{change.new}</div>
                               </div>
                             ))}
                             {formattedDetails && (
