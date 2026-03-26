@@ -530,9 +530,6 @@ export function RotaTimeline({
           <div className="space-y-1">
             <CardTitle className="text-xl font-semibold tracking-tight">{isMyRota ? "My Rota" : "Rota"}</CardTitle>
             <CardDescription className="text-sm text-muted-foreground">
-              {isMyRota
-                ? "Your allocated shifts and leave by role. Same layout as Time & Attendance → Rota."
-                : "Required vs allocated and leave by role. Use \"Shift types\" to show or hide Allocated, Authorised Leave, Attended, etc. Click a shift for details, or use + to add one."}
               {!isMyRota && isSingleDay && (
                 <span className="mt-2 block">
                   See who&apos;s checked in today →{" "}
