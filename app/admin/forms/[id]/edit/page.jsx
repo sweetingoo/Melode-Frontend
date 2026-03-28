@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -946,6 +946,14 @@ const EditFormPage = () => {
             },
           }),
           categories: normalizedCategories,
+          personnel: {
+            enabled: false,
+            section: "",
+            completion_mode: "staff_only",
+            ...(typeof form.form_config?.personnel === "object" && form.form_config.personnel !== null
+              ? form.form_config.personnel
+              : {}),
+          },
         },
         access_config: form.access_config || {
           public_access: false,
@@ -3612,6 +3620,92 @@ const EditFormPage = () => {
                 </div>
               </CardContent>
             </Card>
+
+            {!form?.is_tracker ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Personnel file</CardTitle>
+                  <CardDescription>
+                    Link this form to a person&apos;s Info &amp; Compliance → Personnel File. Each completion is stored as a
+                    separate submission. Not available for tracker forms.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="personnel-enabled"
+                      checked={!!formData.form_config?.personnel?.enabled}
+                      onCheckedChange={(checked) =>
+                        setFormData({
+                          ...formData,
+                          form_config: {
+                            ...formData.form_config,
+                            personnel: {
+                              ...formData.form_config.personnel,
+                              enabled: !!checked,
+                            },
+                          },
+                        })
+                      }
+                    />
+                    <Label htmlFor="personnel-enabled" className="font-normal cursor-pointer">
+                      Show under each person&apos;s Personnel File
+                    </Label>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="personnel-section">Section label (grouping)</Label>
+                    <Input
+                      id="personnel-section"
+                      placeholder="e.g. Reviews, Onboarding, Medical"
+                      value={formData.form_config?.personnel?.section ?? ""}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          form_config: {
+                            ...formData.form_config,
+                            personnel: {
+                              ...formData.form_config.personnel,
+                              section: e.target.value,
+                            },
+                          },
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Who may complete this form</Label>
+                    <Select
+                      value={formData.form_config?.personnel?.completion_mode || "staff_only"}
+                      onValueChange={(value) =>
+                        setFormData({
+                          ...formData,
+                          form_config: {
+                            ...formData.form_config,
+                            personnel: {
+                              ...formData.form_config.personnel,
+                              completion_mode: value,
+                            },
+                          },
+                        })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="staff_only">Staff only (People Management)</SelectItem>
+                        <SelectItem value="subject_or_staff">That person or staff</SelectItem>
+                        <SelectItem value="public_link">Anyone (use with Public access below)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      For colleague feedback or 360-style forms, choose &quot;Anyone&quot; and enable{" "}
+                      <strong>Public access</strong> under form access above.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : null}
 
             {/* Form Assignment */}
             <Card>

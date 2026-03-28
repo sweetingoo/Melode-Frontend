@@ -107,6 +107,7 @@ export const useCreateForm = () => {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: formKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: ["custom-forms"] });
       toast.success("Form created successfully", {
         description: `Form "${data.form_title || data.form_name}" has been created.`,
       });
@@ -138,6 +139,7 @@ export const useUpdateForm = () => {
     onSuccess: (data, variables) => {
       queryClient.setQueryData(formKeys.detail(variables.slug), data);
       queryClient.invalidateQueries({ queryKey: formKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: ["custom-forms"] });
       toast.success("Form updated successfully", {
         description: `Form "${data.form_title || data.form_name}" has been updated.`,
       });
@@ -169,6 +171,7 @@ export const useDeleteForm = () => {
     onSuccess: (slug) => {
       queryClient.removeQueries({ queryKey: formKeys.detail(slug) });
       queryClient.invalidateQueries({ queryKey: formKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: ["custom-forms"] });
       toast.success("Form deleted successfully", {
         description: "The form has been removed.",
       });
@@ -260,6 +263,7 @@ export const useCreateFormSubmission = () => {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: formKeys.submissionList() });
+      queryClient.invalidateQueries({ queryKey: ["form-submissions"] });
       queryClient.invalidateQueries({ queryKey: formKeys.detail(data.form_id) });
       
       // Check if tasks were created
@@ -308,13 +312,33 @@ export const useUpdateFormSubmission = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ slug, submissionData }) => {
-      const response = await formsService.updateFormSubmission(slug, submissionData);
+    mutationFn: async (vars) => {
+      const identifier = vars.slug ?? vars.id;
+      const submissionData =
+        vars.submissionData ??
+        (vars.submission_data !== undefined || vars.status !== undefined
+          ? {
+              submission_data: vars.submission_data,
+              status: vars.status,
+              category: vars.category,
+              review_notes: vars.review_notes,
+              notes: vars.notes,
+            }
+          : null);
+      if (!identifier || !submissionData) {
+        throw new Error("updateFormSubmission requires slug or id and submission payload");
+      }
+      const body = Object.fromEntries(
+        Object.entries(submissionData).filter(([, v]) => v !== undefined)
+      );
+      const response = await formsService.updateFormSubmission(identifier, body);
       return response.data;
     },
     onSuccess: (data, variables) => {
-      queryClient.setQueryData(formKeys.submissionDetail(variables.slug), data);
+      const key = variables.slug ?? variables.id;
+      if (key) queryClient.setQueryData(formKeys.submissionDetail(key), data);
       queryClient.invalidateQueries({ queryKey: formKeys.submissionList() });
+      queryClient.invalidateQueries({ queryKey: ["form-submissions"] });
       toast.success("Form submission updated successfully");
     },
     onError: (error) => {

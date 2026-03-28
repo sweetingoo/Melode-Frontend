@@ -5,7 +5,11 @@ export const formsService = {
   // Get all forms
   getForms: async (params = {}) => {
     try {
-      return await api.get("/settings/custom-forms", { params });
+      const query = { ...params };
+      if (query.is_personnel !== undefined) {
+        query.is_personnel = query.is_personnel ? "true" : "false";
+      }
+      return await api.get("/settings/custom-forms", { params: query });
     } catch (error) {
       console.error("Get forms failed:", error);
       throw error;

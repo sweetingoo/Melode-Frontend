@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -20,8 +20,16 @@ import { toast } from "sonner";
 const FormSubmitPage = () => {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const slug = params.slug;
   const resumeSubmissionId = params.resumeSubmissionId; // For resuming drafts
+
+  const personnelSubjectUserId = useMemo(() => {
+    const raw = searchParams.get("subjectUserId");
+    if (raw == null || String(raw).trim() === "") return undefined;
+    const n = parseInt(String(raw), 10);
+    return Number.isFinite(n) && n > 0 ? n : undefined;
+  }, [searchParams]);
 
   const { data: form, isLoading: formLoading } = useFormBySlug(slug);
   const createSubmissionMutation = useCreateFormSubmission();
@@ -435,6 +443,10 @@ const FormSubmitPage = () => {
       }
       // Otherwise, submission will be anonymous (no user_id)
 
+      if (personnelSubjectUserId != null) {
+        submissionPayload.subject_user_id = personnelSubjectUserId;
+      }
+
       // Submit the form with processed data
       const result = draftSubmissionId 
         ? await updateSubmissionMutation.mutateAsync({
@@ -753,7 +765,11 @@ const FormSubmitPage = () => {
       if (isAuthenticated && currentUser) {
         draftPayload.submitted_by_user_id = currentUser.id;
       }
-      
+
+      if (personnelSubjectUserId != null) {
+        draftPayload.subject_user_id = personnelSubjectUserId;
+      }
+
       if (draftSubmissionId) {
         // Update existing draft
         await updateSubmissionMutation.mutateAsync({
@@ -1001,6 +1017,14 @@ const FormSubmitPage = () => {
               </div>
             </CardContent>
           </Card>
+        )}
+
+        {form.form_config?.personnel?.enabled && personnelSubjectUserId == null && (
+          <div className="mb-6 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
+            This form is linked to a personnel file. Use the link that includes{" "}
+            <code className="rounded bg-amber-100/80 px-1 dark:bg-amber-900/50">?subjectUserId=…</code> so the response is
+            stored against the correct person (for example a 360 or feedback form).
+          </div>
         )}
 
         <form onSubmit={handleSubmit}>

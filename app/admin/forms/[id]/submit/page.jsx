@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useEffect } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,8 +18,16 @@ import { toast } from "sonner";
 const FormSubmitPage = () => {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const formSlug = params.id || params.slug;
   const resumeSubmissionId = params.resumeSubmissionId; // For resuming drafts
+
+  const rawSubjectUserId = searchParams.get("subjectUserId");
+  const parsedSubject = rawSubjectUserId ? parseInt(rawSubjectUserId, 10) : NaN;
+  const personnelSubjectUserId =
+    Number.isFinite(parsedSubject) && parsedSubject > 0 ? parsedSubject : null;
+  const personnelSubjectPayload =
+    personnelSubjectUserId != null ? { subject_user_id: personnelSubjectUserId } : {};
 
   const { data: form, isLoading: formLoading } = useForm(formSlug);
   const createSubmissionMutation = useCreateFormSubmission();
@@ -356,6 +364,7 @@ const FormSubmitPage = () => {
             form_id: form?.id,
             submission_data: processedSubmissionData,
             status: "submitted",
+            ...personnelSubjectPayload,
           });
 
       // Clear saved submission from sessionStorage after successful submission
@@ -417,6 +426,13 @@ const FormSubmitPage = () => {
     // If no page breaks, return all fields as single page
     return pagesArray.length > 0 ? pagesArray : [fields];
   }, [fields]);
+
+  const isPersonnelLinkedForm = useMemo(() => {
+    if (!form || form.is_tracker) return false;
+    const p = form.form_config?.personnel;
+    if (!p || typeof p !== "object") return false;
+    return p.enabled === true || p.enabled === "true" || p.enabled === 1;
+  }, [form]);
 
   const totalPages = pages.length;
   const currentPageFields = pages[currentPage] || [];
@@ -588,9 +604,10 @@ const FormSubmitPage = () => {
       } else {
         // Create new draft
         const result = await createSubmissionMutation.mutateAsync({
-          form_id: parseInt(formId),
+          form_id: form?.id,
           submission_data: processedData,
           status: "draft",
+          ...personnelSubjectPayload,
         });
         const newDraftId = result.id;
         setDraftSubmissionId(newDraftId);
@@ -935,6 +952,14 @@ const FormSubmitPage = () => {
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div className="flex-1">
+          {isPersonnelLinkedForm && !personnelSubjectUserId ? (
+            <div className="mb-4 rounded-md border border-amber-500/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-950 dark:text-amber-100">
+              This form is linked to the personnel file. Open it from{" "}
+              <strong>People → Info &amp; Compliance → Personnel File</strong> (or add{" "}
+              <code className="rounded bg-background/60 px-1">?subjectUserId=…</code> to the URL) so submissions are stored
+              against the correct person.
+            </div>
+          ) : null}
           <h1 className="text-3xl font-bold">{form.form_title || form.form_name}</h1>
           <p className="text-muted-foreground">Submit Form</p>
         </div>

@@ -152,6 +152,7 @@ import { api } from "@/services/api-client";
 import CategoryTree from "@/components/documents/CategoryTree";
 import DocumentList from "@/components/documents/DocumentList";
 import { PageSearchBar } from "@/components/admin/PageSearchBar";
+import PersonnelFormsSection from "@/components/people-management/PersonnelFormsSection";
 
 const TasksForUser = ({ userSlug }) => {
   const [statusFilter, setStatusFilter] = React.useState("pending");
@@ -4304,6 +4305,14 @@ const UserEditPage = () => {
                   Confidential HR documents for this person. Categories are managed separately from the Library. Documents are not shareable and are only available to authorised People Management users.
                 </p>
               </div>
+
+              {personnelUserId ? (
+                <PersonnelFormsSection
+                  subjectUserId={personnelUserId}
+                  canStartForms={canManagePersonnelDocuments}
+                  viewer="admin"
+                />
+              ) : null}
 
               <PageSearchBar
                 searchValue={personnelFileSearch}

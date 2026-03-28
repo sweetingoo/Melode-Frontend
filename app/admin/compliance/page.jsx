@@ -14,7 +14,8 @@ import {
 } from "@/hooks/useProfile";
 import { useEntityCompliance } from "@/hooks/useCompliance";
 import { useCustomFieldLinks } from "@/hooks/useCustomFieldLinks";
-import { Shield, Loader2, User, Save, ChevronLeft, ChevronRight } from "lucide-react";
+import { Shield, Loader2, User, Save, ChevronLeft, ChevronRight, ClipboardList } from "lucide-react";
+import PersonnelFormsSection from "@/components/people-management/PersonnelFormsSection";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -808,6 +809,10 @@ export default function CompliancePage() {
         <TabsList>
           <TabsTrigger value="additional">My Information</TabsTrigger>
           <TabsTrigger value="compliance">My Compliance</TabsTrigger>
+          <TabsTrigger value="personnel" className="inline-flex items-center gap-1.5">
+            <ClipboardList className="h-4 w-4" />
+            Personnel forms
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="compliance" className="space-y-6">
@@ -819,6 +824,18 @@ export default function CompliancePage() {
             isAdmin={false}
             canUpload={true}
           />
+        </TabsContent>
+
+        <TabsContent value="personnel" className="space-y-6">
+          {currentUserData?.id ? (
+            <PersonnelFormsSection
+              subjectUserId={currentUserData.id}
+              canStartForms
+              viewer="self"
+            />
+          ) : (
+            <p className="text-sm text-muted-foreground">Unable to load your account for personnel forms.</p>
+          )}
         </TabsContent>
 
         <TabsContent value="additional" className="space-y-6">
