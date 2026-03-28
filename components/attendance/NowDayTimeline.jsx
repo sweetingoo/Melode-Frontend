@@ -81,11 +81,13 @@ export function NowDayTimeline({
       ? ((tickNow - windowStartMin) / span) * 100
       : null;
 
-  const deptColW = 90;
-  const roleColW = 140;
+  const deptColW = 52;
+  const roleColW = 64;
+  const personColW = 132;
   const rowHClass = "h-[72px]";
   const rowH = 72;
   const gridMinW = 640;
+  const leftSidebarW = deptColW + roleColW + personColW;
 
   if (!rows.length) {
     return (
@@ -98,12 +100,22 @@ export function NowDayTimeline({
   return (
     <div className={cn("rounded-xl border bg-card shadow-sm overflow-hidden", className)}>
       <div className="flex w-full">
-        <div className="shrink-0 border-r bg-muted/20" style={{ width: deptColW + roleColW }}>
-          <div className="h-10 border-b" />
+        <div className="shrink-0 border-r bg-muted/20" style={{ width: leftSidebarW }}>
+          <div className="flex h-10 shrink-0 border-b border-border/60">
+            <div className="shrink-0 border-r border-border/60" style={{ width: deptColW }} />
+            <div className="shrink-0 border-r border-border/60" style={{ width: roleColW }} />
+            <div
+              className="flex min-w-0 items-center px-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground"
+              style={{ width: personColW }}
+            >
+              Person
+            </div>
+          </div>
           <table className="w-full border-collapse table-fixed">
             <colgroup>
               <col style={{ width: deptColW }} />
               <col style={{ width: roleColW }} />
+              <col style={{ width: personColW }} />
             </colgroup>
             <tbody>
               {(() => {
@@ -129,16 +141,17 @@ export function NowDayTimeline({
                     const roleRowSpan = roleEnd - j;
 
                     for (let k = j; k < roleEnd; k++) {
+                      const isLastTableRow = k === rows.length - 1;
                       out.push(
                         <tr
                           key={`left-${rows[k].groupId ?? "grp"}-${rows[k].laneIndex ?? k}-${k}`}
                           style={{ height: rowH, minHeight: rowH, maxHeight: rowH, lineHeight: 1 }}
-                          className={rowHClass}
+                          className={cn(rowHClass, !isLastTableRow && "border-b border-border/60")}
                         >
                           {k === i ? (
                             <td
                               rowSpan={deptRowSpan}
-                              className="align-middle text-center border-r border-border/60 border-b border-border/60"
+                              className="align-middle text-center border-r border-border/60"
                               style={{ padding: 0, height: rowH, minHeight: rowH, maxHeight: rowH, verticalAlign: "middle" }}
                             >
                               <span
@@ -157,7 +170,7 @@ export function NowDayTimeline({
                           {k === j ? (
                             <td
                               rowSpan={roleRowSpan}
-                              className="align-middle text-center border-l border-border/60 border-b border-border/60"
+                              className="align-middle text-center border-r border-border/60"
                               style={{ padding: 0, height: rowH, minHeight: rowH, maxHeight: rowH, verticalAlign: "middle" }}
                             >
                               <span
@@ -173,6 +186,14 @@ export function NowDayTimeline({
                               </span>
                             </td>
                           ) : null}
+                          <td
+                            className="border-r border-border/60 px-2 align-middle text-left text-xs font-medium text-foreground"
+                            style={{ padding: "0 8px", height: rowH, minHeight: rowH, maxHeight: rowH, verticalAlign: "middle" }}
+                          >
+                            <span className="block truncate leading-tight" title={rows[k].displayName || ""}>
+                              {rows[k].displayName || "—"}
+                            </span>
+                          </td>
                         </tr>
                       );
                     }
@@ -209,11 +230,8 @@ export function NowDayTimeline({
               ))}
             </div>
             {rows.map((row, rowIndex) => {
-              const nextRow = rows[rowIndex + 1];
               const isLastRow = rowIndex === rows.length - 1;
-              const roleBoundary = !nextRow || nextRow.roleName !== row.roleName;
-              const deptBoundary = !nextRow || nextRow.departmentName !== row.departmentName;
-              const showBottomBorder = !isLastRow && (roleBoundary || deptBoundary);
+              const showBottomBorder = !isLastRow;
 
               return (
               <div
@@ -234,11 +252,12 @@ export function NowDayTimeline({
                     const width = ((seg.endMin - seg.startMin) / span) * 100;
                     if (width <= 0) return null;
                     const meta = KIND_META[seg.kind] || KIND_META.provisional;
+                    const barText = seg.barLabel ?? seg.shortLabel ?? meta.label;
                     return (
                       <div
                         key={`${seg.kind}-${idx}-${seg.startMin}-${seg.endMin}`}
                         className={cn(
-                          "absolute top-0 flex h-full min-w-[3px] items-center overflow-hidden rounded-md px-1 text-[10px] font-medium leading-tight",
+                          "absolute top-0 flex h-full min-w-[3px] items-center overflow-hidden rounded-md px-1 text-[9px] font-medium leading-tight",
                           meta.barClass
                         )}
                         style={{ left: `${left}%`, width: `${Math.max(width, 0.35)}%` }}
@@ -246,7 +265,9 @@ export function NowDayTimeline({
                           seg.title || `${meta.label}: ${formatRange(seg.startMin, seg.endMin)}`
                         }
                       >
-                        <span className="truncate">{seg.shortLabel || meta.label}</span>
+                        <span className="truncate" title={barText}>
+                          {barText}
+                        </span>
                       </div>
                     );
                   })}

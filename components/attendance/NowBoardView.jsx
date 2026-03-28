@@ -86,11 +86,14 @@ function shiftRecordToSegment(record, dateStr) {
   if (endMin == null) endMin = startMin + 60;
   endMin = Math.min(DAY_END_MIN, Math.max(startMin + 1, endMin));
   const typeName = record.shift_leave_type?.name || "";
+  const timeRange = formatRangeLabel(startMin, endMin);
+  const barLabel = typeName ? `${typeName.slice(0, 10)} ${timeRange}` : timeRange;
   return {
     kind: cat,
     startMin,
     endMin,
     shortLabel: typeName ? typeName.slice(0, 14) : undefined,
+    barLabel,
     title: typeName ? `${typeName} (${formatRangeLabel(startMin, endMin)})` : undefined,
   };
 }
@@ -104,16 +107,40 @@ function formatRangeLabel(a, b) {
   return `${f(a)}–${f(b)}`;
 }
 
+function minToHHmm(m) {
+  const h = Math.floor(m / 60) % 24;
+  const mi = Math.floor(m % 60);
+  return `${String(h).padStart(2, "0")}:${String(mi).padStart(2, "0")}`;
+}
+
+/** Compare calendar days from API strings, Date, or YYYY-MM-DD (ignores time / timezone suffix quirks). */
+function normalizeDayKey(v) {
+  if (v == null || v === "") return "";
+  if (typeof v === "string") return v.slice(0, 10);
+  try {
+    if (v instanceof Date && !isNaN(v.getTime())) {
+      return formatDateForAPI(v) || "";
+    }
+    const d = new Date(v);
+    if (!isNaN(d.getTime())) return formatDateForAPI(d) || "";
+  } catch {
+    /* ignore */
+  }
+  return String(v).slice(0, 10);
+}
+
 function clockRecordToSegment(record, dateStr, isSelectedToday) {
   const cin = parseUTCDate(record.clock_in_time);
   if (!cin || isNaN(cin.getTime())) return null;
-  if (formatDateForAPI(cin) !== dateStr) return null;
+  const targetDay = normalizeDayKey(dateStr);
+  const cinDay = normalizeDayKey(formatDateForAPI(cin));
+  if (cinDay !== targetDay) return null;
   const startMin = toMinutesSinceLocalMidnight(cin);
   let endMin;
   if (record.clock_out_time) {
     const cout = parseUTCDate(record.clock_out_time);
     if (cout && !isNaN(cout.getTime())) {
-      if (formatDateForAPI(cout) === dateStr) {
+      if (normalizeDayKey(formatDateForAPI(cout)) === targetDay) {
         endMin = toMinutesSinceLocalMidnight(cout);
       } else {
         endMin = DAY_END_MIN;
@@ -127,27 +154,38 @@ function clockRecordToSegment(record, dateStr, isSelectedToday) {
     endMin = DAY_END_MIN;
   }
   endMin = Math.min(DAY_END_MIN, Math.max(startMin + 1, endMin));
+  const hasClockOut = !!record.clock_out_time;
+  const barLabel = hasClockOut
+    ? `In ${minToHHmm(startMin)} Out ${minToHHmm(endMin)}`
+    : `In ${minToHHmm(startMin)}`;
   return {
     kind: "clock",
     startMin,
     endMin,
-    shortLabel: "In",
+    shortLabel: barLabel,
+    barLabel,
     title: `Clocked ${formatRangeLabel(startMin, endMin)}`,
   };
 }
 
 function openClockToSegment(entry, dateStr, boardDateStr, isSelectedToday) {
-  if (boardDateStr !== dateStr) return null;
+  // Now-board `date` and selected day must match; normalize so "2026-03-28" === "2026-03-28T00:00:00".
+  if (normalizeDayKey(boardDateStr) !== normalizeDayKey(dateStr)) return null;
   const cin = entry.clock_in_time ? parseUTCDate(entry.clock_in_time) : null;
   if (!cin || isNaN(cin.getTime())) return null;
-  if (formatDateForAPI(cin) !== dateStr) return null;
-  const startMin = toMinutesSinceLocalMidnight(cin);
+  const targetDay = normalizeDayKey(dateStr);
+  const cinDay = normalizeDayKey(formatDateForAPI(cin));
+  // Still-active sessions may have started on a previous calendar day; show bar from midnight of the selected day.
+  const startMin = cinDay === targetDay ? toMinutesSinceLocalMidnight(cin) : 0;
   const endMin = isSelectedToday ? toMinutesSinceLocalMidnight(new Date()) : DAY_END_MIN;
+  const inWallMin = toMinutesSinceLocalMidnight(cin);
+  const barLabel = `In ${minToHHmm(inWallMin)}`;
   return {
     kind: "clock",
     startMin,
     endMin: Math.min(DAY_END_MIN, Math.max(startMin + 1, endMin)),
-    shortLabel: "In",
+    shortLabel: barLabel,
+    barLabel,
     title: `Clocked in (open) ${formatRangeLabel(startMin, endMin)}`,
   };
 }
@@ -391,11 +429,13 @@ export function NowBoardView({ departmentId: initialDepartmentId = null }) {
       return record?.job_role_id || record?.shift_role_id ? `Role ${record.job_role_id ?? record.shift_role_id}` : "—";
     };
 
-    const mergeGroupSegments = (groupKey, departmentName, roleName, segment) => {
+    const mergeGroupSegments = (groupKey, departmentName, roleName, userId, displayName, segment) => {
       if (!segment) return;
       if (!groupMap.has(groupKey)) {
         groupMap.set(groupKey, {
           groupId: groupKey,
+          userId,
+          displayName: displayName || `User ${userId}`,
           departmentName: departmentName || "—",
           roleName: roleName || "—",
           segments: [],
@@ -410,13 +450,12 @@ export function NowBoardView({ departmentId: initialDepartmentId = null }) {
       const name = getUserDisplayName(r.user) || `User ${r.user_id}`;
       const departmentName = getShiftGroupDepartment(r);
       const roleName = getShiftGroupRole(r);
-      const groupKey = `${departmentName}||${roleName}`;
+      const groupKey = `${departmentName}||${roleName}||${r.user_id}`;
       const seg = shiftRecordToSegment(r, dateStr);
       if (seg) {
         seg.userDisplayName = name;
-        // Ensure hover shows who the segment belongs to (important now that rows are grouped).
         seg.title = seg.title ? `${name} • ${seg.title}` : name;
-        mergeGroupSegments(groupKey, departmentName, roleName, seg);
+        mergeGroupSegments(groupKey, departmentName, roleName, r.user_id, name, seg);
       }
     }
 
@@ -431,33 +470,37 @@ export function NowBoardView({ departmentId: initialDepartmentId = null }) {
         `User ${cr.user_id}`;
       const departmentName = cr?.department_name || "—";
       const roleName = cr?.job_role_name || cr?.current_shift_role_name || cr?.initial_shift_role_name || "—";
-      const groupKey = `${departmentName}||${roleName}`;
+      const groupKey = `${departmentName}||${roleName}||${cr.user_id}`;
       const seg = clockRecordToSegment(cr, dateStr, isToday);
       if (seg) {
         seg.userDisplayName = name;
         seg.title = seg.title ? `${name} • ${seg.title}` : name;
-        mergeGroupSegments(groupKey, departmentName, roleName, seg);
-        if (!cr.clock_out_time) seenOpenClockUsers.add(cr.user_id);
+        mergeGroupSegments(groupKey, departmentName, roleName, cr.user_id, name, seg);
+        if (!cr.clock_out_time) seenOpenClockUsers.add(String(cr.user_id));
       }
     }
 
     for (const u of clockedInNow) {
-      if (!passesUser(u.user_id)) continue;
-      if (seenOpenClockUsers.has(u.user_id)) continue;
-      const name = u.display_name || `User ${u.user_id}`;
+      const clockUserId = u.user_id ?? u.id;
+      if (clockUserId == null) continue;
+      if (!passesUser(clockUserId)) continue;
+      if (seenOpenClockUsers.has(String(clockUserId))) continue;
+      const name = u.display_name || `User ${clockUserId}`;
       const departmentName = u?.department_name || "—";
       const roleName = u?.role_name || "—";
-      const groupKey = `${departmentName}||${roleName}`;
+      const groupKey = `${departmentName}||${roleName}||${clockUserId}`;
       const seg = openClockToSegment(u, dateStr, boardDate, isToday);
       if (seg) {
         seg.userDisplayName = name;
         seg.title = seg.title ? `${name} • ${seg.title}` : name;
-        mergeGroupSegments(groupKey, departmentName, roleName, seg);
+        mergeGroupSegments(groupKey, departmentName, roleName, clockUserId, name, seg);
       }
     }
 
     const rows = Array.from(groupMap.values()).map((g) => ({
       groupId: g.groupId,
+      userId: g.userId,
+      displayName: g.displayName,
       departmentName: g.departmentName,
       roleName: g.roleName,
       segments: sortSegments(g.segments),
@@ -497,6 +540,8 @@ export function NowBoardView({ departmentId: initialDepartmentId = null }) {
       for (let laneIndex = 0; laneIndex < lanes.length; laneIndex++) {
         laneRows.push({
           groupId: gRow.groupId,
+          userId: gRow.userId,
+          displayName: gRow.displayName,
           laneIndex,
           departmentName: gRow.departmentName,
           roleName: gRow.roleName,
@@ -510,6 +555,8 @@ export function NowBoardView({ departmentId: initialDepartmentId = null }) {
       if (deptCmp !== 0) return deptCmp;
       const roleCmp = String(a.roleName).localeCompare(String(b.roleName), undefined, { sensitivity: "base" });
       if (roleCmp !== 0) return roleCmp;
+      const nameCmp = String(a.displayName || "").localeCompare(String(b.displayName || ""), undefined, { sensitivity: "base" });
+      if (nameCmp !== 0) return nameCmp;
       return (a.laneIndex ?? 0) - (b.laneIndex ?? 0);
     });
 
