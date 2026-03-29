@@ -56,6 +56,7 @@ import {
   Clock,
   History,
   Calendar,
+  CalendarDays,
   Crown,
   FileSpreadsheet,
   BarChart3,
@@ -143,6 +144,13 @@ const mainMenuItems = [
     icon: CheckSquare,
     url: "/admin/tasks",
     permission: "tasks:read", // Permission to read tasks
+  },
+  {
+    title: "Calendar",
+    description: "Events, invites, RSVPs and reminders",
+    icon: CalendarDays,
+    url: "/admin/calendar",
+    permission: null,
   },
   {
     title: "Projects",
