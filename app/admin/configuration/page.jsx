@@ -89,12 +89,14 @@ import {
   UserPlus,
   UserMinus,
   Users,
+  Scale,
 } from "lucide-react";
 import { toast } from "sonner";
 import RichTextEditor from "@/components/RichTextEditor";
 import { useUploadFile } from "@/hooks/useProfile";
 import { Upload, Image as ImageIcon } from "lucide-react";
 import { filesService } from "@/services/files";
+import { legalService } from "@/services/legal";
 
 // Utility function to extract file reference from URL or value
 const extractFileReference = (value) => {
@@ -239,7 +241,7 @@ function ConfigurationPageContent() {
 
   const { data: settingsData, isLoading } = useSettings(settingsParams);
   // Exclude settings managed elsewhere: Role defaults (Default Role Permissions), Attendance (Time & Attendance → Settings)
-  const SETTINGS_HIDDEN_PREFIXES = ["role.defaults.", "attendance."];
+  const SETTINGS_HIDDEN_PREFIXES = ["role.defaults.", "attendance.", "legal.terms."];
   const settings = useMemo(() => {
     if (!settingsData) return [];
     let list = [];
@@ -266,6 +268,43 @@ function ConfigurationPageContent() {
   const bulkUpdateMutation = useBulkUpdateSettings();
   const deleteSettingMutation = useDeleteSetting();
   const updateOrganisationMutation = useUpdateOrganisation();
+  const queryClient = useQueryClient();
+
+  const { data: termsData, isLoading: termsLoading } = useQuery({
+    queryKey: ["legal", "terms"],
+    queryFn: async () => (await legalService.getTerms()).data,
+    enabled: activeTab === "terms" && canAccessConfiguration,
+  });
+
+  const [termsDraft, setTermsDraft] = useState({
+    enabled: false,
+    version: "",
+    title: "",
+    body: "",
+  });
+
+  useEffect(() => {
+    if (termsData) {
+      setTermsDraft({
+        enabled: !!termsData.enabled,
+        version: termsData.version || "",
+        title: termsData.title || "",
+        body: termsData.body || "",
+      });
+    }
+  }, [termsData]);
+
+  const saveTermsMutation = useMutation({
+    mutationFn: (payload) => legalService.updateTerms(payload),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["legal", "terms"] });
+      toast.success("Terms of service saved");
+    },
+    onError: (error) => {
+      const msg = error.response?.data?.detail;
+      toast.error(typeof msg === "string" ? msg : "Could not save terms");
+    },
+  });
 
   // Form state for create/edit
   const [formData, setFormData] = useState({
@@ -848,6 +887,7 @@ function ConfigurationPageContent() {
           <TabsTrigger value="settings">Settings</TabsTrigger>
           <TabsTrigger value="organisation">Organisation</TabsTrigger>
           <TabsTrigger value="integrations">Integrations</TabsTrigger>
+          <TabsTrigger value="terms">Terms</TabsTrigger>
           <TabsTrigger value="role-defaults">Role Defaults</TabsTrigger>
         </TabsList>
 
@@ -2701,6 +2741,108 @@ function ConfigurationPageContent() {
                 )}
               </Button>
               </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="terms" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Scale className="h-5 w-5" />
+                Terms of service (signup)
+              </CardTitle>
+              <CardDescription>
+                When enabled and a version is set, invited users must accept this document before they can set their password.
+                Each acceptance is stored and appears in audit logs.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {termsLoading ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between rounded-lg border p-4">
+                    <div>
+                      <Label htmlFor="terms-enabled" className="text-base">
+                        Require acceptance on invitation signup
+                      </Label>
+                      <p className="text-sm text-muted-foreground">
+                        Also requires a non-empty version and body below
+                      </p>
+                    </div>
+                    <Switch
+                      id="terms-enabled"
+                      checked={termsDraft.enabled}
+                      onCheckedChange={(checked) =>
+                        setTermsDraft((prev) => ({ ...prev, enabled: checked }))
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="terms-version">Version label</Label>
+                    <Input
+                      id="terms-version"
+                      placeholder="e.g. 2026-03-29 or v1.2"
+                      value={termsDraft.version}
+                      onChange={(e) =>
+                        setTermsDraft((prev) => ({ ...prev, version: e.target.value }))
+                      }
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Changing this invalidates open signup pages until the user refreshes.
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="terms-title">Title</Label>
+                    <Input
+                      id="terms-title"
+                      value={termsDraft.title}
+                      onChange={(e) =>
+                        setTermsDraft((prev) => ({ ...prev, title: e.target.value }))
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="terms-body">Document text</Label>
+                    <Textarea
+                      id="terms-body"
+                      className="min-h-[220px] font-mono text-sm"
+                      value={termsDraft.body}
+                      onChange={(e) =>
+                        setTermsDraft((prev) => ({ ...prev, body: e.target.value }))
+                      }
+                      placeholder="Paste plain-text terms. Users see this on the signup screen."
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    onClick={() =>
+                      saveTermsMutation.mutate({
+                        enabled: termsDraft.enabled,
+                        version: termsDraft.version,
+                        title: termsDraft.title,
+                        body: termsDraft.body,
+                      })
+                    }
+                    disabled={saveTermsMutation.isPending}
+                  >
+                    {saveTermsMutation.isPending ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Saving…
+                      </>
+                    ) : (
+                      <>
+                        <Save className="mr-2 h-4 w-4" />
+                        Save terms
+                      </>
+                    )}
+                  </Button>
+                </>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

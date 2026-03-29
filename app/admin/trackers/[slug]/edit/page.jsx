@@ -679,6 +679,7 @@ const TrackerEditPage = () => {
               constants: {},
             }),
             use_stages: tracker.tracker_config?.use_stages ?? (!!(tracker.tracker_config?.stage_mapping?.length || tracker.tracker_config?.is_patient_referral)),
+            link_cases_to_user: !!tracker.tracker_config?.link_cases_to_user,
             list_view_fields: tracker.tracker_config?.list_view_fields || [],
             note_categories: tracker.tracker_config?.note_categories || [],
             action_types: (tracker.tracker_config?.action_types && Array.isArray(tracker.tracker_config.action_types))
@@ -1605,6 +1606,29 @@ const TrackerEditPage = () => {
                   Organize trackers. Manage categories in Admin → Tracker Categories.
                 </p>
               </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="link_cases_to_user"
+                  checked={!!formData.tracker_config?.link_cases_to_user}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      tracker_config: {
+                        ...prev.tracker_config,
+                        link_cases_to_user: e.target.checked,
+                      },
+                    }))
+                  }
+                  className="rounded"
+                />
+                <Label htmlFor="link_cases_to_user" className="cursor-pointer">
+                  User-linked tracker — each case is about someone in the directory (shown under their Info &amp; Compliance)
+                </Label>
+              </div>
+              <p className="text-xs text-muted-foreground -mt-1 ml-6">
+                When enabled, staff choose the person when creating a case. That person can open their cases from their profile without tracker admin permissions.
+              </p>
               <div className="flex items-center gap-2">
                 <input
                   type="checkbox"

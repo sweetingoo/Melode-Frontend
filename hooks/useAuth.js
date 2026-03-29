@@ -576,9 +576,12 @@ export const useSignup = () => {
       console.error("Signup error:", error);
 
       if (error.response?.status === 400) {
-        toast.error("Invalid invitation", {
-          description: "The invitation token is invalid or expired",
-        });
+        const detail = error.response?.data?.detail;
+        const message =
+          typeof detail === "string"
+            ? detail
+            : "The request could not be completed. Check your invitation link or terms acceptance.";
+        toast.error("Signup failed", { description: message });
       } else if (error.response?.status === 422) {
         const errorData = error.response.data;
 

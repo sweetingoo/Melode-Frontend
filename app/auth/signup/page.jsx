@@ -14,6 +14,8 @@ import { useSignup } from "@/hooks/useAuth";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { useSearchParams, useRouter } from "next/navigation";
 import { apiUtils } from "@/services/api-client";
+import { legalService } from "@/services/legal";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const SignupContent = () => {
   const router = useRouter();
@@ -25,9 +27,29 @@ const SignupContent = () => {
   });
   const [validationErrors, setValidationErrors] = useState({});
   const searchParams = useSearchParams();
+  const [termsPublic, setTermsPublic] = useState(null);
+  const [termsLoading, setTermsLoading] = useState(true);
+  const [acceptTerms, setAcceptTerms] = useState(false);
 
   // Use the signup mutation from our custom hook
   const signupMutation = useSignup();
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await legalService.getTermsPublic();
+        if (!cancelled) setTermsPublic(data);
+      } catch {
+        if (!cancelled) setTermsPublic(null);
+      } finally {
+        if (!cancelled) setTermsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -88,6 +110,10 @@ const SignupContent = () => {
       errors.confirmPassword = "Passwords do not match";
     }
 
+    if (termsPublic?.enforcement_active && !acceptTerms) {
+      errors.acceptTerms = "You must accept the terms to continue";
+    }
+
     setValidationErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -104,6 +130,8 @@ const SignupContent = () => {
     const signupData = {
       invitation_token: formData.invitation_token,
       password: formData.password,
+      accept_terms: acceptTerms,
+      terms_version: termsPublic?.version || null,
     };
 
     // Call the signup mutation
@@ -240,6 +268,34 @@ const SignupContent = () => {
                   </p>
                 )}
               </div>
+
+              {!termsLoading && termsPublic?.enforcement_active && (
+                <div className="space-y-3 rounded-lg border border-border bg-muted/30 p-4">
+                  <p className="text-sm font-medium">{termsPublic.title}</p>
+                  <div className="max-h-48 overflow-y-auto rounded-md border bg-background p-3 text-sm whitespace-pre-wrap">
+                    {termsPublic.body}
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <Checkbox
+                      id="accept-terms"
+                      checked={acceptTerms}
+                      onCheckedChange={(v) => {
+                        setAcceptTerms(!!v);
+                        if (validationErrors.acceptTerms) {
+                          setValidationErrors((prev) => ({ ...prev, acceptTerms: "" }));
+                        }
+                      }}
+                      className="mt-1"
+                    />
+                    <Label htmlFor="accept-terms" className="text-sm font-normal leading-snug cursor-pointer">
+                      I have read and accept these terms and conditions (version: {termsPublic.version})
+                    </Label>
+                  </div>
+                  {validationErrors.acceptTerms && (
+                    <p className="text-xs text-red-600">{validationErrors.acceptTerms}</p>
+                  )}
+                </div>
+              )}
 
               {/* Submit Button */}
               <Button

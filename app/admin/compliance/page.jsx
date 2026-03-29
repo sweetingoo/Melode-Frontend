@@ -14,8 +14,9 @@ import {
 } from "@/hooks/useProfile";
 import { useEntityCompliance } from "@/hooks/useCompliance";
 import { useCustomFieldLinks } from "@/hooks/useCustomFieldLinks";
-import { Shield, Loader2, User, Save, ChevronLeft, ChevronRight, ClipboardList } from "lucide-react";
+import { Shield, Loader2, User, Save, ChevronLeft, ChevronRight, ClipboardList, LayoutList } from "lucide-react";
 import PersonnelFormsSection from "@/components/people-management/PersonnelFormsSection";
+import UserLinkedTrackerCasesSection from "@/components/people-management/UserLinkedTrackerCasesSection";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -809,6 +810,10 @@ export default function CompliancePage() {
         <TabsList>
           <TabsTrigger value="additional">My Information</TabsTrigger>
           <TabsTrigger value="compliance">My Compliance</TabsTrigger>
+          <TabsTrigger value="tracker-cases" className="inline-flex items-center gap-1.5">
+            <LayoutList className="h-4 w-4" />
+            Tracker cases
+          </TabsTrigger>
           <TabsTrigger value="personnel" className="inline-flex items-center gap-1.5">
             <ClipboardList className="h-4 w-4" />
             Personnel forms
@@ -824,6 +829,14 @@ export default function CompliancePage() {
             isAdmin={false}
             canUpload={true}
           />
+        </TabsContent>
+
+        <TabsContent value="tracker-cases" className="space-y-6">
+          {currentUserData?.id ? (
+            <UserLinkedTrackerCasesSection subjectUserId={currentUserData.id} viewer="self" />
+          ) : (
+            <p className="text-sm text-muted-foreground">Unable to load your account for tracker cases.</p>
+          )}
         </TabsContent>
 
         <TabsContent value="personnel" className="space-y-6">

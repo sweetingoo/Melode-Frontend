@@ -195,6 +195,7 @@ const TrackersPage = () => {
   // Explicit stage + status for create entry (when tracker has stage_mapping)
   const [createEntrySelectedStage, setCreateEntrySelectedStage] = useState("");
   const [createEntrySelectedStatus, setCreateEntrySelectedStatus] = useState("");
+  const [createEntrySubjectUserId, setCreateEntrySubjectUserId] = useState("");
   const [showMetadataColumns, setShowMetadataColumns] = useState(false);
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   // Sheet-like: selected cell for formula bar (rowIndex, fieldId)
@@ -409,7 +410,7 @@ const TrackersPage = () => {
   }, [selectedTracker]);
 
   // Get users for "Updated By" display
-  const { data: usersResponse } = useUsers();
+  const { data: usersResponse } = useUsers({ page: 1, per_page: 200, is_active: true });
   const users = usersResponse?.users || usersResponse || [];
 
   // Helper to get user name
@@ -1345,6 +1346,7 @@ const TrackersPage = () => {
                   setCreateEntryStageIndex(0);
                   setCreateEntrySelectedStage("");
                   setCreateEntrySelectedStatus("");
+                  setCreateEntrySubjectUserId("");
                 }
               }}
             >
@@ -1356,6 +1358,31 @@ const TrackersPage = () => {
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
+                  {trackerDetails?.tracker_config?.link_cases_to_user && (
+                    <div className="space-y-2">
+                      <Label>Casework is about *</Label>
+                      <Select
+                        value={createEntrySubjectUserId ? String(createEntrySubjectUserId) : ""}
+                        onValueChange={(v) => setCreateEntrySubjectUserId(v)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select user…" />
+                        </SelectTrigger>
+                        <SelectContent className="max-h-72 overflow-y-auto">
+                          {users
+                            .filter((u) => u?.id)
+                            .map((u) => (
+                              <SelectItem key={u.id} value={String(u.id)}>
+                                {getUserName(u.id) || `User #${u.id}`}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        This tracker is configured to link every case to a person (Info &amp; Compliance).
+                      </p>
+                    </div>
+                  )}
                   {trackerDetails && trackerDetails.tracker_fields?.fields && (() => {
                     // Get fields to show in creation modal
                     const allFields = trackerDetails.tracker_fields.fields.filter((field) => {
@@ -1725,6 +1752,13 @@ const TrackersPage = () => {
                         toast.error("Please fill in all required fields");
                         return;
                       }
+                      if (trackerDetails?.tracker_config?.link_cases_to_user) {
+                        const uid = parseInt(String(createEntrySubjectUserId || "").trim(), 10);
+                        if (!Number.isFinite(uid) || uid <= 0) {
+                          toast.error("Select the user this case is about");
+                          return;
+                        }
+                      }
                       try {
                         const allFieldsList = trackerDetails.tracker_fields?.fields || [];
                         const submission_data = {};
@@ -1784,17 +1818,25 @@ const TrackersPage = () => {
                         if (statusFieldId && statusToUse) {
                           submission_data[statusFieldId] = statusToUse;
                         }
-                        await createEntryMutation.mutateAsync({
+                        const entryPayload = {
                           form_id: trackerDetails.id,
                           submission_data,
                           status: statusToUse,
-                        });
+                        };
+                        if (trackerDetails?.tracker_config?.link_cases_to_user) {
+                          entryPayload.subject_user_id = parseInt(
+                            String(createEntrySubjectUserId).trim(),
+                            10
+                          );
+                        }
+                        await createEntryMutation.mutateAsync(entryPayload);
                         setIsCreateEntryDialogOpen(false);
                         setEntryFormData({});
                         setEntryFieldErrors({});
                         setCreateEntryStageIndex(0);
                         setCreateEntrySelectedStage("");
                         setCreateEntrySelectedStatus("");
+                        setCreateEntrySubjectUserId("");
                         toast.success("Entry created");
                         // Stay on list (do not navigate to entry)
                       } catch (error) {

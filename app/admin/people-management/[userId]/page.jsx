@@ -153,6 +153,7 @@ import CategoryTree from "@/components/documents/CategoryTree";
 import DocumentList from "@/components/documents/DocumentList";
 import { PageSearchBar } from "@/components/admin/PageSearchBar";
 import PersonnelFormsSection from "@/components/people-management/PersonnelFormsSection";
+import UserLinkedTrackerCasesSection from "@/components/people-management/UserLinkedTrackerCasesSection";
 
 const TasksForUser = ({ userSlug }) => {
   const [statusFilter, setStatusFilter] = React.useState("pending");
@@ -420,7 +421,9 @@ const UserEditPage = () => {
 
   // Check if tab parameter is in URL (for redirects from compliance-monitoring)
   const tabParam = searchParams?.get("tab");
-  
+  const complianceTabParam = searchParams?.get("complianceTab");
+  const COMPLIANCE_SUB_TAB_VALUES = ["additional", "compliance", "tracker-cases", "personnel"];
+
   // Get stored tab state from localStorage
   const getStoredTabState = (key, defaultValue) => {
     if (typeof window === 'undefined') return defaultValue;
@@ -437,8 +440,13 @@ const UserEditPage = () => {
     return tabParam || getStoredTabState('activeTab', 'basic');
   });
   
-  // Nested tabs state for compliance tab (My Information / My Compliance) - always default to My Information on load
-  const [complianceSubTab, setComplianceSubTab] = useState('additional');
+  // Nested tabs under Info & Compliance: sync from ?complianceTab=… or localStorage
+  const [complianceSubTab, setComplianceSubTab] = useState(() => {
+    if (complianceTabParam && COMPLIANCE_SUB_TAB_VALUES.includes(complianceTabParam)) {
+      return complianceTabParam;
+    }
+    return getStoredTabState("complianceSubTab", "additional");
+  });
   const [activeSectionTab, setActiveSectionTab] = useState(() => {
     return getStoredTabState('activeSectionTab', null);
   });
@@ -468,16 +476,45 @@ const UserEditPage = () => {
     }
   }, [activeTab, userSlug]);
 
-  // Persist active tab in URL query (?tab=...) so refresh keeps the active tab via GET.
+  // Deep link / browser back: when ?complianceTab= changes, sync nested tab
+  useEffect(() => {
+    if (activeTab !== "compliance") return;
+    if (!complianceTabParam || !COMPLIANCE_SUB_TAB_VALUES.includes(complianceTabParam)) return;
+    setComplianceSubTab((prev) => (prev === complianceTabParam ? prev : complianceTabParam));
+  }, [activeTab, complianceTabParam]);
+
+  // Persist active tab and nested compliance tab in URL (?tab= & complianceTab=)
   useEffect(() => {
     if (!activeTab || !pathname) return;
-    if (tabParam === activeTab) return;
-
     const nextParams = new URLSearchParams(searchParams?.toString() || "");
-    nextParams.set("tab", activeTab);
+    let needsReplace = false;
+    if (nextParams.get("tab") !== activeTab) {
+      nextParams.set("tab", activeTab);
+      needsReplace = true;
+    }
+    if (activeTab === "compliance") {
+      if (nextParams.get("complianceTab") !== complianceSubTab) {
+        nextParams.set("complianceTab", complianceSubTab);
+        needsReplace = true;
+      }
+    } else if (nextParams.has("complianceTab")) {
+      nextParams.delete("complianceTab");
+      needsReplace = true;
+    }
+    if (!needsReplace) return;
     const nextQuery = nextParams.toString();
     router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
-  }, [activeTab, tabParam, pathname, router, searchParams]);
+  }, [activeTab, complianceSubTab, pathname, router, searchParams]);
+
+  // Remember nested compliance tab per user (optional; URL is primary)
+  useEffect(() => {
+    if (typeof window === "undefined" || !userSlug || !complianceSubTab) return;
+    try {
+      localStorage.setItem(`people-management-${userSlug}-complianceSubTab`, complianceSubTab);
+    } catch {
+      /* ignore */
+    }
+  }, [complianceSubTab, userSlug]);
 
   // Persist activeSectionTab to localStorage
   useEffect(() => {
@@ -3755,12 +3792,15 @@ const UserEditPage = () => {
         {/* Compliance Tab */}
         <TabsContent value="compliance" className="space-y-6">
           <Tabs value={complianceSubTab} onValueChange={setComplianceSubTab} className="space-y-6">
-            <TabsList className="grid w-full grid-cols-3 h-auto gap-1">
+            <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 h-auto gap-1">
               <TabsTrigger value="additional" className="whitespace-normal text-center px-2 py-2 text-xs sm:text-sm">
                 My Information
               </TabsTrigger>
               <TabsTrigger value="compliance" className="whitespace-normal text-center px-2 py-2 text-xs sm:text-sm">
                 My Compliance
+              </TabsTrigger>
+              <TabsTrigger value="tracker-cases" className="whitespace-normal text-center px-2 py-2 text-xs sm:text-sm">
+                Tracker cases
               </TabsTrigger>
               <TabsTrigger value="personnel" className="whitespace-normal text-center px-2 py-2 text-xs sm:text-sm">
                 Personnel File
@@ -3776,6 +3816,14 @@ const UserEditPage = () => {
                 isAdmin={true}
                 canUpload={true}
               />
+            </TabsContent>
+
+            <TabsContent value="tracker-cases" className="space-y-6">
+              {personnelUserId ? (
+                <UserLinkedTrackerCasesSection subjectUserId={personnelUserId} viewer="admin" />
+              ) : (
+                <p className="text-sm text-muted-foreground">Unable to load user id for tracker cases.</p>
+              )}
             </TabsContent>
 
             <TabsContent value="additional" className="space-y-6">
