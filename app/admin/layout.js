@@ -149,7 +149,7 @@ const mainMenuItems = [
     title: "Calendar",
     description: "Events, invites, RSVPs and reminders",
     icon: CalendarDays,
-    url: "/admin/calendar",
+    url: "/admin/attendance?tab=rota",
     permission: null,
   },
   {

@@ -136,6 +136,8 @@ function AttendancePageContent() {
     return { from: fromDate, to: toDate };
   }, [activeTab, searchParams]);
 
+  const initialOpenEventSlug = searchParams.get("event") || undefined;
+
   return (
     <div className="w-full space-y-4 px-2 py-4 sm:space-y-6 sm:px-0 sm:py-6">
       <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-4 sm:space-y-6">
@@ -215,7 +217,11 @@ function AttendancePageContent() {
         )}
 
         <TabsContent value="rota" className="mt-0 focus-visible:outline-none">
-          <RotaTimeline initialRange={initialRotaRange} includeAll={canManageAllShiftRecords} />
+          <RotaTimeline
+            initialRange={initialRotaRange}
+            includeAll={canManageAllShiftRecords}
+            initialOpenEventSlug={initialOpenEventSlug}
+          />
         </TabsContent>
 
         <TabsContent value="now" className="mt-0 focus-visible:outline-none">

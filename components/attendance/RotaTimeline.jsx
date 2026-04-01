@@ -2,10 +2,36 @@
 
 import React, { useMemo, useState, useEffect } from "react";
 import Link from "next/link";
-import { format, addDays, startOfWeek, startOfMonth, endOfMonth, addMonths, subMonths, differenceInDays } from "date-fns";
+import {
+  format,
+  addDays,
+  startOfWeek,
+  startOfMonth,
+  endOfMonth,
+  endOfDay,
+  startOfDay,
+  addMonths,
+  subMonths,
+  differenceInDays,
+} from "date-fns";
+import { usePathname, useRouter } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Building2, Calendar as CalendarIcon, ChevronDown, ChevronRight, Clock, FileText, Filter, Loader2, Pencil, Plus, Trash2, User } from "lucide-react";
+import {
+  Building2,
+  Calendar as CalendarIcon,
+  ChevronDown,
+  ChevronRight,
+  Clock,
+  FileText,
+  Filter,
+  Loader2,
+  Pencil,
+  Plus,
+  Trash2,
+  User,
+} from "lucide-react";
+import { toast } from "sonner";
 import {
   Dialog,
   DialogContent,
@@ -30,6 +56,17 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useCalendarEventsList } from "@/hooks/useCalendarEvents";
+import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
+import { calendarEventsService } from "@/services/calendarEvents";
+import { CalendarEventCreateDialog } from "@/components/calendar/CalendarEventCreateDialog";
+import { CalendarEventDetailSheet } from "@/components/calendar/CalendarEventDetailSheet";
+
+function calendarEventIntersectsDay(ev, day) {
+  const s = new Date(ev.starts_at);
+  const e = new Date(ev.ends_at);
+  return s <= endOfDay(day) && e >= startOfDay(day);
+}
 
 /** Categories that can appear as blocks on the rota (shift records). */
 const ROTA_CATEGORY_OPTIONS = [
@@ -98,6 +135,7 @@ export function RotaTimeline({
   userId: lockedUserId = null,
   userDisplayName: lockedUserDisplayName = null,
   includeAll = false,
+  initialOpenEventSlug = null,
 }) {
   const defaultRange = useMemo(defaultWeekRange, []);
   const [customRange, setCustomRange] = useState(defaultRange);
@@ -248,6 +286,66 @@ export function RotaTimeline({
   };
 
   const isLoading = coverageLoading || shiftsLoading;
+
+  const router = useRouter();
+  const pathname = usePathname();
+  const { hasPermission } = usePermissionsCheck();
+  const canListEvents = hasPermission("event:list");
+  const canCreateEvent = hasPermission("event:create");
+  const canRunEventReminders = hasPermission("event:update");
+
+  const [createCalendarOpen, setCreateCalendarOpen] = useState(false);
+  const [selectedCalendarEventSlug, setSelectedCalendarEventSlug] = useState(null);
+
+  useEffect(() => {
+    if (initialOpenEventSlug) setSelectedCalendarEventSlug(initialOpenEventSlug);
+  }, [initialOpenEventSlug]);
+
+  const calendarRangeIso = useMemo(() => {
+    if (!committedRange?.from || !committedRange?.to) return { start: null, end: null };
+    return {
+      start: startOfDay(committedRange.from).toISOString(),
+      end: endOfDay(committedRange.to).toISOString(),
+    };
+  }, [committedRange?.from?.getTime?.(), committedRange?.to?.getTime?.()]);
+
+  const { data: calendarListData, isFetching: calendarEventsFetching } = useCalendarEventsList({
+    start: calendarRangeIso.start,
+    end: calendarRangeIso.end,
+    per_page: 200,
+    enabled: canListEvents && !!calendarRangeIso.start && !!calendarRangeIso.end,
+  });
+
+  const calendarEvents = calendarListData?.events || [];
+
+  const eventsByDateStr = useMemo(() => {
+    const map = {};
+    for (const d of days) {
+      const key = formatDateForAPI(d);
+      map[key] = calendarEvents
+        .filter((ev) => calendarEventIntersectsDay(ev, d))
+        .sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at));
+    }
+    return map;
+  }, [days, calendarEvents]);
+
+  const runEventReminders = async () => {
+    try {
+      const res = await calendarEventsService.processReminders();
+      toast.message(`Reminders processed: ${res.data?.processed ?? 0}`);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Failed to run reminders");
+    }
+  };
+
+  const clearEventQueryParam = () => {
+    if (typeof window === "undefined" || !pathname) return;
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has("event")) return;
+    params.delete("event");
+    const q = params.toString();
+    router.replace(q ? `${pathname}?${q}` : pathname, { scroll: false });
+  };
 
   const roleDepartmentById = useMemo(() => {
     const map = new Map();
@@ -530,6 +628,11 @@ export function RotaTimeline({
           <div className="space-y-1">
             <CardTitle className="text-xl font-semibold tracking-tight">{isMyRota ? "My Rota" : "Rota"}</CardTitle>
             <CardDescription className="text-sm text-muted-foreground">
+              {canListEvents && (
+                <span className="block">
+                  Organisation events appear in the date column (violet) alongside shifts for the same range.
+                </span>
+              )}
               {!isMyRota && isSingleDay && (
                 <span className="mt-2 block">
                   See who&apos;s checked in today →{" "}
@@ -737,6 +840,17 @@ export function RotaTimeline({
               >
                 <Plus className="h-4 w-4 shrink-0" />
                 Add Shift Record
+              </Button>
+            )}
+            {canCreateEvent && (
+              <Button type="button" variant="secondary" className="h-9 gap-2" onClick={() => setCreateCalendarOpen(true)}>
+                <CalendarIcon className="h-4 w-4 shrink-0" />
+                New event
+              </Button>
+            )}
+            {canRunEventReminders && (
+              <Button type="button" variant="outline" className="h-9 gap-2" onClick={runEventReminders}>
+                Event reminders
               </Button>
             )}
             <Popover open={rangeCalendarOpen} onOpenChange={setRangeCalendarOpen}>
@@ -966,6 +1080,33 @@ export function RotaTimeline({
                       >
                         <span className="block text-[11px] uppercase tracking-wider opacity-80">{format(d, "EEE")}</span>
                         <span className="block text-base">{format(d, "d")}</span>
+                        {canListEvents && (
+                          <div className="mt-2 max-w-[140px] space-y-1 border-t border-border/50 pt-2">
+                            <p className="text-[9px] font-semibold uppercase tracking-wide text-violet-700 dark:text-violet-300">
+                              Events
+                            </p>
+                            {calendarEventsFetching ? (
+                              <span className="text-[10px] text-muted-foreground">…</span>
+                            ) : (
+                              (eventsByDateStr[dateStr] || []).map((ev) => (
+                                <button
+                                  key={ev.slug}
+                                  type="button"
+                                  onClick={() => setSelectedCalendarEventSlug(ev.slug)}
+                                  className={cn(
+                                    "flex w-full flex-col items-start rounded-md border-l-4 border-l-violet-500 bg-violet-500/10 px-1.5 py-1 text-left text-[10px] leading-tight transition-colors hover:bg-violet-500/20",
+                                    ev.is_cancelled && "opacity-50 line-through",
+                                  )}
+                                >
+                                  <span className="tabular-nums text-muted-foreground">
+                                    {format(new Date(ev.starts_at), "HH:mm")}
+                                  </span>
+                                  <span className="w-full truncate font-medium">{ev.title}</span>
+                                </button>
+                              ))
+                            )}
+                          </div>
+                        )}
                       </td>
                       {roleRowsSorted.map((row) => {
                         const roleData = byDateRole[dateStr]?.[row.key];
@@ -1175,6 +1316,17 @@ export function RotaTimeline({
         allowUserSelect={includeAll}
         defaultNewCategory="provisional"
       />
+      <CalendarEventDetailSheet
+        slug={selectedCalendarEventSlug}
+        open={!!selectedCalendarEventSlug}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedCalendarEventSlug(null);
+            clearEventQueryParam();
+          }
+        }}
+      />
+      <CalendarEventCreateDialog open={createCalendarOpen} onOpenChange={setCreateCalendarOpen} />
     </Card>
   );
 }
