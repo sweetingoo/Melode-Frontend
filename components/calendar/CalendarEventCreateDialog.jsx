@@ -54,13 +54,6 @@ function calendarInviteUserLabel(u) {
   );
 }
 
-const WEEKLY_INTERVAL_OPTIONS = [
-  { value: "none", label: "None" },
-  { value: "1", label: "Every 1 week" },
-  { value: "2", label: "Every 2 weeks" },
-  { value: "4", label: "Every 4 weeks" },
-];
-
 export function CalendarEventCreateDialog({ open, onOpenChange }) {
   const { data: locations = [] } = useLocations({ per_page: 200 });
   const { data: roles = [] } = useRolesAll(100);
@@ -69,9 +62,12 @@ export function CalendarEventCreateDialog({ open, onOpenChange }) {
   const calendarJobRoles = useMemo(() => {
     const list = Array.isArray(roles) ? roles : [];
     const jobs = list.filter((r) => (r.role_type || r.roleType) === "job_role");
-    return [...jobs].sort((a, b) =>
-      formatRolePickerLabel(a).localeCompare(formatRolePickerLabel(b), undefined, { sensitivity: "base" }),
-    );
+    const getDept = (r) => (r.department?.name || r.department_name || "No department").trim();
+    return [...jobs].sort((a, b) => {
+      const deptCmp = getDept(a).localeCompare(getDept(b), undefined, { sensitivity: "base" });
+      if (deptCmp !== 0) return deptCmp;
+      return formatRolePickerLabel(a).localeCompare(formatRolePickerLabel(b), undefined, { sensitivity: "base" });
+    });
   }, [roles]);
 
   const defaultStart = nextTopOfHour();
@@ -92,9 +88,8 @@ export function CalendarEventCreateDialog({ open, onOpenChange }) {
 
   /** none | weekly | monthly — weekly uses same spacing choices as shift “recurring” on rota */
   const [repeatMode, setRepeatMode] = useState("none");
-  const [weeklyIntervalWeeks, setWeeklyIntervalWeeks] = useState("none");
-  const [weeksAhead, setWeeksAhead] = useState(12);
-  const [monthsAhead, setMonthsAhead] = useState(6);
+  const [recurrenceInterval, setRecurrenceInterval] = useState(1);
+  const [recurrenceCount, setRecurrenceCount] = useState(12);
 
   const [invitePickerOpen, setInvitePickerOpen] = useState(false);
   const [inviteUserSearch, setInviteUserSearch] = useState("");
@@ -150,9 +145,8 @@ export function CalendarEventCreateDialog({ open, onOpenChange }) {
       selected_role_ids: [],
     });
     setRepeatMode("none");
-    setWeeklyIntervalWeeks("none");
-    setWeeksAhead(12);
-    setMonthsAhead(6);
+    setRecurrenceInterval(1);
+    setRecurrenceCount(12);
     setInviteUserSearch("");
     setDebouncedInviteSearch("");
   };
@@ -233,21 +227,18 @@ export function CalendarEventCreateDialog({ open, onOpenChange }) {
   };
 
   const buildRecurrencePayload = () => {
-    if (repeatMode === "weekly" && weeklyIntervalWeeks !== "none") {
-      const interval = parseInt(weeklyIntervalWeeks, 10);
-      const count = Math.min(52, Math.max(1, Math.ceil(Number(weeksAhead) / interval)));
+    if (repeatMode === "weekly") {
       return {
         recurrence_frequency: "weekly",
-        recurrence_interval: interval,
-        recurrence_occurrence_count: count,
+        recurrence_interval: Math.min(12, Math.max(1, parseInt(String(recurrenceInterval), 10) || 1)),
+        recurrence_occurrence_count: Math.min(52, Math.max(1, parseInt(String(recurrenceCount), 10) || 1)),
       };
     }
     if (repeatMode === "monthly") {
-      const count = Math.min(52, Math.max(1, parseInt(String(monthsAhead), 10) || 1));
       return {
         recurrence_frequency: "monthly",
-        recurrence_interval: 1,
-        recurrence_occurrence_count: count,
+        recurrence_interval: Math.min(12, Math.max(1, parseInt(String(recurrenceInterval), 10) || 1)),
+        recurrence_occurrence_count: Math.min(52, Math.max(1, parseInt(String(recurrenceCount), 10) || 1)),
       };
     }
     return {
@@ -508,6 +499,7 @@ export function CalendarEventCreateDialog({ open, onOpenChange }) {
               ) : (
                 calendarJobRoles.map((r) => {
                   const shiftKids = r.shift_roles || r.shiftRoles || [];
+                  const deptName = r.department?.name || r.department_name || "No department";
                   return (
                     <label key={r.id} className="flex flex-col gap-1 text-sm">
                       <span className="flex items-start gap-2">
@@ -517,7 +509,7 @@ export function CalendarEventCreateDialog({ open, onOpenChange }) {
                           onCheckedChange={() => toggleRole(r.id)}
                         />
                         <span>
-                          <span className="font-medium leading-snug">{formatRolePickerLabel(r)}</span>
+                          <span className="font-medium leading-snug">{deptName} - {formatRolePickerLabel(r)}</span>
                           {shiftKids.length > 0 ? (
                             <span className="mt-0.5 block text-xs text-muted-foreground leading-snug">
                               Linked shift roles: {shiftKids.map((s) => s.display_name || s.name).join(", ")}
@@ -534,12 +526,15 @@ export function CalendarEventCreateDialog({ open, onOpenChange }) {
 
           <div className="space-y-2 rounded-lg border bg-muted/20 p-3">
             <Label>Repeat</Label>
-            <p className="text-xs text-muted-foreground">Weekly options match “recurring” shifts on the rota. Monthly is available when you need a different pattern.</p>
+            <p className="text-xs text-muted-foreground">Flexible recurrence (weekly/monthly) with custom interval and number of occurrences.</p>
             <Select
               value={repeatMode}
               onValueChange={(v) => {
                 setRepeatMode(v);
-                if (v !== "weekly") setWeeklyIntervalWeeks("none");
+                if (v === "none") {
+                  setRecurrenceInterval(1);
+                  setRecurrenceCount(12);
+                }
               }}
             >
               <SelectTrigger>
@@ -551,44 +546,23 @@ export function CalendarEventCreateDialog({ open, onOpenChange }) {
                 <SelectItem value="monthly">Monthly</SelectItem>
               </SelectContent>
             </Select>
-            {repeatMode === "weekly" && (
+            {(repeatMode === "weekly" || repeatMode === "monthly") && (
               <div className="space-y-2 pt-1">
-                <Label className="text-xs">Every</Label>
-                <Select value={weeklyIntervalWeeks} onValueChange={setWeeklyIntervalWeeks}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {WEEKLY_INTERVAL_OPTIONS.map((o) => (
-                      <SelectItem key={o.value} value={o.value}>
-                        {o.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {weeklyIntervalWeeks !== "none" && (
-                  <div className="space-y-1">
-                    <Label className="text-xs">Weeks to schedule ahead (1–52)</Label>
-                    <Input
-                      type="number"
-                      min={1}
-                      max={52}
-                      value={weeksAhead}
-                      onChange={(e) => setWeeksAhead(parseInt(e.target.value, 10) || 1)}
-                    />
-                  </div>
-                )}
-              </div>
-            )}
-            {repeatMode === "monthly" && (
-              <div className="space-y-1 pt-1">
-                <Label className="text-xs">Number of occurrences (months, max 52)</Label>
+                <Label className="text-xs">Repeat every {repeatMode === "weekly" ? "week(s)" : "month(s)"} (1-12)</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={12}
+                  value={recurrenceInterval}
+                  onChange={(e) => setRecurrenceInterval(parseInt(e.target.value, 10) || 1)}
+                />
+                <Label className="text-xs">Number of occurrences (1-52)</Label>
                 <Input
                   type="number"
                   min={1}
                   max={52}
-                  value={monthsAhead}
-                  onChange={(e) => setMonthsAhead(parseInt(e.target.value, 10) || 1)}
+                  value={recurrenceCount}
+                  onChange={(e) => setRecurrenceCount(parseInt(e.target.value, 10) || 1)}
                 />
               </div>
             )}
@@ -605,8 +579,7 @@ export function CalendarEventCreateDialog({ open, onOpenChange }) {
               createMutation.isPending ||
               !form.title ||
               !form.startLocal ||
-              !form.endLocal ||
-              (repeatMode === "weekly" && weeklyIntervalWeeks === "none")
+              !form.endLocal
             }
           >
             {createMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create"}
