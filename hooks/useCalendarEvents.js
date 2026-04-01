@@ -61,8 +61,8 @@ export function useCreateCalendarEvent() {
 export function useUpdateCalendarEvent() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ slug, data }) => {
-      const res = await calendarEventsService.update(slug, data);
+    mutationFn: async ({ slug, data, apply_to_series = false }) => {
+      const res = await calendarEventsService.update(slug, data, { apply_to_series });
       return res.data;
     },
     onSuccess: (_, v) => {
@@ -89,7 +89,8 @@ export function useDeleteCalendarEvent() {
 export function usePatchEventInvites() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ slug, data }) => calendarEventsService.patchInvites(slug, data),
+    mutationFn: ({ slug, data, apply_to_series = false }) =>
+      calendarEventsService.patchInvites(slug, data, { apply_to_series }),
     onSuccess: (_, v) => {
       qc.invalidateQueries({ queryKey: qk.one(v.slug) });
       qc.invalidateQueries({ queryKey: ["calendar-events"] });

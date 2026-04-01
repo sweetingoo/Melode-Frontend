@@ -10,14 +10,18 @@ export const calendarEventsService = {
   create(data) {
     return apiClient.post("/calendar-events", data);
   },
-  update(slug, data) {
-    return apiClient.put(`/calendar-events/${encodeURIComponent(slug)}`, data);
+  update(slug, data, options = {}) {
+    return apiClient.put(`/calendar-events/${encodeURIComponent(slug)}`, data, {
+      params: { apply_to_series: !!options.apply_to_series },
+    });
   },
   delete(slug) {
     return apiClient.delete(`/calendar-events/${encodeURIComponent(slug)}`);
   },
-  patchInvites(slug, data) {
-    return apiClient.patch(`/calendar-events/${encodeURIComponent(slug)}/invites`, data);
+  patchInvites(slug, data, options = {}) {
+    return apiClient.patch(`/calendar-events/${encodeURIComponent(slug)}/invites`, data, {
+      params: { apply_to_series: !!options.apply_to_series },
+    });
   },
   listRsvps(slug) {
     return apiClient.get(`/calendar-events/${encodeURIComponent(slug)}/rsvps`);

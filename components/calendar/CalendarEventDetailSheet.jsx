@@ -1,12 +1,12 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Copy, Loader2, Trash2 } from "lucide-react";
+import { Copy, Loader2, Pencil, Trash2 } from "lucide-react";
 import CommentThread from "@/components/CommentThread";
 import {
   useCalendarEvent,
@@ -17,6 +17,7 @@ import {
 } from "@/hooks/useCalendarEvents";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
 import { toast } from "sonner";
+import { CalendarEventEditDialog } from "@/components/calendar/CalendarEventEditDialog";
 
 export function CalendarEventDetailSheet({ slug, open, onOpenChange }) {
   const { hasPermission } = usePermissionsCheck();
@@ -28,6 +29,7 @@ export function CalendarEventDetailSheet({ slug, open, onOpenChange }) {
   const selfRsvpMutation = useSelfEventRsvp();
   const patchAttendedMutation = usePatchRsvpAttended();
   const deleteMutation = useDeleteCalendarEvent();
+  const [editOpen, setEditOpen] = useState(false);
 
   const copyPublicLink = (token) => {
     const base = typeof window !== "undefined" ? window.location.origin : "";
@@ -78,6 +80,14 @@ export function CalendarEventDetailSheet({ slug, open, onOpenChange }) {
                   </Button>
                 </div>
               ) : null}
+              {canUpdate && (
+                <div className="flex items-center gap-2">
+                  <Button type="button" size="sm" variant="outline" onClick={() => setEditOpen(true)}>
+                    <Pencil className="h-3 w-3 mr-1" />
+                    Edit event
+                  </Button>
+                </div>
+              )}
 
               <Separator />
 
@@ -149,6 +159,7 @@ export function CalendarEventDetailSheet({ slug, open, onOpenChange }) {
 
               <CommentThread entityType="calendar_event" entitySlug={event.slug} />
             </div>
+            <CalendarEventEditDialog open={editOpen} onOpenChange={setEditOpen} event={event} />
           </>
         )}
       </SheetContent>

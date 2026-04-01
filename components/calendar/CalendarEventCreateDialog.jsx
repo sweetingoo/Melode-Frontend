@@ -55,6 +55,16 @@ function calendarInviteUserLabel(u) {
 }
 
 export function CalendarEventCreateDialog({ open, onOpenChange }) {
+  const WEEKLY_INTERVAL_OPTIONS = [
+    { value: "1", label: "Every 1 week" },
+    { value: "2", label: "Every 2 weeks" },
+    { value: "4", label: "Every 4 weeks" },
+  ];
+  const MONTHLY_INTERVAL_OPTIONS = [
+    { value: "1", label: "Every 1 month" },
+    { value: "2", label: "Every 2 months" },
+    { value: "3", label: "Every 3 months" },
+  ];
   const { data: locations = [] } = useLocations({ per_page: 200 });
   const { data: roles = [] } = useRolesAll(100);
   const createMutation = useCreateCalendarEvent();
@@ -526,7 +536,7 @@ export function CalendarEventCreateDialog({ open, onOpenChange }) {
 
           <div className="space-y-2 rounded-lg border bg-muted/20 p-3">
             <Label>Repeat</Label>
-            <p className="text-xs text-muted-foreground">Flexible recurrence (weekly/monthly) with custom interval and number of occurrences.</p>
+            <p className="text-xs text-muted-foreground">Set how often this event repeats.</p>
             <Select
               value={repeatMode}
               onValueChange={(v) => {
@@ -542,20 +552,28 @@ export function CalendarEventCreateDialog({ open, onOpenChange }) {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">Does not repeat</SelectItem>
-                <SelectItem value="weekly">Weekly (same as shift recurrence)</SelectItem>
+                <SelectItem value="weekly">Weekly</SelectItem>
                 <SelectItem value="monthly">Monthly</SelectItem>
               </SelectContent>
             </Select>
             {(repeatMode === "weekly" || repeatMode === "monthly") && (
               <div className="space-y-2 pt-1">
-                <Label className="text-xs">Repeat every {repeatMode === "weekly" ? "week(s)" : "month(s)"} (1-12)</Label>
-                <Input
-                  type="number"
-                  min={1}
-                  max={12}
-                  value={recurrenceInterval}
-                  onChange={(e) => setRecurrenceInterval(parseInt(e.target.value, 10) || 1)}
-                />
+                <Label className="text-xs">Every</Label>
+                <Select
+                  value={String(recurrenceInterval)}
+                  onValueChange={(v) => setRecurrenceInterval(parseInt(v, 10) || 1)}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(repeatMode === "weekly" ? WEEKLY_INTERVAL_OPTIONS : MONTHLY_INTERVAL_OPTIONS).map((o) => (
+                      <SelectItem key={o.value} value={o.value}>
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <Label className="text-xs">Number of occurrences (1-52)</Label>
                 <Input
                   type="number"
