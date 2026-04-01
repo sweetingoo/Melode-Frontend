@@ -1,29 +1,38 @@
 "use client";
 
-import { useEffect, Suspense } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { Loader2 } from "lucide-react";
+import { Suspense, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
+import { RotaTimeline } from "@/components/attendance/RotaTimeline";
+import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
 
 /**
- * Calendar events use the same timeline as the rota (Time & Attendance → Rota).
- * This route keeps old links working and optional ?event=slug deep links.
+ * Calendar page uses the same layout as attendance rota,
+ * but focuses on events only.
  */
-function CalendarRedirectInner() {
-  const router = useRouter();
+function CalendarPageInner() {
   const searchParams = useSearchParams();
+  const { hasPermission } = usePermissionsCheck();
+  const canListEvents = hasPermission("event:list");
 
-  useEffect(() => {
-    const event = searchParams.get("event");
-    const params = new URLSearchParams();
-    params.set("tab", "rota");
-    if (event) params.set("event", event);
-    router.replace(`/admin/attendance?${params.toString()}`);
-  }, [router, searchParams]);
+  if (!canListEvents) {
+    return <div className="px-2 py-4 text-sm text-muted-foreground sm:px-0 sm:py-6">You do not have permission to view calendar events.</div>;
+  }
+
+  const initialRange = useMemo(() => {
+    const from = searchParams.get("from");
+    const to = searchParams.get("to");
+    if (!from || !to) return null;
+    const fromDate = new Date(`${from}T12:00:00`);
+    const toDate = new Date(`${to}T12:00:00`);
+    if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) return null;
+    return { from: fromDate, to: toDate };
+  }, [searchParams]);
+
+  const initialOpenEventSlug = searchParams.get("event") || undefined;
 
   return (
-    <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3 p-6 text-muted-foreground">
-      <Loader2 className="h-8 w-8 animate-spin" />
-      <p className="text-sm">Opening rota…</p>
+    <div className="w-full space-y-4 px-2 py-4 sm:space-y-6 sm:px-0 sm:py-6">
+      <RotaTimeline initialRange={initialRange} initialOpenEventSlug={initialOpenEventSlug} eventsOnly />
     </div>
   );
 }
@@ -32,12 +41,12 @@ export default function CalendarPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-[40vh] items-center justify-center p-6 text-muted-foreground">
-          <Loader2 className="h-8 w-8 animate-spin" />
+        <div className="flex min-h-[200px] items-center justify-center p-8 text-muted-foreground">
+          Loading…
         </div>
       }
     >
-      <CalendarRedirectInner />
+      <CalendarPageInner />
     </Suspense>
   );
 }

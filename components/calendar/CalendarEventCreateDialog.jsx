@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -24,12 +24,25 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ChevronDown, Loader2, UserPlus, X } from "lucide-react";
+import { CalendarDays, ChevronDown, Loader2, UserPlus, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLocations } from "@/hooks/useLocations";
 import { useRolesAll, formatRolePickerLabel } from "@/hooks/useRoles";
 import { useCreateCalendarEvent } from "@/hooks/useCalendarEvents";
 import { usersService } from "@/services/users";
+
+function toLocalDateTimeInputValue(date) {
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function nextTopOfHour(base = new Date()) {
+  const d = new Date(base);
+  d.setSeconds(0, 0);
+  d.setMinutes(0);
+  d.setHours(d.getHours() + 1);
+  return d;
+}
 
 function calendarInviteUserLabel(u) {
   if (!u) return "";
@@ -61,12 +74,14 @@ export function CalendarEventCreateDialog({ open, onOpenChange }) {
     );
   }, [roles]);
 
+  const defaultStart = nextTopOfHour();
+  const defaultEnd = new Date(defaultStart.getTime() + 60 * 60 * 1000);
   const [form, setForm] = useState({
     title: "",
     description: "",
     visibility: "private",
-    startLocal: "",
-    endLocal: "",
+    startLocal: toLocalDateTimeInputValue(defaultStart),
+    endLocal: toLocalDateTimeInputValue(defaultEnd),
     location_id: "",
     location_detail_text: "",
     location_mode: "physical",
@@ -86,6 +101,8 @@ export function CalendarEventCreateDialog({ open, onOpenChange }) {
   const [debouncedInviteSearch, setDebouncedInviteSearch] = useState("");
   const [suggestResults, setSuggestResults] = useState([]);
   const [suggestLoading, setSuggestLoading] = useState(false);
+  const startInputRef = useRef(null);
+  const endInputRef = useRef(null);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedInviteSearch(inviteUserSearch), 300);
@@ -117,12 +134,14 @@ export function CalendarEventCreateDialog({ open, onOpenChange }) {
   }, [invitePickerOpen, debouncedInviteSearch]);
 
   const resetForm = () => {
+    const start = nextTopOfHour();
+    const end = new Date(start.getTime() + 60 * 60 * 1000);
     setForm({
       title: "",
       description: "",
       visibility: "private",
-      startLocal: "",
-      endLocal: "",
+      startLocal: toLocalDateTimeInputValue(start),
+      endLocal: toLocalDateTimeInputValue(end),
       location_id: "",
       location_detail_text: "",
       location_mode: "physical",
@@ -170,6 +189,49 @@ export function CalendarEventCreateDialog({ open, onOpenChange }) {
     setForm((f) => ({ ...f, invitedPeople: f.invitedPeople.filter((p) => p.id !== id) }));
   };
 
+  const handleStartChange = (value) => {
+    setForm((prev) => {
+      const next = { ...prev, startLocal: value };
+      if (!value) return next;
+      const start = new Date(value);
+      if (isNaN(start.getTime())) return next;
+      const suggestedEnd = new Date(start.getTime() + 60 * 60 * 1000);
+      const currentEnd = prev.endLocal ? new Date(prev.endLocal) : null;
+      if (!prev.endLocal || !currentEnd || isNaN(currentEnd.getTime()) || currentEnd <= start) {
+        next.endLocal = toLocalDateTimeInputValue(suggestedEnd);
+      }
+      return next;
+    });
+  };
+
+  const handleEndChange = (value) => {
+    setForm((prev) => {
+      const next = { ...prev, endLocal: value };
+      if (!value || !prev.startLocal) return next;
+      const start = new Date(prev.startLocal);
+      const end = new Date(value);
+      if (isNaN(start.getTime()) || isNaN(end.getTime())) return next;
+      if (end <= start) {
+        next.endLocal = toLocalDateTimeInputValue(new Date(start.getTime() + 60 * 60 * 1000));
+      }
+      return next;
+    });
+  };
+
+  const openNativePicker = (ref) => {
+    const el = ref?.current;
+    if (!el) return;
+    try {
+      if (typeof el.showPicker === "function") el.showPicker();
+      else {
+        el.focus();
+        el.click();
+      }
+    } catch {
+      el.focus();
+    }
+  };
+
   const buildRecurrencePayload = () => {
     if (repeatMode === "weekly" && weeklyIntervalWeeks !== "none") {
       const interval = parseInt(weeklyIntervalWeeks, 10);
@@ -196,14 +258,24 @@ export function CalendarEventCreateDialog({ open, onOpenChange }) {
   };
 
   const handleCreate = async () => {
+    const startDate = new Date(form.startLocal);
+    const endDate = new Date(form.endLocal);
+    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+      return;
+    }
+    if (endDate <= startDate) {
+      toast.error("End date/time must be after start date/time");
+      return;
+    }
+
     const userIds = (form.invitedPeople || []).map((p) => p.id).filter(Boolean);
     const rec = buildRecurrencePayload();
     const payload = {
       title: form.title.trim(),
       description: form.description || null,
       visibility: form.visibility,
-      starts_at: new Date(form.startLocal).toISOString(),
-      ends_at: new Date(form.endLocal).toISOString(),
+      starts_at: startDate.toISOString(),
+      ends_at: endDate.toISOString(),
       location_id: form.location_id ? parseInt(form.location_id, 10) : null,
       location_detail_text: form.location_detail_text || null,
       location_mode: form.location_mode,
@@ -256,11 +328,36 @@ export function CalendarEventCreateDialog({ open, onOpenChange }) {
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <div className="space-y-1">
               <Label>Start</Label>
-              <Input type="datetime-local" value={form.startLocal} onChange={(e) => setForm({ ...form, startLocal: e.target.value })} />
+              <div className="flex items-center gap-2">
+                <Input ref={startInputRef} type="datetime-local" value={form.startLocal} onChange={(e) => handleStartChange(e.target.value)} />
+                <Button type="button" variant="outline" size="icon" className="h-10 w-10 shrink-0" onClick={() => openNativePicker(startInputRef)} aria-label="Open start date and time picker">
+                  <CalendarDays className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
             <div className="space-y-1">
               <Label>End</Label>
-              <Input type="datetime-local" value={form.endLocal} onChange={(e) => setForm({ ...form, endLocal: e.target.value })} />
+              <div className="flex items-center gap-2">
+                <Input
+                  ref={endInputRef}
+                  type="datetime-local"
+                  value={form.endLocal}
+                  min={form.startLocal || undefined}
+                  disabled={!form.startLocal}
+                  onChange={(e) => handleEndChange(e.target.value)}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-10 w-10 shrink-0"
+                  disabled={!form.startLocal}
+                  onClick={() => openNativePicker(endInputRef)}
+                  aria-label="Open end date and time picker"
+                >
+                  <CalendarDays className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           </div>
           <div className="space-y-1">

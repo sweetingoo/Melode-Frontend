@@ -77,6 +77,8 @@ const ROTA_CATEGORY_OPTIONS = [
   { value: "attendance", label: CATEGORY_LABELS.attendance },
 ];
 const DEFAULT_VISIBLE_CATEGORIES = ["mapped", "provisional", "authorised_leave", "unauthorised_leave", "attendance"];
+const EVENT_VISIBILITY_OPTIONS = ["public", "private"];
+const EVENT_MODE_OPTIONS = ["physical", "online", "hybrid"];
 
 const RANGE_PRESETS = [
   { id: "today", label: "Today" },
@@ -136,11 +138,28 @@ export function RotaTimeline({
   userDisplayName: lockedUserDisplayName = null,
   includeAll = false,
   initialOpenEventSlug = null,
+  eventsOnly = false,
 }) {
+  const readQueryParamCsv = (key, allowed, fallbackValues) => {
+    if (typeof window === "undefined") return new Set(fallbackValues);
+    const raw = new URLSearchParams(window.location.search).get(key);
+    if (!raw) return new Set(fallbackValues);
+    const picked = raw
+      .split(",")
+      .map((s) => s.trim().toLowerCase())
+      .filter((s) => allowed.includes(s));
+    return new Set(picked.length > 0 ? picked : fallbackValues);
+  };
+
   const defaultRange = useMemo(defaultWeekRange, []);
   const [customRange, setCustomRange] = useState(defaultRange);
   const [committedRange, setCommittedRange] = useState(defaultRange);
   const [rangeSource, setRangeSource] = useState("thisWeek");
+  const [eventsViewMode, setEventsViewMode] = useState(() => {
+    if (typeof window === "undefined") return "range";
+    const v = new URLSearchParams(window.location.search).get("ev_view");
+    return v === "day" ? "day" : "range";
+  }); // range | day
   const [rangeCalendarOpen, setRangeCalendarOpen] = useState(false);
   const [departmentFilter, setDepartmentFilter] = useState(departmentIdProp != null ? String(departmentIdProp) : "all");
   const [userFilter, setUserFilter] = useState(lockedUserId != null ? String(lockedUserId) : "all");
@@ -181,7 +200,7 @@ export function RotaTimeline({
   const departmentIdNum = departmentFilter === "all" ? null : (parseInt(departmentFilter, 10) || null);
   const userIdNum = userFilter === "all" ? null : (parseInt(userFilter, 10) || null);
 
-  const { data: departmentsData } = useDepartments({ per_page: 200 });
+  const { data: departmentsData } = useDepartments({ per_page: 200 }, { enabled: !eventsOnly });
   const departments = useMemo(() => {
     if (!departmentsData) return [];
     if (Array.isArray(departmentsData)) return departmentsData;
@@ -256,9 +275,9 @@ export function RotaTimeline({
     [coverageParams, userIdNum, includeAll]
   );
 
-  const { data: coverageData, isLoading: coverageLoading } = useCoverage(coverageParams);
-  const { data: shiftData, isLoading: shiftsLoading } = useShiftRecordsAllPages(shiftParams);
-  const { data: allRolesData = [] } = useRolesAll(100);
+  const { data: coverageData, isLoading: coverageLoading } = useCoverage(coverageParams, { enabled: !eventsOnly });
+  const { data: shiftData, isLoading: shiftsLoading } = useShiftRecordsAllPages(shiftParams, { enabled: !eventsOnly });
+  const { data: allRolesData = [] } = useRolesAll(100, { enabled: !eventsOnly });
 
   /** Job role id → column title (avoid using shift role / coverage role_name which is often "General"). */
   const jobRoleColumnNameById = useMemo(() => {
@@ -275,6 +294,12 @@ export function RotaTimeline({
   }, [allRolesData]);
 
   const [visibleCategories, setVisibleCategories] = useState(() => new Set(DEFAULT_VISIBLE_CATEGORIES));
+  const [visibleEventVisibilities, setVisibleEventVisibilities] = useState(() =>
+    readQueryParamCsv("ev_vis", EVENT_VISIBILITY_OPTIONS, EVENT_VISIBILITY_OPTIONS)
+  );
+  const [visibleEventModes, setVisibleEventModes] = useState(() =>
+    readQueryParamCsv("ev_mode", EVENT_MODE_OPTIONS, EVENT_MODE_OPTIONS)
+  );
 
   const toggleCategory = (value) => {
     setVisibleCategories((prev) => {
@@ -284,8 +309,22 @@ export function RotaTimeline({
       return next;
     });
   };
-
-  const isLoading = coverageLoading || shiftsLoading;
+  const toggleEventVisibility = (value) => {
+    setVisibleEventVisibilities((prev) => {
+      const next = new Set(prev);
+      if (next.has(value)) next.delete(value);
+      else next.add(value);
+      return next;
+    });
+  };
+  const toggleEventMode = (value) => {
+    setVisibleEventModes((prev) => {
+      const next = new Set(prev);
+      if (next.has(value)) next.delete(value);
+      else next.add(value);
+      return next;
+    });
+  };
 
   const router = useRouter();
   const pathname = usePathname();
@@ -309,25 +348,41 @@ export function RotaTimeline({
     };
   }, [committedRange?.from?.getTime?.(), committedRange?.to?.getTime?.()]);
 
-  const { data: calendarListData, isFetching: calendarEventsFetching } = useCalendarEventsList({
+  const {
+    data: calendarListData,
+    isFetching: calendarEventsFetching,
+    isError: calendarEventsError,
+    error: calendarEventsErrorObj,
+  } = useCalendarEventsList({
     start: calendarRangeIso.start,
     end: calendarRangeIso.end,
-    per_page: 200,
+    per_page: 100,
     enabled: canListEvents && !!calendarRangeIso.start && !!calendarRangeIso.end,
   });
 
+  const isLoading = eventsOnly ? calendarEventsFetching : (coverageLoading || shiftsLoading);
+
   const calendarEvents = calendarListData?.events || [];
+  const filteredCalendarEvents = useMemo(() => {
+    if (!eventsOnly) return calendarEvents;
+    return calendarEvents.filter((ev) => {
+      const visibilityOk = visibleEventVisibilities.has(String(ev.visibility || "").toLowerCase());
+      const modeOk = visibleEventModes.has(String(ev.location_mode || "").toLowerCase());
+      return visibilityOk && modeOk;
+    });
+  }, [eventsOnly, calendarEvents, visibleEventVisibilities, visibleEventModes]);
+  const calendarEventsTotal = Number(calendarListData?.total || 0);
 
   const eventsByDateStr = useMemo(() => {
     const map = {};
     for (const d of days) {
       const key = formatDateForAPI(d);
-      map[key] = calendarEvents
+      map[key] = filteredCalendarEvents
         .filter((ev) => calendarEventIntersectsDay(ev, d))
         .sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at));
     }
     return map;
-  }, [days, calendarEvents]);
+  }, [days, filteredCalendarEvents]);
 
   const runEventReminders = async () => {
     try {
@@ -346,6 +401,47 @@ export function RotaTimeline({
     const q = params.toString();
     router.replace(q ? `${pathname}?${q}` : pathname, { scroll: false });
   };
+
+  useEffect(() => {
+    if (!eventsOnly || !pathname || typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+
+    if (eventsViewMode === "day") params.set("ev_view", "day");
+    else params.delete("ev_view");
+
+    const vis = Array.from(visibleEventVisibilities).sort();
+    if (vis.length > 0 && vis.length < EVENT_VISIBILITY_OPTIONS.length) params.set("ev_vis", vis.join(","));
+    else params.delete("ev_vis");
+
+    const modes = Array.from(visibleEventModes).sort();
+    if (modes.length > 0 && modes.length < EVENT_MODE_OPTIONS.length) params.set("ev_mode", modes.join(","));
+    else params.delete("ev_mode");
+
+    if (committedRange?.from && committedRange?.to) {
+      params.set("from", formatDateForAPI(committedRange.from));
+      params.set("to", formatDateForAPI(committedRange.to));
+    } else {
+      params.delete("from");
+      params.delete("to");
+    }
+
+    const nextQuery = params.toString();
+    const currentQuery = window.location.search.startsWith("?")
+      ? window.location.search.slice(1)
+      : window.location.search;
+    if (nextQuery !== currentQuery) {
+      router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
+    }
+  }, [
+    eventsOnly,
+    pathname,
+    router,
+    eventsViewMode,
+    visibleEventVisibilities,
+    visibleEventModes,
+    committedRange?.from?.getTime?.(),
+    committedRange?.to?.getTime?.(),
+  ]);
 
   const roleDepartmentById = useMemo(() => {
     const map = new Map();
@@ -626,14 +722,18 @@ export function RotaTimeline({
       <CardHeader className="space-y-3 border-b bg-muted/20 px-4 py-5 sm:px-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="space-y-1">
-            <CardTitle className="text-xl font-semibold tracking-tight">{isMyRota ? "My Rota" : "Rota"}</CardTitle>
+            <CardTitle className="text-xl font-semibold tracking-tight">
+              {eventsOnly ? "Calendar" : (isMyRota ? "My Rota" : "Rota")}
+            </CardTitle>
             <CardDescription className="text-sm text-muted-foreground">
-              {canListEvents && (
+              {eventsOnly ? (
+                <span className="block">Organisation events shown by date range.</span>
+              ) : canListEvents && (
                 <span className="block">
                   Organisation events appear in the date column (violet) alongside shifts for the same range.
                 </span>
               )}
-              {!isMyRota && isSingleDay && (
+              {!eventsOnly && !isMyRota && isSingleDay && (
                 <span className="mt-2 block">
                   See who&apos;s checked in today →{" "}
                   <Link href="/admin/attendance?tab=now" className="font-medium text-primary underline hover:no-underline">
@@ -641,7 +741,7 @@ export function RotaTimeline({
                   </Link>
                 </span>
               )}
-              {isMyRota && (
+              {!eventsOnly && isMyRota && (
                 <span className="mt-2 block">
                   <Link href="/admin/attendance?tab=rota" className="font-medium text-primary underline hover:no-underline">
                     View full rota →
@@ -651,7 +751,7 @@ export function RotaTimeline({
             </CardDescription>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <div className="flex flex-wrap items-center gap-2">
+            {!eventsOnly && <div className="flex flex-wrap items-center gap-2">
               <div className="flex items-center gap-2">
                 <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" />
                 <Label className="sr-only">Department</Label>
@@ -829,8 +929,8 @@ export function RotaTimeline({
                   </Popover>
                 </div>
               )}
-            </div>
-            {!isMyRota && (
+            </div>}
+            {!eventsOnly && !isMyRota && (
               <Button
                 onClick={() => {
                   setAddShiftInitial(null);
@@ -853,6 +953,34 @@ export function RotaTimeline({
                 Event reminders
               </Button>
             )}
+            {eventsOnly && (
+              <div className="inline-flex h-9 items-center rounded-lg border bg-background p-1">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={eventsViewMode === "day" ? "secondary" : "ghost"}
+                  className="h-7 px-3"
+                  onClick={() => {
+                    setEventsViewMode("day");
+                    const anchor = committedRange?.from ?? new Date();
+                    setCustomRange({ from: anchor, to: anchor });
+                    setCommittedRange({ from: anchor, to: anchor });
+                    setRangeSource("today");
+                  }}
+                >
+                  Day
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={eventsViewMode === "range" ? "secondary" : "ghost"}
+                  className="h-7 px-3"
+                  onClick={() => setEventsViewMode("range")}
+                >
+                  Range
+                </Button>
+              </div>
+            )}
             <Popover open={rangeCalendarOpen} onOpenChange={setRangeCalendarOpen}>
               <PopoverTrigger asChild>
                 <Button
@@ -864,7 +992,9 @@ export function RotaTimeline({
                 >
                   <CalendarIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
                   <span>
-                    {rangeSource === "custom"
+                    {eventsOnly && eventsViewMode === "day"
+                      ? format(committedRange?.from ?? new Date(), "d MMM yyyy")
+                      : rangeSource === "custom"
                       ? "Custom"
                       : RANGE_PRESETS.find((p) => p.id === rangeSource)?.label ?? rangeLabel}
                   </span>
@@ -879,29 +1009,42 @@ export function RotaTimeline({
                 avoidCollisions={true}
                 collisionPadding={16}
               >
-                <div className="border-b bg-muted/30 px-4 py-3">
-                  <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Quick range</p>
-                  <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-3">
-                    {RANGE_PRESETS.map((preset) => (
-                      <Button
-                        key={preset.id}
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 justify-start rounded-md px-2.5 text-xs font-medium text-foreground hover:bg-muted"
-                        onClick={() => applyRangePreset(preset.id)}
-                      >
-                        {preset.label}
-                      </Button>
-                    ))}
+                {(!eventsOnly || eventsViewMode === "range") && (
+                  <div className="border-b bg-muted/30 px-4 py-3">
+                    <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Quick range</p>
+                    <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+                      {RANGE_PRESETS.map((preset) => (
+                        <Button
+                          key={preset.id}
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 justify-start rounded-md px-2.5 text-xs font-medium text-foreground hover:bg-muted"
+                          onClick={() => applyRangePreset(preset.id)}
+                        >
+                          {preset.label}
+                        </Button>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
                 <div className="p-3 overflow-hidden">
-                  <p className="mb-2 text-xs font-medium text-muted-foreground">Or pick dates</p>
+                  <p className="mb-2 text-xs font-medium text-muted-foreground">
+                    {eventsOnly && eventsViewMode === "day" ? "Pick day" : "Or pick dates"}
+                  </p>
                   <Calendar
-                    mode="range"
+                    mode={eventsOnly && eventsViewMode === "day" ? "single" : "range"}
                     defaultMonth={customRange?.from ?? new Date()}
-                    selected={customRange ?? undefined}
+                    selected={eventsOnly && eventsViewMode === "day" ? (customRange?.from ?? undefined) : (customRange ?? undefined)}
                     onSelect={(range) => {
+                      if (eventsOnly && eventsViewMode === "day") {
+                        if (!range) return;
+                        const picked = new Date(range.getFullYear(), range.getMonth(), range.getDate(), 12, 0, 0);
+                        setCustomRange({ from: picked, to: picked });
+                        setCommittedRange({ from: picked, to: picked });
+                        setRangeSource("today");
+                        setRangeCalendarOpen(false);
+                        return;
+                      }
                       if (!range) {
                         setCustomRange(null);
                         return;
@@ -921,7 +1064,7 @@ export function RotaTimeline({
                       month: "min-w-0 flex-1 space-y-4",
                     }}
                   />
-                  {customRange?.from && (
+                  {(!eventsOnly || eventsViewMode === "range") && customRange?.from && (
                     <div className="flex justify-end border-t pt-3 mt-3">
                       <Button
                         size="sm"
@@ -949,42 +1092,71 @@ export function RotaTimeline({
                 <Button
                   variant="outline"
                   className="h-9 min-w-[140px] justify-start gap-2 rounded-lg border bg-background px-3 py-2 text-sm font-medium shadow-sm transition-colors hover:bg-muted/50"
-                  aria-label="Filter shift types"
+                  aria-label={eventsOnly ? "Filter event types" : "Filter shift types"}
                 >
                   <Filter className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  <span>Shift types</span>
+                  <span>{eventsOnly ? "Event types" : "Shift types"}</span>
                   <ChevronDown className="ml-auto h-4 w-4 shrink-0 opacity-50" />
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-64 rounded-xl border bg-card p-3 shadow-lg" align="end" sideOffset={8}>
-                <p className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                  Show on rota
-                </p>
-                <div className="space-y-2">
-                  {ROTA_CATEGORY_OPTIONS.map((opt) => {
-                    const colors = CATEGORY_COLORS[opt.value];
-                    return (
-                      <label
-                        key={opt.value}
-                        className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted/50"
-                      >
-                        <Checkbox
-                          checked={visibleCategories.has(opt.value)}
-                          onCheckedChange={() => toggleCategory(opt.value)}
-                          aria-label={opt.label}
-                        />
-                        {colors && (
-                          <span
-                            className={cn("h-5 w-2 shrink-0 rounded-sm border-l-4", colors.border, colors.bg)}
-                            title={opt.label}
-                            aria-hidden
-                          />
-                        )}
-                        <span className="text-sm">{opt.label}</span>
-                      </label>
-                    );
-                  })}
-                </div>
+                {eventsOnly ? (
+                  <div className="space-y-4">
+                    <div>
+                      <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">Visibility</p>
+                      <div className="space-y-1.5">
+                        {EVENT_VISIBILITY_OPTIONS.map((opt) => (
+                          <label key={opt} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted/50">
+                            <Checkbox checked={visibleEventVisibilities.has(opt)} onCheckedChange={() => toggleEventVisibility(opt)} aria-label={opt} />
+                            <span className="text-sm capitalize">{opt}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">Mode</p>
+                      <div className="space-y-1.5">
+                        {EVENT_MODE_OPTIONS.map((opt) => (
+                          <label key={opt} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted/50">
+                            <Checkbox checked={visibleEventModes.has(opt)} onCheckedChange={() => toggleEventMode(opt)} aria-label={opt} />
+                            <span className="text-sm capitalize">{opt}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <p className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                      Show on rota
+                    </p>
+                    <div className="space-y-2">
+                      {ROTA_CATEGORY_OPTIONS.map((opt) => {
+                        const colors = CATEGORY_COLORS[opt.value];
+                        return (
+                          <label
+                            key={opt.value}
+                            className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted/50"
+                          >
+                            <Checkbox
+                              checked={visibleCategories.has(opt.value)}
+                              onCheckedChange={() => toggleCategory(opt.value)}
+                              aria-label={opt.label}
+                            />
+                            {colors && (
+                              <span
+                                className={cn("h-5 w-2 shrink-0 rounded-sm border-l-4", colors.border, colors.bg)}
+                                title={opt.label}
+                                aria-hidden
+                              />
+                            )}
+                            <span className="text-sm">{opt.label}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
               </PopoverContent>
             </Popover>
           </div>
@@ -999,6 +1171,110 @@ export function RotaTimeline({
         ) : (
           <div className="max-h-[min(70vh,calc(100dvh-11rem))] min-h-[200px] overflow-auto overscroll-contain rounded-b-lg">
             <div className="min-w-[640px]">
+              {eventsOnly ? (
+                <table className="w-full border-separate border-spacing-0 text-sm">
+                  <thead>
+                    <tr className="border-b border-border/80 bg-muted/40">
+                      <th className="sticky top-0 left-0 z-[25] w-[120px] min-w-[120px] bg-muted/95 px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground shadow-[1px_0_0_0_hsl(var(--border)_/_0.6)] backdrop-blur supports-[backdrop-filter]:bg-muted/80">
+                        Date
+                      </th>
+                      <th className="sticky top-0 z-24 min-w-[320px] border-l border-border/60 bg-card/95 px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground shadow-sm backdrop-blur supports-[backdrop-filter]:bg-card/90">
+                        Events
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {calendarEventsError && (
+                      <tr>
+                        <td colSpan={2} className="py-4 text-center">
+                          <p className="text-sm text-destructive">
+                            Failed to load events: {calendarEventsErrorObj?.response?.data?.detail || calendarEventsErrorObj?.message || "Unknown error"}
+                          </p>
+                        </td>
+                      </tr>
+                    )}
+                    {!calendarEventsError && days.length > 0 && (
+                      <tr>
+                        <td colSpan={2} className="border-b border-border/40 bg-muted/10 px-3 py-2 text-xs text-muted-foreground">
+                          Showing {calendarEventsTotal} event{calendarEventsTotal === 1 ? "" : "s"} in {rangeLabel}.
+                        </td>
+                      </tr>
+                    )}
+                    {days.length === 0 && (
+                      <tr>
+                        <td colSpan={2} className="py-16 text-center">
+                          <p className="text-muted-foreground">Pick a date range to view events.</p>
+                        </td>
+                      </tr>
+                    )}
+                    {days.map((d, dayIndex) => {
+                      const dateStr = formatDateForAPI(d);
+                      const isToday = dateStr === todayStr;
+                      const dayEvents = eventsByDateStr[dateStr] || [];
+                      return (
+                        <tr
+                          key={dateStr}
+                          className={`border-b border-border/50 transition-colors hover:bg-muted/15 ${dayIndex % 2 === 0 ? "bg-background" : "bg-muted/5"}`}
+                        >
+                          <td
+                            className={`sticky left-0 z-[20] min-w-[120px] border-r border-border/50 px-3 py-3 align-top shadow-[1px_0_0_0_hsl(var(--border)_/_0.5)] ${
+                              isToday ? "bg-primary/10 font-semibold text-foreground" : "bg-muted/30 font-medium text-muted-foreground"
+                            }`}
+                          >
+                            <span className="block text-[11px] uppercase tracking-wider opacity-80">{format(d, "EEE")}</span>
+                            <span className="block text-base">{format(d, "d")}</span>
+                          </td>
+                          <td className="border-l border-border/40 px-3 py-3 align-top">
+                            {calendarEventsFetching ? (
+                              <span className="text-sm text-muted-foreground">Loading events...</span>
+                            ) : dayEvents.length === 0 ? (
+                              <span className="text-sm text-muted-foreground">No events</span>
+                            ) : (
+                              <div className="space-y-2">
+                                {dayEvents.map((ev) => (
+                                  <button
+                                    key={ev.slug}
+                                    type="button"
+                                    onClick={() => setSelectedCalendarEventSlug(ev.slug)}
+                                    className={cn(
+                                      "group relative block w-full overflow-hidden rounded-xl border border-violet-200/60 bg-gradient-to-br from-background to-violet-50/40 px-3.5 py-3 text-left shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-violet-300 hover:shadow-md dark:border-violet-900/40 dark:from-background dark:to-violet-950/20",
+                                      ev.is_cancelled && "opacity-50 line-through",
+                                    )}
+                                  >
+                                    <span className="pointer-events-none absolute inset-y-0 left-0 w-1 bg-violet-500/80" />
+                                    <div className="flex w-full items-start justify-between gap-2 text-left">
+                                      <span className="truncate pr-2 text-sm font-semibold tracking-tight text-foreground">
+                                        {ev.title}
+                                      </span>
+                                      <span className="shrink-0 rounded-full border bg-background/80 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                                        {ev.visibility}
+                                      </span>
+                                    </div>
+                                    <div className="mt-1.5 grid w-full grid-cols-[120px_82px_minmax(0,1fr)_minmax(0,1fr)] items-center gap-x-3 text-left">
+                                      <span className="text-left text-xs font-medium text-violet-700 dark:text-violet-300">
+                                        {format(new Date(ev.starts_at), "HH:mm")} - {format(new Date(ev.ends_at), "HH:mm")}
+                                      </span>
+                                      <span className="justify-self-start rounded-md bg-muted/70 px-1.5 py-0.5 text-[11px] capitalize text-muted-foreground">
+                                        {ev.location_mode}
+                                      </span>
+                                      <span className="truncate text-left text-[11px] text-muted-foreground">
+                                        {ev.location_detail_text || (ev.online_meeting_url ? "Online link available" : "No location details")}
+                                      </span>
+                                      <span className="truncate text-left text-[11px] text-muted-foreground/90">
+                                        {ev.description || ""}
+                                      </span>
+                                    </div>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              ) : (
               <table className="w-full border-separate border-spacing-0 text-sm">
               <thead>
                 <tr className="border-b border-border/80 bg-muted/40">
@@ -1181,6 +1457,7 @@ export function RotaTimeline({
                 })}
               </tbody>
             </table>
+              )}
             </div>
           </div>
         )}
