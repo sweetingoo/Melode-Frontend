@@ -153,6 +153,13 @@ const mainMenuItems = [
     permission: null,
   },
   {
+    title: "Event categories",
+    description: "Colours and labels for calendar events",
+    icon: Tag,
+    url: "/admin/calendar/event-categories",
+    permission: "event:update",
+  },
+  {
     title: "Projects",
     description: "Manage and organise your projects",
     icon: FolderKanban,

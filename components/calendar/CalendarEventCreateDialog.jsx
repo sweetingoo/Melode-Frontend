@@ -29,7 +29,9 @@ import { cn } from "@/lib/utils";
 import { useLocations } from "@/hooks/useLocations";
 import { useRolesAll, formatRolePickerLabel } from "@/hooks/useRoles";
 import { useCreateCalendarEvent } from "@/hooks/useCalendarEvents";
+import { useCalendarEventCategories } from "@/hooks/useCalendarEventCategories";
 import { usersService } from "@/services/users";
+import { toast } from "sonner";
 
 function toLocalDateTimeInputValue(date) {
   const pad = (n) => String(n).padStart(2, "0");
@@ -67,6 +69,8 @@ export function CalendarEventCreateDialog({ open, onOpenChange }) {
   ];
   const { data: locations = [] } = useLocations({ per_page: 200 });
   const { data: roles = [] } = useRolesAll(100);
+  const { data: categoriesPayload } = useCalendarEventCategories({ includeInactive: false, enabled: open });
+  const eventCategories = categoriesPayload?.categories ?? [];
   const createMutation = useCreateCalendarEvent();
 
   const calendarJobRoles = useMemo(() => {
@@ -94,6 +98,7 @@ export function CalendarEventCreateDialog({ open, onOpenChange }) {
     online_meeting_url: "",
     invitedPeople: [],
     selected_role_ids: [],
+    category_id: "",
   });
 
   /** none | weekly | monthly — weekly uses same spacing choices as shift “recurring” on rota */
@@ -153,6 +158,7 @@ export function CalendarEventCreateDialog({ open, onOpenChange }) {
       online_meeting_url: "",
       invitedPeople: [],
       selected_role_ids: [],
+      category_id: "",
     });
     setRepeatMode("none");
     setRecurrenceInterval(1);
@@ -277,6 +283,7 @@ export function CalendarEventCreateDialog({ open, onOpenChange }) {
       visibility: form.visibility,
       starts_at: startDate.toISOString(),
       ends_at: endDate.toISOString(),
+      category_id: form.category_id ? parseInt(form.category_id, 10) : null,
       location_id: form.location_id ? parseInt(form.location_id, 10) : null,
       location_detail_text: form.location_detail_text || null,
       location_mode: form.location_mode,
@@ -370,6 +377,25 @@ export function CalendarEventCreateDialog({ open, onOpenChange }) {
               <SelectContent>
                 <SelectItem value="private">Private (invited users / roles)</SelectItem>
                 <SelectItem value="public">Public link (guests can RSVP)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label>Category</Label>
+            <Select
+              value={form.category_id ? String(form.category_id) : "none"}
+              onValueChange={(v) => setForm({ ...form, category_id: v === "none" ? "" : v })}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Optional" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None</SelectItem>
+                {eventCategories.map((c) => (
+                  <SelectItem key={c.id} value={String(c.id)}>
+                    {c.name}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>

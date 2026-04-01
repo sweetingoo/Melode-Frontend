@@ -53,6 +53,17 @@ export function CalendarEventDetailSheet({ slug, open, onOpenChange }) {
             </SheetHeader>
             <div className="mt-5 space-y-4 text-sm pb-2">
               <p className="text-muted-foreground whitespace-pre-wrap">{event.description || "—"}</p>
+              {event.category?.name ? (
+                <div className="flex items-center gap-2">
+                  <span
+                    className="inline-block h-3 w-3 shrink-0 rounded-sm border"
+                    style={{ backgroundColor: event.category.color || "#6366f1" }}
+                  />
+                  <span className="text-muted-foreground">
+                    <strong className="text-foreground">Category:</strong> {event.category.name}
+                  </span>
+                </div>
+              ) : null}
               <div>
                 <div>
                   <strong>When:</strong> {format(new Date(event.starts_at), "PPpp")} – {format(new Date(event.ends_at), "p")}

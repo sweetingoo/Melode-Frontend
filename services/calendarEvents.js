@@ -35,6 +35,9 @@ export const calendarEventsService = {
   processReminders() {
     return apiClient.post("/calendar-events/process-reminders");
   },
+  listMyAcceptedUpcoming({ limit = 10 } = {}) {
+    return apiClient.get("/calendar-events/my-accepted-upcoming", { params: { limit } });
+  },
   /** No auth */
   publicGet(token) {
     return apiClient.get(`/calendar-events/public/${encodeURIComponent(token)}`);

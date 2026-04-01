@@ -68,6 +68,13 @@ function calendarEventIntersectsDay(ev, day) {
   return s <= endOfDay(day) && e >= startOfDay(day);
 }
 
+function calendarEventCategoryColor(ev) {
+  const c = ev?.category?.color;
+  if (!c || typeof c !== "string") return null;
+  const t = c.trim();
+  return /^#[0-9A-Fa-f]{3}$|^#[0-9A-Fa-f]{6}$/.test(t) ? t : null;
+}
+
 /** Categories that can appear as blocks on the rota (shift records). */
 const ROTA_CATEGORY_OPTIONS = [
   { value: "mapped", label: CATEGORY_LABELS.mapped },
@@ -1241,7 +1248,12 @@ export function RotaTimeline({
                                       ev.is_cancelled && "opacity-50 line-through",
                                     )}
                                   >
-                                    <span className="pointer-events-none absolute inset-y-0 left-0 w-1 bg-violet-500/80" />
+                                    <span
+                                      className="pointer-events-none absolute inset-y-0 left-0 w-1"
+                                      style={{
+                                        backgroundColor: calendarEventCategoryColor(ev) || "rgb(139 92 246 / 0.85)",
+                                      }}
+                                    />
                                     <div className="flex w-full items-start justify-between gap-2 text-left">
                                       <span className="truncate pr-2 text-sm font-semibold tracking-tight text-foreground">
                                         {ev.title}
@@ -1370,9 +1382,12 @@ export function RotaTimeline({
                                   type="button"
                                   onClick={() => setSelectedCalendarEventSlug(ev.slug)}
                                   className={cn(
-                                    "flex w-full flex-col items-start rounded-md border-l-4 border-l-violet-500 bg-violet-500/10 px-1.5 py-1 text-left text-[10px] leading-tight transition-colors hover:bg-violet-500/20",
+                                    "flex w-full flex-col items-start rounded-md border-l-4 border-transparent bg-violet-500/10 px-1.5 py-1 text-left text-[10px] leading-tight transition-colors hover:bg-violet-500/20",
                                     ev.is_cancelled && "opacity-50 line-through",
                                   )}
+                                  style={{
+                                    borderLeftColor: calendarEventCategoryColor(ev) || "rgb(139 92 246)",
+                                  }}
                                 >
                                   <span className="tabular-nums text-muted-foreground">
                                     {format(new Date(ev.starts_at), "HH:mm")}

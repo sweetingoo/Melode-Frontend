@@ -49,6 +49,7 @@ import {
   DashboardCompliance,
   DashboardClock,
   DashboardUpcomingShifts,
+  DashboardMyAcceptedEvents,
   DashboardTasks,
   DashboardAnnualLeave,
   DashboardRecentActivity,
@@ -472,6 +473,15 @@ const Dashboard = () => {
                 </div>
               </section>
 
+              <section className="mb-10">
+                <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">
+                  Your upcoming events
+                </h2>
+                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                  <DashboardMyAcceptedEvents />
+                </div>
+              </section>
+
               {/* Needs attention: only when there is something */}
               {dashboardData?.needs_attention && (myOverdueTasksCount + (dashboardData.needs_attention.submissions_pending_review ?? 0)) > 0 && (
                 <section className="mb-10">
@@ -622,6 +632,7 @@ const Dashboard = () => {
             <DashboardCompliance />
             <DashboardClock />
             <DashboardUpcomingShifts />
+            <DashboardMyAcceptedEvents />
             <DashboardTasks />
             <DashboardAnnualLeave />
             <DashboardRecentActivity activities={recentActivities} />

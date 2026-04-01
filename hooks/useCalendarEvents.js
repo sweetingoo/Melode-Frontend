@@ -8,6 +8,7 @@ const qk = {
   list: (range) => ["calendar-events", range?.start, range?.end],
   one: (slug) => ["calendar-event", slug],
   rsvps: (slug) => ["calendar-event-rsvps", slug],
+  myAccepted: (limit) => ["calendar-events", "my-accepted-upcoming", limit],
 };
 
 export function useCalendarEventsList({ start, end, page = 1, per_page = 50, enabled = true }) {
@@ -43,6 +44,17 @@ export function useCalendarEventRsvps(slug, enabled = true) {
   });
 }
 
+export function useMyAcceptedCalendarEvents({ limit = 8, enabled = true } = {}) {
+  return useQuery({
+    queryKey: qk.myAccepted(limit),
+    queryFn: async () => {
+      const res = await calendarEventsService.listMyAcceptedUpcoming({ limit });
+      return res.data;
+    },
+    enabled,
+  });
+}
+
 export function useCreateCalendarEvent() {
   const qc = useQueryClient();
   return useMutation({
@@ -52,6 +64,7 @@ export function useCreateCalendarEvent() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["calendar-events"] });
+      qc.invalidateQueries({ queryKey: ["calendar-events", "my-accepted-upcoming"] });
       toast.success("Event created");
     },
     onError: (e) => toast.error(e.response?.data?.detail || "Failed to create event"),
@@ -68,6 +81,7 @@ export function useUpdateCalendarEvent() {
     onSuccess: (_, v) => {
       qc.invalidateQueries({ queryKey: ["calendar-events"] });
       qc.invalidateQueries({ queryKey: qk.one(v.slug) });
+      qc.invalidateQueries({ queryKey: ["calendar-events", "my-accepted-upcoming"] });
       toast.success("Event updated");
     },
     onError: (e) => toast.error(e.response?.data?.detail || "Failed to update"),
@@ -107,6 +121,7 @@ export function useSelfEventRsvp() {
     onSuccess: (_, v) => {
       qc.invalidateQueries({ queryKey: qk.rsvps(v.slug) });
       qc.invalidateQueries({ queryKey: qk.one(v.slug) });
+      qc.invalidateQueries({ queryKey: ["calendar-events", "my-accepted-upcoming"] });
       toast.success("RSVP saved");
     },
     onError: (e) => toast.error(e.response?.data?.detail || "RSVP failed"),

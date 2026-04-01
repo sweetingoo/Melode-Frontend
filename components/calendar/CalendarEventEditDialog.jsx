@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { useLocations } from "@/hooks/useLocations";
 import { useRolesAll, formatRolePickerLabel } from "@/hooks/useRoles";
 import { usePatchEventInvites, useUpdateCalendarEvent } from "@/hooks/useCalendarEvents";
+import { useCalendarEventCategories } from "@/hooks/useCalendarEventCategories";
 import { usersService } from "@/services/users";
 import { toast } from "sonner";
 
@@ -33,6 +34,8 @@ function userLabel(u) {
 export function CalendarEventEditDialog({ open, onOpenChange, event }) {
   const { data: locations = [] } = useLocations({ per_page: 200 });
   const { data: roles = [] } = useRolesAll(100);
+  const { data: categoriesPayload } = useCalendarEventCategories({ includeInactive: true, enabled: open });
+  const eventCategories = categoriesPayload?.categories ?? [];
   const updateMutation = useUpdateCalendarEvent();
   const patchInvitesMutation = usePatchEventInvites();
 
@@ -65,6 +68,7 @@ export function CalendarEventEditDialog({ open, onOpenChange, event }) {
       online_meeting_url: event.online_meeting_url || "",
       invitedPeople: invited_user_ids.map((id) => ({ id, label: `User #${id}` })),
       selected_role_ids: invited_role_ids,
+      category_id: event.category_id != null ? String(event.category_id) : "",
     });
     setApplyScope("single");
   }, [event, open]);
@@ -125,6 +129,7 @@ export function CalendarEventEditDialog({ open, onOpenChange, event }) {
         location_detail_text: form.location_detail_text || null,
         location_mode: form.location_mode,
         online_meeting_url: form.online_meeting_url || null,
+        category_id: form.category_id ? parseInt(form.category_id, 10) : null,
       },
     });
 
@@ -177,6 +182,25 @@ export function CalendarEventEditDialog({ open, onOpenChange, event }) {
             <Select value={form.visibility} onValueChange={(v) => setForm({ ...form, visibility: v })}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent><SelectItem value="private">Private</SelectItem><SelectItem value="public">Public</SelectItem></SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label>Category</Label>
+            <Select
+              value={form.category_id ? String(form.category_id) : "none"}
+              onValueChange={(v) => setForm({ ...form, category_id: v === "none" ? "" : v })}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Optional" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None</SelectItem>
+                {eventCategories.map((c) => (
+                  <SelectItem key={c.id} value={String(c.id)}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
             </Select>
           </div>
           <div className="space-y-1">

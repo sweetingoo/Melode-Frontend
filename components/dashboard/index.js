@@ -3,6 +3,7 @@ export { DashboardBroadcasts } from "./DashboardBroadcasts";
 export { DashboardCompliance } from "./DashboardCompliance";
 export { DashboardClock } from "./DashboardClock";
 export { DashboardUpcomingShifts } from "./DashboardUpcomingShifts";
+export { DashboardMyAcceptedEvents } from "./DashboardMyAcceptedEvents";
 export { DashboardTasks } from "./DashboardTasks";
 export { DashboardAnnualLeave } from "./DashboardAnnualLeave";
 export { DashboardRecentActivity } from "./DashboardRecentActivity";
