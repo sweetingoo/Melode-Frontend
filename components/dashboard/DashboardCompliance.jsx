@@ -5,6 +5,8 @@ import { useMyExpiringCompliance } from "@/hooks/useCompliance";
 import { ShieldAlert, ArrowRight } from "lucide-react";
 import Link from "next/link";
 
+const MY_COMPLIANCE_HREF = "/admin/compliance?tab=compliance";
+
 /** Outstanding compliance: within 30 days of expiry / expired. Uses existing compliance API. */
 export function DashboardCompliance() {
   const { data, isLoading, isError } = useMyExpiringCompliance(30, 1, 10);
@@ -45,7 +47,7 @@ export function DashboardCompliance() {
             {items.slice(0, 3).map((item) => (
               <li key={item.value_id ?? item.id}>
                 <Link
-                  href={item.value_slug ? `/admin/compliance-monitoring/${item.value_slug}` : "/admin/compliance-monitoring"}
+                  href={MY_COMPLIANCE_HREF}
                   className="text-sm hover:underline flex items-center gap-1"
                 >
                   <span className="truncate">{item.field_label ?? item.field_name ?? "Compliance"}</span>
@@ -61,7 +63,7 @@ export function DashboardCompliance() {
             ))}
           </ul>
         )}
-        <Link href="/admin/compliance-monitoring" className="text-sm font-medium text-primary hover:underline mt-3 inline-block">
+        <Link href={MY_COMPLIANCE_HREF} className="text-sm font-medium text-primary hover:underline mt-3 inline-block">
           View all
         </Link>
       </CardContent>

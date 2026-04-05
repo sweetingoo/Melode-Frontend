@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, Suspense } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ComplianceSection } from "@/components/ComplianceSection";
@@ -21,8 +21,12 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Label } from "@/components/ui/label";
+import { useSearchParams } from "next/navigation";
 
-export default function CompliancePage() {
+const COMPLIANCE_PAGE_MAIN_TABS = ["additional", "compliance", "tracker-cases", "personnel"];
+
+function CompliancePageContent() {
+  const searchParams = useSearchParams();
   const { data: currentUserData, isLoading: currentUserLoading } = useCurrentUser();
   const [activeTab, setActiveTab] = useState("additional");
   const [activeSectionTab, setActiveSectionTab] = useState(null);
@@ -216,6 +220,13 @@ export default function CompliancePage() {
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  const tabFromUrl = searchParams.get("tab");
+  useEffect(() => {
+    if (tabFromUrl && COMPLIANCE_PAGE_MAIN_TABS.includes(tabFromUrl)) {
+      setActiveTab(tabFromUrl);
+    }
+  }, [tabFromUrl]);
 
   const handleCustomFieldChange = (fieldId, value) => {
     const fieldIdInt = typeof fieldId === 'number' ? fieldId : parseInt(fieldId, 10);
@@ -1384,5 +1395,19 @@ export default function CompliancePage() {
         </TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+export default function CompliancePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      }
+    >
+      <CompliancePageContent />
+    </Suspense>
   );
 }
