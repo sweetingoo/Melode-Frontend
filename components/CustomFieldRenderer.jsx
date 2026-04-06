@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { useDownloadFile } from "@/hooks/useProfile";
 import { useFileReferences } from "@/hooks/useFileReferences";
 import { usersService } from "@/services/users";
+import { getUserDisplayName } from "@/utils/user";
 
 // Sort options by value for consistent display order (select, radio, multiselect)
 const sortOptionsByValue = (options) => {
@@ -2020,6 +2021,38 @@ const SignatureFieldRenderer = ({ field, value, onChange, error, fieldId }) => {
   );
 };
 
+function peopleFieldParseUserId(value) {
+  if (value == null) return null;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && /^\d+$/.test(value.trim())) return parseInt(value.trim(), 10);
+  if (typeof value === "object" && value.id != null) {
+    const id = value.id;
+    if (typeof id === "number" && Number.isFinite(id)) return id;
+    if (typeof id === "string" && /^\d+$/.test(id.trim())) return parseInt(id.trim(), 10);
+  }
+  return null;
+}
+
+function peopleFieldValueHasDisplay(value) {
+  if (!value || typeof value !== "object") return false;
+  return !!(
+    value.display_name ||
+    value.first_name ||
+    value.last_name ||
+    value.email
+  );
+}
+
+/** Non-numeric slug only — numeric strings are treated as ids, not path segments. */
+function peopleFieldParseSlug(value) {
+  if (!value || typeof value !== "object") return null;
+  const s = value.slug;
+  if (typeof s !== "string" || !s.trim()) return null;
+  const t = s.trim();
+  if (/^\d+$/.test(t)) return null;
+  return t;
+}
+
 // People Field Renderer Component
 const PeopleFieldRenderer = ({ field, value, onChange, error, fieldId, readOnly }) => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -2027,23 +2060,79 @@ const PeopleFieldRenderer = ({ field, value, onChange, error, fieldId, readOnly 
   const [isLoading, setIsLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
+  const [resolvingUser, setResolvingUser] = useState(false);
 
   // Field configuration
   const filterByOrganization = field.filter_by_organization || field.filterByOrganization;
   const filterByRoles = field.filter_by_roles || field.filterByRoles || [];
   const roleIds = Array.isArray(filterByRoles) ? filterByRoles.map(r => typeof r === 'object' ? r.id : r).filter(Boolean).join(',') : '';
 
-  // Load selected user when value changes
+  // Load selected user when value changes (resolve id-only values from saved submissions)
   useEffect(() => {
-    if (value && typeof value === 'object' && value.id) {
-      setSelectedUser(value);
-    } else if (value && typeof value === 'number') {
-      // If value is just an ID, we'll need to fetch the user
-      // For now, just set it as the value
-      setSelectedUser({ id: value });
+    let cancelled = false;
+
+    if (value && typeof value === "object" && peopleFieldValueHasDisplay(value) && value.id != null) {
+      setSelectedUser({
+        id: value.id,
+        email: value.email,
+        display_name: value.display_name,
+        first_name: value.first_name,
+        last_name: value.last_name,
+      });
+      setResolvingUser(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const slug = peopleFieldParseSlug(value);
+    const uid = peopleFieldParseUserId(value);
+
+    if (slug == null && uid == null) {
+      setSelectedUser(null);
+      setResolvingUser(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const applyUser = (u) => {
+      if (cancelled || !u?.id) return;
+      setSelectedUser({
+        id: u.id,
+        email: u.email,
+        display_name:
+          u.display_name ||
+          `${u.first_name || ""} ${u.last_name || ""}`.trim() ||
+          u.email,
+        first_name: u.first_name,
+        last_name: u.last_name,
+      });
+    };
+
+    setResolvingUser(true);
+    if (uid != null) {
+      setSelectedUser({ id: uid });
     } else {
       setSelectedUser(null);
     }
+
+    const resolvePromise = slug
+      ? usersService.getUser(slug).then((res) => res?.data?.data ?? res?.data)
+      : usersService.resolveUserByListLookup(uid);
+
+    resolvePromise
+      .then((u) => applyUser(u))
+      .catch(() => {
+        /* keep id placeholder; button still shows User #id */
+      })
+      .finally(() => {
+        if (!cancelled) setResolvingUser(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [value]);
 
   // Search users when search term changes
@@ -2100,13 +2189,13 @@ const PeopleFieldRenderer = ({ field, value, onChange, error, fieldId, readOnly 
   }, [isOpen, roleIds]);
 
   const handleUserSelect = (user) => {
-    // Store user ID and display name for programmatic linking
     const userValue = {
       id: user.id,
-      email: user.email,
-      display_name: user.display_name || `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.email,
+      slug: user.slug,
+      display_name: getUserDisplayName(user),
       first_name: user.first_name,
       last_name: user.last_name,
+      email: user.email,
     };
     setSelectedUser(userValue);
     onChange(userValue);
@@ -2120,14 +2209,19 @@ const PeopleFieldRenderer = ({ field, value, onChange, error, fieldId, readOnly 
     setSearchTerm("");
   };
 
-  const displayValue = selectedUser 
-    ? (selectedUser.display_name || `${selectedUser.first_name || ''} ${selectedUser.last_name || ''}`.trim() || selectedUser.email || `User #${selectedUser.id}`)
-    : "";
+  const displayValue = selectedUser ? getUserDisplayName(selectedUser) : "";
 
   if (readOnly) {
     return (
       <div className={cn("px-3 py-2 border rounded-md bg-muted", error && "border-red-500")}>
-        {displayValue || <span className="text-muted-foreground">No user selected</span>}
+        {resolvingUser ? (
+          <span className="inline-flex items-center gap-2 text-muted-foreground text-sm">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Loading…
+          </span>
+        ) : (
+          displayValue || <span className="text-muted-foreground">No user selected</span>
+        )}
       </div>
     );
   }
@@ -2145,7 +2239,14 @@ const PeopleFieldRenderer = ({ field, value, onChange, error, fieldId, readOnly 
           )}
         >
           <span className="truncate">
-            {displayValue || `Select ${field.field_label || field.name || "user"}`}
+            {resolvingUser ? (
+              <span className="inline-flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+                Loading…
+              </span>
+            ) : (
+              displayValue || `Select ${field.field_label || field.name || "user"}`
+            )}
           </span>
           <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
@@ -2183,7 +2284,7 @@ const PeopleFieldRenderer = ({ field, value, onChange, error, fieldId, readOnly 
             ) : (
               <div className="p-1">
                 {users.map((user) => {
-                  const userDisplayName = user.display_name || `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.email;
+                  const userDisplayName = getUserDisplayName(user);
                   const isSelected = selectedUser?.id === user.id;
                   return (
                     <div
@@ -2196,9 +2297,9 @@ const PeopleFieldRenderer = ({ field, value, onChange, error, fieldId, readOnly 
                     >
                       <div className="flex flex-col flex-1">
                         <span className="font-medium">{userDisplayName}</span>
-                        {user.email && user.email !== userDisplayName && (
+                        {user.email && user.email !== userDisplayName ? (
                           <span className="text-xs text-muted-foreground">{user.email}</span>
-                        )}
+                        ) : null}
                       </div>
                       {isSelected && (
                         <span className="ml-2 text-primary">✓</span>

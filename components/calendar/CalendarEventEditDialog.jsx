@@ -28,7 +28,38 @@ function toInputDateTime(iso) {
 }
 
 function userLabel(u) {
-  return u?.display_name || [u?.first_name, u?.last_name].filter(Boolean).join(" ").trim() || u?.email || `User #${u?.id}`;
+  return (
+    u?.display_name ||
+    [u?.first_name, u?.last_name].filter(Boolean).join(" ").trim() ||
+    u?.email ||
+    u?.username ||
+    `User #${u?.id}`
+  );
+}
+
+function calendarInviteUserSlug(u) {
+  const s = typeof u?.slug === "string" ? u.slug.trim() : "";
+  return s || null;
+}
+
+function invitePersonKey(p) {
+  if (p?.slug) return p.slug;
+  if (p?.id != null) return `id:${p.id}`;
+  return String(Math.random());
+}
+
+function invitedPeopleFromEventInvites(invites) {
+  return (invites || [])
+    .filter((x) => x.user_id != null)
+    .map((x) => {
+      const slug = typeof x.user_slug === "string" && x.user_slug.trim() ? x.user_slug.trim() : null;
+      const display =
+        typeof x.user_display_name === "string" && x.user_display_name.trim()
+          ? x.user_display_name.trim()
+          : null;
+      const label = display || slug || `User #${x.user_id}`;
+      return { slug, id: x.user_id, label };
+    });
 }
 
 export function CalendarEventEditDialog({ open, onOpenChange, event }) {
@@ -54,7 +85,6 @@ export function CalendarEventEditDialog({ open, onOpenChange, event }) {
 
   useEffect(() => {
     if (!event || !open) return;
-    const invited_user_ids = (event.invites || []).map((x) => x.user_id).filter(Boolean);
     const invited_role_ids = (event.invites || []).map((x) => x.role_id).filter(Boolean);
     setForm({
       title: event.title || "",
@@ -66,7 +96,7 @@ export function CalendarEventEditDialog({ open, onOpenChange, event }) {
       location_detail_text: event.location_detail_text || "",
       location_mode: event.location_mode || "physical",
       online_meeting_url: event.online_meeting_url || "",
-      invitedPeople: invited_user_ids.map((id) => ({ id, label: `User #${id}` })),
+      invitedPeople: invitedPeopleFromEventInvites(event.invites),
       selected_role_ids: invited_role_ids,
       category_id: event.category_id != null ? String(event.category_id) : "",
     });
@@ -94,16 +124,27 @@ export function CalendarEventEditDialog({ open, onOpenChange, event }) {
   }, [invitePickerOpen, inviteUserSearch]);
 
   const addInvitedPerson = (u) => {
-    if (!u?.id) return;
+    const slug = calendarInviteUserSlug(u);
+    if (!slug) {
+      toast.error("This person cannot be invited (missing account slug).");
+      return;
+    }
     setForm((f) => {
-      if (f.invitedPeople.some((p) => p.id === u.id)) return f;
-      return { ...f, invitedPeople: [...f.invitedPeople, { id: u.id, label: userLabel(u) }] };
+      if (f.invitedPeople.some((p) => p.slug === slug)) return f;
+      return {
+        ...f,
+        invitedPeople: [...f.invitedPeople, { slug, id: u.id, label: userLabel(u) }],
+      };
     });
     setInvitePickerOpen(false);
     setInviteUserSearch("");
   };
 
-  const removeInvitedPerson = (id) => setForm((f) => ({ ...f, invitedPeople: f.invitedPeople.filter((p) => p.id !== id) }));
+  const removeInvitedPerson = (p) =>
+    setForm((f) => ({
+      ...f,
+      invitedPeople: f.invitedPeople.filter((x) => invitePersonKey(x) !== invitePersonKey(p)),
+    }));
   const toggleRole = (id) =>
     setForm((f) => ({ ...f, selected_role_ids: f.selected_role_ids.includes(id) ? f.selected_role_ids.filter((x) => x !== id) : [...f.selected_role_ids, id] }));
 
@@ -133,11 +174,15 @@ export function CalendarEventEditDialog({ open, onOpenChange, event }) {
       },
     });
 
+    const invitedSlugs = form.invitedPeople.map((p) => p.slug).filter(Boolean);
+    const legacyUserIds = form.invitedPeople.filter((p) => !p.slug && p.id != null).map((p) => p.id);
+
     await patchInvitesMutation.mutateAsync({
       slug: event.slug,
       apply_to_series: applyScope === "series",
       data: {
-        invited_user_ids: form.invitedPeople.map((p) => p.id),
+        invited_user_slugs: invitedSlugs.length ? invitedSlugs : null,
+        invited_user_ids: legacyUserIds.length ? legacyUserIds : null,
         invited_role_ids: form.selected_role_ids,
       },
     });
@@ -225,9 +270,9 @@ export function CalendarEventEditDialog({ open, onOpenChange, event }) {
             {form.invitedPeople.length > 0 && (
               <div className="flex flex-wrap gap-2">
                 {form.invitedPeople.map((p) => (
-                  <Badge key={p.id} variant="secondary" className="gap-1 py-1 pl-2 pr-1 font-normal">
+                  <Badge key={invitePersonKey(p)} variant="secondary" className="gap-1 py-1 pl-2 pr-1 font-normal">
                     <span className="max-w-[220px] truncate">{p.label}</span>
-                    <button type="button" className="rounded-sm p-0.5 hover:bg-muted-foreground/20" onClick={() => removeInvitedPerson(p.id)} aria-label={`Remove ${p.label}`}>
+                    <button type="button" className="rounded-sm p-0.5 hover:bg-muted-foreground/20" onClick={() => removeInvitedPerson(p)} aria-label={`Remove ${p.label}`}>
                       <X className="h-3.5 w-3.5" />
                     </button>
                   </Badge>
@@ -247,10 +292,16 @@ export function CalendarEventEditDialog({ open, onOpenChange, event }) {
                   {loadingUsers ? <p className="py-8 text-center text-sm text-muted-foreground">Loading...</p> : (
                     <ul className="p-1">
                       {results.map((u) => {
-                        const selected = form.invitedPeople.some((p) => p.id === u.id);
+                        const us = calendarInviteUserSlug(u);
+                        const selected = us ? form.invitedPeople.some((p) => p.slug === us) : false;
                         return (
                           <li key={u.id}>
-                            <button type="button" disabled={selected} className={cn("w-full rounded-sm px-2 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground", selected && "opacity-50")} onClick={() => addInvitedPerson(u)}>
+                            <button
+                              type="button"
+                              disabled={selected || !us}
+                              className={cn("w-full rounded-sm px-2 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground", selected && "opacity-50")}
+                              onClick={() => addInvitedPerson(u)}
+                            >
                               <div className="font-medium">{userLabel(u)}</div>
                               {u.email ? <div className="text-xs text-muted-foreground truncate">{u.email}</div> : null}
                             </button>

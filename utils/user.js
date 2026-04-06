@@ -1,6 +1,6 @@
 /**
- * User display helpers. Safe for both full and minimal user objects from GET /users.
- * Non-admin callers receive minimal users: { id, slug, display_name, is_active } only.
+ * User display helpers. Safe for full users, GET /users minimal rows, and GET /users/suggest rows.
+ * Suggest includes optional `email`; minimal list users do not.
  */
 
 /**

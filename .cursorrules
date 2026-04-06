@@ -53,6 +53,7 @@ This is a Next.js frontend application for the Melode project. The codebase uses
 - Use the existing API client patterns in `/services`
 - Follow the established authentication and token management patterns
 - Handle errors gracefully using existing error handling utilities
+- **Do not expose numeric IDs to users**: avoid raw `id` in visible URLs, shareable links, and UI copy (e.g. `User #123`). Use slugs for paths and resolve **display names** (or slugs) from API responses for labels.
 - **ALWAYS use slugs (strings) instead of IDs (integers) for all API path parameters**
 - Use `entitySlug`, `userSlug`, `taskSlug`, `projectSlug`, etc. for path parameters
 - Request bodies and query parameters may still use IDs where appropriate (as per migration guide)

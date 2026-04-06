@@ -89,7 +89,7 @@ export const usersService = {
     }
   },
 
-  // Get user by slug
+  // Get user by slug (path is /users/{slug} — use slug, never a numeric id)
   getUser: async (slug) => {
     try {
       return await api.get(`/users/${slug}`);
@@ -98,6 +98,31 @@ export const usersService = {
       console.error(`Get user ${slug} failed:`, error);
       throw error;
     }
+  },
+
+  /**
+   * Resolve a user by internal id without putting the id in the URL path (avoids /users/123).
+   * Pages through GET /users until a matching row is found or pages are exhausted.
+   */
+  resolveUserByListLookup: async (userId, { maxPages = 50 } = {}) => {
+    const id = Number(userId);
+    if (!Number.isFinite(id) || id < 1) return null;
+    let page = 1;
+    for (; page <= maxPages; page += 1) {
+      const response = await api.get("/users", {
+        params: { page, per_page: API_MAX_LIST_PAGE },
+      });
+      const body = response.data ?? response;
+      const users = Array.isArray(body.users) ? body.users : [];
+      const hit = users.find((u) => u.id === id);
+      if (hit) return hit;
+      const totalPages =
+        typeof body.total_pages === "number" && body.total_pages >= 1
+          ? body.total_pages
+          : 1;
+      if (page >= totalPages || users.length === 0) break;
+    }
+    return null;
   },
 
   // Update user

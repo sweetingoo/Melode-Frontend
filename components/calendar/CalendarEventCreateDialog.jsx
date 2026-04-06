@@ -52,8 +52,20 @@ function calendarInviteUserLabel(u) {
     u.display_name ||
     [u.first_name, u.last_name].filter(Boolean).join(" ").trim() ||
     u.email ||
+    u.username ||
     `User #${u.id}`
   );
+}
+
+function calendarInviteUserSlug(u) {
+  const s = typeof u?.slug === "string" ? u.slug.trim() : "";
+  return s || null;
+}
+
+function invitePersonKey(p) {
+  if (p?.slug) return p.slug;
+  if (p?.id != null) return `id:${p.id}`;
+  return String(Math.random());
 }
 
 export function CalendarEventCreateDialog({ open, onOpenChange }) {
@@ -185,18 +197,28 @@ export function CalendarEventCreateDialog({ open, onOpenChange }) {
   };
 
   const addInvitedPerson = (user) => {
-    if (!user?.id) return;
+    const slug = calendarInviteUserSlug(user);
+    if (!slug) {
+      toast.error("This person cannot be invited (missing account slug).");
+      return;
+    }
     setForm((f) => {
-      if (f.invitedPeople.some((p) => p.id === user.id)) return f;
-      return { ...f, invitedPeople: [...f.invitedPeople, { id: user.id, label: calendarInviteUserLabel(user) }] };
+      if (f.invitedPeople.some((p) => p.slug === slug)) return f;
+      return {
+        ...f,
+        invitedPeople: [
+          ...f.invitedPeople,
+          { slug, id: user.id, label: calendarInviteUserLabel(user) },
+        ],
+      };
     });
     setInvitePickerOpen(false);
     setInviteUserSearch("");
     setDebouncedInviteSearch("");
   };
 
-  const removeInvitedPerson = (id) => {
-    setForm((f) => ({ ...f, invitedPeople: f.invitedPeople.filter((p) => p.id !== id) }));
+  const removeInvitedPerson = (slug) => {
+    setForm((f) => ({ ...f, invitedPeople: f.invitedPeople.filter((p) => p.slug !== slug) }));
   };
 
   const handleStartChange = (value) => {
@@ -275,7 +297,7 @@ export function CalendarEventCreateDialog({ open, onOpenChange }) {
       return;
     }
 
-    const userIds = (form.invitedPeople || []).map((p) => p.id).filter(Boolean);
+    const invitedSlugs = (form.invitedPeople || []).map((p) => p.slug).filter(Boolean);
     const rec = buildRecurrencePayload();
     const payload = {
       title: form.title.trim(),
@@ -288,7 +310,8 @@ export function CalendarEventCreateDialog({ open, onOpenChange }) {
       location_detail_text: form.location_detail_text || null,
       location_mode: form.location_mode,
       online_meeting_url: form.online_meeting_url || null,
-      invited_user_ids: userIds.length ? userIds : null,
+      invited_user_slugs: invitedSlugs.length ? invitedSlugs : null,
+      invited_user_ids: null,
       invited_role_ids: form.selected_role_ids.length ? form.selected_role_ids : null,
       reminders: [
         { offset_minutes_before: 1440, channel_email: true, channel_app: true, channel_sms: false },
@@ -446,12 +469,12 @@ export function CalendarEventCreateDialog({ open, onOpenChange }) {
             {form.invitedPeople.length > 0 && (
               <div className="flex flex-wrap gap-2">
                 {form.invitedPeople.map((p) => (
-                  <Badge key={p.id} variant="secondary" className="gap-1 py-1 pl-2 pr-1 font-normal">
+                  <Badge key={invitePersonKey(p)} variant="secondary" className="gap-1 py-1 pl-2 pr-1 font-normal">
                     <span className="max-w-[220px] truncate">{p.label}</span>
                     <button
                       type="button"
                       className="rounded-sm p-0.5 hover:bg-muted-foreground/20"
-                      onClick={() => removeInvitedPerson(p.id)}
+                      onClick={() => removeInvitedPerson(p.slug)}
                       aria-label={`Remove ${p.label}`}
                     >
                       <X className="h-3.5 w-3.5" />
@@ -495,12 +518,13 @@ export function CalendarEventCreateDialog({ open, onOpenChange }) {
                   ) : (
                     <ul className="p-1">
                       {suggestResults.map((u) => {
-                        const selected = form.invitedPeople.some((p) => p.id === u.id);
+                        const us = calendarInviteUserSlug(u);
+                        const selected = us ? form.invitedPeople.some((p) => p.slug === us) : false;
                         return (
                           <li key={u.id}>
                             <button
                               type="button"
-                              disabled={selected}
+                              disabled={selected || !us}
                               className={cn(
                                 "w-full rounded-sm px-2 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground",
                                 selected && "opacity-50",
