@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
-import Link from "next/link";
 import { format, startOfWeek, addDays } from "date-fns";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -69,7 +68,6 @@ export function MyRotaView() {
 
   const weekLabel = `${format(weekDays[0], "d MMM")} – ${format(weekDays[6], "d MMM yyyy")}`;
   const weekLabelShort = `${format(weekDays[0], "d")}–${format(weekDays[6], "d MMM")}`;
-  const rotaLink = `/admin/attendance?tab=rota&from=${startDateStr}&to=${endDateStr}`;
 
   if (!user?.id) {
     return (
@@ -91,10 +89,7 @@ export function MyRotaView() {
               My Rota
             </CardTitle>
             <CardDescription className="text-sm">
-              Your allocated shifts for the week. Request cover and swaps coming soon.{" "}
-              <Link href={rotaLink} className="inline-flex items-center gap-1 font-medium text-primary underline hover:no-underline">
-                View full rota
-              </Link>
+              Your allocated shifts for the week. Request cover and swaps coming soon.
             </CardDescription>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2 sm:justify-start">

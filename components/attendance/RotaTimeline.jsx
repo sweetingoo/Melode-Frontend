@@ -749,13 +749,6 @@ export function RotaTimeline({
                     </Link>
                   </span>
                 )}
-                {isMyRota && (
-                  <span className="mt-2 block">
-                    <Link href="/admin/attendance?tab=rota" className="font-medium text-primary underline hover:no-underline">
-                      View full rota →
-                    </Link>
-                  </span>
-                )}
               </CardDescription>
             </div>
           )}
