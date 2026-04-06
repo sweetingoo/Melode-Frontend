@@ -40,6 +40,7 @@ import {
   CheckCircle2,
   AlertCircle,
   Info,
+  Building2,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import RichTextEditor from "@/components/RichTextEditor";
@@ -482,7 +483,13 @@ const CreateBroadcastDialog = ({
                                         <p className="text-xs text-muted-foreground line-clamp-2">{desc}</p>
                                       ) : null}
                                       {deptName ? (
-                                        <p className="text-xs text-muted-foreground truncate">{deptName}</p>
+                                        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                          <Building2
+                                            className="h-3.5 w-3.5 shrink-0 text-muted-foreground/80"
+                                            aria-hidden
+                                          />
+                                          <span className="min-w-0 truncate">{deptName}</span>
+                                        </p>
                                       ) : null}
                                     </div>
                                   ) : null}
