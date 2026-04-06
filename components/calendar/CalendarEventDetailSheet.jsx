@@ -60,7 +60,7 @@ export function CalendarEventDetailSheet({ slug, open, onOpenChange }) {
                     style={{ backgroundColor: event.category.color || "#6366f1" }}
                   />
                   <span className="text-muted-foreground">
-                    <strong className="text-foreground">Category:</strong> {event.category.name}
+                    <strong className="text-foreground">Type:</strong> {event.category.name}
                   </span>
                 </div>
               ) : null}

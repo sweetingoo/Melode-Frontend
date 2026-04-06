@@ -63,3 +63,26 @@ export function useDeleteCalendarEventCategory() {
     onError: (e) => toast.error(e.response?.data?.detail || "Failed to delete"),
   });
 }
+
+/** Apply new `sort_order` values (0..n-1) after drag-and-drop; single toast. */
+export function useReorderCalendarEventCategories() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (updates) => {
+      await Promise.all(
+        updates.map(({ id, sort_order }) =>
+          calendarEventCategoriesService.update(id, { sort_order })
+        )
+      );
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: calendarEventCategoriesKeys.all });
+      qc.invalidateQueries({ queryKey: ["calendar-events"] });
+      toast.success("Order updated");
+    },
+    onError: (e) => {
+      qc.invalidateQueries({ queryKey: calendarEventCategoriesKeys.all });
+      toast.error(e.response?.data?.detail || "Failed to update order");
+    },
+  });
+}

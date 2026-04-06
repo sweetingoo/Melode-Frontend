@@ -381,7 +381,7 @@ export function CalendarEventCreateDialog({ open, onOpenChange }) {
             </Select>
           </div>
           <div className="space-y-1">
-            <Label>Category</Label>
+            <Label>Event type</Label>
             <Select
               value={form.category_id ? String(form.category_id) : "none"}
               onValueChange={(v) => setForm({ ...form, category_id: v === "none" ? "" : v })}

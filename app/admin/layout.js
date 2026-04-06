@@ -153,13 +153,6 @@ const mainMenuItems = [
     permission: null,
   },
   {
-    title: "Event categories",
-    description: "Colours and labels for calendar events",
-    icon: Tag,
-    url: "/admin/calendar/event-categories",
-    permission: "event:update",
-  },
-  {
     title: "Projects",
     description: "Manage and organise your projects",
     icon: FolderKanban,
@@ -356,6 +349,13 @@ const settingsItems = [
     icon: Type,
     url: "/admin/task-types",
     permission: "task_types:read", // Permission to read task types
+  },
+  {
+    title: "Event Types",
+    description: "Names and colours for calendar events",
+    icon: CalendarDays,
+    url: "/admin/settings/event-types",
+    permission: "event:update",
   },
   {
     title: "Category Types",
