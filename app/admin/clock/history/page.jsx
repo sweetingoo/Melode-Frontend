@@ -200,7 +200,7 @@ function ClockHistoryPageContent() {
               </CardDescription>
             </CardHeader>
             <CardContent className="p-4 sm:p-6">
-              <LeaveRequestList userId={user?.id} showCreateButton={true} compactHeader />
+              <LeaveRequestList userId={user?.id} showCreateButton={true} compactHeader syncPaginationWithUrl />
             </CardContent>
           </Card>
         </TabsContent>

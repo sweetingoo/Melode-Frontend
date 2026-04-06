@@ -202,7 +202,10 @@ export const attendanceService = {
 
   getHolidayBalance: async (params = {}) => {
     try {
-      return await api.get("/attendance/holiday-balance", { params });
+      const clean = Object.fromEntries(
+        Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== "")
+      );
+      return await api.get("/attendance/holiday-balance", { params: clean });
     } catch (error) {
       console.error("Get holiday balance failed:", error);
       throw error;
