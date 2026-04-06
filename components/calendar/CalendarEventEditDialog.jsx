@@ -14,7 +14,13 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { ChevronDown, Loader2, UserPlus, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLocations } from "@/hooks/useLocations";
-import { useRolesAll, formatRolePickerLabel, sortJobRolesForCalendar } from "@/hooks/useRoles";
+import {
+  useRolesAll,
+  sortJobRolesForCalendar,
+  filterJobRolesBySearch,
+  getRoleDepartmentLabel,
+  getCalendarJobRoleName,
+} from "@/hooks/useRoles";
 import { usePatchEventInvites, useUpdateCalendarEvent } from "@/hooks/useCalendarEvents";
 import { useCalendarEventCategories } from "@/hooks/useCalendarEventCategories";
 import { usersService } from "@/services/users";
@@ -79,6 +85,15 @@ export function CalendarEventEditDialog({ open, onOpenChange, event }) {
   const isRecurring = event?.parent_event_id != null || (event?.recurrence_frequency && event.recurrence_frequency !== "none");
 
   const calendarJobRoles = useMemo(() => sortJobRolesForCalendar(roles), [roles]);
+  const [jobRoleSearch, setJobRoleSearch] = useState("");
+  const filteredCalendarJobRoles = useMemo(
+    () => filterJobRolesBySearch(calendarJobRoles, jobRoleSearch),
+    [calendarJobRoles, jobRoleSearch]
+  );
+
+  useEffect(() => {
+    if (!open) setJobRoleSearch("");
+  }, [open]);
 
   useEffect(() => {
     if (!event || !open) return;
@@ -314,16 +329,32 @@ export function CalendarEventEditDialog({ open, onOpenChange, event }) {
 
           <div className="space-y-2">
             <Label>Invite by job role</Label>
+            <Input
+              value={jobRoleSearch}
+              onChange={(e) => setJobRoleSearch(e.target.value)}
+              placeholder="Search job roles…"
+              className="h-9"
+              aria-label="Search job roles"
+            />
             <div className="max-h-40 overflow-y-auto rounded-md border p-2 space-y-3 sm:max-h-48">
-              {calendarJobRoles.map((r) => {
-                const dept = r.department?.name || r.department_name || "No department";
-                return (
-                  <label key={r.id} className="flex items-center gap-2 text-sm">
-                    <Checkbox className="mt-0.5" checked={form.selected_role_ids.includes(r.id)} onCheckedChange={() => toggleRole(r.id)} />
-                    <span className="font-medium leading-snug">{dept} - {formatRolePickerLabel(r)}</span>
-                  </label>
-                );
-              })}
+              {calendarJobRoles.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-2">No job roles loaded.</p>
+              ) : filteredCalendarJobRoles.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-2">No matching job roles.</p>
+              ) : (
+                filteredCalendarJobRoles.map((r) => {
+                  const dept = getRoleDepartmentLabel(r) || "No department";
+                  const roleMain = getCalendarJobRoleName(r);
+                  return (
+                    <label key={r.id} className="flex items-center gap-2 text-sm">
+                      <Checkbox className="mt-0.5" checked={form.selected_role_ids.includes(r.id)} onCheckedChange={() => toggleRole(r.id)} />
+                      <span className="font-medium leading-snug">
+                        {dept} - {roleMain}
+                      </span>
+                    </label>
+                  );
+                })
+              )}
             </div>
           </div>
         </div>

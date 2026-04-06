@@ -27,7 +27,13 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { CalendarDays, ChevronDown, Loader2, UserPlus, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLocations } from "@/hooks/useLocations";
-import { useRolesAll, formatRolePickerLabel, sortJobRolesForCalendar } from "@/hooks/useRoles";
+import {
+  useRolesAll,
+  sortJobRolesForCalendar,
+  filterJobRolesBySearch,
+  getRoleDepartmentLabel,
+  getCalendarJobRoleName,
+} from "@/hooks/useRoles";
 import { useCreateCalendarEvent } from "@/hooks/useCalendarEvents";
 import { useCalendarEventCategories } from "@/hooks/useCalendarEventCategories";
 import { usersService } from "@/services/users";
@@ -86,6 +92,11 @@ export function CalendarEventCreateDialog({ open, onOpenChange }) {
   const createMutation = useCreateCalendarEvent();
 
   const calendarJobRoles = useMemo(() => sortJobRolesForCalendar(roles), [roles]);
+  const [jobRoleSearch, setJobRoleSearch] = useState("");
+  const filteredCalendarJobRoles = useMemo(
+    () => filterJobRolesBySearch(calendarJobRoles, jobRoleSearch),
+    [calendarJobRoles, jobRoleSearch]
+  );
 
   const defaultStart = nextTopOfHour();
   const defaultEnd = new Date(defaultStart.getTime() + 60 * 60 * 1000);
@@ -168,6 +179,7 @@ export function CalendarEventCreateDialog({ open, onOpenChange }) {
     setRecurrenceCount(12);
     setInviteUserSearch("");
     setDebouncedInviteSearch("");
+    setJobRoleSearch("");
   };
 
   useEffect(() => {
@@ -175,6 +187,7 @@ export function CalendarEventCreateDialog({ open, onOpenChange }) {
       setInvitePickerOpen(false);
       setInviteUserSearch("");
       setDebouncedInviteSearch("");
+      setJobRoleSearch("");
     }
   }, [open]);
 
@@ -544,13 +557,23 @@ export function CalendarEventCreateDialog({ open, onOpenChange }) {
             <p className="text-xs text-muted-foreground">
               Job roles only (same idea as rota columns). Use named people above for shift-only assignments.
             </p>
+            <Input
+              value={jobRoleSearch}
+              onChange={(e) => setJobRoleSearch(e.target.value)}
+              placeholder="Search job roles…"
+              className="h-9"
+              aria-label="Search job roles"
+            />
             <div className="max-h-40 overflow-y-auto rounded-md border p-2 space-y-3 sm:max-h-48">
               {calendarJobRoles.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-2">No job roles loaded.</p>
+              ) : filteredCalendarJobRoles.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-2">No matching job roles.</p>
               ) : (
-                calendarJobRoles.map((r) => {
+                filteredCalendarJobRoles.map((r) => {
                   const shiftKids = r.shift_roles || r.shiftRoles || [];
-                  const deptName = r.department?.name || r.department_name || "No department";
+                  const deptName = getRoleDepartmentLabel(r) || "No department";
+                  const roleMain = getCalendarJobRoleName(r);
                   return (
                     <label key={r.id} className="flex flex-col gap-1 text-sm">
                       <span className="flex items-start gap-2">
@@ -560,7 +583,9 @@ export function CalendarEventCreateDialog({ open, onOpenChange }) {
                           onCheckedChange={() => toggleRole(r.id)}
                         />
                         <span>
-                          <span className="font-medium leading-snug">{deptName} - {formatRolePickerLabel(r)}</span>
+                          <span className="font-medium leading-snug">
+                            {deptName} - {roleMain}
+                          </span>
                           {shiftKids.length > 0 ? (
                             <span className="mt-0.5 block text-xs text-muted-foreground leading-snug">
                               Linked shift roles: {shiftKids.map((s) => s.display_name || s.name).join(", ")}

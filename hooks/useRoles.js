@@ -466,6 +466,25 @@ export function getRoleDepartmentLabel(role) {
 }
 
 /**
+ * Display name for calendar job-role rows (department is shown separately).
+ * Avoids showing UUID-like slugs when display_name/name are missing.
+ */
+export function getCalendarJobRoleName(role) {
+  if (!role) return "";
+  const dn = role.display_name != null ? String(role.display_name).trim() : "";
+  if (dn) return dn;
+  const n = role.name != null ? String(role.name).trim() : "";
+  if (n) return n;
+  const s = role.slug != null ? String(role.slug).trim() : "";
+  if (s) {
+    const compact = s.replace(/-/g, "");
+    const looksLikeOpaqueId = /^[0-9a-f]{24,}$/i.test(compact);
+    if (!looksLikeOpaqueId) return s;
+  }
+  return `Role ${role.id}`;
+}
+
+/**
  * Job roles for calendar invite UI: sort by department A–Z, then role name A–Z.
  * Roles with no department sort last (after all named departments).
  */
@@ -490,6 +509,31 @@ export function sortJobRolesForCalendar(rolesList) {
     const c = da.localeCompare(db, undefined, { sensitivity: "base" });
     if (c !== 0) return c;
     return roleKey(a).localeCompare(roleKey(b), undefined, { sensitivity: "base" });
+  });
+}
+
+/**
+ * Filter sorted job roles (e.g. calendar invite list) by search text: department, role name, slug, picker label, linked shift names.
+ */
+export function filterJobRolesBySearch(roles, searchRaw) {
+  const list = Array.isArray(roles) ? roles : [];
+  const q = (searchRaw || "").trim().toLowerCase();
+  if (!q) return list;
+  return list.filter((r) => {
+    const dept = getRoleDepartmentLabel(r).toLowerCase();
+    const name = (r.display_name || r.name || "").toString().toLowerCase();
+    const slug = (r.slug || "").toString().toLowerCase();
+    const picker = formatRolePickerLabel(r).toLowerCase();
+    const shifts = (r.shift_roles || r.shiftRoles || [])
+      .map((s) => `${s.display_name || ""} ${s.name || ""}`.toLowerCase())
+      .join(" ");
+    return (
+      dept.includes(q) ||
+      name.includes(q) ||
+      slug.includes(q) ||
+      picker.includes(q) ||
+      shifts.includes(q)
+    );
   });
 }
 
