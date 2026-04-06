@@ -33,8 +33,6 @@ import { useShiftRecordsAllPages } from "@/hooks/useShiftRecords";
 import { useClockRecords } from "@/hooks/useClock";
 import { useLocations } from "@/hooks/useLocations";
 import { useCreateMessage } from "@/hooks/useMessages";
-import { useUsers } from "@/hooks/useUsers";
-import { useRoles } from "@/hooks/useRoles";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
 import { formatDateForAPI, parseUTCDate } from "@/utils/time";
 import { getUserDisplayName } from "@/utils/user";
@@ -642,8 +640,6 @@ export function NowBoardView({ departmentId: initialDepartmentId = null }) {
     hasPermission("BROADCAST_CREATE") ||
     hasPermission("broadcast:send") ||
     hasPermission("BROADCAST_SEND");
-  const { data: usersData } = useUsers({}, { enabled: broadcastDialogOpen });
-  const { data: rolesData } = useRoles({}, { enabled: broadcastDialogOpen });
   const createMessageMutation = useCreateMessage();
 
   const broadcastInitialTitle = useMemo(() => "Cover needed today", []);
@@ -1174,8 +1170,6 @@ export function NowBoardView({ departmentId: initialDepartmentId = null }) {
           }
         }}
         isLoading={createMessageMutation.isPending}
-        usersData={usersData}
-        rolesData={rolesData}
         initialTitle={broadcastInitialTitle}
         initialContent={broadcastInitialContent}
       />

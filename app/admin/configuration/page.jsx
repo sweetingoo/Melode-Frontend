@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useEffect, Suspense } from "react";
+import { permissionMatchesSearch } from "@/lib/permissionSearchMatch";
 import { useSearchParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -3109,11 +3110,11 @@ function PermissionByRoleSection() {
     if (permissionsData) fetchAll();
   }, [permissionsData]);
 
-  const filteredPermissions = allPermissionsList.filter(
-    (p) =>
-      (p.name || "").toLowerCase().includes((searchPermission || "").toLowerCase()) ||
-      (p.resource || "").toLowerCase().includes((searchPermission || "").toLowerCase()) ||
-      (p.action || "").toLowerCase().includes((searchPermission || "").toLowerCase())
+  const filteredPermissions = allPermissionsList.filter((p) =>
+    permissionMatchesSearch(
+      { name: p.name, resource: p.resource, action: p.action, slug: p.slug },
+      searchPermission,
+    ),
   );
   const roleIdsWithPermission = useMemo(
     () => new Set((rolesWithPermission || []).map((r) => r.role_id)),
@@ -3453,11 +3454,7 @@ function DefaultRolePermissionsSection() {
   }, [defaultPermissionSlugs, isLoadingDefaults, isInitialized]);
 
   // Filter permissions based on search
-  const filteredPermissions = allPermissions.filter((permission) =>
-    permission.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    permission.resource.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    permission.action.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredPermissions = allPermissions.filter((permission) => permissionMatchesSearch(permission, searchTerm));
 
   const handleTogglePermission = (permissionSlug) => {
     setSelectedPermissionSlugs((prev) => {

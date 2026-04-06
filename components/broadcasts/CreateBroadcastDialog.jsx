@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import {
   Dialog,
   DialogContent,
@@ -44,34 +44,63 @@ import {
 import { Switch } from "@/components/ui/switch";
 import RichTextEditor from "@/components/RichTextEditor";
 import { cn } from "@/lib/utils";
-import { useCurrentUser } from "@/hooks/useAuth";
 import { toast } from "sonner";
+import { usersService } from "@/services/users";
+import { rolesService } from "@/services/roles";
+import { getUserDisplayName } from "@/utils/user";
+
+function normalizeRolesListResponse(data) {
+  if (Array.isArray(data)) return data;
+  if (data?.roles && Array.isArray(data.roles)) return data.roles;
+  return [];
+}
+
+/** Job-role row meta: show description and department independently when present. */
+function broadcastJobRoleMeta(role) {
+  const desc = role.description && String(role.description).trim();
+  const deptName = role.department?.name?.trim();
+  return { desc: desc || "", deptName: deptName || "" };
+}
+
+function compareBroadcastJobRoles(a, b) {
+  const deptA = (a.department?.name || "").trim().toLowerCase();
+  const deptB = (b.department?.name || "").trim().toLowerCase();
+  const noDept = "\uFFFF";
+  const keyA = deptA || noDept;
+  const keyB = deptB || noDept;
+  if (keyA !== keyB) {
+    return keyA.localeCompare(keyB, undefined, { sensitivity: "base" });
+  }
+  const nameA = (a.display_name || a.name || "").toLowerCase();
+  const nameB = (b.display_name || b.name || "").toLowerCase();
+  return nameA.localeCompare(nameB, undefined, { sensitivity: "base" });
+}
 
 const CreateBroadcastDialog = ({
   open,
   onOpenChange,
   onSubmit,
   isLoading,
-  usersData,
-  rolesData,
   initialTitle = "",
   initialContent = "",
 }) => {
-  const { data: currentUser } = useCurrentUser();
   const [step, setStep] = useState("compose"); // "select" or "compose"
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [userSuggestResults, setUserSuggestResults] = useState([]);
+  const [userSuggestLoading, setUserSuggestLoading] = useState(false);
+  const [jobRolesResults, setJobRolesResults] = useState([]);
+  const [jobRolesLoading, setJobRolesLoading] = useState(false);
+  const [jobRolesLoadingMore, setJobRolesLoadingMore] = useState(false);
+  const [jobRolesPage, setJobRolesPage] = useState(1);
+  const [jobRolesHasMore, setJobRolesHasMore] = useState(false);
   const [selectedUserIds, setSelectedUserIds] = useState([]);
+  const [selectedUsersById, setSelectedUsersById] = useState(() => new Map());
   const [selectedRoleIds, setSelectedRoleIds] = useState([]);
+  const [selectedRolesById, setSelectedRolesById] = useState(() => new Map());
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [category, setCategory] = useState("");
-
-  useEffect(() => {
-    if (open && (initialTitle || initialContent)) {
-      if (initialTitle) setTitle(initialTitle);
-      if (initialContent) setContent(initialContent);
-    }
-  }, [open, initialTitle, initialContent]);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [formData, setFormData] = useState({
     content_delivery_mode: "full", // "full", "app_only", "hybrid"
@@ -83,54 +112,136 @@ const CreateBroadcastDialog = ({
     target_type: "user", // "user", "role", "target_user_ids"
   });
 
-  // Get users and roles from data
-  const users = useMemo(() => {
-    const allUsers = usersData?.users || usersData?.data || [];
-    return allUsers;
-  }, [usersData]);
-
-  const roles = useMemo(() => {
-    return rolesData?.roles || rolesData || [];
-  }, [rolesData]);
-
-  // Filter users and roles based on search
-  const filteredUsers = useMemo(() => {
-    if (!searchTerm) return users;
-    const term = searchTerm.toLowerCase();
-    return users.filter(
-      (user) =>
-        user.first_name?.toLowerCase().includes(term) ||
-        user.last_name?.toLowerCase().includes(term) ||
-        user.email?.toLowerCase().includes(term) ||
-        user.username?.toLowerCase().includes(term)
-    );
-  }, [users, searchTerm]);
-
-  const filteredRoles = useMemo(() => {
-    if (!searchTerm) return roles;
-    const term = searchTerm.toLowerCase();
-    return roles.filter(
-      (role) =>
-        role.display_name?.toLowerCase().includes(term) ||
-        role.name?.toLowerCase().includes(term) ||
-        role.slug?.toLowerCase().includes(term)
-    );
-  }, [roles, searchTerm]);
-
-  const handleUserSelect = (userId) => {
-    if (selectedUserIds.includes(userId)) {
-      setSelectedUserIds(selectedUserIds.filter((id) => id !== userId));
-    } else {
-      setSelectedUserIds([...selectedUserIds, userId]);
+  useEffect(() => {
+    if (open && (initialTitle || initialContent)) {
+      if (initialTitle) setTitle(initialTitle);
+      if (initialContent) setContent(initialContent);
     }
+  }, [open, initialTitle, initialContent]);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchTerm.trim()), 300);
+    return () => clearTimeout(t);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    if (!open || formData.target_type !== "user") return;
+    let cancelled = false;
+    (async () => {
+      setUserSuggestLoading(true);
+      try {
+        const res = await usersService.suggestUsers({
+          ...(debouncedSearch ? { search: debouncedSearch } : {}),
+          is_active: true,
+          per_page: 50,
+        });
+        if (!cancelled) setUserSuggestResults(Array.isArray(res.data?.users) ? res.data.users : []);
+      } catch {
+        if (!cancelled) setUserSuggestResults([]);
+      } finally {
+        if (!cancelled) setUserSuggestLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, formData.target_type, debouncedSearch]);
+
+  useEffect(() => {
+    if (!open || formData.target_type !== "role") return;
+    let cancelled = false;
+    setJobRolesLoading(true);
+    setJobRolesPage(1);
+    (async () => {
+      try {
+        const res = await rolesService.getRoles({
+          page: 1,
+          per_page: 50,
+          role_type: "job_role",
+          ...(debouncedSearch ? { search: debouncedSearch } : {}),
+        });
+        if (cancelled) return;
+        const list = normalizeRolesListResponse(res.data);
+        setJobRolesResults(list);
+        setJobRolesHasMore(list.length >= 50);
+      } catch {
+        if (!cancelled) {
+          setJobRolesResults([]);
+          setJobRolesHasMore(false);
+        }
+      } finally {
+        if (!cancelled) setJobRolesLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, formData.target_type, debouncedSearch]);
+
+  const loadMoreJobRoles = useCallback(async () => {
+    if (jobRolesLoading || jobRolesLoadingMore || !jobRolesHasMore) return;
+    const nextPage = jobRolesPage + 1;
+    setJobRolesLoadingMore(true);
+    try {
+      const res = await rolesService.getRoles({
+        page: nextPage,
+        per_page: 50,
+        role_type: "job_role",
+        ...(debouncedSearch ? { search: debouncedSearch } : {}),
+      });
+      const list = normalizeRolesListResponse(res.data);
+      setJobRolesResults((prev) => {
+        const seen = new Set(prev.map((r) => r.id));
+        const merged = [...prev];
+        for (const r of list) {
+          if (r?.id != null && !seen.has(r.id)) {
+            seen.add(r.id);
+            merged.push(r);
+          }
+        }
+        return merged;
+      });
+      setJobRolesPage(nextPage);
+      setJobRolesHasMore(list.length >= 50);
+    } catch {
+      toast.error("Could not load more roles");
+    } finally {
+      setJobRolesLoadingMore(false);
+    }
+  }, [debouncedSearch, jobRolesHasMore, jobRolesLoading, jobRolesLoadingMore, jobRolesPage]);
+
+  const handleUserSelect = (user) => {
+    const userId = user?.id;
+    if (userId == null) return;
+    if (selectedUserIds.includes(userId)) {
+      setSelectedUserIds((prev) => prev.filter((id) => id !== userId));
+      setSelectedUsersById((m) => {
+        const next = new Map(m);
+        next.delete(userId);
+        return next;
+      });
+      return;
+    }
+    setSelectedUserIds((prev) => [...prev, userId]);
+    setSelectedUsersById((m) => new Map(m).set(userId, user));
   };
 
-  const handleRoleSelect = (roleId) => {
-    const id = roleId.toString();
-    setSelectedRoleIds((prev) =>
-      prev.includes(id) ? prev.filter((r) => r !== id) : [...prev, id]
-    );
-    setSelectedUserIds([]); // Clear user selection when role is selected
+  const handleRoleSelect = (role) => {
+    if (role?.id == null) return;
+    const id = role.id.toString();
+    if (selectedRoleIds.includes(id)) {
+      setSelectedRoleIds((prev) => prev.filter((r) => r !== id));
+      setSelectedRolesById((m) => {
+        const next = new Map(m);
+        next.delete(role.id);
+        return next;
+      });
+    } else {
+      setSelectedRoleIds((prev) => [...prev, id]);
+      setSelectedRolesById((m) => new Map(m).set(role.id, role));
+    }
+    setSelectedUserIds([]);
+    setSelectedUsersById(new Map());
   };
 
   const handleSubmit = () => {
@@ -198,8 +309,15 @@ const CreateBroadcastDialog = ({
   const handleClose = () => {
     setStep("compose");
     setSearchTerm("");
+    setDebouncedSearch("");
+    setUserSuggestResults([]);
+    setJobRolesResults([]);
+    setJobRolesPage(1);
+    setJobRolesHasMore(false);
     setSelectedUserIds([]);
+    setSelectedUsersById(new Map());
     setSelectedRoleIds([]);
+    setSelectedRolesById(new Map());
     setTitle("");
     setContent("");
     setCategory("");
@@ -217,12 +335,21 @@ const CreateBroadcastDialog = ({
   };
 
   const selectedUsers = useMemo(() => {
-    return users.filter((u) => selectedUserIds.includes(u.id));
-  }, [users, selectedUserIds]);
+    return selectedUserIds.map((id) => selectedUsersById.get(id) || { id, display_name: `User #${id}` });
+  }, [selectedUserIds, selectedUsersById]);
 
   const selectedRoles = useMemo(() => {
-    return roles.filter((r) => selectedRoleIds.includes(r.id.toString()));
-  }, [roles, selectedRoleIds]);
+    return selectedRoleIds.map((idStr) => {
+      const idNum = parseInt(idStr, 10);
+      const fromMap = selectedRolesById.get(idNum);
+      if (fromMap) return fromMap;
+      return { id: idNum, display_name: `Role #${idStr}`, name: idStr };
+    });
+  }, [selectedRoleIds, selectedRolesById]);
+
+  const sortedJobRolesForList = useMemo(() => {
+    return [...jobRolesResults].sort(compareBroadcastJobRoles);
+  }, [jobRolesResults]);
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -280,7 +407,10 @@ const CreateBroadcastDialog = ({
                   onValueChange={(value) => {
                     setFormData({ ...formData, target_type: value });
                     setSelectedUserIds([]);
+                    setSelectedUsersById(new Map());
                     setSelectedRoleIds([]);
+                    setSelectedRolesById(new Map());
+                    setSearchTerm("");
                   }}
                 >
                   <SelectTrigger>
@@ -288,7 +418,7 @@ const CreateBroadcastDialog = ({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="user">Specific Users</SelectItem>
-                    <SelectItem value="role">Role (Group)</SelectItem>
+                    <SelectItem value="role">Job role</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -296,51 +426,92 @@ const CreateBroadcastDialog = ({
               {/* Target Selection */}
               {formData.target_type === "role" && (
                 <div className="space-y-2">
-                  <Label>Select Role(s)</Label>
+                  <Label>Select job role(s)</Label>
                   <div className="space-y-2">
                     <div className="relative">
                       <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                       <Input
-                        placeholder="Search roles..."
+                        placeholder="Search job roles…"
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         className="pl-9 h-9"
+                        autoComplete="off"
                       />
                     </div>
                     <ScrollArea className="h-48 border rounded-md">
                       <div className="divide-y">
-                        {filteredRoles.map((role) => {
-                          const isSelected = selectedRoleIds.includes(role.id.toString());
-                          return (
-                            <div
-                              key={role.id}
-                              onClick={() => handleRoleSelect(role.id.toString())}
-                              className={cn(
-                                "px-4 py-3 cursor-pointer transition-colors hover:bg-muted/50 flex items-center gap-3",
-                                isSelected && "bg-primary/5 border-l-4 border-l-primary"
-                              )}
-                            >
-                              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                                <Users className="h-5 w-5 text-primary" />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <h3 className="font-semibold text-sm">
-                                    {role.display_name || role.name}
-                                  </h3>
-                                  {isSelected && (
-                                    <CheckCircle2 className="h-4 w-4 text-primary" />
-                                  )}
+                        {jobRolesLoading ? (
+                          <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Loading roles…
+                          </div>
+                        ) : jobRolesResults.length === 0 ? (
+                          <p className="py-8 px-4 text-center text-sm text-muted-foreground">
+                            {debouncedSearch
+                              ? "No job roles match. Try another search."
+                              : "No job roles found."}
+                          </p>
+                        ) : (
+                          sortedJobRolesForList.map((role) => {
+                            const isSelected = selectedRoleIds.includes(role.id.toString());
+                            const { desc, deptName } = broadcastJobRoleMeta(role);
+                            return (
+                              <div
+                                key={role.id}
+                                onClick={() => handleRoleSelect(role)}
+                                className={cn(
+                                  "px-4 py-3 cursor-pointer transition-colors hover:bg-muted/50 flex items-center gap-3",
+                                  isSelected && "bg-primary/5 border-l-4 border-l-primary"
+                                )}
+                              >
+                                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                                  <Users className="h-5 w-5 text-primary" />
                                 </div>
-                                <p className="text-xs text-muted-foreground truncate">
-                                  {role.description || `Group: ${role.slug || role.name}`}
-                                </p>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <h3 className="font-semibold text-sm">
+                                      {role.display_name || role.name}
+                                    </h3>
+                                    {isSelected && (
+                                      <CheckCircle2 className="h-4 w-4 text-primary" />
+                                    )}
+                                  </div>
+                                  {(desc || deptName) ? (
+                                    <div className="mt-0.5 space-y-0.5">
+                                      {desc ? (
+                                        <p className="text-xs text-muted-foreground line-clamp-2">{desc}</p>
+                                      ) : null}
+                                      {deptName ? (
+                                        <p className="text-xs text-muted-foreground truncate">{deptName}</p>
+                                      ) : null}
+                                    </div>
+                                  ) : null}
+                                </div>
                               </div>
-                            </div>
-                          );
-                        })}
+                            );
+                          })
+                        )}
                       </div>
                     </ScrollArea>
+                    {jobRolesHasMore && !jobRolesLoading && jobRolesResults.length > 0 && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="w-full"
+                        disabled={jobRolesLoadingMore}
+                        onClick={() => loadMoreJobRoles()}
+                      >
+                        {jobRolesLoadingMore ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Loading…
+                          </>
+                        ) : (
+                          "Load more roles"
+                        )}
+                      </Button>
+                    )}
                     {selectedRoles.length > 0 && (
                       <div className="flex items-center gap-2 flex-wrap">
                         {selectedRoles.map((role) => (
@@ -362,44 +533,56 @@ const CreateBroadcastDialog = ({
                     <div className="relative">
                       <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                       <Input
-                        placeholder="Search users..."
+                        placeholder="Search by name or email…"
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         className="pl-9 h-9"
+                        autoComplete="off"
                       />
                     </div>
                     <ScrollArea className="h-48 border rounded-md">
                       <div className="divide-y">
-                        {filteredUsers.map((user) => {
-                          const isSelected = selectedUserIds.includes(user.id);
-                          return (
-                            <div
-                              key={user.id}
-                              onClick={() => handleUserSelect(user.id)}
-                              className={cn(
-                                "px-4 py-3 cursor-pointer transition-colors hover:bg-muted/50 flex items-center gap-3",
-                                isSelected && "bg-primary/5 border-l-4 border-l-primary"
-                              )}
-                            >
-                              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-muted flex items-center justify-center">
-                                <User className="h-5 w-5 text-muted-foreground" />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <h3 className="font-semibold text-sm">
-                                    {user.first_name} {user.last_name}
-                                  </h3>
-                                  {isSelected && (
-                                    <CheckCircle2 className="h-4 w-4 text-primary" />
-                                  )}
+                        {userSuggestLoading ? (
+                          <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Loading users…
+                          </div>
+                        ) : userSuggestResults.length === 0 ? (
+                          <p className="py-8 px-4 text-center text-sm text-muted-foreground">
+                            {debouncedSearch
+                              ? "No users match. Try another search."
+                              : "Type to search users, or browse the first suggestions below."}
+                          </p>
+                        ) : (
+                          userSuggestResults.map((user) => {
+                            const isSelected = selectedUserIds.includes(user.id);
+                            return (
+                              <div
+                                key={user.id}
+                                onClick={() => handleUserSelect(user)}
+                                className={cn(
+                                  "px-4 py-3 cursor-pointer transition-colors hover:bg-muted/50 flex items-center gap-3",
+                                  isSelected && "bg-primary/5 border-l-4 border-l-primary"
+                                )}
+                              >
+                                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-muted flex items-center justify-center">
+                                  <User className="h-5 w-5 text-muted-foreground" />
                                 </div>
-                                <p className="text-xs text-muted-foreground truncate">
-                                  {user.email}
-                                </p>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <h3 className="font-semibold text-sm">{getUserDisplayName(user)}</h3>
+                                    {isSelected && (
+                                      <CheckCircle2 className="h-4 w-4 text-primary" />
+                                    )}
+                                  </div>
+                                  {user.email ? (
+                                    <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+                                  ) : null}
+                                </div>
                               </div>
-                            </div>
-                          );
-                        })}
+                            );
+                          })
+                        )}
                       </div>
                     </ScrollArea>
                     {selectedUsers.length > 0 && (
@@ -411,7 +594,7 @@ const CreateBroadcastDialog = ({
                             className="flex items-center gap-1.5"
                           >
                             <User className="h-3 w-3" />
-                            {user.first_name} {user.last_name}
+                            {getUserDisplayName(user)}
                           </Badge>
                         ))}
                       </div>

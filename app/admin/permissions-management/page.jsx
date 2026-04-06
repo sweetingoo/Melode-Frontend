@@ -78,6 +78,7 @@ import {
 } from "@/hooks/usePermissions";
 import { useRolesAll } from "@/hooks/useRoles";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
+import { permissionMatchesSearch } from "@/lib/permissionSearchMatch";
 import { PageSearchBar } from "@/components/admin/PageSearchBar";
 
 /** Summary counts (shares React Query cache with PermissionUsageRolesPanel). */
@@ -303,9 +304,7 @@ const PermissionsManagementPage = () => {
     );
 
     const matchesSearch =
-      permission.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      permission.resource.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      permission.action.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      permissionMatchesSearch(permission, searchTerm) ||
       permissionType.toLowerCase().includes(searchTerm.toLowerCase());
 
     const matchesResource =

@@ -4,7 +4,6 @@ import { useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useMyAcceptedCalendarEvents } from "@/hooks/useCalendarEvents";
-import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
 import { CalendarHeart, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { format } from "date-fns";
@@ -15,8 +14,6 @@ function categoryHex(c) {
 }
 
 export function DashboardMyAcceptedEvents() {
-  const { hasPermission } = usePermissionsCheck();
-  const canOpenCalendar = hasPermission("event:list");
   const { data, isLoading, isError } = useMyAcceptedCalendarEvents({ limit: 8, enabled: true });
   const accepted = data?.events ?? [];
   const awaiting = data?.awaiting_invite ?? [];
@@ -95,14 +92,14 @@ export function DashboardMyAcceptedEvents() {
                       <span className="text-[11px] text-muted-foreground/90">{ev.category.name}</span>
                     ) : null}
                   </span>
-                  {canOpenCalendar ? (
+                  {ev.slug ? (
                     <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground self-center" />
                   ) : null}
                 </>
               );
               const className =
                 "flex w-full items-stretch gap-3 rounded-lg border border-transparent px-1 py-1 text-left transition-colors hover:bg-muted/50 -mx-1";
-              if (canOpenCalendar && ev.slug) {
+              if (ev.slug) {
                 return (
                   <li key={ev.slug}>
                     <Link
@@ -122,13 +119,9 @@ export function DashboardMyAcceptedEvents() {
             })}
           </ul>
         )}
-        {canOpenCalendar ? (
-          <Link href="/admin/calendar" className="text-sm font-medium text-primary hover:underline mt-3 inline-block">
-            Open calendar
-          </Link>
-        ) : (
-          <p className="text-xs text-muted-foreground mt-3">Calendar requires event list permission to open events.</p>
-        )}
+        <Link href="/admin/calendar" className="text-sm font-medium text-primary hover:underline mt-3 inline-block">
+          Open calendar
+        </Link>
       </CardContent>
     </Card>
   );

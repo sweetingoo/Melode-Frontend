@@ -336,7 +336,6 @@ export function RotaTimeline({
   const router = useRouter();
   const pathname = usePathname();
   const { hasPermission } = usePermissionsCheck();
-  const canListEvents = hasPermission("event:list");
   const canCreateEvent = hasPermission("event:create");
   const canRunEventReminders = hasPermission("event:update");
 
@@ -364,7 +363,7 @@ export function RotaTimeline({
     start: calendarRangeIso.start,
     end: calendarRangeIso.end,
     per_page: 100,
-    enabled: canListEvents && !!calendarRangeIso.start && !!calendarRangeIso.end,
+    enabled: !!calendarRangeIso.start && !!calendarRangeIso.end,
   });
 
   const isLoading = eventsOnly ? calendarEventsFetching : (coverageLoading || shiftsLoading);
@@ -727,36 +726,39 @@ export function RotaTimeline({
   return (
     <Card className="border-0 shadow-sm bg-card">
       <CardHeader className="space-y-3 border-b bg-muted/20 px-4 py-5 sm:px-6">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="space-y-1">
-            <CardTitle className="text-xl font-semibold tracking-tight">
-              {eventsOnly ? "Calendar" : (isMyRota ? "My Rota" : "Rota")}
-            </CardTitle>
-            <CardDescription className="text-sm text-muted-foreground">
-              {eventsOnly ? (
-                <span className="block">Organisation events shown by date range.</span>
-              ) : canListEvents && (
+        <div
+          className={cn(
+            "flex flex-wrap items-center gap-4",
+            eventsOnly ? "justify-end" : "justify-between",
+          )}
+        >
+          {!eventsOnly && (
+            <div className="space-y-1">
+              <CardTitle className="text-xl font-semibold tracking-tight">
+                {isMyRota ? "My Rota" : "Rota"}
+              </CardTitle>
+              <CardDescription className="text-sm text-muted-foreground">
                 <span className="block">
-                  Organisation events appear in the date column (violet) alongside shifts for the same range.
+                  Events you can access appear in the date column (violet) alongside shifts for the same range.
                 </span>
-              )}
-              {!eventsOnly && !isMyRota && isSingleDay && (
-                <span className="mt-2 block">
-                  See who&apos;s checked in today →{" "}
-                  <Link href="/admin/attendance?tab=now" className="font-medium text-primary underline hover:no-underline">
-                    Now tab
-                  </Link>
-                </span>
-              )}
-              {!eventsOnly && isMyRota && (
-                <span className="mt-2 block">
-                  <Link href="/admin/attendance?tab=rota" className="font-medium text-primary underline hover:no-underline">
-                    View full rota →
-                  </Link>
-                </span>
-              )}
-            </CardDescription>
-          </div>
+                {!isMyRota && isSingleDay && (
+                  <span className="mt-2 block">
+                    See who&apos;s checked in today →{" "}
+                    <Link href="/admin/attendance?tab=now" className="font-medium text-primary underline hover:no-underline">
+                      Now tab
+                    </Link>
+                  </span>
+                )}
+                {isMyRota && (
+                  <span className="mt-2 block">
+                    <Link href="/admin/attendance?tab=rota" className="font-medium text-primary underline hover:no-underline">
+                      View full rota →
+                    </Link>
+                  </span>
+                )}
+              </CardDescription>
+            </div>
+          )}
           <div className="flex flex-wrap items-center gap-3">
             {!eventsOnly && <div className="flex flex-wrap items-center gap-2">
               <div className="flex items-center gap-2">
@@ -1368,36 +1370,34 @@ export function RotaTimeline({
                       >
                         <span className="block text-[11px] uppercase tracking-wider opacity-80">{format(d, "EEE")}</span>
                         <span className="block text-base">{format(d, "d")}</span>
-                        {canListEvents && (
-                          <div className="mt-2 max-w-[140px] space-y-1 border-t border-border/50 pt-2">
-                            <p className="text-[9px] font-semibold uppercase tracking-wide text-violet-700 dark:text-violet-300">
-                              Events
-                            </p>
-                            {calendarEventsFetching ? (
-                              <span className="text-[10px] text-muted-foreground">…</span>
-                            ) : (
-                              (eventsByDateStr[dateStr] || []).map((ev) => (
-                                <button
-                                  key={ev.slug}
-                                  type="button"
-                                  onClick={() => setSelectedCalendarEventSlug(ev.slug)}
-                                  className={cn(
-                                    "flex w-full flex-col items-start rounded-md border-l-4 border-transparent bg-violet-500/10 px-1.5 py-1 text-left text-[10px] leading-tight transition-colors hover:bg-violet-500/20",
-                                    ev.is_cancelled && "opacity-50 line-through",
-                                  )}
-                                  style={{
-                                    borderLeftColor: calendarEventCategoryColor(ev) || "rgb(139 92 246)",
-                                  }}
-                                >
-                                  <span className="tabular-nums text-muted-foreground">
-                                    {format(new Date(ev.starts_at), "HH:mm")}
-                                  </span>
-                                  <span className="w-full truncate font-medium">{ev.title}</span>
-                                </button>
-                              ))
-                            )}
-                          </div>
-                        )}
+                        <div className="mt-2 max-w-[140px] space-y-1 border-t border-border/50 pt-2">
+                          <p className="text-[9px] font-semibold uppercase tracking-wide text-violet-700 dark:text-violet-300">
+                            Events
+                          </p>
+                          {calendarEventsFetching ? (
+                            <span className="text-[10px] text-muted-foreground">…</span>
+                          ) : (
+                            (eventsByDateStr[dateStr] || []).map((ev) => (
+                              <button
+                                key={ev.slug}
+                                type="button"
+                                onClick={() => setSelectedCalendarEventSlug(ev.slug)}
+                                className={cn(
+                                  "flex w-full flex-col items-start rounded-md border-l-4 border-transparent bg-violet-500/10 px-1.5 py-1 text-left text-[10px] leading-tight transition-colors hover:bg-violet-500/20",
+                                  ev.is_cancelled && "opacity-50 line-through",
+                                )}
+                                style={{
+                                  borderLeftColor: calendarEventCategoryColor(ev) || "rgb(139 92 246)",
+                                }}
+                              >
+                                <span className="tabular-nums text-muted-foreground">
+                                  {format(new Date(ev.starts_at), "HH:mm")}
+                                </span>
+                                <span className="w-full truncate font-medium">{ev.title}</span>
+                              </button>
+                            ))
+                          )}
+                        </div>
                       </td>
                       {roleRowsSorted.map((row) => {
                         const roleData = byDateRole[dateStr]?.[row.key];

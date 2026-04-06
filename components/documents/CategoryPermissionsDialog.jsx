@@ -29,6 +29,7 @@ import {
 } from "@/hooks/useRoles";
 import { Loader2, User, Users, Search, Shield, X, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { permissionMatchesSearch } from "@/lib/permissionSearchMatch";
 import { toast } from "sonner";
 
 const CategoryPermissionsDialog = ({ open, onOpenChange, category }) => {
@@ -305,13 +306,7 @@ const CategoryPermissionsDialog = ({ open, onOpenChange, category }) => {
 
   const filteredPermissionSlugs = useMemo(() => {
     if (!permissionSearchQuery) return allPermissions;
-    const query = permissionSearchQuery.toLowerCase();
-    return allPermissions.filter((perm) => {
-      const name = typeof perm === 'string' 
-        ? perm 
-        : (perm.name || perm.slug || perm.display_name || '').toLowerCase();
-      return name.includes(query);
-    });
+    return allPermissions.filter((perm) => permissionMatchesSearch(perm, permissionSearchQuery));
   }, [allPermissions, permissionSearchQuery]);
 
   const handleToggleRole = (action, roleId) => {

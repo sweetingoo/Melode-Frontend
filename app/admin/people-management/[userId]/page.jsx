@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import { permissionMatchesSearch } from "@/lib/permissionSearchMatch";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -2181,15 +2182,17 @@ const UserEditPage = () => {
   };
 
   // Filter permissions based on search term (for both assigned and available)
-  const filterPermission = (permission) => {
-    const searchLower = searchPermissionTerm.toLowerCase();
-    return (
-      permission.permission.toLowerCase().includes(searchLower) ||
-      permission.description.toLowerCase().includes(searchLower) ||
-      permission.resource.toLowerCase().includes(searchLower) ||
-      permission.action?.toLowerCase().includes(searchLower)
+  const filterPermission = (permission) =>
+    permissionMatchesSearch(
+      {
+        permission: permission.permission,
+        name: permission.display_name,
+        description: permission.description,
+        resource: permission.resource,
+        action: permission.action,
+      },
+      searchPermissionTerm,
     );
-  };
 
   const filteredAssignedPermissions =
     assignedPermissions.filter(filterPermission);

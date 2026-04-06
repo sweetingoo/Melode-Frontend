@@ -3,7 +3,6 @@
 import { Suspense, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import { RotaTimeline } from "@/components/attendance/RotaTimeline";
-import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
 
 /**
  * Calendar page uses the same layout as attendance rota,
@@ -11,12 +10,6 @@ import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
  */
 function CalendarPageInner() {
   const searchParams = useSearchParams();
-  const { hasPermission } = usePermissionsCheck();
-  const canListEvents = hasPermission("event:list");
-
-  if (!canListEvents) {
-    return <div className="px-2 py-4 text-sm text-muted-foreground sm:px-0 sm:py-6">You do not have permission to view calendar events.</div>;
-  }
 
   const initialRange = useMemo(() => {
     const from = searchParams.get("from");

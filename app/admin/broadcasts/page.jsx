@@ -40,8 +40,6 @@ import {
   Megaphone,
 } from "lucide-react";
 import { useBroadcastInbox, useAllBroadcasts } from "@/hooks/useMessages";
-import { useUsers } from "@/hooks/useUsers";
-import { useRoles } from "@/hooks/useRoles";
 import { useCreateMessage } from "@/hooks/useMessages";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
 import { useCurrentUser } from "@/hooks/useAuth";
@@ -57,8 +55,6 @@ const BroadcastsPage = () => {
   const [page, setPage] = useState(1);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [activeTab, setActiveTab] = useState("inbox"); // "inbox" or "outbox"
-  const { data: usersData } = useUsers();
-  const { data: rolesData } = useRoles();
   const createMessageMutation = useCreateMessage();
   const { hasPermission } = usePermissionsCheck();
   const { data: currentUser } = useCurrentUser();
@@ -942,8 +938,6 @@ const BroadcastsPage = () => {
           }
         }}
         isLoading={createMessageMutation.isPending}
-        usersData={usersData}
-        rolesData={rolesData}
       />
     </div>
   );
