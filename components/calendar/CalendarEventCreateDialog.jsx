@@ -27,7 +27,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { CalendarDays, ChevronDown, Loader2, UserPlus, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLocations } from "@/hooks/useLocations";
-import { useRolesAll, formatRolePickerLabel } from "@/hooks/useRoles";
+import { useRolesAll, formatRolePickerLabel, sortJobRolesForCalendar } from "@/hooks/useRoles";
 import { useCreateCalendarEvent } from "@/hooks/useCalendarEvents";
 import { useCalendarEventCategories } from "@/hooks/useCalendarEventCategories";
 import { usersService } from "@/services/users";
@@ -85,16 +85,7 @@ export function CalendarEventCreateDialog({ open, onOpenChange }) {
   const eventCategories = categoriesPayload?.categories ?? [];
   const createMutation = useCreateCalendarEvent();
 
-  const calendarJobRoles = useMemo(() => {
-    const list = Array.isArray(roles) ? roles : [];
-    const jobs = list.filter((r) => (r.role_type || r.roleType) === "job_role");
-    const getDept = (r) => (r.department?.name || r.department_name || "No department").trim();
-    return [...jobs].sort((a, b) => {
-      const deptCmp = getDept(a).localeCompare(getDept(b), undefined, { sensitivity: "base" });
-      if (deptCmp !== 0) return deptCmp;
-      return formatRolePickerLabel(a).localeCompare(formatRolePickerLabel(b), undefined, { sensitivity: "base" });
-    });
-  }, [roles]);
+  const calendarJobRoles = useMemo(() => sortJobRolesForCalendar(roles), [roles]);
 
   const defaultStart = nextTopOfHour();
   const defaultEnd = new Date(defaultStart.getTime() + 60 * 60 * 1000);

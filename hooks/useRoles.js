@@ -466,6 +466,34 @@ export function getRoleDepartmentLabel(role) {
 }
 
 /**
+ * Job roles for calendar invite UI: sort by department A–Z, then role name A–Z.
+ * Roles with no department sort last (after all named departments).
+ */
+export function sortJobRolesForCalendar(rolesList) {
+  const jobs = normalizeRolesList(rolesList).filter(
+    (r) => (r.role_type || r.roleType) === "job_role"
+  );
+  const deptKey = (r) => {
+    const d = getRoleDepartmentLabel(r);
+    return d ? d : null;
+  };
+  const roleKey = (r) => (r.display_name || r.name || r.slug || "").toString();
+
+  return [...jobs].sort((a, b) => {
+    const da = deptKey(a);
+    const db = deptKey(b);
+    if (da == null && db != null) return 1;
+    if (da != null && db == null) return -1;
+    if (da == null && db == null) {
+      return roleKey(a).localeCompare(roleKey(b), undefined, { sensitivity: "base" });
+    }
+    const c = da.localeCompare(db, undefined, { sensitivity: "base" });
+    if (c !== 0) return c;
+    return roleKey(a).localeCompare(roleKey(b), undefined, { sensitivity: "base" });
+  });
+}
+
+/**
  * Label for role pickers: includes " - {Department}" when present; otherwise duplicate display
  * names get a "(slug)" suffix. Used by forms, folder permissions, etc.
  */

@@ -14,7 +14,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { ChevronDown, Loader2, UserPlus, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLocations } from "@/hooks/useLocations";
-import { useRolesAll, formatRolePickerLabel } from "@/hooks/useRoles";
+import { useRolesAll, formatRolePickerLabel, sortJobRolesForCalendar } from "@/hooks/useRoles";
 import { usePatchEventInvites, useUpdateCalendarEvent } from "@/hooks/useCalendarEvents";
 import { useCalendarEventCategories } from "@/hooks/useCalendarEventCategories";
 import { usersService } from "@/services/users";
@@ -78,10 +78,7 @@ export function CalendarEventEditDialog({ open, onOpenChange, event }) {
   const [applyScope, setApplyScope] = useState("single"); // single | series
   const isRecurring = event?.parent_event_id != null || (event?.recurrence_frequency && event.recurrence_frequency !== "none");
 
-  const calendarJobRoles = useMemo(() => {
-    const list = Array.isArray(roles) ? roles : [];
-    return list.filter((r) => (r.role_type || r.roleType) === "job_role");
-  }, [roles]);
+  const calendarJobRoles = useMemo(() => sortJobRolesForCalendar(roles), [roles]);
 
   useEffect(() => {
     if (!event || !open) return;
