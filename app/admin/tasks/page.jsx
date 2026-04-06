@@ -109,7 +109,8 @@ import {
 } from "@/hooks/useLocationTypes";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAssets } from "@/hooks/useAssets";
-import { useRoles, useRoleUsers } from "@/hooks/useRoles";
+import { useRoles, formatRolePickerLabel } from "@/hooks/useRoles";
+import { JobShiftRoleAccessPicker } from "@/components/forms/JobShiftRoleAccessPicker";
 import { useActiveTaskTypes, useCreateTaskType } from "@/hooks/useTaskTypes";
 import { useForms } from "@/hooks/useForms";
 import { useProjects } from "@/hooks/useProjects";
@@ -158,6 +159,7 @@ const TasksPage = () => {
     assigned_to_user_id: "",
     assigned_user_ids: [],
     assigned_to_role_id: "",
+    assigned_to_role_ids: [],
     assigned_to_asset_id: "",
     form_id: "",
     form_submission_id: "",
@@ -296,7 +298,11 @@ const TasksPage = () => {
   const { data: locationTypes = [], isLoading: locationTypesLoading } = useActiveLocationTypes();
   const createLocationTypeMutation = useCreateLocationType();
   const { data: assetsData } = useAssets();
-  const { data: rolesData } = useRoles();
+  const needFlatRolesList =
+    isEditModalOpen ||
+    isAssignModalOpen ||
+    (isCreateModalOpen && assignmentMode === "asset");
+  const { data: rolesData } = useRoles({}, { enabled: needFlatRolesList });
   const { data: activeTaskTypes } = useActiveTaskTypes();
   const { data: formsResponse } = useForms();
   // Debounce search term
@@ -320,13 +326,6 @@ const TasksPage = () => {
   });
   const { data: currentUserData } = useCurrentUser();
   const isMobile = useIsMobile();
-
-  // Get users for selected role (for role assignment info)
-  const selectedRoleId = taskFormData.assigned_to_role_id
-    ? parseInt(taskFormData.assigned_to_role_id)
-    : null;
-  const selectedRole = rolesData?.find(r => r.id === selectedRoleId || r.slug === selectedRoleId);
-  const { data: roleUsersData } = useRoleUsers(selectedRole?.slug || selectedRoleId);
 
   // Permission checking
   const currentUserPermissions = currentUserData?.permissions || [];
@@ -538,23 +537,6 @@ const TasksPage = () => {
     }
   }
 
-  // Extract role users from response
-  let roleUsers = [];
-  if (roleUsersData) {
-    if (Array.isArray(roleUsersData)) {
-      roleUsers = roleUsersData;
-    } else if (roleUsersData.users && Array.isArray(roleUsersData.users)) {
-      roleUsers = roleUsersData.users;
-    } else if (roleUsersData.data && Array.isArray(roleUsersData.data)) {
-      roleUsers = roleUsersData.data;
-    } else if (roleUsersData.results && Array.isArray(roleUsersData.results)) {
-      roleUsers = roleUsersData.results;
-    }
-  }
-
-  // Count active users in selected role
-  const activeRoleUsersCount = roleUsers.filter(user => user.is_active !== false).length;
-
   // Filter tasks by search term
   const filteredTasks = tasks.filter((task) => {
     if (!searchTerm) return true;
@@ -615,8 +597,11 @@ const TasksPage = () => {
       errors.assignment = "At least one user must be selected";
     } else if (assignmentMode === "user" && (!taskFormData.assigned_to_user_id || taskFormData.assigned_to_user_id === "none")) {
       errors.assignment = "A user must be selected";
-    } else if (assignmentMode === "role" && (!taskFormData.assigned_to_role_id || taskFormData.assigned_to_role_id === "none")) {
-      errors.assignment = "A role must be selected";
+    } else if (
+      assignmentMode === "role" &&
+      (!taskFormData.assigned_to_role_ids || taskFormData.assigned_to_role_ids.length === 0)
+    ) {
+      errors.assignment = "Select at least one role";
     } else if (assignmentMode === "asset") {
       if (!taskFormData.assigned_to_asset_id || taskFormData.assigned_to_asset_id === "none") {
         errors.asset_assignment = "An asset must be selected";
@@ -810,12 +795,8 @@ const TasksPage = () => {
           }
         }
       } else if (assignmentMode === "role") {
-        // Role assignment
-        if (taskFormData.assigned_to_role_id && taskFormData.assigned_to_role_id !== "none") {
-          const roleId = parseInt(taskFormData.assigned_to_role_id);
-          if (!isNaN(roleId)) {
-            taskData.assigned_to_role_id = roleId;
-          }
+        if (taskFormData.assigned_to_role_ids?.length > 0) {
+          taskData.assigned_to_role_ids = taskFormData.assigned_to_role_ids;
         }
       } else if (assignmentMode === "asset") {
         // Asset assignment - requires both asset and either user or role
@@ -1075,6 +1056,7 @@ const TasksPage = () => {
       assigned_to_user_id: "",
       assigned_user_ids: [],
       assigned_to_role_id: "",
+      assigned_to_role_ids: [],
       assigned_to_asset_id: "",
       form_id: "",
       form_submission_id: "",
@@ -1108,6 +1090,7 @@ const TasksPage = () => {
       assigned_to_user_id: task.assigned_to_user_id || "",
       assigned_user_ids: task.assigned_user_ids || [],
       assigned_to_role_id: task.assigned_to_role_id || "",
+      assigned_to_role_ids: [],
       assigned_to_asset_id: task.assigned_to_asset_id || "",
       form_id: task.form_id || "",
       form_submission_id: task.form_submission_id || "",
@@ -2093,7 +2076,16 @@ const TasksPage = () => {
             {/* Assignment Section */}
             <div>
               <Label className="mb-3 block">Task Assignment</Label>
-              <Tabs value={assignmentMode} onValueChange={setAssignmentMode} className="w-full">
+              <Tabs
+                value={assignmentMode}
+                onValueChange={(v) => {
+                  setAssignmentMode(v);
+                  if (v !== "role") {
+                    setTaskFormData((prev) => ({ ...prev, assigned_to_role_ids: [] }));
+                  }
+                }}
+                className="w-full"
+              >
                 <div className="overflow-x-auto scrollbar-hide">
                   <TabsList className="inline-flex w-auto flex-nowrap gap-1 sm:gap-0 lg:grid lg:w-full lg:grid-cols-4">
                     <TabsTrigger value="multiple-users" className="whitespace-nowrap">
@@ -2160,6 +2152,7 @@ const TasksPage = () => {
                     onSelectionChange={setSelectedUserIds}
                     placeholder="Type to search and select users..."
                     className="w-full"
+                    lazyUserSuggest
                   />
                   {formErrors.assignment && assignmentMode === "multiple-users" && (
                     <p className="text-sm text-red-600">{formErrors.assignment}</p>
@@ -2176,51 +2169,46 @@ const TasksPage = () => {
                           Individual Tasks Mode
                         </p>
                         <p className="text-xs text-blue-700 dark:text-blue-300">
-                          This will create individual tasks for all active users in this role. Each user will receive their own task in their "My Tasks" section.
+                          Select one or more job or shift roles. One task is created per active user in the union of those roles (users in multiple selected roles get a single task).
                         </p>
                       </div>
                     </div>
                   </div>
-                  <Select
-                    value={taskFormData.assigned_to_role_id && taskFormData.assigned_to_role_id !== "" ? taskFormData.assigned_to_role_id : undefined}
-                    onValueChange={(value) => {
+                  <Label className="text-sm">Roles *</Label>
+                  <JobShiftRoleAccessPicker
+                    idPrefix="create-task-roles"
+                    selectionMode="id"
+                    lazyLoad
+                    lazyEnabled={isCreateModalOpen && assignmentMode === "role"}
+                    selectedRoleIds={taskFormData.assigned_to_role_ids || []}
+                    onRoleIdsChange={(ids) => {
                       setTaskFormData({
                         ...taskFormData,
-                        assigned_to_role_id: value,
-                        // Clear other assignment types when role is selected
+                        assigned_to_role_ids: ids,
+                        assigned_to_role_id: "",
                         assigned_to_user_id: "",
                         assigned_to_asset_id: "",
                         assigned_user_ids: [],
                       });
                       setSelectedUserIds([]);
                     }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select role" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {roles.map((role) => (
-                        <SelectItem key={role.id} value={role.id.toString()}>
-                          {role.display_name || role.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {taskFormData.assigned_to_role_id && taskFormData.assigned_to_role_id !== "" && selectedRoleId && (
+                    standaloneRoles={[]}
+                    jobRoleGroups={[]}
+                  />
+                  {taskFormData.assigned_to_role_ids?.length > 0 && (
                     <div className="p-3 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-md">
-                      <p className="text-xs font-medium text-green-800 dark:text-green-200">
-                        {activeRoleUsersCount > 0 ? (
-                          <span>
-                            <Badge variant="outline" className="mr-2">
-                              {activeRoleUsersCount}
-                            </Badge>
-                            active {activeRoleUsersCount === 1 ? 'user' : 'users'} in this role will receive {activeRoleUsersCount === 1 ? 'a task' : 'tasks'}.
-                          </span>
-                        ) : (
-                          <span className="text-amber-600 dark:text-amber-400">No active users found in this role.</span>
-                        )}
-                      </p>
+                      <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-green-800 dark:text-green-200">
+                        <Badge variant="outline">
+                          {taskFormData.assigned_to_role_ids.length}
+                        </Badge>
+                        <span>
+                          role{taskFormData.assigned_to_role_ids.length === 1 ? "" : "s"} selected — each qualifying user receives one task.
+                        </span>
+                      </div>
                     </div>
+                  )}
+                  {formErrors.assignment && assignmentMode === "role" && (
+                    <p className="text-sm text-red-600">{formErrors.assignment}</p>
                   )}
                 </TabsContent>
 
@@ -2237,6 +2225,7 @@ const TasksPage = () => {
                   <UserMentionSelector
                     users={users}
                     selectedUserIds={taskFormData.assigned_to_user_id ? [parseInt(taskFormData.assigned_to_user_id)] : []}
+                    lazyUserSuggest
                     onSelectionChange={(userIds) => {
                       const userId = userIds.length > 0 ? userIds[0].toString() : "";
                       setTaskFormData({
@@ -2244,6 +2233,7 @@ const TasksPage = () => {
                         assigned_to_user_id: userId,
                         // Clear other assignment types when single user is selected
                         assigned_to_role_id: "",
+                        assigned_to_role_ids: [],
                         assigned_to_asset_id: "",
                         assigned_user_ids: [],
                       });
@@ -2310,12 +2300,14 @@ const TasksPage = () => {
                         <UserMentionSelector
                           users={users}
                           selectedUserIds={taskFormData.assigned_to_user_id ? [parseInt(taskFormData.assigned_to_user_id)] : []}
+                          lazyUserSuggest
                           onSelectionChange={(userIds) => {
                             const userId = userIds.length > 0 ? userIds[0].toString() : "";
                             setTaskFormData({
                               ...taskFormData,
                               assigned_to_user_id: userId,
-                              assigned_to_role_id: "", // Clear role when user is selected
+                              assigned_to_role_id: "",
+                              assigned_to_role_ids: [],
                             });
                             if (formErrors.asset_assignment) {
                               setFormErrors({ ...formErrors, asset_assignment: null });
@@ -2333,7 +2325,8 @@ const TasksPage = () => {
                             setTaskFormData({
                               ...taskFormData,
                               assigned_to_role_id: value,
-                              assigned_to_user_id: "", // Clear user when role is selected
+                              assigned_to_role_ids: [],
+                              assigned_to_user_id: "",
                             });
                             if (formErrors.asset_assignment) {
                               setFormErrors({ ...formErrors, asset_assignment: null });
@@ -2346,24 +2339,15 @@ const TasksPage = () => {
                           <SelectContent>
                             {roles.map((role) => (
                               <SelectItem key={role.id} value={role.id.toString()}>
-                                {role.display_name || role.name}
+                                {formatRolePickerLabel(role)}
                               </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
-                        {taskFormData.assigned_to_role_id && taskFormData.assigned_to_role_id !== "" && selectedRoleId && (
+                        {taskFormData.assigned_to_role_id && taskFormData.assigned_to_role_id !== "" && (
                           <div className="p-3 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-md mt-3">
                             <p className="text-xs font-medium text-green-800 dark:text-green-200">
-                              {activeRoleUsersCount > 0 ? (
-                                <span>
-                                  <Badge variant="outline" className="mr-2">
-                                    {activeRoleUsersCount}
-                                  </Badge>
-                                  active {activeRoleUsersCount === 1 ? 'user' : 'users'} in this role will receive {activeRoleUsersCount === 1 ? 'a task' : 'tasks'}.
-                                </span>
-                              ) : (
-                                <span className="text-amber-600 dark:text-amber-400">No active users found in this role.</span>
-                              )}
+                              Creates one task linked to the asset and the selected role.
                             </p>
                           </div>
                         )}
@@ -2820,7 +2804,16 @@ const TasksPage = () => {
             {/* Assignment Section */}
             <div>
               <Label className="mb-3 block">Task Assignment</Label>
-              <Tabs value={editAssignmentMode} onValueChange={setEditAssignmentMode} className="w-full">
+              <Tabs
+                value={editAssignmentMode}
+                onValueChange={(v) => {
+                  setEditAssignmentMode(v);
+                  if (v !== "role") {
+                    setTaskFormData((prev) => ({ ...prev, assigned_to_role_ids: [] }));
+                  }
+                }}
+                className="w-full"
+              >
                 <div className="overflow-x-auto scrollbar-hide">
                   <TabsList className="inline-flex w-auto flex-nowrap gap-1 sm:gap-0 lg:grid lg:w-full lg:grid-cols-4">
                     <TabsTrigger value="multiple-users" className="whitespace-nowrap">
@@ -2886,10 +2879,10 @@ const TasksPage = () => {
                       <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
                       <div className="flex-1 space-y-1">
                         <p className="text-sm font-medium text-blue-900 dark:text-blue-100">
-                          Individual Tasks Mode
+                          Role on this task
                         </p>
                         <p className="text-xs text-blue-700 dark:text-blue-300">
-                          Assigning to a role will create individual tasks for all active users in this role. Each user will receive their own task in their "My Tasks" section.
+                          Updates the role stored on this task record. Labels include department where available.
                         </p>
                       </div>
                     </div>
@@ -2900,7 +2893,6 @@ const TasksPage = () => {
                       setTaskFormData({
                         ...taskFormData,
                         assigned_to_role_id: value,
-                        // Clear other assignment types when role is selected
                         assigned_to_user_id: "",
                         assigned_to_asset_id: "",
                         assigned_user_ids: [],
@@ -2914,27 +2906,11 @@ const TasksPage = () => {
                     <SelectContent>
                       {roles.map((role) => (
                         <SelectItem key={role.id} value={role.id.toString()}>
-                          {role.display_name || role.name}
+                          {formatRolePickerLabel(role)}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                  {taskFormData.assigned_to_role_id && taskFormData.assigned_to_role_id !== "" && selectedRoleId && (
-                    <div className="p-3 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-md">
-                      <p className="text-xs font-medium text-green-800 dark:text-green-200">
-                        {activeRoleUsersCount > 0 ? (
-                          <span>
-                            <Badge variant="outline" className="mr-2">
-                              {activeRoleUsersCount}
-                            </Badge>
-                            active {activeRoleUsersCount === 1 ? 'user' : 'users'} in this role will receive {activeRoleUsersCount === 1 ? 'a task' : 'tasks'}.
-                          </span>
-                        ) : (
-                          <span className="text-amber-600 dark:text-amber-400">No active users found in this role.</span>
-                        )}
-                      </p>
-                    </div>
-                  )}
                 </TabsContent>
 
                 {/* Single User Tab */}
@@ -2950,13 +2926,14 @@ const TasksPage = () => {
                   <UserMentionSelector
                     users={users}
                     selectedUserIds={taskFormData.assigned_to_user_id ? [parseInt(taskFormData.assigned_to_user_id)] : []}
+                    lazyUserSuggest
                     onSelectionChange={(userIds) => {
                       const userId = userIds.length > 0 ? userIds[0].toString() : "";
                       setTaskFormData({
                         ...taskFormData,
                         assigned_to_user_id: userId,
-                        // Clear other assignment types when single user is selected
                         assigned_to_role_id: "",
+                        assigned_to_role_ids: [],
                         assigned_to_asset_id: "",
                         assigned_user_ids: [],
                       });
@@ -3020,6 +2997,7 @@ const TasksPage = () => {
                         <UserMentionSelector
                           users={users}
                           selectedUserIds={taskFormData.assigned_to_user_id ? [parseInt(taskFormData.assigned_to_user_id)] : []}
+                          lazyUserSuggest
                           onSelectionChange={(userIds) => {
                             const userId = userIds.length > 0 ? userIds[0].toString() : "";
                             setTaskFormData({
@@ -3040,7 +3018,7 @@ const TasksPage = () => {
                             setTaskFormData({
                               ...taskFormData,
                               assigned_to_role_id: value,
-                              assigned_to_user_id: "", // Clear user when role is selected
+                              assigned_to_user_id: "",
                             });
                           }}
                         >
@@ -3050,24 +3028,15 @@ const TasksPage = () => {
                           <SelectContent>
                             {roles.map((role) => (
                               <SelectItem key={role.id} value={role.id.toString()}>
-                                {role.display_name || role.name}
+                                {formatRolePickerLabel(role)}
                               </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
-                        {taskFormData.assigned_to_role_id && taskFormData.assigned_to_role_id !== "" && selectedRoleId && (
+                        {taskFormData.assigned_to_role_id && taskFormData.assigned_to_role_id !== "" && (
                           <div className="p-3 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-md mt-3">
                             <p className="text-xs font-medium text-green-800 dark:text-green-200">
-                              {activeRoleUsersCount > 0 ? (
-                                <span>
-                                  <Badge variant="outline" className="mr-2">
-                                    {activeRoleUsersCount}
-                                  </Badge>
-                                  active {activeRoleUsersCount === 1 ? 'user' : 'users'} in this role will receive {activeRoleUsersCount === 1 ? 'a task' : 'tasks'}.
-                                </span>
-                              ) : (
-                                <span className="text-amber-600 dark:text-amber-400">No active users found in this role.</span>
-                              )}
+                              One task linked to the asset and the selected role.
                             </p>
                           </div>
                         )}
@@ -3199,7 +3168,7 @@ const TasksPage = () => {
                   <SelectContent>
                     {roles.map((role) => (
                       <SelectItem key={role.id} value={role.id.toString()}>
-                        {role.display_name || role.name}
+                        {formatRolePickerLabel(role)}
                       </SelectItem>
                     ))}
                   </SelectContent>

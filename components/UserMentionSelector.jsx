@@ -1,19 +1,27 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { X, User, Search, Check } from "lucide-react";
+import { X, User, Search, Check, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getUserDisplayName } from "@/utils/user";
+import { usersService } from "@/services/users";
 
-/** Account flags from full or minimal GET /users rows */
+function idsMatch(a, b) {
+  return String(a) === String(b);
+}
+
+/** Account flags from GET /users, GET /users/suggest, or transformed user rows (snake_case or camelCase). */
 function UserStatusInline({ user, compact = false }) {
   if (!user) return null;
+  const isActive = user.is_active ?? user.isActive;
+  const isVerified = user.is_verified ?? user.isVerified;
+  const isSuperuser = user.is_superuser ?? user.isSuperuser;
   const chips = [];
 
-  if (user.is_active === false) {
+  if (isActive === false) {
     chips.push(
       <span
         key="inactive"
@@ -22,7 +30,7 @@ function UserStatusInline({ user, compact = false }) {
         Inactive
       </span>
     );
-  } else if (user.is_active === true && !compact) {
+  } else if (isActive === true && !compact) {
     chips.push(
       <span
         key="active"
@@ -33,7 +41,7 @@ function UserStatusInline({ user, compact = false }) {
     );
   }
 
-  if (user.is_verified === false) {
+  if (isVerified === false) {
     chips.push(
       <span
         key="unverified"
@@ -42,7 +50,7 @@ function UserStatusInline({ user, compact = false }) {
         Unverified
       </span>
     );
-  } else if (user.is_verified === true && !compact) {
+  } else if (isVerified === true) {
     chips.push(
       <span
         key="verified"
@@ -53,7 +61,7 @@ function UserStatusInline({ user, compact = false }) {
     );
   }
 
-  if (user.is_superuser) {
+  if (isSuperuser) {
     chips.push(
       <span
         key="super"
@@ -84,58 +92,130 @@ const UserMentionSelector = ({
   placeholder = "Type to search users...",
   maxHeight = "300px",
   className = "",
-  singleSelection = false, // New prop for single selection mode
+  singleSelection = false,
+  /** When true, loads options via GET /users/suggest (debounced); not limited to first page of GET /users */
+  lazyUserSuggest = false,
 }) => {
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [isOpen, setIsOpen] = useState(false);
+  const [suggestResults, setSuggestResults] = useState([]);
+  const [suggestLoading, setSuggestLoading] = useState(false);
+  const [knownUsersById, setKnownUsersById] = useState(() => new Map());
   const inputRef = useRef(null);
   const dropdownRef = useRef(null);
   const containerRef = useRef(null);
 
-  // Filter users based on search term (works for full or minimal user list from API)
-  const filteredUsers = users.filter((user) => {
-    if (!searchTerm) return true;
-    const searchLower = searchTerm.toLowerCase();
-    const displayName = getUserDisplayName(user);
-    const statusBlob = [
-      user.is_active === false ? "inactive" : "",
-      user.is_active === true ? "active" : "",
-      user.is_verified === true ? "verified" : "",
-      user.is_verified === false ? "unverified" : "",
-      user.is_superuser ? "superuser" : "",
-    ]
-      .join(" ")
-      .toLowerCase();
-    return (
-      displayName.toLowerCase().includes(searchLower) ||
-      statusBlob.includes(searchLower) ||
-      user.email?.toLowerCase().includes(searchLower) ||
-      user.username?.toLowerCase().includes(searchLower)
-    );
-  });
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchTerm.trim()), 300);
+    return () => clearTimeout(t);
+  }, [searchTerm]);
 
-  // Get selected users
-  const selectedUsers = users.filter((user) =>
-    selectedUserIds.includes(user.id)
+  useEffect(() => {
+    if (!users?.length) return;
+    setKnownUsersById((prev) => {
+      const next = new Map(prev);
+      for (const u of users) {
+        if (u?.id != null) next.set(Number(u.id), u);
+      }
+      return next;
+    });
+  }, [users]);
+
+  useEffect(() => {
+    if (!lazyUserSuggest || !isOpen) return;
+    let cancelled = false;
+    setSuggestLoading(true);
+    (async () => {
+      try {
+        const res = await usersService.suggestUsers({
+          ...(debouncedSearch ? { search: debouncedSearch } : {}),
+          is_active: true,
+          per_page: 100,
+        });
+        const list = Array.isArray(res.data?.users) ? res.data.users : [];
+        if (cancelled) return;
+        setSuggestResults(list);
+        setKnownUsersById((prev) => {
+          const next = new Map(prev);
+          for (const u of list) {
+            if (u?.id != null) next.set(Number(u.id), u);
+          }
+          return next;
+        });
+      } catch {
+        if (!cancelled) setSuggestResults([]);
+      } finally {
+        if (!cancelled) setSuggestLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [lazyUserSuggest, isOpen, debouncedSearch]);
+
+  const filteredUsers = useMemo(() => {
+    if (lazyUserSuggest) return suggestResults;
+    return users.filter((user) => {
+      if (!searchTerm) return true;
+      const searchLower = searchTerm.toLowerCase();
+      const displayName = getUserDisplayName(user);
+      const statusBlob = [
+        (user.is_active ?? user.isActive) === false ? "inactive" : "",
+        (user.is_active ?? user.isActive) === true ? "active" : "",
+        (user.is_verified ?? user.isVerified) === true ? "verified" : "",
+        (user.is_verified ?? user.isVerified) === false ? "unverified" : "",
+        user.is_superuser || user.isSuperuser ? "superuser" : "",
+      ]
+        .join(" ")
+        .toLowerCase();
+      return (
+        displayName.toLowerCase().includes(searchLower) ||
+        statusBlob.includes(searchLower) ||
+        user.email?.toLowerCase().includes(searchLower) ||
+        user.username?.toLowerCase().includes(searchLower)
+      );
+    });
+  }, [lazyUserSuggest, suggestResults, users, searchTerm]);
+
+  const selectedUsers = useMemo(() => {
+    if (lazyUserSuggest) {
+      return selectedUserIds.map((rawId) => {
+        const idNum = Number(rawId);
+        return (
+          knownUsersById.get(idNum) ||
+          users.find((u) => idsMatch(u.id, rawId)) || {
+            id: idNum,
+            display_name: `User #${rawId}`,
+          }
+        );
+      });
+    }
+    return users.filter((user) => selectedUserIds.some((id) => idsMatch(id, user.id)));
+  }, [lazyUserSuggest, knownUsersById, users, selectedUserIds]);
+
+  const availableUsers = useMemo(
+    () =>
+      filteredUsers.filter(
+        (user) => !selectedUserIds.some((id) => idsMatch(id, user.id))
+      ),
+    [filteredUsers, selectedUserIds]
   );
 
-  // Get unselected filtered users
-  const availableUsers = filteredUsers.filter(
-    (user) => !selectedUserIds.includes(user.id)
-  );
-
-  const handleUserSelect = (userId) => {
+  const handleUserSelect = (user) => {
+    const userId = user?.id;
+    if (userId == null) return;
+    if (lazyUserSuggest && user) {
+      setKnownUsersById((m) => new Map(m).set(Number(user.id), user));
+    }
     if (singleSelection) {
-      // For single selection, replace the selection
       onSelectionChange([userId]);
       setSearchTerm("");
-      setIsOpen(false); // Close dropdown after selection
+      setIsOpen(false);
     } else {
-      // For multiple selection, add to the list
       const newSelection = [...selectedUserIds, userId];
       onSelectionChange(newSelection);
       setSearchTerm("");
-      // Keep popover open for multiple selections
       if (inputRef.current) {
         inputRef.current.focus();
       }
@@ -144,11 +224,10 @@ const UserMentionSelector = ({
 
   const handleUserRemove = (userId, e) => {
     e.stopPropagation();
-    const newSelection = selectedUserIds.filter((id) => id !== userId);
+    const newSelection = selectedUserIds.filter((id) => !idsMatch(id, userId));
     onSelectionChange(newSelection);
   };
 
-  // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (
@@ -165,9 +244,10 @@ const UserMentionSelector = ({
     }
   }, [isOpen]);
 
+  const listSourceLength = lazyUserSuggest ? suggestResults.length : users.length;
+
   return (
     <div ref={containerRef} className={cn("space-y-2 relative", className)}>
-      {/* Selected Users Display */}
       {selectedUsers.length > 0 && (
         <div className="flex flex-wrap gap-2 p-2 border rounded-md min-h-[42px]">
           {selectedUsers.map((user) => (
@@ -192,7 +272,6 @@ const UserMentionSelector = ({
         </div>
       )}
 
-      {/* Search Input with Dropdown */}
       <div className="relative">
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none z-10" />
         <Input
@@ -207,21 +286,29 @@ const UserMentionSelector = ({
           onFocus={() => setIsOpen(true)}
           className="pl-9"
         />
-        
-        {/* Dropdown */}
+
         {isOpen && (
           <div
             ref={dropdownRef}
             className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-md overflow-hidden"
             style={{ maxHeight }}
           >
-            {availableUsers.length === 0 ? (
+            {lazyUserSuggest && suggestLoading ? (
+              <div className="flex items-center justify-center gap-2 p-6 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading users…
+              </div>
+            ) : availableUsers.length === 0 ? (
               <div className="p-4 text-center text-sm text-muted-foreground">
-                {searchTerm
-                  ? `No users found matching "${searchTerm}"`
-                  : selectedUserIds.length === users.length
-                  ? "All users are already selected"
-                  : "No users available"}
+                {lazyUserSuggest && debouncedSearch
+                  ? `No users found matching "${debouncedSearch}"`
+                  : searchTerm && !lazyUserSuggest
+                    ? `No users found matching "${searchTerm}"`
+                    : selectedUserIds.length === listSourceLength && !lazyUserSuggest
+                      ? "All users are already selected"
+                      : lazyUserSuggest
+                        ? "No users match. Try another search."
+                        : "No users available"}
               </div>
             ) : (
               <div className="p-1 overflow-y-auto" style={{ maxHeight }}>
@@ -229,7 +316,7 @@ const UserMentionSelector = ({
                   <button
                     key={user.id}
                     type="button"
-                    onClick={() => handleUserSelect(user.id)}
+                    onClick={() => handleUserSelect(user)}
                     className="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-accent hover:text-accent-foreground transition-colors group"
                   >
                     <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -259,7 +346,6 @@ const UserMentionSelector = ({
         )}
       </div>
 
-      {/* Selection Count - Only show for multiple selection */}
       {!singleSelection && selectedUserIds.length > 0 && (
         <p className="text-xs text-muted-foreground">
           {selectedUserIds.length} user{selectedUserIds.length !== 1 ? "s" : ""} selected
@@ -270,4 +356,3 @@ const UserMentionSelector = ({
 };
 
 export default UserMentionSelector;
-
