@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -59,12 +59,18 @@ import { AvatarWithUrl } from "@/components/AvatarWithUrl";
 import { formatDistanceToNow, format } from "date-fns";
 import Link from "next/link";
 import { calculateElapsedHours, formatElapsedTime } from "@/utils/time";
+import { resolveClockRecordPathKey } from "@/utils/clockRecordPath";
+import { toast } from "sonner";
 
 export default function ManagerClockPage() {
   const router = useRouter();
   const [locationFilter, setLocationFilter] = useState("all");
   const [departmentFilter, setDepartmentFilter] = useState("all");
   const [editingRecord, setEditingRecord] = useState(null);
+  /** Captured when opening edit dialog — must not rely on editingRecord shape at save time (refetch/stale rows). */
+  const [editingRecordApiKey, setEditingRecordApiKey] = useState(null);
+  /** Same as editingRecordApiKey but set synchronously so Save cannot run before React commits state (avoids undefined slug in PUT). */
+  const editingRecordKeyRef = useRef(null);
   const [editClockInTime, setEditClockInTime] = useState("");
   const [editClockOutTime, setEditClockOutTime] = useState("");
   const [editNotes, setEditNotes] = useState("");
@@ -124,17 +130,40 @@ export default function ManagerClockPage() {
   const updateClockRecordMutation = useUpdateClockRecord();
   const managerClockOutMutation = useManagerClockOut();
 
-  // Normalize active clocks data - API returns array directly
-  const activeClocks = React.useMemo(() => {
-    if (!activeClocksData) return [];
-    if (Array.isArray(activeClocksData)) return activeClocksData;
-    if (Array.isArray(activeClocksData.items)) return activeClocksData.items;
-    if (Array.isArray(activeClocksData.data)) return activeClocksData.data;
-    return [];
-  }, [activeClocksData]);
+  // useActiveClocks already returns a normalized array
+  const activeClocks = Array.isArray(activeClocksData) ? activeClocksData : [];
+
+  const closeEditDialog = () => {
+    setEditingRecord(null);
+    setEditingRecordApiKey(null);
+    editingRecordKeyRef.current = null;
+    setEditClockInTime("");
+    setEditClockOutTime("");
+    setEditNotes("");
+  };
 
   const handleEditRecord = (record) => {
+    const apiKey = resolveClockRecordPathKey(record);
+    if (!apiKey) {
+      toast.error("Cannot edit this session", {
+        description: "The active session response did not include a clock record id. Refresh the page or contact support.",
+      });
+      return;
+    }
+    editingRecordKeyRef.current = apiKey;
+    setEditingRecordApiKey(apiKey);
     setEditingRecord(record);
+    if (process.env.NODE_ENV === "development") {
+      console.debug("[clock] open edit session", {
+        resolvedApiKey: apiKey,
+        row: {
+          user_id: record?.user_id,
+          slug: record?.slug,
+          clock_record_id: record?.clock_record_id,
+          clockRecordId: record?.clockRecordId,
+        },
+      });
+    }
     setEditClockInTime(
       record.clock_in_time
         ? format(new Date(record.clock_in_time), "yyyy-MM-dd'T'HH:mm")
@@ -168,16 +197,36 @@ export default function ManagerClockPage() {
     };
 
     try {
-      // Use clock_record_id from API response, fallback to id for backward compatibility
-      const recordId = editingRecord.clock_record_id || editingRecord.id;
+      const fromRef = editingRecordKeyRef.current;
+      const fromState = editingRecordApiKey;
+      const fromRecord = editingRecord ? resolveClockRecordPathKey(editingRecord) : null;
+      const recordKey = fromRef || fromState || fromRecord;
+      if (process.env.NODE_ENV === "development") {
+        console.debug("[clock] save edit session", {
+          fromRef,
+          fromState,
+          fromRecord,
+          chosenRecordKey: recordKey,
+          editingRecordKeys: editingRecord
+            ? {
+                slug: editingRecord.slug,
+                clock_record_id: editingRecord.clock_record_id,
+                clockRecordId: editingRecord.clockRecordId,
+              }
+            : null,
+        });
+      }
+      if (!recordKey || recordKey === "undefined") {
+        toast.error("Cannot save", {
+          description: "Missing clock record id. Close this dialog, refresh active people, and try again.",
+        });
+        return;
+      }
       await updateClockRecordMutation.mutateAsync({
-        id: recordId,
+        recordKey,
         clockData: updateData,
       });
-      setEditingRecord(null);
-      setEditClockInTime("");
-      setEditClockOutTime("");
-      setEditNotes("");
+      closeEditDialog();
     } catch (error) {
       // Error handled by mutation
     }
@@ -403,8 +452,12 @@ export default function ManagerClockPage() {
                   {activeClocks.map((record, index) => {
                     const elapsedHours = calculateElapsedHours(record.clock_in_time);
                     const warningBadge = getWarningBadge(elapsedHours);
-                    // Create a unique key: use clock_record_id if available, otherwise combine user_id and clock_in_time
-                    const uniqueKey = record.clock_record_id || `clock-${record.user_id || 'unknown'}-${record.clock_in_time || `index-${index}`}`;
+                    const recordPathKey = resolveClockRecordPathKey(record);
+                    const uniqueKey =
+                      recordPathKey ||
+                      record.slug ||
+                      record.clock_record_id ||
+                      `clock-${record.user_id || "unknown"}-${record.clock_in_time || `index-${index}`}`;
 
                     // Get user initials for avatar
                     const userInitials = record.user_name
@@ -513,6 +566,12 @@ export default function ManagerClockPage() {
                               size="icon"
                               onClick={() => handleEditRecord(record)}
                               className="h-8 w-8"
+                              disabled={!recordPathKey}
+                              title={
+                                recordPathKey
+                                  ? "Edit session times and notes"
+                                  : "Cannot edit — missing clock record id in API data"
+                              }
                             >
                               <Edit className="h-4 w-4" />
                             </Button>
@@ -537,7 +596,7 @@ export default function ManagerClockPage() {
       </Card>
 
       {/* Edit Session Record Dialog */}
-      <Dialog open={!!editingRecord} onOpenChange={(open) => !open && setEditingRecord(null)}>
+      <Dialog open={!!editingRecord} onOpenChange={(open) => !open && closeEditDialog()}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Edit Session Record</DialogTitle>
@@ -583,10 +642,7 @@ export default function ManagerClockPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setEditingRecord(null)}
-            >
+            <Button variant="outline" onClick={closeEditDialog}>
               Cancel
             </Button>
             <Button

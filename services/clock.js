@@ -91,7 +91,17 @@ export const clockService = {
   // Edit clock record (manager)
   updateClockRecord: async (slug, clockData) => {
     try {
-      return await api.put(`/clock/records/${slug}`, clockData);
+      const segment = slug != null ? String(slug).trim() : "";
+      if (!segment || segment === "undefined") {
+        throw new Error("Clock record slug or id is required");
+      }
+      if (process.env.NODE_ENV === "development") {
+        console.debug("[clock] clockService.updateClockRecord", {
+          path: `/clock/records/${segment}`,
+          segmentLength: segment.length,
+        });
+      }
+      return await api.put(`/clock/records/${segment}`, clockData);
     } catch (error) {
       console.error(`Update clock record ${slug} failed:`, error);
       throw error;

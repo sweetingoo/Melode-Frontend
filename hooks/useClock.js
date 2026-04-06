@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { clockService } from "@/services/clock";
 import { attendanceKeys } from "@/hooks/useAttendance";
 import { toast } from "sonner";
+import { normalizeManagerActiveClockRow } from "@/utils/clockRecordPath";
 
 // Clock query keys
 export const clockKeys = {
@@ -80,8 +81,33 @@ export const useActiveClocks = (params = {}, options = {}) => {
   return useQuery({
     queryKey: clockKeys.active(params),
     queryFn: async () => {
-      const response = await clockService.getActiveClocks(params);
-      return response.data;
+      const res = await clockService.getActiveClocks(params);
+      // Axios response has .data; if the service ever returns the body only, use res as-is
+      const body = res != null && typeof res === "object" && "data" in res ? res.data : res;
+      const list = Array.isArray(body)
+        ? body
+        : Array.isArray(body?.items)
+          ? body.items
+          : Array.isArray(body?.data)
+            ? body.data
+            : [];
+      const normalized = list.map(normalizeManagerActiveClockRow);
+      if (process.env.NODE_ENV === "development") {
+        const sample = normalized[0];
+        console.debug("[clock] useActiveClocks response", {
+          rawHasDataKey: res != null && typeof res === "object" && "data" in res,
+          bodyIsArray: Array.isArray(body),
+          rowCount: normalized.length,
+          firstRow: sample
+            ? {
+                user_id: sample.user_id,
+                slug: sample.slug,
+                clock_record_id: sample.clock_record_id,
+              }
+            : null,
+        });
+      }
+      return normalized;
     },
     staleTime: 30 * 1000, // 30 seconds - frequently updated
     refetchInterval: 30 * 1000, // Auto-refetch every 30 seconds
@@ -224,8 +250,23 @@ export const useUpdateClockRecord = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ slug, clockData }) => {
-      const response = await clockService.updateClockRecord(slug, clockData);
+    mutationFn: async (variables) => {
+      const clockData = variables.clockData;
+      const recordKey =
+        variables.recordKey ?? variables.slug ?? variables.id ?? variables.clockRecordSlug;
+      const keyStr = recordKey != null ? String(recordKey).trim() : "";
+      if (process.env.NODE_ENV === "development") {
+        console.debug("[clock] useUpdateClockRecord mutationFn", {
+          variableKeys: variables && typeof variables === "object" ? Object.keys(variables) : [],
+          recordKeyRaw: recordKey,
+          keyStr,
+          hasClockData: !!clockData,
+        });
+      }
+      if (!keyStr || keyStr === "undefined") {
+        throw new Error("Missing clock record identifier (slug or id)");
+      }
+      const response = await clockService.updateClockRecord(keyStr, clockData);
       return response.data;
     },
     onSuccess: (data, variables) => {
