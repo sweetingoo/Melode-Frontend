@@ -172,6 +172,15 @@ export const attendanceService = {
     }
   },
 
+  deleteHolidayYear: async (slug) => {
+    try {
+      await api.delete(`/attendance/holiday-years/${slug}`);
+    } catch (error) {
+      console.error(`Delete holiday year ${slug} failed:`, error);
+      throw error;
+    }
+  },
+
   rolloverHolidayYear: async (body = {}) => {
     try {
       return await api.post("/attendance/holiday-years/rollover", body);

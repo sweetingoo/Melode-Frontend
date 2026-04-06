@@ -1,6 +1,9 @@
-# Cursor Rules for Melode Frontend
+---
+description: Melode Next.js frontend — conventions from .cursorrules (docs, lists, API slugs, files)
+alwaysApply: true
+---
 
-> **Canonical copy:** `.cursor/rules/melode-frontend-cursorrules.mdc` — edit that file for Cursor project rules; keep this file in sync if you still use it elsewhere.
+# Cursor Rules for Melode Frontend
 
 ## Project Context
 This is a Next.js frontend application for the Melode project. The codebase uses React, Next.js, and modern JavaScript/JSX patterns.
@@ -23,7 +26,7 @@ This is a Next.js frontend application for the Melode project. The codebase uses
 - **NEVER create documentation files unless explicitly asked by the user**
 - Do not create README files, markdown files, or any documentation unless the user specifically requests it
 - Do not proactively create documentation even if it seems helpful
-- Only create documentation files when the user explicitly asks for them
+- Only create documentation files when the user explicitly asks for it
 - Focus on code implementation rather than documentation
 
 ## Database & Migrations
@@ -87,4 +90,3 @@ This is a Next.js frontend application for the Melode project. The codebase uses
 - **NEVER** store or use direct S3 signed URLs for persistence; they expire. Store only **`file_reference_id`** (slug) per field.
 - **ALWAYS** use the upload endpoint above for file uploads; then put the returned slug into the form submission for that field.
 - To show a “View”/“Download” link: call the retrieve endpoint with the stored **`file_reference_id`** slug, then open the returned `download_url`.
-

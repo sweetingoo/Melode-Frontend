@@ -1,0 +1,11 @@
+---
+description: Match the user request precisely; do not add unrequested UI copy or scope
+alwaysApply: true
+---
+
+# Follow the request; no unrequested UI text
+
+- **Implement what the user asked for**, in the places they implied (files, APIs, components). Do not substitute a broader interpretation without cause.
+- **Do not add or change user-visible copy** the user did not ask for: dialog descriptions, modal subtitles, tooltips, helper paragraphs under inputs, `CardDescription` blurbs, empty states, or toast wording—unless they explicitly asked for messaging, documentation in UI, or “explain to the user” in that surface.
+- If a task is purely behavioural (e.g. default dates, validation, wiring), **change behaviour only**; keep existing labels and descriptions unless they are wrong or the user asked to update them.
+- When copy *is* requested, stay **specific** to what they asked (tone, length, location); avoid extra explanatory sentences they did not request.

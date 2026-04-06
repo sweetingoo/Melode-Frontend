@@ -388,6 +388,22 @@ export const useUpdateHolidayYear = () => {
   });
 };
 
+export const useDeleteHolidayYear = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (slug) => attendanceService.deleteHolidayYear(slug),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: [...attendanceKeys.all, "holiday-years"] });
+      await queryClient.invalidateQueries({ queryKey: attendanceKeys.currentHolidayYear() });
+      toast.success("Holiday year deleted");
+    },
+    onError: (error) => {
+      const msg = error?.response?.data?.detail || error?.response?.data?.message || "Failed to delete holiday year";
+      toast.error(Array.isArray(msg) ? msg.map((e) => e.msg || e).join(", ") : msg);
+    },
+  });
+};
+
 // Current Holiday Year
 export const useCurrentHolidayYear = (options = {}) => {
   return useQuery({

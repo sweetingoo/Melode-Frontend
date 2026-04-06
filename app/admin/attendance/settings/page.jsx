@@ -42,6 +42,7 @@ import {
   useDeleteContractType,
   useHolidayYears,
   useUpdateHolidayYear,
+  useDeleteHolidayYear,
   useRolloverHolidayYear,
   useAttendanceSettings,
   useUpdateAttendanceSettings,
@@ -75,6 +76,8 @@ export default function AttendanceSettingsPage() {
   const [isTypeFormOpen, setIsTypeFormOpen] = useState(false);
   const [deleteSlug, setDeleteSlug] = useState(null);
   const [isYearFormOpen, setIsYearFormOpen] = useState(false);
+  const [holidayYearFormInitial, setHolidayYearFormInitial] = useState(null);
+  const [deleteHolidayYearTarget, setDeleteHolidayYearTarget] = useState(null);
   const [rolloverDialogOpen, setRolloverDialogOpen] = useState(false);
   const [rolloverAllowNegative, setRolloverAllowNegative] = useState(false);
   const deleteSlugRef = useRef(null);
@@ -96,6 +99,7 @@ export default function AttendanceSettingsPage() {
   const deleteContractType = useDeleteContractType();
   const rolloverYear = useRolloverHolidayYear();
   const updateHolidayYear = useUpdateHolidayYear();
+  const deleteHolidayYear = useDeleteHolidayYear();
   const { data: yearsData, isLoading: yearsLoading } = useHolidayYears({});
   const { data: settings, isLoading: settingsLoading } = useAttendanceSettings();
   const updateSettings = useUpdateAttendanceSettings();
@@ -495,14 +499,23 @@ export default function AttendanceSettingsPage() {
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
               <CardTitle>Holiday Years</CardTitle>
-              <CardDescription>Manage holiday year configurations</CardDescription>
+              <CardDescription>
+                Each row is a fixed date range used for entitlements and leave. Changing the system &quot;Holiday year start&quot; above does not
+                move existing years—edit a year here or add a new one if your policy dates change.
+              </CardDescription>
             </div>
             <div className="flex items-center gap-2">
               <Button variant="outline" onClick={() => setRolloverDialogOpen(true)} disabled={years.length === 0}>
                 <RotateCw className="mr-2 h-4 w-4" />
                 Rollover to new year
               </Button>
-              <Button variant="outline" onClick={() => setIsYearFormOpen(true)}>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setHolidayYearFormInitial(null);
+                  setIsYearFormOpen(true);
+                }}
+              >
                 <Plus className="mr-2 h-4 w-4" />
                 Add Year
               </Button>
@@ -517,7 +530,14 @@ export default function AttendanceSettingsPage() {
           ) : years.length === 0 ? (
             <div className="rounded-lg border border-dashed p-8 text-center">
               <p className="text-sm text-muted-foreground">No holiday years configured</p>
-              <Button onClick={() => setIsYearFormOpen(true)} className="mt-4" variant="outline">
+              <Button
+                onClick={() => {
+                  setHolidayYearFormInitial(null);
+                  setIsYearFormOpen(true);
+                }}
+                className="mt-4"
+                variant="outline"
+              >
                 <Plus className="mr-2 h-4 w-4" />
                 Add First Year
               </Button>
@@ -536,6 +556,31 @@ export default function AttendanceSettingsPage() {
                     <Badge variant={year.is_active ? "default" : "secondary"}>
                       {year.is_active ? "Active" : "Inactive"}
                     </Badge>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setHolidayYearFormInitial(year);
+                        setIsYearFormOpen(true);
+                      }}
+                    >
+                      <Edit className="mr-1.5 h-3.5 w-3.5" />
+                      Edit
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-destructive hover:text-destructive"
+                      onClick={() =>
+                        setDeleteHolidayYearTarget({
+                          slug: year.slug ?? String(year.id),
+                          yearName: year.year_name,
+                        })
+                      }
+                    >
+                      <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                      Delete
+                    </Button>
                     {!year.is_active && (
                       <Button
                         variant="outline"
@@ -562,7 +607,42 @@ export default function AttendanceSettingsPage() {
         </CardContent>
       </Card>
 
-      <HolidayYearForm open={isYearFormOpen} onOpenChange={setIsYearFormOpen} />
+      <HolidayYearForm
+        open={isYearFormOpen}
+        onOpenChange={(open) => {
+          setIsYearFormOpen(open);
+          if (!open) setHolidayYearFormInitial(null);
+        }}
+        initialYear={holidayYearFormInitial}
+        defaultHolidayStartMmDd={systemHolidayYearStart}
+      />
+
+      <AlertDialog open={!!deleteHolidayYearTarget} onOpenChange={(open) => !open && setDeleteHolidayYearTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete holiday year?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteHolidayYearTarget?.yearName ? `Remove "${deleteHolidayYearTarget.yearName}". ` : ""}
+              You can only delete a year that has no holiday entitlements.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeleteHolidayYearTarget(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={async () => {
+                if (deleteHolidayYearTarget?.slug) {
+                  await deleteHolidayYear.mutateAsync(deleteHolidayYearTarget.slug);
+                  setDeleteHolidayYearTarget(null);
+                }
+              }}
+              disabled={deleteHolidayYear.isPending}
+            >
+              {deleteHolidayYear.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={rolloverDialogOpen} onOpenChange={setRolloverDialogOpen}>
         <AlertDialogContent>
@@ -638,7 +718,10 @@ export default function AttendanceSettingsPage() {
                   value={systemHolidayYearStart}
                   onChange={(e) => setSystemHolidayYearStart(e.target.value)}
                 />
-                <p className="text-xs text-muted-foreground">Format: MM-DD (e.g., 04-01 for April 1st)</p>
+                <p className="text-xs text-muted-foreground">
+                  Format: MM-DD (e.g., 04-01 for April 1st). Used as the default for new setup and some logic—existing holiday years keep their own
+                  start/end until you edit them below.
+                </p>
               </div>
 
               <div className="space-y-2">
