@@ -538,13 +538,13 @@ export function filterJobRolesBySearch(roles, searchRaw) {
 }
 
 /**
- * Label for role pickers: includes " - {Department}" when present; otherwise duplicate display
+ * Label for role pickers: includes "{Department} - {role}" when present; otherwise duplicate display
  * names get a "(slug)" suffix. Used by forms, folder permissions, etc.
  */
 export function formatRolePickerLabel(role) {
   const main = role.display_name || role.name || role.slug || `Role ${role.id}`;
   const dept = getRoleDepartmentLabel(role);
-  if (dept) return `${main} - ${dept}`;
+  if (dept) return `${dept} - ${main}`;
   if (role._pickerDuplicate) {
     const suffix = role.slug || role.name || role.id;
     return `${main} (${suffix})`;
