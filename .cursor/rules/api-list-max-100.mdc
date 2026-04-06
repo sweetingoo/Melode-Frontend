@@ -1,0 +1,11 @@
+---
+description: Cap list API requests at 100 items per call; use shared user suggest UI
+globs: "**/*.{js,jsx}"
+alwaysApply: true
+---
+
+# API list size limit (Melode frontend)
+
+- **Never pass `per_page`, `limit`, `page_size`, or equivalent query/body fields greater than `100`** in any API call from this codebase. If more rows are needed, paginate (next page), use infinite query patterns, or use a search/suggest endpoint with a capped page size.
+- For **GET /users** and **GET /users/suggest**, rely on `@/services/users.js`: `getUsers`, `getUsersAllPages`, and `suggestUsers` enforce **`API_MAX_LIST_PAGE` / `USERS_SUGGEST_MAX_PER_PAGE` (100)**. Do not duplicate suggest logic without the same cap.
+- For **searchable user selection in UI**, prefer **`SearchableUserSuggestSelect`** (`@/components/ui/searchable-user-suggest-select.jsx`), aligned with **`SearchableFieldSelect`**, instead of loading hundreds of users into a native `<select>`.

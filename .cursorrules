@@ -41,10 +41,12 @@ This is a Next.js frontend application for the Melode project. The codebase uses
 - Ensure code is properly formatted and linted
 
 ## Lists & Pagination
-- **Do not use large page sizes**: keep `per_page`, `limit`, and `page_size` modest (e.g. 20–50). Do not use values like 100, 200, or 500 unless the product explicitly requires it.
-- **Never use large fixed page sizes** to load "all" records for dropdowns or filters (e.g. avoid per_page: 200).
+- **Never request more than 100 items in a single API call** from the Melode frontend: `per_page`, `limit`, `page_size`, and similar params must be **≤ 100**. If more data is needed, use pagination, infinite scroll, or search/suggest endpoints.
+- **`usersService`**: `getUsers`, `getUsersAllPages`, and `suggestUsers` in `@/services/users` clamp `per_page` to **100** (`API_MAX_LIST_PAGE` / `USERS_SUGGEST_MAX_PER_PAGE`). Do not bypass with raw `api.get` unless you also enforce the cap.
+- **User pickers**: use `SearchableUserSuggestSelect` from `@/components/ui/searchable-user-suggest-select.jsx` (lazy `/users/suggest`) instead of loading large user lists for dropdowns.
+- Prefer **smaller** page sizes where UX allows (e.g. 20–50). Values above 100 are invalid for our client contract.
 - Use **lazy loading** for large lists: search-as-you-type APIs, pagination, or virtualisation.
-- Prefer server-side search/suggest endpoints (e.g. `/employees/suggest?q=...&limit=20`) over loading hundreds of records and filtering client-side.
+- Prefer server-side search/suggest endpoints over loading full lists and filtering client-side.
 - Use "load more" or infinite scroll if the user needs more than one page.
 
 ## API Integration

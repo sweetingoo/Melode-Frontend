@@ -1,11 +1,31 @@
 import { api } from "./api-client";
 
+/**
+ * Hard cap for list-style query params (`per_page`, etc.) on Melode user APIs.
+ * Do not exceed this in any single request from the frontend.
+ */
+export const API_MAX_LIST_PAGE = 100;
+
+/** Alias: max `per_page` for GET /users/suggest; default when omitted. */
+export const USERS_SUGGEST_MAX_PER_PAGE = API_MAX_LIST_PAGE;
+
+function clampUsersListPerPage(raw) {
+  if (raw == null || raw === "") return undefined;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 1) return undefined;
+  return Math.min(Math.floor(n), API_MAX_LIST_PAGE);
+}
+
 // Users API service
 export const usersService = {
   // Get all users
   getUsers: async (params = {}) => {
     try {
-      return await api.get("/users", { params });
+      const { per_page, ...rest } = params;
+      const capped = clampUsersListPerPage(per_page);
+      const nextParams =
+        capped != null ? { ...rest, per_page: capped } : { ...rest };
+      return await api.get("/users", { params: nextParams });
     } catch (error) {
       console.error("Get users failed:", error);
       throw error;
@@ -13,13 +33,14 @@ export const usersService = {
   },
 
   /** Fetch every page from GET /users (max per_page 100 on API). Omit is_active to include inactive users. */
-  getUsersAllPages: async (perPage = 100, params = {}) => {
+  getUsersAllPages: async (perPage = API_MAX_LIST_PAGE, params = {}) => {
+    const pageSize = clampUsersListPerPage(perPage) ?? API_MAX_LIST_PAGE;
     const all = [];
     let page = 1;
     let totalPages = 1;
     for (;;) {
       const response = await api.get("/users", {
-        params: { page, per_page: perPage, ...params },
+        params: { page, per_page: pageSize, ...params },
       });
       const body = response.data ?? response;
       const chunk = Array.isArray(body.users) ? body.users : [];
@@ -57,7 +78,11 @@ export const usersService = {
   // Suggest users for field selection (autocomplete)
   suggestUsers: async (params = {}) => {
     try {
-      return await api.get("/users/suggest", { params });
+      const { per_page: rawPerPage, ...rest } = params;
+      let per_page = USERS_SUGGEST_MAX_PER_PAGE;
+      const capped = clampUsersListPerPage(rawPerPage);
+      if (capped != null) per_page = capped;
+      return await api.get("/users/suggest", { params: { ...rest, per_page } });
     } catch (error) {
       console.error("Suggest users failed:", error);
       throw error;

@@ -90,11 +90,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { format, addDays, startOfDay, subDays } from "date-fns";
 import { parseUTCDate } from "@/utils/time";
 import { humanizeStatusForDisplay } from "@/utils/slug";
+import { getUserDisplayName } from "@/utils/user";
 import { getStageColor } from "@/utils/stageColors";
 import { toast } from "sonner";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
 import { useUsers } from "@/hooks/useUsers";
 import { api } from "@/services/api-client";
+import { SearchableUserSuggestSelect } from "@/components/ui/searchable-user-suggest-select";
 import { PageSearchBar } from "@/components/admin/PageSearchBar";
 import { TrackerQuerySearchBar } from "@/components/admin/TrackerQuerySearchBar";
 import { trackersService } from "@/services/trackers";
@@ -196,6 +198,7 @@ const TrackersPage = () => {
   const [createEntrySelectedStage, setCreateEntrySelectedStage] = useState("");
   const [createEntrySelectedStatus, setCreateEntrySelectedStatus] = useState("");
   const [createEntrySubjectUserId, setCreateEntrySubjectUserId] = useState("");
+  const [createEntrySubjectUserLabel, setCreateEntrySubjectUserLabel] = useState("");
   const [showMetadataColumns, setShowMetadataColumns] = useState(false);
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   // Sheet-like: selected cell for formula bar (rowIndex, fieldId)
@@ -410,7 +413,7 @@ const TrackersPage = () => {
   }, [selectedTracker]);
 
   // Get users for "Updated By" display
-  const { data: usersResponse } = useUsers({ page: 1, per_page: 200, is_active: true });
+  const { data: usersResponse } = useUsers({ page: 1, per_page: 100, is_active: true });
   const users = usersResponse?.users || usersResponse || [];
 
   // Helper to get user name
@@ -1347,6 +1350,7 @@ const TrackersPage = () => {
                   setCreateEntrySelectedStage("");
                   setCreateEntrySelectedStatus("");
                   setCreateEntrySubjectUserId("");
+                  setCreateEntrySubjectUserLabel("");
                 }
               }}
             >
@@ -1361,23 +1365,21 @@ const TrackersPage = () => {
                   {trackerDetails?.tracker_config?.link_cases_to_user && (
                     <div className="space-y-2">
                       <Label>Casework is about *</Label>
-                      <Select
+                      <SearchableUserSuggestSelect
                         value={createEntrySubjectUserId ? String(createEntrySubjectUserId) : ""}
-                        onValueChange={(v) => setCreateEntrySubjectUserId(v)}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select user…" />
-                        </SelectTrigger>
-                        <SelectContent className="max-h-72 overflow-y-auto">
-                          {users
-                            .filter((u) => u?.id)
-                            .map((u) => (
-                              <SelectItem key={u.id} value={String(u.id)}>
-                                {getUserName(u.id) || `User #${u.id}`}
-                              </SelectItem>
-                            ))}
-                        </SelectContent>
-                      </Select>
+                        displayLabel={
+                          createEntrySubjectUserId
+                            ? createEntrySubjectUserLabel ||
+                              getUserName(parseInt(String(createEntrySubjectUserId), 10)) ||
+                              `User #${createEntrySubjectUserId}`
+                            : ""
+                        }
+                        onValueChange={({ id, user }) => {
+                          setCreateEntrySubjectUserId(id);
+                          setCreateEntrySubjectUserLabel(getUserDisplayName(user));
+                        }}
+                        placeholder="Search and select user…"
+                      />
                       <p className="text-xs text-muted-foreground">
                         This tracker is configured to link every case to a person (Info &amp; Compliance).
                       </p>
@@ -1837,6 +1839,7 @@ const TrackersPage = () => {
                         setCreateEntrySelectedStage("");
                         setCreateEntrySelectedStatus("");
                         setCreateEntrySubjectUserId("");
+                        setCreateEntrySubjectUserLabel("");
                         toast.success("Entry created");
                         // Stay on list (do not navigate to entry)
                       } catch (error) {
