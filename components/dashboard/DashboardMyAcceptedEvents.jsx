@@ -1,6 +1,8 @@
 "use client";
 
+import { useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { useMyAcceptedCalendarEvents } from "@/hooks/useCalendarEvents";
 import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
 import { CalendarHeart, ArrowRight } from "lucide-react";
@@ -16,7 +18,30 @@ export function DashboardMyAcceptedEvents() {
   const { hasPermission } = usePermissionsCheck();
   const canOpenCalendar = hasPermission("event:list");
   const { data, isLoading, isError } = useMyAcceptedCalendarEvents({ limit: 8, enabled: true });
-  const events = data?.events ?? [];
+  const accepted = data?.events ?? [];
+  const awaiting = data?.awaiting_invite ?? [];
+
+  const rows = useMemo(() => {
+    const withKind = [
+      ...accepted.map((ev) => ({ ev, kind: "attending" })),
+      ...awaiting.map((ev) => ({ ev, kind: "awaiting" })),
+    ];
+    const byKey = new Map();
+    for (const row of withKind) {
+      const key = row.ev.slug || row.ev.id;
+      const existing = byKey.get(key);
+      if (!existing || existing.kind === "awaiting") {
+        byKey.set(key, row);
+      }
+    }
+    return Array.from(byKey.values()).sort((a, b) => {
+      const ta = a.ev.starts_at ? new Date(a.ev.starts_at).getTime() : 0;
+      const tb = b.ev.starts_at ? new Date(b.ev.starts_at).getTime() : 0;
+      return ta - tb;
+    });
+  }, [accepted, awaiting]);
+
+  const displayRows = rows.slice(0, 8);
 
   return (
     <Card className="rounded-2xl border shadow-sm hover:shadow transition-shadow overflow-hidden">
@@ -25,10 +50,10 @@ export function DashboardMyAcceptedEvents() {
           <div className="h-9 w-9 rounded-lg bg-violet-500/10 flex items-center justify-center">
             <CalendarHeart className="h-4 w-4 text-violet-600 dark:text-violet-400" />
           </div>
-          Events you&apos;re attending
+          Events
         </CardTitle>
         <p className="text-xs text-muted-foreground font-normal pl-[2.875rem] -mt-1">
-          Upcoming events where your RSVP is <span className="font-medium text-foreground">Attending</span>
+          Your upcoming events.
         </p>
       </CardHeader>
       <CardContent className="pt-0 px-5 pb-5">
@@ -36,11 +61,11 @@ export function DashboardMyAcceptedEvents() {
           <p className="text-sm text-muted-foreground py-4">Loading…</p>
         ) : isError ? (
           <p className="text-sm text-muted-foreground py-4">Could not load events.</p>
-        ) : events.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-4">No upcoming accepted events</p>
+        ) : displayRows.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-4">No upcoming invites or accepted events</p>
         ) : (
           <ul className="space-y-1.5">
-            {events.map((ev) => {
+            {displayRows.map(({ ev, kind }) => {
               const accent = categoryHex(ev.category?.color);
               const start = ev.starts_at ? new Date(ev.starts_at) : null;
               const timeOk = start && !Number.isNaN(start.getTime());
@@ -53,7 +78,18 @@ export function DashboardMyAcceptedEvents() {
                     aria-hidden
                   />
                   <span className="flex min-w-0 flex-1 flex-col gap-0.5 py-0.5">
-                    <span className="truncate text-sm font-medium text-foreground">{ev.title}</span>
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span className="truncate text-sm font-medium text-foreground">{ev.title}</span>
+                      {kind === "awaiting" ? (
+                        <Badge variant="secondary" className="shrink-0 text-[10px] px-1.5 py-0 font-medium">
+                          Respond
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="shrink-0 text-[10px] px-1.5 py-0 font-medium border-violet-500/40 text-violet-700 dark:text-violet-300">
+                          Attending
+                        </Badge>
+                      )}
+                    </span>
                     <span className="text-xs text-muted-foreground">{line1}</span>
                     {ev.category?.name ? (
                       <span className="text-[11px] text-muted-foreground/90">{ev.category.name}</span>
