@@ -54,6 +54,7 @@ import {
   FileText,
   ClipboardList,
   Clock,
+  CreditCard,
   History,
   Calendar,
   CalendarDays,
@@ -130,6 +131,13 @@ const mainMenuItems = [
     icon: History,
     url: "/admin/clock/history",
     permission: null, // Always visible so everyone can view their own shifts/leave; backend restricts data to own
+  },
+  {
+    title: "Cards",
+    description: "NFC cards",
+    icon: CreditCard,
+    url: "/admin/cards",
+    permission: null,
   },
   {
     title: "Time & Attendance",

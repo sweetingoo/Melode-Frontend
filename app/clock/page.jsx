@@ -38,7 +38,7 @@ export default function ClockPage() {
   const [jobRoleId, setJobRoleId] = useState("");
   const [shiftRoleId, setShiftRoleId] = useState("");
   const [locationId, setLocationId] = useState("none");
-  const [loginMethod] = useState("web"); // Always "web" for web version
+  const [loginMethod] = useState("manual");
   const [notes, setNotes] = useState("");
   const [currentTime, setCurrentTime] = useState(new Date());
   const [linkProvisionalModal, setLinkProvisionalModal] = useState(null); // { clockRecord, provisionalShifts }
@@ -363,8 +363,11 @@ export default function ClockPage() {
         <Button variant="ghost" size="icon" onClick={() => router.back()}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <div className="flex-1">
+        <div className="flex-1 flex items-center gap-2 flex-wrap">
           <h1 className="text-2xl font-bold">Check In</h1>
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/admin/cards">Cards</Link>
+          </Button>
         </div>
         <div className="text-right">
           <div className="text-2xl font-mono font-semibold">

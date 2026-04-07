@@ -32,9 +32,11 @@ export function normalizeManagerActiveClockRow(row) {
   if (!row || typeof row !== "object") return row;
   const clock_record_id = row.clock_record_id ?? row.clockRecordId ?? row.clock_record?.id;
   const slug = row.slug ?? row.clock_record_slug ?? row.clockRecordSlug ?? row.clock_record?.slug;
+  const user_slug = row.user_slug ?? row.userSlug;
   return {
     ...row,
     ...(clock_record_id !== undefined && clock_record_id !== null ? { clock_record_id } : {}),
     ...(slug !== undefined && slug !== null && slug !== "" ? { slug } : {}),
+    ...(user_slug !== undefined && user_slug !== null && user_slug !== "" ? { user_slug } : {}),
   };
 }

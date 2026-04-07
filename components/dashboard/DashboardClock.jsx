@@ -35,15 +35,22 @@ export function DashboardClock() {
             </div>
             Clock
           </CardTitle>
-          <Link href="/clock">
-            <Button
-              variant={isClockedIn ? "outline" : "default"}
-              size="sm"
-              className="h-8 text-xs font-medium shrink-0"
-            >
-              {isClockedIn ? "View shift" : "Clock in"}
-            </Button>
-          </Link>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <Link href="/admin/cards">
+              <Button variant="outline" size="sm" className="h-8 text-xs font-medium">
+                Cards
+              </Button>
+            </Link>
+            <Link href="/clock">
+              <Button
+                variant={isClockedIn ? "outline" : "default"}
+                size="sm"
+                className="h-8 text-xs font-medium"
+              >
+                {isClockedIn ? "View shift" : "Clock in"}
+              </Button>
+            </Link>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="pt-0 px-5 pb-5">

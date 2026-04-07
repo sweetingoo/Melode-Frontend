@@ -155,6 +155,7 @@ import DocumentList from "@/components/documents/DocumentList";
 import { PageSearchBar } from "@/components/admin/PageSearchBar";
 import PersonnelFormsSection from "@/components/people-management/PersonnelFormsSection";
 import UserLinkedTrackerCasesSection from "@/components/people-management/UserLinkedTrackerCasesSection";
+import { UserClockNfcCredentialSection } from "@/components/people-management/UserClockNfcCredentialSection";
 
 const TasksForUser = ({ userSlug }) => {
   const [statusFilter, setStatusFilter] = React.useState("pending");
@@ -2538,6 +2539,10 @@ const UserEditPage = () => {
               </div>
             </CardContent>
           </Card>
+
+          {canUpdateUser && actualUserSlug ? (
+            <UserClockNfcCredentialSection userSlug={actualUserSlug} userName={transformedUser?.name} />
+          ) : null}
         </TabsContent>
 
         {/* Roles & Permissions Tab */}

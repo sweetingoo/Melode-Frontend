@@ -36,14 +36,61 @@ export const clockService = {
   },
 
   // Manager clock out another user
-  managerClockOut: async (userId, notes) => {
+  managerClockOut: async ({ userSlug, notes, logout_method = "manual" }) => {
     try {
-      return await api.post("/clock/out/manager", {
-        user_id: userId,
-        notes,
-      });
+      const slug = userSlug != null ? String(userSlug).trim() : "";
+      const payload = { user_slug: slug, notes, logout_method };
+      return await api.post("/clock/out/manager", payload);
     } catch (error) {
       console.error("Manager clock out failed:", error);
+      throw error;
+    }
+  },
+
+  getNfcCredentialStatus: async () => {
+    try {
+      return await api.get("/clock/nfc-credential");
+    } catch (error) {
+      console.error("Get NFC credential status failed:", error);
+      throw error;
+    }
+  },
+
+  getNfcWalletLinks: async () => {
+    try {
+      return await api.get("/clock/nfc-credential/wallet-links");
+    } catch (error) {
+      console.error("Get NFC wallet links failed:", error);
+      throw error;
+    }
+  },
+
+  rotateNfcCredentialForUser: async (userSlug) => {
+    try {
+      const segment = String(userSlug ?? "").trim();
+      return await api.post(`/clock/nfc-credential/users/${encodeURIComponent(segment)}/rotate`);
+    } catch (error) {
+      console.error("Rotate NFC credential for user failed:", error);
+      throw error;
+    }
+  },
+
+  getNfcCredentialStatusForUser: async (userSlug) => {
+    try {
+      const segment = String(userSlug ?? "").trim();
+      return await api.get(`/clock/nfc-credential/users/${encodeURIComponent(segment)}`);
+    } catch (error) {
+      console.error("Get NFC credential status for user failed:", error);
+      throw error;
+    }
+  },
+
+  disableNfcCredentialForUser: async (userSlug) => {
+    try {
+      const segment = String(userSlug ?? "").trim();
+      return await api.delete(`/clock/nfc-credential/users/${encodeURIComponent(segment)}`);
+    } catch (error) {
+      console.error("Disable NFC credential for user failed:", error);
       throw error;
     }
   },

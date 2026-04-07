@@ -85,7 +85,10 @@ export const ClockInOutButton = ({ className = "" }) => {
   };
 
   const handleClockOut = async () => {
-    const clockOutData = clockOutNotes.trim() ? { notes: clockOutNotes.trim() } : {};
+    const clockOutData = {
+      logout_method: "manual",
+      ...(clockOutNotes.trim() ? { notes: clockOutNotes.trim() } : {}),
+    };
     try {
       await clockOutMutation.mutateAsync(clockOutData);
       setShowClockOutDialog(false);

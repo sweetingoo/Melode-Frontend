@@ -157,7 +157,7 @@ export default function ManagerClockPage() {
       console.debug("[clock] open edit session", {
         resolvedApiKey: apiKey,
         row: {
-          user_id: record?.user_id,
+          user_slug: record?.user_slug,
           slug: record?.slug,
           clock_record_id: record?.clock_record_id,
           clockRecordId: record?.clockRecordId,
@@ -241,7 +241,7 @@ export default function ManagerClockPage() {
     if (!clockOutRecord) return;
     try {
       await managerClockOutMutation.mutateAsync({
-        userId: clockOutRecord.user_id,
+        userSlug: clockOutRecord.user_slug,
         notes: clockOutNotes.trim() || undefined,
       });
       setClockOutRecord(null);
@@ -456,8 +456,9 @@ export default function ManagerClockPage() {
                     const uniqueKey =
                       recordPathKey ||
                       record.slug ||
+                      (record.user_slug ? `user-${record.user_slug}` : null) ||
                       record.clock_record_id ||
-                      `clock-${record.user_id || "unknown"}-${record.clock_in_time || `index-${index}`}`;
+                      `clock-row-${index}`;
 
                     // Get user initials for avatar
                     const userInitials = record.user_name

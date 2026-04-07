@@ -13,6 +13,9 @@ export const clockKeys = {
   records: (params) => [...clockKeys.all, "records", params],
   myRecords: (params) => [...clockKeys.all, "my-records", params],
   active: (params) => [...clockKeys.all, "active", params],
+  nfcCredential: () => [...clockKeys.all, "nfc-credential"],
+  nfcUserStatus: (userSlug) => [...clockKeys.all, "nfc-user-status", userSlug],
+  nfcWalletLinks: () => [...clockKeys.all, "nfc-wallet-links"],
 };
 
 // Get clock status query
@@ -218,8 +221,8 @@ export const useManagerClockOut = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ userId, notes }) => {
-      const response = await clockService.managerClockOut(userId, notes);
+    mutationFn: async ({ userSlug, notes, logout_method = "manual" }) => {
+      const response = await clockService.managerClockOut({ userSlug, notes, logout_method });
       return response.data;
     },
     onSuccess: () => {
@@ -241,6 +244,78 @@ export const useManagerClockOut = () => {
           ? errorMessage.map((e) => e.msg || e).join(", ")
           : errorMessage,
       });
+    },
+  });
+};
+
+export const useClockNfcCredentialStatus = (options = {}) => {
+  return useQuery({
+    queryKey: clockKeys.nfcCredential(),
+    queryFn: async () => {
+      const response = await clockService.getNfcCredentialStatus();
+      return response.data;
+    },
+    ...options,
+  });
+};
+
+export const useClockNfcWalletLinks = (options = {}) => {
+  return useQuery({
+    queryKey: clockKeys.nfcWalletLinks(),
+    queryFn: async () => {
+      const response = await clockService.getNfcWalletLinks();
+      return response.data;
+    },
+    ...options,
+  });
+};
+
+export const useRotateClockNfcForUser = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ userSlug }) => {
+      const response = await clockService.rotateNfcCredentialForUser(userSlug);
+      return response.data;
+    },
+    onSuccess: (_data, variables) => {
+      const slug = variables?.userSlug != null ? String(variables.userSlug).trim() : "";
+      queryClient.invalidateQueries({ queryKey: clockKeys.nfcCredential() });
+      if (slug) {
+        queryClient.invalidateQueries({ queryKey: clockKeys.nfcUserStatus(slug) });
+      }
+    },
+    onError: (error) => {
+      console.error("Rotate NFC credential for user error:", error);
+    },
+  });
+};
+
+export const useClockNfcCredentialStatusForUser = (userSlug, options = {}) => {
+  const slug = userSlug != null ? String(userSlug).trim() : "";
+  return useQuery({
+    queryKey: clockKeys.nfcUserStatus(slug),
+    queryFn: async () => {
+      const response = await clockService.getNfcCredentialStatusForUser(slug);
+      return response.data;
+    },
+    enabled: !!slug,
+    ...options,
+  });
+};
+
+export const useDisableClockNfcForUser = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ userSlug }) => {
+      const response = await clockService.disableNfcCredentialForUser(userSlug);
+      return response.data;
+    },
+    onSuccess: (_data, variables) => {
+      const slug = variables?.userSlug != null ? String(variables.userSlug).trim() : "";
+      queryClient.invalidateQueries({ queryKey: clockKeys.nfcUserStatus(slug) });
+    },
+    onError: (error) => {
+      console.error("Disable NFC credential for user error:", error);
     },
   });
 };
