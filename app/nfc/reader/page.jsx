@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { ScanLine, Radio } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -8,8 +8,10 @@ import { Card, CardContent } from "@/components/ui/card";
 export default function NfcReaderPage() {
   const [isScanning, setIsScanning] = useState(false);
   const [status, setStatus] = useState("");
+  const [showEnableButton, setShowEnableButton] = useState(false);
   const isSupported = typeof window !== "undefined" && "NDEFReader" in window;
   const readerRef = useRef(null);
+  const hasAttemptedRef = useRef(false);
 
   const decodeRecord = (record) => {
     if (!record?.data) return "";
@@ -30,9 +32,7 @@ export default function NfcReaderPage() {
       if (typeof window === "undefined") return;
       if (!("NDEFReader" in window)) {
         setStatus("NFC not supported on this browser/device.");
-        if (typeof window !== "undefined") {
-          window.alert("NFC is not supported on this browser/device.");
-        }
+        setShowEnableButton(true);
         return;
       }
 
@@ -41,6 +41,7 @@ export default function NfcReaderPage() {
       }
       const reader = readerRef.current;
       setStatus("Hold the card near the reader...");
+      setShowEnableButton(false);
       await reader.scan();
       setIsScanning(true);
 
@@ -61,11 +62,15 @@ export default function NfcReaderPage() {
     } catch (_error) {
       setIsScanning(false);
       setStatus("Unable to start NFC scan. Check permissions and try again.");
-      if (typeof window !== "undefined") {
-        window.alert("Unable to start NFC scan. Please allow permission and try again.");
-      }
+      setShowEnableButton(true);
     }
   };
+
+  useEffect(() => {
+    if (hasAttemptedRef.current) return;
+    hasAttemptedRef.current = true;
+    startScan();
+  }, []);
 
   return (
     <div className="container mx-auto p-6 max-w-xl">
@@ -79,14 +84,11 @@ export default function NfcReaderPage() {
               <ScanLine className="h-7 w-7" />
             </div>
           </div>
-          <Button
-            type="button"
-            onClick={startScan}
-            disabled={isScanning}
-            size="lg"
-          >
-            Check In/Out
-          </Button>
+          {showEnableButton ? (
+            <Button type="button" onClick={startScan} disabled={isScanning} size="lg">
+              Enable NFC
+            </Button>
+          ) : null}
           <div className="text-sm text-muted-foreground text-center min-h-5">{status}</div>
         </CardContent>
       </Card>
