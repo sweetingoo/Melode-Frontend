@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { FaceLandmarker, FilesetResolver } from "@mediapipe/tasks-vision";
 
-const MEL0DE_NFC_PREFIX = "melode:nfc:";
+const MEL0DE_NFC_PREFIX = (process.env.NEXT_PUBLIC_NFC_PREFIX || "melode:nfc:").trim();
 
 export default function NfcReaderPage() {
   const [isScanning, setIsScanning] = useState(false);
