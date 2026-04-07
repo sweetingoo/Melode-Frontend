@@ -89,9 +89,18 @@ export default function NfcReaderPage() {
 
       reader.onreading = (event) => {
         try {
+          const records = event.message?.records || [];
+          if (records.length > 1) {
+            playBeep("warning");
+            setStatus("Multiple NFC tags detected. Please tap one card at a time.");
+            return;
+          }
+          const record = records[0];
+          if (!record) {
+            setStatus("Card detected but no data was found.");
+            return;
+          }
           playBeep(faceVisibleRef.current ? "success" : "warning");
-          const record = event.message?.records?.[0];
-          if (!record) return;
           decodeRecord(record);
           capturePhoto();
           setStatus(
