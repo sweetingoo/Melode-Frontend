@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useEffect, useRef, useCallback, Suspense } from "react";
+import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -97,6 +98,9 @@ import { usePermissionsCheck } from "@/hooks/usePermissionsCheck";
 import { useUsers } from "@/hooks/useUsers";
 import { api } from "@/services/api-client";
 import { SearchableUserSuggestSelect } from "@/components/ui/searchable-user-suggest-select";
+import { SearchableJobRoleSelect } from "@/components/ui/searchable-job-role-select";
+import { roleKeys, normalizeRolesList, sortJobRolesForCalendar, formatRolePickerLabel } from "@/hooks/useRoles";
+import { rolesService } from "@/services/roles";
 import { PageSearchBar } from "@/components/admin/PageSearchBar";
 import { TrackerQuerySearchBar } from "@/components/admin/TrackerQuerySearchBar";
 import { trackersService } from "@/services/trackers";
@@ -199,6 +203,8 @@ const TrackersPage = () => {
   const [createEntrySelectedStatus, setCreateEntrySelectedStatus] = useState("");
   const [createEntrySubjectUserId, setCreateEntrySubjectUserId] = useState("");
   const [createEntrySubjectUserLabel, setCreateEntrySubjectUserLabel] = useState("");
+  const [createEntrySubjectRoleId, setCreateEntrySubjectRoleId] = useState("");
+  const [createEntrySubjectRoleLabel, setCreateEntrySubjectRoleLabel] = useState("");
   const [showMetadataColumns, setShowMetadataColumns] = useState(false);
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   // Sheet-like: selected cell for formula bar (rowIndex, fieldId)
@@ -479,6 +485,22 @@ const TrackersPage = () => {
   const { data: trackerDetails } = useTracker(selectedTrackerObj?.slug || "", {
     enabled: !!selectedTrackerObj?.slug && isCreateEntryDialogOpen,
   });
+
+  const { data: caseworkJobRoles = [], isLoading: caseworkJobRolesLoading } = useQuery({
+    queryKey: [...roleKeys.lists(), "casework-picker", "job_roles"],
+    queryFn: async () => {
+      const response = await rolesService.getRolesAllPages(100, { role_type: "job_role" });
+      return sortJobRolesForCalendar(normalizeRolesList(response.data));
+    },
+    enabled:
+      Boolean(
+        selectedTrackerObj?.slug &&
+          isCreateEntryDialogOpen &&
+          trackerDetails?.tracker_config?.link_cases_to_user
+      ),
+    staleTime: 5 * 60 * 1000,
+  });
+
   const { data: trackerDetailForFormula } = useTracker(selectedTrackerObj?.slug || "", {
     enabled: !!selectedTrackerObj?.slug && isFormulaDialogOpen,
   });
@@ -1351,6 +1373,8 @@ const TrackersPage = () => {
                   setCreateEntrySelectedStatus("");
                   setCreateEntrySubjectUserId("");
                   setCreateEntrySubjectUserLabel("");
+                  setCreateEntrySubjectRoleId("");
+                  setCreateEntrySubjectRoleLabel("");
                 }
               }}
             >
@@ -1363,23 +1387,47 @@ const TrackersPage = () => {
                 </DialogHeader>
                 <div className="space-y-4 py-4">
                   {trackerDetails?.tracker_config?.link_cases_to_user && (
-                    <div className="space-y-2">
-                      <Label>Casework is about *</Label>
-                      <SearchableUserSuggestSelect
-                        value={createEntrySubjectUserId ? String(createEntrySubjectUserId) : ""}
-                        displayLabel={
-                          createEntrySubjectUserId
-                            ? createEntrySubjectUserLabel ||
-                              getUserName(parseInt(String(createEntrySubjectUserId), 10)) ||
-                              `User #${createEntrySubjectUserId}`
-                            : ""
-                        }
-                        onValueChange={({ id, user }) => {
-                          setCreateEntrySubjectUserId(id);
-                          setCreateEntrySubjectUserLabel(getUserDisplayName(user));
-                        }}
-                        placeholder="Search and select user…"
-                      />
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <Label>Role *</Label>
+                        <SearchableJobRoleSelect
+                          value={createEntrySubjectRoleId ? String(createEntrySubjectRoleId) : ""}
+                          displayLabel={createEntrySubjectRoleLabel}
+                          roles={caseworkJobRoles}
+                          loading={caseworkJobRolesLoading}
+                          onValueChange={({ id, role }) => {
+                            setCreateEntrySubjectRoleId(id);
+                            setCreateEntrySubjectRoleLabel(formatRolePickerLabel(role));
+                            setCreateEntrySubjectUserId("");
+                            setCreateEntrySubjectUserLabel("");
+                          }}
+                          placeholder="Search and select role…"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Casework is about *</Label>
+                        <SearchableUserSuggestSelect
+                          value={createEntrySubjectUserId ? String(createEntrySubjectUserId) : ""}
+                          displayLabel={
+                            createEntrySubjectUserId
+                              ? createEntrySubjectUserLabel ||
+                                getUserName(parseInt(String(createEntrySubjectUserId), 10)) ||
+                                `User #${createEntrySubjectUserId}`
+                              : ""
+                          }
+                          onValueChange={({ id, user }) => {
+                            setCreateEntrySubjectUserId(id);
+                            setCreateEntrySubjectUserLabel(getUserDisplayName(user));
+                          }}
+                          placeholder={
+                            createEntrySubjectRoleId
+                              ? "Search and select user in this role…"
+                              : "Select a role first…"
+                          }
+                          disabled={!createEntrySubjectRoleId}
+                          roleIds={createEntrySubjectRoleId ? String(createEntrySubjectRoleId) : undefined}
+                        />
+                      </div>
                       <p className="text-xs text-muted-foreground">
                         This tracker is configured to link every case to a person (Info &amp; Compliance).
                       </p>
@@ -1755,6 +1803,11 @@ const TrackersPage = () => {
                         return;
                       }
                       if (trackerDetails?.tracker_config?.link_cases_to_user) {
+                        const rid = parseInt(String(createEntrySubjectRoleId || "").trim(), 10);
+                        if (!Number.isFinite(rid) || rid <= 0) {
+                          toast.error("Select a role first");
+                          return;
+                        }
                         const uid = parseInt(String(createEntrySubjectUserId || "").trim(), 10);
                         if (!Number.isFinite(uid) || uid <= 0) {
                           toast.error("Select the user this case is about");
@@ -1840,6 +1893,8 @@ const TrackersPage = () => {
                         setCreateEntrySelectedStatus("");
                         setCreateEntrySubjectUserId("");
                         setCreateEntrySubjectUserLabel("");
+                        setCreateEntrySubjectRoleId("");
+                        setCreateEntrySubjectRoleLabel("");
                         toast.success("Entry created");
                         // Stay on list (do not navigate to entry)
                       } catch (error) {
