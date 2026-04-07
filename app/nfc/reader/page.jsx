@@ -5,17 +5,21 @@ import { ScanLine, Radio } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { FaceLandmarker, FilesetResolver } from "@mediapipe/tasks-vision";
+import { api } from "@/services/api-client";
 
-const MEL0DE_NFC_PREFIX = (process.env.NEXT_PUBLIC_NFC_PREFIX || "melode:nfc:").trim();
+const DEFAULT_NFC_PREFIX = (process.env.NEXT_PUBLIC_NFC_PREFIX || "melode:nfc:").trim();
 
 export default function NfcReaderPage() {
   const [isScanning, setIsScanning] = useState(false);
   const [status, setStatus] = useState("");
   const [showEnableButton, setShowEnableButton] = useState(false);
   const [faceVisible, setFaceVisible] = useState(false);
+  const [nfcPrefix, setNfcPrefix] = useState(DEFAULT_NFC_PREFIX);
+  const [tapPopup, setTapPopup] = useState(null);
   const isSupported = typeof window !== "undefined" && "NDEFReader" in window;
   const readerRef = useRef(null);
   const faceVisibleRef = useRef(false);
+  const nfcPrefixRef = useRef(DEFAULT_NFC_PREFIX);
   const hasAttemptedRef = useRef(false);
   const videoRef = useRef(null);
   const photoCanvasRef = useRef(null);
@@ -24,6 +28,18 @@ export default function NfcReaderPage() {
   const faceLandmarkerRef = useRef(null);
   const animationFrameRef = useRef(null);
   const audioContextRef = useRef(null);
+  const popupTimerRef = useRef(null);
+
+  const showTapPopup = (type, message) => {
+    if (popupTimerRef.current) {
+      clearTimeout(popupTimerRef.current);
+    }
+    setTapPopup({ type, message });
+    popupTimerRef.current = window.setTimeout(() => {
+      setTapPopup(null);
+      popupTimerRef.current = null;
+    }, 2200);
+  };
 
   const decodeRecord = (record) => {
     if (!record?.data) return "";
@@ -41,8 +57,9 @@ export default function NfcReaderPage() {
 
   const extractAllowedToken = (record) => {
     const payload = decodeRecord(record)?.trim();
-    if (!payload || !payload.startsWith(MEL0DE_NFC_PREFIX)) return null;
-    const token = payload.slice(MEL0DE_NFC_PREFIX.length).trim();
+    const prefix = nfcPrefixRef.current || DEFAULT_NFC_PREFIX;
+    if (!payload || !payload.startsWith(prefix)) return null;
+    const token = payload.slice(prefix.length).trim();
     return token || null;
   };
 
@@ -102,28 +119,35 @@ export default function NfcReaderPage() {
           if (records.length > 1) {
             playBeep("warning");
             setStatus("Multiple NFC tags detected. Please tap one card at a time.");
+            showTapPopup("error", "Unsuccessful");
             return;
           }
           const record = records[0];
           if (!record) {
             setStatus("Card detected but no data was found.");
+            showTapPopup("error", "Unsuccessful");
+            return;
+          }
+          if (!faceVisibleRef.current) {
+            playBeep("warning");
+            setStatus("Face not visible. Show face to scan.");
+            showTapPopup("error", "Unsuccessful");
             return;
           }
           const allowedToken = extractAllowedToken(record);
           if (!allowedToken) {
             playBeep("warning");
             setStatus("Unsupported card. Please use an authorized Melode card.");
+            showTapPopup("error", "Unsuccessful");
             return;
           }
-          playBeep(faceVisibleRef.current ? "success" : "warning");
+          playBeep("success");
           capturePhoto();
-          setStatus(
-            faceVisibleRef.current
-              ? "Card read successfully."
-              : "Card read successfully (no face detected).",
-          );
+          setStatus("Card read successfully.");
+          showTapPopup("success", "Successful");
         } catch (_error) {
           setStatus("Card detected but data could not be decoded.");
+          showTapPopup("error", "Unsuccessful");
         }
       };
 
@@ -285,6 +309,24 @@ export default function NfcReaderPage() {
   };
 
   useEffect(() => {
+    nfcPrefixRef.current = nfcPrefix;
+  }, [nfcPrefix]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const response = await api.get("/clock/nfc-reader-config");
+        const serverPrefix = response?.data?.nfc_card_prefix;
+        if (typeof serverPrefix === "string" && serverPrefix.trim()) {
+          setNfcPrefix(serverPrefix.trim());
+        }
+      } catch (_error) {
+        setNfcPrefix(DEFAULT_NFC_PREFIX);
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
     if (hasAttemptedRef.current) return;
     hasAttemptedRef.current = true;
     (async () => {
@@ -306,6 +348,9 @@ export default function NfcReaderPage() {
       }
       if (audioContextRef.current?.state && audioContextRef.current.state !== "closed") {
         audioContextRef.current.close();
+      }
+      if (popupTimerRef.current) {
+        clearTimeout(popupTimerRef.current);
       }
     };
   }, []);
@@ -362,6 +407,19 @@ export default function NfcReaderPage() {
             <div className="text-sm text-muted-foreground text-center min-h-5">
               {faceVisible ? "Face visible." : "Face not visible."} {status}
             </div>
+            {tapPopup ? (
+              <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none px-4">
+                <div
+                  className={`rounded-xl px-6 py-4 text-base font-semibold shadow-xl ring-1 ${
+                    tapPopup.type === "success"
+                      ? "bg-emerald-600/95 text-white ring-emerald-400/50"
+                      : "bg-red-600/95 text-white ring-red-400/50"
+                  }`}
+                >
+                  {tapPopup.message}
+                </div>
+              </div>
+            ) : null}
           </CardContent>
         </Card>
       </div>

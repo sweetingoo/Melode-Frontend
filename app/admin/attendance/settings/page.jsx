@@ -85,6 +85,7 @@ export default function AttendanceSettingsPage() {
   const [systemDefaultHours, setSystemDefaultHours] = useState(7.5);
   const [systemAllowNegative, setSystemAllowNegative] = useState(false);
   const [provisionalShiftLinkWindowHours, setProvisionalShiftLinkWindowHours] = useState(2);
+  const [nfcCardPrefix, setNfcCardPrefix] = useState("melode:nfc:");
   const [isContractTypeFormOpen, setIsContractTypeFormOpen] = useState(false);
   const [selectedContractType, setSelectedContractType] = useState(null);
   const [contractTypeName, setContractTypeName] = useState("");
@@ -115,6 +116,7 @@ export default function AttendanceSettingsPage() {
       setSystemDefaultHours(Number(settings.default_hours_per_day) || 7.5);
       setSystemAllowNegative(!!settings.allow_negative_holiday_balance);
       setProvisionalShiftLinkWindowHours(Number(settings.provisional_shift_link_window_hours) ?? 2);
+      setNfcCardPrefix((settings.nfc_card_prefix || "melode:nfc:").trim());
     }
   }, [settings]);
 
@@ -133,11 +135,16 @@ export default function AttendanceSettingsPage() {
       toast.error("Invalid window", { description: "Provisional shift link window must be between 0.5 and 24 hours" });
       return;
     }
+    if (!nfcCardPrefix || !String(nfcCardPrefix).trim()) {
+      toast.error("Invalid NFC prefix", { description: "NFC card prefix is required." });
+      return;
+    }
     updateSettings.mutate({
       holiday_year_start_date: systemHolidayYearStart,
       default_hours_per_day: hours,
       allow_negative_holiday_balance: systemAllowNegative,
       provisional_shift_link_window_hours: windowHours,
+      nfc_card_prefix: String(nfcCardPrefix).trim(),
     });
   };
 
@@ -769,6 +776,15 @@ export default function AttendanceSettingsPage() {
                 <p className="text-xs text-muted-foreground">
                   When a user clocks in, show allocated shifts starting within this many hours before or after. Used to prompt &quot;Are you logging in to this shift?&quot; (default 2)
                 </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="nfc-card-prefix">NFC Card Prefix</Label>
+                <Input
+                  id="nfc-card-prefix"
+                  value={nfcCardPrefix}
+                  onChange={(e) => setNfcCardPrefix(e.target.value)}
+                />
               </div>
             </div>
           )}
