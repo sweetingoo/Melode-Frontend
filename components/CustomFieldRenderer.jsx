@@ -10,13 +10,32 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
-import { CalendarIcon, Download, FileText, X, Search, Loader2, Plus, Trash2, AlertTriangle } from "lucide-react";
+import { CalendarIcon, Download, FileText, X, Search, Loader2, Plus, Trash2, AlertTriangle, Undo2, Redo2 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useDownloadFile } from "@/hooks/useProfile";
 import { useFileReferences } from "@/hooks/useFileReferences";
 import { usersService } from "@/services/users";
+import { profileService } from "@/services/profile";
 import { getUserDisplayName } from "@/utils/user";
+
+/** If a stored value points at GET .../settings/files/{slug}/download (JSON), return {slug}; that URL is not an image. */
+function extractFileReferenceSlugFromStoredBackground(stored) {
+  if (!stored || typeof stored !== "string") return null;
+  const t = stored.trim();
+  if (!t) return null;
+  try {
+    if (/^https?:\/\//i.test(t)) {
+      const u = new URL(t);
+      const m = u.pathname.match(/\/(?:settings\/)?files\/([^/]+)\/download\/?$/i);
+      return m ? m[1] : null;
+    }
+  } catch {
+    return null;
+  }
+  const m = t.match(/\/(?:settings\/)?files\/([^/]+)\/download\/?$/i);
+  return m ? m[1] : null;
+}
 
 // Sort options by value for consistent display order (select, radio, multiselect)
 const sortOptionsByValue = (options) => {
@@ -1015,6 +1034,17 @@ const CustomFieldRenderer = ({
         );
       }
 
+      case 'image_free_draw':
+        return (
+          <ImageFreeDrawFieldRenderer
+            field={field}
+            value={value}
+            onChange={handleChange}
+            error={error}
+            readOnly={readOnly}
+          />
+        );
+
       case 'signature':
         return <SignatureFieldRenderer 
           field={field} 
@@ -1830,6 +1860,351 @@ const FileFieldRenderer = ({ field, value, onChange, error, fieldId }) => {
           </Button>
         </div>
       )}
+    </div>
+  );
+};
+
+/** Draw on a background image; submitted value is a PNG data URL (background + strokes). */
+const ImageFreeDrawFieldRenderer = ({ field, value, onChange, error, readOnly }) => {
+  const fileRef =
+    field.background_image_file_reference_id ||
+    field.field_background_image_file_reference_id ||
+    '';
+  const rawBackgroundUrl = (
+    field.background_image_url ||
+    field.field_background_image_url ||
+    field.image_url ||
+    field.field_image_url ||
+    ''
+  ).trim();
+  const altText = field.background_alt_text || field.field_alt_text || field.alt_text || '';
+
+  const imgRef = React.useRef(null);
+  const canvasRef = React.useRef(null);
+  const [isDrawing, setIsDrawing] = React.useState(false);
+  const [resolvedBgUrl, setResolvedBgUrl] = React.useState(null);
+  const [resolveLoading, setResolveLoading] = React.useState(false);
+  /** Linear undo: stack of committed composite data URLs (or null); index = current. */
+  const drawHistoryRef = React.useRef({ stack: [value ?? null], index: 0 });
+  const [, historyTick] = React.useReducer((n) => n + 1, 0);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    async function resolveBackground() {
+      if (value && typeof value === 'string' && value.startsWith('data:image')) {
+        setResolvedBgUrl(null);
+        setResolveLoading(false);
+        return;
+      }
+      setResolveLoading(true);
+      setResolvedBgUrl(null);
+      try {
+        const ref = String(fileRef || '').trim();
+        if (ref) {
+          const data = await profileService.downloadFile(ref);
+          if (cancelled) return;
+          setResolvedBgUrl(data?.download_url || null);
+          return;
+        }
+        if (!rawBackgroundUrl) {
+          if (!cancelled) setResolvedBgUrl(null);
+          return;
+        }
+        const mistakenJsonEndpointSlug = extractFileReferenceSlugFromStoredBackground(rawBackgroundUrl);
+        if (mistakenJsonEndpointSlug) {
+          const data = await profileService.downloadFile(mistakenJsonEndpointSlug);
+          if (cancelled) return;
+          setResolvedBgUrl(data?.download_url || null);
+          return;
+        }
+        if (/^https?:\/\//i.test(rawBackgroundUrl)) {
+          if (!cancelled) setResolvedBgUrl(rawBackgroundUrl);
+          return;
+        }
+      } catch {
+        if (!cancelled) setResolvedBgUrl(null);
+      } finally {
+        if (!cancelled) setResolveLoading(false);
+      }
+    }
+    resolveBackground();
+    return () => {
+      cancelled = true;
+    };
+  }, [fileRef, rawBackgroundUrl, value]);
+
+  const fieldIdentity = field.id ?? field.field_id ?? field.name ?? '';
+
+  React.useEffect(() => {
+    drawHistoryRef.current = { stack: [value ?? null], index: 0 };
+    historyTick();
+  }, [fieldIdentity]);
+
+  React.useEffect(() => {
+    const h = drawHistoryRef.current;
+    const onlyNull = h.stack.length === 1 && (h.stack[0] === null || h.stack[0] === undefined);
+    if (onlyNull && value) {
+      h.stack = [value];
+      h.index = 0;
+      historyTick();
+    }
+  }, [value, fieldIdentity]);
+
+  const displaySrc =
+    value && typeof value === 'string' && value.startsWith('data:image')
+      ? value
+      : resolvedBgUrl || '';
+
+  const syncCanvasSize = React.useCallback(() => {
+    const img = imgRef.current;
+    const canvas = canvasRef.current;
+    if (!img || !canvas) return;
+    const w = img.offsetWidth || Math.round(canvas.getBoundingClientRect().width);
+    const h = img.offsetHeight || Math.round(canvas.getBoundingClientRect().height);
+    if (w < 2 || h < 2) return;
+    canvas.width = w;
+    canvas.height = h;
+    canvas.style.width = `${w}px`;
+    canvas.style.height = `${h}px`;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, w, h);
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+  }, []);
+
+  React.useEffect(() => {
+    const onResize = () => syncCanvasSize();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [syncCanvasSize]);
+
+  React.useLayoutEffect(() => {
+    const img = imgRef.current;
+    if (!img || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => syncCanvasSize());
+    ro.observe(img);
+    return () => ro.disconnect();
+  }, [syncCanvasSize, displaySrc]);
+
+  const getCoordinates = (e) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    let clientX;
+    let clientY;
+    if (e.touches && e.touches.length > 0) {
+      clientX = e.touches[0].clientX;
+      clientY = e.touches[0].clientY;
+    } else if (e.changedTouches && e.changedTouches.length > 0) {
+      clientX = e.changedTouches[0].clientX;
+      clientY = e.changedTouches[0].clientY;
+    } else {
+      clientX = e.clientX;
+      clientY = e.clientY;
+    }
+    return {
+      x: (clientX - rect.left) * scaleX,
+      y: (clientY - rect.top) * scaleY,
+    };
+  };
+
+  const compositeAndSubmit = React.useCallback(() => {
+    const drawCanvas = canvasRef.current;
+    if (!drawCanvas || !displaySrc) return;
+    const w = drawCanvas.width;
+    const h = drawCanvas.height;
+    if (w < 2 || h < 2) return;
+
+    const out = document.createElement('canvas');
+    out.width = w;
+    out.height = h;
+    const octx = out.getContext('2d');
+    const base = new Image();
+    if (!displaySrc.startsWith('data:')) {
+      base.crossOrigin = 'anonymous';
+    }
+    const commit = (dataUrl) => {
+      const dh = drawHistoryRef.current;
+      const stack = dh.stack.slice(0, dh.index + 1);
+      stack.push(dataUrl);
+      dh.stack = stack;
+      dh.index = stack.length - 1;
+      const dctx = drawCanvas.getContext('2d');
+      dctx.clearRect(0, 0, w, h);
+      onChange(dataUrl);
+      historyTick();
+    };
+    base.onload = () => {
+      octx.drawImage(base, 0, 0, w, h);
+      octx.drawImage(drawCanvas, 0, 0);
+      commit(out.toDataURL('image/png'));
+    };
+    base.onerror = () => {
+      octx.drawImage(drawCanvas, 0, 0);
+      commit(out.toDataURL('image/png'));
+    };
+    base.src = displaySrc;
+  }, [displaySrc, onChange]);
+
+  const startDrawing = (e) => {
+    e.preventDefault();
+    setIsDrawing(true);
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const coords = getCoordinates(e);
+    ctx.beginPath();
+    ctx.moveTo(coords.x, coords.y);
+  };
+
+  const draw = (e) => {
+    if (!isDrawing) return;
+    e.preventDefault();
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const coords = getCoordinates(e);
+    ctx.lineTo(coords.x, coords.y);
+    ctx.stroke();
+  };
+
+  const stopDrawing = (e) => {
+    if (e) e.preventDefault();
+    if (!isDrawing) return;
+    setIsDrawing(false);
+    compositeAndSubmit();
+  };
+
+  const clearAll = () => {
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+    drawHistoryRef.current = { stack: [null], index: 0 };
+    onChange(null);
+    historyTick();
+  };
+
+  const undo = () => {
+    const h = drawHistoryRef.current;
+    if (h.index <= 0) return;
+    h.index -= 1;
+    onChange(h.stack[h.index]);
+    historyTick();
+  };
+
+  const redo = () => {
+    const h = drawHistoryRef.current;
+    if (h.index >= h.stack.length - 1) return;
+    h.index += 1;
+    onChange(h.stack[h.index]);
+    historyTick();
+  };
+
+  const hist = drawHistoryRef.current;
+  const canUndo = hist.index > 0;
+  const canRedo = hist.index < hist.stack.length - 1;
+
+  if (readOnly) {
+    if (value && typeof value === 'string' && value.startsWith('data:image')) {
+      return (
+        <div className="space-y-2 w-full">
+          <img
+            src={value}
+            alt={altText || 'Drawing'}
+            className="max-w-full h-auto border rounded-md bg-background"
+            style={{ maxHeight: '320px' }}
+          />
+        </div>
+      );
+    }
+    return <p className="text-sm text-muted-foreground">—</p>;
+  }
+
+  const hasBackgroundConfig =
+    !!(String(fileRef || '').trim() || rawBackgroundUrl) ||
+    !!(value && String(value).startsWith('data:image'));
+
+  if (!hasBackgroundConfig) {
+    return (
+      <p className="text-sm text-amber-600 dark:text-amber-500">
+        This field has no background image configured. Ask an administrator to set a background image in the form or tracker settings.
+      </p>
+    );
+  }
+
+  if (resolveLoading && !displaySrc) {
+    return (
+      <div className="flex items-center gap-2 text-sm text-muted-foreground py-8">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        Loading background image…
+      </div>
+    );
+  }
+
+  if (!displaySrc) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        Could not load the background image. If it was uploaded, the file reference may be invalid.
+      </p>
+    );
+  }
+
+  return (
+    <div className="w-full space-y-2 self-start">
+      {/* Grid: image and canvas share one cell so the diagram is one surface (bg behind strokes). */}
+      <div
+        className="grid w-full max-w-full overflow-hidden rounded-md border-2 border-border leading-[0] [&>*]:col-start-1 [&>*]:row-start-1"
+        style={{ touchAction: 'none' }}
+      >
+        <img
+          ref={imgRef}
+          src={displaySrc}
+          alt={altText || 'Background'}
+          className="m-0 block h-auto w-full max-w-full select-none bg-transparent p-0 align-top pointer-events-none"
+          crossOrigin={displaySrc.startsWith('data:') ? undefined : 'anonymous'}
+          onLoad={syncCanvasSize}
+          draggable={false}
+        />
+        <canvas
+          ref={canvasRef}
+          className="z-10 m-0 block h-full w-full min-h-0 min-w-0 cursor-crosshair bg-transparent p-0 pointer-events-auto"
+          style={{ touchAction: 'none' }}
+          onMouseDown={startDrawing}
+          onMouseMove={draw}
+          onMouseUp={stopDrawing}
+          onMouseLeave={stopDrawing}
+          onTouchStart={startDrawing}
+          onTouchMove={draw}
+          onTouchEnd={stopDrawing}
+          onTouchCancel={stopDrawing}
+        />
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs text-muted-foreground">
+          Draw directly on the image; release to apply. Undo and redo step through strokes.
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button type="button" variant="outline" size="sm" onClick={undo} disabled={!canUndo} title="Undo">
+            <Undo2 className="mr-1 h-4 w-4" />
+            Undo
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={redo} disabled={!canRedo} title="Redo">
+            <Redo2 className="mr-1 h-4 w-4" />
+            Redo
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={clearAll}>
+            <X className="mr-2 h-4 w-4" />
+            Clear
+          </Button>
+        </div>
+      </div>
+      {error && <p className="text-sm text-red-500">{error}</p>}
     </div>
   );
 };

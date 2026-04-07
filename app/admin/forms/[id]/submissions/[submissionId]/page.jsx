@@ -527,17 +527,17 @@ const FormSubmissionDetailPage = () => {
   // Helper to render field value with better visual representation
   const renderFieldValue = (field, value) => {
     const fieldType = field?.field_type?.toLowerCase();
-    const isSignatureField = fieldType === 'signature';
-    
-    // Handle signature fields - display as image if it's a data URI
-    if (isSignatureField && typeof value === 'string' && value.startsWith('data:image')) {
+    const isSignatureLikeImage =
+      fieldType === 'signature' || fieldType === 'image_free_draw';
+
+    if (isSignatureLikeImage && typeof value === 'string' && value.startsWith('data:image')) {
       return (
         <div className="mt-2">
           <img 
             src={value} 
-            alt="Signature" 
+            alt={fieldType === 'image_free_draw' ? 'Drawing' : 'Signature'} 
             className="max-w-full h-auto border rounded-md bg-background"
-            style={{ maxHeight: '200px' }}
+            style={{ maxHeight: fieldType === 'image_free_draw' ? '320px' : '200px' }}
           />
         </div>
       );

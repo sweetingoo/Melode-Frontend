@@ -2409,11 +2409,11 @@ const TrackerEntryDetailPage = () => {
                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                   <div className="space-y-2">{leftF.map((field) => {
                                                     const fieldId = field.id || field.name || field.field_id;
-                                                    return <div key={fieldId} className={cn(["text_block", "image_block", "youtube_video_embed"].includes((field.type || field.field_type || "").toLowerCase()) && "md:col-span-2")}><CustomFieldRenderer field={mapFieldToMapped(field)} value={displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} readOnly /></div>;
+                                                    return <div key={fieldId} className={cn(["text_block", "image_block", "image_free_draw", "youtube_video_embed"].includes((field.type || field.field_type || "").toLowerCase()) && "md:col-span-2")}><CustomFieldRenderer field={mapFieldToMapped(field)} value={displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} readOnly /></div>;
                                                   })}</div>
                                                   <div className="space-y-2">{rightF.map((field) => {
                                                     const fieldId = field.id || field.name || field.field_id;
-                                                    return <div key={fieldId} className={cn(["text_block", "image_block", "youtube_video_embed"].includes((field.type || field.field_type || "").toLowerCase()) && "md:col-span-2")}><CustomFieldRenderer field={mapFieldToMapped(field)} value={displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} readOnly /></div>;
+                                                    return <div key={fieldId} className={cn(["text_block", "image_block", "image_free_draw", "youtube_video_embed"].includes((field.type || field.field_type || "").toLowerCase()) && "md:col-span-2")}><CustomFieldRenderer field={mapFieldToMapped(field)} value={displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} readOnly /></div>;
                                                   })}</div>
                                                 </div>
                                               )}
@@ -2430,7 +2430,7 @@ const TrackerEntryDetailPage = () => {
                                         {visibleFields.map((field) => {
                                           const fieldId = field.id || field.name || field.field_id;
                                           return (
-                                            <div key={fieldId} className={cn("space-y-1", ["text_block", "image_block", "youtube_video_embed"].includes((field.type || field.field_type || "").toLowerCase()) && "md:col-span-2")}>
+                                            <div key={fieldId} className={cn("space-y-1", ["text_block", "image_block", "image_free_draw", "youtube_video_embed"].includes((field.type || field.field_type || "").toLowerCase()) && "md:col-span-2")}>
                                               <CustomFieldRenderer field={mapFieldToMapped(field)} value={displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} readOnly />
                                             </div>
                                           );
@@ -2669,7 +2669,7 @@ const TrackerEntryDetailPage = () => {
                                     ) : (
                                       <div className={layout === "stack" ? "space-y-3" : "grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3"}>
                                         {groupFields.map((field) => (
-                                          <div key={field.id || field.name || field.field_id} className={cn("space-y-1", ["text_block", "image_block", "youtube_video_embed"].includes((field.type || field.field_type || "").toLowerCase()) && "md:col-span-2")}>
+                                          <div key={field.id || field.name || field.field_id} className={cn("space-y-1", ["text_block", "image_block", "image_free_draw", "youtube_video_embed"].includes((field.type || field.field_type || "").toLowerCase()) && "md:col-span-2")}>
                                             {renderEditableField(field)}
                                           </div>
                                         ))}
@@ -2791,11 +2791,11 @@ const TrackerEntryDetailPage = () => {
                                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                 <div className="space-y-2">{leftF.map((field) => {
                                                   const fieldId = field.id || field.name || field.field_id;
-                                                  return <div key={fieldId} className={cn(["text_block", "image_block", "youtube_video_embed"].includes((field.type || field.field_type || "").toLowerCase()) && "md:col-span-2")}><CustomFieldRenderer field={mapFieldToMapped(field)} value={displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} readOnly /></div>;
+                                                  return <div key={fieldId} className={cn(["text_block", "image_block", "image_free_draw", "youtube_video_embed"].includes((field.type || field.field_type || "").toLowerCase()) && "md:col-span-2")}><CustomFieldRenderer field={mapFieldToMapped(field)} value={displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} readOnly /></div>;
                                                 })}</div>
                                                 <div className="space-y-2">{rightF.map((field) => {
                                                   const fieldId = field.id || field.name || field.field_id;
-                                                  return <div key={fieldId} className={cn(["text_block", "image_block", "youtube_video_embed"].includes((field.type || field.field_type || "").toLowerCase()) && "md:col-span-2")}><CustomFieldRenderer field={mapFieldToMapped(field)} value={displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} readOnly /></div>;
+                                                  return <div key={fieldId} className={cn(["text_block", "image_block", "image_free_draw", "youtube_video_embed"].includes((field.type || field.field_type || "").toLowerCase()) && "md:col-span-2")}><CustomFieldRenderer field={mapFieldToMapped(field)} value={displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} readOnly /></div>;
                                                 })}</div>
                                               </div>
                                             )}
@@ -2812,7 +2812,7 @@ const TrackerEntryDetailPage = () => {
                                       {visibleFields.map((field) => {
                                         const fieldId = field.id || field.name || field.field_id;
                                         return (
-                                          <div key={fieldId} className={cn("space-y-1", ["text_block", "image_block", "youtube_video_embed"].includes((field.type || field.field_type || "").toLowerCase()) && "md:col-span-2")}>
+                                          <div key={fieldId} className={cn("space-y-1", ["text_block", "image_block", "image_free_draw", "youtube_video_embed"].includes((field.type || field.field_type || "").toLowerCase()) && "md:col-span-2")}>
                                             <CustomFieldRenderer field={mapFieldToMapped(field)} value={displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} readOnly />
                                           </div>
                                         );

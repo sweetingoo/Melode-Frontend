@@ -317,21 +317,21 @@ const FormSubmissionDetailPage = () => {
     const formatted = formatFieldValue(field, value);
     const fieldType = field.field_type?.toLowerCase();
     const isFileField = fieldType === 'file';
-    const isSignatureField = fieldType === 'signature';
+    const isSignatureLikeImage =
+      fieldType === 'signature' || fieldType === 'image_free_draw';
 
     if (formatted === null) {
       return <p className="text-muted-foreground italic">No value provided</p>;
     }
 
-    // Handle signature fields - display as image if it's a data URI
-    if (isSignatureField && typeof formatted === 'string' && formatted.startsWith('data:image')) {
+    if (isSignatureLikeImage && typeof formatted === 'string' && formatted.startsWith('data:image')) {
       return (
         <div className="mt-2">
           <img 
             src={formatted} 
-            alt="Signature" 
+            alt={fieldType === 'image_free_draw' ? 'Drawing' : 'Signature'} 
             className="max-w-full h-auto border rounded-md bg-white"
-            style={{ maxHeight: '200px' }}
+            style={{ maxHeight: fieldType === 'image_free_draw' ? '320px' : '200px' }}
           />
         </div>
       );

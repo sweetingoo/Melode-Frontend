@@ -884,8 +884,12 @@ export const generateFormSubmissionPDFFromData = async ({
           addText(`${fieldLabel}:`, 10, true);
           pdf.setFont(undefined, "normal");
 
-          // Handle signature fields - embed as image if it's a data URL
-          if (fieldType === "signature" && typeof value === "string" && value.startsWith("data:image")) {
+          // Handle signature / image_free_draw - embed as image if it's a data URL
+          if (
+            (fieldType === "signature" || fieldType === "image_free_draw") &&
+            typeof value === "string" &&
+            value.startsWith("data:image")
+          ) {
             try {
               // Create image element to get dimensions
               const img = new Image();
@@ -924,7 +928,7 @@ export const generateFormSubmissionPDFFromData = async ({
 
               // Calculate image dimensions to fit within page width
               const maxWidth = pageWidth - 2 * margin;
-              const maxHeight = 50; // Max height in mm
+              const maxHeight = fieldType === "image_free_draw" ? 100 : 50; // mm — diagrams may need more space
               let imgWidth = (img.width * 0.264583); // Convert pixels to mm
               let imgHeight = (img.height * 0.264583);
 

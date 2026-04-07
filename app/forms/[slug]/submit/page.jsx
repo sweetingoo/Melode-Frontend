@@ -221,7 +221,7 @@ const FormSubmitPage = () => {
         }
 
       case "signature":
-        // Signature is stored as base64 data URL
+      case "image_free_draw":
         return typeof value === "string" ? value : null;
 
       case "people":

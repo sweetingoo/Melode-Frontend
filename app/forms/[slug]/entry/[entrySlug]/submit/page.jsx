@@ -112,6 +112,7 @@ export default function PublicEntrySubmitPage() {
       case "file":
         return typeof value === "number" ? value : null;
       case "signature":
+      case "image_free_draw":
         return typeof value === "string" ? value : null;
       default:
         return String(value);

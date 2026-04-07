@@ -48,6 +48,7 @@ import {
   Minus,
   FileDown,
   PenTool,
+  ImagePlus,
   Hash,
   AlignLeft,
   ChevronDown,
@@ -164,6 +165,7 @@ const fieldTypes = [
   { value: "file", label: "File Upload" },
   { value: "json", label: "JSON" },
   { value: "signature", label: "Signature" },
+  { value: "image_free_draw", label: "Image / Free Draw" },
   // Display-only field types
   { value: "text_block", label: "Text Block (Display Only)" },
   { value: "image_block", label: "Image Block (Display Only)" },
@@ -331,6 +333,10 @@ const NewFormPage = () => {
     image_file: null, // for image_block (uploaded file)
     image_file_id: null, // for image_block (uploaded file ID after upload)
     alt_text: "", // for image_block and youtube_video_embed
+    background_image_url: "",
+    background_image_file_reference_id: "",
+    background_image_file: null,
+    background_alt_text: "",
     video_url: "", // for youtube_video_embed
     download_url: "", // for download_link
     // Conditional visibility
@@ -502,6 +508,15 @@ const NewFormPage = () => {
       return;
     }
 
+    if (
+      newField.field_type === "image_free_draw" &&
+      !newField.background_image_url?.trim() &&
+      !newField.background_image_file_reference_id?.trim()
+    ) {
+      toast.error("Either background image URL or an uploaded image is required for Image / Free Draw");
+      return;
+    }
+
     // For youtube_video_embed, require video_url
     if (newField.field_type === 'youtube_video_embed' && !newField.video_url) {
       toast.error("YouTube video URL is required for YouTube video embed");
@@ -546,6 +561,14 @@ const NewFormPage = () => {
       }
       if (newField.alt_text) {
         field.alt_text = newField.alt_text;
+      }
+    } else if (newField.field_type === "image_free_draw") {
+      const refId = newField.background_image_file_reference_id?.trim();
+      const directUrl = newField.background_image_url?.trim();
+      if (refId) field.background_image_file_reference_id = refId;
+      if (directUrl) field.background_image_url = directUrl;
+      if (newField.background_alt_text) {
+        field.background_alt_text = newField.background_alt_text;
       }
     } else if (newField.field_type === 'youtube_video_embed') {
       // For youtube_video_embed, use video_url and alt_text
@@ -692,6 +715,10 @@ const NewFormPage = () => {
       image_file: null,
       image_file_id: null,
       alt_text: "",
+      background_image_url: "",
+      background_image_file_reference_id: "",
+      background_image_file: null,
+      background_alt_text: "",
       video_url: "",
       download_url: "",
     });
@@ -1652,6 +1679,116 @@ const NewFormPage = () => {
                         </div>
                       )}
 
+                      {newField.field_type === "image_free_draw" && (
+                        <div className="space-y-2 pt-2 border-t">
+                          <div className="p-3 bg-muted rounded-md mb-3">
+                            <p className="text-xs text-muted-foreground">
+                              <strong>Image / Free Draw:</strong> Users see this picture and can draw on it. The saved answer is one image (background plus markings).
+                            </p>
+                          </div>
+                          <Label className="text-sm font-medium">Background image</Label>
+                          <Tabs
+                            defaultValue={
+                              newField.background_image_file_reference_id || newField.background_image_file
+                                ? "upload"
+                                : "url"
+                            }
+                            className="w-full"
+                          >
+                            <TabsList className="grid w-full grid-cols-2">
+                              <TabsTrigger value="url">Direct URL</TabsTrigger>
+                              <TabsTrigger value="upload">Upload Image</TabsTrigger>
+                            </TabsList>
+                            <TabsContent value="url" className="space-y-2">
+                              <Label htmlFor="new_image_free_draw_url" className="text-xs">
+                                Background image URL *
+                              </Label>
+                              <Input
+                                id="new_image_free_draw_url"
+                                value={newField.background_image_url}
+                                onChange={(e) =>
+                                  setNewField({
+                                    ...newField,
+                                    background_image_url: e.target.value,
+                                    background_image_file: null,
+                                    background_image_file_reference_id: "",
+                                  })
+                                }
+                                placeholder="https://example.com/diagram.png"
+                              />
+                            </TabsContent>
+                            <TabsContent value="upload" className="space-y-2">
+                              <Label htmlFor="new_image_free_draw_file" className="text-xs">
+                                Upload background *
+                              </Label>
+                              <Input
+                                id="new_image_free_draw_file"
+                                type="file"
+                                accept="image/*"
+                                onChange={async (e) => {
+                                  const file = e.target.files?.[0];
+                                  if (!file) return;
+                                  try {
+                                    setNewField({
+                                      ...newField,
+                                      background_image_file: file,
+                                      background_image_url: "",
+                                      background_image_file_reference_id: "",
+                                    });
+                                    const uploadResult = await uploadFileMutation.mutateAsync({ file });
+                                    const fileRef =
+                                      uploadResult?.file_reference_id ??
+                                      uploadResult?.slug ??
+                                      uploadResult?.id ??
+                                      uploadResult?.file_id;
+                                    if (fileRef === undefined || fileRef === null || fileRef === "") {
+                                      throw new Error("No file reference from upload");
+                                    }
+                                    setNewField({
+                                      ...newField,
+                                      background_image_file: file,
+                                      background_image_url: "",
+                                      background_image_file_reference_id: String(fileRef),
+                                    });
+                                    toast.success("Background image uploaded");
+                                  } catch (error) {
+                                    console.error(error);
+                                    toast.error("Failed to upload image", {
+                                      description: error.response?.data?.detail || error.message,
+                                    });
+                                    setNewField({
+                                      ...newField,
+                                      background_image_file: null,
+                                      background_image_url: "",
+                                      background_image_file_reference_id: "",
+                                    });
+                                  }
+                                }}
+                              />
+                              {newField.background_image_file && (
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  Selected: {newField.background_image_file.name}
+                                  {uploadFileMutation.isPending ? " — Uploading…" : ""}
+                                </p>
+                              )}
+                            </TabsContent>
+                          </Tabs>
+                          <div>
+                            <Label htmlFor="new_image_free_draw_alt" className="text-xs">
+                              Alt text (background)
+                            </Label>
+                            <Input
+                              id="new_image_free_draw_alt"
+                              value={newField.background_alt_text}
+                              onChange={(e) =>
+                                setNewField({ ...newField, background_alt_text: e.target.value })
+                              }
+                              placeholder="Describe the diagram for accessibility"
+                            />
+                          </div>
+                        </div>
+                      )}
+
                       {/* YouTube Video Embed Configuration */}
                       {newField.field_type === "youtube_video_embed" && (
                         <div className="space-y-2 pt-2 border-t">
@@ -1860,7 +1997,7 @@ const NewFormPage = () => {
                         )}
 
                       {/* Validation Options - Collapsible */}
-                      {!['text_block', 'image_block', 'line_break', 'page_break', 'download_link', 'boolean', 'boolean_with_description', 'signature'].includes(newField.field_type) &&
+                      {!['text_block', 'image_block', 'line_break', 'page_break', 'download_link', 'boolean', 'boolean_with_description', 'signature', 'image_free_draw'].includes(newField.field_type) &&
                         (['text', 'textarea', 'email', 'phone', 'number', 'date'].includes(newField.field_type) ||
                           newField.validation.min ||
                           newField.validation.max ||
@@ -2538,6 +2675,7 @@ const NewFormPage = () => {
                             boolean_with_description: CheckSquare,
                             file: Upload,
                             signature: PenTool,
+                            image_free_draw: ImagePlus,
                             text_block: FileText,
                             image_block: Image,
                             youtube_video_embed: Play,
@@ -2617,6 +2755,11 @@ const NewFormPage = () => {
                                     image_url: field.image_url || '',
                                     image_file_id: field.image_file_id || null,
                                     alt_text: field.alt_text || '',
+                                    background_image_url: field.background_image_url || '',
+                                    background_image_file_reference_id:
+                                      field.background_image_file_reference_id || '',
+                                    background_image_file: null,
+                                    background_alt_text: field.background_alt_text || '',
                                     download_url: field.download_url || '',
                                     conditional_visibility: field.conditional_visibility || null,
                                     file_expiry_date: field.file_expiry_date || false,

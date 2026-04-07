@@ -65,6 +65,7 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { parseUTCDate } from "@/utils/time";
 import { trackersService } from "@/services/trackers";
+import { useUploadFile } from "@/hooks/useProfile";
 
 const fieldTypes = [
   { value: "text", label: "Text" },
@@ -83,6 +84,7 @@ const fieldTypes = [
   { value: "file", label: "File Upload" },
   { value: "json", label: "JSON" },
   { value: "signature", label: "Signature" },
+  { value: "image_free_draw", label: "Image / Free Draw" },
   { value: "rag", label: "RAG (Red / Amber / Green)" },
   { value: "calculated", label: "Calculated (Sum / Percentage)" },
   { value: "repeatable_group", label: "Repeatable group (Add more rows)" },
@@ -493,6 +495,7 @@ const TrackerEditPage = () => {
 
   const { data: tracker, isLoading: trackerLoading } = useTracker(slug);
   const updateMutation = useUpdateTracker();
+  const uploadFileMutation = useUploadFile({ silent: true });
 
   // Sync SMS templates from tracker when opening Communication tab. Only run when tracker has loaded
   // so we don't overwrite with empty data before fetch completes.
@@ -615,6 +618,10 @@ const TrackerEditPage = () => {
     section: "",
     options: [],
     fields: [],
+    background_image_url: "",
+    background_image_file_reference_id: "",
+    background_image_file: null,
+    background_alt_text: "",
   });
 
   const [editingFieldIndex, setEditingFieldIndex] = useState(null);
@@ -823,6 +830,15 @@ const TrackerEditPage = () => {
       toast.warning("Add at least one child field so each row has columns. You can edit this field later to add more.");
     }
 
+    if (
+      newField.type === "image_free_draw" &&
+      !String(newField.background_image_url || "").trim() &&
+      !String(newField.background_image_file_reference_id || "").trim()
+    ) {
+      toast.error("Background image URL or upload is required for Image / Free Draw");
+      return;
+    }
+
     const field = {
       id: fieldId,
       name: fieldId,
@@ -833,6 +849,17 @@ const TrackerEditPage = () => {
       ...(newField.options.length > 0 && { options: newField.options }),
       ...(newField.type === "repeatable_group" && { fields: newField.fields || [] }),
       ...(newField.field_options && Object.keys(newField.field_options).length > 0 && { field_options: newField.field_options }),
+      ...(newField.type === "image_free_draw"
+        ? {
+            ...(String(newField.background_image_file_reference_id || "").trim()
+              ? { background_image_file_reference_id: newField.background_image_file_reference_id.trim() }
+              : {}),
+            ...(String(newField.background_image_url || "").trim()
+              ? { background_image_url: newField.background_image_url.trim() }
+              : {}),
+            ...(newField.background_alt_text ? { background_alt_text: newField.background_alt_text } : {}),
+          }
+        : {}),
     };
 
     setFormData((prev) => ({
@@ -853,6 +880,10 @@ const TrackerEditPage = () => {
       section: "",
       options: [],
       fields: [],
+      background_image_url: "",
+      background_image_file_reference_id: "",
+      background_image_file: null,
+      background_alt_text: "",
     });
     setNewOption({ value: "", label: "" });
     setFieldIdManuallyEdited(false);
@@ -906,9 +937,19 @@ const TrackerEditPage = () => {
       return;
     }
 
+    if (
+      editingField.type === "image_free_draw" &&
+      !String(editingField.background_image_url || "").trim() &&
+      !String(editingField.background_image_file_reference_id || "").trim()
+    ) {
+      toast.error("Background image URL or upload is required for Image / Free Draw");
+      return;
+    }
+
+    const { background_image_file: _bgFileOmit, ...editingFieldToPersist } = editingField;
     const newFields = [...(formData.tracker_fields?.fields || [])];
     newFields[editingFieldIndex] = {
-      ...editingField,
+      ...editingFieldToPersist,
       options: editingField.options || [],
       fields: editingField.fields || [],
     };
@@ -2353,6 +2394,92 @@ const TrackerEditPage = () => {
                           </div>
                         )}
 
+                        {editingField.type === "image_free_draw" && (
+                          <div className="space-y-2 pt-2 border-t">
+                            <Label className="text-sm font-medium">Background image</Label>
+                            <Tabs
+                              defaultValue={
+                                editingField.background_image_file_reference_id || editingField.background_image_file
+                                  ? "upload"
+                                  : "url"
+                              }
+                              className="w-full"
+                            >
+                              <TabsList className="grid w-full grid-cols-2">
+                                <TabsTrigger value="url">Direct URL</TabsTrigger>
+                                <TabsTrigger value="upload">Upload</TabsTrigger>
+                              </TabsList>
+                              <TabsContent value="url" className="space-y-2">
+                                <Input
+                                  placeholder="https://…"
+                                  value={editingField.background_image_url || ""}
+                                  onChange={(e) =>
+                                    setEditingField({
+                                      ...editingField,
+                                      background_image_url: e.target.value,
+                                      background_image_file: null,
+                                      background_image_file_reference_id: "",
+                                    })
+                                  }
+                                />
+                              </TabsContent>
+                              <TabsContent value="upload" className="space-y-2">
+                                <Input
+                                  type="file"
+                                  accept="image/*"
+                                  onChange={async (e) => {
+                                    const file = e.target.files?.[0];
+                                    if (!file) return;
+                                    try {
+                                      setEditingField({
+                                        ...editingField,
+                                        background_image_file: file,
+                                        background_image_url: "",
+                                        background_image_file_reference_id: "",
+                                      });
+                                      const uploadResult = await uploadFileMutation.mutateAsync({ file });
+                                      const fileRef =
+                                        uploadResult?.file_reference_id ??
+                                        uploadResult?.slug ??
+                                        uploadResult?.id ??
+                                        uploadResult?.file_id;
+                                      if (fileRef === undefined || fileRef === null || fileRef === "") {
+                                        throw new Error("No file reference from upload");
+                                      }
+                                      setEditingField({
+                                        ...editingField,
+                                        background_image_file: file,
+                                        background_image_url: "",
+                                        background_image_file_reference_id: String(fileRef),
+                                      });
+                                      toast.success("Background image uploaded");
+                                    } catch (err) {
+                                      toast.error(err?.response?.data?.detail || err?.message || "Upload failed");
+                                      setEditingField({
+                                        ...editingField,
+                                        background_image_file: null,
+                                        background_image_url: editingField.background_image_url || "",
+                                        background_image_file_reference_id:
+                                          editingField.background_image_file_reference_id || "",
+                                      });
+                                    }
+                                  }}
+                                />
+                              </TabsContent>
+                            </Tabs>
+                            <div>
+                              <Label className="text-xs">Alt text (optional)</Label>
+                              <Input
+                                value={editingField.background_alt_text || ""}
+                                onChange={(e) =>
+                                  setEditingField({ ...editingField, background_alt_text: e.target.value })
+                                }
+                                placeholder="Describe the diagram"
+                              />
+                            </div>
+                          </div>
+                        )}
+
                         {/* RAG rules (Red / Amber / Green thresholds) */}
                         {editingField.type === "rag" && (
                           <div className="space-y-3 p-3 border rounded-md bg-muted/30">
@@ -3242,6 +3369,92 @@ const TrackerEditPage = () => {
                             ))}
                           </div>
                         )}
+                      </div>
+                    )}
+
+                    {newField.type === "image_free_draw" && (
+                      <div className="space-y-2 pt-2 border-t">
+                        <p className="text-xs text-muted-foreground">
+                          Users draw on this background; the submission stores one combined image (PNG).
+                        </p>
+                        <Label className="text-sm font-medium">Background image</Label>
+                        <Tabs
+                          defaultValue={
+                            newField.background_image_file_reference_id || newField.background_image_file
+                              ? "upload"
+                              : "url"
+                          }
+                          className="w-full"
+                        >
+                          <TabsList className="grid w-full grid-cols-2">
+                            <TabsTrigger value="url">Direct URL</TabsTrigger>
+                            <TabsTrigger value="upload">Upload</TabsTrigger>
+                          </TabsList>
+                          <TabsContent value="url" className="space-y-2">
+                            <Input
+                              placeholder="https://…"
+                              value={newField.background_image_url}
+                              onChange={(e) =>
+                                setNewField({
+                                  ...newField,
+                                  background_image_url: e.target.value,
+                                  background_image_file: null,
+                                  background_image_file_reference_id: "",
+                                })
+                              }
+                            />
+                          </TabsContent>
+                          <TabsContent value="upload" className="space-y-2">
+                            <Input
+                              type="file"
+                              accept="image/*"
+                              onChange={async (e) => {
+                                const file = e.target.files?.[0];
+                                if (!file) return;
+                                try {
+                                  setNewField({
+                                    ...newField,
+                                    background_image_file: file,
+                                    background_image_url: "",
+                                    background_image_file_reference_id: "",
+                                  });
+                                  const uploadResult = await uploadFileMutation.mutateAsync({ file });
+                                  const fileRef =
+                                    uploadResult?.file_reference_id ??
+                                    uploadResult?.slug ??
+                                    uploadResult?.id ??
+                                    uploadResult?.file_id;
+                                  if (fileRef === undefined || fileRef === null || fileRef === "") {
+                                    throw new Error("No file reference from upload");
+                                  }
+                                  setNewField({
+                                    ...newField,
+                                    background_image_file: file,
+                                    background_image_url: "",
+                                    background_image_file_reference_id: String(fileRef),
+                                  });
+                                  toast.success("Background image uploaded");
+                                } catch (err) {
+                                  toast.error(err?.response?.data?.detail || err?.message || "Upload failed");
+                                  setNewField({
+                                    ...newField,
+                                    background_image_file: null,
+                                    background_image_url: "",
+                                    background_image_file_reference_id: "",
+                                  });
+                                }
+                              }}
+                            />
+                          </TabsContent>
+                        </Tabs>
+                        <div>
+                          <Label className="text-xs">Alt text (optional)</Label>
+                          <Input
+                            value={newField.background_alt_text}
+                            onChange={(e) => setNewField({ ...newField, background_alt_text: e.target.value })}
+                            placeholder="Describe the diagram"
+                          />
+                        </div>
                       </div>
                     )}
 
