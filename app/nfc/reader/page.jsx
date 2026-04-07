@@ -21,6 +21,7 @@ export default function NfcReaderPage() {
   const mediaStreamRef = useRef(null);
   const faceLandmarkerRef = useRef(null);
   const animationFrameRef = useRef(null);
+  const audioContextRef = useRef(null);
 
   const decodeRecord = (record) => {
     if (!record?.data) return "";
@@ -88,15 +89,16 @@ export default function NfcReaderPage() {
 
       reader.onreading = (event) => {
         try {
-          if (!faceVisibleRef.current) {
-            setStatus("Face not visible. Show face to scan.");
-            return;
-          }
+          playBeep(faceVisibleRef.current ? "success" : "warning");
           const record = event.message?.records?.[0];
           if (!record) return;
           decodeRecord(record);
           capturePhoto();
-          setStatus("Card read successfully.");
+          setStatus(
+            faceVisibleRef.current
+              ? "Card read successfully."
+              : "Card read successfully (no face detected).",
+          );
         } catch (_error) {
           setStatus("Card detected but data could not be decoded.");
         }
@@ -122,6 +124,49 @@ export default function NfcReaderPage() {
     if (!ctx) return null;
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     return canvas.toDataURL("image/jpeg", 0.9);
+  };
+
+  const getAudioContext = () => {
+    if (typeof window === "undefined") return null;
+    if (!audioContextRef.current) {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return null;
+      audioContextRef.current = new Ctx();
+    }
+    return audioContextRef.current;
+  };
+
+  const playTone = (ctx, frequency, durationMs, startAt) => {
+    const oscillator = ctx.createOscillator();
+    const gainNode = ctx.createGain();
+    oscillator.type = "sine";
+    oscillator.frequency.setValueAtTime(frequency, startAt);
+    gainNode.gain.setValueAtTime(0.0001, startAt);
+    gainNode.gain.exponentialRampToValueAtTime(0.15, startAt + 0.01);
+    gainNode.gain.exponentialRampToValueAtTime(0.0001, startAt + durationMs / 1000);
+    oscillator.connect(gainNode);
+    gainNode.connect(ctx.destination);
+    oscillator.start(startAt);
+    oscillator.stop(startAt + durationMs / 1000 + 0.02);
+  };
+
+  const playBeep = async (mode) => {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    if (ctx.state === "suspended") {
+      try {
+        await ctx.resume();
+      } catch (_error) {
+        return;
+      }
+    }
+    const now = ctx.currentTime;
+    if (mode === "warning") {
+      playTone(ctx, 520, 120, now);
+      playTone(ctx, 420, 160, now + 0.17);
+      return;
+    }
+    playTone(ctx, 980, 120, now);
   };
 
   const drawLandmarks = (video, landmarks) => {
@@ -235,6 +280,9 @@ export default function NfcReaderPage() {
       }
       if (faceLandmarkerRef.current?.close) {
         faceLandmarkerRef.current.close();
+      }
+      if (audioContextRef.current?.state && audioContextRef.current.state !== "closed") {
+        audioContextRef.current.close();
       }
     };
   }, []);
