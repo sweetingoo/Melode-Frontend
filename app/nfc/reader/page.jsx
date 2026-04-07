@@ -29,6 +29,8 @@ export default function NfcReaderPage() {
   const animationFrameRef = useRef(null);
   const audioContextRef = useRef(null);
   const popupTimerRef = useRef(null);
+  const statusTimerRef = useRef(null);
+  const readCooldownUntilRef = useRef(0);
 
   const showTapPopup = (type, message) => {
     if (popupTimerRef.current) {
@@ -39,6 +41,17 @@ export default function NfcReaderPage() {
       setTapPopup(null);
       popupTimerRef.current = null;
     }, 2200);
+  };
+
+  const setStatusWithReset = (message, resetMs = 2200) => {
+    if (statusTimerRef.current) {
+      clearTimeout(statusTimerRef.current);
+    }
+    setStatus(message);
+    statusTimerRef.current = window.setTimeout(() => {
+      setStatus("");
+      statusTimerRef.current = null;
+    }, resetMs);
   };
 
   const decodeRecord = (record) => {
@@ -115,38 +128,44 @@ export default function NfcReaderPage() {
 
       reader.onreading = (event) => {
         try {
+          const now = Date.now();
+          if (now < readCooldownUntilRef.current) {
+            return;
+          }
+          readCooldownUntilRef.current = now + 2200;
+
           const records = event.message?.records || [];
           if (records.length > 1) {
             playBeep("warning");
-            setStatus("Multiple NFC tags detected. Please tap one card at a time.");
+            setStatusWithReset("Multiple NFC tags detected. Please tap one card at a time.");
             showTapPopup("error", "Unsuccessful");
             return;
           }
           const record = records[0];
           if (!record) {
-            setStatus("Card detected but no data was found.");
+            setStatusWithReset("Card detected but no data was found.");
             showTapPopup("error", "Unsuccessful");
             return;
           }
           if (!faceVisibleRef.current) {
             playBeep("warning");
-            setStatus("Face not visible. Show face to scan.");
+            setStatusWithReset("Face not visible. Show face to scan.");
             showTapPopup("error", "Unsuccessful");
             return;
           }
           const allowedToken = extractAllowedToken(record);
           if (!allowedToken) {
             playBeep("warning");
-            setStatus("Unsupported card. Please use an authorized Melode card.");
+            setStatusWithReset("Unsupported card. Please use an authorized Melode card.");
             showTapPopup("error", "Unsuccessful");
             return;
           }
           playBeep("success");
           capturePhoto();
-          setStatus("Card read successfully.");
+          setStatusWithReset("Card read successfully.");
           showTapPopup("success", "Successful");
         } catch (_error) {
-          setStatus("Card detected but data could not be decoded.");
+          setStatusWithReset("Card detected but data could not be decoded.");
           showTapPopup("error", "Unsuccessful");
         }
       };
@@ -351,6 +370,9 @@ export default function NfcReaderPage() {
       }
       if (popupTimerRef.current) {
         clearTimeout(popupTimerRef.current);
+      }
+      if (statusTimerRef.current) {
+        clearTimeout(statusTimerRef.current);
       }
     };
   }, []);
