@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { FaceLandmarker, FilesetResolver } from "@mediapipe/tasks-vision";
 
+const MEL0DE_NFC_PREFIX = "melode:nfc:";
+
 export default function NfcReaderPage() {
   const [isScanning, setIsScanning] = useState(false);
   const [status, setStatus] = useState("");
@@ -35,6 +37,13 @@ export default function NfcReaderPage() {
     }
 
     return new TextDecoder(record.encoding || "utf-8").decode(record.data);
+  };
+
+  const extractAllowedToken = (record) => {
+    const payload = decodeRecord(record)?.trim();
+    if (!payload || !payload.startsWith(MEL0DE_NFC_PREFIX)) return null;
+    const token = payload.slice(MEL0DE_NFC_PREFIX.length).trim();
+    return token || null;
   };
 
   const isFaceInsideGuide = (video, landmarks) => {
@@ -100,8 +109,13 @@ export default function NfcReaderPage() {
             setStatus("Card detected but no data was found.");
             return;
           }
+          const allowedToken = extractAllowedToken(record);
+          if (!allowedToken) {
+            playBeep("warning");
+            setStatus("Unsupported card. Please use an authorized Melode card.");
+            return;
+          }
           playBeep(faceVisibleRef.current ? "success" : "warning");
-          decodeRecord(record);
           capturePhoto();
           setStatus(
             faceVisibleRef.current
