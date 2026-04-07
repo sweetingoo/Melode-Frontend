@@ -13,6 +13,7 @@ export default function NfcReaderPage() {
   const [faceVisible, setFaceVisible] = useState(false);
   const isSupported = typeof window !== "undefined" && "NDEFReader" in window;
   const readerRef = useRef(null);
+  const faceVisibleRef = useRef(false);
   const hasAttemptedRef = useRef(false);
   const videoRef = useRef(null);
   const photoCanvasRef = useRef(null);
@@ -87,7 +88,7 @@ export default function NfcReaderPage() {
 
       reader.onreading = (event) => {
         try {
-          if (!faceVisible) {
+          if (!faceVisibleRef.current) {
             setStatus("Face not visible. Show face to scan.");
             return;
           }
@@ -197,13 +198,17 @@ export default function NfcReaderPage() {
         const result = landmarker.detectForVideo(video, performance.now());
         const landmarks = result?.faceLandmarks?.[0] || [];
         if (!landmarks.length) {
+          faceVisibleRef.current = false;
           setFaceVisible(false);
           drawLandmarks(video, []);
         } else {
           drawLandmarks(video, landmarks);
-          setFaceVisible(isFaceInsideGuide(video, landmarks));
+          const isVisible = isFaceInsideGuide(video, landmarks);
+          faceVisibleRef.current = isVisible;
+          setFaceVisible(isVisible);
         }
       } catch (_error) {
+        faceVisibleRef.current = false;
         setFaceVisible(false);
       }
       animationFrameRef.current = window.requestAnimationFrame(loop);
