@@ -31,7 +31,11 @@ import {
 } from "@/hooks/useClock";
 import { useRolesAll } from "@/hooks/useRoles";
 import { useCurrentUser } from "@/hooks/useAuth";
-import { formatElapsedTimeHHMMSS, calculateElapsedHours as calcElapsedHours } from "@/utils/time";
+import {
+  formatElapsedTimeHHMMSS,
+  calculateElapsedHours as calcElapsedHours,
+  parseUTCDate,
+} from "@/utils/time";
 import {
   Clock,
   Square,
@@ -83,6 +87,12 @@ export default function ClockDashboardPage() {
   // Calculate elapsed time
   const [elapsedTime, setElapsedTime] = useState("");
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  const formatLocalDateTime = (utcValue) => {
+    const dt = parseUTCDate(utcValue);
+    if (!dt || Number.isNaN(dt.getTime())) return "Unknown";
+    return dt.toLocaleString("en-GB");
+  };
 
   useEffect(() => {
     if (clockStatus?.clock_in_time) {
@@ -323,9 +333,7 @@ export default function ClockDashboardPage() {
               <div>
                 <p className="text-sm text-muted-foreground">Check In Time</p>
                 <p className="font-medium">
-                  {clockStatus.clock_in_time
-                    ? new Date(clockStatus.clock_in_time).toLocaleString("en-GB")
-                    : "Unknown"}
+                  {clockStatus.clock_in_time ? formatLocalDateTime(clockStatus.clock_in_time) : "Unknown"}
                 </p>
               </div>
             </div>

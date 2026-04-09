@@ -23,7 +23,6 @@ export default function NfcReaderPage() {
   const nfcPrefixRef = useRef(DEFAULT_NFC_PREFIX);
   const hasAttemptedRef = useRef(false);
   const videoRef = useRef(null);
-  const photoCanvasRef = useRef(null);
   const overlayCanvasRef = useRef(null);
   const mediaStreamRef = useRef(null);
   const faceLandmarkerRef = useRef(null);
@@ -81,6 +80,20 @@ export default function NfcReaderPage() {
     }
 
     return new TextDecoder(record.encoding || "utf-8").decode(record.data);
+  };
+
+  const formatLocalDateTime = (utcIsoString) => {
+    if (!utcIsoString) return "";
+    const dt = new Date(utcIsoString);
+    if (Number.isNaN(dt.getTime())) return "";
+    try {
+      return new Intl.DateTimeFormat(undefined, {
+        dateStyle: "medium",
+        timeStyle: "short",
+      }).format(dt);
+    } catch (_error) {
+      return dt.toLocaleString();
+    }
   };
 
   const extractAllowedToken = (record) => {
@@ -176,21 +189,24 @@ export default function NfcReaderPage() {
             return;
           }
           playBeep("success");
-          capturePhoto();
           let identifiedName = "";
           let identifiedAvatarUrl = "";
+          let localCheckinTime = "";
           try {
             const identifyRes = await api.post("/clock/nfc-reader/identify", { token: allowedToken });
             identifiedName = identifyRes?.data?.display_name || "";
             identifiedAvatarUrl = identifyRes?.data?.avatar_url || "";
+            localCheckinTime = formatLocalDateTime(identifyRes?.data?.checkin_time_utc);
           } catch (_error) {
             identifiedName = "";
             identifiedAvatarUrl = "";
+            localCheckinTime = "";
           }
           setStatusWithReset("Card read successfully.");
           showTapPopup("success", "Check-in successful", {
             name: identifiedName,
             avatarUrl: identifiedAvatarUrl,
+            checkinTimeLocal: localCheckinTime,
           });
           window.setTimeout(() => {
             resetForNextCheckin();
@@ -212,18 +228,6 @@ export default function NfcReaderPage() {
       setStatus("Unable to start NFC scan. Check permissions and try again.");
       setShowEnableButton(true);
     }
-  };
-
-  const capturePhoto = () => {
-    const video = videoRef.current;
-    const canvas = photoCanvasRef.current;
-    if (!video || !canvas || video.videoWidth <= 0 || video.videoHeight <= 0) return null;
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return null;
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    return canvas.toDataURL("image/jpeg", 0.9);
   };
 
   const getAudioContext = () => {
@@ -438,7 +442,6 @@ export default function NfcReaderPage() {
               )}
               </div>
             </div>
-          <canvas ref={photoCanvasRef} className="hidden" />
             <div className="relative h-44 w-44 sm:h-48 sm:w-48 rounded-full border border-border bg-muted/30 flex items-center justify-center">
               <div className="absolute h-32 w-32 sm:h-36 sm:w-36 rounded-full border border-border/80" />
               <div className="absolute h-20 w-20 sm:h-24 sm:w-24 rounded-full border border-border/60" />
@@ -491,6 +494,11 @@ export default function NfcReaderPage() {
                       {tapPopup.type === "success" && tapPopup.name ? (
                         <div className="mt-1 text-sm font-medium text-white/90 truncate">
                           {tapPopup.name}
+                        </div>
+                      ) : null}
+                      {tapPopup.type === "success" && tapPopup.checkinTimeLocal ? (
+                        <div className="mt-1 text-xs font-medium text-white/80">
+                          {tapPopup.checkinTimeLocal}
                         </div>
                       ) : null}
                     </div>
