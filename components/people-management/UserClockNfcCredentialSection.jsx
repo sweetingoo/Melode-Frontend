@@ -25,9 +25,28 @@ import {
 } from "@/hooks/useClock";
 import { api } from "@/services/api-client";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 const DEFAULT_NFC_PREFIX = (process.env.NEXT_PUBLIC_NFC_PREFIX || "melode:nfc:").trim();
 const MASKED_PAYLOAD = "•••••••••••••••••••••••••••••••••";
+
+/**
+ * Write plain text as an NDEF Text record (matches kiosk `decodeRecord` for RTD_TEXT).
+ * Requires Chrome on Android, HTTPS or localhost, and a user gesture.
+ */
+async function writeMelodePayloadToNfcTag(text) {
+  const payload = typeof text === "string" ? text.trim() : "";
+  if (!payload) {
+    throw new Error("empty");
+  }
+  if (typeof window === "undefined" || !("NDEFReader" in window)) {
+    throw new Error("unsupported");
+  }
+  const ndef = new NDEFReader();
+  await ndef.write({
+    records: [{ recordType: "text", data: payload }],
+  });
+}
 
 function formatUpdatedAt(iso) {
   if (!iso) return "—";
@@ -104,6 +123,12 @@ export function UserClockNfcCredentialSection({ userSlug, userName }) {
   const [nfcPrefix, setNfcPrefix] = React.useState(DEFAULT_NFC_PREFIX);
   const [tagPayload, setTagPayload] = React.useState("");
   const [revealSecret, setRevealSecret] = React.useState(false);
+  const [supportsWebNfc, setSupportsWebNfc] = React.useState(false);
+  const [nfcWritePending, setNfcWritePending] = React.useState(false);
+
+  React.useEffect(() => {
+    setSupportsWebNfc(typeof window !== "undefined" && "NDEFReader" in window);
+  }, []);
 
   React.useEffect(() => {
     (async () => {
@@ -145,6 +170,40 @@ export function UserClockNfcCredentialSection({ userSlug, userName }) {
       setRevealSecret(false);
     } catch {
       /* logged in hook */
+    }
+  };
+
+  const handleWriteNfcTag = async () => {
+    if (!tagPayload.trim() || nfcWritePending) return;
+    setNfcWritePending(true);
+    try {
+      await writeMelodePayloadToNfcTag(tagPayload);
+      toast.success("NFC tag written");
+    } catch (err) {
+      const name = err && typeof err === "object" ? err.name : "";
+      if (name === "AbortError") {
+        return;
+      }
+      if (name === "NotAllowedError") {
+        toast.error("NFC permission was denied");
+        return;
+      }
+      if (name === "NotSupportedError") {
+        toast.error("This device cannot write NFC tags");
+        return;
+      }
+      if (err?.message === "unsupported") {
+        toast.error("Writing from the browser needs Chrome on an NFC-capable phone");
+        return;
+      }
+      if (err?.message === "empty") {
+        return;
+      }
+      toast.error("Could not write NFC tag", {
+        description: typeof err?.message === "string" ? err.message : undefined,
+      });
+    } finally {
+      setNfcWritePending(false);
     }
   };
 
@@ -282,20 +341,45 @@ export function UserClockNfcCredentialSection({ userSlug, userName }) {
                 </div>
 
                 <div className="rounded-xl border bg-muted/20 p-4">
-                  <div className="flex items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="text-sm font-medium">NFC tag write string</span>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="shrink-0"
-                      disabled={!canToggleReveal}
-                      aria-label={revealSecret ? "Hide NFC write string" : "Show NFC write string"}
-                      aria-pressed={revealSecret}
-                      onClick={() => setRevealSecret((v) => !v)}
-                    >
-                      {revealSecret ? <EyeOff className="h-4 w-4" aria-hidden /> : <Eye className="h-4 w-4" aria-hidden />}
-                    </Button>
+                    <div className="flex shrink-0 items-center gap-1">
+                      {supportsWebNfc && Boolean(tagPayload) ? (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-8 gap-1.5 text-xs"
+                              disabled={nfcWritePending}
+                              aria-busy={nfcWritePending}
+                              onClick={handleWriteNfcTag}
+                            >
+                              {nfcWritePending ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                              ) : null}
+                              Write to tag
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom" className="max-w-xs text-balance">
+                            Uses this phone’s NFC (Chrome on Android). Hold the tag when the browser prompts.
+                          </TooltipContent>
+                        </Tooltip>
+                      ) : null}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="shrink-0"
+                        disabled={!canToggleReveal}
+                        aria-label={revealSecret ? "Hide NFC write string" : "Show NFC write string"}
+                        aria-pressed={revealSecret}
+                        onClick={() => setRevealSecret((v) => !v)}
+                      >
+                        {revealSecret ? <EyeOff className="h-4 w-4" aria-hidden /> : <Eye className="h-4 w-4" aria-hidden />}
+                      </Button>
+                    </div>
                   </div>
                   <div className="mt-3 rounded-lg border bg-background px-3 py-2.5 font-mono text-xs leading-relaxed break-all text-muted-foreground">
                     {!tagPayload ? "—" : revealSecret ? tagPayload : MASKED_PAYLOAD}
