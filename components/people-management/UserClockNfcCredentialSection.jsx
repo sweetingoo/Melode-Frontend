@@ -2,7 +2,7 @@
 
 import React from "react";
 import Image from "next/image";
-import { CreditCard, Eye, EyeOff, Info, Loader2, ScanLine } from "lucide-react";
+import { CheckCircle2, CreditCard, Eye, EyeOff, Info, Loader2, ScanLine } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +18,14 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   useClockNfcCredentialStatusForUser,
   useDisableClockNfcForUser,
   useEnableClockNfcForUser,
@@ -25,7 +33,6 @@ import {
 } from "@/hooks/useClock";
 import { api } from "@/services/api-client";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
 
 const DEFAULT_NFC_PREFIX = (process.env.NEXT_PUBLIC_NFC_PREFIX || "melode:nfc:").trim();
 const MASKED_PAYLOAD = "•••••••••••••••••••••••••••••••••";
@@ -33,8 +40,9 @@ const MASKED_PAYLOAD = "••••••••••••••••••�
 /**
  * Write plain text as an NDEF Text record (matches kiosk `decodeRecord` for RTD_TEXT).
  * Requires Chrome on Android, HTTPS or localhost, and a user gesture.
+ * Pass `signal` to cancel while waiting for the tag (AbortController).
  */
-async function writeMelodePayloadToNfcTag(text) {
+async function writeMelodePayloadToNfcTag(text, options = {}) {
   const payload = typeof text === "string" ? text.trim() : "";
   if (!payload) {
     throw new Error("empty");
@@ -43,9 +51,9 @@ async function writeMelodePayloadToNfcTag(text) {
     throw new Error("unsupported");
   }
   const ndef = new NDEFReader();
-  await ndef.write({
-    records: [{ recordType: "text", data: payload }],
-  });
+  const message = { records: [{ recordType: "text", data: payload }] };
+  const writeOpts = options.signal ? { signal: options.signal } : undefined;
+  await ndef.write(message, writeOpts);
 }
 
 function formatUpdatedAt(iso) {
@@ -124,7 +132,11 @@ export function UserClockNfcCredentialSection({ userSlug, userName }) {
   const [tagPayload, setTagPayload] = React.useState("");
   const [revealSecret, setRevealSecret] = React.useState(false);
   const [supportsWebNfc, setSupportsWebNfc] = React.useState(false);
-  const [nfcWritePending, setNfcWritePending] = React.useState(false);
+  const [nfcWriteDialogOpen, setNfcWriteDialogOpen] = React.useState(false);
+  /** progress: waiting for tag; success | error: finished */
+  const [nfcWritePhase, setNfcWritePhase] = React.useState("progress");
+  const [nfcWriteErrorText, setNfcWriteErrorText] = React.useState("");
+  const nfcWriteAbortRef = React.useRef(null);
 
   React.useEffect(() => {
     setSupportsWebNfc(typeof window !== "undefined" && "NDEFReader" in window);
@@ -173,41 +185,62 @@ export function UserClockNfcCredentialSection({ userSlug, userName }) {
     }
   };
 
-  const handleWriteNfcTag = async () => {
-    if (!tagPayload.trim() || nfcWritePending) return;
-    setNfcWritePending(true);
-    try {
-      await writeMelodePayloadToNfcTag(tagPayload);
-      toast.success("NFC tag written");
-    } catch (err) {
-      const name = err && typeof err === "object" ? err.name : "";
-      if (name === "AbortError") {
-        return;
-      }
-      if (name === "NotAllowedError") {
-        toast.error("NFC permission was denied");
-        return;
-      }
-      if (name === "NotSupportedError") {
-        toast.error("This device cannot write NFC tags");
-        return;
-      }
-      if (err?.message === "unsupported") {
-        toast.error("Writing from the browser needs Chrome on an NFC-capable phone");
-        return;
-      }
-      if (err?.message === "empty") {
-        return;
-      }
-      toast.error("Could not write NFC tag", {
-        description: typeof err?.message === "string" ? err.message : undefined,
-      });
-    } finally {
-      setNfcWritePending(false);
+  const closeNfcWriteDialog = React.useCallback(() => {
+    nfcWriteAbortRef.current?.abort();
+    nfcWriteAbortRef.current = null;
+    setNfcWriteDialogOpen(false);
+    setNfcWritePhase("progress");
+    setNfcWriteErrorText("");
+  }, []);
+
+  const mapNfcWriteError = React.useCallback((err) => {
+    const name = err && typeof err === "object" ? err.name : "";
+    if (name === "NotAllowedError") return "NFC permission was denied.";
+    if (name === "NotSupportedError") return "This device cannot write NFC tags.";
+    if (err?.message === "unsupported") {
+      return "This browser or device does not support Web NFC. Try Chrome on an Android phone with NFC.";
     }
-  };
+    if (typeof err?.message === "string" && err.message) return err.message;
+    return "Could not write the NFC tag.";
+  }, []);
+
+  const startNfcWrite = React.useCallback(() => {
+    if (!tagPayload.trim() || !supportsWebNfc) return;
+    setNfcWritePhase("progress");
+    setNfcWriteErrorText("");
+    setNfcWriteDialogOpen(true);
+    const ac = new AbortController();
+    nfcWriteAbortRef.current = ac;
+    writeMelodePayloadToNfcTag(tagPayload, { signal: ac.signal })
+      .then(() => {
+        nfcWriteAbortRef.current = null;
+        setNfcWritePhase("success");
+      })
+      .catch((err) => {
+        if (err?.name === "AbortError") {
+          closeNfcWriteDialog();
+          return;
+        }
+        nfcWriteAbortRef.current = null;
+        setNfcWriteErrorText(mapNfcWriteError(err));
+        setNfcWritePhase("error");
+      });
+  }, [tagPayload, supportsWebNfc, mapNfcWriteError, closeNfcWriteDialog]);
+
+  const onNfcWriteDialogOpenChange = React.useCallback(
+    (open) => {
+      if (!open) closeNfcWriteDialog();
+    },
+    [closeNfcWriteDialog]
+  );
+
+  const cancelNfcWriteInProgress = React.useCallback(() => {
+    nfcWriteAbortRef.current?.abort();
+    closeNfcWriteDialog();
+  }, [closeNfcWriteDialog]);
 
   const statusLabel = !hasRecord ? "Not issued" : nfcEnabled ? "Active" : "Disabled";
+  const nfcWriteInProgress = nfcWriteDialogOpen && nfcWritePhase === "progress";
   const canToggleReveal = Boolean(tagPayload);
   const updatedLabel = formatUpdatedAt(statusData?.updated_at);
   const supersededList = React.useMemo(() => {
@@ -347,26 +380,23 @@ export function UserClockNfcCredentialSection({ userSlug, userName }) {
                       {Boolean(tagPayload) ? (
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <span className={cn("inline-flex", (!supportsWebNfc || nfcWritePending) && "cursor-not-allowed")}>
+                            <span className={cn("inline-flex", (!supportsWebNfc || nfcWriteInProgress) && "cursor-not-allowed")}>
                               <Button
                                 type="button"
                                 variant="outline"
                                 size="sm"
                                 className="h-8 gap-1.5 text-xs"
-                                disabled={!supportsWebNfc || nfcWritePending}
-                                aria-busy={nfcWritePending}
-                                onClick={handleWriteNfcTag}
+                                disabled={!supportsWebNfc || nfcWriteInProgress}
+                                aria-busy={nfcWriteInProgress}
+                                onClick={startNfcWrite}
                               >
-                                {nfcWritePending ? (
-                                  <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-                                ) : null}
                                 Write to tag
                               </Button>
                             </span>
                           </TooltipTrigger>
                           <TooltipContent side="bottom" className="max-w-xs text-balance">
                             {supportsWebNfc
-                              ? "Uses this phone’s NFC (Chrome on Android). Hold the tag when the browser prompts."
+                              ? "Opens steps to hold the card on this phone while the tag is written."
                               : "This browser or device can’t write NFC from the web. Reveal the string to copy it, or use Chrome on Android with NFC."}
                           </TooltipContent>
                         </Tooltip>
@@ -419,6 +449,62 @@ export function UserClockNfcCredentialSection({ userSlug, userName }) {
           ))}
         </ul>
       </CardContent>
+
+      <Dialog open={nfcWriteDialogOpen} onOpenChange={onNfcWriteDialogOpenChange}>
+        <DialogContent className="sm:max-w-md">
+          {nfcWritePhase === "progress" ? (
+            <>
+              <DialogHeader>
+                <DialogTitle>Program NFC tag</DialogTitle>
+                <DialogDescription>
+                  When the browser asks, hold the card flat against the back of this phone until writing finishes. You can
+                  cancel below or close this window if you change your mind.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="flex flex-col items-center gap-3 py-2">
+                <Loader2 className="h-10 w-10 animate-spin text-muted-foreground" aria-hidden />
+                <p className="text-center text-sm text-muted-foreground">Waiting for the tag…</p>
+              </div>
+              <DialogFooter className="gap-2 sm:gap-0">
+                <Button type="button" variant="outline" onClick={cancelNfcWriteInProgress}>
+                  Cancel
+                </Button>
+              </DialogFooter>
+            </>
+          ) : null}
+          {nfcWritePhase === "success" ? (
+            <>
+              <DialogHeader>
+                <DialogTitle>Successful</DialogTitle>
+                <DialogDescription asChild>
+                  <div className="flex items-start gap-2 text-left text-sm text-muted-foreground">
+                    <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
+                    <span>The tag was written. You can remove the card from the phone.</span>
+                  </div>
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button type="button" onClick={closeNfcWriteDialog}>
+                  Done
+                </Button>
+              </DialogFooter>
+            </>
+          ) : null}
+          {nfcWritePhase === "error" ? (
+            <>
+              <DialogHeader>
+                <DialogTitle>Couldn&apos;t write tag</DialogTitle>
+                <DialogDescription>{nfcWriteErrorText}</DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button type="button" onClick={closeNfcWriteDialog}>
+                  Close
+                </Button>
+              </DialogFooter>
+            </>
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }
