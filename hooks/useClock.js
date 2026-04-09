@@ -313,9 +313,28 @@ export const useDisableClockNfcForUser = () => {
     onSuccess: (_data, variables) => {
       const slug = variables?.userSlug != null ? String(variables.userSlug).trim() : "";
       queryClient.invalidateQueries({ queryKey: clockKeys.nfcUserStatus(slug) });
+      queryClient.invalidateQueries({ queryKey: clockKeys.nfcCredential() });
     },
     onError: (error) => {
       console.error("Disable NFC credential for user error:", error);
+    },
+  });
+};
+
+export const useEnableClockNfcForUser = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ userSlug }) => {
+      const response = await clockService.enableNfcCredentialForUser(userSlug);
+      return response.data;
+    },
+    onSuccess: (_data, variables) => {
+      const slug = variables?.userSlug != null ? String(variables.userSlug).trim() : "";
+      queryClient.invalidateQueries({ queryKey: clockKeys.nfcUserStatus(slug) });
+      queryClient.invalidateQueries({ queryKey: clockKeys.nfcCredential() });
+    },
+    onError: (error) => {
+      console.error("Enable NFC credential for user error:", error);
     },
   });
 };

@@ -37,7 +37,8 @@ export default function AdminCardsPage() {
   const displayName = currentUser?.display_name || currentUser?.name || currentUser?.username || "";
   const { data: nfcStatus } = useClockNfcCredentialStatus();
   const isIssued = nfcStatus?.has_credential === true;
-  const { data: walletLinks } = useClockNfcWalletLinks({ enabled: isIssued });
+  const isNfcActive = isIssued && nfcStatus?.is_enabled !== false;
+  const { data: walletLinks } = useClockNfcWalletLinks({ enabled: isNfcActive });
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -61,7 +62,7 @@ export default function AdminCardsPage() {
                 type="button"
                 variant="outline"
                 size="lg"
-                disabled={!isIssued || !walletLinks?.apple_wallet_url}
+                disabled={!isNfcActive || !walletLinks?.apple_wallet_url}
                 onClick={() => walletLinks?.apple_wallet_url && window.open(walletLinks.apple_wallet_url, "_blank", "noopener,noreferrer")}
               >
                 <AppleMark className="h-5 w-5 mr-2" />
@@ -71,7 +72,7 @@ export default function AdminCardsPage() {
                 type="button"
                 variant="outline"
                 size="lg"
-                disabled={!isIssued || !walletLinks?.google_wallet_url}
+                disabled={!isNfcActive || !walletLinks?.google_wallet_url}
                 onClick={() => walletLinks?.google_wallet_url && window.open(walletLinks.google_wallet_url, "_blank", "noopener,noreferrer")}
               >
                 <GoogleMark className="h-5 w-5 mr-2" />
@@ -125,6 +126,10 @@ export default function AdminCardsPage() {
               {!isIssued ? (
                 <div className="absolute bottom-5 right-5 sm:bottom-6 sm:right-6 rounded-full bg-red-500/15 px-3 py-1 text-xs font-medium text-red-200 ring-1 ring-red-400/30 backdrop-blur">
                   Not Issued
+                </div>
+              ) : !isNfcActive ? (
+                <div className="absolute bottom-5 right-5 sm:bottom-6 sm:right-6 rounded-full bg-amber-500/15 px-3 py-1 text-xs font-medium text-amber-100 ring-1 ring-amber-400/30 backdrop-blur">
+                  Disabled
                 </div>
               ) : null}
             </div>

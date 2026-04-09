@@ -95,6 +95,16 @@ export const clockService = {
     }
   },
 
+  enableNfcCredentialForUser: async (userSlug) => {
+    try {
+      const segment = String(userSlug ?? "").trim();
+      return await api.post(`/clock/nfc-credential/users/${encodeURIComponent(segment)}/enable`);
+    } catch (error) {
+      console.error("Enable NFC credential for user failed:", error);
+      throw error;
+    }
+  },
+
   // Get clock status
   getClockStatus: async () => {
     try {

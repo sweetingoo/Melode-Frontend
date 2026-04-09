@@ -199,14 +199,15 @@ export default function NfcReaderPage() {
             identifiedName = data?.display_name || "";
             identifiedAvatarUrl = data?.avatar_url || "";
             const action = data?.action;
+            const summary = data?.clock_summary;
             if (action === "clocked_out") {
               popupTitle = "Check-out successful";
-              const cot = data?.clock_record?.clock_out_time;
+              const cot = summary?.clock_out_time;
               localCheckinTime = formatLocalDateTime(
                 typeof cot === "string" ? cot : cot != null ? String(cot) : ""
               );
             } else if (action === "clocked_in") {
-              const cit = data?.clock_record?.clock_in_time;
+              const cit = summary?.clock_in_time;
               localCheckinTime = formatLocalDateTime(
                 typeof cit === "string" ? cit : cit != null ? String(cit) : ""
               );
