@@ -344,26 +344,30 @@ export function UserClockNfcCredentialSection({ userSlug, userName }) {
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="text-sm font-medium">NFC tag write string</span>
                     <div className="flex shrink-0 items-center gap-1">
-                      {supportsWebNfc && Boolean(tagPayload) ? (
+                      {Boolean(tagPayload) ? (
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="h-8 gap-1.5 text-xs"
-                              disabled={nfcWritePending}
-                              aria-busy={nfcWritePending}
-                              onClick={handleWriteNfcTag}
-                            >
-                              {nfcWritePending ? (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-                              ) : null}
-                              Write to tag
-                            </Button>
+                            <span className={cn("inline-flex", (!supportsWebNfc || nfcWritePending) && "cursor-not-allowed")}>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-8 gap-1.5 text-xs"
+                                disabled={!supportsWebNfc || nfcWritePending}
+                                aria-busy={nfcWritePending}
+                                onClick={handleWriteNfcTag}
+                              >
+                                {nfcWritePending ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                                ) : null}
+                                Write to tag
+                              </Button>
+                            </span>
                           </TooltipTrigger>
                           <TooltipContent side="bottom" className="max-w-xs text-balance">
-                            Uses this phone’s NFC (Chrome on Android). Hold the tag when the browser prompts.
+                            {supportsWebNfc
+                              ? "Uses this phone’s NFC (Chrome on Android). Hold the tag when the browser prompts."
+                              : "This browser or device can’t write NFC from the web. Reveal the string to copy it, or use Chrome on Android with NFC."}
                           </TooltipContent>
                         </Tooltip>
                       ) : null}
