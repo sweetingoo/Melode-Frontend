@@ -188,22 +188,41 @@ export default function NfcReaderPage() {
             showTapPopup("error", "Unsuccessful");
             return;
           }
-          playBeep("success");
           let identifiedName = "";
           let identifiedAvatarUrl = "";
           let localCheckinTime = "";
+          let popupTitle = "Check-in successful";
+          let popupType = "success";
           try {
-            const identifyRes = await api.post("/clock/nfc-reader/identify", { token: allowedToken });
-            identifiedName = identifyRes?.data?.display_name || "";
-            identifiedAvatarUrl = identifyRes?.data?.avatar_url || "";
-            localCheckinTime = formatLocalDateTime(identifyRes?.data?.checkin_time_utc);
-          } catch (_error) {
-            identifiedName = "";
-            identifiedAvatarUrl = "";
-            localCheckinTime = "";
+            const checkInRes = await api.post("/clock/nfc-reader/check-in", { token: allowedToken });
+            const data = checkInRes?.data;
+            identifiedName = data?.display_name || "";
+            identifiedAvatarUrl = data?.avatar_url || "";
+            const action = data?.action;
+            if (action === "clocked_out") {
+              popupTitle = "Check-out successful";
+              const cot = data?.clock_record?.clock_out_time;
+              localCheckinTime = formatLocalDateTime(
+                typeof cot === "string" ? cot : cot != null ? String(cot) : ""
+              );
+            } else if (action === "clocked_in") {
+              const cit = data?.clock_record?.clock_in_time;
+              localCheckinTime = formatLocalDateTime(
+                typeof cit === "string" ? cit : cit != null ? String(cit) : ""
+              );
+            }
+            playBeep("success");
+          } catch (error) {
+            const detail = error?.response?.data?.detail;
+            popupType = "error";
+            popupTitle =
+              typeof detail === "string" && detail.trim()
+                ? detail
+                : "Unsuccessful";
+            playBeep("warning");
           }
-          setStatusWithReset("Card read successfully.");
-          showTapPopup("success", "Check-in successful", {
+          setStatusWithReset(popupType === "success" ? "Card read successfully." : popupTitle);
+          showTapPopup(popupType, popupTitle, {
             name: identifiedName,
             avatarUrl: identifiedAvatarUrl,
             checkinTimeLocal: localCheckinTime,
