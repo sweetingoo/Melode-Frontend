@@ -7,6 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useClockNfcCredentialStatusForUser, useDisableClockNfcForUser, useRotateClockNfcForUser } from "@/hooks/useClock";
+import { api } from "@/services/api-client";
+
+const DEFAULT_NFC_PREFIX = (process.env.NEXT_PUBLIC_NFC_PREFIX || "melode:nfc:").trim();
 
 /** NFC / wallet credential for a person (manager: ``user:update``). */
 export function UserClockNfcCredentialSection({ userSlug, userName }) {
@@ -14,11 +17,31 @@ export function UserClockNfcCredentialSection({ userSlug, userName }) {
   const disableMutation = useDisableClockNfcForUser();
   const { data: statusData, isLoading: statusLoading } = useClockNfcCredentialStatusForUser(userSlug);
   const isIssued = statusData?.has_credential === true;
+  const [nfcPrefix, setNfcPrefix] = React.useState(DEFAULT_NFC_PREFIX);
+  const [tagPayload, setTagPayload] = React.useState("");
+
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const response = await api.get("/clock/nfc-reader-config");
+        const serverPrefix = response?.data?.nfc_card_prefix;
+        if (typeof serverPrefix === "string" && serverPrefix.trim()) {
+          setNfcPrefix(serverPrefix.trim());
+        }
+      } catch (_error) {
+        setNfcPrefix(DEFAULT_NFC_PREFIX);
+      }
+    })();
+  }, []);
 
   const handleRotate = async () => {
     if (!userSlug) return;
     try {
-      await rotateMutation.mutateAsync({ userSlug });
+      const result = await rotateMutation.mutateAsync({ userSlug });
+      const token = typeof result?.token === "string" ? result.token.trim() : "";
+      if (token) {
+        setTagPayload(`${nfcPrefix}${token}`);
+      }
     } catch {
       /* logged in hook */
     }
@@ -112,6 +135,13 @@ export function UserClockNfcCredentialSection({ userSlug, userName }) {
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
+        </div>
+
+        <div className="space-y-2">
+          <div className="text-sm font-medium">Write this string to NFC tag</div>
+          <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs font-mono break-all">
+            {tagPayload || `${nfcPrefix}<token shown after generate>`}
+          </div>
         </div>
       </CardContent>
     </Card>

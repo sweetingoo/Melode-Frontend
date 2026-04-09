@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
+import Image from "next/image";
 import { ScanLine, Radio } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -32,11 +33,11 @@ export default function NfcReaderPage() {
   const statusTimerRef = useRef(null);
   const readCooldownUntilRef = useRef(0);
 
-  const showTapPopup = (type, message) => {
+  const showTapPopup = (type, message, details = {}) => {
     if (popupTimerRef.current) {
       clearTimeout(popupTimerRef.current);
     }
-    setTapPopup({ type, message });
+    setTapPopup({ type, message, ...details });
     popupTimerRef.current = window.setTimeout(() => {
       setTapPopup(null);
       popupTimerRef.current = null;
@@ -126,7 +127,7 @@ export default function NfcReaderPage() {
       await reader.scan();
       setIsScanning(true);
 
-      reader.onreading = (event) => {
+      reader.onreading = async (event) => {
         try {
           const now = Date.now();
           if (now < readCooldownUntilRef.current) {
@@ -162,8 +163,21 @@ export default function NfcReaderPage() {
           }
           playBeep("success");
           capturePhoto();
+          let identifiedName = "";
+          let identifiedAvatarUrl = "";
+          try {
+            const identifyRes = await api.post("/clock/nfc-reader/identify", { token: allowedToken });
+            identifiedName = identifyRes?.data?.display_name || "";
+            identifiedAvatarUrl = identifyRes?.data?.avatar_url || "";
+          } catch (_error) {
+            identifiedName = "";
+            identifiedAvatarUrl = "";
+          }
           setStatusWithReset("Card read successfully.");
-          showTapPopup("success", "Successful");
+          showTapPopup("success", "Successful", {
+            name: identifiedName,
+            avatarUrl: identifiedAvatarUrl,
+          });
         } catch (_error) {
           setStatusWithReset("Card detected but data could not be decoded.");
           showTapPopup("error", "Unsuccessful");
@@ -432,13 +446,33 @@ export default function NfcReaderPage() {
             {tapPopup ? (
               <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none px-4">
                 <div
-                  className={`rounded-xl px-6 py-4 text-base font-semibold shadow-xl ring-1 ${
+                  className={`rounded-xl px-6 py-4 text-base font-semibold shadow-xl ring-1 min-w-[240px] max-w-[92vw] ${
                     tapPopup.type === "success"
                       ? "bg-emerald-600/95 text-white ring-emerald-400/50"
                       : "bg-red-600/95 text-white ring-red-400/50"
                   }`}
                 >
-                  {tapPopup.message}
+                  <div className="flex items-center gap-3">
+                    {tapPopup.type === "success" ? (
+                      tapPopup.avatarUrl ? (
+                        <Image
+                          src={tapPopup.avatarUrl}
+                          alt=""
+                          width={44}
+                          height={44}
+                          className="h-11 w-11 rounded-full object-cover ring-2 ring-white/50"
+                        />
+                      ) : (
+                        <div className="h-11 w-11 rounded-full bg-white/20 ring-2 ring-white/40" />
+                      )
+                    ) : null}
+                    <div className="min-w-0">
+                      <div>{tapPopup.message}</div>
+                      {tapPopup.type === "success" && tapPopup.name ? (
+                        <div className="mt-1 text-sm font-medium text-white/90 truncate">{tapPopup.name}</div>
+                      ) : null}
+                    </div>
+                  </div>
                 </div>
               </div>
             ) : null}
