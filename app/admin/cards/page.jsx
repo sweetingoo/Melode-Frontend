@@ -119,7 +119,7 @@ export default function AdminCardsPage() {
                 </div>
 
                 <div className="text-sm text-white/70 max-w-[28rem]">
-                  Tap at an NFC reader to check in and check out.
+                  Tap your card on the premises tablet to check in and check out.
                 </div>
               </div>
 
@@ -137,9 +137,8 @@ export default function AdminCardsPage() {
             <div className="rounded-xl border bg-card p-4 text-sm text-muted-foreground">
               <div className="font-medium text-foreground mb-2">How to use</div>
               <ul className="list-disc pl-5 space-y-1">
-                <li>Open the reader page and keep it on screen.</li>
-                <li>Tap your card on the device reader.</li>
-                <li>Hold for a moment until it registers.</li>
+                <li>Tap your card on the premises tablet.</li>
+                <li>Hold for a moment until check-in or check-out registers.</li>
               </ul>
             </div>
           </div>
