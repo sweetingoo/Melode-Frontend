@@ -55,6 +55,20 @@ export default function NfcReaderPage() {
     }, resetMs);
   };
 
+  const resetForNextCheckin = () => {
+    if (popupTimerRef.current) {
+      clearTimeout(popupTimerRef.current);
+      popupTimerRef.current = null;
+    }
+    if (statusTimerRef.current) {
+      clearTimeout(statusTimerRef.current);
+      statusTimerRef.current = null;
+    }
+    setTapPopup(null);
+    setStatus("Ready for next check-in.");
+    readCooldownUntilRef.current = 0;
+  };
+
   const decodeRecord = (record) => {
     if (!record?.data) return "";
     const bytes = new Uint8Array(record.data);
@@ -174,13 +188,19 @@ export default function NfcReaderPage() {
             identifiedAvatarUrl = "";
           }
           setStatusWithReset("Card read successfully.");
-          showTapPopup("success", "Successful", {
+          showTapPopup("success", "Check-in successful", {
             name: identifiedName,
             avatarUrl: identifiedAvatarUrl,
           });
+          window.setTimeout(() => {
+            resetForNextCheckin();
+          }, 3000);
         } catch (_error) {
           setStatusWithReset("Card detected but data could not be decoded.");
-          showTapPopup("error", "Unsuccessful");
+          showTapPopup("error", "Check-in unsuccessful");
+          window.setTimeout(() => {
+            resetForNextCheckin();
+          }, 3000);
         }
       };
 
@@ -469,7 +489,9 @@ export default function NfcReaderPage() {
                     <div className="min-w-0">
                       <div>{tapPopup.message}</div>
                       {tapPopup.type === "success" && tapPopup.name ? (
-                        <div className="mt-1 text-sm font-medium text-white/90 truncate">{tapPopup.name}</div>
+                        <div className="mt-1 text-sm font-medium text-white/90 truncate">
+                          {tapPopup.name}
+                        </div>
                       ) : null}
                     </div>
                   </div>
