@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback, Suspense } from "react";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -104,6 +104,7 @@ import { rolesService } from "@/services/roles";
 import { PageSearchBar } from "@/components/admin/PageSearchBar";
 import { TrackerQuerySearchBar } from "@/components/admin/TrackerQuerySearchBar";
 import { trackersService } from "@/services/trackers";
+import { persistTrackersListUrl } from "@/utils/trackersListReturn";
 
 const TRACKER_PARAM = "tracker";
 const Q_PARAM = "q";
@@ -181,9 +182,124 @@ function slugifyStage(name) {
   return s || "stage";
 }
 
+function trackerFileParts(value) {
+  if (value == null || value === "") return [];
+  return Array.isArray(value) ? value : [value];
+}
+
+function getTrackerFileFieldMeta(part) {
+  if (part == null || part === "") return { identifier: null, fileName: null };
+  if (typeof part === "number" && Number.isFinite(part)) return { identifier: String(part), fileName: null };
+  if (typeof part === "string") {
+    const t = part.trim();
+    return t ? { identifier: t, fileName: null } : { identifier: null, fileName: null };
+  }
+  if (typeof part === "object") {
+    const fileRefId = part.file_reference_id != null ? String(part.file_reference_id).trim() : null;
+    const fileId = part.file_id != null ? String(part.file_id).trim() : null;
+    const identifier = fileRefId || fileId || null;
+    const fileName = part.file_name != null ? String(part.file_name) : null;
+    return { identifier, fileName };
+  }
+  return { identifier: null, fileName: null };
+}
+
+function isImageFileName(name) {
+  if (!name || typeof name !== "string") return false;
+  return /\.(png|jpe?g|gif|webp|svg|bmp|ico)$/i.test(name.trim());
+}
+
+function isImageLikelyForTrackerFileField(field, fileName) {
+  if (isImageFileName(fileName)) return true;
+  const accept = field?.field_options?.accept || field?.validation?.allowed_types;
+  if (!accept) return false;
+  const s = Array.isArray(accept) ? accept.join(",") : String(accept);
+  return /image\//i.test(s);
+}
+
+function formatTrackerFileFieldPlain(field, value) {
+  const ft = String(field?.type || field?.field_type || "").toLowerCase();
+  if (ft !== "file" && ft !== "image") return "—";
+  const parts = trackerFileParts(value);
+  if (parts.length === 0) return "—";
+  const labels = parts
+    .map((part) => {
+      const { identifier, fileName } = getTrackerFileFieldMeta(part);
+      if (identifier == null) return null;
+      return fileName?.trim() || "File";
+    })
+    .filter(Boolean);
+  if (labels.length === 0) return "—";
+  return labels.join(", ");
+}
+
+/** List cell: thumbnail for image files (presigned URL); otherwise file name. */
+function TrackerListFileCell({ field, value }) {
+  const plain = formatTrackerFileFieldPlain(field, value);
+  const parts = trackerFileParts(value);
+  const imageTargets = useMemo(() => {
+    return parts
+      .map((part) => {
+        const { identifier, fileName } = getTrackerFileFieldMeta(part);
+        if (!identifier || !isImageLikelyForTrackerFileField(field, fileName)) return null;
+        return { identifier, fileName };
+      })
+      .filter(Boolean);
+  }, [field, value]);
+
+  const [srcById, setSrcById] = useState({});
+
+  useEffect(() => {
+    if (imageTargets.length === 0) return undefined;
+    let cancelled = false;
+    (async () => {
+      const next = {};
+      await Promise.all(
+        imageTargets.map(async ({ identifier }) => {
+          try {
+            const res = await api.get(`/settings/files/${identifier}/download`);
+            const u = res?.data?.download_url;
+            if (u) next[identifier] = u;
+          } catch {
+            /* keep plain label */
+          }
+        })
+      );
+      if (!cancelled) setSrcById(next);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [imageTargets]);
+
+  const first = imageTargets[0];
+  const firstSrc = first ? srcById[first.identifier] : null;
+  if (firstSrc) {
+    return (
+      <span className="inline-flex items-center gap-1 min-w-0">
+        <img
+          src={firstSrc}
+          alt=""
+          className="max-h-32 max-w-[264px] object-contain rounded border bg-muted shrink-0"
+        />
+        {imageTargets.length > 1 ? (
+          <span className="text-xs text-muted-foreground shrink-0">+{imageTargets.length - 1}</span>
+        ) : null}
+      </span>
+    );
+  }
+  return <span className="truncate">{plain}</span>;
+}
+
 const TrackersPage = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const pathname = usePathname();
+
+  useEffect(() => {
+    const q = searchParams?.toString() ? `?${searchParams.toString()}` : "";
+    persistTrackersListUrl(pathname || "", q);
+  }, [pathname, searchParams]);
   const { hasPermission } = usePermissionsCheck();
   const canCreateEntry = hasPermission("tracker_entry:create");
   const canReadEntries = hasPermission("tracker_entry:read") || hasPermission("tracker_entry:list");
@@ -1175,8 +1291,18 @@ const TrackersPage = () => {
       return String(value);
     }
 
+    if (fieldType === "image_free_draw") {
+      if (typeof value === "string" && value.startsWith("data:image")) return "Drawing";
+      if (value === null || value === undefined || value === "") return "—";
+      return "Drawing";
+    }
+
     if (value === null || value === undefined || value === "") {
       return "—";
+    }
+
+    if (["file", "image"].includes(String(fieldType || "").toLowerCase())) {
+      return formatTrackerFileFieldPlain(field, value);
     }
     
     // Handle different field types
@@ -3487,11 +3613,17 @@ const TrackersPage = () => {
                                           return false;
                                         }
                                       })();
+                                    const listFieldType = (field.type || field.field_type || "").toLowerCase();
+                                    const isListImageCell =
+                                      listFieldType === "image_free_draw" &&
+                                      typeof value === "string" &&
+                                      value.startsWith("data:image");
+                                    const isListFileCell = listFieldType === "file" || listFieldType === "image";
                                     return (
                                       <TableCell
                                         key={fieldId}
                                         className={cn(
-                                          "border-r min-w-[120px] max-w-[220px] tabular-nums",
+                                          "border-r min-w-[120px] max-w-[300px] tabular-nums",
                                           densityClass,
                                           isSelected && "ring-1 ring-primary bg-primary/5",
                                           highlight.match && (HIGHLIGHT_COLOR_CLASSES[highlight.color] || HIGHLIGHT_COLOR_CLASSES.green),
@@ -3499,8 +3631,24 @@ const TrackersPage = () => {
                                         )}
                                         onClick={(e) => { e.stopPropagation(); setSelectedCell({ rowIndex: index, fieldId }); }}
                                       >
-                                        <div className="max-w-[200px] truncate flex items-center gap-1" title={formatFieldValue(field, value)}>
-                                          {formatFieldValue(field, value)}
+                                        <div
+                                          className={cn(
+                                            "max-w-[280px] flex items-center gap-1 min-w-0",
+                                            isListFileCell || isListImageCell ? "" : "truncate"
+                                          )}
+                                          title={formatFieldValue(field, value)}
+                                        >
+                                          {isListFileCell ? (
+                                            <TrackerListFileCell field={field} value={value} />
+                                          ) : isListImageCell ? (
+                                            <img
+                                              src={value}
+                                              alt=""
+                                              className="max-h-32 max-w-[264px] object-contain rounded border bg-muted shrink-0"
+                                            />
+                                          ) : (
+                                            formatFieldValue(field, value)
+                                          )}
                                           {isOverdue && (
                                             <Badge variant="destructive" className="text-[10px] px-1 py-0 shrink-0">
                                               Overdue

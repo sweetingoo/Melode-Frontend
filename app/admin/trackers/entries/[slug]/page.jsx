@@ -70,6 +70,7 @@ import { api } from "@/services/api-client";
 import { filesService } from "@/services/files";
 import { trackersService } from "@/services/trackers";
 import { cn } from "@/lib/utils";
+import { getTrackersListReturnHrefFromStorage } from "@/utils/trackersListReturn";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 const ENTRY_DATA_TAB = "__entry_data__";
@@ -101,6 +102,11 @@ const TrackerEntryDetailPage = () => {
   // Get slug from params - handle both 'slug' and 'entryId' for backward compatibility
   const entrySlug = params.slug || params.entryId;
   const tabFromUrl = searchParams?.get("tab");
+
+  const [trackersListReturnHref, setTrackersListReturnHref] = useState("/admin/trackers");
+  useEffect(() => {
+    setTrackersListReturnHref(getTrackersListReturnHrefFromStorage());
+  }, []);
 
   const [activeTab, setActiveTab] = useState(() => {
     if (typeof window === "undefined") return "activity";
@@ -1483,7 +1489,7 @@ const TrackerEntryDetailPage = () => {
         <p className="text-muted-foreground mb-4">
           {entryError?.response?.data?.detail || entryError?.message || "An error occurred"}
         </p>
-        <Link href="/admin/trackers">
+        <Link href={trackersListReturnHref}>
           <Button variant="outline">
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back to Trackers
@@ -1510,7 +1516,7 @@ const TrackerEntryDetailPage = () => {
         <p className="text-sm text-muted-foreground mb-4">
           The entry you're looking for doesn't exist or you don't have permission to view it.
         </p>
-        <Link href="/admin/trackers">
+        <Link href={trackersListReturnHref}>
           <Button variant="outline">
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back to Trackers
@@ -1524,7 +1530,7 @@ const TrackerEntryDetailPage = () => {
   if (!canReadEntry) {
     return (
       <div className="space-y-4">
-        <Link href="/admin/trackers">
+        <Link href={trackersListReturnHref}>
           <Button variant="ghost" size="sm">
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back to Trackers
@@ -1551,7 +1557,7 @@ const TrackerEntryDetailPage = () => {
       <header className="sticky top-0 z-20 bg-background border-b shadow-sm">
         <div className="px-4 py-3 flex flex-col gap-3">
           <div className="flex items-center gap-2">
-            <Link href="/admin/trackers">
+            <Link href={trackersListReturnHref}>
               <Button variant="ghost" size="sm">
                 <ArrowLeft className="mr-2 h-4 w-4" />
                 Back
