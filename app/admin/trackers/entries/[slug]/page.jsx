@@ -37,7 +37,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFo
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Loader2, ArrowLeft, Edit, Save, X, Clock, MessageSquare, FileText, User as UserIcon, Calendar, CalendarClock, Paperclip, Smartphone, ChevronRight, ChevronDown, Link2, Share2, Bell, Phone, Mail, Plus, Send, MessageCircle, Globe, CheckCircle } from "lucide-react";
+import { Loader2, ArrowLeft, Edit, Save, X, Clock, MessageSquare, FileText, User as UserIcon, Calendar, CalendarClock, Paperclip, Smartphone, ChevronRight, ChevronDown, Link2, Share2, Bell, Phone, Mail, Plus, Send, MessageCircle, Globe, CheckCircle, RotateCcw } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   useTrackerEntry,
@@ -74,6 +74,10 @@ import { getTrackersListReturnHrefFromStorage } from "@/utils/trackersListReturn
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 const ENTRY_DATA_TAB = "__entry_data__";
+
+/** Match Melode tracker_field_utils — audit display only */
+const TRACKER_CASE_CLOSED_KEY = "__melode_case_closed";
+const TRACKER_SUBMISSION_STAGE_KEY = "__melode_tracker_stage";
 
 // Generate action type id from label (same logic as tracker edit page)
 const generateActionTypeId = (label) => {
@@ -164,6 +168,7 @@ const TrackerEntryDetailPage = () => {
   const [logActionChaseDate, setLogActionChaseDate] = useState("");
   const [logActionNoChase, setLogActionNoChase] = useState(false);
   const [isCloseCaseDialogOpen, setIsCloseCaseDialogOpen] = useState(false);
+  const [isReopenCaseDialogOpen, setIsReopenCaseDialogOpen] = useState(false);
   const [logSheetTab, setLogSheetTab] = useState("actions");
   const [logAppointmentDate, setLogAppointmentDate] = useState("");
   const [logAppointmentTime, setLogAppointmentTime] = useState("");
@@ -832,8 +837,21 @@ const TrackerEntryDetailPage = () => {
   // Use same source as tracker edit (Fields per stage): prefer tracker_fields.sections, else tracker_config.sections (from GET /trackers/:slug)
   const sections = (displayTracker?.tracker_fields?.sections?.length ? displayTracker.tracker_fields.sections : trackerConfig.sections) || [];
 
+  // Case closed: API `case_closed` / formatted_data (marker) or legacy status = master "Closed*" label.
+  const isClosed = useMemo(() => {
+    if (entry?.case_closed === true) return true;
+    if (entry?.case_closed === false) return false;
+    if (entry?.formatted_data?.case_closed === true) return true;
+    if (entry?.formatted_data?.case_closed === false) return false;
+    const st = entry?.status;
+    if (st == null || st === "") return false;
+    const master = tracker?.tracker_config?.statuses || [];
+    const norm = String(st).trim();
+    if (!Array.isArray(master) || master.length === 0) return norm.toLowerCase().startsWith("closed");
+    return master.some((m) => String(m).trim() === norm && String(m).trim().toLowerCase().startsWith("closed"));
+  }, [entry?.case_closed, entry?.formatted_data?.case_closed, entry?.status, tracker?.tracker_config?.statuses]);
+
   // Phase 5.4: Closed cases are read-only (no edit, no status change, no actions)
-  const isClosed = Boolean(entry?.status && String(entry.status).startsWith("Closed"));
   const canEditCase = canUpdateEntry && !isClosed;
 
   // Phase 5.2: Send SMS only when tracker has an SMS sender number configured (backend also enforces)
@@ -1457,26 +1475,35 @@ const TrackerEntryDetailPage = () => {
     setIsSendSmsModalOpen(true);
   };
 
-  // Closed status: first status that starts with "Closed" in tracker, or "Closed"
-  const closedStatus = useMemo(() => {
-    const statuses = tracker?.tracker_config?.statuses || [];
-    const found = statuses.find((s) => String(s).startsWith("Closed"));
-    if (found) return found;
-    const fromStages = (tracker?.tracker_config?.stage_mapping || []).flatMap((s) => s.statuses || []);
-    return fromStages.find((s) => String(s).startsWith("Closed")) || "Closed";
-  }, [tracker?.tracker_config?.statuses, tracker?.tracker_config?.stage_mapping]);
-
   const handleCloseCase = async () => {
     try {
       await updateEntryMutation.mutateAsync({
         entryIdentifier: entrySlug,
-        entryData: { status: closedStatus },
+        entryData: { case_closed: true },
       });
       setIsCloseCaseDialogOpen(false);
       toast.success("Case closed. The entry is now read-only.");
     } catch (err) {
       const d = err?.response?.data?.detail;
       toast.error(typeof d === "string" ? d : d?.message || "Failed to close case");
+    }
+  };
+
+  const handleReopenCase = async () => {
+    try {
+      await updateEntryMutation.mutateAsync({
+        entryIdentifier: entrySlug,
+        entryData: { case_closed: false },
+      });
+      setIsReopenCaseDialogOpen(false);
+      toast.success("Case reopened.");
+    } catch (err) {
+      const d = err?.response?.data?.detail;
+      const msg =
+        typeof d === "string"
+          ? d
+          : d?.message || (Array.isArray(d?.guardrail_errors) ? d.guardrail_errors[0] : null) || "Failed to reopen case";
+      toast.error(msg);
     }
   };
 
@@ -1629,9 +1656,17 @@ const TrackerEntryDetailPage = () => {
                     </Button>
                   )}
                   {isClosed && (
-                    <Badge variant="secondary" className="text-xs">
-                      Read-only (closed)
-                    </Badge>
+                    <span className="inline-flex flex-wrap items-center gap-2">
+                      <Badge variant="secondary" className="text-xs">
+                        Read-only (closed)
+                      </Badge>
+                      {canUpdateEntry && (
+                        <Button variant="outline" size="sm" onClick={() => setIsReopenCaseDialogOpen(true)}>
+                          <RotateCcw className="mr-2 h-4 w-4" />
+                          Reopen case
+                        </Button>
+                      )}
+                    </span>
                   )}
                 </>
               )}
@@ -3419,16 +3454,47 @@ const TrackerEntryDetailPage = () => {
                         const newData = log.new_values?.submission_data || {};
                         const allKeys = new Set([...Object.keys(oldData), ...Object.keys(newData)]);
                         
+                        const formatCaseClosedAudit = (v) => {
+                          if (v === null || v === undefined || v === "") return "Open";
+                          const t = String(v).trim();
+                          if (!t || t.toLowerCase() === "false") return "Open";
+                          try {
+                            const d = parseUTCDate(t);
+                            if (d && !Number.isNaN(d.getTime())) {
+                              return `Closed (${format(d, "d MMM yyyy, HH:mm")})`;
+                            }
+                          } catch {
+                            /* ignore */
+                          }
+                          return "Closed";
+                        };
+
                         allKeys.forEach((key) => {
                           const oldVal = oldData[key];
                           const newVal = newData[key];
-                          
+
                           if (oldVal !== newVal) {
+                            if (key === TRACKER_CASE_CLOSED_KEY) {
+                              changes.push({
+                                field: "Case closed",
+                                old: formatCaseClosedAudit(oldVal),
+                                new: formatCaseClosedAudit(newVal),
+                              });
+                              return;
+                            }
+                            if (key === TRACKER_SUBMISSION_STAGE_KEY) {
+                              changes.push({
+                                field: "Pipeline stage",
+                                old: oldVal == null || oldVal === "" ? "—" : String(oldVal),
+                                new: newVal == null || newVal === "" ? "—" : String(newVal),
+                              });
+                              return;
+                            }
                             const field = findFieldByKey(key);
                             const fieldLabel = field?.label || key;
                             const formattedOld = formatValue(field, oldVal);
                             const formattedNew = formatValue(field, newVal);
-                            
+
                             changes.push({
                               field: fieldLabel,
                               old: formattedOld,
@@ -4289,6 +4355,21 @@ const TrackerEntryDetailPage = () => {
             <Button onClick={handleCloseCase} disabled={updateEntryMutation.isPending}>
               {updateEntryMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               Close case
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isReopenCaseDialogOpen} onOpenChange={setIsReopenCaseDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Reopen case</DialogTitle>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsReopenCaseDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleReopenCase} disabled={updateEntryMutation.isPending}>
+              {updateEntryMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Reopen case
             </Button>
           </DialogFooter>
         </DialogContent>
