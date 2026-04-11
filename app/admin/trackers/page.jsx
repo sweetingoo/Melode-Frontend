@@ -170,6 +170,17 @@ function formulaFieldIdFromLabel(label) {
     .substring(0, 80);
 }
 
+/** Matches backend trackers._slugify_stage (queue preset id per stage). */
+function slugifyStage(name) {
+  if (!name) return "stage";
+  const s = String(name)
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  return s || "stage";
+}
+
 const TrackersPage = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -508,6 +519,42 @@ const TrackersPage = () => {
   const { data: selectedTrackerDetail } = useTracker(selectedTrackerObj?.slug || "", {
     enabled: !!selectedTrackerObj?.slug,
   });
+  const isPatientReferralTracker = !!selectedTrackerObj?.tracker_config?.is_patient_referral;
+  const { data: queueCountsData } = useTrackerQueueCounts(selectedTrackerObj?.slug ?? "", {
+    enabled: !!selectedTrackerObj?.slug,
+  });
+  const queuePresets = queueCountsData?.queue_presets ?? [];
+  /** Same resolved stage the API uses for queue counts — never rely on JSON field_filters.derived_stage (not stored). */
+  const effectiveTrackerResolvedStage = useMemo(() => {
+    if (isPatientReferralTracker) return null;
+    if (activeQueue && activeQueue !== "all") {
+      const preset = queuePresets.find((p) => p.id === activeQueue);
+      if (preset?.label != null && typeof preset.label === "string") {
+        const t = preset.label.trim();
+        if (t && t.toLowerCase() !== "all") return t;
+      }
+      const sm = selectedTrackerDetail?.tracker_config?.stage_mapping;
+      if (Array.isArray(sm)) {
+        for (const item of sm) {
+          const name = (item?.stage || item?.name || "").toString().trim();
+          if (!name) continue;
+          if (slugifyStage(name) === activeQueue) return name;
+        }
+      }
+    }
+    const raw = columnFilters?.derived_stage;
+    const colVal = typeof raw === "object" && raw?.value != null ? raw.value : raw;
+    if (colVal != null && String(colVal).trim() !== "" && String(colVal).toLowerCase() !== "all") {
+      return String(colVal).trim();
+    }
+    return null;
+  }, [
+    isPatientReferralTracker,
+    activeQueue,
+    queuePresets,
+    selectedTrackerDetail?.tracker_config?.stage_mapping,
+    columnFilters?.derived_stage,
+  ]);
   const updateTrackerMutation = useUpdateTracker();
 
   // When create-entry dialog opens with a stage-based tracker, set initial stage and status
@@ -618,7 +665,9 @@ const TrackersPage = () => {
       params.form_id = parseInt(selectedTracker);
     }
 
-    if (statusesFilter?.length) {
+    if (effectiveTrackerResolvedStage) {
+      params.tracker_resolved_stage = effectiveTrackerResolvedStage;
+    } else if (statusesFilter?.length) {
       params.statuses = statusesFilter;
     } else if (statusFilter !== "all") {
       params.status = statusFilter;
@@ -630,6 +679,9 @@ const TrackersPage = () => {
 
     const today = format(startOfDay(new Date()), "yyyy-MM-dd");
     const effectiveFieldFilters = { ...columnFilters };
+    if (effectiveTrackerResolvedStage) {
+      delete effectiveFieldFilters.derived_stage;
+    }
     if (chaseFilter === "due_or_overdue") {
       effectiveFieldFilters.chase_due = { op: "<=", value: today };
     }
@@ -648,7 +700,23 @@ const TrackersPage = () => {
     if (unseenFilter === "unseen") params.has_unacknowledged_inbound = true;
 
     return params;
-  }, [selectedTracker, statusFilter, statusesFilter, chaseFilter, unseenFilter, searchTerm, sortBy, sortOrder, columnFilters, itemsPerPage, updatedAtAfter, updatedAtBefore, nextAppointmentDateAfter, nextAppointmentDateBefore]);
+  }, [
+    selectedTracker,
+    effectiveTrackerResolvedStage,
+    statusFilter,
+    statusesFilter,
+    chaseFilter,
+    unseenFilter,
+    searchTerm,
+    sortBy,
+    sortOrder,
+    columnFilters,
+    itemsPerPage,
+    updatedAtAfter,
+    updatedAtBefore,
+    nextAppointmentDateAfter,
+    nextAppointmentDateBefore,
+  ]);
 
   // Get tracker entries with infinite scroll
   const {
@@ -664,13 +732,23 @@ const TrackersPage = () => {
   const aggregateParams = useMemo(() => {
     const today = format(startOfDay(new Date()), "yyyy-MM-dd");
     const effectiveFieldFilters = { ...columnFilters };
+    if (effectiveTrackerResolvedStage) {
+      delete effectiveFieldFilters.derived_stage;
+    }
     if (chaseFilter === "due_or_overdue") {
       effectiveFieldFilters.chase_due = { op: "<=", value: today };
     }
     return {
       form_id: selectedTracker ? parseInt(selectedTracker, 10) : undefined,
-      status: statusesFilter?.length ? undefined : (statusFilter !== "all" ? statusFilter : undefined),
-      statuses: statusesFilter?.length ? statusesFilter : undefined,
+      tracker_resolved_stage: effectiveTrackerResolvedStage || undefined,
+      status: effectiveTrackerResolvedStage
+        ? undefined
+        : statusesFilter?.length
+          ? undefined
+          : statusFilter !== "all"
+            ? statusFilter
+            : undefined,
+      statuses: effectiveTrackerResolvedStage ? undefined : statusesFilter?.length ? statusesFilter : undefined,
       query: searchTerm || undefined,
       field_filters:
         Object.keys(effectiveFieldFilters).length > 0
@@ -687,16 +765,23 @@ const TrackersPage = () => {
       next_appointment_date_after: nextAppointmentDateAfter || undefined,
       next_appointment_date_before: nextAppointmentDateBefore || undefined,
     };
-  }, [selectedTracker, statusFilter, statusesFilter, chaseFilter, searchTerm, columnFilters, queryBarAggregateFields, updatedAtAfter, updatedAtBefore, nextAppointmentDateAfter, nextAppointmentDateBefore]);
+  }, [
+    selectedTracker,
+    effectiveTrackerResolvedStage,
+    statusFilter,
+    statusesFilter,
+    chaseFilter,
+    searchTerm,
+    columnFilters,
+    queryBarAggregateFields,
+    updatedAtAfter,
+    updatedAtBefore,
+    nextAppointmentDateAfter,
+    nextAppointmentDateBefore,
+  ]);
   const { data: backendAggregatesData } = useTrackerEntriesAggregates(aggregateParams, {
     enabled: !!selectedTracker,
   });
-  // Queue presets come from backend per tracker (patient-referral: fixed presets; stage-styled: one per stage).
-  const isPatientReferralTracker = !!selectedTrackerObj?.tracker_config?.is_patient_referral;
-  const { data: queueCountsData } = useTrackerQueueCounts(selectedTrackerObj?.slug ?? "", {
-    enabled: !!selectedTrackerObj?.slug,
-  });
-  const queuePresets = queueCountsData?.queue_presets ?? [];
 
   // Infinite scroll: load more when sentinel enters viewport (must be after useInfiniteTrackerEntries)
   const loadMoreRef = useRef(null);
@@ -901,25 +986,43 @@ const TrackersPage = () => {
   }, []);
 
   // Apply queue preset: use backend queue_presets when available (per-tracker queues); else fall back to patient-referral preset helper
-  const applyQueue = useCallback((queueId) => {
-    setActiveQueue(queueId === "all" ? null : queueId);
-    const presets = queueCountsData?.queue_presets;
-    const preset = presets?.find((p) => p.id === queueId);
-    if (preset) {
-      setStatusFilter(preset.status ?? (preset.statuses?.length === 1 ? preset.statuses[0] : "all"));
-      setStatusesFilter(preset.statuses?.length > 1 ? preset.statuses : null);
-      setColumnFilters(preset.field_filters || {});
-      setNextAppointmentDateAfter(preset.next_appointment_date_after || null);
-      setNextAppointmentDateBefore(preset.next_appointment_date_before || null);
-    } else {
-      const legacy = getPatientReferralQueuePreset(queueId);
-      setStatusFilter(legacy.status ?? "all");
-      setStatusesFilter(null);
-      setColumnFilters(legacy.field_filters || {});
-      setNextAppointmentDateAfter(legacy.next_appointment_date_after || null);
-      setNextAppointmentDateBefore(legacy.next_appointment_date_before || null);
-    }
-  }, [queueCountsData?.queue_presets]);
+  const applyQueue = useCallback(
+    (queueId) => {
+      setActiveQueue(queueId === "all" ? null : queueId);
+      const presets = queueCountsData?.queue_presets;
+      const preset = presets?.find((p) => p.id === queueId);
+      const useResolvedStage =
+        !isPatientReferralTracker &&
+        queueId !== "all" &&
+        preset &&
+        preset.label != null &&
+        String(preset.label).trim() !== "" &&
+        String(preset.label).trim().toLowerCase() !== "all";
+      if (useResolvedStage) {
+        setStatusFilter("all");
+        setStatusesFilter(null);
+        setColumnFilters(preset.field_filters || {});
+        setNextAppointmentDateAfter(preset.next_appointment_date_after || null);
+        setNextAppointmentDateBefore(preset.next_appointment_date_before || null);
+        return;
+      }
+      if (preset) {
+        setStatusFilter(preset.status ?? (preset.statuses?.length === 1 ? preset.statuses[0] : "all"));
+        setStatusesFilter(preset.statuses?.length > 1 ? preset.statuses : null);
+        setColumnFilters(preset.field_filters || {});
+        setNextAppointmentDateAfter(preset.next_appointment_date_after || null);
+        setNextAppointmentDateBefore(preset.next_appointment_date_before || null);
+      } else {
+        const legacy = getPatientReferralQueuePreset(queueId);
+        setStatusFilter(legacy.status ?? "all");
+        setStatusesFilter(null);
+        setColumnFilters(legacy.field_filters || {});
+        setNextAppointmentDateAfter(legacy.next_appointment_date_after || null);
+        setNextAppointmentDateBefore(legacy.next_appointment_date_before || null);
+      }
+    },
+    [queueCountsData?.queue_presets, isPatientReferralTracker]
+  );
 
   // Helper: does this cell match a highlight rule? Returns { match, color }. Multiple rules for the same column are supported; last matching rule wins (so add most specific first, or add in order: red >75, green <=75, blue <=50).
   const cellMatchesHighlightRule = useCallback(

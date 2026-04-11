@@ -355,6 +355,7 @@ export const trackersService = {
     try {
       const {
         form_id,
+        tracker_resolved_stage,
         status,
         statuses,
         query,
@@ -369,8 +370,13 @@ export const trackersService = {
         page: 1,
         per_page: 1,
         ...(form_id != null && { form_id: Number(form_id) }),
-        ...(status != null && status !== "all" && { status }),
-        ...(statuses?.length && { statuses }),
+        ...(tracker_resolved_stage && String(tracker_resolved_stage).trim() && {
+          tracker_resolved_stage: String(tracker_resolved_stage).trim(),
+        }),
+        ...(!tracker_resolved_stage &&
+          status != null &&
+          status !== "all" && { status }),
+        ...(!tracker_resolved_stage && statuses?.length && { statuses }),
         ...(query && { query }),
         ...(field_filters && Object.keys(field_filters).length > 0 && { field_filters }),
         ...(aggregate_fields && Object.keys(aggregate_fields).length > 0 && { aggregate_fields }),
