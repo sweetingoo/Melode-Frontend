@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Plus, Pencil, Trash2, Loader2, Clock } from "lucide-react";
-import { format } from "date-fns";
+import { formatShiftDateForDisplay, getShiftTimesForDisplay } from "@/utils/time";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { useProvisionalShifts, useDeleteProvisionalShift } from "@/hooks/useShiftRecords";
@@ -156,18 +156,17 @@ export const ProvisionalShiftList = ({ userId = null, showCreateButton = true, c
                   <TableCell>
                     {record.user?.display_name || record.user?.email || `User #${record.user_id}`}
                   </TableCell>
-                  <TableCell>
-                    {record.shift_date
-                      ? format(new Date(record.shift_date), "dd MMM yyyy")
-                      : "—"}
-                  </TableCell>
+                  <TableCell>{record.shift_date ? formatShiftDateForDisplay(record.shift_date) : "—"}</TableCell>
                   <TableCell>
                     {record.shift_leave_type?.name || record.shift_leave_type_id || "—"}
                   </TableCell>
                   <TableCell>{record.hours ?? "—"}</TableCell>
                   <TableCell>
                     {record.start_time && record.end_time
-                      ? `${String(record.start_time).slice(0, 5)} – ${String(record.end_time).slice(0, 5)}`
+                      ? (() => {
+                          const { start, end } = getShiftTimesForDisplay(record);
+                          return `${start} – ${end}`;
+                        })()
                       : "—"}
                   </TableCell>
                   <TableCell>
@@ -244,7 +243,7 @@ export const ProvisionalShiftList = ({ userId = null, showCreateButton = true, c
               </div>
               <div className="grid grid-cols-[100px_1fr] gap-2 text-sm items-baseline">
                 <Label className="text-muted-foreground font-normal">Date</Label>
-                <span>{detailRecord.shift_date ? format(new Date(detailRecord.shift_date), "dd MMM yyyy") : "—"}</span>
+                <span>{detailRecord.shift_date ? formatShiftDateForDisplay(detailRecord.shift_date) : "—"}</span>
               </div>
               <div className="grid grid-cols-[100px_1fr] gap-2 text-sm items-baseline">
                 <Label className="text-muted-foreground font-normal">Type</Label>
@@ -258,7 +257,10 @@ export const ProvisionalShiftList = ({ userId = null, showCreateButton = true, c
                 <Label className="text-muted-foreground font-normal">Time</Label>
                 <span>
                   {detailRecord.start_time && detailRecord.end_time
-                    ? `${String(detailRecord.start_time).slice(0, 5)} – ${String(detailRecord.end_time).slice(0, 5)}`
+                    ? (() => {
+                        const { start, end } = getShiftTimesForDisplay(detailRecord);
+                        return `${start} – ${end}`;
+                      })()
                     : "—"}
                 </span>
               </div>

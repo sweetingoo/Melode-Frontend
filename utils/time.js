@@ -2,6 +2,8 @@
  * Utility functions for time formatting and calculations
  */
 
+import { format } from "date-fns";
+
 /**
  * Parse a UTC date string from the server and convert to local time
  * Handles various UTC formats:
@@ -38,6 +40,130 @@ export const parseUTCDate = (dateString) => {
 
   return new Date(dateString);
 };
+
+/**
+ * Parse API date-only string (YYYY-MM-DD) as a calendar day in the viewer's local timezone.
+ * Avoids `new Date("YYYY-MM-DD")` interpreting UTC midnight (wrong day in some zones).
+ * @param {string|null|undefined} dateStr
+ * @returns {Date|null}
+ */
+export function parseLocalDateOnlyFromApi(dateStr) {
+  if (!dateStr) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(dateStr).trim());
+  if (!m) return null;
+  const y = Number.parseInt(m[1], 10);
+  const mo = Number.parseInt(m[2], 10) - 1;
+  const d = Number.parseInt(m[3], 10);
+  const local = new Date(y, mo, d);
+  return Number.isNaN(local.getTime()) ? null : local;
+}
+
+/**
+ * @param {string|null|undefined} dateStr
+ * @param {string} pattern date-fns pattern (default calendar-style date)
+ * @returns {string}
+ */
+export function formatShiftDateForDisplay(dateStr, pattern = "dd MMM yyyy") {
+  const local = parseLocalDateOnlyFromApi(dateStr);
+  if (!local) return "";
+  return format(local, pattern);
+}
+
+/** Normalize API time fragment to HH:mm:ss for ISO combine. */
+function normalizeTimeToHms(timeVal) {
+  const raw = String(timeVal ?? "").trim();
+  if (!raw) return "00:00:00";
+  if (raw.includes("T")) {
+    const tPart = raw.split("T")[1] || raw;
+    const noFrac = tPart.replace(/\.\d+/, "").replace(/[Zz]|[+-]\d{2}:\d{2}$/, "");
+    const bits = noFrac.split(":").filter(Boolean);
+    const h = String(Math.min(23, Math.max(0, parseInt(bits[0], 10) || 0))).padStart(2, "0");
+    const m = String(Math.min(59, Math.max(0, parseInt(bits[1], 10) || 0))).padStart(2, "0");
+    const s =
+      bits[2] != null
+        ? String(Math.min(59, Math.max(0, parseInt(String(bits[2]).replace(/\D.*/, ""), 10) || 0))).padStart(2, "0")
+        : "00";
+    return `${h}:${m}:${s}`;
+  }
+  const bits = raw.split(":");
+  const h = String(Math.min(23, Math.max(0, parseInt(bits[0], 10) || 0))).padStart(2, "0");
+  const m = String(Math.min(59, Math.max(0, parseInt(bits[1], 10) || 0))).padStart(2, "0");
+  const s =
+    bits[2] != null
+      ? String(Math.min(59, Math.max(0, parseInt(String(bits[2]).replace(/\.\d+/, "").replace(/\D.*/, ""), 10) || 0))).padStart(
+          2,
+          "0"
+        )
+      : "00";
+  return `${h}:${m}:${s}`;
+}
+
+function shiftRecordIsFromClock(record) {
+  if (!record || typeof record !== "object") return false;
+  return record.clock_record_id != null || Boolean(record.clock_record_slug);
+}
+
+/**
+ * Single start or end time for list/rota: local wall clock for planned shifts;
+ * for clock-backed attendance rows, interpret shift_date + time as UTC and format in local time.
+ * @param {object} record shift record from API
+ * @param {string|Date|null|undefined} value start_time or end_time
+ * @returns {string} HH:mm or empty
+ */
+export function formatShiftTimeFieldForDisplay(record, value) {
+  if (value == null || value === "") return "";
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return format(value, "HH:mm");
+  }
+  const s = String(value);
+  if (s.includes("T")) {
+    const d = parseUTCDate(s);
+    return d && !Number.isNaN(d.getTime()) ? format(d, "HH:mm") : s.slice(0, 5);
+  }
+  if (shiftRecordIsFromClock(record)) {
+    const day = record.shift_date ? String(record.shift_date).slice(0, 10) : "";
+    if (!day) return s.slice(0, 5);
+    const hms = normalizeTimeToHms(s);
+    const inst = parseUTCDate(`${day}T${hms}`);
+    return inst && !Number.isNaN(inst.getTime()) ? format(inst, "HH:mm") : s.slice(0, 5);
+  }
+  return s.slice(0, 5);
+}
+
+/**
+ * @returns {{ start: string, end: string }}
+ */
+export function getShiftTimesForDisplay(record) {
+  if (!record?.start_time) return { start: "", end: "" };
+  const start = formatShiftTimeFieldForDisplay(record, record.start_time);
+  const end = record.end_time ? formatShiftTimeFieldForDisplay(record, record.end_time) : "";
+  return { start, end };
+}
+
+/**
+ * Table cell: time range or em dash (matches ShiftRecordList wording for open end).
+ */
+export function formatShiftTimesRangeForTable(record) {
+  if (!record?.start_time) return "—";
+  const { start, end } = getShiftTimesForDisplay(record);
+  if (record.end_time) return `${start} – ${end}`;
+  return `${start} – (add end later)`;
+}
+
+/**
+ * Default shift-record list filter: consecutive calendar days in the viewer's local timezone,
+ * ending on today's local date (inclusive). Used so API `start_date` / `end_date` align with local "recent".
+ * @param {number} daySpan number of days including today (default 7)
+ * @returns {{ from: Date, to: Date }}
+ */
+export function getDefaultShiftListDateRangeLocal(daySpan = 7) {
+  const span = Math.max(1, Number(daySpan) || 7);
+  const end = new Date();
+  end.setHours(0, 0, 0, 0);
+  const start = new Date(end);
+  start.setDate(start.getDate() - (span - 1));
+  return { from: start, to: end };
+}
 
 /**
  * Parse a time string, handling timezone issues

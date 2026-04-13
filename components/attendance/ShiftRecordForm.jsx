@@ -20,7 +20,7 @@ import Link from "next/link";
 import { CalendarIcon, Loader2, Plus, ChevronDown } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
-import { formatDateForAPI } from "@/utils/time";
+import { formatDateForAPI, parseLocalDateOnlyFromApi } from "@/utils/time";
 import { getUserDisplayName } from "@/utils/user";
 import { useCreateShiftRecord, useUpdateShiftRecord, useCreateProvisionalShiftsRecurring } from "@/hooks/useShiftRecords";
 import { useShiftLeaveTypes, useAttendanceEmployeeSuggest, useAttendanceDepartments } from "@/hooks/useAttendance";
@@ -269,7 +269,7 @@ export const ShiftRecordForm = ({
     if (shiftRecord) {
       const uid = shiftRecord.user_id?.toString() || "";
       const deptId = shiftRecord.department_id?.toString() || "";
-      setShiftDate(shiftRecord.shift_date ? new Date(shiftRecord.shift_date) : null);
+      setShiftDate(shiftRecord.shift_date ? parseLocalDateOnlyFromApi(shiftRecord.shift_date) : null);
       setCategory(shiftRecord.category || "attendance");
       setShiftLeaveTypeId(shiftRecord.shift_leave_type_id?.toString() || "");
       setSelectedUserId(uid);

@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { LayoutGrid, Loader2, ChevronLeft, ChevronRight, Clock } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useShiftRecords } from "@/hooks/useShiftRecords";
-import { formatDateForAPI } from "@/utils/time";
+import { formatDateForAPI, getShiftTimesForDisplay } from "@/utils/time";
 import { cn } from "@/lib/utils";
 
 /**
@@ -138,8 +138,9 @@ export function MyRotaView() {
                         <span className="text-sm text-muted-foreground">No shift</span>
                       ) : (
                         dayRecords.map((r) => {
-                          const start = r.start_time ? String(r.start_time).slice(0, 5) : "—";
-                          const end = r.end_time ? String(r.end_time).slice(0, 5) : "—";
+                          const { start: st, end: en } = getShiftTimesForDisplay(r);
+                          const start = r.start_time ? st || "—" : "—";
+                          const end = r.end_time ? en || "—" : "—";
                           const typeName = r.shift_leave_type?.name ?? r.category ?? "Shift";
                           return (
                             <div

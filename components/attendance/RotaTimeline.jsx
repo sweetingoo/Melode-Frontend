@@ -47,7 +47,12 @@ import { useCoverage, useAttendanceEmployeeSuggest } from "@/hooks/useAttendance
 import { useDeleteShiftRecord, useShiftRecordsAllPages } from "@/hooks/useShiftRecords";
 import { useDepartments } from "@/hooks/useDepartments";
 import { useRolesAll } from "@/hooks/useRoles";
-import { formatDateForAPI } from "@/utils/time";
+import {
+  formatDateForAPI,
+  parseUTCDate,
+  formatShiftDateForDisplay,
+  getShiftTimesForDisplay,
+} from "@/utils/time";
 import { getUserDisplayName } from "@/utils/user";
 import { ShiftRecordForm } from "./ShiftRecordForm";
 import { cn } from "@/lib/utils";
@@ -63,8 +68,9 @@ import { CalendarEventCreateDialog } from "@/components/calendar/CalendarEventCr
 import { CalendarEventDetailSheet } from "@/components/calendar/CalendarEventDetailSheet";
 
 function calendarEventIntersectsDay(ev, day) {
-  const s = new Date(ev.starts_at);
-  const e = new Date(ev.ends_at);
+  const s = parseUTCDate(ev.starts_at);
+  const e = parseUTCDate(ev.ends_at);
+  if (!s || !e || Number.isNaN(s.getTime()) || Number.isNaN(e.getTime())) return false;
   return s <= endOfDay(day) && e >= startOfDay(day);
 }
 
@@ -385,7 +391,12 @@ export function RotaTimeline({
       const key = formatDateForAPI(d);
       map[key] = filteredCalendarEvents
         .filter((ev) => calendarEventIntersectsDay(ev, d))
-        .sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at));
+        .sort((a, b) => {
+          const da = parseUTCDate(a.starts_at);
+          const db = parseUTCDate(b.starts_at);
+          if (!da || !db) return 0;
+          return da.getTime() - db.getTime();
+        });
     }
     return map;
   }, [days, filteredCalendarEvents]);
@@ -626,8 +637,7 @@ export function RotaTimeline({
       const roleKey = roleId != null && roleId !== "" ? `job_role_${roleId}` : "job_role_unspecified";
       if (!out[d]) out[d] = {};
       if (!out[d][roleKey]) out[d][roleKey] = [];
-      const start = r.start_time ? (typeof r.start_time === "string" ? r.start_time.slice(0, 5) : "") : "";
-      const end = r.end_time ? (typeof r.end_time === "string" ? r.end_time.slice(0, 5) : "") : "";
+      const { start, end } = getShiftTimesForDisplay(r);
       out[d][roleKey].push({
         id: r.id,
         user: r.user,
@@ -1259,7 +1269,13 @@ export function RotaTimeline({
                                     </div>
                                     <div className="mt-1.5 grid w-full grid-cols-[120px_82px_minmax(0,1fr)_minmax(0,1fr)] items-center gap-x-3 text-left">
                                       <span className="text-left text-xs font-medium text-violet-700 dark:text-violet-300">
-                                        {format(new Date(ev.starts_at), "HH:mm")} - {format(new Date(ev.ends_at), "HH:mm")}
+                                        {(() => {
+                                          const evStart = parseUTCDate(ev.starts_at);
+                                          const evEnd = parseUTCDate(ev.ends_at);
+                                          if (!evStart || !evEnd || Number.isNaN(evStart.getTime()) || Number.isNaN(evEnd.getTime()))
+                                            return "—";
+                                          return `${format(evStart, "HH:mm")} – ${format(evEnd, "HH:mm")}`;
+                                        })()}
                                       </span>
                                       <span className="justify-self-start rounded-md bg-muted/70 px-1.5 py-0.5 text-[11px] capitalize text-muted-foreground">
                                         {ev.location_mode}
@@ -1384,7 +1400,10 @@ export function RotaTimeline({
                                 }}
                               >
                                 <span className="tabular-nums text-muted-foreground">
-                                  {format(new Date(ev.starts_at), "HH:mm")}
+                                  {(() => {
+                                    const evStart = parseUTCDate(ev.starts_at);
+                                    return evStart && !Number.isNaN(evStart.getTime()) ? format(evStart, "HH:mm") : "—";
+                                  })()}
                                 </span>
                                 <span className="w-full truncate font-medium">{ev.title}</span>
                               </button>
@@ -1509,12 +1528,7 @@ export function RotaTimeline({
                       <dt className="text-muted-foreground">Date</dt>
                       <dd>
                         {selectedBlock.record.shift_date
-                          ? format(
-                              typeof selectedBlock.record.shift_date === "string"
-                                ? new Date(selectedBlock.record.shift_date + "T12:00:00")
-                                : new Date(selectedBlock.record.shift_date),
-                              "EEEE, d MMM yyyy"
-                            )
+                          ? formatShiftDateForDisplay(selectedBlock.record.shift_date, "EEEE, d MMM yyyy")
                           : "—"}
                       </dd>
                     </div>

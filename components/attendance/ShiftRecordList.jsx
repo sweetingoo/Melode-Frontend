@@ -38,7 +38,13 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { Plus, Pencil, Trash2, Loader2, CalendarIcon, ChevronDown, Clock, UserPen } from "lucide-react";
 import { format } from "date-fns";
-import { formatDateForAPI } from "@/utils/time";
+import {
+  formatDateForAPI,
+  parseUTCDate,
+  formatShiftDateForDisplay,
+  formatShiftTimesRangeForTable,
+  getDefaultShiftListDateRangeLocal,
+} from "@/utils/time";
 import { getUserDisplayName } from "@/utils/user";
 import { cn } from "@/lib/utils";
 import { keepPreviousData } from "@tanstack/react-query";
@@ -113,11 +119,12 @@ export const ShiftRecordList = ({
   const initialPage = syncWithUrl ? parsePositiveInt(searchParams.get("page"), 1) : 1;
 
   const [categoryFilter, setCategoryFilter] = useState(initialCategory);
-  const [dateRange, setDateRange] = useState(
-    initialStartDate || initialEndDate
-      ? { from: initialStartDate, to: initialEndDate || initialStartDate }
-      : undefined
-  );
+  const [dateRange, setDateRange] = useState(() => {
+    if (initialStartDate || initialEndDate) {
+      return { from: initialStartDate, to: initialEndDate || initialStartDate };
+    }
+    return getDefaultShiftListDateRangeLocal(7);
+  });
   const [userFilter, setUserFilter] = useState(initialUserFilter);
   const [roleFilter, setRoleFilter] = useState(initialRoleFilter);
   const [departmentFilter, setDepartmentFilter] = useState(initialDepartmentFilter);
@@ -669,9 +676,7 @@ export const ShiftRecordList = ({
                     </TableCell>
                   )}
                   <TableCell>
-                    {record.shift_date
-                      ? format(new Date(record.shift_date), "dd MMM yyyy")
-                      : "—"}
+                    {record.shift_date ? formatShiftDateForDisplay(record.shift_date) : "—"}
                   </TableCell>
                   <TableCell>{getCategoryBadge(record.category)}</TableCell>
                   <TableCell>
@@ -691,20 +696,30 @@ export const ShiftRecordList = ({
                     {record.shift_leave_type?.name || record.shift_leave_type_id || "—"}
                   </TableCell>
                   <TableCell>{record.hours ?? "—"}</TableCell>
-                  <TableCell>
-                    {record.start_time
-                      ? record.end_time
-                        ? `${String(record.start_time).slice(0, 5)} – ${String(record.end_time).slice(0, 5)}`
-                        : `${String(record.start_time).slice(0, 5)} – (add end later)`
-                      : "—"}
-                  </TableCell>
+                  <TableCell>{formatShiftTimesRangeForTable(record)}</TableCell>
                   <TableCell className="max-w-[200px] truncate">
                     {record.notes || "—"}
                   </TableCell>
-                  <TableCell className="text-muted-foreground text-xs" title={record.edited_at ? `Edited at ${format(new Date(record.edited_at), "PPp")}${record.edited_by_user_id ? ` by user #${record.edited_by_user_id}` : ""}` : ""}>
+                  <TableCell
+                    className="text-muted-foreground text-xs"
+                    title={
+                      record.edited_at
+                        ? (() => {
+                            const ed = parseUTCDate(record.edited_at);
+                            if (!ed || Number.isNaN(ed.getTime())) return "";
+                            return `Edited at ${format(ed, "PPp")}${
+                              record.edited_by_user_id ? ` by user #${record.edited_by_user_id}` : ""
+                            }`;
+                          })()
+                        : ""
+                    }
+                  >
                     {record.edited_at ? (
                       <>
-                        {format(new Date(record.edited_at), "dd MMM HH:mm")}
+                        {(() => {
+                          const ed = parseUTCDate(record.edited_at);
+                          return ed && !Number.isNaN(ed.getTime()) ? format(ed, "dd MMM HH:mm") : "—";
+                        })()}
                         {record.edited_by && (
                           <span className="block truncate text-muted-foreground/80">
                             by {record.edited_by.display_name || record.edited_by.email || ""}
