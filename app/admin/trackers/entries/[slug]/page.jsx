@@ -1657,7 +1657,10 @@ const TrackerEntryDetailPage = () => {
                   )}
                   {isClosed && (
                     <span className="inline-flex flex-wrap items-center gap-2">
-                      <Badge variant="secondary" className="text-xs">
+                      <Badge
+                        variant="destructive"
+                        className="text-xs font-bold uppercase tracking-wide text-white shadow-sm ring-1 ring-red-600/40 dark:ring-red-400/35"
+                      >
                         Read-only (closed)
                       </Badge>
                       {canUpdateEntry && (

@@ -110,11 +110,26 @@ const TRACKER_PARAM = "tracker";
 const Q_PARAM = "q";
 const STATUS_PARAM = "status";
 const CHASE_PARAM = "chase";
+const CASE_STATE_PARAM = "case_state";
 const FIELD_PREFIX = "f_";
 const HIGHLIGHT_RULES_PARAM = "hl";
 const AGGREGATE_PREFIX = "ag_";
 
 // Patient Referral queue presets (Phase 3)
+/** List row: case closed via API flag or legacy master "Closed*" status */
+function isListEntryCaseClosed(entry, tracker) {
+  if (entry?.case_closed === true) return true;
+  if (entry?.case_closed === false) return false;
+  if (entry?.formatted_data?.case_closed === true) return true;
+  if (entry?.formatted_data?.case_closed === false) return false;
+  const st = entry?.status;
+  if (st == null || st === "") return false;
+  const master = tracker?.tracker_config?.statuses || [];
+  const norm = String(st).trim();
+  if (!Array.isArray(master) || master.length === 0) return norm.toLowerCase().startsWith("closed");
+  return master.some((m) => String(m).trim() === norm && String(m).trim().toLowerCase().startsWith("closed"));
+}
+
 const PATIENT_REFERRAL_QUEUE_IDS = {
   ALL: "all",
   AWAITING_TRIAGE: "awaiting_triage",
@@ -312,6 +327,7 @@ const TrackersPage = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [committedSearchTerm, setCommittedSearchTerm] = useState(""); // only pushed to URL on Enter
   const [statusFilter, setStatusFilter] = useState("all");
+  const [caseStateFilter, setCaseStateFilter] = useState("all");
   const [chaseFilter, setChaseFilter] = useState("all"); // "all" | "due_or_overdue"
   const [unseenFilter, setUnseenFilter] = useState("all"); // "all" | "unseen" — filter to cases with unread patient message
   const [sortBy, setSortBy] = useState("created_at");
@@ -419,16 +435,18 @@ const TrackersPage = () => {
     () =>
       !!searchTerm ||
       statusFilter !== "all" ||
+      caseStateFilter !== "all" ||
       Object.keys(columnFilters).length > 0 ||
       highlightRules.length > 0 ||
       Object.keys(queryBarAggregateFields).length > 0 ||
       chaseFilter !== "all",
-    [searchTerm, statusFilter, chaseFilter, columnFilters, highlightRules, queryBarAggregateFields]
+    [searchTerm, statusFilter, caseStateFilter, chaseFilter, columnFilters, highlightRules, queryBarAggregateFields]
   );
   const clearAllFilters = useCallback(() => {
     setSearchTerm("");
     setCommittedSearchTerm("");
     setStatusFilter("all");
+    setCaseStateFilter("all");
     setChaseFilter("all");
     setColumnFilters({});
     setColumnSorting({});
@@ -458,6 +476,7 @@ const TrackersPage = () => {
     setSearchTerm(q);
     setCommittedSearchTerm(q);
     setStatusFilter(status);
+    setCaseStateFilter(searchParams.get(CASE_STATE_PARAM) ?? "all");
     setChaseFilter(searchParams.get(CHASE_PARAM) ?? "all");
     setColumnFilters(filters);
     // Highlight rules (hl = JSON array)
@@ -505,6 +524,8 @@ const TrackersPage = () => {
     else next.delete(Q_PARAM);
     if (statusFilter && statusFilter !== "all") next.set(STATUS_PARAM, statusFilter);
     else next.delete(STATUS_PARAM);
+    if (caseStateFilter && caseStateFilter !== "all") next.set(CASE_STATE_PARAM, caseStateFilter);
+    else next.delete(CASE_STATE_PARAM);
     if (chaseFilter && chaseFilter !== "all") next.set(CHASE_PARAM, chaseFilter);
     else next.delete(CHASE_PARAM);
     for (const key of Array.from(next.keys())) {
@@ -529,7 +550,7 @@ const TrackersPage = () => {
     if (nextSearch !== currentSearch) {
       router.replace(`/admin/trackers?${nextSearch}`, { scroll: false });
     }
-  }, [committedSearchTerm, statusFilter, chaseFilter, columnFilters, highlightRules, queryBarAggregateFields, searchParams, router]);
+  }, [committedSearchTerm, statusFilter, caseStateFilter, chaseFilter, columnFilters, highlightRules, queryBarAggregateFields, searchParams, router]);
 
   // Clear formula bar selection, highlight rules, query-bar aggregates, and queue filter when user switches tracker (not on initial load)
   const prevSelectedTrackerRef = useRef(selectedTracker);
@@ -815,12 +836,17 @@ const TrackersPage = () => {
     if (nextAppointmentDateBefore) params.next_appointment_date_before = nextAppointmentDateBefore;
     if (unseenFilter === "unseen") params.has_unacknowledged_inbound = true;
 
+    if (caseStateFilter === "open" || caseStateFilter === "closed") {
+      params.tracker_case_state = caseStateFilter;
+    }
+
     return params;
   }, [
     selectedTracker,
     effectiveTrackerResolvedStage,
     statusFilter,
     statusesFilter,
+    caseStateFilter,
     chaseFilter,
     unseenFilter,
     searchTerm,
@@ -880,12 +906,14 @@ const TrackersPage = () => {
       updated_at_before: updatedAtBefore || undefined,
       next_appointment_date_after: nextAppointmentDateAfter || undefined,
       next_appointment_date_before: nextAppointmentDateBefore || undefined,
+      tracker_case_state: caseStateFilter === "open" || caseStateFilter === "closed" ? caseStateFilter : undefined,
     };
   }, [
     selectedTracker,
     effectiveTrackerResolvedStage,
     statusFilter,
     statusesFilter,
+    caseStateFilter,
     chaseFilter,
     searchTerm,
     columnFilters,
@@ -2578,6 +2606,19 @@ const TrackersPage = () => {
                     </Select>
                   </div>
                   <div className="flex-1">
+                    <Label>Case</Label>
+                    <Select value={caseStateFilter} onValueChange={(value) => setCaseStateFilter(value)}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="All cases" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All (open and closed)</SelectItem>
+                        <SelectItem value="open">Open cases only</SelectItem>
+                        <SelectItem value="closed">Closed cases only</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex-1">
                     <Label>Chase</Label>
                     <Select
                       value={chaseFilter}
@@ -3108,6 +3149,35 @@ const TrackersPage = () => {
             ))}
           </div>
         )}
+        {selectedTracker === tracker.id.toString() && (
+          <div className="flex flex-wrap items-center gap-1.5 px-4 py-1.5 border-b bg-muted/10">
+            <span className="text-xs text-muted-foreground shrink-0">Case:</span>
+            <Button
+              variant={caseStateFilter === "all" ? "secondary" : "ghost"}
+              size="sm"
+              className="h-7 text-xs"
+              onClick={() => setCaseStateFilter("all")}
+            >
+              All
+            </Button>
+            <Button
+              variant={caseStateFilter === "open" ? "secondary" : "ghost"}
+              size="sm"
+              className="h-7 text-xs"
+              onClick={() => setCaseStateFilter("open")}
+            >
+              Open
+            </Button>
+            <Button
+              variant={caseStateFilter === "closed" ? "secondary" : "ghost"}
+              size="sm"
+              className="h-7 text-xs"
+              onClick={() => setCaseStateFilter("closed")}
+            >
+              Closed
+            </Button>
+          </div>
+        )}
         <CardContent className="p-0">
           {entriesLoading ? (
             <div className="flex flex-col items-center justify-center py-16 gap-4">
@@ -3125,18 +3195,19 @@ const TrackersPage = () => {
                 <FileText className="h-10 w-10 text-muted-foreground" />
               </div>
               <h3 className="text-lg font-semibold mb-1">
-                {searchTerm || statusFilter !== "all" || Object.keys(columnFilters).length > 0 || nextAppointmentDateAfter || nextAppointmentDateBefore || updatedAtAfter || updatedAtBefore
+                {searchTerm || statusFilter !== "all" || caseStateFilter !== "all" || Object.keys(columnFilters).length > 0 || nextAppointmentDateAfter || nextAppointmentDateBefore || updatedAtAfter || updatedAtBefore
                   ? "No entries match"
                   : "No entries yet"}
               </h3>
               <p className="text-muted-foreground text-sm mb-6 max-w-sm">
-                {searchTerm || statusFilter !== "all" || Object.keys(columnFilters).length > 0 || nextAppointmentDateAfter || nextAppointmentDateBefore || updatedAtAfter || updatedAtBefore
+                {searchTerm || statusFilter !== "all" || caseStateFilter !== "all" || Object.keys(columnFilters).length > 0 || nextAppointmentDateAfter || nextAppointmentDateBefore || updatedAtAfter || updatedAtBefore
                   ? "Try adjusting search or filters."
                   : `Create the first entry for ${tracker.name}.`}
               </p>
               {canCreateEntry &&
                 !searchTerm &&
                 statusFilter === "all" &&
+                caseStateFilter === "all" &&
                 Object.keys(columnFilters).length === 0 &&
                 !nextAppointmentDateAfter &&
                 !nextAppointmentDateBefore &&
@@ -3352,6 +3423,7 @@ const TrackersPage = () => {
                   <TableBody>
                             {entries.map((entry, index) => {
                               const submissionData = entry.submission_data || entry.formatted_data || {};
+                              const rowClosed = isListEntryCaseClosed(entry, tracker);
                               // List API sets next_action_* only when there is a pending (incomplete) chase action.
                               const hasPendingChase = Boolean(entry.next_action_date);
                               
@@ -3374,7 +3446,9 @@ const TrackersPage = () => {
                           key={entry.id}
                           className={cn(
                             "cursor-pointer transition-colors border-b",
-                            index % 2 === 0 ? "bg-background hover:bg-muted/40" : "bg-muted/20 hover:bg-muted/50"
+                            index % 2 === 0 ? "bg-background hover:bg-muted/40" : "bg-muted/20 hover:bg-muted/50",
+                            rowClosed &&
+                              "border-l-[5px] border-l-red-600 dark:border-l-red-500 bg-red-50/90 dark:bg-red-950/35"
                           )}
                           onClick={() => router.push(`/admin/trackers/entries/${entry.slug || entry.id}`)}
                         >
@@ -3386,13 +3460,23 @@ const TrackersPage = () => {
                             )}
                             onClick={(e) => { e.stopPropagation(); setSelectedCell({ rowIndex: index, fieldId: "_entry#" }); }}
                           >
-                            <Link
-                              href={`/admin/trackers/entries/${entry.slug || entry.id}`}
-                              className="hover:underline"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                                      #{entryNumber}
-                            </Link>
+                            <span className="inline-flex items-center gap-1.5 min-w-0">
+                              <Link
+                                href={`/admin/trackers/entries/${entry.slug || entry.id}`}
+                                className="hover:underline"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                #{entryNumber}
+                              </Link>
+                              {rowClosed && (
+                                <Badge
+                                  variant="destructive"
+                                  className="shrink-0 h-6 px-2.5 text-xs font-bold uppercase tracking-wide text-white shadow-sm ring-1 ring-red-600/40 dark:ring-red-400/35"
+                                >
+                                  Closed
+                                </Badge>
+                              )}
+                            </span>
                           </TableCell>
                           <TableCell
                             className={cn(
@@ -3456,7 +3540,7 @@ const TrackersPage = () => {
                                               handleStageChange(entry, stageName, mapping);
                                             }
                                           }}
-                                          disabled={updateEntryMutation.isPending}
+                                          disabled={updateEntryMutation.isPending || rowClosed}
                                         >
                                           <SelectTrigger
                                             className="h-8 min-w-[100px] font-normal text-xs"
@@ -3527,7 +3611,7 @@ const TrackersPage = () => {
                                         handleStatusChange(entry, newStatus, undefined, entry.formatted_data?.derived_stage);
                                       }
                                     }}
-                                    disabled={updateEntryMutation.isPending}
+                                    disabled={updateEntryMutation.isPending || rowClosed}
                                   >
                                     <SelectTrigger
                                       className="h-8 min-w-[120px] font-normal"
