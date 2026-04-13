@@ -2659,6 +2659,7 @@ const TrackerEntryDetailPage = () => {
                                           </thead>
                                           <tbody>
                                             {(tableRowsForGroup.length > 0 ? tableRowsForGroup : [{ cells: (group.table_columns || [{ id: "c1" }]).map(() => ({ text: "", field_id: null })) }]).map((row, rIdx) => {
+                                              if (!checkRowVisibility(row, effectiveEntryData)) return null;
                                               const tableCols = Array.isArray(group.table_columns) && group.table_columns.length > 0 ? group.table_columns : [{ id: "col_1", label: "Column 1" }];
                                               const cells = (row.cells || []).slice(0, tableCols.length);
                                               while (cells.length < tableCols.length) cells.push({ text: "", field_id: null });
@@ -2668,6 +2669,7 @@ const TrackerEntryDetailPage = () => {
                                                     const fieldId = cell.field_id ? String(cell.field_id) : null;
                                                     const field = fieldId ? getFieldByIdEdit(fieldId) : null;
                                                     if (!field && !cell.text) return <td key={cIdx} className="p-2" />;
+                                                    if (field && !checkFieldVisibility(field, effectiveEntryData)) return <td key={cIdx} className="p-2" />;
                                                     return (
                                                       <td key={cIdx} className="p-2 align-top">
                                                         <div className="space-y-1">
@@ -2685,10 +2687,10 @@ const TrackerEntryDetailPage = () => {
                                       </div>
                                     ) : isGrid ? (
                                       <div className="space-y-4">
-                                        {gridRows.map((gridRow, rowIdx) => {
-                                          const leftF = (gridRow.left || []).map((fid) => getFieldByIdEdit(fid)).filter(Boolean);
-                                          const centerF = (gridRow.center || []).map((fid) => getFieldByIdEdit(fid)).filter(Boolean);
-                                          const rightF = (gridRow.right || []).map((fid) => getFieldByIdEdit(fid)).filter(Boolean);
+                                        {gridRows.filter((gridRow) => checkRowVisibility(gridRow, effectiveEntryData)).map((gridRow, rowIdx) => {
+                                          const leftF = (gridRow.left || []).map((fid) => getFieldByIdEdit(fid)).filter(Boolean).filter((f) => checkFieldVisibility(f, effectiveEntryData));
+                                          const centerF = (gridRow.center || []).map((fid) => getFieldByIdEdit(fid)).filter(Boolean).filter((f) => checkFieldVisibility(f, effectiveEntryData));
+                                          const rightF = (gridRow.right || []).map((fid) => getFieldByIdEdit(fid)).filter(Boolean).filter((f) => checkFieldVisibility(f, effectiveEntryData));
                                           const hasL = leftF.length > 0;
                                           const hasR = rightF.length > 0;
                                           const hasC = centerF.length > 0;
