@@ -4,6 +4,7 @@ import React, { useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import CustomFieldRenderer from "@/components/CustomFieldRenderer";
 import { cn } from "@/lib/utils";
+import { filterNonEmptyGridColumns, gridRowFieldIdsFlat, normalizeGridRowColumns, trackerGridRowColsClass } from "@/utils/trackerGridLayout";
 
 const mapFieldToMapped = (field) => {
   const fieldId = field.id || field.name || field.field_id;
@@ -52,13 +53,21 @@ function PreviewSectionBody({ section, fields }) {
     );
   }
 
-  const fieldIdsInGroups = new Set(groups.flatMap((g) => g.fields || []));
+  const fieldIdsInGroups = new Set(
+    groups.flatMap((g) => [
+      ...(g.fields || []),
+      ...(g.table_rows || []).flatMap((row) => (row.cells || []).map((c) => c.field_id).filter(Boolean)),
+      ...(g.grid_rows || []).flatMap((row) => gridRowFieldIdsFlat(row)),
+    ]),
+  );
   const ungroupedFields = sectionFields.filter((f) => !fieldIdsInGroups.has(f.id || f.field_id || f.name));
 
   return (
     <div className="space-y-4">
       {groups.map((group) => {
-        const groupFieldIds = group.fields || [];
+        const fromTable = (group.table_rows || []).flatMap((row) => (row.cells || []).map((c) => c.field_id).filter(Boolean));
+        const fromGrid = (group.grid_rows || []).flatMap((row) => gridRowFieldIdsFlat(row));
+        const groupFieldIds = [...new Set([...(group.fields || []), ...fromTable, ...fromGrid])];
         const groupFields = groupFieldIds
           .map((fid) => sectionFields.find((f) => String(f.id || f.field_id || f.name) === String(fid)))
           .filter(Boolean);
@@ -153,77 +162,42 @@ function PreviewSectionBody({ section, fields }) {
             ) : isGrid ? (
               <div className="space-y-4">
                 {gridRows.map((gridRow, rowIdx) => {
-                  const leftF = (gridRow.left || []).map((fid) => getFieldById(fid)).filter(Boolean);
-                  const centerF = (gridRow.center || []).map((fid) => getFieldById(fid)).filter(Boolean);
-                  const rightF = (gridRow.right || []).map((fid) => getFieldById(fid)).filter(Boolean);
-                  const hasL = leftF.length > 0;
-                  const hasR = rightF.length > 0;
-                  const hasC = centerF.length > 0;
-                  if (!hasL && !hasR && !hasC) return null;
+                  const colIds = normalizeGridRowColumns(gridRow);
+                  const colFields = filterNonEmptyGridColumns(colIds.map((ids) => ids.map((fid) => getFieldById(fid)).filter(Boolean)));
+                  if (colFields.length === 0) return null;
                   const rowTitle = gridRow.label || gridRow.title;
+                  const renderPreviewField = (field) => {
+                    const fieldId = field.id || field.name || field.field_id;
+                    return (
+                      <div
+                        key={fieldId}
+                        className={cn(
+                          ["text_block", "image_block", "image_free_draw", "youtube_video_embed"].includes(
+                            (field.type || field.field_type || "").toLowerCase()
+                          ) && "sm:col-span-2"
+                        )}
+                      >
+                        <CustomFieldRenderer
+                          field={mapFieldToMapped(field)}
+                          value={displayData[fieldId]}
+                          otherTextValue={displayData[`${fieldId}_other`]}
+                          readOnly
+                        />
+                      </div>
+                    );
+                  };
                   return (
                     <div key={`row-${rowIdx}`} className="space-y-3">
                       {rowTitle ? (
                         <h4 className="text-sm font-medium text-foreground border-b pb-1">{rowTitle}</h4>
                       ) : null}
-                      {(hasL || hasR) && (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            {leftF.map((field) => {
-                              const fieldId = field.id || field.name || field.field_id;
-                              return (
-                                <div
-                                  key={fieldId}
-                                  className={cn(
-                                    ["text_block", "image_block", "image_free_draw", "youtube_video_embed"].includes(
-                                      (field.type || field.field_type || "").toLowerCase()
-                                    ) && "sm:col-span-2"
-                                  )}
-                                >
-                                  <CustomFieldRenderer
-                                    field={mapFieldToMapped(field)}
-                                    value={displayData[fieldId]}
-                                    otherTextValue={displayData[`${fieldId}_other`]}
-                                    readOnly
-                                  />
-                                </div>
-                              );
-                            })}
+                      <div className={trackerGridRowColsClass(colFields.length)}>
+                        {colFields.map((fields, colIdx) => (
+                          <div key={colIdx} className="space-y-2">
+                            {fields.map((field) => renderPreviewField(field))}
                           </div>
-                          <div className="space-y-2">
-                            {rightF.map((field) => {
-                              const fieldId = field.id || field.name || field.field_id;
-                              return (
-                                <div key={fieldId}>
-                                  <CustomFieldRenderer
-                                    field={mapFieldToMapped(field)}
-                                    value={displayData[fieldId]}
-                                    otherTextValue={displayData[`${fieldId}_other`]}
-                                    readOnly
-                                  />
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
-                      {hasC && (
-                        <div className="space-y-2">
-                          {centerF.map((field) => {
-                            const fieldId = field.id || field.name || field.field_id;
-                            return (
-                              <div key={fieldId}>
-                                <CustomFieldRenderer
-                                  field={mapFieldToMapped(field)}
-                                  value={displayData[fieldId]}
-                                  otherTextValue={displayData[`${fieldId}_other`]}
-                                  readOnly
-                                />
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
+                        ))}
+                      </div>
                     </div>
                   );
                 })}

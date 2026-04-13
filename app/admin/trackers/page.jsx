@@ -73,6 +73,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { filterNonEmptyGridColumns, gridRowFieldIdsFlat, normalizeGridRowColumns, trackerGridRowColsClass } from "@/utils/trackerGridLayout";
 import {
   useTrackers,
   useTracker,
@@ -1839,9 +1840,11 @@ const TrackersPage = () => {
                                         {/* Grouped fields first: each group with its label, respect group visibility */}
                                         {sectionGroups?.length > 0 && sectionGroups.map((group) => {
                                           if (!checkGroupVisibility(group, entryFormData)) return null;
-                                          const groupFieldIds = group.fields || [];
+                                          const fromTable = (group.table_rows || []).flatMap((row) => (row.cells || []).map((c) => c.field_id).filter(Boolean).map(String));
+                                          const fromGrid = (group.grid_rows || []).flatMap((row) => gridRowFieldIdsFlat(row).map(String));
+                                          const groupFieldIds = [...new Set([...(group.fields || []).map(String), ...fromTable, ...fromGrid])];
                                           const groupFields = groupFieldIds
-                                            .map((fid) => sectionFields.find((f) => (f.id || f.field_id || f.name) === fid))
+                                            .map((fid) => sectionFields.find((f) => String(f.id || f.field_id || f.name) === String(fid)))
                                             .filter(Boolean);
                                           if (groupFields.length === 0) return null;
                                           const isGrid = (group.layout || "") === "grid" && (group.grid_rows?.length > 0 || group.grid_columns);
@@ -1854,22 +1857,24 @@ const TrackersPage = () => {
                                               {isGrid && rows.length > 0 ? (
                                                 <div className="space-y-4">
                                                   {rows.map((gridRow, rowIdx) => {
-                                                    const leftFields = (gridRow.left || []).map((fid) => sectionFields.find((f) => (f.id || f.field_id || f.name) === fid)).filter(Boolean);
-                                                    const centerFields = (gridRow.center || []).map((fid) => sectionFields.find((f) => (f.id || f.field_id || f.name) === fid)).filter(Boolean);
-                                                    const rightFields = (gridRow.right || []).map((fid) => sectionFields.find((f) => (f.id || f.field_id || f.name) === fid)).filter(Boolean);
+                                                    const colIds = normalizeGridRowColumns(gridRow);
+                                                    const colFields = filterNonEmptyGridColumns(
+                                                      colIds.map((ids) =>
+                                                        ids.map((fid) => sectionFields.find((f) => String(f.id || f.field_id || f.name) === String(fid))).filter(Boolean),
+                                                      ),
+                                                    );
+                                                    if (colFields.length === 0) return null;
                                                     return (
                                                       <div key={`row-${rowIdx}`} className="space-y-4">
-                                                        {Array.from({ length: Math.max(leftFields.length, rightFields.length) }, (_, i) => (
-                                                          <div key={`lr-${i}`} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                            <div>{leftFields[i] ? renderField(leftFields[i]) : null}</div>
-                                                            <div>{rightFields[i] ? renderField(rightFields[i]) : null}</div>
-                                                          </div>
-                                                        ))}
-                                                        {centerFields.map((field) => (
-                                                          <div key={field.id || field.field_id || field.name} className="w-full">
-                                                            {renderField(field)}
-                                                          </div>
-                                                        ))}
+                                                        <div className={trackerGridRowColsClass(colFields.length)}>
+                                                          {colFields.map((fields, cIdx) => (
+                                                            <div key={cIdx} className="space-y-2">
+                                                              {fields.map((field) => (
+                                                                <div key={field.id || field.field_id || field.name}>{renderField(field)}</div>
+                                                              ))}
+                                                            </div>
+                                                          ))}
+                                                        </div>
                                                       </div>
                                                     );
                                                   })}

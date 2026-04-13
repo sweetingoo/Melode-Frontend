@@ -20,6 +20,13 @@ import {
 } from "@/components/ui/select";
 import { SearchableFieldSelect } from "@/components/ui/searchable-field-select";
 import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
@@ -67,6 +74,10 @@ import { STAGE_COLOR_PALETTE } from "@/utils/stageColors";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { parseUTCDate } from "@/utils/time";
+import { gridRowFieldIdsFlat, gridRowWithColumnsOnly, normalizeGridRowColumns } from "@/utils/trackerGridLayout";
+import { cn } from "@/lib/utils";
+import { PeopleFieldRoleSelector } from "@/components/trackers/PeopleFieldRoleSelector";
+import { TrackerLayoutQuickCreateFieldForm } from "@/components/trackers/TrackerLayoutQuickCreateFieldForm";
 import { trackersService } from "@/services/trackers";
 import { useUploadFile } from "@/hooks/useProfile";
 
@@ -99,6 +110,25 @@ const fieldTypes = [
   { value: "page_break", label: "Page Break (Display Only)" },
   { value: "download_link", label: "Download Link (Display Only)" },
 ];
+
+/** Initial draft for layout inline create (same shape as new field, minus id; section set on submit). */
+const LAYOUT_QUICK_CREATE_INITIAL = {
+  label: "",
+  type: "text",
+  required: false,
+  section: "",
+  options: [],
+  fields: [],
+  field_options: {},
+  filter_by_roles: [],
+  filter_by_organization: false,
+  background_image_url: "",
+  background_image_file_reference_id: "",
+  background_image_file: null,
+  background_alt_text: "",
+  rag_rules: undefined,
+  formula: undefined,
+};
 
 // No fixed default stages – each tracker/service defines its own. Used when tracker has no stage_mapping set.
 const DEFAULT_STAGE_MAPPING = [];
@@ -137,9 +167,56 @@ const generateUniqueId = (label) => {
   return `${baseId}-${timestamp}-${random}`;
 };
 
-const COLUMNS = ["left", "center", "right"];
-const columnLabels = { left: "Left", center: "Center", right: "Right" };
-const centerLabelFullWidth = "Center (full width)";
+/**
+ * Shared by "Add field" and layout inline create. `draft` matches `newField` shape.
+ * @returns {{ field: object } | { error: string }}
+ */
+function buildTrackerFieldRecordFromDraft(draft, existingIds, sectionId) {
+  if (!String(draft?.label || "").trim()) return { error: "Field label is required" };
+  let fieldId = draft.id || generateFieldIdFromLabel(draft.label);
+  if (!fieldId) return { error: "Could not generate field ID from label" };
+  fieldId = ensureUniqueFieldId(fieldId, existingIds);
+  const t = draft.type || "text";
+  if ((t === "select" || t === "radio" || t === "multiselect") && (!draft.options || draft.options.length === 0)) {
+    return { error: `${t === "select" ? "Select" : t === "radio" ? "Radio" : "Multi-select"} fields require at least one option` };
+  }
+  if (
+    t === "image_free_draw" &&
+    !String(draft.background_image_url || "").trim() &&
+    !String(draft.background_image_file_reference_id || "").trim()
+  ) {
+    return { error: "Background image URL or upload is required for Image / Free Draw" };
+  }
+  const field = {
+    id: fieldId,
+    name: fieldId,
+    type: t,
+    label: String(draft.label).trim(),
+    required: !!draft.required,
+    section: sectionId != null ? sectionId : draft.section || null,
+    ...(draft.options && draft.options.length > 0 && { options: draft.options }),
+    ...(t === "repeatable_group" && { fields: draft.fields || [] }),
+    ...(draft.field_options && Object.keys(draft.field_options).length > 0 && { field_options: draft.field_options }),
+    ...(Array.isArray(draft.filter_by_roles) && draft.filter_by_roles.length > 0 ? { filter_by_roles: draft.filter_by_roles } : {}),
+    ...(draft.filter_by_organization ? { filter_by_organization: true } : {}),
+    ...(draft.rag_rules && typeof draft.rag_rules === "object" && Object.keys(draft.rag_rules).length > 0
+      ? { rag_rules: draft.rag_rules }
+      : {}),
+    ...(draft.formula && typeof draft.formula === "object" && Object.keys(draft.formula).length > 0 ? { formula: draft.formula } : {}),
+    ...(t === "image_free_draw"
+      ? {
+          ...(String(draft.background_image_file_reference_id || "").trim()
+            ? { background_image_file_reference_id: String(draft.background_image_file_reference_id).trim() }
+            : {}),
+          ...(String(draft.background_image_url || "").trim()
+            ? { background_image_url: String(draft.background_image_url).trim() }
+            : {}),
+          ...(draft.background_alt_text ? { background_alt_text: draft.background_alt_text } : {}),
+        }
+      : {}),
+  };
+  return { field };
+}
 
 // Return all field ids already used in this section's layout (table cells, grid slots, stack group.fields) so dropdowns can exclude them.
 function getUsedFieldIdsInSection(section) {
@@ -153,7 +230,7 @@ function getUsedFieldIdsInSection(section) {
       });
     } else if ((g.layout || "") === "grid" && Array.isArray(g.grid_rows)) {
       (g.grid_rows || []).forEach((row) => {
-        [...(row.left || []), ...(row.center || []), ...(row.right || [])].forEach((id) => used.add(String(id)));
+        gridRowFieldIdsFlat(row).forEach((id) => used.add(String(id)));
       });
     } else {
       (g.fields || []).forEach((id) => used.add(String(id)));
@@ -162,76 +239,144 @@ function getUsedFieldIdsInSection(section) {
   return used;
 }
 
-function OneRowEditor({ row, rowIndex, sectionFields, allIdsInAnyGroup, onUpdateRow, onRemoveRow, canRemoveRow }) {
-  const grid = row || { left: [], center: [], right: [] };
-  const hasLeftOrRight = ((grid.left || []).length + (grid.right || []).length) > 0;
-  const centerLabel = hasLeftOrRight ? columnLabels.center : centerLabelFullWidth;
-  const isColDisabled = () => false;
+/** Value input for row/field conditional visibility — options from dependent field type (matches field-level editor). */
+function ConditionalVisibilityValueControl({ depField, value, showWhen, onValueChange, compact, fullWidth }) {
+  const needsValue = ["equals", "not_equals", "contains"].includes(showWhen || "");
+  if (!needsValue) return null;
+  const depType = (depField?.type || depField?.field_type || "").toLowerCase();
+  const isBoolean = depType === "boolean" || depType === "checkbox" || depType === "boolean_with_description";
+  const isSelectLike = ["select", "dropdown", "radio", "radio_group"].includes(depType);
+  const isMultiselect = depType === "multiselect";
+  const isNumber = depType === "number" || depType === "integer";
+  const depOptions = depField ? (depField.field_options?.options || depField.options || []) : [];
+  const opts = Array.isArray(depOptions) ? depOptions : [];
+  const tw = compact ? "h-6 text-xs" : "h-8 text-xs";
+  const wide = fullWidth ? "w-full" : compact ? "w-24 inline-flex" : "w-full max-w-md";
+  if (isBoolean) {
+    return (
+      <Select value={value ?? ""} onValueChange={(v) => onValueChange(v || null)}>
+        <SelectTrigger id="cond-value" className={cn(tw, wide)}><SelectValue placeholder="…" /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="yes">Yes</SelectItem>
+          <SelectItem value="no">No</SelectItem>
+        </SelectContent>
+      </Select>
+    );
+  }
+  if (isSelectLike || isMultiselect) {
+    return (
+      <Select value={value ?? ""} onValueChange={(v) => onValueChange(v || null)}>
+        <SelectTrigger id="cond-value" className={cn(tw, fullWidth ? "w-full" : "min-w-[7rem] max-w-[14rem] inline-flex")}><SelectValue placeholder="Option…" /></SelectTrigger>
+        <SelectContent>
+          {opts.map((opt, i) => {
+            const val = typeof opt === "object" && opt !== null ? (opt.value ?? opt.label ?? "") : opt;
+            const label = typeof opt === "object" && opt !== null ? (opt.label ?? opt.value ?? String(val)) : String(opt);
+            return <SelectItem key={i} value={String(val)}>{label}</SelectItem>;
+          })}
+        </SelectContent>
+      </Select>
+    );
+  }
+  if (isNumber) {
+    return (
+      <Input
+        id="cond-value"
+        type="number"
+        className={cn(tw, fullWidth ? "w-full" : "w-20 inline-flex")}
+        value={value ?? ""}
+        onChange={(e) => onValueChange(e.target.value !== "" ? e.target.value : null)}
+        placeholder="Number"
+      />
+    );
+  }
+  return (
+    <Input
+      id="cond-value"
+      className={cn(tw, fullWidth ? "w-full" : "w-28 inline-flex")}
+      value={value ?? ""}
+      onChange={(e) => onValueChange(e.target.value || null)}
+      placeholder="Value to match"
+    />
+  );
+}
+
+function OneRowEditor({ row, rowIndex, sectionFields, allIdsInAnyGroup, onUpdateRow, onRemoveRow, canRemoveRow, onRequestCreateInColumn }) {
+  const grid = row || {};
+  const columnArrays = React.useMemo(() => normalizeGridRowColumns(grid), [grid]);
 
   const availableToAdd = sectionFields
     .map((f) => f.id || f.name || f.field_id)
     .filter(Boolean)
     .filter((id) => !allIdsInAnyGroup.includes(String(id)));
 
-  const updateRow = (newGrid) => {
-    onUpdateRow(rowIndex, { ...grid, ...newGrid });
+  const commitColumns = (cols) => {
+    onUpdateRow(rowIndex, gridRowWithColumnsOnly(grid, cols));
   };
 
-  const moveField = (fieldId, fromCol, toCol) => {
-    if (fromCol === toCol) return;
-    if (isColDisabled(toCol)) return;
-    const left = [...(grid.left || [])];
-    const center = [...(grid.center || [])];
-    const right = [...(grid.right || [])];
-    [left, center, right].forEach((arr, i) => {
-      if (COLUMNS[i] === fromCol) {
-        const idx = arr.indexOf(fieldId);
-        if (idx !== -1) arr.splice(idx, 1);
-      }
-    });
-    const addTo = (arr) => { if (!arr.includes(fieldId)) arr.push(fieldId); };
-    if (toCol === "left") addTo(left);
-    else if (toCol === "center") addTo(center);
-    else addTo(right);
-    updateRow({ left, center, right });
+  const moveField = (fieldId, fromIdx, toIdx) => {
+    if (fromIdx === toIdx) return;
+    const cols = columnArrays.map((c) => [...c]);
+    const fromArr = cols[fromIdx] || [];
+    const fi = fromArr.indexOf(fieldId);
+    if (fi === -1) return;
+    fromArr.splice(fi, 1);
+    cols[fromIdx] = fromArr;
+    const toArr = [...(cols[toIdx] || [])];
+    if (!toArr.includes(fieldId)) toArr.push(fieldId);
+    cols[toIdx] = toArr;
+    commitColumns(cols);
   };
 
-  const removeFromColumn = (fieldId, col) => {
-    const nextGrid = { ...grid };
-    nextGrid[col] = (nextGrid[col] || []).filter((id) => id !== fieldId);
-    updateRow(nextGrid);
+  const removeFromColumn = (fieldId, colIdx) => {
+    const cols = columnArrays.map((c, i) => (i === colIdx ? c.filter((id) => id !== fieldId) : [...c]));
+    commitColumns(cols);
   };
 
-  const addToColumn = (fieldId, col) => {
-    if (isColDisabled(col)) return;
-    const nextGrid = { ...grid };
-    nextGrid[col] = [...(nextGrid[col] || []), fieldId];
-    updateRow(nextGrid);
+  const addToColumn = (fieldId, colIdx) => {
+    const cols = columnArrays.map((c, i) => (i === colIdx ? [...c, fieldId] : [...c]));
+    commitColumns(cols);
   };
 
-  const onDragStart = (e, fieldId, col) => {
+  const addColumn = () => {
+    if (columnArrays.length >= 24) return;
+    commitColumns([...columnArrays.map((c) => [...c]), []]);
+  };
+
+  const removeColumn = (colIdx) => {
+    if (columnArrays.length <= 1) return;
+    commitColumns(columnArrays.filter((_, i) => i !== colIdx).map((c) => [...c]));
+  };
+
+  const onDragStart = (e, fieldId, colIdx) => {
     e.dataTransfer.setData("fieldId", fieldId);
-    e.dataTransfer.setData("fromColumn", col);
+    e.dataTransfer.setData("fromColumnIndex", String(colIdx));
     e.dataTransfer.setData("fromRowIndex", String(rowIndex));
     e.dataTransfer.effectAllowed = "move";
   };
 
-  const onDragOver = (e, col) => {
+  const onDragOver = (e) => {
     e.preventDefault();
-    if (isColDisabled(col)) e.dataTransfer.dropEffect = "none";
-    else e.dataTransfer.dropEffect = "move";
+    e.dataTransfer.dropEffect = "move";
   };
-  const onDrop = (e, toCol) => {
+  const onDrop = (e, toIdx) => {
     e.preventDefault();
-    if (isColDisabled(toCol)) return;
     const fieldId = e.dataTransfer.getData("fieldId");
-    const fromCol = e.dataTransfer.getData("fromColumn");
+    const fromIdx = parseInt(e.dataTransfer.getData("fromColumnIndex"), 10);
     const fromRowIdx = e.dataTransfer.getData("fromRowIndex");
-    if (fieldId && fromCol && String(fromRowIdx) === String(rowIndex)) moveField(fieldId, fromCol, toCol);
+    if (!fieldId || String(fromRowIdx) !== String(rowIndex) || Number.isNaN(fromIdx)) return;
+    moveField(fieldId, fromIdx, toIdx);
+  };
+
+  const updateRowMeta = (patch) => {
+    onUpdateRow(rowIndex, { ...grid, ...patch });
   };
 
   const visibilityFields = sectionFields.filter((f) => !["text_block", "image_block", "line_break", "page_break", "download_link"].includes((f.type || f.field_type || "").toLowerCase()));
   const cv = grid.conditional_visibility || {};
+  const depFieldForRowCv = cv.depends_on_field
+    ? sectionFields.find((f) => String(f.id || f.name || f.field_id) === String(cv.depends_on_field))
+    : null;
+  const n = columnArrays.length;
 
   return (
     <div className="relative p-3 rounded border border-border bg-muted/20 space-y-2">
@@ -240,59 +385,72 @@ function OneRowEditor({ row, rowIndex, sectionFields, allIdsInAnyGroup, onUpdate
           <Input
             placeholder="Row title (optional)"
             value={grid.label ?? ""}
-            onChange={(e) => updateRow({ label: e.target.value.trim() || undefined })}
+            onChange={(e) => updateRowMeta({ label: e.target.value.trim() || undefined })}
             className="h-8 text-xs max-w-[200px]"
           />
           {!grid.label && (
             <span className="text-xs text-muted-foreground shrink-0">Row {rowIndex + 1}</span>
           )}
         </div>
-        {canRemoveRow && (
-          <Button type="button" variant="ghost" size="sm" className="h-6 text-xs text-destructive shrink-0" onClick={() => onRemoveRow(rowIndex)}>
-            <Trash2 className="h-3 w-3 mr-1" /> Remove row
+        <div className="flex flex-wrap items-center gap-1 shrink-0">
+          <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={addColumn} disabled={columnArrays.length >= 24}>
+            <Plus className="h-3 w-3 mr-1" /> Add column
           </Button>
-        )}
+          {canRemoveRow && (
+            <Button type="button" variant="ghost" size="sm" className="h-7 text-xs text-destructive" onClick={() => onRemoveRow(rowIndex)}>
+              <Trash2 className="h-3 w-3 mr-1" /> Remove row
+            </Button>
+          )}
+        </div>
       </div>
-      <div className="grid grid-cols-3 gap-3">
-        {COLUMNS.map((col) => {
-          const disabled = isColDisabled(col);
-          return (
+      <div className="overflow-x-auto -mx-1 px-1 pb-1">
+        <div
+          className="grid gap-3 min-w-0"
+          style={{ gridTemplateColumns: `repeat(${n}, minmax(120px, 1fr))` }}
+        >
+          {columnArrays.map((colIds, colIdx) => (
             <div
-              key={col}
-              onDragOver={(e) => onDragOver(e, col)}
-              onDrop={(e) => onDrop(e, col)}
-              className={`min-h-[72px] rounded border border-dashed p-2 flex flex-col ${disabled ? "border-muted-foreground/20 bg-muted/10 opacity-80" : "border-muted-foreground/40"}`}
+              key={colIdx}
+              onDragOver={onDragOver}
+              onDrop={(e) => onDrop(e, colIdx)}
+              className="min-h-[72px] rounded border border-dashed border-muted-foreground/40 p-2 flex flex-col"
             >
-              <div className="text-xs font-medium text-muted-foreground mb-1">
-                {col === "center" ? centerLabel : columnLabels[col]}
+              <div className="flex items-center justify-between gap-1 mb-1">
+                <span className="text-xs font-medium text-muted-foreground">Column {colIdx + 1}</span>
+                {columnArrays.length > 1 && (
+                  <Button type="button" variant="ghost" size="sm" className="h-6 px-1 text-xs text-destructive" onClick={() => removeColumn(colIdx)} title="Remove column">
+                    <X className="h-3 w-3" />
+                  </Button>
+                )}
               </div>
               <div className="flex flex-wrap gap-1 flex-1">
-                {(grid[col] || []).map((fid) => {
+                {colIds.map((fid) => {
                   const f = sectionFields.find((x) => (x.id || x.name || x.field_id) === fid);
                   return (
-                    <Badge key={fid} variant="secondary" className="text-xs cursor-grab active:cursor-grabbing" draggable onDragStart={(e) => onDragStart(e, fid, col)}>
+                    <Badge key={fid} variant="secondary" className="text-xs cursor-grab active:cursor-grabbing" draggable onDragStart={(e) => onDragStart(e, fid, colIdx)}>
                       {f?.label || f?.name || fid}
-                      <button type="button" className="ml-1 hover:text-destructive" onClick={() => removeFromColumn(fid, col)}><X className="h-3 w-3" /></button>
+                      <button type="button" className="ml-1 hover:text-destructive" onClick={() => removeFromColumn(fid, colIdx)}><X className="h-3 w-3" /></button>
                     </Badge>
                   );
                 })}
               </div>
-              {!disabled && availableToAdd.length > 0 && (
+              {(availableToAdd.length > 0 || typeof onRequestCreateInColumn === "function") && (
                 <SearchableFieldSelect
                   fields={sectionFields.filter((f) => {
                     const id = f.id ?? f.name ?? f.field_id;
                     return id != null && availableToAdd.some((aid) => String(aid) === String(id));
                   })}
                   value=""
-                  onValueChange={(val) => { if (val) addToColumn(val, col); }}
+                  onValueChange={(val) => { if (val) addToColumn(val, colIdx); }}
                   placeholder="+ Add field"
                   className="h-7 text-xs mt-1 w-full min-w-0"
                   compact
+                  onCreateNew={typeof onRequestCreateInColumn === "function" ? () => onRequestCreateInColumn(colIdx) : undefined}
                 />
               )}
             </div>
-          );
-        })}
+          ))}
+        </div>
       </div>
       {/* Show row when (optional) – same as Forms grid row visibility */}
       <div className="pt-2 mt-2 border-t border-border/50">
@@ -301,7 +459,12 @@ function OneRowEditor({ row, rowIndex, sectionFields, allIdsInAnyGroup, onUpdate
           <SearchableFieldSelect
             fields={visibilityFields}
             value={cv.depends_on_field ?? "__none__"}
-            onValueChange={(v) => updateRow({ conditional_visibility: v && v !== "__none__" ? { ...cv, depends_on_field: v } : undefined })}
+            onValueChange={(v) =>
+              updateRowMeta({
+                conditional_visibility:
+                  v && v !== "__none__" ? { depends_on_field: v, show_when: undefined, value: undefined } : undefined,
+              })
+            }
             placeholder="Always show"
             noneOption
             noneLabel="Always show"
@@ -310,7 +473,18 @@ function OneRowEditor({ row, rowIndex, sectionFields, allIdsInAnyGroup, onUpdate
           />
           {cv.depends_on_field && (
             <>
-              <Select value={cv.show_when || ""} onValueChange={(v) => updateRow({ conditional_visibility: { ...cv, show_when: v || undefined } })}>
+              <Select
+                value={cv.show_when || ""}
+                onValueChange={(v) =>
+                  updateRowMeta({
+                    conditional_visibility: {
+                      ...cv,
+                      show_when: v || undefined,
+                      value: ["equals", "not_equals", "contains"].includes(v) ? cv.value : undefined,
+                    },
+                  })
+                }
+              >
                 <SelectTrigger className="h-7 text-xs w-24 inline-flex"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="equals">Equals</SelectItem>
@@ -320,9 +494,13 @@ function OneRowEditor({ row, rowIndex, sectionFields, allIdsInAnyGroup, onUpdate
                   <SelectItem value="is_not_empty">Not empty</SelectItem>
                 </SelectContent>
               </Select>
-              {["equals", "not_equals", "contains"].includes(cv.show_when) && (
-                <Input placeholder="Value" className="h-7 text-xs w-24" value={cv.value ?? ""} onChange={(e) => updateRow({ conditional_visibility: { ...cv, value: e.target.value } })} />
-              )}
+              <ConditionalVisibilityValueControl
+                depField={depFieldForRowCv}
+                value={cv.value}
+                showWhen={cv.show_when}
+                compact
+                onValueChange={(next) => updateRowMeta({ conditional_visibility: { ...cv, value: next } })}
+              />
             </>
           )}
         </div>
@@ -331,11 +509,13 @@ function OneRowEditor({ row, rowIndex, sectionFields, allIdsInAnyGroup, onUpdate
   );
 }
 
-function GridColumnsEditor({ group, groupIdx, sectionFields, editingSection, setEditingSection }) {
+function GridColumnsEditor({ group, groupIdx, sectionFields, editingSection, setEditingSection, onRequestCreateInGridColumn }) {
   const gridRows = group.grid_rows && group.grid_rows.length > 0
     ? group.grid_rows
-    : (group.grid_columns ? [{ ...group.grid_columns }] : [{ left: [], center: [], right: [] }]);
-  const allIdsInGroup = gridRows.flatMap((r) => [...(r.left || []), ...(r.center || []), ...(r.right || [])]);
+    : (group.grid_columns
+        ? [gridRowWithColumnsOnly({ ...group.grid_columns }, normalizeGridRowColumns(group.grid_columns))]
+        : [{ columns: [[], [], []], conditional_visibility: undefined }]);
+  const allIdsInGroup = gridRows.flatMap((r) => gridRowFieldIdsFlat(r));
   const usedInSection = getUsedFieldIdsInSection(editingSection);
   const allIdsInAnyGroup = Array.from(usedInSection);
 
@@ -348,12 +528,12 @@ function GridColumnsEditor({ group, groupIdx, sectionFields, editingSection, set
     const fromFields = group.fields || [];
     if (fromFields.length === 0) return;
     const next = [...(editingSection.groups || [])];
-    next[groupIdx] = { ...group, grid_rows: [{ left: [...fromFields], center: [], right: [] }], fields: [...fromFields] };
+    next[groupIdx] = { ...group, grid_rows: [{ columns: [[...fromFields], [], []], conditional_visibility: undefined }], fields: [...fromFields] };
     setEditingSection((prev) => ({ ...prev, groups: next }));
   }, []);
 
   const updateRows = (newRows) => {
-    const flat = newRows.flatMap((r) => [...(r.left || []), ...(r.center || []), ...(r.right || [])]);
+    const flat = newRows.flatMap((r) => gridRowFieldIdsFlat(r));
     const next = [...(editingSection.groups || [])];
     next[groupIdx] = { ...group, grid_rows: newRows, fields: flat };
     setEditingSection((prev) => ({ ...prev, groups: next }));
@@ -365,7 +545,7 @@ function GridColumnsEditor({ group, groupIdx, sectionFields, editingSection, set
   };
 
   const addRow = () => {
-    updateRows([...gridRows, { left: [], center: [], right: [], conditional_visibility: undefined }]);
+    updateRows([...gridRows, { columns: [[], [], []], conditional_visibility: undefined }]);
   };
 
   const removeRow = (rowIndex) => {
@@ -436,6 +616,11 @@ function GridColumnsEditor({ group, groupIdx, sectionFields, editingSection, set
                 onUpdateRow={updateRowAt}
                 onRemoveRow={removeRow}
                 canRemoveRow={gridRows.length > 1}
+                onRequestCreateInColumn={
+                  typeof onRequestCreateInGridColumn === "function"
+                    ? (columnIndex) => onRequestCreateInGridColumn(rowIndex, columnIndex)
+                    : undefined
+                }
               />
             </div>
           </div>
@@ -717,6 +902,12 @@ const TrackerEditPage = () => {
   const [editingSectionIndex, setEditingSectionIndex] = useState(null);
   const [editingSection, setEditingSection] = useState(null);
 
+  /** Inline create from stack / grid / table layout: dialog + where to attach the new field id */
+  const [layoutQuickCreateOpen, setLayoutQuickCreateOpen] = useState(false);
+  const [layoutQuickCreateDraft, setLayoutQuickCreateDraft] = useState(() => ({ ...LAYOUT_QUICK_CREATE_INITIAL }));
+  const [layoutQuickOption, setLayoutQuickOption] = useState({ value: "", label: "" });
+  const [layoutQuickCreatePlacement, setLayoutQuickCreatePlacement] = useState(null);
+
   // Draft option label for repeatable group child (select/dropdown) so input stays controlled
   const [repeatableOptionDraft, setRepeatableOptionDraft] = useState({});
 
@@ -860,6 +1051,30 @@ const TrackerEditPage = () => {
     }
   };
 
+  const handleLayoutQuickAddOption = () => {
+    if (!layoutQuickOption.label) {
+      toast.error("Label is required");
+      return;
+    }
+    const optionValue = layoutQuickOption.value || generateFieldIdFromLabel(layoutQuickOption.label);
+    if (!optionValue) {
+      toast.error("Could not generate option value from label");
+      return;
+    }
+    setLayoutQuickCreateDraft((prev) => ({
+      ...prev,
+      options: [...(prev.options || []), { value: optionValue, label: layoutQuickOption.label }],
+    }));
+    setLayoutQuickOption({ value: "", label: "" });
+  };
+
+  const handleLayoutQuickRemoveOption = (index) => {
+    setLayoutQuickCreateDraft((prev) => ({
+      ...prev,
+      options: (prev.options || []).filter((_, i) => i !== index),
+    }));
+  };
+
   const handleProvisionSmsNumber = async () => {
     if (!slug) return;
     setProvisionSmsLoading(true);
@@ -888,61 +1103,16 @@ const TrackerEditPage = () => {
 
   // Field Management
   const handleAddField = () => {
-    if (!newField.label) {
-      toast.error("Field label is required");
-      return;
-    }
-
-    const existingIds = (formData.tracker_fields?.fields || []).map((f) => f.id || f.name || f.field_id);
-    let fieldId = newField.id || generateFieldIdFromLabel(newField.label);
-    if (!fieldId) {
-      toast.error("Could not generate field ID from label");
-      return;
-    }
-    fieldId = ensureUniqueFieldId(fieldId, existingIds);
-
-    // For select/multiselect, require options
-    if ((newField.type === "select" || newField.type === "radio" || newField.type === "multiselect") && newField.options.length === 0) {
-      toast.error(`${newField.type === "select" ? "Select" : newField.type === "radio" ? "Radio" : "Multi-select"} fields require at least one option`);
-      return;
-    }
-
-    // Repeatable group: suggest adding at least one child field
     if (newField.type === "repeatable_group" && (!newField.fields || newField.fields.length === 0)) {
       toast.warning("Add at least one child field so each row has columns. You can edit this field later to add more.");
     }
-
-    if (
-      newField.type === "image_free_draw" &&
-      !String(newField.background_image_url || "").trim() &&
-      !String(newField.background_image_file_reference_id || "").trim()
-    ) {
-      toast.error("Background image URL or upload is required for Image / Free Draw");
+    const existingIds = (formData.tracker_fields?.fields || []).map((f) => f.id || f.name || f.field_id);
+    const built = buildTrackerFieldRecordFromDraft(newField, existingIds, newField.section || null);
+    if (built.error) {
+      toast.error(built.error);
       return;
     }
-
-    const field = {
-      id: fieldId,
-      name: fieldId,
-      type: newField.type,
-      label: newField.label,
-      required: newField.required || false,
-      section: newField.section || null,
-      ...(newField.options.length > 0 && { options: newField.options }),
-      ...(newField.type === "repeatable_group" && { fields: newField.fields || [] }),
-      ...(newField.field_options && Object.keys(newField.field_options).length > 0 && { field_options: newField.field_options }),
-      ...(newField.type === "image_free_draw"
-        ? {
-            ...(String(newField.background_image_file_reference_id || "").trim()
-              ? { background_image_file_reference_id: newField.background_image_file_reference_id.trim() }
-              : {}),
-            ...(String(newField.background_image_url || "").trim()
-              ? { background_image_url: newField.background_image_url.trim() }
-              : {}),
-            ...(newField.background_alt_text ? { background_alt_text: newField.background_alt_text } : {}),
-          }
-        : {}),
-    };
+    const { field } = built;
 
     setFormData((prev) => ({
       ...prev,
@@ -970,6 +1140,83 @@ const TrackerEditPage = () => {
     setNewOption({ value: "", label: "" });
     setFieldIdManuallyEdited(false);
     toast.success("Field added successfully");
+  };
+
+  const handleLayoutQuickCreateSubmit = () => {
+    if (!editingSection?.id) {
+      toast.error("Edit a stage section first");
+      return;
+    }
+    if (!layoutQuickCreatePlacement) {
+      toast.error("Nothing to attach");
+      return;
+    }
+    const draft = { ...layoutQuickCreateDraft };
+    const existingIds = (formData.tracker_fields?.fields || []).map((f) => f.id || f.name || f.field_id);
+    const built = buildTrackerFieldRecordFromDraft(draft, existingIds, editingSection.id);
+    if (built.error) {
+      toast.error(built.error);
+      return;
+    }
+    const { field } = built;
+    const pid = layoutQuickCreatePlacement;
+
+    setFormData((prev) => ({
+      ...prev,
+      tracker_fields: {
+        ...prev.tracker_fields,
+        fields: [...(prev.tracker_fields?.fields || []), field],
+      },
+    }));
+
+    setEditingSection((prev) => {
+      if (!prev) return prev;
+      const nextFieldIds = [...new Set([...(prev.fields || []), field.id])];
+      const groups = [...(prev.groups || [])];
+      if (pid.kind === "stack") {
+        const g = groups[pid.groupIdx];
+        if (!g) return { ...prev, fields: nextFieldIds };
+        groups[pid.groupIdx] = { ...g, fields: [...(g.fields || []), field.id] };
+        return { ...prev, fields: nextFieldIds, groups };
+      }
+      if (pid.kind === "grid") {
+        const g = groups[pid.groupIdx];
+        if (!g) return { ...prev, fields: nextFieldIds };
+        const gridRows = [...(g.grid_rows || [])];
+        const raw = { ...(gridRows[pid.rowIdx] || {}) };
+        let cols = normalizeGridRowColumns(raw);
+        const idx = typeof pid.columnIndex === "number" ? pid.columnIndex : 0;
+        while (cols.length <= idx) cols = [...cols, []];
+        const slot = [...(cols[idx] || [])];
+        if (!slot.includes(field.id)) slot.push(field.id);
+        cols[idx] = slot;
+        gridRows[pid.rowIdx] = gridRowWithColumnsOnly(raw, cols);
+        const allFlat = gridRows.flatMap((r) => gridRowFieldIdsFlat(r));
+        groups[pid.groupIdx] = { ...g, grid_rows: gridRows, fields: allFlat };
+        return { ...prev, fields: nextFieldIds, groups };
+      }
+      if (pid.kind === "table") {
+        const g = groups[pid.groupIdx];
+        if (!g) return { ...prev, fields: nextFieldIds };
+        const rows = [...(g.table_rows || [])];
+        const row = { ...(rows[pid.rIdx] || { cells: [] }) };
+        const cells = [...(row.cells || [])];
+        while (cells.length <= pid.cIdx) cells.push({ text: "", field_id: null });
+        cells[pid.cIdx] = { ...cells[pid.cIdx], field_id: field.id };
+        rows[pid.rIdx] = { ...row, cells };
+        const fromCells = rows.flatMap((r) => (r.cells || []).map((c) => c.field_id).filter(Boolean));
+        const mergedFields = [...new Set([...(g.fields || []), ...fromCells])];
+        groups[pid.groupIdx] = { ...g, table_rows: rows, fields: mergedFields };
+        return { ...prev, fields: nextFieldIds, groups };
+      }
+      return { ...prev, fields: nextFieldIds };
+    });
+
+    setLayoutQuickCreateOpen(false);
+    setLayoutQuickCreatePlacement(null);
+    setLayoutQuickCreateDraft({ ...LAYOUT_QUICK_CREATE_INITIAL });
+    setLayoutQuickOption({ value: "", label: "" });
+    toast.success("Field created and added to layout");
   };
 
   const handleRemoveField = (index) => {
@@ -2224,14 +2471,7 @@ const TrackerEditPage = () => {
                               {editingField.conditional_visibility?.depends_on_field && (() => {
                                 const depFieldId = editingField.conditional_visibility?.depends_on_field;
                                 const depField = fields.find((f) => String(f.id || f.name || f.field_id) === String(depFieldId));
-                                const depType = (depField?.type || depField?.field_type || "").toLowerCase();
                                 const needsValue = ["equals", "not_equals", "contains"].includes(editingField.conditional_visibility?.show_when || "");
-                                const isBoolean = depType === "boolean" || depType === "checkbox" || depType === "boolean_with_description";
-                                const isSelectLike = ["select", "dropdown", "radio", "radio_group"].includes(depType);
-                                const isMultiselect = depType === "multiselect";
-                                const isNumber = depType === "number" || depType === "integer";
-                                const depOptions = depField ? (depField.field_options?.options || depField.options || []) : [];
-                                const opts = Array.isArray(depOptions) ? depOptions : [];
                                 return (
                                   <>
                                     <div>
@@ -2264,83 +2504,21 @@ const TrackerEditPage = () => {
                                     {needsValue && (
                                       <div>
                                         <Label htmlFor="cond-value" className="text-xs">Value</Label>
-                                        {isBoolean ? (
-                                          <Select
-                                            value={editingField.conditional_visibility?.value ?? ""}
-                                            onValueChange={(v) =>
-                                              setEditingField((prev) => ({
-                                                ...prev,
-                                                conditional_visibility: {
-                                                  ...(prev.conditional_visibility || {}),
-                                                  value: v || null,
-                                                },
-                                              }))
-                                            }
-                                          >
-                                            <SelectTrigger id="cond-value">
-                                              <SelectValue placeholder="Select..." />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                              <SelectItem value="yes">Yes</SelectItem>
-                                              <SelectItem value="no">No</SelectItem>
-                                            </SelectContent>
-                                          </Select>
-                                        ) : isSelectLike || isMultiselect ? (
-                                          <Select
-                                            value={editingField.conditional_visibility?.value ?? ""}
-                                            onValueChange={(v) =>
-                                              setEditingField((prev) => ({
-                                                ...prev,
-                                                conditional_visibility: {
-                                                  ...(prev.conditional_visibility || {}),
-                                                  value: v || null,
-                                                },
-                                              }))
-                                            }
-                                          >
-                                            <SelectTrigger id="cond-value">
-                                              <SelectValue placeholder="Select option..." />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                              {opts.map((opt, i) => {
-                                                const val = typeof opt === "object" && opt !== null ? (opt.value ?? opt.label ?? "") : opt;
-                                                const label = typeof opt === "object" && opt !== null ? (opt.label ?? opt.value ?? String(val)) : String(opt);
-                                                return <SelectItem key={i} value={String(val)}>{label}</SelectItem>;
-                                              })}
-                                            </SelectContent>
-                                          </Select>
-                                        ) : isNumber ? (
-                                          <Input
-                                            id="cond-value"
-                                            type="number"
-                                            value={editingField.conditional_visibility?.value ?? ""}
-                                            onChange={(e) =>
-                                              setEditingField((prev) => ({
-                                                ...prev,
-                                                conditional_visibility: {
-                                                  ...(prev.conditional_visibility || {}),
-                                                  value: e.target.value !== "" ? e.target.value : null,
-                                                },
-                                              }))
-                                            }
-                                            placeholder="Number"
-                                          />
-                                        ) : (
-                                          <Input
-                                            id="cond-value"
-                                            value={editingField.conditional_visibility?.value ?? ""}
-                                            onChange={(e) =>
-                                              setEditingField((prev) => ({
-                                                ...prev,
-                                                conditional_visibility: {
-                                                  ...(prev.conditional_visibility || {}),
-                                                  value: e.target.value || null,
-                                                },
-                                              }))
-                                            }
-                                            placeholder="Value to match"
-                                          />
-                                        )}
+                                        <ConditionalVisibilityValueControl
+                                          depField={depField}
+                                          fullWidth
+                                          value={editingField.conditional_visibility?.value}
+                                          showWhen={editingField.conditional_visibility?.show_when}
+                                          onValueChange={(next) =>
+                                            setEditingField((prev) => ({
+                                              ...prev,
+                                              conditional_visibility: {
+                                                ...(prev.conditional_visibility || {}),
+                                                value: next,
+                                              },
+                                            }))
+                                          }
+                                        />
                                       </div>
                                     )}
                                     <div>
@@ -4099,8 +4277,24 @@ const TrackerEditPage = () => {
                   <Label>Fields for each stage</Label>
                   {sections.map((section, index) => {
                     // Backend/template sections use section.fields (array of field ids); edit UI may use field.section
-                    const sectionFieldIds = (section.fields || []).length > 0 ? (section.fields || []) : null;
-                    const sectionFields = sectionFieldIds ? fields.filter((f) => sectionFieldIds.includes(f.id || f.name || f.field_id)) : fields.filter((f) => f.section === section.id);
+                    const isEditingThisSection = editingSectionIndex === index && editingSection != null;
+                    const mergedSectionFieldIds = isEditingThisSection
+                      ? [
+                          ...new Set([
+                            ...((section.fields || []).map(String)),
+                            ...((editingSection.fields || []).map(String)),
+                          ]),
+                        ].filter(Boolean)
+                      : [];
+                    const sectionFieldIds =
+                      mergedSectionFieldIds.length > 0
+                        ? mergedSectionFieldIds
+                        : (section.fields || []).length > 0
+                          ? (section.fields || [])
+                          : null;
+                    const sectionFields = sectionFieldIds
+                      ? fields.filter((f) => sectionFieldIds.includes(String(f.id || f.name || f.field_id)))
+                      : fields.filter((f) => f.section === section.id);
                     const linkedStage = stageMapping[index];
                     const linkedStageName = linkedStage?.stage ?? linkedStage?.name ?? null;
                     return editingSectionIndex === index ? (
@@ -4196,7 +4390,7 @@ const TrackerEditPage = () => {
                                   <Trash2 className="h-4 w-4 text-destructive" />
                                 </Button>
                               </div>
-                              {/* Layout: Stack (default) or Grid (3 columns: left, center full width, right) */}
+                              {/* Layout: Stack (default) or Grid (dynamic columns per row) */}
                               <div className="space-y-2">
                                 <Label className="text-xs font-medium">Layout</Label>
                                 <Select
@@ -4206,15 +4400,20 @@ const TrackerEditPage = () => {
                                     const newGroup = { ...group, layout: val };
                                     if (val === "grid") {
                                       const hasRows = Array.isArray(group.grid_rows) && group.grid_rows.length > 0;
-                                      const hasGrid = (group.grid_columns?.left ?? []).length > 0 || (group.grid_columns?.center ?? []).length > 0 || (group.grid_columns?.right ?? []).length > 0;
+                                      const hasGrid =
+                                        (group.grid_columns?.left ?? []).length > 0 ||
+                                        (group.grid_columns?.center ?? []).length > 0 ||
+                                        (group.grid_columns?.right ?? []).length > 0 ||
+                                        (group.grid_columns?.far_right ?? []).length > 0;
                                       if (hasRows) {
                                         newGroup.grid_rows = group.grid_rows;
-                                        newGroup.fields = group.grid_rows.flatMap((r) => [...(r.left || []), ...(r.center || []), ...(r.right || [])]);
+                                        newGroup.fields = group.grid_rows.flatMap((r) => gridRowFieldIdsFlat(r));
                                       } else if (hasGrid) {
-                                        newGroup.grid_rows = [{ left: group.grid_columns?.left ?? [], center: group.grid_columns?.center ?? [], right: group.grid_columns?.right ?? [] }];
-                                        newGroup.fields = [...(newGroup.grid_rows[0].left || []), ...(newGroup.grid_rows[0].center || []), ...(newGroup.grid_rows[0].right || [])];
+                                        const cols0 = normalizeGridRowColumns(group.grid_columns || {});
+                                        newGroup.grid_rows = [gridRowWithColumnsOnly({ conditional_visibility: undefined }, cols0)];
+                                        newGroup.fields = cols0.flat();
                                       } else {
-                                        newGroup.grid_rows = [{ left: [...(group.fields || [])], center: [], right: [] }];
+                                        newGroup.grid_rows = [{ columns: [[...(group.fields || [])], [], []], conditional_visibility: undefined }];
                                         newGroup.fields = group.fields || [];
                                       }
                                     } else if (val === "table") {
@@ -4232,7 +4431,7 @@ const TrackerEditPage = () => {
                                   </SelectTrigger>
                                   <SelectContent>
                                     <SelectItem value="stack">Stack (default)</SelectItem>
-                                    <SelectItem value="grid">Grid (3 columns)</SelectItem>
+                                    <SelectItem value="grid">Grid (columns per row)</SelectItem>
                                     <SelectItem value="table">Table</SelectItem>
                                   </SelectContent>
                                 </Select>
@@ -4244,6 +4443,10 @@ const TrackerEditPage = () => {
                                   sectionFields={sectionFields}
                                   editingSection={editingSection}
                                   setEditingSection={setEditingSection}
+                                  onRequestCreateInGridColumn={(rowIdx, columnIndex) => {
+                                    setLayoutQuickCreatePlacement({ kind: "grid", groupIdx, rowIdx, columnIndex });
+                                    setLayoutQuickCreateOpen(true);
+                                  }}
                                 />
                               ) : (group.layout || "") === "table" ? (
                                 (() => {
@@ -4322,6 +4525,9 @@ const TrackerEditPage = () => {
                                               const cells = (row.cells || []).slice(0, cols.length);
                                               while (cells.length < cols.length) cells.push({ text: "", field_id: null });
                                               const cv = row.conditional_visibility;
+                                              const depFieldForTableCv = cv?.depends_on_field
+                                                ? sectionFields.find((x) => String(x.id || x.name || x.field_id) === String(cv.depends_on_field))
+                                                : null;
                                               const trackerVisibilityFields = sectionFields.filter((x) => !["text_block", "image_block", "line_break", "page_break", "download_link"].includes((x.type || x.field_type || "").toLowerCase()));
                                               const isDragging = draggedTableRow?.groupIdx === groupIdx && draggedTableRow?.rowIdx === rIdx;
                                               const isDropTarget = dragOverTableRow?.groupIdx === groupIdx && dragOverTableRow?.rowIdx === rIdx && !isDragging;
@@ -4355,6 +4561,10 @@ const TrackerEditPage = () => {
                                                           noneLabel="— No field —"
                                                           className="h-8 text-xs w-full"
                                                           compact
+                                                          onCreateNew={() => {
+                                                            setLayoutQuickCreatePlacement({ kind: "table", groupIdx, rIdx, cIdx });
+                                                            setLayoutQuickCreateOpen(true);
+                                                          }}
                                                         />
                                                       </div>
                                                     </td>
@@ -4369,7 +4579,12 @@ const TrackerEditPage = () => {
                                                     <SearchableFieldSelect
                                                       fields={trackerVisibilityFields}
                                                       value={cv?.depends_on_field || "__none__"}
-                                                      onValueChange={(v) => setRowVisibility(rIdx, v && v !== "__none__" ? { ...(cv || {}), depends_on_field: v } : null)}
+                                                      onValueChange={(v) =>
+                                                        setRowVisibility(
+                                                          rIdx,
+                                                          v && v !== "__none__" ? { depends_on_field: v, show_when: undefined, value: undefined } : null,
+                                                        )
+                                                      }
                                                       placeholder="Always"
                                                       noneOption
                                                       noneLabel="Always"
@@ -4378,7 +4593,16 @@ const TrackerEditPage = () => {
                                                     />
                                                     {cv?.depends_on_field && (
                                                       <>
-                                                        <Select value={cv.show_when || ""} onValueChange={(v) => setRowVisibility(rIdx, { ...cv, show_when: v })}>
+                                                        <Select
+                                                          value={cv.show_when || ""}
+                                                          onValueChange={(v) =>
+                                                            setRowVisibility(rIdx, {
+                                                              ...cv,
+                                                              show_when: v,
+                                                              value: ["equals", "not_equals", "contains"].includes(v) ? cv.value : undefined,
+                                                            })
+                                                          }
+                                                        >
                                                           <SelectTrigger className="h-6 text-xs w-24 inline-flex ml-1"><SelectValue /></SelectTrigger>
                                                           <SelectContent>
                                                             <SelectItem value="equals">Equals</SelectItem>
@@ -4388,9 +4612,15 @@ const TrackerEditPage = () => {
                                                             <SelectItem value="is_not_empty">Is not empty</SelectItem>
                                                           </SelectContent>
                                                         </Select>
-                                                        {["equals", "not_equals", "contains"].includes(cv.show_when) && (
-                                                          <Input placeholder="Value" className="h-6 text-xs w-24 inline-flex ml-1" value={cv.value ?? ""} onChange={(e) => setRowVisibility(rIdx, { ...cv, value: e.target.value })} />
-                                                        )}
+                                                        <span className="ml-1 inline-flex align-middle">
+                                                          <ConditionalVisibilityValueControl
+                                                            depField={depFieldForTableCv}
+                                                            value={cv.value}
+                                                            showWhen={cv.show_when}
+                                                            compact
+                                                            onValueChange={(next) => setRowVisibility(rIdx, { ...cv, value: next })}
+                                                          />
+                                                        </span>
                                                       </>
                                                     )}
                                                   </td>
@@ -4442,6 +4672,10 @@ const TrackerEditPage = () => {
                                   placeholder="+ Add field"
                                   className="w-40 h-8 text-xs"
                                   compact
+                                  onCreateNew={() => {
+                                    setLayoutQuickCreatePlacement({ kind: "stack", groupIdx });
+                                    setLayoutQuickCreateOpen(true);
+                                  }}
                                 />
                               </div>
                               )}
@@ -4483,14 +4717,6 @@ const TrackerEditPage = () => {
                                       ) : (
                                         conditions.map((cond, cIdx) => {
                                           const depField = sectionFields.find((f) => String(f.id || f.name || f.field_id) === cond.depends_on_field);
-                                          const depType = (depField?.type || depField?.field_type || "").toLowerCase();
-                                          const needsValue = ["equals", "not_equals", "contains"].includes(cond.show_when || "");
-                                          const isBoolean = depType === "boolean" || depType === "checkbox" || depType === "boolean_with_description";
-                                          const isSelectLike = ["select", "dropdown", "radio", "radio_group"].includes(depType);
-                                          const isMultiselect = depType === "multiselect";
-                                          const isNumber = depType === "number" || depType === "integer";
-                                          const depOptions = depField ? (depField.field_options?.options || depField.options || []) : [];
-                                          const opts = Array.isArray(depOptions) ? depOptions : [];
                                           return (
                                             <div key={cIdx} className="flex flex-wrap items-center gap-2 rounded border p-2 bg-muted/30">
                                               <SearchableFieldSelect
@@ -4506,7 +4732,15 @@ const TrackerEditPage = () => {
                                               />
                                               {cond.depends_on_field && (
                                                 <>
-                                                  <Select value={cond.show_when || ""} onValueChange={(v) => updateCondition(cIdx, { show_when: v || null, value: needsValue ? (cond.value ?? null) : null })}>
+                                                  <Select
+                                                    value={cond.show_when || ""}
+                                                    onValueChange={(v) =>
+                                                      updateCondition(cIdx, {
+                                                        show_when: v || null,
+                                                        value: ["equals", "not_equals", "contains"].includes(v) ? cond.value : null,
+                                                      })
+                                                    }
+                                                  >
                                                     <SelectTrigger className="h-8 text-xs w-24"><SelectValue /></SelectTrigger>
                                                     <SelectContent>
                                                       <SelectItem value="equals">Equals</SelectItem>
@@ -4516,27 +4750,12 @@ const TrackerEditPage = () => {
                                                       <SelectItem value="is_not_empty">Not empty</SelectItem>
                                                     </SelectContent>
                                                   </Select>
-                                                  {needsValue && (isBoolean ? (
-                                                    <Select value={cond.value || ""} onValueChange={(v) => updateCondition(cIdx, { value: v || null })}>
-                                                      <SelectTrigger className="h-8 text-xs w-20"><SelectValue /></SelectTrigger>
-                                                      <SelectContent><SelectItem value="yes">Yes</SelectItem><SelectItem value="no">No</SelectItem></SelectContent>
-                                                    </Select>
-                                                  ) : isSelectLike || isMultiselect ? (
-                                                    <Select value={cond.value || ""} onValueChange={(v) => updateCondition(cIdx, { value: v || null })}>
-                                                      <SelectTrigger className="h-8 text-xs w-28"><SelectValue /></SelectTrigger>
-                                                      <SelectContent>
-                                                        {opts.map((opt, i) => {
-                                                          const val = typeof opt === "object" && opt !== null ? (opt.value ?? opt.label ?? "") : opt;
-                                                          const label = typeof opt === "object" && opt !== null ? (opt.label ?? opt.value ?? String(val)) : String(opt);
-                                                          return <SelectItem key={i} value={String(val)}>{label}</SelectItem>;
-                                                        })}
-                                                      </SelectContent>
-                                                    </Select>
-                                                  ) : isNumber ? (
-                                                    <Input type="number" className="h-8 text-xs w-20" value={cond.value ?? ""} onChange={(e) => updateCondition(cIdx, { value: e.target.value || null })} placeholder="Number" />
-                                                  ) : (
-                                                    <Input className="h-8 text-xs w-24" value={cond.value ?? ""} onChange={(e) => updateCondition(cIdx, { value: e.target.value || null })} placeholder="Value" />
-                                                  ))}
+                                                  <ConditionalVisibilityValueControl
+                                                    depField={depField}
+                                                    value={cond.value}
+                                                    showWhen={cond.show_when}
+                                                    onValueChange={(next) => updateCondition(cIdx, { value: next })}
+                                                  />
                                                 </>
                                               )}
                                               <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0 text-destructive" onClick={() => removeCondition(cIdx)} title="Remove condition">
@@ -6322,6 +6541,91 @@ const TrackerEditPage = () => {
           </Button>
         </div>
       </Tabs>
+
+      <Dialog
+        open={layoutQuickCreateOpen}
+        onOpenChange={(o) => {
+          setLayoutQuickCreateOpen(o);
+          if (!o) {
+            setLayoutQuickCreatePlacement(null);
+            setLayoutQuickCreateDraft({ ...LAYOUT_QUICK_CREATE_INITIAL });
+            setLayoutQuickOption({ value: "", label: "" });
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col gap-0 p-0 overflow-hidden">
+          <DialogHeader className="px-6 pt-6 pb-2 shrink-0 space-y-1">
+            <DialogTitle>New field</DialogTitle>
+            <p className="text-xs text-muted-foreground font-normal">
+              Field ID and stage are set automatically for this stage.
+            </p>
+          </DialogHeader>
+          <div className="px-6 overflow-y-auto flex-1 min-h-0 space-y-4 pb-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="layout-quick-label">Field label *</Label>
+              <Input
+                id="layout-quick-label"
+                value={layoutQuickCreateDraft.label}
+                onChange={(e) => setLayoutQuickCreateDraft((d) => ({ ...d, label: e.target.value }))}
+                placeholder="e.g., Patient name"
+                autoFocus
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="layout-quick-type">Field type *</Label>
+              <Select
+                value={layoutQuickCreateDraft.type}
+                onValueChange={(v) =>
+                  setLayoutQuickCreateDraft((prev) => ({
+                    ...LAYOUT_QUICK_CREATE_INITIAL,
+                    label: prev.label || "",
+                    type: v,
+                    ...(v === "repeatable_group" ? { fields: [] } : {}),
+                  }))
+                }
+              >
+                <SelectTrigger id="layout-quick-type" className="h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {fieldTypes.map((ft) => (
+                    <SelectItem key={ft.value} value={ft.value}>
+                      {ft.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <TrackerLayoutQuickCreateFieldForm
+              draft={layoutQuickCreateDraft}
+              setDraft={setLayoutQuickCreateDraft}
+              newOption={layoutQuickOption}
+              setNewOption={setLayoutQuickOption}
+              onAddOption={handleLayoutQuickAddOption}
+              onRemoveOption={handleLayoutQuickRemoveOption}
+              uploadFileMutation={uploadFileMutation}
+              generateFieldIdFromLabel={generateFieldIdFromLabel}
+            />
+          </div>
+          <DialogFooter className="px-6 py-4 border-t shrink-0 gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setLayoutQuickCreateOpen(false);
+                setLayoutQuickCreatePlacement(null);
+                setLayoutQuickCreateDraft({ ...LAYOUT_QUICK_CREATE_INITIAL });
+                setLayoutQuickOption({ value: "", label: "" });
+              }}
+            >
+              Cancel
+            </Button>
+            <Button type="button" onClick={handleLayoutQuickCreateSubmit}>
+              Create and add
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
@@ -6380,62 +6684,6 @@ const TrackerConstantsEditor = ({ constants, onChange }) => {
         <Plus className="mr-2 h-4 w-4" />
         Add constant
       </Button>
-    </div>
-  );
-};
-
-// People Field Role Selector Component
-const PeopleFieldRoleSelector = ({ selectedRoleIds, onChange }) => {
-  const { data: rolesData, isLoading } = useRolesAll();
-  // Handle both array and object response formats
-  const roles = Array.isArray(rolesData)
-    ? rolesData
-    : rolesData?.roles || rolesData?.items || [];
-
-  const handleRoleToggle = (roleId) => {
-    const roleIdNum = typeof roleId === 'string' ? parseInt(roleId) : roleId;
-    const currentIds = Array.isArray(selectedRoleIds) ? selectedRoleIds.map(r => typeof r === 'object' ? r.id : r) : [];
-    
-    if (currentIds.includes(roleIdNum)) {
-      onChange(currentIds.filter(id => id !== roleIdNum));
-    } else {
-      onChange([...currentIds, roleIdNum]);
-    }
-  };
-
-  if (isLoading) {
-    return <div className="text-sm text-muted-foreground">Loading roles...</div>;
-  }
-
-  return (
-    <div className="space-y-2">
-      <div className="max-h-48 overflow-auto border rounded-md p-2 space-y-1">
-        {roles.length === 0 ? (
-          <div className="text-sm text-muted-foreground py-2">No roles available</div>
-        ) : (
-          roles.map((role) => {
-            const roleId = role.id;
-            const isSelected = Array.isArray(selectedRoleIds) && selectedRoleIds.some(r => (typeof r === 'object' ? r.id : r) === roleId);
-            return (
-              <div key={roleId} className="flex items-center space-x-2">
-                <Checkbox
-                  id={`role-${roleId}`}
-                  checked={isSelected}
-                  onCheckedChange={() => handleRoleToggle(roleId)}
-                />
-                <Label htmlFor={`role-${roleId}`} className="cursor-pointer text-sm flex-1">
-                  {role.display_name || role.name || `Role ${roleId}`}
-                </Label>
-              </div>
-            );
-          })
-        )}
-      </div>
-      {selectedRoleIds && selectedRoleIds.length > 0 && (
-        <p className="text-xs text-muted-foreground">
-          {selectedRoleIds.length} role(s) selected
-        </p>
-      )}
     </div>
   );
 };

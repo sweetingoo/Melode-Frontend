@@ -13,6 +13,7 @@ import { trackersService } from "@/services/trackers";
 import CustomFieldRenderer from "@/components/CustomFieldRenderer";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { filterNonEmptyGridColumns, gridRowFieldIdsFlat, normalizeGridRowColumns, trackerGridRowColsClass } from "@/utils/trackerGridLayout";
 
 export default function PublicEntrySubmitPage() {
   const params = useParams();
@@ -193,7 +194,6 @@ export default function PublicEntrySubmitPage() {
         : fields.filter((f) => f.section === section.id || f.section === sectionKey);
       const groups = section.groups && Array.isArray(section.groups) ? section.groups : [];
       const sectionLabel = section.label || section.title || section.id || "Section";
-      const hasId = (f, id) => String(f?.id || f?.name || f?.field_id || f?.field_name) === String(id);
       let ungrouped = [];
       let groupsWithFields = [];
       if (groups.length > 0) {
@@ -201,15 +201,22 @@ export default function PublicEntrySubmitPage() {
           groups.flatMap((g) => {
             const fromFields = (g.fields || []).map(String);
             const fromTable = (g.table_rows || []).flatMap((row) => (row.cells || []).map((c) => c.field_id).filter(Boolean).map(String));
-            const fromGrid = (g.grid_rows || []).flatMap((row) => [...(row.left || []), ...(row.center || []), ...(row.right || [])].map(String));
+            const fromGrid = (g.grid_rows || []).flatMap((row) => gridRowFieldIdsFlat(row).map(String));
             return [...fromFields, ...fromTable, ...fromGrid];
           })
         );
         ungrouped = sectionFields.filter((f) => !fieldIdsInGroups.has(String(f?.id || f?.name || f?.field_id || f?.field_name)));
-        groupsWithFields = groups.map((g) => ({
-          group: g,
-          fields: sectionFields.filter((f) => (g.fields || []).some((id) => hasId(f, id))),
-        }));
+        groupsWithFields = groups.map((g) => {
+          const ids = new Set([
+            ...(g.fields || []).map(String),
+            ...(g.table_rows || []).flatMap((row) => (row.cells || []).map((c) => c.field_id).filter(Boolean).map(String)),
+            ...(g.grid_rows || []).flatMap((row) => gridRowFieldIdsFlat(row).map(String)),
+          ]);
+          return {
+            group: g,
+            fields: sectionFields.filter((f) => ids.has(String(f?.id || f?.name || f?.field_id || f?.field_name))),
+          };
+        });
       } else {
         ungrouped = sectionFields;
       }
@@ -525,26 +532,26 @@ export default function PublicEntrySubmitPage() {
                                 ) : isGrid ? (
                                   <div className="space-y-4">
                                     {gridRows.filter((gridRow) => checkRowVisibility(gridRow, submissionData)).map((gridRow, rowIdx) => {
-                                      const leftF = (gridRow.left || []).map((fid) => getFieldById(fid)).filter(Boolean).filter((f) => checkFieldVisibility(f, submissionData));
-                                      const centerF = (gridRow.center || []).map((fid) => getFieldById(fid)).filter(Boolean).filter((f) => checkFieldVisibility(f, submissionData));
-                                      const rightF = (gridRow.right || []).map((fid) => getFieldById(fid)).filter(Boolean).filter((f) => checkFieldVisibility(f, submissionData));
-                                      const hasL = leftF.length > 0;
-                                      const hasR = rightF.length > 0;
-                                      const hasC = centerF.length > 0;
-                                      if (!hasL && !hasR && !hasC) return null;
+                                      const colIds = normalizeGridRowColumns(gridRow);
+                                      const colFields = filterNonEmptyGridColumns(
+                                        colIds.map((ids) =>
+                                          ids.map((fid) => getFieldById(fid)).filter(Boolean).filter((f) => checkFieldVisibility(f, submissionData)),
+                                        ),
+                                      );
+                                      if (colFields.length === 0) return null;
                                       const rowTitle = gridRow.label || gridRow.title;
                                       return (
                                         <div key={`row-${rowIdx}`} className="space-y-3">
                                           {rowTitle && (
                                             <h4 className="text-sm font-medium text-foreground border-b pb-1">{rowTitle}</h4>
                                           )}
-                                          {(hasL || hasR) && (
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                              <div className="space-y-2">{leftF.map((f) => renderField(f))}</div>
-                                              <div className="space-y-2">{rightF.map((f) => renderField(f))}</div>
-                                            </div>
-                                          )}
-                                          {hasC && <div className="space-y-2">{centerF.map((f) => renderField(f))}</div>}
+                                          <div className={trackerGridRowColsClass(colFields.length)}>
+                                            {colFields.map((fields, colIdx) => (
+                                              <div key={colIdx} className="space-y-2">
+                                                {fields.map((f) => renderField(f))}
+                                              </div>
+                                            ))}
+                                          </div>
                                         </div>
                                       );
                                     })}

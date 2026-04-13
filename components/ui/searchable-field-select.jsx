@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { ChevronDown, Search } from "lucide-react";
+import { ChevronDown, Plus, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,6 +33,8 @@ function getFieldLabel(f) {
  * @param {string} [props.excludeFieldId] - Field id to exclude from the list (e.g. current field)
  * @param {string[]} [props.excludeTypes] - Field types to exclude (e.g. display-only types)
  * @param {string} [props.className] - Class for the trigger button
+ * @param {function(): void} [props.onCreateNew] - Optional: show a footer action to create a new field (e.g. tracker layout editor)
+ * @param {string} [props.createNewLabel] - Label for the create action (default "Create new field…")
  * @param {boolean} [props.compact] - Use smaller trigger (h-7 text-xs)
  */
 export function SearchableFieldSelect({
@@ -46,6 +48,8 @@ export function SearchableFieldSelect({
   excludeTypes = [],
   className,
   compact = false,
+  onCreateNew,
+  createNewLabel = "Create new field…",
 }) {
   const [open, setOpen] = React.useState(false);
   const [search, setSearch] = React.useState("");
@@ -151,6 +155,23 @@ export function SearchableFieldSelect({
             )}
           </div>
         </ScrollArea>
+        {typeof onCreateNew === "function" && (
+          <div className="border-t border-border p-1">
+            <Button
+              type="button"
+              variant="ghost"
+              className={cn("w-full justify-start font-normal h-9 text-sm", compact && "h-8 text-xs")}
+              onClick={() => {
+                onCreateNew();
+                setOpen(false);
+                setSearch("");
+              }}
+            >
+              <Plus className="mr-2 h-4 w-4 shrink-0 opacity-70" />
+              {createNewLabel}
+            </Button>
+          </div>
+        )}
       </PopoverContent>
     </Popover>
   );
