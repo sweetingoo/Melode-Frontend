@@ -114,7 +114,7 @@ const TrackersManagePage = () => {
   const createFromTemplateMutation = useCreateTrackerFromTemplate({
     onCreated: (data) => {
       const slug = data?.slug || data?.form_name;
-      if (slug) router.push(`/admin/trackers/${slug}/edit?tab=sections`);
+      if (slug) router.push(`/admin/trackers/${slug}/edit?tab=fields`);
     },
   });
   const updateMutation = useUpdateTracker();
@@ -204,9 +204,9 @@ const TrackersManagePage = () => {
       });
       setIsCreateDialogOpen(false);
       resetForm();
-      // Go to editor so user can add fields, sections, and groups (open Fields per stage tab)
+      // Go to editor so user can add fields, sections, and groups (Form tab)
       const newSlug = data?.slug || data?.form_name;
-      if (newSlug) router.push(`/admin/trackers/${newSlug}/edit?tab=sections`);
+      if (newSlug) router.push(`/admin/trackers/${newSlug}/edit?tab=fields`);
     } catch (error) {
       // Error handled by mutation
     }
@@ -555,7 +555,7 @@ const TrackersManagePage = () => {
                   </Label>
                 </div>
                 <div className="text-sm text-muted-foreground">
-                  <p className="mb-2">After creation you&apos;ll be taken to the editor. Use the <strong>Fields per stage</strong> tab to add sections and group fields; use the <strong>Fields</strong> tab to add field definitions first if needed.</p>
+                  <p className="mb-2">After creation you&apos;ll be taken to the editor. On the <strong>Form</strong> tab, add field definitions first if needed, then use <strong>Fields per stage</strong> to add sections and group fields.</p>
                 </div>
               </div>
               <DialogFooter>

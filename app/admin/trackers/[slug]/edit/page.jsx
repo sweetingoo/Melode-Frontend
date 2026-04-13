@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -40,7 +40,10 @@ import {
   Link2,
   MessageSquare,
   CalendarClock,
+  LayoutTemplate,
+  List,
 } from "lucide-react";
+import { TrackerFormPreviewPanel } from "@/components/trackers/TrackerFormPreviewPanel";
 import {
   Pagination,
   PaginationContent,
@@ -452,15 +455,90 @@ const TrackerEditPage = () => {
   const searchParams = useSearchParams();
   const slug = params.slug;
   const tabFromUrl = searchParams?.get("tab");
-  const TRACKER_EDIT_TABS = ["sections", "fields", "stages", "basic", "statuses", "communication", "permissions", "notifications", "audit"];
+  const TRACKER_EDIT_TABS = [
+    "fields",
+    "stages",
+    "basic",
+    "statuses",
+    "communication",
+    "permissions",
+    "notifications",
+    "audit",
+    "appointments",
+  ];
+  const FORM_PREVIEW_LS_KEY = "melode_tracker_edit_form_preview_open";
+  const [formPreviewOpen, setFormPreviewOpen] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const v = localStorage.getItem(FORM_PREVIEW_LS_KEY);
+      if (v === "1") setFormPreviewOpen(true);
+      else if (v === "0") setFormPreviewOpen(false);
+      else setFormPreviewOpen(window.matchMedia("(min-width: 1280px)").matches);
+    } catch {
+      setFormPreviewOpen(false);
+    }
+  }, []);
+  const toggleFormPreview = () => {
+    setFormPreviewOpen((open) => {
+      const next = !open;
+      try {
+        localStorage.setItem(FORM_PREVIEW_LS_KEY, next ? "1" : "0");
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  };
+
+  /** Match preview column height to the builder column (xl+); preview scrolls when its content is taller. */
+  const formBuildColumnRef = useRef(null);
+  const [formBuildColumnHeightPx, setFormBuildColumnHeightPx] = useState(null);
+  const [isXlFormLayout, setIsXlFormLayout] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(min-width: 1280px)");
+    const sync = () => setIsXlFormLayout(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
   const [activeTab, setActiveTab] = useState(() => {
     if (typeof window === "undefined") return "basic";
     const t = new URLSearchParams(window.location.search).get("tab");
-    return t && TRACKER_EDIT_TABS.includes(t) ? t : "basic";
+    const mapped = t === "sections" ? "fields" : t;
+    return mapped && TRACKER_EDIT_TABS.includes(mapped) ? mapped : "basic";
   });
   useEffect(() => {
+    if (tabFromUrl === "sections" && slug) {
+      const sp = new URLSearchParams(searchParams?.toString() || "");
+      sp.set("tab", "fields");
+      router.replace(`/admin/trackers/${slug}/edit?${sp.toString()}`, { scroll: false });
+      setActiveTab("fields");
+      return;
+    }
     if (tabFromUrl && TRACKER_EDIT_TABS.includes(tabFromUrl)) setActiveTab(tabFromUrl);
-  }, [tabFromUrl]);
+  }, [tabFromUrl, slug, searchParams, router]);
+
+  useLayoutEffect(() => {
+    if (activeTab !== "fields") {
+      setFormBuildColumnHeightPx(null);
+      return;
+    }
+    const el = formBuildColumnRef.current;
+    if (!el) return;
+    const read = () => {
+      const h = el.getBoundingClientRect().height;
+      setFormBuildColumnHeightPx(h > 0 ? Math.round(h * 10) / 10 : null);
+    };
+    read();
+    const ro = new ResizeObserver(() => read());
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+    };
+  }, [activeTab, formPreviewOpen, isXlFormLayout]);
+
   const [smsTemplatesDraft, setSmsTemplatesDraft] = useState(null);
   const [smsTemplateOpenKeys, setSmsTemplateOpenKeys] = useState(() => new Set());
   const [addAppointmentSection, setAddAppointmentSection] = useState(null);
@@ -626,6 +704,10 @@ const TrackerEditPage = () => {
 
   const [editingFieldIndex, setEditingFieldIndex] = useState(null);
   const [editingField, setEditingField] = useState(null);
+  const [fieldsListOpen, setFieldsListOpen] = useState(false);
+  useEffect(() => {
+    if (editingFieldIndex !== null) setFieldsListOpen(true);
+  }, [editingFieldIndex]);
 
   // Drag and drop state for field reordering
   const [draggedIndex, setDraggedIndex] = useState(null);
@@ -1556,8 +1638,7 @@ const TrackerEditPage = () => {
         <div className="overflow-x-auto scrollbar-hide -mx-2 px-2 min-w-0 w-full">
           <TabsList className="inline-flex flex-nowrap w-max gap-0.5 [&>*]:shrink-0">
             <TabsTrigger value="basic">Basic Info</TabsTrigger>
-            <TabsTrigger value="fields">Fields ({fields.length})</TabsTrigger>
-            <TabsTrigger value="sections">Fields per stage ({sections.length})</TabsTrigger>
+            <TabsTrigger value="fields">Form ({fields.length})</TabsTrigger>
             <TabsTrigger value="statuses">Statuses & settings ({statuses.length})</TabsTrigger>
             {formData.tracker_config?.use_stages && (
               <TabsTrigger value="stages">Stages ({stageMapping.length})</TabsTrigger>
@@ -1947,8 +2028,22 @@ const TrackerEditPage = () => {
           </Card>
         </TabsContent>
 
-        {/* Fields Tab */}
-        <TabsContent value="fields" className="space-y-4">
+        {/* Form: field definitions + per-stage layout; optional preview */}
+        <TabsContent value="fields" className="mt-0 space-y-3">
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={toggleFormPreview}
+              className="shrink-0"
+            >
+              <LayoutTemplate className="h-4 w-4 mr-2" />
+              {formPreviewOpen ? "Hide preview" : "Show preview"}
+            </Button>
+          </div>
+          <div className="flex flex-col xl:flex-row xl:items-start gap-4">
+            <div ref={formBuildColumnRef} className="min-w-0 flex-1 space-y-4 xl:min-h-0">
           <Card>
             <CardHeader>
               <CardTitle>Tracker Fields</CardTitle>
@@ -1956,8 +2051,29 @@ const TrackerEditPage = () => {
             <CardContent className="space-y-4">
               {/* Existing Fields */}
               {fields.length > 0 && (
-                <div className="space-y-2">
-                  <Label>Existing Fields</Label>
+                <Collapsible open={fieldsListOpen} onOpenChange={setFieldsListOpen} className="overflow-hidden rounded-lg border bg-muted/15">
+                  <CollapsibleTrigger asChild>
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-3 px-3 py-2.5 text-left outline-none transition-colors hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                    >
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border bg-background shadow-sm">
+                        <List className="h-4 w-4 text-muted-foreground" aria-hidden />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-medium leading-none">All fields</div>
+                        <div className="mt-1 text-xs text-muted-foreground">
+                          {fields.length} {fields.length === 1 ? "field" : "fields"}
+                        </div>
+                      </div>
+                      <ChevronRight
+                        className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 ${fieldsListOpen ? "rotate-90" : ""}`}
+                        aria-hidden
+                      />
+                    </button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <div className="space-y-2 border-t bg-background px-2 py-3">
                   {fields.map((field, index) => (
                     editingFieldIndex === index ? (
                       // Edit Field Form
@@ -2012,7 +2128,7 @@ const TrackerEditPage = () => {
                         <div>
                           <Label htmlFor="edit-field-section">Stage (Optional)</Label>
                           {formData.tracker_config?.use_stages && stageMapping.length > 0 && (
-                            <p className="text-xs text-muted-foreground mb-1">Assigning a field to a stage puts it in that stage's set of fields (see Fields per stage tab).</p>
+                            <p className="text-xs text-muted-foreground mb-1">Assigning a field to a stage puts it in that stage&apos;s set of fields (see Fields per stage below).</p>
                           )}
                           <Select
                             value={getSectionIdForField(editingField, sections) || editingField.section || "none"}
@@ -3086,7 +3202,9 @@ const TrackerEditPage = () => {
                       </div>
                     )
                   ))}
-                </div>
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
               )}
 
               {/* Add New Field */}
@@ -3166,7 +3284,7 @@ const TrackerEditPage = () => {
                     <div>
                       <Label htmlFor="field-section">Stage (Optional)</Label>
                       {formData.tracker_config?.use_stages && stageMapping.length > 0 && (
-                        <p className="text-xs text-muted-foreground mb-1">Assigning a field to a stage puts it in that stage's set of fields (see Fields per stage tab).</p>
+                        <p className="text-xs text-muted-foreground mb-1">Assigning a field to a stage puts it in that stage&apos;s set of fields (see Fields per stage below).</p>
                       )}
                       <Select
                         value={newField.section || "none"}
@@ -3967,10 +4085,6 @@ const TrackerEditPage = () => {
               </Collapsible>
             </CardContent>
           </Card>
-        </TabsContent>
-
-        {/* Fields per stage (sections) – one section per stage, order matches */}
-        <TabsContent value="sections" className="space-y-4">
           <Card>
             <CardHeader>
               <CardTitle>Fields per stage</CardTitle>
@@ -4591,6 +4705,27 @@ const TrackerEditPage = () => {
               </div>
             </CardContent>
           </Card>
+            </div>
+            {formPreviewOpen && (
+              <aside
+                className="flex w-full min-h-0 flex-col border rounded-lg bg-card p-0 shadow-sm xl:w-[min(100%,28rem)] xl:shrink-0 xl:overflow-hidden"
+                style={
+                  isXlFormLayout && formBuildColumnHeightPx != null
+                    ? { height: formBuildColumnHeightPx }
+                    : undefined
+                }
+              >
+                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3">
+                  <TrackerFormPreviewPanel
+                    fields={fields}
+                    sections={sections}
+                    stageMapping={stageMapping || []}
+                    useStages={formData.tracker_config?.use_stages}
+                  />
+                </div>
+              </aside>
+            )}
+          </div>
         </TabsContent>
 
         {/* Statuses & settings Tab */}
@@ -4599,7 +4734,7 @@ const TrackerEditPage = () => {
             <CardHeader>
               <CardTitle>Tracker Statuses</CardTitle>
               <p className="text-sm text-muted-foreground mt-1">
-                Allowed <strong>Status</strong> values (workflow state). Queue counts use status. The field that holds it in the form (e.g. &quot;Current status&quot;) is configured in Fields. Stage is derived from status.
+                Allowed <strong>Status</strong> values (workflow state). Queue counts use status. The field that holds it in the form (e.g. &quot;Current status&quot;) is configured on the <strong>Form</strong> tab. Stage is derived from status.
               </p>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -4915,7 +5050,7 @@ const TrackerEditPage = () => {
             <CardHeader>
               <CardTitle>Stages &amp; workflow</CardTitle>
               <p className="text-sm text-muted-foreground mt-1">
-                <strong>Stages</strong> are workflow steps (e.g. Case Creation, Triage). Add stages and assign statuses per stage; if a stage has no statuses, it uses the tracker default from the <strong>Statuses & settings</strong> tab. Use <strong>Allowed next stages</strong> and <strong>Allowed next statuses</strong> to control progression. Which fields appear at each step is set in the <strong>Fields per stage</strong> tab; order matches (section 1 = stage 1, etc.).
+                <strong>Stages</strong> are workflow steps (e.g. Case Creation, Triage). Add stages and assign statuses per stage; if a stage has no statuses, it uses the tracker default from the <strong>Statuses & settings</strong> tab. Use <strong>Allowed next stages</strong> and <strong>Allowed next statuses</strong> to control progression. Which fields appear at each step is set under <strong>Fields per stage</strong> on the <strong>Form</strong> tab; order matches (section 1 = stage 1, etc.).
               </p>
             </CardHeader>
             <CardContent className="space-y-4">

@@ -834,7 +834,7 @@ const TrackerEntryDetailPage = () => {
   const displayTracker = fullTracker ?? tracker;
   const trackerFields = displayTracker?.tracker_fields?.fields || [];
   const trackerConfig = displayTracker?.tracker_config || {};
-  // Use same source as tracker edit (Fields per stage): prefer tracker_fields.sections, else tracker_config.sections (from GET /trackers/:slug)
+  // Use same source as tracker edit (Form → Fields per stage): prefer tracker_fields.sections, else tracker_config.sections (from GET /trackers/:slug)
   const sections = (displayTracker?.tracker_fields?.sections?.length ? displayTracker.tracker_fields.sections : trackerConfig.sections) || [];
 
   // Case closed: API `case_closed` / formatted_data (marker) or legacy status = master "Closed*" label.
