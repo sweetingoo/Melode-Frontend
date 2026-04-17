@@ -14,7 +14,6 @@ const PUBLIC_ROUTES = [
   '/auth/forgot-password',
   '/auth/reset-password',
   '/',
-  '/nfc', // NFC reader routes (public)
   '/forms' // Form submission routes (public)
 ];
 
