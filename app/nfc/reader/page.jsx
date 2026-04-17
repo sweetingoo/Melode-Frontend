@@ -10,6 +10,49 @@ import { api } from "@/services/api-client";
 
 const DEFAULT_NFC_PREFIX = (process.env.NEXT_PUBLIC_NFC_PREFIX || "melode:nfc:").trim();
 
+const CCID_INTERFACE_CLASS = 0x0b;
+
+// Chromium refuses claimInterface() for these classes on ordinary origins (WebUSB spec).
+// https://wicg.github.io/webusb/#protected-interface-classes
+const WEBUSB_PROTECTED_INTERFACE_CLASSES = new Set([
+  0x01, 0x03, 0x08, 0x0b, 0x0e, 0x10, 0xe0,
+]);
+
+function pickWebUsbBulkInOutInterface(cfg) {
+  let fallbackProtected = null;
+  for (const iface of cfg?.interfaces || []) {
+    for (const alt of iface.alternates || []) {
+      const endpoints = alt.endpoints || [];
+      if (!endpoints.length) continue;
+      const inEp = endpoints.find((ep) => ep.direction === "in");
+      const outEp = endpoints.find((ep) => ep.direction === "out");
+      if (!inEp || !outEp) continue;
+      const isProtected = WEBUSB_PROTECTED_INTERFACE_CLASSES.has(alt.interfaceClass);
+      const row = {
+        interfaceNumber: iface.interfaceNumber,
+        alt,
+        inEp,
+        outEp,
+        isProtected,
+      };
+      if (!isProtected) return row;
+      if (!fallbackProtected) fallbackProtected = row;
+    }
+  }
+  return fallbackProtected;
+}
+
+function usbDeviceHasCcidInterface(device) {
+  for (const cfg of device.configurations || []) {
+    for (const iface of cfg.interfaces || []) {
+      for (const alt of iface.alternates || []) {
+        if (alt.interfaceClass === CCID_INTERFACE_CLASS) return true;
+      }
+    }
+  }
+  return false;
+}
+
 export default function NfcReaderPage() {
   const [isScanning, setIsScanning] = useState(false);
   const [status, setStatus] = useState("");
@@ -51,6 +94,22 @@ export default function NfcReaderPage() {
     });
   };
 
+  const appendUsbOpenFailureHints = (error) => {
+    const msg = (error?.message || String(error || "")).toLowerCase();
+    if (msg.includes("protected class")) {
+      appendNfcDebugLog(
+        "USB hint: Chrome blocks WebUSB from claiming CCID/smart-card (class 0x0B) and other protected classes on normal websites. This is a browser rule, not your reader being broken. Use Web NFC on Android, WebHID if the reader supports it, a vendor bulk interface, or a native bridge.",
+      );
+      return;
+    }
+    if (!msg.includes("access denied") && !msg.includes("securityerror") && !msg.includes("notallowederror")) {
+      return;
+    }
+    appendNfcDebugLog(
+      "USB hint: Windows often blocks open() if the Smart Card (PC/SC) stack or another app owns the reader. Quit vendor NFC/smart-card software, unplug/replug, try another port, and keep the page on https:// or localhost. Some managed PCs block WebUSB entirely.",
+    );
+  };
+
   const toHex = (value, width = 4) => `0x${value.toString(16).padStart(width, "0")}`;
 
   const bytesToHex = (bytes) => {
@@ -86,6 +145,52 @@ export default function NfcReaderPage() {
     appendNfcDebugLog("USB reader disconnected.");
   };
 
+  const attachUsbDevice = async (device) => {
+    if (!device.opened) {
+      await device.open();
+    }
+    if (!device.configuration) {
+      await device.selectConfiguration(1);
+    }
+    const cfg = device.configuration;
+    const picked = pickWebUsbBulkInOutInterface(cfg);
+    if (!picked) {
+      throw new Error("No usable USB interface found.");
+    }
+    if (picked.isProtected) {
+      if (picked.alt.interfaceClass === CCID_INTERFACE_CLASS) {
+        throw new Error(
+          "Chrome blocks WebUSB from claiming CCID/smart-card interfaces (class 0x0B) on ordinary websites.",
+        );
+      }
+      throw new Error(
+        `Chrome blocks WebUSB from claiming this USB interface (protected class 0x${picked.alt.interfaceClass.toString(16)}).`,
+      );
+    }
+
+    await device.claimInterface(picked.interfaceNumber);
+    if (picked.alt.alternateSetting != null) {
+      await device.selectAlternateInterface(picked.interfaceNumber, picked.alt.alternateSetting);
+    }
+
+    usbDeviceRef.current = device;
+    usbInterfaceRef.current = picked.interfaceNumber;
+    usbInEndpointRef.current = picked.inEp.endpointNumber;
+    usbOutEndpointRef.current = picked.outEp.endpointNumber;
+    setUsbConnected(true);
+    setUsbDeviceLabel(device.productName || `${toHex(device.vendorId)}:${toHex(device.productId)}`);
+    appendNfcDebugLog(
+      "USB connected:",
+      device.productName || "(no product name)",
+      `vid=${toHex(device.vendorId)}`,
+      `pid=${toHex(device.productId)}`,
+      `iface=${picked.interfaceNumber}`,
+      `class=0x${picked.alt.interfaceClass.toString(16)}`,
+      `epIn=${picked.inEp.endpointNumber}`,
+      `epOut=${picked.outEp.endpointNumber}`,
+    );
+  };
+
   const connectUsbReader = async () => {
     if (typeof window === "undefined" || !("usb" in navigator)) {
       appendNfcDebugLog("WebUSB is not supported in this browser.");
@@ -93,52 +198,16 @@ export default function NfcReaderPage() {
     }
     setUsbBusy(true);
     try {
+      if (usbDeviceRef.current) {
+        await disconnectUsbReader();
+      }
       const device = await navigator.usb.requestDevice({
-        filters: [{ classCode: 0x0b }],
+        filters: [{ classCode: CCID_INTERFACE_CLASS }],
       });
-      await device.open();
-      if (!device.configuration) {
-        await device.selectConfiguration(1);
-      }
-      const cfg = device.configuration;
-      const usbInterface = cfg?.interfaces?.find((itf) =>
-        (itf.alternates || []).some((alt) => (alt.endpoints || []).length > 0),
-      );
-      if (!usbInterface) {
-        throw new Error("No usable USB interface found.");
-      }
-      const alt =
-        usbInterface.alternates.find((item) => item.alternateSetting === usbInterface.alternate.alternateSetting) ||
-        usbInterface.alternates[0];
-      await device.claimInterface(usbInterface.interfaceNumber);
-      if (alt?.alternateSetting != null) {
-        await device.selectAlternateInterface(usbInterface.interfaceNumber, alt.alternateSetting);
-      }
-
-      const endpoints = alt?.endpoints || [];
-      const inEp = endpoints.find((ep) => ep.direction === "in");
-      const outEp = endpoints.find((ep) => ep.direction === "out");
-      if (!inEp || !outEp) {
-        throw new Error("Reader interface is missing IN/OUT endpoints.");
-      }
-
-      usbDeviceRef.current = device;
-      usbInterfaceRef.current = usbInterface.interfaceNumber;
-      usbInEndpointRef.current = inEp.endpointNumber;
-      usbOutEndpointRef.current = outEp.endpointNumber;
-      setUsbConnected(true);
-      setUsbDeviceLabel(device.productName || `${toHex(device.vendorId)}:${toHex(device.productId)}`);
-      appendNfcDebugLog(
-        "USB connected:",
-        device.productName || "(no product name)",
-        `vid=${toHex(device.vendorId)}`,
-        `pid=${toHex(device.productId)}`,
-        `iface=${usbInterface.interfaceNumber}`,
-        `epIn=${inEp.endpointNumber}`,
-        `epOut=${outEp.endpointNumber}`,
-      );
+      await attachUsbDevice(device);
     } catch (error) {
       appendNfcDebugLog("USB connect failed:", error?.message || "Unknown error");
+      appendUsbOpenFailureHints(error);
       await disconnectUsbReader();
     } finally {
       setUsbBusy(false);
@@ -577,6 +646,63 @@ export default function NfcReaderPage() {
   }, []);
 
   useEffect(() => {
+    if (typeof window === "undefined" || !("usb" in navigator)) return undefined;
+
+    const restoreAuthorizedUsbReader = async () => {
+      if (usbDeviceRef.current) return;
+      let candidate = null;
+      try {
+        const devices = await navigator.usb.getDevices();
+        candidate =
+          devices.find(usbDeviceHasCcidInterface) || (devices.length === 1 ? devices[0] : null);
+        if (!candidate) return;
+        if (candidate.opened) {
+          try {
+            await candidate.close();
+          } catch (_e) {
+            // Stale session (e.g. React remount); reopen below.
+          }
+        }
+        await attachUsbDevice(candidate);
+        appendNfcDebugLog("USB session restored for this site (no picker needed).");
+      } catch (error) {
+        appendNfcDebugLog("USB auto-restore failed:", error?.message || String(error));
+        appendUsbOpenFailureHints(error);
+        if (candidate) {
+          try {
+            if (candidate.opened) await candidate.close();
+          } catch (_e) {
+            // ignore
+          }
+        }
+      }
+    };
+
+    const onUsbDisconnect = (event) => {
+      if (usbDeviceRef.current && event.device === usbDeviceRef.current) {
+        usbDeviceRef.current = null;
+        usbInterfaceRef.current = null;
+        usbInEndpointRef.current = null;
+        usbOutEndpointRef.current = null;
+        setUsbConnected(false);
+        setUsbDeviceLabel("");
+        appendNfcDebugLog("USB reader unplugged.");
+      }
+    };
+
+    void restoreAuthorizedUsbReader();
+    navigator.usb.addEventListener("disconnect", onUsbDisconnect);
+    navigator.usb.addEventListener("connect", restoreAuthorizedUsbReader);
+
+    return () => {
+      navigator.usb.removeEventListener("disconnect", onUsbDisconnect);
+      navigator.usb.removeEventListener("connect", restoreAuthorizedUsbReader);
+    };
+    // Intentionally run once on mount; attachUsbDevice is stable for our purposes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- WebUSB restore + listeners
+  }, []);
+
+  useEffect(() => {
     return () => {
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
@@ -595,9 +721,6 @@ export default function NfcReaderPage() {
       }
       if (statusTimerRef.current) {
         clearTimeout(statusTimerRef.current);
-      }
-      if (usbDeviceRef.current) {
-        disconnectUsbReader();
       }
     };
   }, []);
@@ -676,6 +799,25 @@ export default function NfcReaderPage() {
               <div className="max-h-32 overflow-auto whitespace-pre-wrap break-words text-xs text-muted-foreground">
                 {nfcDebugLog.length ? nfcDebugLog.join("\n") : "No NFC events yet."}
               </div>
+            </div>
+            <div className="w-full max-w-xl rounded-md border border-dashed bg-muted/10 p-3 text-xs text-muted-foreground space-y-2">
+              <div className="font-medium text-foreground/80">What these messages mean</div>
+              <p>
+                <span className="text-foreground/70">NDEFReader missing:</span> Phone-style tap-to-read uses Web NFC,
+                which Chrome exposes on Android, not on typical laptop/desktop Chrome. Use an Android phone with Chrome
+                for built-in NFC, or rely on a USB CCID reader here.
+              </p>
+              <p>
+                <span className="text-foreground/70">USB Access denied:</span> The OS or another program is not allowing
+                the browser to open the device. This is environmental (drivers, Smart Card service, policy), not a bug
+                in this page. See the USB hint in the log after a failed connect.
+              </p>
+              <p>
+                <span className="text-foreground/70">Protected class / CCID:</span> Chrome will not let ordinary sites
+                claim USB smart-card (CCID, class 0x0B) interfaces over WebUSB. Most USB NFC readers only expose CCID, so
+                the USB buttons here cannot drive them from the web. Prefer Web NFC on Android, or a non-WebUSB path
+                (e.g. WebHID or a small native helper) if you need the laptop.
+              </p>
             </div>
             {tapPopup ? (
               <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none px-4">
