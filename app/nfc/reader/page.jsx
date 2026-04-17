@@ -17,8 +17,17 @@ export default function NfcReaderPage() {
   const [faceVisible, setFaceVisible] = useState(false);
   const [nfcPrefix, setNfcPrefix] = useState(DEFAULT_NFC_PREFIX);
   const [tapPopup, setTapPopup] = useState(null);
+  const [nfcDebugLog, setNfcDebugLog] = useState([]);
+  const [usbBusy, setUsbBusy] = useState(false);
+  const [usbConnected, setUsbConnected] = useState(false);
+  const [usbDeviceLabel, setUsbDeviceLabel] = useState("");
   const isSupported = typeof window !== "undefined" && "NDEFReader" in window;
+  const isUsbSupported = typeof window !== "undefined" && "usb" in navigator;
   const readerRef = useRef(null);
+  const usbDeviceRef = useRef(null);
+  const usbInterfaceRef = useRef(null);
+  const usbInEndpointRef = useRef(null);
+  const usbOutEndpointRef = useRef(null);
   const faceVisibleRef = useRef(false);
   const nfcPrefixRef = useRef(DEFAULT_NFC_PREFIX);
   const hasAttemptedRef = useRef(false);
@@ -31,6 +40,138 @@ export default function NfcReaderPage() {
   const popupTimerRef = useRef(null);
   const statusTimerRef = useRef(null);
   const readCooldownUntilRef = useRef(0);
+
+  const appendNfcDebugLog = (...parts) => {
+    const line = parts
+      .map((part) => (typeof part === "string" ? part : JSON.stringify(part)))
+      .join(" ");
+    setNfcDebugLog((prev) => {
+      const next = [...prev, line];
+      return next.slice(-12);
+    });
+  };
+
+  const toHex = (value, width = 4) => `0x${value.toString(16).padStart(width, "0")}`;
+
+  const bytesToHex = (bytes) => {
+    if (!bytes?.length) return "";
+    return Array.from(bytes)
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join(" ");
+  };
+
+  const disconnectUsbReader = async () => {
+    const device = usbDeviceRef.current;
+    if (!device) return;
+    try {
+      if (device.opened && usbInterfaceRef.current != null) {
+        await device.releaseInterface(usbInterfaceRef.current);
+      }
+    } catch (_error) {
+      // Ignore release errors during cleanup.
+    }
+    try {
+      if (device.opened) {
+        await device.close();
+      }
+    } catch (_error) {
+      // Ignore close errors during cleanup.
+    }
+    usbDeviceRef.current = null;
+    usbInterfaceRef.current = null;
+    usbInEndpointRef.current = null;
+    usbOutEndpointRef.current = null;
+    setUsbConnected(false);
+    setUsbDeviceLabel("");
+    appendNfcDebugLog("USB reader disconnected.");
+  };
+
+  const connectUsbReader = async () => {
+    if (typeof window === "undefined" || !("usb" in navigator)) {
+      appendNfcDebugLog("WebUSB is not supported in this browser.");
+      return;
+    }
+    setUsbBusy(true);
+    try {
+      const device = await navigator.usb.requestDevice({
+        filters: [{ classCode: 0x0b }],
+      });
+      await device.open();
+      if (!device.configuration) {
+        await device.selectConfiguration(1);
+      }
+      const cfg = device.configuration;
+      const usbInterface = cfg?.interfaces?.find((itf) =>
+        (itf.alternates || []).some((alt) => (alt.endpoints || []).length > 0),
+      );
+      if (!usbInterface) {
+        throw new Error("No usable USB interface found.");
+      }
+      const alt =
+        usbInterface.alternates.find((item) => item.alternateSetting === usbInterface.alternate.alternateSetting) ||
+        usbInterface.alternates[0];
+      await device.claimInterface(usbInterface.interfaceNumber);
+      if (alt?.alternateSetting != null) {
+        await device.selectAlternateInterface(usbInterface.interfaceNumber, alt.alternateSetting);
+      }
+
+      const endpoints = alt?.endpoints || [];
+      const inEp = endpoints.find((ep) => ep.direction === "in");
+      const outEp = endpoints.find((ep) => ep.direction === "out");
+      if (!inEp || !outEp) {
+        throw new Error("Reader interface is missing IN/OUT endpoints.");
+      }
+
+      usbDeviceRef.current = device;
+      usbInterfaceRef.current = usbInterface.interfaceNumber;
+      usbInEndpointRef.current = inEp.endpointNumber;
+      usbOutEndpointRef.current = outEp.endpointNumber;
+      setUsbConnected(true);
+      setUsbDeviceLabel(device.productName || `${toHex(device.vendorId)}:${toHex(device.productId)}`);
+      appendNfcDebugLog(
+        "USB connected:",
+        device.productName || "(no product name)",
+        `vid=${toHex(device.vendorId)}`,
+        `pid=${toHex(device.productId)}`,
+        `iface=${usbInterface.interfaceNumber}`,
+        `epIn=${inEp.endpointNumber}`,
+        `epOut=${outEp.endpointNumber}`,
+      );
+    } catch (error) {
+      appendNfcDebugLog("USB connect failed:", error?.message || "Unknown error");
+      await disconnectUsbReader();
+    } finally {
+      setUsbBusy(false);
+    }
+  };
+
+  const probeUsbReader = async () => {
+    const device = usbDeviceRef.current;
+    const inEndpoint = usbInEndpointRef.current;
+    const outEndpoint = usbOutEndpointRef.current;
+    if (!device || inEndpoint == null || outEndpoint == null) {
+      appendNfcDebugLog("Probe skipped: USB reader is not connected.");
+      return;
+    }
+    setUsbBusy(true);
+    try {
+      // CCID "Get Slot Status" command packet. Works on many USB smart-card readers.
+      const command = new Uint8Array([0x65, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00]);
+      await device.transferOut(outEndpoint, command);
+      appendNfcDebugLog("USB probe sent (CCID Get Slot Status).");
+      const response = await device.transferIn(inEndpoint, 512);
+      const data = response?.data ? new Uint8Array(response.data.buffer) : null;
+      appendNfcDebugLog(
+        "USB probe response:",
+        `status=${response?.status || "unknown"}`,
+        data?.length ? bytesToHex(data.slice(0, 64)) : "(no payload)",
+      );
+    } catch (error) {
+      appendNfcDebugLog("USB probe failed:", error?.message || "Unknown error");
+    } finally {
+      setUsbBusy(false);
+    }
+  };
 
   const showTapPopup = (type, message, details = {}) => {
     if (popupTimerRef.current) {
@@ -142,6 +283,7 @@ export default function NfcReaderPage() {
       if (!("NDEFReader" in window)) {
         setStatus("NFC not supported on this browser/device.");
         setShowEnableButton(true);
+        appendNfcDebugLog("NDEFReader not available in this browser.");
         return;
       }
 
@@ -153,6 +295,7 @@ export default function NfcReaderPage() {
       setShowEnableButton(false);
       await reader.scan();
       setIsScanning(true);
+      appendNfcDebugLog("Scan started. Waiting for NFC card/tag...");
 
       reader.onreading = async (event) => {
         try {
@@ -163,6 +306,18 @@ export default function NfcReaderPage() {
           readCooldownUntilRef.current = now + 2200;
 
           const records = event.message?.records || [];
+          appendNfcDebugLog(
+            "Tag detected.",
+            `serial=${event.serialNumber || "(not available)"}`,
+            `records=${records.length}`,
+          );
+          for (const record of records) {
+            appendNfcDebugLog(
+              "Record:",
+              `type=${record?.recordType || "unknown"}`,
+              `mediaType=${record?.mediaType || ""}`,
+            );
+          }
           if (records.length > 1) {
             playBeep("warning");
             setStatusWithReset("Multiple NFC tags detected. Please tap one card at a time.");
@@ -183,11 +338,13 @@ export default function NfcReaderPage() {
           }
           const allowedToken = extractAllowedToken(record);
           if (!allowedToken) {
+            appendNfcDebugLog("Card read but payload is not an allowed Melode token.");
             playBeep("warning");
             setStatusWithReset("Unsupported card. Please use an authorized Melode card.");
             showTapPopup("error", "Unsuccessful");
             return;
           }
+          appendNfcDebugLog("Allowed Melode token detected. Sending check-in request.");
           let identifiedName = "";
           let identifiedAvatarUrl = "";
           let localCheckinTime = "";
@@ -221,8 +378,12 @@ export default function NfcReaderPage() {
                 ? detail
                 : "Unsuccessful";
             playBeep("warning");
+            appendNfcDebugLog("API rejected check-in:", popupTitle);
           }
           setStatusWithReset(popupType === "success" ? "Card read successfully." : popupTitle);
+          if (popupType === "success") {
+            appendNfcDebugLog("Check-in request successful.");
+          }
           showTapPopup(popupType, popupTitle, {
             name: identifiedName,
             avatarUrl: identifiedAvatarUrl,
@@ -232,6 +393,7 @@ export default function NfcReaderPage() {
             resetForNextCheckin();
           }, 3000);
         } catch (_error) {
+          appendNfcDebugLog("Tag detected but record data could not be decoded.");
           setStatusWithReset("Card detected but data could not be decoded.");
           showTapPopup("error", "Check-in unsuccessful");
           window.setTimeout(() => {
@@ -241,12 +403,14 @@ export default function NfcReaderPage() {
       };
 
       reader.onreadingerror = () => {
+        appendNfcDebugLog("Tag detected but NDEF payload could not be read.");
         setStatus("Card detected but could not be read. Try again.");
       };
     } catch (_error) {
       setIsScanning(false);
       setStatus("Unable to start NFC scan. Check permissions and try again.");
       setShowEnableButton(true);
+      appendNfcDebugLog("Failed to start scan. Check permissions/browser support.");
     }
   };
 
@@ -432,6 +596,9 @@ export default function NfcReaderPage() {
       if (statusTimerRef.current) {
         clearTimeout(statusTimerRef.current);
       }
+      if (usbDeviceRef.current) {
+        disconnectUsbReader();
+      }
     };
   }, []);
 
@@ -483,8 +650,32 @@ export default function NfcReaderPage() {
                 Enable NFC
               </Button>
             ) : null}
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <Button type="button" variant="outline" onClick={connectUsbReader} disabled={usbBusy || !isUsbSupported}>
+                {usbConnected ? "Reconnect USB Reader" : "Connect USB Reader"}
+              </Button>
+              <Button type="button" variant="outline" onClick={probeUsbReader} disabled={usbBusy || !usbConnected}>
+                Probe USB Reader
+              </Button>
+              <Button type="button" variant="ghost" onClick={disconnectUsbReader} disabled={usbBusy || !usbConnected}>
+                Disconnect USB
+              </Button>
+            </div>
+            <div className="text-xs text-muted-foreground text-center min-h-4">
+              {isUsbSupported
+                ? usbConnected
+                  ? `USB connected: ${usbDeviceLabel || "Reader"}`
+                  : "USB reader not connected."
+                : "WebUSB not supported on this browser/device."}
+            </div>
             <div className="text-sm text-muted-foreground text-center min-h-5">
               {faceVisible ? "Face visible." : "Face not visible."} {status}
+            </div>
+            <div className="w-full max-w-xl rounded-md border bg-muted/20 p-3">
+              <div className="text-xs font-medium text-muted-foreground mb-2">NFC diagnostics</div>
+              <div className="max-h-32 overflow-auto whitespace-pre-wrap break-words text-xs text-muted-foreground">
+                {nfcDebugLog.length ? nfcDebugLog.join("\n") : "No NFC events yet."}
+              </div>
             </div>
             {tapPopup ? (
               <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none px-4">
