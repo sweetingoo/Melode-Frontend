@@ -53,6 +53,7 @@ import {
   Users,
   TrendingUp,
   Filter,
+  Camera,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { AvatarWithUrl } from "@/components/AvatarWithUrl";
@@ -438,6 +439,15 @@ export default function ManagerClockPage() {
                 <TableHeader>
                   <TableRow className="bg-muted/50">
                     <TableHead className="font-semibold">User</TableHead>
+                    <TableHead
+                      className="font-semibold w-[92px] text-center"
+                      title="Check-in verification only — these sessions are still active (no clock-out photo yet)"
+                    >
+                      <span className="inline-flex flex-col items-center justify-center gap-0.5 text-center">
+                        <Camera className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                        <span className="text-[11px] leading-tight">Check-in photo</span>
+                      </span>
+                    </TableHead>
                     <TableHead className="font-semibold">Job Role</TableHead>
                     <TableHead className="font-semibold">Shift Role</TableHead>
                     <TableHead className="font-semibold">Location</TableHead>
@@ -492,6 +502,26 @@ export default function ManagerClockPage() {
                               )}
                             </div>
                           </div>
+                        </TableCell>
+                        <TableCell className="align-middle">
+                          {record.clock_in_verification_photo_url ? (
+                            <a
+                              href={record.clock_in_verification_photo_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex rounded-md border border-border overflow-hidden focus:outline-none focus:ring-2 focus:ring-ring"
+                              title="Open check-in verification photo"
+                            >
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={record.clock_in_verification_photo_url}
+                                alt=""
+                                className="h-12 w-12 object-cover"
+                              />
+                            </a>
+                          ) : (
+                            <span className="text-muted-foreground text-sm">—</span>
+                          )}
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
@@ -606,6 +636,25 @@ export default function ManagerClockPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            {editingRecord?.clock_in_verification_photo_url ? (
+              <div className="space-y-2">
+                <Label className="text-muted-foreground">Check-in verification photo</Label>
+                <a
+                  href={editingRecord.clock_in_verification_photo_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex max-w-full rounded-md border border-border overflow-hidden focus:outline-none focus:ring-2 focus:ring-ring"
+                  title="Open full-size photo"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={editingRecord.clock_in_verification_photo_url}
+                    alt=""
+                    className="max-h-52 w-auto max-w-full object-contain bg-muted/30"
+                  />
+                </a>
+              </div>
+            ) : null}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="editClockInTime">
@@ -674,10 +723,29 @@ export default function ManagerClockPage() {
           </DialogHeader>
           <div className="space-y-4">
             {clockOutRecord && (
-              <div className="text-sm">
+              <div className="space-y-3 text-sm">
                 <p>
                   User: <span className="font-semibold">{clockOutRecord.user_name || "N/A"}</span>
                 </p>
+                {clockOutRecord.clock_in_verification_photo_url ? (
+                  <div className="space-y-2">
+                    <p className="text-muted-foreground">Check-in verification photo</p>
+                    <a
+                      href={clockOutRecord.clock_in_verification_photo_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex max-w-full rounded-md border border-border overflow-hidden focus:outline-none focus:ring-2 focus:ring-ring"
+                      title="Open full-size photo"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={clockOutRecord.clock_in_verification_photo_url}
+                        alt=""
+                        className="max-h-44 w-auto max-w-full object-contain bg-muted/30"
+                      />
+                    </a>
+                  </div>
+                ) : null}
               </div>
             )}
             <div className="space-y-2">

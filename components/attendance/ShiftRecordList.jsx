@@ -36,7 +36,7 @@ import {
 } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
-import { Plus, Pencil, Trash2, Loader2, CalendarIcon, ChevronDown, Clock, UserPen } from "lucide-react";
+import { Plus, Pencil, Trash2, Loader2, CalendarIcon, ChevronDown, Clock, UserPen, Camera } from "lucide-react";
 import { format } from "date-fns";
 import {
   formatDateForAPI,
@@ -659,6 +659,12 @@ export const ShiftRecordList = ({
                 <TableHead>Date</TableHead>
                 <TableHead>Category</TableHead>
                 <TableHead className="whitespace-nowrap">How logged</TableHead>
+                <TableHead className="w-[88px] text-center">
+                  <span className="inline-flex flex-col items-center gap-0.5">
+                    <Camera className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                    <span className="text-[11px] leading-tight">Photo</span>
+                  </span>
+                </TableHead>
                 <TableHead>Type</TableHead>
                 <TableHead>Hours</TableHead>
                 <TableHead>Time</TableHead>
@@ -690,6 +696,56 @@ export const ShiftRecordList = ({
                         <UserPen className="h-4 w-4 shrink-0" />
                         <span className="text-xs">Manual</span>
                       </span>
+                    )}
+                  </TableCell>
+                  <TableCell className="align-middle w-[1%]">
+                    {record.clock_in_verification_photo_url || record.clock_out_verification_photo_url ? (
+                      <div className="flex flex-wrap items-end justify-center gap-2">
+                        {record.clock_in_verification_photo_url ? (
+                          <div className="flex flex-col items-center gap-0.5">
+                            <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                              Check-in
+                            </span>
+                            <a
+                              href={record.clock_in_verification_photo_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex rounded-md border border-border overflow-hidden focus:outline-none focus:ring-2 focus:ring-ring"
+                              title="Open check-in verification photo"
+                            >
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={record.clock_in_verification_photo_url}
+                                alt=""
+                                className="h-10 w-10 object-cover"
+                              />
+                            </a>
+                          </div>
+                        ) : null}
+                        {record.clock_out_verification_photo_url ? (
+                          <div className="flex flex-col items-center gap-0.5">
+                            <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                              Check-out
+                            </span>
+                            <a
+                              href={record.clock_out_verification_photo_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex rounded-md border border-border overflow-hidden focus:outline-none focus:ring-2 focus:ring-ring"
+                              title="Open check-out verification photo"
+                            >
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={record.clock_out_verification_photo_url}
+                                alt=""
+                                className="h-10 w-10 object-cover"
+                              />
+                            </a>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground text-sm">—</span>
                     )}
                   </TableCell>
                   <TableCell>
