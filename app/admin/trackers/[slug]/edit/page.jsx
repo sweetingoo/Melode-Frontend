@@ -1038,14 +1038,50 @@ const TrackerEditPage = () => {
         });
       }
 
-      const dataToSave = smsTemplatesDraft !== null
-        ? { ...formData, tracker_config: { ...formData.tracker_config, sms_templates: smsTemplatesDraft } }
-        : formData;
+      let dataToSave =
+        smsTemplatesDraft !== null
+          ? { ...formData, tracker_config: { ...formData.tracker_config, sms_templates: smsTemplatesDraft } }
+          : { ...formData };
+
+      let mergedSectionOnSave = false;
+      if (editingSection && editingSectionIndex !== null) {
+        if (!editingSection.label) {
+          toast.error("Section label is required");
+          return;
+        }
+        const sectionsSource = dataToSave.tracker_fields?.sections?.length
+          ? dataToSave.tracker_fields.sections
+          : dataToSave.tracker_config?.sections;
+        const currentSections = [...(sectionsSource || [])];
+        currentSections[editingSectionIndex] = { ...editingSection };
+        dataToSave = {
+          ...dataToSave,
+          ...(dataToSave.tracker_fields?.sections?.length
+            ? { tracker_fields: { ...dataToSave.tracker_fields, sections: currentSections } }
+            : {}),
+          tracker_config: {
+            ...dataToSave.tracker_config,
+            sections: currentSections,
+          },
+        };
+        mergedSectionOnSave = true;
+      }
+
       await updateMutation.mutateAsync({
         slug: slug,
         trackerData: sanitizeTrackerPayload(dataToSave),
       });
       toast.success("Tracker updated successfully");
+
+      if (mergedSectionOnSave) {
+        setFormData(dataToSave);
+        setEditingSectionIndex(null);
+        setEditingSection(null);
+        setDraggedGroupIndex(null);
+        setDragOverGroupIndex(null);
+        setDraggedTableRow(null);
+        setDragOverTableRow(null);
+      }
     } catch (error) {
       // Error handled by mutation
     }
