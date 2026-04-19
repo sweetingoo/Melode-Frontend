@@ -28,6 +28,7 @@ export function TrackerLayoutQuickCreateFieldForm({
   setNewOption,
   onAddOption,
   onRemoveOption,
+  onToggleOptionFreeText,
   uploadFileMutation,
   generateFieldIdFromLabel,
 }) {
@@ -160,20 +161,54 @@ export function TrackerLayoutQuickCreateFieldForm({
               onChange={(e) => setNewOption((prev) => ({ ...prev, value: e.target.value }))}
               className="flex-1 min-w-[120px]"
             />
+            {draft.type === "multiselect" && (
+              <div className="flex items-center gap-2 shrink-0">
+                <Checkbox
+                  id="layout-quick-opt-free-text"
+                  checked={!!newOption.free_text}
+                  onCheckedChange={(c) => setNewOption((prev) => ({ ...prev, free_text: !!c }))}
+                />
+                <Label htmlFor="layout-quick-opt-free-text" className="text-xs cursor-pointer whitespace-nowrap font-normal">
+                  Free text
+                </Label>
+              </div>
+            )}
             <Button type="button" variant="outline" size="sm" onClick={onAddOption} disabled={!newOption.label}>
               <Plus className="h-4 w-4" />
             </Button>
           </div>
+          {draft.type === "multiselect" && (
+            <p className="text-xs text-muted-foreground">
+              Enable &quot;Free text&quot; on an option to show a details box when that option is checked.
+            </p>
+          )}
           {(draft.options || []).length > 0 && (
             <div className="space-y-1">
               {(draft.options || []).map((option, idx) => (
-                <div key={idx} className="flex items-center justify-between p-2 bg-muted rounded text-sm">
-                  <span>
+                <div key={idx} className="flex items-center justify-between gap-2 p-2 bg-muted rounded text-sm">
+                  <span className="min-w-0 flex-1">
                     <strong>{option.value}</strong>: {option.label}
+                    {option.free_text ? (
+                      <span className="ml-2 text-[10px] uppercase text-muted-foreground">Free text</span>
+                    ) : null}
                   </span>
-                  <Button type="button" variant="ghost" size="sm" onClick={() => onRemoveOption(idx)}>
-                    <X className="h-4 w-4" />
-                  </Button>
+                  <div className="flex items-center gap-1 shrink-0">
+                    {draft.type === "multiselect" && typeof onToggleOptionFreeText === "function" && (
+                      <div className="flex items-center gap-1.5 mr-1">
+                        <Checkbox
+                          id={`layout-quick-ft-${idx}`}
+                          checked={!!option.free_text}
+                          onCheckedChange={() => onToggleOptionFreeText(idx)}
+                        />
+                        <Label htmlFor={`layout-quick-ft-${idx}`} className="text-xs cursor-pointer font-normal whitespace-nowrap">
+                          Free text
+                        </Label>
+                      </div>
+                    )}
+                    <Button type="button" variant="ghost" size="sm" onClick={() => onRemoveOption(idx)}>
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>

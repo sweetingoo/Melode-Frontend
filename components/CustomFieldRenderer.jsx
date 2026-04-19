@@ -57,11 +57,19 @@ const isOptionOther = (value, label) => {
   return false;
 };
 
+/** Option object may set free_text: true (multiselect) to show a textarea when that option is selected. */
+const optionPromptsFreeText = (option) => {
+  if (option && typeof option === 'object' && option.free_text === true) return true;
+  return isOptionOther(option?.value, option?.label);
+};
+
 // Order options: put "other"/"others" at end only (no None). Use for radio and other types that don't need None.
 const orderOptionsOtherAtEnd = (options) => {
   if (!Array.isArray(options) || options.length === 0) return [];
   const normalized = options.map((o) =>
-    typeof o === 'object' && o !== null ? { value: o.value ?? '', label: o.label ?? o.value ?? '' } : { value: String(o), label: String(o) }
+    typeof o === 'object' && o !== null
+      ? { value: o.value ?? '', label: o.label ?? o.value ?? '', ...(o.free_text === true ? { free_text: true } : {}) }
+      : { value: String(o), label: String(o) }
   );
   const otherOptions = normalized.filter((o) => isOptionOther(o.value, o.label));
   const rest = normalized.filter((o) => !isOptionOther(o.value, o.label));
@@ -76,7 +84,9 @@ const normalizeOptionsWithNoneAndOther = (options) => {
     return { options: [noneOption], noneValue: 'none' };
   }
   const normalized = options.map((o) =>
-    typeof o === 'object' && o !== null ? { value: o.value ?? '', label: o.label ?? o.value ?? '' } : { value: String(o), label: String(o) }
+    typeof o === 'object' && o !== null
+      ? { value: o.value ?? '', label: o.label ?? o.value ?? '', ...(o.free_text === true ? { free_text: true } : {}) }
+      : { value: String(o), label: String(o) }
   );
   const isNone = (v, l) => {
     const vv = String(v || '').toLowerCase().trim();
@@ -105,6 +115,8 @@ const CustomFieldRenderer = ({
   readOnly = false,
   hideLabel = false,
   otherTextValue,
+  /** Multiselect: per-option free text stored on submission_data[`${field.id}_free_text`] as { [optionValue]: string } */
+  optionFreeTextMap,
 }) => {
   const fieldId = `custom-field-${field.id}`;
   const otherFieldId = `${field.id}_other`;
@@ -380,7 +392,7 @@ const CustomFieldRenderer = ({
           );
         }
         const selectedOption = options.find((o) => (o.value ?? o) === selectVal);
-        const isOtherSelected = selectedOption && isOptionOther(selectedOption.value, selectedOption.label);
+        const isOtherSelected = selectedOption && optionPromptsFreeText(selectedOption);
         return (
           <div className="space-y-2">
             <Select
@@ -588,6 +600,35 @@ const CustomFieldRenderer = ({
         const multiObj = value && typeof value === 'object' && 'rag' in value ? value : { value, rag: null };
         const selectedValues = Array.isArray(multiObj.value) ? multiObj.value : (multiObj.value ? [multiObj.value] : []);
         const multiRag = multiObj.rag?.toLowerCase();
+        const freeTextMap =
+          optionFreeTextMap && typeof optionFreeTextMap === 'object' && !Array.isArray(optionFreeTextMap)
+            ? optionFreeTextMap
+            : {};
+
+        const getFreeTextForSelectedOption = (optionValue) => {
+          const sv = String(optionValue);
+          if (freeTextMap[sv] !== undefined && freeTextMap[sv] !== null) return String(freeTextMap[sv]);
+          const legacyOther = multiOptions.find(
+            (o) => selectedValues.includes(o.value ?? o) && isOptionOther(o.value, o.label),
+          );
+          if (
+            legacyOther &&
+            String(legacyOther.value ?? legacyOther) === sv &&
+            typeof otherTextValue === 'string'
+          ) {
+            return otherTextValue;
+          }
+          return '';
+        };
+
+        const pruneFreeTextKey = (optionValue) => {
+          if (!onChange) return;
+          const k = String(optionValue);
+          const next = { ...freeTextMap };
+          delete next[k];
+          onChange(`${field.id}_free_text`, next);
+        };
+
         if (readOnly && multiRag) {
           const labels = selectedValues.map((v) => {
             const o = multiOptions.find((opt) => (opt.value ?? opt) === v);
@@ -607,11 +648,6 @@ const CustomFieldRenderer = ({
           );
         }
         const setMultiValue = (next) => handleChange(next.length ? next : []);
-        const selectedOtherOption = multiOptions.find((o) => {
-          const v = o.value ?? o;
-          return selectedValues.includes(v) && isOptionOther(o.value, o.label);
-        });
-        const isOtherSelectedMulti = !!selectedOtherOption;
         return (
           <div className="space-y-2 w-full">
             <div className="grid w-full grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4 min-w-0">
@@ -620,52 +656,69 @@ const CustomFieldRenderer = ({
                 const optionLabel = typeof option === 'object' && option !== null ? (option.label ?? option.value ?? '') : (option ?? '');
                 const isSelected = selectedValues.some((v) => String(v) === String(optionValue) || String(v) === String(optionLabel));
                 const isNoneOption = String(optionValue) === String(multiNoneValue);
+                const showFreeText = optionPromptsFreeText(option);
+                const ftVal = getFreeTextForSelectedOption(optionValue);
                 return (
-                  <div key={index} className="flex min-w-0 items-start gap-2 py-1.5 pr-2">
-                    <Checkbox
-                      id={`${fieldId}-${index}`}
-                      checked={isSelected}
-                      className="shrink-0 mt-0.5"
-                      onCheckedChange={(checked) => {
-                        if (checked) {
-                          if (isNoneOption) {
-                            setMultiValue([multiNoneValue]);
+                  <div key={index} className="flex min-w-0 flex-col gap-1.5 py-1.5 pr-2">
+                    <div className="flex items-start gap-2">
+                      <Checkbox
+                        id={`${fieldId}-${index}`}
+                        checked={isSelected}
+                        className="shrink-0 mt-0.5"
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            if (isNoneOption) {
+                              setMultiValue([multiNoneValue]);
+                            } else {
+                              handleChange([...selectedValues.filter(v => String(v) !== String(multiNoneValue)), optionValue]);
+                            }
                           } else {
-                            handleChange([...selectedValues.filter(v => String(v) !== String(multiNoneValue)), optionValue]);
+                            if (showFreeText) pruneFreeTextKey(optionValue);
+                            const next = selectedValues.filter((v) => String(v) !== String(optionValue) && String(v) !== String(optionLabel));
+                            if (isNoneOption) {
+                              handleChange(next.length ? next : []);
+                            } else {
+                              setMultiValue(next);
+                            }
                           }
-                        } else {
-                          const next = selectedValues.filter((v) => String(v) !== String(optionValue) && String(v) !== String(optionLabel));
-                          if (isNoneOption) {
-                            handleChange(next.length ? next : []);
-                          } else {
-                            setMultiValue(next);
-                          }
-                        }
-                      }}
-                    />
-                    <Label htmlFor={`${fieldId}-${index}`} className="text-sm font-normal cursor-pointer min-w-0 flex-1 break-words">
-                      {option.label || option}
-                    </Label>
+                        }}
+                        disabled={readOnly}
+                      />
+                      <Label htmlFor={`${fieldId}-${index}`} className="text-sm font-normal cursor-pointer min-w-0 flex-1 break-words">
+                        {option.label || option}
+                      </Label>
+                    </div>
+                    {isSelected && showFreeText && (
+                      readOnly ? (
+                        ftVal ? (
+                          <div className="ml-7 pl-3 border-l-2 border-muted text-sm text-muted-foreground whitespace-pre-wrap">
+                            {ftVal}
+                          </div>
+                        ) : null
+                      ) : (
+                        <div className="pl-7 space-y-1 w-full min-w-0">
+                          <Label htmlFor={`${fieldId}-ft-${index}`} className="text-xs text-muted-foreground">
+                            Details
+                          </Label>
+                          <Textarea
+                            id={`${fieldId}-ft-${index}`}
+                            value={ftVal}
+                            onChange={(e) => {
+                              const next = { ...freeTextMap, [String(optionValue)]: e.target.value };
+                              onChange(`${field.id}_free_text`, next);
+                            }}
+                            placeholder="Type here..."
+                            rows={3}
+                            className={error ? 'border-red-500' : ''}
+                            disabled={readOnly}
+                          />
+                        </div>
+                      )
+                    )}
                   </div>
                 );
               })}
             </div>
-            {isOtherSelectedMulti && !readOnly && (
-              <div className="space-y-1">
-                <Label htmlFor={`${fieldId}-other`} className="text-sm text-muted-foreground">
-                  Please specify
-                </Label>
-                <Textarea
-                  id={`${fieldId}-other`}
-                  value={otherTextValue ?? ''}
-                  onChange={(e) => onChange(otherFieldId, e.target.value)}
-                  placeholder="Type here..."
-                  rows={3}
-                  className={error ? 'border-red-500' : ''}
-                  disabled={readOnly}
-                />
-              </div>
-            )}
             {selectedValues.length > 0 && (
               <div className="text-sm text-muted-foreground">
                 Selected: {selectedValues.join(', ')}

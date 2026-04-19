@@ -331,6 +331,15 @@ export default function PublicEntrySubmitPage() {
 
       const v = formatFieldValueForAPI(field, value);
       if (v !== null) processed[fieldId] = v;
+
+      const oth = submissionData[`${fieldId}_other`];
+      if (oth !== undefined && oth !== null && String(oth).trim() !== "") {
+        processed[`${fieldId}_other`] = oth;
+      }
+      const fmap = submissionData[`${fieldId}_free_text`];
+      if (fmap && typeof fmap === "object" && !Array.isArray(fmap) && Object.keys(fmap).length > 0) {
+        processed[`${fieldId}_free_text`] = fmap;
+      }
     }
 
     try {
@@ -461,6 +470,8 @@ export default function PublicEntrySubmitPage() {
                       key={fieldId}
                       field={mapFieldToMapped(field)}
                       value={value}
+                      otherTextValue={submissionData[`${fieldId}_other`]}
+                      optionFreeTextMap={submissionData[`${fieldId}_free_text`]}
                       onChange={isDisplayOnly ? undefined : handleFieldChange}
                       error={error}
                     />
@@ -614,6 +625,8 @@ export default function PublicEntrySubmitPage() {
                           key={fieldId}
                           field={mappedField}
                           value={value}
+                          otherTextValue={submissionData[`${fieldId}_other`]}
+                          optionFreeTextMap={submissionData[`${fieldId}_free_text`]}
                           onChange={isDisplayOnly ? undefined : handleFieldChange}
                           error={error}
                         />

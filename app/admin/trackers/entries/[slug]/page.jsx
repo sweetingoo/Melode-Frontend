@@ -2146,6 +2146,7 @@ const TrackerEntryDetailPage = () => {
                             field={getFieldWithStageFilteredStatusOptions(baseField, statusesForEditModeStage)}
                             value={value}
                             otherTextValue={effectiveEntryData[`${fieldId}_other`]}
+                            optionFreeTextMap={effectiveEntryData[`${fieldId}_free_text`]}
                             onChange={handleFieldChange}
                             error={fieldErrors[fieldId]}
                             readOnly={isFieldDisabledByCondition(field, effectiveEntryData)}
@@ -2184,6 +2185,7 @@ const TrackerEntryDetailPage = () => {
                               field={getFieldWithStageFilteredStatusOptions(baseField, statusesForEditModeStage)}
                               value={value}
                               otherTextValue={effectiveEntryData[`${fieldId}_other`]}
+                              optionFreeTextMap={effectiveEntryData[`${fieldId}_free_text`]}
                               onChange={handleFieldChange}
                               error={fieldErrors[fieldId]}
                               readOnly={isFieldDisabledByCondition(field, effectiveEntryData)}
@@ -2223,6 +2225,7 @@ const TrackerEntryDetailPage = () => {
                                       field={getFieldWithStageFilteredStatusOptions(baseField, statusesForSectionStage.length ? statusesForSectionStage : statusesForEditModeStage)}
                                       value={value}
                                       otherTextValue={effectiveEntryData[`${fieldId}_other`]}
+                                      optionFreeTextMap={effectiveEntryData[`${fieldId}_free_text`]}
                                       onChange={handleFieldChange}
                                       error={fieldErrors[fieldId]}
                                       readOnly={isFieldDisabledByCondition(field, effectiveEntryData)}
@@ -2255,6 +2258,7 @@ const TrackerEntryDetailPage = () => {
                                 field={getFieldWithStageFilteredStatusOptions(baseField, statusesForEditModeStage)}
                                 value={value}
                                 otherTextValue={effectiveEntryData[`${fieldId}_other`]}
+                                optionFreeTextMap={effectiveEntryData[`${fieldId}_free_text`]}
                                 onChange={handleFieldChange}
                                 error={fieldErrors[fieldId]}
                                 readOnly={isFieldDisabledByCondition(field, effectiveEntryData)}
@@ -2297,7 +2301,7 @@ const TrackerEntryDetailPage = () => {
                           const mapped = { ...field, type: field.type || field.field_type, field_label: field.label || field.field_label || field.name, field_name: field.name || field.id, id: fieldId };
                           return (
                             <div key={fieldId} className="space-y-1">
-                              <CustomFieldRenderer field={mapped} value={displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} readOnly />
+                              <CustomFieldRenderer field={mapped} value={displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} optionFreeTextMap={displayData[`${fieldId}_free_text`]} readOnly />
                             </div>
                           );
                         })}
@@ -2332,7 +2336,7 @@ const TrackerEntryDetailPage = () => {
                             const mapped = { ...field, type: field.type || field.field_type, field_label: field.label || field.field_label || field.name, field_name: field.name || field.id, id: fieldId };
                             return (
                               <div key={fieldId} className="space-y-1">
-                                <CustomFieldRenderer field={mapped} value={displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} readOnly />
+                                <CustomFieldRenderer field={mapped} value={displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} optionFreeTextMap={displayData[`${fieldId}_free_text`]} readOnly />
                               </div>
                             );
                           })}
@@ -2369,7 +2373,7 @@ const TrackerEntryDetailPage = () => {
                                 const fieldId = field.id || field.name || field.field_id;
                                 return (
                                   <div key={fieldId} className="space-y-1">
-                                    <CustomFieldRenderer field={mapFieldToMapped(field)} value={displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} readOnly />
+                                    <CustomFieldRenderer field={mapFieldToMapped(field)} value={displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} optionFreeTextMap={displayData[`${fieldId}_free_text`]} readOnly />
                                   </div>
                                 );
                               })}
@@ -2415,13 +2419,23 @@ const TrackerEntryDetailPage = () => {
                                                         if (field && !checkFieldVisibility(field, displayData)) return <td key={cIdx} className="p-2" />;
                                                         const rawVal = fieldId != null ? displayData[fieldId] : undefined;
                                                         const rawOther = fieldId != null ? displayData[`${fieldId}_other`] : undefined;
+                                                        const rawFreeText = fieldId != null ? displayData[`${fieldId}_free_text`] : undefined;
                                                         const cellValue = Array.isArray(rawVal) ? rawVal[originalIdx] : rawVal;
                                                         const cellOtherValue = Array.isArray(rawOther) ? rawOther[originalIdx] : rawOther;
+                                                        const cellFreeTextMap = Array.isArray(rawFreeText) ? rawFreeText[originalIdx] : rawFreeText;
                                                         return (
                                                           <td key={cIdx} className="p-2 align-top">
                                                             <div className="space-y-1">
                                                               {cell.text ? <span className="text-muted-foreground text-xs block">{cell.text}</span> : null}
-                                                              {field && <CustomFieldRenderer field={mapFieldToMapped(field)} value={cellValue} otherTextValue={cellOtherValue} readOnly />}
+                                                              {field && (
+                                                                <CustomFieldRenderer
+                                                                  field={mapFieldToMapped(field)}
+                                                                  value={cellValue}
+                                                                  otherTextValue={cellOtherValue}
+                                                                  optionFreeTextMap={cellFreeTextMap}
+                                                                  readOnly
+                                                                />
+                                                              )}
                                                             </div>
                                                           </td>
                                                         );
@@ -2449,7 +2463,7 @@ const TrackerEntryDetailPage = () => {
                                             const fieldId = field.id || field.name || field.field_id;
                                             return (
                                               <div key={fieldId} className={cn(["text_block", "image_block", "image_free_draw", "youtube_video_embed"].includes((field.type || field.field_type || "").toLowerCase()) && "md:col-span-2")}>
-                                                <CustomFieldRenderer field={mapFieldToMapped(field)} value={displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} readOnly />
+                                                <CustomFieldRenderer field={mapFieldToMapped(field)} value={displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} optionFreeTextMap={displayData[`${fieldId}_free_text`]} readOnly />
                                               </div>
                                             );
                                           };
@@ -2475,7 +2489,7 @@ const TrackerEntryDetailPage = () => {
                                           const fieldId = field.id || field.name || field.field_id;
                                           return (
                                             <div key={fieldId} className={cn("space-y-1", ["text_block", "image_block", "image_free_draw", "youtube_video_embed"].includes((field.type || field.field_type || "").toLowerCase()) && "md:col-span-2")}>
-                                              <CustomFieldRenderer field={mapFieldToMapped(field)} value={displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} readOnly />
+                                              <CustomFieldRenderer field={mapFieldToMapped(field)} value={displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} optionFreeTextMap={displayData[`${fieldId}_free_text`]} readOnly />
                                             </div>
                                           );
                                         })}
@@ -2508,7 +2522,7 @@ const TrackerEntryDetailPage = () => {
                                 const mapped = { ...field, type: field.type || field.field_type, field_label: field.label || field.field_label || field.name, field_name: field.name || field.id, id: fieldId };
                                 return (
                                   <div key={fieldId} className="space-y-1">
-                                    <CustomFieldRenderer field={mapped} value={displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} readOnly />
+                                    <CustomFieldRenderer field={mapped} value={displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} optionFreeTextMap={displayData[`${fieldId}_free_text`]} readOnly />
                                   </div>
                                 );
                               })}
@@ -2605,6 +2619,7 @@ const TrackerEntryDetailPage = () => {
                                     field={getFieldWithStageFilteredStatusOptions(baseField, statusesForThisStage.length ? statusesForThisStage : statusesForEditModeStage)}
                                     value={value}
                                     otherTextValue={effectiveEntryData[`${fieldId}_other`]}
+                                    optionFreeTextMap={effectiveEntryData[`${fieldId}_free_text`]}
                                     onChange={handleFieldChange}
                                     error={fieldErrors[fieldId]}
                                     readOnly={isFieldDisabledByCondition(field, effectiveEntryData)}
@@ -2625,6 +2640,7 @@ const TrackerEntryDetailPage = () => {
                                 field={getFieldWithStageFilteredStatusOptions(baseField, statusesForThisStage.length ? statusesForThisStage : statusesForEditModeStage)}
                                 value={value}
                                 otherTextValue={effectiveEntryData[`${fieldId}_other`]}
+                                optionFreeTextMap={effectiveEntryData[`${fieldId}_free_text`]}
                                 onChange={handleFieldChange}
                                 error={fieldErrors[fieldId]}
                                 readOnly={isFieldDisabledByCondition(field, effectiveEntryData)}
@@ -2739,7 +2755,7 @@ const TrackerEntryDetailPage = () => {
                             const fieldId = field.id || field.name || field.field_id;
                             return (
                               <div key={fieldId} className="space-y-1">
-                                <CustomFieldRenderer field={{ ...field, type: field.type || field.field_type, field_label: field.label || field.name, id: fieldId }} value={displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} readOnly />
+                                <CustomFieldRenderer field={{ ...field, type: field.type || field.field_type, field_label: field.label || field.name, id: fieldId }} value={displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} optionFreeTextMap={displayData[`${fieldId}_free_text`]} readOnly />
                               </div>
                             );
                           });
@@ -2798,13 +2814,23 @@ const TrackerEntryDetailPage = () => {
                                                       if (field && !checkFieldVisibility(field, displayData)) return <td key={cIdx} className="p-2" />;
                                                       const rawVal = fieldId != null ? displayData[fieldId] : undefined;
                                                       const rawOther = fieldId != null ? displayData[`${fieldId}_other`] : undefined;
+                                                      const rawFreeText = fieldId != null ? displayData[`${fieldId}_free_text`] : undefined;
                                                       const cellValue = Array.isArray(rawVal) ? rawVal[originalIdx] : rawVal;
                                                       const cellOtherValue = Array.isArray(rawOther) ? rawOther[originalIdx] : rawOther;
+                                                      const cellFreeTextMap = Array.isArray(rawFreeText) ? rawFreeText[originalIdx] : rawFreeText;
                                                       return (
                                                         <td key={cIdx} className="p-2 align-top">
                                                           <div className="space-y-1">
                                                             {cell.text ? <span className="text-muted-foreground text-xs block">{cell.text}</span> : null}
-                                                            {field && <CustomFieldRenderer field={mapFieldToMapped(field)} value={cellValue} otherTextValue={cellOtherValue} readOnly />}
+                                                            {field && (
+                                                              <CustomFieldRenderer
+                                                                field={mapFieldToMapped(field)}
+                                                                value={cellValue}
+                                                                otherTextValue={cellOtherValue}
+                                                                optionFreeTextMap={cellFreeTextMap}
+                                                                readOnly
+                                                              />
+                                                            )}
                                                           </div>
                                                         </td>
                                                       );
@@ -2832,7 +2858,7 @@ const TrackerEntryDetailPage = () => {
                                           const fieldId = field.id || field.name || field.field_id;
                                           return (
                                             <div key={fieldId} className={cn(["text_block", "image_block", "image_free_draw", "youtube_video_embed"].includes((field.type || field.field_type || "").toLowerCase()) && "md:col-span-2")}>
-                                              <CustomFieldRenderer field={mapFieldToMapped(field)} value={displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} readOnly />
+                                              <CustomFieldRenderer field={mapFieldToMapped(field)} value={displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} optionFreeTextMap={displayData[`${fieldId}_free_text`]} readOnly />
                                             </div>
                                           );
                                         };
@@ -2858,7 +2884,7 @@ const TrackerEntryDetailPage = () => {
                                         const fieldId = field.id || field.name || field.field_id;
                                         return (
                                           <div key={fieldId} className={cn("space-y-1", ["text_block", "image_block", "image_free_draw", "youtube_video_embed"].includes((field.type || field.field_type || "").toLowerCase()) && "md:col-span-2")}>
-                                            <CustomFieldRenderer field={mapFieldToMapped(field)} value={displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} readOnly />
+                                            <CustomFieldRenderer field={mapFieldToMapped(field)} value={displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} optionFreeTextMap={displayData[`${fieldId}_free_text`]} readOnly />
                                           </div>
                                         );
                                       })}
@@ -2872,7 +2898,7 @@ const TrackerEntryDetailPage = () => {
                               const fieldId = field.id || field.name || field.field_id;
                               return (
                                 <div key={fieldId} className="space-y-1">
-                                  <CustomFieldRenderer field={mapFieldToMapped(field)} value={displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} readOnly />
+                                  <CustomFieldRenderer field={mapFieldToMapped(field)} value={displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} optionFreeTextMap={displayData[`${fieldId}_free_text`]} readOnly />
                                 </div>
                               );
                             })}

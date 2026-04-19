@@ -905,7 +905,7 @@ const TrackerEditPage = () => {
   /** Inline create from stack / grid / table layout: dialog + where to attach the new field id */
   const [layoutQuickCreateOpen, setLayoutQuickCreateOpen] = useState(false);
   const [layoutQuickCreateDraft, setLayoutQuickCreateDraft] = useState(() => ({ ...LAYOUT_QUICK_CREATE_INITIAL }));
-  const [layoutQuickOption, setLayoutQuickOption] = useState({ value: "", label: "" });
+  const [layoutQuickOption, setLayoutQuickOption] = useState({ value: "", label: "", free_text: false });
   const [layoutQuickCreatePlacement, setLayoutQuickCreatePlacement] = useState(null);
 
   // Draft option label for repeatable group child (select/dropdown) so input stays controlled
@@ -932,8 +932,8 @@ const TrackerEditPage = () => {
   const [newNoteCategory, setNewNoteCategory] = useState("");
   const [newActionTypeLabel, setNewActionTypeLabel] = useState("");
   const [newActionTypeChaseDays, setNewActionTypeChaseDays] = useState("");
-  const [newOption, setNewOption] = useState({ value: "", label: "" });
-  const [editingOption, setEditingOption] = useState({ value: "", label: "" });
+  const [newOption, setNewOption] = useState({ value: "", label: "", free_text: false });
+  const [editingOption, setEditingOption] = useState({ value: "", label: "", free_text: false });
   const [shareLinkCopied, setShareLinkCopied] = useState(false);
   const [provisionSmsLoading, setProvisionSmsLoading] = useState(false);
   const [twilioActiveNumbers, setTwilioActiveNumbers] = useState([]);
@@ -1099,9 +1099,12 @@ const TrackerEditPage = () => {
     }
     setLayoutQuickCreateDraft((prev) => ({
       ...prev,
-      options: [...(prev.options || []), { value: optionValue, label: layoutQuickOption.label }],
+      options: [
+        ...(prev.options || []),
+        { value: optionValue, label: layoutQuickOption.label, ...(layoutQuickOption.free_text ? { free_text: true } : {}) },
+      ],
     }));
-    setLayoutQuickOption({ value: "", label: "" });
+    setLayoutQuickOption({ value: "", label: "", free_text: false });
   };
 
   const handleLayoutQuickRemoveOption = (index) => {
@@ -1251,7 +1254,7 @@ const TrackerEditPage = () => {
     setLayoutQuickCreateOpen(false);
     setLayoutQuickCreatePlacement(null);
     setLayoutQuickCreateDraft({ ...LAYOUT_QUICK_CREATE_INITIAL });
-    setLayoutQuickOption({ value: "", label: "" });
+    setLayoutQuickOption({ value: "", label: "", free_text: false });
     toast.success("Field created and added to layout");
   };
 
@@ -1366,6 +1369,7 @@ const TrackerEditPage = () => {
     const newOption = {
       value: optionValue,
       label: editingOption.label,
+      ...(editingOption.free_text ? { free_text: true } : {}),
     };
 
     setEditingField((prev) => ({
@@ -1373,7 +1377,7 @@ const TrackerEditPage = () => {
       options: [...(prev.options || []), newOption],
     }));
 
-    setEditingOption({ value: "", label: "" });
+    setEditingOption({ value: "", label: "", free_text: false });
   };
 
   const handleRemoveEditingOption = (index) => {
@@ -1793,10 +1797,10 @@ const TrackerEditPage = () => {
 
     setNewField((prev) => ({
       ...prev,
-      options: [...prev.options, { value: optionValue, label: newOption.label }],
+      options: [...prev.options, { value: optionValue, label: newOption.label, ...(newOption.free_text ? { free_text: true } : {}) }],
     }));
 
-    setNewOption({ value: "", label: "" });
+    setNewOption({ value: "", label: "", free_text: false });
   };
 
   const handleRemoveOption = (index) => {
@@ -2688,6 +2692,18 @@ const TrackerEditPage = () => {
                                 onChange={(e) => setEditingOption((prev) => ({ ...prev, value: e.target.value }))}
                                 className="flex-1 min-w-[120px]"
                               />
+                              {editingField.type === "multiselect" && (
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <Checkbox
+                                    id="edit-new-opt-free-text"
+                                    checked={!!editingOption.free_text}
+                                    onCheckedChange={(c) => setEditingOption((prev) => ({ ...prev, free_text: !!c }))}
+                                  />
+                                  <Label htmlFor="edit-new-opt-free-text" className="text-xs cursor-pointer whitespace-nowrap font-normal">
+                                    Free text
+                                  </Label>
+                                </div>
+                              )}
                               <Button
                                 type="button"
                                 variant="outline"
@@ -2699,24 +2715,53 @@ const TrackerEditPage = () => {
                             </div>
                             <p className="text-xs text-muted-foreground">
                               Value is what gets stored; label is what users see. Leave value blank to auto-generate from label.
+                              {editingField.type === "multiselect" && (
+                                <> For multi-select, enable &quot;Free text&quot; on an option to show a details box when that option is checked.</>
+                              )}
                             </p>
                             {editingField.options && editingField.options.length > 0 && (
                               <div className="space-y-1">
                                 {editingField.options.map((option, idx) => (
                                   <div
                                     key={idx}
-                                    className="flex items-center justify-between p-2 bg-muted rounded"
+                                    className="flex items-center justify-between gap-2 p-2 bg-muted rounded"
                                   >
-                                    <span className="text-sm">
+                                    <span className="text-sm min-w-0 flex-1">
                                       <strong>{option.value}</strong>: {option.label}
+                                      {option.free_text ? (
+                                        <Badge variant="secondary" className="ml-2 text-[10px] align-middle">
+                                          Free text
+                                        </Badge>
+                                      ) : null}
                                     </span>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => handleRemoveEditingOption(idx)}
-                                    >
-                                      <X className="h-4 w-4" />
-                                    </Button>
+                                    <div className="flex items-center gap-1 shrink-0">
+                                      {editingField.type === "multiselect" && (
+                                        <div className="flex items-center gap-1.5 mr-1">
+                                          <Checkbox
+                                            id={`edit-opt-ft-${idx}`}
+                                            checked={!!option.free_text}
+                                            onCheckedChange={() =>
+                                              setEditingField((prev) => ({
+                                                ...prev,
+                                                options: (prev.options || []).map((o, i) =>
+                                                  i === idx ? { ...o, free_text: !o.free_text } : o,
+                                                ),
+                                              }))
+                                            }
+                                          />
+                                          <Label htmlFor={`edit-opt-ft-${idx}`} className="text-xs cursor-pointer font-normal whitespace-nowrap">
+                                            Free text
+                                          </Label>
+                                        </div>
+                                      )}
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => handleRemoveEditingOption(idx)}
+                                      >
+                                        <X className="h-4 w-4" />
+                                      </Button>
+                                    </div>
                                   </div>
                                 ))}
                               </div>
@@ -3668,6 +3713,18 @@ const TrackerEditPage = () => {
                             onChange={(e) => setNewOption((prev) => ({ ...prev, value: e.target.value }))}
                             className="flex-1 min-w-[120px]"
                           />
+                          {newField.type === "multiselect" && (
+                            <div className="flex items-center gap-2 shrink-0">
+                              <Checkbox
+                                id="new-opt-free-text"
+                                checked={!!newOption.free_text}
+                                onCheckedChange={(c) => setNewOption((prev) => ({ ...prev, free_text: !!c }))}
+                              />
+                              <Label htmlFor="new-opt-free-text" className="text-xs cursor-pointer whitespace-nowrap font-normal">
+                                Free text
+                              </Label>
+                            </div>
+                          )}
                           <Button
                             type="button"
                             variant="outline"
@@ -3679,24 +3736,51 @@ const TrackerEditPage = () => {
                         </div>
                         <p className="text-xs text-muted-foreground">
                           Value is what gets stored; label is what users see. Leave value blank to auto-generate from label.
+                          {newField.type === "multiselect" && (
+                            <> For multi-select, enable &quot;Free text&quot; on an option to show a details box when that option is checked.</>
+                          )}
                         </p>
                         {newField.options.length > 0 && (
                           <div className="space-y-1">
                             {newField.options.map((option, idx) => (
                               <div
                                 key={idx}
-                                className="flex items-center justify-between p-2 bg-muted rounded"
+                                className="flex items-center justify-between gap-2 p-2 bg-muted rounded"
                               >
-                                <span className="text-sm">
+                                <span className="text-sm min-w-0 flex-1">
                                   <strong>{option.value}</strong>: {option.label}
+                                  {option.free_text ? (
+                                    <Badge variant="secondary" className="ml-2 text-[10px] align-middle">
+                                      Free text
+                                    </Badge>
+                                  ) : null}
                                 </span>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleRemoveOption(idx)}
-                                >
-                                  <X className="h-4 w-4" />
-                                </Button>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  {newField.type === "multiselect" && (
+                                    <div className="flex items-center gap-1.5 mr-1">
+                                      <Checkbox
+                                        id={`new-opt-ft-${idx}`}
+                                        checked={!!option.free_text}
+                                        onCheckedChange={() =>
+                                          setNewField((prev) => ({
+                                            ...prev,
+                                            options: prev.options.map((o, i) => (i === idx ? { ...o, free_text: !o.free_text } : o)),
+                                          }))
+                                        }
+                                      />
+                                      <Label htmlFor={`new-opt-ft-${idx}`} className="text-xs cursor-pointer font-normal whitespace-nowrap">
+                                        Free text
+                                      </Label>
+                                    </div>
+                                  )}
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleRemoveOption(idx)}
+                                  >
+                                    <X className="h-4 w-4" />
+                                  </Button>
+                                </div>
                               </div>
                             ))}
                           </div>
@@ -6585,7 +6669,7 @@ const TrackerEditPage = () => {
           if (!o) {
             setLayoutQuickCreatePlacement(null);
             setLayoutQuickCreateDraft({ ...LAYOUT_QUICK_CREATE_INITIAL });
-            setLayoutQuickOption({ value: "", label: "" });
+            setLayoutQuickOption({ value: "", label: "", free_text: false });
           }
         }}
       >
@@ -6639,6 +6723,12 @@ const TrackerEditPage = () => {
               setNewOption={setLayoutQuickOption}
               onAddOption={handleLayoutQuickAddOption}
               onRemoveOption={handleLayoutQuickRemoveOption}
+              onToggleOptionFreeText={(idx) =>
+                setLayoutQuickCreateDraft((prev) => ({
+                  ...prev,
+                  options: (prev.options || []).map((o, i) => (i === idx ? { ...o, free_text: !o.free_text } : o)),
+                }))
+              }
               uploadFileMutation={uploadFileMutation}
               generateFieldIdFromLabel={generateFieldIdFromLabel}
             />
@@ -6651,7 +6741,7 @@ const TrackerEditPage = () => {
                 setLayoutQuickCreateOpen(false);
                 setLayoutQuickCreatePlacement(null);
                 setLayoutQuickCreateDraft({ ...LAYOUT_QUICK_CREATE_INITIAL });
-                setLayoutQuickOption({ value: "", label: "" });
+                setLayoutQuickOption({ value: "", label: "", free_text: false });
               }}
             >
               Cancel
