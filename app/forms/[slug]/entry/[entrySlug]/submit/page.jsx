@@ -107,6 +107,7 @@ export default function PublicEntrySubmitPage() {
         return String(value);
       case "select":
       case "radio":
+      case "table_radio":
         return String(value);
       case "multiselect":
         return Array.isArray(value) ? value : [String(value)];
@@ -506,8 +507,8 @@ export default function PublicEntrySubmitPage() {
                                     <table className="w-full border-collapse text-sm">
                                       <thead>
                                         <tr className="border-b bg-muted/50">
-                                          {(Array.isArray(group.table_columns) && group.table_columns.length > 0 ? group.table_columns : [{ id: "col_1", label: "Column 1" }]).map((col) => (
-                                            <th key={col.id} className="text-left font-medium p-2">{col.label || col.id}</th>
+                                          {(Array.isArray(group.table_columns) && group.table_columns.length > 0 ? group.table_columns : [{ id: "col_1", label: "" }]).map((col) => (
+                                            <th key={col.id} className="text-left font-medium p-2">{String(col?.label ?? "").trim()}</th>
                                           ))}
                                         </tr>
                                       </thead>
@@ -515,7 +516,7 @@ export default function PublicEntrySubmitPage() {
                                         {(tableRowsForGroup.length > 0 ? tableRowsForGroup : [{ cells: (group.table_columns || [{ id: "c1" }]).map(() => ({ text: "", field_id: null })) }])
                                           .filter((row) => checkRowVisibility(row, submissionData))
                                           .map((row, rIdx) => {
-                                            const tableCols = Array.isArray(group.table_columns) && group.table_columns.length > 0 ? group.table_columns : [{ id: "col_1", label: "Column 1" }];
+                                            const tableCols = Array.isArray(group.table_columns) && group.table_columns.length > 0 ? group.table_columns : [{ id: "col_1", label: "" }];
                                             const cells = (row.cells || []).slice(0, tableCols.length);
                                             while (cells.length < tableCols.length) cells.push({ text: "", field_id: null });
                                             return (

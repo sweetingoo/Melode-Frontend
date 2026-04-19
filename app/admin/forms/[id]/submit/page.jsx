@@ -1045,7 +1045,7 @@ const FormSubmitPage = () => {
                                     if (activeTabId !== (tab.id || tab.label)) return null;
                                     const tabHasTable = (tab.layout || "") === "table" && Array.isArray(tab.table_rows) && tab.table_rows.length > 0;
                                     if (tabHasTable) {
-                                      const tableCols = Array.isArray(tab.table_columns) && tab.table_columns.length > 0 ? tab.table_columns : [{ id: "col_1", label: "Column 1" }];
+                                      const tableCols = Array.isArray(tab.table_columns) && tab.table_columns.length > 0 ? tab.table_columns : [{ id: "col_1", label: "" }];
                                       const tableRows = tab.table_rows || [];
                                       return (
                                         <div key={tab.id || tab.label} className="overflow-x-auto">
@@ -1053,7 +1053,7 @@ const FormSubmitPage = () => {
                                             <thead>
                                               <tr className="border-b border-border">
                                                 {tableCols.map((col) => (
-                                                  <th key={col.id} className="text-left font-medium p-2 pr-4">{col.label || col.id}</th>
+                                                  <th key={col.id} className="text-left font-medium p-2 pr-4">{String(col?.label ?? "").trim()}</th>
                                                 ))}
                                               </tr>
                                             </thead>
@@ -1108,7 +1108,7 @@ const FormSubmitPage = () => {
                           );
                         }
                         if ((group.layout || "") === "table") {
-                          const tableCols = Array.isArray(group.table_columns) && group.table_columns.length > 0 ? group.table_columns : [{ id: "col_1", label: "Column 1" }];
+                          const tableCols = Array.isArray(group.table_columns) && group.table_columns.length > 0 ? group.table_columns : [{ id: "col_1", label: "" }];
                           const tableRows = Array.isArray(group.table_rows) ? group.table_rows : [];
                           return (
                             <Card key={group.id || group.label}>
@@ -1123,7 +1123,7 @@ const FormSubmitPage = () => {
                                     <thead>
                                       <tr className="border-b border-border">
                                         {tableCols.map((col) => (
-                                          <th key={col.id} className="text-left font-medium p-2 pr-4">{col.label || col.id}</th>
+                                          <th key={col.id} className="text-left font-medium p-2 pr-4">{String(col?.label ?? "").trim()}</th>
                                         ))}
                                       </tr>
                                     </thead>

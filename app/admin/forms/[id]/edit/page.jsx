@@ -318,7 +318,7 @@ const FORM_GRID_COLS = ["left", "center", "right"];
 const formGridColumnLabels = { left: "Left", center: "Center (full width)", right: "Right" };
 
 function GridCellTableEditor({ tableCols, tableRows, fieldsList, allIdsInAnyGroup, onUpdate, onRowVisibilityChange }) {
-  const cols = tableCols?.length > 0 ? tableCols : [{ id: "col_1", label: "Column 1" }];
+  const cols = tableCols?.length > 0 ? tableCols : [{ id: "col_1", label: "" }];
   const rows = Array.isArray(tableRows) ? tableRows : [];
   const [rowVisOverride, setRowVisOverride] = useState({});
   const setRowVisibility = (rIdx, cv) => {
@@ -351,7 +351,7 @@ function GridCellTableEditor({ tableCols, tableRows, fieldsList, allIdsInAnyGrou
   const removeColumn = (cIdx) => {
     const nextCols = cols.filter((_, i) => i !== cIdx);
     const nextRows = rows.map((r) => ({ ...r, cells: (r.cells || []).filter((_, i) => i !== cIdx) }));
-    onUpdate(nextCols.length > 0 ? nextCols : [{ id: "col_1", label: "Column 1" }], nextRows);
+    onUpdate(nextCols.length > 0 ? nextCols : [{ id: "col_1", label: "" }], nextRows);
   };
   const addRow = () => onUpdate(cols, [...rows, { cells: cols.map(() => ({ text: "", field_id: null })) }]);
   const removeRow = (rIdx) => onUpdate(cols, rows.filter((_, i) => i !== rIdx));
@@ -477,7 +477,7 @@ function GridCellTabsEditor({ tabs, fieldsList, allIdsInAnyGroup, onUpdate }) {
     <div className="space-y-1.5 mt-1 min-w-[320px] overflow-x-auto">
       {tabList.map((tab, tIdx) => {
         const isTable = (tab.layout || "fields") === "table";
-        const tabCols = isTable && tab.table_columns?.length > 0 ? tab.table_columns : [{ id: "col_1", label: "Column 1" }];
+        const tabCols = isTable && tab.table_columns?.length > 0 ? tab.table_columns : [{ id: "col_1", label: "" }];
         const tabRows = isTable ? (tab.table_rows || []) : [];
         return (
           <div key={tab.id || tIdx} className="rounded border bg-muted/20 p-1.5 space-y-1">
@@ -642,7 +642,7 @@ function FormOneRowEditor({ row, rowIndex, fieldsList, allIdsInAnyGroup, onUpdat
           const slot = slotValue(col);
           const isTable = isTableSlot(col);
           const isTabs = isTabsSlot(col);
-          const tableCols = isTable && slot.table_columns?.length > 0 ? slot.table_columns : [{ id: "col_1", label: "Column 1" }];
+          const tableCols = isTable && slot.table_columns?.length > 0 ? slot.table_columns : [{ id: "col_1", label: "" }];
           const tableRows = isTable ? (slot.table_rows || []) : [];
           const slotContentType = isTable ? "table" : isTabs ? "tabs" : "fields";
           const isTableOrTabs = isTable || isTabs;
@@ -4224,7 +4224,7 @@ const EditFormPage = () => {
                                 : [{ id: `tab_${Date.now()}`, label: "Tab 1", fields: [] }];
                               newGroup.fields = newGroup.tabs.flatMap((t) => t.fields || []);
                             } else if (v === "table") {
-                              const cols = Array.isArray(group.table_columns) && group.table_columns.length > 0 ? group.table_columns : [{ id: "col_1", label: "Column 1" }];
+                              const cols = Array.isArray(group.table_columns) && group.table_columns.length > 0 ? group.table_columns : [{ id: "col_1", label: "" }];
                               const rows = Array.isArray(group.table_rows) && group.table_rows.length > 0 ? group.table_rows : [{ cells: cols.map(() => ({ text: "", field_id: null })) }];
                               newGroup.table_columns = cols;
                               newGroup.table_rows = rows;
@@ -4252,7 +4252,7 @@ const EditFormPage = () => {
                           />
                         ) : (group.layout || "") === "table" ? (
                           (() => {
-                            const cols = Array.isArray(group.table_columns) && group.table_columns.length > 0 ? group.table_columns : [{ id: "col_1", label: "Column 1" }];
+                            const cols = Array.isArray(group.table_columns) && group.table_columns.length > 0 ? group.table_columns : [{ id: "col_1", label: "" }];
                             const rows = Array.isArray(group.table_rows) ? group.table_rows : [];
                             return (
                               <GridCellTableEditor

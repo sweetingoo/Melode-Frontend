@@ -1351,8 +1351,8 @@ const TrackersPage = () => {
       }
     }
     
-    // Handle select/multiselect fields - show label instead of value
-    if ((fieldType === "select" || fieldType === "multiselect")) {
+    // Handle select/multiselect/table_radio fields - show label instead of value
+    if ((fieldType === "select" || fieldType === "multiselect" || fieldType === "table_radio")) {
       // Get options from field.options or field.field_options?.options
       const options = field.options || field.field_options?.options || [];
       

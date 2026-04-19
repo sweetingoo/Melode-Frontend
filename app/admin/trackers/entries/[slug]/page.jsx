@@ -423,7 +423,7 @@ const TrackerEntryDetailPage = () => {
     }
     
     // Handle select fields - show label if available
-    if ((fieldType === "select" || fieldType === "multiselect") && field?.options) {
+    if ((fieldType === "select" || fieldType === "multiselect" || fieldType === "table_radio") && field?.options) {
       if (Array.isArray(value)) {
         return value.map(v => {
           const option = field.options.find(opt => String(opt.value) === String(v) || String(opt.label) === String(v));
@@ -955,7 +955,7 @@ const TrackerEntryDetailPage = () => {
     }
     
     // Handle select fields - show label if available
-    if ((fieldType === "select" || fieldType === "multiselect") && field.options) {
+    if ((fieldType === "select" || fieldType === "multiselect" || fieldType === "table_radio") && field.options) {
       if (Array.isArray(value)) {
         return value.map(v => {
           const option = field.options.find(opt => String(opt.value) === String(v) || String(opt.label) === String(v));
@@ -2213,25 +2213,36 @@ const TrackerEntryDetailPage = () => {
                           <CollapsibleContent>
                             <Card className="rounded-t-none border-t">
                               <CardContent className="pt-4 space-y-4">
-                                {sectionFields.map((field) => {
-                                  const fieldId = field.id || field.name || field.field_id;
-                                  const value = effectiveEntryData[fieldId];
-                                  const stageForSection = stageMapping[sectionIndex];
-                                  const statusesForSectionStage = (stageForSection?.statuses ?? stageForSection?.status_list ?? []).filter(Boolean);
-                                  const baseField = { ...field, type: field.type || field.field_type, field_label: field.label || field.field_label || field.name, field_name: field.name || field.id };
-                                  return (
-                                    <CustomFieldRenderer
-                                      key={fieldId}
-                                      field={getFieldWithStageFilteredStatusOptions(baseField, statusesForSectionStage.length ? statusesForSectionStage : statusesForEditModeStage)}
-                                      value={value}
-                                      otherTextValue={effectiveEntryData[`${fieldId}_other`]}
-                                      optionFreeTextMap={effectiveEntryData[`${fieldId}_free_text`]}
-                                      onChange={handleFieldChange}
-                                      error={fieldErrors[fieldId]}
-                                      readOnly={isFieldDisabledByCondition(field, effectiveEntryData)}
-                                    />
-                                  );
-                                })}
+                                {(() => {
+                                  const allSectionFieldsForCtx = fieldsBySection[sectionKey]?.fields || [];
+                                  const tableRadioCtx = {
+                                    groups: section.groups || [],
+                                    sectionFields: allSectionFieldsForCtx,
+                                    entryData: effectiveEntryData,
+                                    shouldShowRow: (row) => checkRowVisibility(row, effectiveEntryData),
+                                    shouldShowField: (f) => checkFieldVisibility(f, effectiveEntryData),
+                                  };
+                                  return sectionFields.map((field) => {
+                                    const fieldId = field.id || field.name || field.field_id;
+                                    const value = effectiveEntryData[fieldId];
+                                    const stageForSection = stageMapping[sectionIndex];
+                                    const statusesForSectionStage = (stageForSection?.statuses ?? stageForSection?.status_list ?? []).filter(Boolean);
+                                    const baseField = { ...field, type: field.type || field.field_type, field_label: field.label || field.field_label || field.name, field_name: field.name || field.id };
+                                    return (
+                                      <CustomFieldRenderer
+                                        key={fieldId}
+                                        field={getFieldWithStageFilteredStatusOptions(baseField, statusesForSectionStage.length ? statusesForSectionStage : statusesForEditModeStage)}
+                                        value={value}
+                                        otherTextValue={effectiveEntryData[`${fieldId}_other`]}
+                                        optionFreeTextMap={effectiveEntryData[`${fieldId}_free_text`]}
+                                        onChange={handleFieldChange}
+                                        error={fieldErrors[fieldId]}
+                                        readOnly={isFieldDisabledByCondition(field, effectiveEntryData)}
+                                        sectionLayoutContext={tableRadioCtx}
+                                      />
+                                    );
+                                  });
+                                })()}
                               </CardContent>
                             </Card>
                           </CollapsibleContent>
@@ -2393,7 +2404,7 @@ const TrackerEntryDetailPage = () => {
                                     {group.label && <h4 className="text-sm font-medium text-muted-foreground border-b pb-1">{group.label}</h4>}
                                     {isTable ? (
                                       (() => {
-                                        const tableCols = Array.isArray(group.table_columns) && group.table_columns.length > 0 ? group.table_columns : [{ id: "col_1", label: "Column 1" }];
+                                        const tableCols = Array.isArray(group.table_columns) && group.table_columns.length > 0 ? group.table_columns : [{ id: "col_1", label: "" }];
                                         const rows = tableRows.length > 0 ? tableRows : [{ cells: tableCols.map(() => ({ text: "", field_id: null })) }];
                                         return (
                                           <div className="overflow-x-auto rounded-md border">
@@ -2401,7 +2412,7 @@ const TrackerEntryDetailPage = () => {
                                               <thead>
                                                 <tr className="border-b bg-muted/50">
                                                   {tableCols.map((col) => (
-                                                    <th key={col.id} className="text-left font-medium p-2">{col.label || col.id}</th>
+                                                    <th key={col.id} className="text-left font-medium p-2">{String(col?.label ?? "").trim()}</th>
                                                   ))}
                                                 </tr>
                                               </thead>
@@ -2608,6 +2619,13 @@ const TrackerEntryDetailPage = () => {
                         (() => {
                           const layoutItemEdit = trackerReadOnlyLayout[sectionIndex];
                           const allFieldsForEdit = allSectionFieldsForStage;
+                          const tableRadioSectionLayoutContext = {
+                            groups: section.groups || [],
+                            sectionFields: allFieldsForEdit,
+                            entryData: effectiveEntryData,
+                            shouldShowRow: (row) => checkRowVisibility(row, effectiveEntryData),
+                            shouldShowField: (f) => checkFieldVisibility(f, effectiveEntryData),
+                          };
                           if (!layoutItemEdit || !layoutItemEdit.groupsWithFields?.length) {
                             return allFieldsForEdit.map((field) => {
                               const fieldId = field.id || field.name || field.field_id;
@@ -2623,12 +2641,18 @@ const TrackerEntryDetailPage = () => {
                                     onChange={handleFieldChange}
                                     error={fieldErrors[fieldId]}
                                     readOnly={isFieldDisabledByCondition(field, effectiveEntryData)}
+                                    sectionLayoutContext={tableRadioSectionLayoutContext}
                                   />
                                 </div>
                               );
                             });
                           }
                           const { ungrouped: editUngrouped, groupsWithFields: editGroups } = layoutItemEdit;
+                          const tableRadioBoundGroupIds = new Set(
+                            allFieldsForEdit
+                              .filter((f) => (f.type || f.field_type) === "table_radio" && f.field_options?.table_group_id)
+                              .map((f) => String(f.field_options.table_group_id)),
+                          );
                           const getFieldByIdEdit = (fid) => allFieldsForEdit.find((f) => String(f.id || f.name || f.field_id) === String(fid));
                           const renderEditableField = (field) => {
                             const fieldId = field.id || field.name || field.field_id;
@@ -2644,6 +2668,7 @@ const TrackerEntryDetailPage = () => {
                                 onChange={handleFieldChange}
                                 error={fieldErrors[fieldId]}
                                 readOnly={isFieldDisabledByCondition(field, effectiveEntryData)}
+                                sectionLayoutContext={tableRadioSectionLayoutContext}
                               />
                             );
                           };
@@ -2655,6 +2680,9 @@ const TrackerEntryDetailPage = () => {
                                 const hasTableStructure = Array.isArray(group.table_columns) && group.table_columns.length > 0;
                                 const tableRowsForGroup = Array.isArray(group.table_rows) ? group.table_rows : [];
                                 const isTable = layout === "table" && (hasTableStructure || tableRowsForGroup.length > 0);
+                                if (isTable && group.id && tableRadioBoundGroupIds.has(String(group.id))) {
+                                  return null;
+                                }
                                 const gridRows = (group.grid_rows && group.grid_rows.length > 0) ? group.grid_rows : (group.grid_columns ? [{ ...group.grid_columns }] : []);
                                 const isGrid = layout === "grid" && gridRows.length > 0;
                                 const groupLabel = group.label || group.title || group.name || "";
@@ -2668,15 +2696,15 @@ const TrackerEntryDetailPage = () => {
                                         <table className="w-full border-collapse text-sm">
                                           <thead>
                                             <tr className="border-b bg-muted/50">
-                                            {(Array.isArray(group.table_columns) && group.table_columns.length > 0 ? group.table_columns : [{ id: "col_1", label: "Column 1" }]).map((col) => (
-                                              <th key={col.id} className="text-left font-medium p-2">{col.label || col.id}</th>
+                                            {(Array.isArray(group.table_columns) && group.table_columns.length > 0 ? group.table_columns : [{ id: "col_1", label: "" }]).map((col) => (
+                                              <th key={col.id} className="text-left font-medium p-2">{String(col?.label ?? "").trim()}</th>
                                             ))}
                                             </tr>
                                           </thead>
                                           <tbody>
                                             {(tableRowsForGroup.length > 0 ? tableRowsForGroup : [{ cells: (group.table_columns || [{ id: "c1" }]).map(() => ({ text: "", field_id: null })) }]).map((row, rIdx) => {
                                               if (!checkRowVisibility(row, effectiveEntryData)) return null;
-                                              const tableCols = Array.isArray(group.table_columns) && group.table_columns.length > 0 ? group.table_columns : [{ id: "col_1", label: "Column 1" }];
+                                              const tableCols = Array.isArray(group.table_columns) && group.table_columns.length > 0 ? group.table_columns : [{ id: "col_1", label: "" }];
                                               const cells = (row.cells || []).slice(0, tableCols.length);
                                               while (cells.length < tableCols.length) cells.push({ text: "", field_id: null });
                                               return (
@@ -2751,11 +2779,25 @@ const TrackerEntryDetailPage = () => {
                       ) : (() => {
                         const layoutItem = trackerReadOnlyLayout[sectionIndex];
                         if (!layoutItem) {
+                          const tableRadioReadOnlyCtxFlat = {
+                            groups: section.groups || [],
+                            sectionFields: fieldsBySection[sectionKey]?.fields || [],
+                            entryData: displayData,
+                            shouldShowRow: (row) => checkRowVisibility(row, displayData),
+                            shouldShowField: (f) => checkFieldVisibility(f, displayData),
+                          };
                           return sectionFields.map((field) => {
                             const fieldId = field.id || field.name || field.field_id;
                             return (
                               <div key={fieldId} className="space-y-1">
-                                <CustomFieldRenderer field={{ ...field, type: field.type || field.field_type, field_label: field.label || field.name, id: fieldId }} value={displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} optionFreeTextMap={displayData[`${fieldId}_free_text`]} readOnly />
+                                <CustomFieldRenderer
+                                  field={{ ...field, type: field.type || field.field_type, field_label: field.label || field.name, id: fieldId }}
+                                  value={displayData[fieldId]}
+                                  otherTextValue={displayData[`${fieldId}_other`]}
+                                  optionFreeTextMap={displayData[`${fieldId}_free_text`]}
+                                  readOnly
+                                  sectionLayoutContext={tableRadioReadOnlyCtxFlat}
+                                />
                               </div>
                             );
                           });
@@ -2764,6 +2806,18 @@ const TrackerEntryDetailPage = () => {
                         const mapFieldToMapped = (field) => ({ ...field, type: field.type || field.field_type, field_label: field.label || field.field_label || field.name, field_name: field.name || field.id, id: field.id || field.name || field.field_id });
                         // Full section fields for resolving table/grid cell field_id when group.fields is empty (e.g. Procedure(s) table)
                         const allSectionFields = fieldsBySection[sectionKey]?.fields || [];
+                        const tableRadioReadOnlyCtx = {
+                          groups: section.groups || [],
+                          sectionFields: allSectionFields,
+                          entryData: displayData,
+                          shouldShowRow: (row) => checkRowVisibility(row, displayData),
+                          shouldShowField: (f) => checkFieldVisibility(f, displayData),
+                        };
+                        const tableRadioBoundGroupIdsRo = new Set(
+                          allSectionFields
+                            .filter((f) => (f.type || f.field_type) === "table_radio" && f.field_options?.table_group_id)
+                            .map((f) => String(f.field_options.table_group_id)),
+                        );
                         // Priority: layout first (groups with Stack/Grid/Table), then ungrouped stage fields at the end
                         return (
                           <div className="space-y-4">
@@ -2773,6 +2827,9 @@ const TrackerEntryDetailPage = () => {
                               const hasTableStructure = Array.isArray(group.table_columns) && group.table_columns.length > 0;
                               const tableRowsForGroup = Array.isArray(group.table_rows) ? group.table_rows : [];
                               const isTable = layout === "table" && (hasTableStructure || tableRowsForGroup.length > 0);
+                              if (isTable && group.id && tableRadioBoundGroupIdsRo.has(String(group.id))) {
+                                return null;
+                              }
                               const gridRows = (group.grid_rows && group.grid_rows.length > 0) ? group.grid_rows : (group.grid_columns ? [{ ...group.grid_columns }] : []);
                               const isGrid = layout === "grid" && gridRows.length > 0;
                               // Resolve field by id: group.fields first, then section fields (for table/grid where group.fields can be empty)
@@ -2788,7 +2845,7 @@ const TrackerEntryDetailPage = () => {
                                   {groupLabelRo ? <h4 className="text-sm font-medium text-muted-foreground border-b pb-1">{groupLabelRo}</h4> : null}
                                   {isTable ? (
                                     (() => {
-                                      const tableCols = Array.isArray(group.table_columns) && group.table_columns.length > 0 ? group.table_columns : [{ id: "col_1", label: "Column 1" }];
+                                      const tableCols = Array.isArray(group.table_columns) && group.table_columns.length > 0 ? group.table_columns : [{ id: "col_1", label: "" }];
                                       const rows = tableRowsForGroup.length > 0 ? tableRowsForGroup : [{ cells: tableCols.map(() => ({ text: "", field_id: null })) }];
                                       return (
                                         <div className="overflow-x-auto rounded-md border">
@@ -2796,7 +2853,7 @@ const TrackerEntryDetailPage = () => {
                                             <thead>
                                               <tr className="border-b bg-muted/50">
                                                 {tableCols.map((col) => (
-                                                  <th key={col.id} className="text-left font-medium p-2">{col.label || col.id}</th>
+                                                  <th key={col.id} className="text-left font-medium p-2">{String(col?.label ?? "").trim()}</th>
                                                 ))}
                                               </tr>
                                             </thead>
@@ -2829,6 +2886,7 @@ const TrackerEntryDetailPage = () => {
                                                                 otherTextValue={cellOtherValue}
                                                                 optionFreeTextMap={cellFreeTextMap}
                                                                 readOnly
+                                                                sectionLayoutContext={tableRadioReadOnlyCtx}
                                                               />
                                                             )}
                                                           </div>
@@ -2858,7 +2916,14 @@ const TrackerEntryDetailPage = () => {
                                           const fieldId = field.id || field.name || field.field_id;
                                           return (
                                             <div key={fieldId} className={cn(["text_block", "image_block", "image_free_draw", "youtube_video_embed"].includes((field.type || field.field_type || "").toLowerCase()) && "md:col-span-2")}>
-                                              <CustomFieldRenderer field={mapFieldToMapped(field)} value={displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} optionFreeTextMap={displayData[`${fieldId}_free_text`]} readOnly />
+                                              <CustomFieldRenderer
+                                                field={mapFieldToMapped(field)}
+                                                value={displayData[fieldId]}
+                                                otherTextValue={displayData[`${fieldId}_other`]}
+                                                optionFreeTextMap={displayData[`${fieldId}_free_text`]}
+                                                readOnly
+                                                sectionLayoutContext={tableRadioReadOnlyCtx}
+                                              />
                                             </div>
                                           );
                                         };
@@ -2884,7 +2949,14 @@ const TrackerEntryDetailPage = () => {
                                         const fieldId = field.id || field.name || field.field_id;
                                         return (
                                           <div key={fieldId} className={cn("space-y-1", ["text_block", "image_block", "image_free_draw", "youtube_video_embed"].includes((field.type || field.field_type || "").toLowerCase()) && "md:col-span-2")}>
-                                            <CustomFieldRenderer field={mapFieldToMapped(field)} value={displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} optionFreeTextMap={displayData[`${fieldId}_free_text`]} readOnly />
+                                            <CustomFieldRenderer
+                                              field={mapFieldToMapped(field)}
+                                              value={displayData[fieldId]}
+                                              otherTextValue={displayData[`${fieldId}_other`]}
+                                              optionFreeTextMap={displayData[`${fieldId}_free_text`]}
+                                              readOnly
+                                              sectionLayoutContext={tableRadioReadOnlyCtx}
+                                            />
                                           </div>
                                         );
                                       })}
@@ -2898,7 +2970,14 @@ const TrackerEntryDetailPage = () => {
                               const fieldId = field.id || field.name || field.field_id;
                               return (
                                 <div key={fieldId} className="space-y-1">
-                                  <CustomFieldRenderer field={mapFieldToMapped(field)} value={displayData[fieldId]} otherTextValue={displayData[`${fieldId}_other`]} optionFreeTextMap={displayData[`${fieldId}_free_text`]} readOnly />
+                                  <CustomFieldRenderer
+                                    field={mapFieldToMapped(field)}
+                                    value={displayData[fieldId]}
+                                    otherTextValue={displayData[`${fieldId}_other`]}
+                                    optionFreeTextMap={displayData[`${fieldId}_free_text`]}
+                                    readOnly
+                                    sectionLayoutContext={tableRadioReadOnlyCtx}
+                                  />
                                 </div>
                               );
                             })}

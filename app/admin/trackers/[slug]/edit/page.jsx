@@ -93,6 +93,7 @@ const fieldTypes = [
   { value: "boolean_with_description", label: "Boolean with description" },
   { value: "select", label: "Select (Dropdown)" },
   { value: "radio", label: "Radio (Single choice)" },
+  { value: "table_radio", label: "Table radio (one choice per table row)" },
   { value: "multiselect", label: "Multi-Select" },
   { value: "people", label: "People (User Selection)" },
   { value: "file", label: "File Upload" },
@@ -167,11 +168,42 @@ const generateUniqueId = (label) => {
   return `${baseId}-${timestamp}-${random}`;
 };
 
+/** Resolves and validates `selection_column_id` for table_radio against the linked table group. */
+function resolveTableRadioFieldOptions(draft, sectionId, layoutSections) {
+  const base = draft.field_options ? { ...draft.field_options } : {};
+  const tgid = base.table_group_id;
+  if (!tgid) return { field_options: draft.field_options, error: null };
+  if (!Array.isArray(layoutSections) || layoutSections.length === 0) {
+    const sid = String(base.selection_column_id ?? "").trim();
+    if (!sid) return { error: "Table radio requires a column for radio buttons" };
+    return { field_options: { ...base, selection_column_id: sid }, error: null };
+  }
+  const sec = layoutSections.find((s) => String(s.id) === String(sectionId));
+  if (!sec) {
+    const sid = String(base.selection_column_id ?? "").trim();
+    if (!sid) return { error: "Table radio requires a column for radio buttons" };
+    return { field_options: { ...base, selection_column_id: sid }, error: null };
+  }
+  const tableGroups = (sec.groups || []).filter((g) => String(g.layout || "").toLowerCase() === "table");
+  const tg = tableGroups.find((g) => String(g.id) === String(tgid));
+  const cols =
+    Array.isArray(tg?.table_columns) && tg.table_columns.length > 0
+      ? tg.table_columns
+      : [{ id: "col_1", label: "" }];
+  let selectionId = String(base.selection_column_id ?? "").trim();
+  if (!selectionId) selectionId = cols[0]?.id != null ? String(cols[0].id) : "";
+  if (!selectionId) return { error: "Table radio requires a column for radio buttons" };
+  if (!cols.some((c) => String(c.id) === String(selectionId))) {
+    return { error: "Choose a valid column for radio buttons" };
+  }
+  return { field_options: { ...base, selection_column_id: selectionId }, error: null };
+}
+
 /**
  * Shared by "Add field" and layout inline create. `draft` matches `newField` shape.
  * @returns {{ field: object } | { error: string }}
  */
-function buildTrackerFieldRecordFromDraft(draft, existingIds, sectionId) {
+function buildTrackerFieldRecordFromDraft(draft, existingIds, sectionId, layoutSections) {
   if (!String(draft?.label || "").trim()) return { error: "Field label is required" };
   let fieldId = draft.id || generateFieldIdFromLabel(draft.label);
   if (!fieldId) return { error: "Could not generate field ID from label" };
@@ -179,6 +211,21 @@ function buildTrackerFieldRecordFromDraft(draft, existingIds, sectionId) {
   const t = draft.type || "text";
   if ((t === "select" || t === "radio" || t === "multiselect") && (!draft.options || draft.options.length === 0)) {
     return { error: `${t === "select" ? "Select" : t === "radio" ? "Radio" : "Multi-select"} fields require at least one option` };
+  }
+  let effectiveFieldOptions = draft.field_options;
+  if (t === "table_radio") {
+    const tgid = draft.field_options?.table_group_id;
+    if (!tgid) return { error: "Table radio requires a linked table group in this stage" };
+    const tropts = draft.options || [];
+    if (tropts.length === 0) return { error: "Table radio requires at least one option (map each to a table row)" };
+    for (const o of tropts) {
+      if (o.table_row_index === undefined || o.table_row_index === null || Number.isNaN(Number(o.table_row_index))) {
+        return { error: "Each table radio option must have a table row index" };
+      }
+    }
+    const resolved = resolveTableRadioFieldOptions(draft, sectionId != null ? sectionId : draft.section, layoutSections);
+    if (resolved.error) return { error: resolved.error };
+    effectiveFieldOptions = resolved.field_options;
   }
   if (
     t === "image_free_draw" &&
@@ -196,7 +243,7 @@ function buildTrackerFieldRecordFromDraft(draft, existingIds, sectionId) {
     section: sectionId != null ? sectionId : draft.section || null,
     ...(draft.options && draft.options.length > 0 && { options: draft.options }),
     ...(t === "repeatable_group" && { fields: draft.fields || [] }),
-    ...(draft.field_options && Object.keys(draft.field_options).length > 0 && { field_options: draft.field_options }),
+    ...(effectiveFieldOptions && Object.keys(effectiveFieldOptions).length > 0 && { field_options: effectiveFieldOptions }),
     ...(Array.isArray(draft.filter_by_roles) && draft.filter_by_roles.length > 0 ? { filter_by_roles: draft.filter_by_roles } : {}),
     ...(draft.filter_by_organization ? { filter_by_organization: true } : {}),
     ...(draft.rag_rules && typeof draft.rag_rules === "object" && Object.keys(draft.rag_rules).length > 0
@@ -245,7 +292,7 @@ function ConditionalVisibilityValueControl({ depField, value, showWhen, onValueC
   if (!needsValue) return null;
   const depType = (depField?.type || depField?.field_type || "").toLowerCase();
   const isBoolean = depType === "boolean" || depType === "checkbox" || depType === "boolean_with_description";
-  const isSelectLike = ["select", "dropdown", "radio", "radio_group"].includes(depType);
+  const isSelectLike = ["select", "dropdown", "radio", "radio_group", "table_radio"].includes(depType);
   const isMultiselect = depType === "multiselect";
   const isNumber = depType === "number" || depType === "integer";
   const depOptions = depField ? (depField.field_options?.options || depField.options || []) : [];
@@ -881,6 +928,7 @@ const TrackerEditPage = () => {
     section: "",
     options: [],
     fields: [],
+    field_options: {},
     background_image_url: "",
     background_image_file_reference_id: "",
     background_image_file: null,
@@ -932,8 +980,8 @@ const TrackerEditPage = () => {
   const [newNoteCategory, setNewNoteCategory] = useState("");
   const [newActionTypeLabel, setNewActionTypeLabel] = useState("");
   const [newActionTypeChaseDays, setNewActionTypeChaseDays] = useState("");
-  const [newOption, setNewOption] = useState({ value: "", label: "", free_text: false });
-  const [editingOption, setEditingOption] = useState({ value: "", label: "", free_text: false });
+  const [newOption, setNewOption] = useState({ value: "", label: "", free_text: false, table_row_index: 0 });
+  const [editingOption, setEditingOption] = useState({ value: "", label: "", free_text: false, table_row_index: 0 });
   const [shareLinkCopied, setShareLinkCopied] = useState(false);
   const [provisionSmsLoading, setProvisionSmsLoading] = useState(false);
   const [twilioActiveNumbers, setTwilioActiveNumbers] = useState([]);
@@ -1146,7 +1194,8 @@ const TrackerEditPage = () => {
       toast.warning("Add at least one child field so each row has columns. You can edit this field later to add more.");
     }
     const existingIds = (formData.tracker_fields?.fields || []).map((f) => f.id || f.name || f.field_id);
-    const built = buildTrackerFieldRecordFromDraft(newField, existingIds, newField.section || null);
+    const layoutSections = formData.tracker_fields?.sections?.length ? formData.tracker_fields.sections : formData.tracker_config?.sections || [];
+    const built = buildTrackerFieldRecordFromDraft(newField, existingIds, newField.section || null, layoutSections);
     if (built.error) {
       toast.error(built.error);
       return;
@@ -1171,12 +1220,13 @@ const TrackerEditPage = () => {
       section: "",
       options: [],
       fields: [],
+      field_options: {},
       background_image_url: "",
       background_image_file_reference_id: "",
       background_image_file: null,
       background_alt_text: "",
     });
-    setNewOption({ value: "", label: "" });
+    setNewOption({ value: "", label: "", free_text: false, table_row_index: 0 });
     setFieldIdManuallyEdited(false);
     toast.success("Field added successfully");
   };
@@ -1192,7 +1242,8 @@ const TrackerEditPage = () => {
     }
     const draft = { ...layoutQuickCreateDraft };
     const existingIds = (formData.tracker_fields?.fields || []).map((f) => f.id || f.name || f.field_id);
-    const built = buildTrackerFieldRecordFromDraft(draft, existingIds, editingSection.id);
+    const layoutSections = formData.tracker_fields?.sections?.length ? formData.tracker_fields.sections : formData.tracker_config?.sections || [];
+    const built = buildTrackerFieldRecordFromDraft(draft, existingIds, editingSection.id, layoutSections);
     if (built.error) {
       toast.error(built.error);
       return;
@@ -1282,13 +1333,13 @@ const TrackerEditPage = () => {
       fields: field.fields || [],
       field_options: field.field_options || {},
     });
-    setEditingOption({ value: "", label: "" });
+    setEditingOption({ value: "", label: "", free_text: false, table_row_index: 0 });
   };
 
   const handleCancelEditField = () => {
     setEditingFieldIndex(null);
     setEditingField(null);
-    setEditingOption({ value: "", label: "" });
+    setEditingOption({ value: "", label: "", free_text: false, table_row_index: 0 });
   };
 
   const handleUpdateField = async () => {
@@ -1305,6 +1356,31 @@ const TrackerEditPage = () => {
       return;
     }
 
+    let fieldPayload = editingField;
+    if (editingField.type === "table_radio") {
+      if (!editingField.field_options?.table_group_id) {
+        toast.error("Table radio requires a linked table group");
+        return;
+      }
+      if (!(editingField.options || []).length) {
+        toast.error("Table radio requires at least one option");
+        return;
+      }
+      for (const o of editingField.options || []) {
+        if (o.table_row_index === undefined || o.table_row_index === null || Number.isNaN(Number(o.table_row_index))) {
+          toast.error("Each option needs a table row index");
+          return;
+        }
+      }
+      const sectionsSrc = formData.tracker_fields?.sections?.length ? formData.tracker_fields.sections : formData.tracker_config?.sections || [];
+      const res = resolveTableRadioFieldOptions(editingField, editingField.section, sectionsSrc);
+      if (res.error) {
+        toast.error(res.error);
+        return;
+      }
+      fieldPayload = { ...editingField, field_options: res.field_options };
+    }
+
     if (
       editingField.type === "image_free_draw" &&
       !String(editingField.background_image_url || "").trim() &&
@@ -1314,12 +1390,12 @@ const TrackerEditPage = () => {
       return;
     }
 
-    const { background_image_file: _bgFileOmit, ...editingFieldToPersist } = editingField;
+    const { background_image_file: _bgFileOmit, ...editingFieldToPersist } = fieldPayload;
     const newFields = [...(formData.tracker_fields?.fields || [])];
     newFields[editingFieldIndex] = {
       ...editingFieldToPersist,
-      options: editingField.options || [],
-      fields: editingField.fields || [],
+      options: fieldPayload.options || [],
+      fields: fieldPayload.fields || [],
     };
 
     // Sync section.fields from field.section so backend/template representation stays in sync
@@ -1344,7 +1420,7 @@ const TrackerEditPage = () => {
 
     setEditingFieldIndex(null);
     setEditingField(null);
-    setEditingOption({ value: "", label: "" });
+    setEditingOption({ value: "", label: "", free_text: false, table_row_index: 0 });
 
     // Save directly to backend
     try {
@@ -1370,6 +1446,7 @@ const TrackerEditPage = () => {
       value: optionValue,
       label: editingOption.label,
       ...(editingOption.free_text ? { free_text: true } : {}),
+      ...(editingField.type === "table_radio" ? { table_row_index: Number(editingOption.table_row_index ?? 0) } : {}),
     };
 
     setEditingField((prev) => ({
@@ -1377,7 +1454,7 @@ const TrackerEditPage = () => {
       options: [...(prev.options || []), newOption],
     }));
 
-    setEditingOption({ value: "", label: "", free_text: false });
+    setEditingOption({ value: "", label: "", free_text: false, table_row_index: 0 });
   };
 
   const handleRemoveEditingOption = (index) => {
@@ -1795,12 +1872,14 @@ const TrackerEditPage = () => {
       return;
     }
 
-    setNewField((prev) => ({
-      ...prev,
-      options: [...prev.options, { value: optionValue, label: newOption.label, ...(newOption.free_text ? { free_text: true } : {}) }],
-    }));
+    setNewField((prev) => {
+      const base = { value: optionValue, label: newOption.label };
+      if (prev.type === "multiselect" && newOption.free_text) base.free_text = true;
+      if (prev.type === "table_radio") base.table_row_index = Number(newOption.table_row_index ?? 0);
+      return { ...prev, options: [...(prev.options || []), base] };
+    });
 
-    setNewOption({ value: "", label: "", free_text: false });
+    setNewOption({ value: "", label: "", free_text: false, table_row_index: 0 });
   };
 
   const handleRemoveOption = (index) => {
@@ -2768,6 +2847,156 @@ const TrackerEditPage = () => {
                             )}
                           </div>
                         )}
+
+                        {editingField.type === "table_radio" &&
+                          (() => {
+                            const sectionsSrc = formData.tracker_fields?.sections?.length
+                              ? formData.tracker_fields.sections
+                              : formData.tracker_config?.sections || [];
+                            const sec = sectionsSrc.find((s) => s.id === editingField.section);
+                            const tableGroups = (sec?.groups || []).filter((g) => String(g.layout || "").toLowerCase() === "table");
+                            const boundTg = tableGroups.find((g) => g.id === editingField.field_options?.table_group_id);
+                            const nRows = Math.max(1, boundTg?.table_rows?.length || 1);
+                            const rowIndices = Array.from({ length: nRows }, (_, i) => i);
+                            return (
+                              <div className="space-y-3 rounded-md border p-3 bg-muted/20">
+                                <p className="text-xs text-muted-foreground">
+                                  Link to a table group in this field&apos;s stage. Each option maps to one row (radio appears in that row).
+                                </p>
+                                {!editingField.section ? (
+                                  <p className="text-sm text-amber-700 dark:text-amber-400">This field has no stage assigned.</p>
+                                ) : tableGroups.length === 0 ? (
+                                  <p className="text-sm text-amber-700 dark:text-amber-400">This stage has no table group.</p>
+                                ) : (
+                                  <div className="space-y-2">
+                                    <Label>Linked table group</Label>
+                                    <Select
+                                      value={editingField.field_options?.table_group_id || ""}
+                                      onValueChange={(v) => {
+                                        const tg = tableGroups.find((g) => String(g.id) === String(v));
+                                        const cols = Array.isArray(tg?.table_columns) && tg.table_columns.length > 0
+                                          ? tg.table_columns
+                                          : [{ id: "col_1", label: "" }];
+                                        const firstId = cols[0]?.id != null ? String(cols[0].id) : "";
+                                        setEditingField((prev) => ({
+                                          ...prev,
+                                          field_options: {
+                                            ...(prev.field_options || {}),
+                                            table_group_id: v,
+                                            selection_column_id: firstId,
+                                          },
+                                        }));
+                                      }}
+                                    >
+                                      <SelectTrigger className="h-9"><SelectValue placeholder="Select table group" /></SelectTrigger>
+                                      <SelectContent>
+                                        {tableGroups.map((g) => (
+                                          <SelectItem key={g.id || g.label} value={g.id}>
+                                            {g.label || g.title || g.name || g.id}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                    <div className="space-y-1">
+                                      <Label className="text-xs">
+                                        Column for radio buttons{" "}
+                                        <span className="text-destructive" aria-hidden>
+                                          *
+                                        </span>
+                                      </Label>
+                                      <Select
+                                        value={
+                                          editingField.field_options?.selection_column_id ||
+                                          (boundTg?.table_columns?.[0]?.id != null ? String(boundTg.table_columns[0].id) : "")
+                                        }
+                                        onValueChange={(v) =>
+                                          setEditingField((prev) => ({
+                                            ...prev,
+                                            field_options: { ...(prev.field_options || {}), selection_column_id: v },
+                                          }))
+                                        }
+                                        disabled={!boundTg}
+                                        required
+                                      >
+                                        <SelectTrigger className="h-8" aria-required>
+                                          <SelectValue placeholder="Choose column" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          {(Array.isArray(boundTg?.table_columns) && boundTg.table_columns.length > 0
+                                            ? boundTg.table_columns
+                                            : [{ id: "col_1", label: "" }]
+                                          ).map((col) => (
+                                            <SelectItem key={col.id} value={String(col.id)}>
+                                              {String(col.label ?? "").trim() || col.id}
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                      <p className="text-xs text-muted-foreground">
+                                        Radios render in this column on each row; other columns follow the table layout as usual.
+                                      </p>
+                                    </div>
+                                    <Label>Options</Label>
+                                    <div className="flex flex-wrap gap-2 items-end">
+                                      <Input
+                                        placeholder="Label *"
+                                        value={editingOption.label}
+                                        onChange={(e) => {
+                                          const newLabel = e.target.value;
+                                          setEditingOption((prev) => ({
+                                            ...prev,
+                                            label: newLabel,
+                                            value:
+                                              prev.value === "" || prev.value === generateFieldIdFromLabel(prev.label)
+                                                ? generateFieldIdFromLabel(newLabel)
+                                                : prev.value,
+                                          }));
+                                        }}
+                                        className="flex-1 min-w-[120px]"
+                                      />
+                                      <Input
+                                        placeholder="Value (optional)"
+                                        value={editingOption.value}
+                                        onChange={(e) => setEditingOption((prev) => ({ ...prev, value: e.target.value }))}
+                                        className="flex-1 min-w-[120px]"
+                                      />
+                                      <Select
+                                        value={String(editingOption.table_row_index ?? 0)}
+                                        onValueChange={(v) => setEditingOption((prev) => ({ ...prev, table_row_index: Number(v) }))}
+                                      >
+                                        <SelectTrigger className="h-9 w-[140px]"><SelectValue placeholder="Row" /></SelectTrigger>
+                                        <SelectContent>
+                                          {rowIndices.map((i) => (
+                                            <SelectItem key={i} value={String(i)}>
+                                              Row {i + 1}
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                      <Button type="button" variant="outline" onClick={handleAddEditingOption} disabled={!editingOption.label || !boundTg}>
+                                        <Plus className="h-4 w-4" />
+                                      </Button>
+                                    </div>
+                                    {(editingField.options || []).length > 0 && (
+                                      <div className="space-y-1 pt-1">
+                                        {(editingField.options || []).map((option, idx) => (
+                                          <div key={idx} className="flex items-center justify-between gap-2 p-2 bg-muted rounded text-sm">
+                                            <span>
+                                              <strong>{option.value}</strong>: {option.label}{" "}
+                                              <span className="text-muted-foreground">(row {Number(option.table_row_index) + 1})</span>
+                                            </span>
+                                            <Button variant="ghost" size="sm" onClick={() => handleRemoveEditingOption(idx)}>
+                                              <X className="h-4 w-4" />
+                                            </Button>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
 
                         {editingField.type === "image_free_draw" && (
                           <div className="space-y-2 pt-2 border-t">
@@ -3788,6 +4017,156 @@ const TrackerEditPage = () => {
                       </div>
                     )}
 
+                    {newField.type === "table_radio" &&
+                      (() => {
+                        const sectionsSrc = formData.tracker_fields?.sections?.length
+                          ? formData.tracker_fields.sections
+                          : formData.tracker_config?.sections || [];
+                        const sec = sectionsSrc.find((s) => s.id === newField.section);
+                        const tableGroups = (sec?.groups || []).filter((g) => String(g.layout || "").toLowerCase() === "table");
+                        const boundTg = tableGroups.find((g) => g.id === newField.field_options?.table_group_id);
+                        const nRows = Math.max(1, boundTg?.table_rows?.length || 1);
+                        const rowIndices = Array.from({ length: nRows }, (_, i) => i);
+                        return (
+                          <div className="space-y-3 rounded-md border p-3 bg-muted/20">
+                            <p className="text-xs text-muted-foreground">
+                              Link this field to a <strong>table</strong> group in the same stage. Add one option per row you want selectable (choose the row index). The form will show one radio per row next to that table&apos;s columns.
+                            </p>
+                            {!newField.section ? (
+                              <p className="text-sm text-amber-700 dark:text-amber-400">Choose a stage above so we can list table groups.</p>
+                            ) : tableGroups.length === 0 ? (
+                              <p className="text-sm text-amber-700 dark:text-amber-400">This stage has no table layout group yet. Add a group with layout &quot;Table&quot; in Fields per stage.</p>
+                            ) : (
+                              <div className="space-y-2">
+                                <Label>Linked table group</Label>
+                                <Select
+                                  value={newField.field_options?.table_group_id || ""}
+                                  onValueChange={(v) => {
+                                    const tg = tableGroups.find((g) => String(g.id) === String(v));
+                                    const cols = Array.isArray(tg?.table_columns) && tg.table_columns.length > 0
+                                      ? tg.table_columns
+                                      : [{ id: "col_1", label: "" }];
+                                    const firstId = cols[0]?.id != null ? String(cols[0].id) : "";
+                                    setNewField((prev) => ({
+                                      ...prev,
+                                      field_options: {
+                                        ...(prev.field_options || {}),
+                                        table_group_id: v,
+                                        selection_column_id: firstId,
+                                      },
+                                    }));
+                                  }}
+                                >
+                                  <SelectTrigger className="h-9"><SelectValue placeholder="Select table group" /></SelectTrigger>
+                                  <SelectContent>
+                                    {tableGroups.map((g) => (
+                                      <SelectItem key={g.id || g.label} value={g.id}>
+                                        {g.label || g.title || g.name || g.id}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <div className="space-y-1">
+                                  <Label className="text-xs">
+                                    Column for radio buttons{" "}
+                                    <span className="text-destructive" aria-hidden>
+                                      *
+                                    </span>
+                                  </Label>
+                                  <Select
+                                    value={
+                                      newField.field_options?.selection_column_id ||
+                                      (boundTg?.table_columns?.[0]?.id != null ? String(boundTg.table_columns[0].id) : "")
+                                    }
+                                    onValueChange={(v) =>
+                                      setNewField((prev) => ({
+                                        ...prev,
+                                        field_options: { ...(prev.field_options || {}), selection_column_id: v },
+                                      }))
+                                    }
+                                    disabled={!boundTg}
+                                    required
+                                  >
+                                    <SelectTrigger className="h-8" aria-required>
+                                      <SelectValue placeholder="Choose column" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {(Array.isArray(boundTg?.table_columns) && boundTg.table_columns.length > 0
+                                        ? boundTg.table_columns
+                                        : [{ id: "col_1", label: "" }]
+                                      ).map((col) => (
+                                        <SelectItem key={col.id} value={String(col.id)}>
+                                          {String(col.label ?? "").trim() || col.id}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                  <p className="text-xs text-muted-foreground">
+                                    Radios render in this column on each row; other columns follow the table layout as usual.
+                                  </p>
+                                </div>
+                                <Label>Options (one per selectable row)</Label>
+                                <div className="flex flex-wrap gap-2 items-end">
+                                  <Input
+                                    placeholder="Label *"
+                                    value={newOption.label}
+                                    onChange={(e) => {
+                                      const newLabel = e.target.value;
+                                      setNewOption((prev) => ({
+                                        ...prev,
+                                        label: newLabel,
+                                        value:
+                                          prev.value === "" || prev.value === generateFieldIdFromLabel(prev.label)
+                                            ? generateFieldIdFromLabel(newLabel)
+                                            : prev.value,
+                                      }));
+                                    }}
+                                    className="flex-1 min-w-[120px]"
+                                  />
+                                  <Input
+                                    placeholder="Value (optional)"
+                                    value={newOption.value}
+                                    onChange={(e) => setNewOption((prev) => ({ ...prev, value: e.target.value }))}
+                                    className="flex-1 min-w-[120px]"
+                                  />
+                                  <Select
+                                    value={String(newOption.table_row_index ?? 0)}
+                                    onValueChange={(v) => setNewOption((prev) => ({ ...prev, table_row_index: Number(v) }))}
+                                  >
+                                    <SelectTrigger className="h-9 w-[140px]"><SelectValue placeholder="Row" /></SelectTrigger>
+                                    <SelectContent>
+                                      {rowIndices.map((i) => (
+                                        <SelectItem key={i} value={String(i)}>
+                                          Row {i + 1}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                  <Button type="button" variant="outline" onClick={handleAddOption} disabled={!newOption.label || !boundTg}>
+                                    <Plus className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                                {(newField.options || []).length > 0 && (
+                                  <div className="space-y-1 pt-1">
+                                    {(newField.options || []).map((option, idx) => (
+                                      <div key={idx} className="flex items-center justify-between gap-2 p-2 bg-muted rounded text-sm">
+                                        <span>
+                                          <strong>{option.value}</strong>: {option.label}{" "}
+                                          <span className="text-muted-foreground">(row {Number(option.table_row_index) + 1})</span>
+                                        </span>
+                                        <Button variant="ghost" size="sm" onClick={() => handleRemoveOption(idx)}>
+                                          <X className="h-4 w-4" />
+                                        </Button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+
                     {newField.type === "image_free_draw" && (
                       <div className="space-y-2 pt-2 border-t">
                         <p className="text-xs text-muted-foreground">
@@ -4537,7 +4916,7 @@ const TrackerEditPage = () => {
                                         newGroup.fields = group.fields || [];
                                       }
                                     } else if (val === "table") {
-                                      const cols = Array.isArray(group.table_columns) && group.table_columns.length > 0 ? group.table_columns : [{ id: "col_1", label: "Column 1" }];
+                                      const cols = Array.isArray(group.table_columns) && group.table_columns.length > 0 ? group.table_columns : [{ id: "col_1", label: "" }];
                                       const rows = Array.isArray(group.table_rows) && group.table_rows.length > 0 ? group.table_rows : [{ cells: cols.map(() => ({ text: "", field_id: null })) }];
                                       newGroup.table_columns = cols;
                                       newGroup.table_rows = rows;
@@ -4570,7 +4949,7 @@ const TrackerEditPage = () => {
                                 />
                               ) : (group.layout || "") === "table" ? (
                                 (() => {
-                                  const cols = Array.isArray(group.table_columns) && group.table_columns.length > 0 ? group.table_columns : [{ id: "col_1", label: "Column 1" }];
+                                  const cols = Array.isArray(group.table_columns) && group.table_columns.length > 0 ? group.table_columns : [{ id: "col_1", label: "" }];
                                   const rows = Array.isArray(group.table_rows) ? group.table_rows : [];
                                   const addColumn = () => {
                                     const next = [...(editingSection.groups || [])];
@@ -4584,7 +4963,7 @@ const TrackerEditPage = () => {
                                     const next = [...(editingSection.groups || [])];
                                     const nextCols = cols.filter((_, i) => i !== cIdx);
                                     const nextRows = rows.map((r) => ({ ...r, cells: (r.cells || []).filter((_, i) => i !== cIdx) }));
-                                    next[groupIdx] = { ...group, table_columns: nextCols.length > 0 ? nextCols : [{ id: "col_1", label: "Column 1" }], table_rows: nextRows };
+                                    next[groupIdx] = { ...group, table_columns: nextCols.length > 0 ? nextCols : [{ id: "col_1", label: "" }], table_rows: nextRows };
                                     setEditingSection((prev) => ({ ...prev, groups: next }));
                                   };
                                   const addRow = () => {

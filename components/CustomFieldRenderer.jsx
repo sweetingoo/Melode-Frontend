@@ -117,6 +117,11 @@ const CustomFieldRenderer = ({
   otherTextValue,
   /** Multiselect: per-option free text stored on submission_data[`${field.id}_free_text`] as { [optionValue]: string } */
   optionFreeTextMap,
+  /**
+   * Table radio: link field to a table group in the same section.
+   * { groups, sectionFields, entryData, shouldShowRow?, shouldShowField? }
+   */
+  sectionLayoutContext,
 }) => {
   const fieldId = `custom-field-${field.id}`;
   const otherFieldId = `${field.id}_other`;
@@ -467,6 +472,200 @@ const CustomFieldRenderer = ({
                   </Label>
                 </div>
               ))}
+            </RadioGroup>
+          </div>
+        );
+      }
+
+      case 'table_radio': {
+        const trOpts = field.field_options?.options || field.options || [];
+        const boundGroupId = field.field_options?.table_group_id;
+        const groups = sectionLayoutContext?.groups || [];
+        const sectionFields = sectionLayoutContext?.sectionFields || [];
+        const entryData = sectionLayoutContext?.entryData || {};
+        const shouldShowRow = sectionLayoutContext?.shouldShowRow;
+        const shouldShowField = sectionLayoutContext?.shouldShowField;
+        const tableGroup =
+          boundGroupId &&
+          groups.find((g) => String(g.id) === String(boundGroupId) && String(g.layout || '').toLowerCase() === 'table');
+        const mapNestedField = (f) => {
+          const id = f.id || f.name || f.field_id;
+          return {
+            ...f,
+            id,
+            field_type: f.type || f.field_type,
+            type: f.type || f.field_type,
+            field_label: f.label || f.field_label || f.name,
+            field_name: f.name || id,
+          };
+        };
+        const getFieldById = (fid) =>
+          sectionFields.find((f) => String(f.id || f.name || f.field_id) === String(fid));
+
+        if (!tableGroup || !trOpts.length) {
+          const fallbackOpts = orderOptionsOtherAtEnd(
+            trOpts.map((o) => ({ value: o.value ?? o, label: o.label ?? o.value ?? o })),
+          );
+          return (
+            <div className="space-y-2">
+              {!tableGroup && (
+                <p className="text-xs text-amber-600 dark:text-amber-500">
+                  Table radio needs a linked table group in the same stage and options with row indices. Showing a simple list until the form is shown in a stage context.
+                </p>
+              )}
+              <RadioGroup
+                value={value !== undefined && value !== null && value !== '' ? String(value) : undefined}
+                onValueChange={handleChange}
+                className={cn('space-y-2', error ? 'border border-red-500 rounded-md p-2' : '')}
+                disabled={readOnly}
+              >
+                {fallbackOpts.map((option, index) => (
+                  <div key={index} className="flex items-center space-x-2">
+                    <RadioGroupItem value={String(option.value ?? option)} id={`${fieldId}-tr-fb-${index}`} disabled={readOnly} />
+                    <Label htmlFor={`${fieldId}-tr-fb-${index}`} className="text-sm font-normal cursor-pointer">
+                      {option.label || option}
+                    </Label>
+                  </div>
+                ))}
+              </RadioGroup>
+            </div>
+          );
+        }
+
+        const tableCols =
+          Array.isArray(tableGroup.table_columns) && tableGroup.table_columns.length > 0
+            ? tableGroup.table_columns
+            : [{ id: 'col_1', label: '' }];
+        const tableRows =
+          Array.isArray(tableGroup.table_rows) && tableGroup.table_rows.length > 0
+            ? tableGroup.table_rows
+            : [{ cells: tableCols.map(() => ({ text: '', field_id: null })) }];
+        const selectionColumnId = field.field_options?.selection_column_id;
+        let radioColIdx = 0;
+        if (selectionColumnId != null && String(selectionColumnId).trim() !== '') {
+          const idx = tableCols.findIndex((c) => String(c.id) === String(selectionColumnId));
+          if (idx >= 0) radioColIdx = idx;
+        }
+
+        const optionByRowIndex = new Map();
+        trOpts.forEach((o) => {
+          const ri = Number(o.table_row_index);
+          if (!Number.isNaN(ri) && ri >= 0) optionByRowIndex.set(ri, o);
+        });
+
+        const linkedGroupTitle = tableGroup.label || tableGroup.title || tableGroup.name;
+
+        return (
+          <div className={cn('space-y-2', error ? 'rounded-md' : '')}>
+            {linkedGroupTitle ? (
+              <h4 className="text-sm font-medium text-muted-foreground border-b pb-1">{linkedGroupTitle}</h4>
+            ) : null}
+            <RadioGroup
+              value={value !== undefined && value !== null && value !== '' ? String(value) : undefined}
+              onValueChange={handleChange}
+              disabled={readOnly}
+              className="w-full"
+            >
+              <div className="overflow-x-auto rounded-md border">
+                <table className="w-full border-collapse text-sm">
+                  <thead>
+                    <tr className="border-b bg-muted/50">
+                      {tableCols.map((col) => (
+                        <th key={col.id} className="text-left font-medium p-2">
+                          {String(col?.label ?? '').trim()}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tableRows.map((row, rowIdx) => {
+                      if (shouldShowRow && !shouldShowRow(row)) return null;
+                      const opt = optionByRowIndex.get(rowIdx);
+                      const cells = (row.cells || []).slice(0, tableCols.length);
+                      while (cells.length < tableCols.length) cells.push({ text: '', field_id: null });
+                      return (
+                        <tr key={rowIdx} className="border-b last:border-b-0 align-top">
+                          {cells.map((cell, cIdx) => {
+                            const isRadioCol = cIdx === radioColIdx;
+                            const cfid = cell.field_id ? String(cell.field_id) : null;
+                            const cellField = cfid ? getFieldById(cfid) : null;
+                            const rawVal = cfid != null ? entryData[cfid] : undefined;
+                            const rawOther = cfid != null ? entryData[`${cfid}_other`] : undefined;
+                            const rawFt = cfid != null ? entryData[`${cfid}_free_text`] : undefined;
+                            const cellValue = Array.isArray(rawVal) ? rawVal[rowIdx] : rawVal;
+                            const cellOther = Array.isArray(rawOther) ? rawOther[rowIdx] : rawOther;
+                            const cellFreeText = Array.isArray(rawFt) ? rawFt[rowIdx] : rawFt;
+
+                            if (isRadioCol) {
+                              return (
+                                <td key={cIdx} className="p-2 align-top">
+                                  <div className="space-y-2">
+                                    {opt ? (
+                                      <div className="flex items-center pt-0.5">
+                                        <RadioGroupItem
+                                          value={String(opt.value ?? opt)}
+                                          id={`${fieldId}-tr-${rowIdx}-${cIdx}`}
+                                          disabled={readOnly}
+                                        />
+                                        <Label htmlFor={`${fieldId}-tr-${rowIdx}-${cIdx}`} className="sr-only">
+                                          {opt.label || opt.value || `Row ${rowIdx + 1}`}
+                                        </Label>
+                                      </div>
+                                    ) : (
+                                      <span className="text-xs text-muted-foreground">—</span>
+                                    )}
+                                    {cell.text ? (
+                                      <span className="text-muted-foreground text-xs block">{cell.text}</span>
+                                    ) : null}
+                                    {cellField ? (
+                                      shouldShowField && !shouldShowField(cellField) ? null : (
+                                        <CustomFieldRenderer
+                                          field={mapNestedField(cellField)}
+                                          value={cellValue}
+                                          otherTextValue={cellOther}
+                                          optionFreeTextMap={cellFreeText}
+                                          onChange={onChange}
+                                          readOnly={readOnly}
+                                          hideLabel
+                                          sectionLayoutContext={sectionLayoutContext}
+                                        />
+                                      )
+                                    ) : null}
+                                  </div>
+                                </td>
+                              );
+                            }
+
+                            if (!cellField && !cell.text) return <td key={cIdx} className="p-2" />;
+                            if (cellField && shouldShowField && !shouldShowField(cellField)) return <td key={cIdx} className="p-2" />;
+                            return (
+                              <td key={cIdx} className="p-2">
+                                <div className="space-y-1">
+                                  {cell.text ? (
+                                    <span className="text-muted-foreground text-xs block">{cell.text}</span>
+                                  ) : null}
+                                  {cellField ? (
+                                    <CustomFieldRenderer
+                                      field={mapNestedField(cellField)}
+                                      value={cellValue}
+                                      otherTextValue={cellOther}
+                                      optionFreeTextMap={cellFreeText}
+                                      onChange={onChange}
+                                      readOnly={readOnly}
+                                      hideLabel
+                                      sectionLayoutContext={sectionLayoutContext}
+                                    />
+                                  ) : null}
+                                </div>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </RadioGroup>
           </div>
         );

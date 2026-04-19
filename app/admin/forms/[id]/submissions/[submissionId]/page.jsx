@@ -1056,7 +1056,7 @@ const FormSubmissionDetailPage = () => {
                                 <thead>
                                   <tr className="border-b border-[#005eb8] bg-[#005eb8]/5">
                                     {tableCols.map((col) => (
-                                      <th key={col.id} className="text-left font-medium p-3 text-[#005eb8]">{col.label || col.id}</th>
+                                      <th key={col.id} className="text-left font-medium p-3 text-[#005eb8]">{String(col?.label ?? "").trim()}</th>
                                     ))}
                                   </tr>
                                 </thead>
@@ -1105,7 +1105,7 @@ const FormSubmissionDetailPage = () => {
                                     const tabHasTable = (tab.layout || "") === "table" && Array.isArray(tab.table_rows) && tab.table_rows.length > 0;
                                     const tabLabel = tab.label || tab.id || "Tab";
                                     if (tabHasTable) {
-                                      const tableCols = Array.isArray(tab.table_columns) && tab.table_columns.length > 0 ? tab.table_columns : [{ id: "col_1", label: "Column 1" }];
+                                      const tableCols = Array.isArray(tab.table_columns) && tab.table_columns.length > 0 ? tab.table_columns : [{ id: "col_1", label: "" }];
                                       const tableRows = tab.table_rows || [];
                                       return (
                                         <div key={tab.id || tab.label}>
@@ -1140,7 +1140,7 @@ const FormSubmissionDetailPage = () => {
                             );
                           }
                           if (isTable) {
-                            const tableCols = Array.isArray(group.table_columns) && group.table_columns.length > 0 ? group.table_columns : [{ id: "col_1", label: "Column 1" }];
+                            const tableCols = Array.isArray(group.table_columns) && group.table_columns.length > 0 ? group.table_columns : [{ id: "col_1", label: "" }];
                             const tableRows = group.table_rows || [];
                             return (
                               <section key={group.id || group.label} className="bg-card rounded-lg border border-border shadow-sm overflow-hidden">
@@ -1161,7 +1161,7 @@ const FormSubmissionDetailPage = () => {
                           if (isGrid && (group.grid_rows || []).length > 0) {
                             const renderGridSlot = (slot, rowIdx, col) => {
                               if (isGridSlotTable(slot)) {
-                                const tableCols = slot.table_columns?.length > 0 ? slot.table_columns : [{ id: "col_1", label: "Column 1" }];
+                                const tableCols = slot.table_columns?.length > 0 ? slot.table_columns : [{ id: "col_1", label: "" }];
                                 const tableRows = slot.table_rows || [];
                                 return renderTable(tableCols, tableRows, `grid-${rowIdx}-${col}`);
                               }
@@ -1172,7 +1172,7 @@ const FormSubmissionDetailPage = () => {
                                       const tabHasTable = (tab.layout || "") === "table" && Array.isArray(tab.table_rows) && tab.table_rows.length > 0;
                                       const tabLabel = tab.label || tab.id || "Tab";
                                       if (tabHasTable) {
-                                        const tableCols = tab.table_columns?.length > 0 ? tab.table_columns : [{ id: "col_1", label: "Column 1" }];
+                                        const tableCols = tab.table_columns?.length > 0 ? tab.table_columns : [{ id: "col_1", label: "" }];
                                         const tableRows = tab.table_rows || [];
                                         return (
                                           <div key={tab.id || tab.label}>

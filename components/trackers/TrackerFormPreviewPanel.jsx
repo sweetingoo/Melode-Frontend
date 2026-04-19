@@ -28,6 +28,11 @@ function PreviewSectionBody({ section, fields }) {
     : fields.filter((f) => f.section === section.id);
   const allSectionFields = sectionFields;
   const groups = Array.isArray(section.groups) ? section.groups : [];
+  const previewTableRadioCtx = {
+    groups,
+    sectionFields: allSectionFields,
+    entryData: displayData,
+  };
 
   if (groups.length === 0) {
     return (
@@ -44,6 +49,7 @@ function PreviewSectionBody({ section, fields }) {
                   value={displayData[fieldId]}
                   otherTextValue={displayData[`${fieldId}_other`]}
                   readOnly
+                  sectionLayoutContext={previewTableRadioCtx}
                 />
               </div>
             );
@@ -62,9 +68,19 @@ function PreviewSectionBody({ section, fields }) {
   );
   const ungroupedFields = sectionFields.filter((f) => !fieldIdsInGroups.has(f.id || f.field_id || f.name));
 
+  const tableRadioBoundGroupIds = new Set(
+    allSectionFields
+      .filter((f) => (f.type || f.field_type) === "table_radio" && f.field_options?.table_group_id)
+      .map((f) => String(f.field_options.table_group_id)),
+  );
+
   return (
     <div className="space-y-4">
       {groups.map((group) => {
+        const layoutG = (group.layout || "stack").toLowerCase();
+        if (layoutG === "table" && group.id && tableRadioBoundGroupIds.has(String(group.id))) {
+          return null;
+        }
         const fromTable = (group.table_rows || []).flatMap((row) => (row.cells || []).map((c) => c.field_id).filter(Boolean));
         const fromGrid = (group.grid_rows || []).flatMap((row) => gridRowFieldIdsFlat(row));
         const groupFieldIds = [...new Set([...(group.fields || []), ...fromTable, ...fromGrid])];
@@ -102,7 +118,7 @@ function PreviewSectionBody({ section, fields }) {
                 const tableCols =
                   Array.isArray(group.table_columns) && group.table_columns.length > 0
                     ? group.table_columns
-                    : [{ id: "col_1", label: "Column 1" }];
+                    : [{ id: "col_1", label: "" }];
                 const rows =
                   tableRowsForGroup.length > 0
                     ? tableRowsForGroup
@@ -114,7 +130,7 @@ function PreviewSectionBody({ section, fields }) {
                         <tr className="border-b bg-muted/50">
                           {tableCols.map((col) => (
                             <th key={col.id} className="text-left font-medium p-2">
-                              {col.label || col.id}
+                              {String(col?.label ?? "").trim()}
                             </th>
                           ))}
                         </tr>
@@ -145,6 +161,7 @@ function PreviewSectionBody({ section, fields }) {
                                           value={cellValue}
                                           otherTextValue={cellOtherValue}
                                           readOnly
+                                          sectionLayoutContext={previewTableRadioCtx}
                                         />
                                       ) : null}
                                     </div>
@@ -182,6 +199,7 @@ function PreviewSectionBody({ section, fields }) {
                           value={displayData[fieldId]}
                           otherTextValue={displayData[`${fieldId}_other`]}
                           readOnly
+                          sectionLayoutContext={previewTableRadioCtx}
                         />
                       </div>
                     );
@@ -221,6 +239,7 @@ function PreviewSectionBody({ section, fields }) {
                         value={displayData[fieldId]}
                         otherTextValue={displayData[`${fieldId}_other`]}
                         readOnly
+                        sectionLayoutContext={previewTableRadioCtx}
                       />
                     </div>
                   );
@@ -241,6 +260,7 @@ function PreviewSectionBody({ section, fields }) {
                   value={displayData[fieldId]}
                   otherTextValue={displayData[`${fieldId}_other`]}
                   readOnly
+                  sectionLayoutContext={previewTableRadioCtx}
                 />
               </div>
             );

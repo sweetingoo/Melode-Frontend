@@ -1155,7 +1155,7 @@ const FormSubmitPage = () => {
                                       const allFormFields = form?.form_fields?.fields || [];
                                       const getFieldById = (id) => allFormFields.find((f) => (f.field_id || f.id || f.name) === id);
                                       if (tabHasTable) {
-                                        const tableCols = Array.isArray(tab.table_columns) && tab.table_columns.length > 0 ? tab.table_columns : [{ id: "col_1", label: "Column 1" }];
+                                        const tableCols = Array.isArray(tab.table_columns) && tab.table_columns.length > 0 ? tab.table_columns : [{ id: "col_1", label: "" }];
                                         const tableRows = tab.table_rows || [];
                                         return (
                                           <div key={tab.id || tab.label} className="overflow-x-auto">
@@ -1163,7 +1163,7 @@ const FormSubmitPage = () => {
                                               <thead>
                                                 <tr className="border-b border-border">
                                                   {tableCols.map((col) => (
-                                                    <th key={col.id} className="text-left font-medium p-2 pr-4">{col.label || col.id}</th>
+                                                    <th key={col.id} className="text-left font-medium p-2 pr-4">{String(col?.label ?? "").trim()}</th>
                                                   ))}
                                                 </tr>
                                               </thead>
@@ -1254,7 +1254,7 @@ const FormSubmitPage = () => {
                             );
                           }
                           if ((group.layout || "") === "table") {
-                            const tableCols = Array.isArray(group.table_columns) && group.table_columns.length > 0 ? group.table_columns : [{ id: "col_1", label: "Column 1" }];
+                            const tableCols = Array.isArray(group.table_columns) && group.table_columns.length > 0 ? group.table_columns : [{ id: "col_1", label: "" }];
                             const tableRows = Array.isArray(group.table_rows) ? group.table_rows : [];
                             const allFormFields = form?.form_fields?.fields || [];
                             const getFieldById = (id) => allFormFields.find((f) => (f.field_id || f.id || f.name) === id);
@@ -1271,7 +1271,7 @@ const FormSubmitPage = () => {
                                       <thead>
                                         <tr className="border-b border-border">
                                           {tableCols.map((col) => (
-                                            <th key={col.id} className="text-left font-medium p-2 pr-4">{col.label || col.id}</th>
+                                            <th key={col.id} className="text-left font-medium p-2 pr-4">{String(col?.label ?? "").trim()}</th>
                                           ))}
                                         </tr>
                                       </thead>
@@ -1370,7 +1370,7 @@ const FormSubmitPage = () => {
                                     const isSlotTabs = (slot) => slot && typeof slot === "object" && (slot.layout || "") === "tabs" && Array.isArray(slot.tabs) && slot.tabs.length > 0;
                                     const renderGridSlot = (slot, rowIdx, col) => {
                                       if (isSlotTable(slot)) {
-                                        const tableCols = slot.table_columns?.length > 0 ? slot.table_columns : [{ id: "col_1", label: "Column 1" }];
+                                        const tableCols = slot.table_columns?.length > 0 ? slot.table_columns : [{ id: "col_1", label: "" }];
                                         const tableRows = slot.table_rows || [];
                                         return (
                                           <div className="overflow-x-auto">
@@ -1378,7 +1378,7 @@ const FormSubmitPage = () => {
                                               <thead>
                                                 <tr className="border-b border-border">
                                                   {tableCols.map((col) => (
-                                                    <th key={col.id} className="text-left font-medium p-2 pr-4">{col.label || col.id}</th>
+                                                    <th key={col.id} className="text-left font-medium p-2 pr-4">{String(col?.label ?? "").trim()}</th>
                                                   ))}
                                                 </tr>
                                               </thead>
@@ -1439,7 +1439,7 @@ const FormSubmitPage = () => {
                                             {activeTab && (
                                               tabHasTable ? (
                                                 (() => {
-                                                  const tableCols = activeTab.table_columns?.length > 0 ? activeTab.table_columns : [{ id: "col_1", label: "Column 1" }];
+                                                  const tableCols = activeTab.table_columns?.length > 0 ? activeTab.table_columns : [{ id: "col_1", label: "" }];
                                                   const tableRows = activeTab.table_rows || [];
                                                   return (
                                                     <div className="overflow-x-auto">
