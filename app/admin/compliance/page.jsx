@@ -101,12 +101,11 @@ function CompliancePageContent() {
         section.fields?.forEach(field => {
           const fieldType = field.field_type?.toLowerCase();
           
-          // For file fields, prioritize file_id (which is a direct property of the field)
           if (fieldType === 'file' || fieldType === 'image') {
-            // file_id is a direct property of the field object, not inside value_data
-            if (field.file_id) {
-              fieldsMap[field.id] = field.file_id;
-              console.log(`[CompliancePage] Initialized file field ${field.id} (${field.field_label}) with file_id: ${field.file_id}`);
+            const fileKey = field.file_reference_id || field.file_id;
+            if (fileKey) {
+              fieldsMap[field.id] = fileKey;
+              console.log(`[CompliancePage] Initialized file field ${field.id} (${field.field_label})`, fileKey);
             } else {
               fieldsMap[field.id] = null;
             }
@@ -486,7 +485,7 @@ function CompliancePageContent() {
       });
       
       // Upload all files first
-      const uploadedFileIds = new Map(); // Maps fieldId to file_id
+      const uploadedFileKeys = new Map(); // fieldId -> file_reference_id (slug) or legacy numeric id
       for (const [fieldId, fileOrFiles] of fileFieldMap.entries()) {
         try {
           const field = customFieldsHierarchy?.sections
@@ -504,11 +503,15 @@ function CompliancePageContent() {
                 file: file,
                 field_id: fieldId.toString(),
               });
-              const fileId = uploadResult.id || uploadResult.file_id;
-              console.log(`[CompliancePage] Uploaded file ${file.name}: file_id=${fileId}`);
-              fileIds.push(fileId);
+              const fileKey =
+                uploadResult.file_reference_id ??
+                uploadResult.slug ??
+                uploadResult.file_id ??
+                uploadResult.id;
+              console.log(`[CompliancePage] Uploaded file ${file.name}:`, fileKey);
+              fileIds.push(fileKey);
             }
-            uploadedFileIds.set(fieldId, fileIds);
+            uploadedFileKeys.set(fieldId, fileIds);
           } else {
             // Single file
             const file = fileOrFiles instanceof File ? fileOrFiles : fileOrFiles.file;
@@ -516,9 +519,13 @@ function CompliancePageContent() {
               file: file,
               field_id: fieldId.toString(),
             });
-            const fileId = uploadResult.id || uploadResult.file_id;
-            console.log(`[CompliancePage] Uploaded file ${file.name}: file_id=${fileId}`);
-            uploadedFileIds.set(fieldId, fileId);
+            const fileKey =
+              uploadResult.file_reference_id ??
+              uploadResult.slug ??
+              uploadResult.file_id ??
+              uploadResult.id;
+            console.log(`[CompliancePage] Uploaded file ${file.name}:`, fileKey);
+            uploadedFileKeys.set(fieldId, fileKey);
           }
         } catch (error) {
           console.error(`[CompliancePage] Failed to upload file for field ${fieldId}:`, error);
@@ -529,7 +536,7 @@ function CompliancePageContent() {
         }
       }
       
-      console.log(`[CompliancePage] File upload complete. Uploaded ${uploadedFileIds.size} file(s)`);
+      console.log(`[CompliancePage] File upload complete. Uploaded ${uploadedFileKeys.size} file(s)`);
       
       // Prepare updates array - only include fields that have actually changed
       // Compare current values with initial values to detect changes
@@ -549,7 +556,7 @@ function CompliancePageContent() {
           const initialValue = initialCustomFieldsData[fieldId];
           
           // For file fields, if we uploaded a file, it's a change
-          if (uploadedFileIds.has(fieldIdInt)) {
+          if (uploadedFileKeys.has(fieldIdInt)) {
             return true; // File was uploaded, this is a change
           }
           
@@ -558,7 +565,7 @@ function CompliancePageContent() {
             if (val === null || val === undefined || val === '') return null;
             // Don't compare File objects - they're handled separately
             if (val instanceof File || (val && typeof val === 'object' && val.file instanceof File)) {
-              return null; // File objects are handled via uploadedFileIds
+              return null; // File objects are handled via uploadedFileKeys
             }
             return val;
           };
@@ -573,15 +580,16 @@ function CompliancePageContent() {
           const fieldIdInt = parseInt(fieldId);
           const fieldSlug = fieldIdToSlugMap.get(fieldIdInt);
           
-          // If this field has an uploaded file, use file_id instead of value
-          if (uploadedFileIds.has(fieldIdInt)) {
-            const fileId = uploadedFileIds.get(fieldIdInt);
-            const finalFileId = Array.isArray(fileId) ? fileId[0] : fileId; // For now, use first file if array
-            
-            const updateItem = {
-              field_slug: fieldSlug,
-              file_id: finalFileId,
-            };
+          if (uploadedFileKeys.has(fieldIdInt)) {
+            const fileKey = uploadedFileKeys.get(fieldIdInt);
+            const finalKey = Array.isArray(fileKey) ? fileKey[0] : fileKey;
+
+            const updateItem = { field_slug: fieldSlug };
+            if (typeof finalKey === 'string' && finalKey.trim() && !/^\d+$/.test(finalKey.trim())) {
+              updateItem.file_reference_id = finalKey.trim();
+            } else {
+              updateItem.file_id = typeof finalKey === 'string' ? parseInt(finalKey, 10) : finalKey;
+            }
             
             // Only preserve existing value_data if it has meaningful content (not just [{}])
             // This is important for compliance fields with sub-fields like notes, registration_number, etc.
@@ -673,7 +681,7 @@ function CompliancePageContent() {
             ?.find(f => f.id === fieldIdInt);
           
           // If this is a file field and we don't have a file_id, don't send invalid values
-          if (field && field.field_type?.toLowerCase() === 'file' && !uploadedFileIds.has(fieldIdInt)) {
+          if (field && field.field_type?.toLowerCase() === 'file' && !uploadedFileKeys.has(fieldIdInt)) {
             const isValidFileValue = 
               finalValue instanceof File || 
               (finalValue && typeof finalValue === 'object' && finalValue.file instanceof File) ||
@@ -696,8 +704,8 @@ function CompliancePageContent() {
       // Debug logging
       console.log('[CompliancePage] Submitting updates:', {
         totalUpdates: updates.length,
-        fileUploads: uploadedFileIds.size,
-        uploadedFileIds: Array.from(uploadedFileIds.entries()),
+        fileUploads: uploadedFileKeys.size,
+        uploadedFileKeys: Array.from(uploadedFileKeys.entries()),
         updates: updates.map(u => ({
           field_slug: u.field_slug,
           hasFileId: !!u.file_id,
@@ -714,7 +722,7 @@ function CompliancePageContent() {
           customFieldsDataKeys: Object.keys(customFieldsData),
           customFieldsDataEntries: Object.entries(customFieldsData),
           hierarchySections: customFieldsHierarchy?.sections?.length || 0,
-          uploadedFileIds: Array.from(uploadedFileIds.entries()),
+          uploadedFileKeys: Array.from(uploadedFileKeys.entries()),
         });
       }
 
@@ -739,8 +747,9 @@ function CompliancePageContent() {
           const fieldId = Array.from(fieldIdToSlugMap.entries())
             .find(([id, slug]) => slug === update.field_slug)?.[0];
           if (fieldId) {
-            // Store the file_id or value as the new initial value
-            if (update.file_id) {
+            if (update.file_reference_id) {
+              updated[fieldId] = update.file_reference_id;
+            } else if (update.file_id != null) {
               updated[fieldId] = update.file_id;
             } else {
               updated[fieldId] = update.value;

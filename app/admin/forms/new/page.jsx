@@ -1611,8 +1611,8 @@ const NewFormPage = () => {
                                         // Backend will replace this with fresh pre-signed URLs when serving
                                         const fileReferenceUrl = ensureAbsoluteUrl(uploadResult.file_reference_url) ||
                                           ensureAbsoluteUrl(uploadResult.file_reference) ||
-                                          (uploadResult.id ? `${apiBaseUrl}/files/${uploadResult.id}/download` : null) ||
-                                          (uploadResult.file_id ? `${apiBaseUrl}/files/${uploadResult.file_id}/download` : null);
+                                          (uploadResult.file_reference_id ? `${apiBaseUrl}/settings/files/${uploadResult.file_reference_id}/download` : null) ||
+                                          (uploadResult.slug ? `${apiBaseUrl}/settings/files/${uploadResult.slug}/download` : null);
 
                                         // Fallback to download_url if file_reference_url not available
                                         const imageUrl = fileReferenceUrl || uploadResult.download_url || uploadResult.url || uploadResult.file_url;
@@ -1739,8 +1739,8 @@ const NewFormPage = () => {
                                     const fileRef =
                                       uploadResult?.file_reference_id ??
                                       uploadResult?.slug ??
-                                      uploadResult?.id ??
-                                      uploadResult?.file_id;
+                                      uploadResult?.file_id ??
+                                      uploadResult?.id;
                                     if (fileRef === undefined || fileRef === null || fileRef === "") {
                                       throw new Error("No file reference from upload");
                                     }

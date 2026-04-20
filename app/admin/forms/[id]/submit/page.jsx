@@ -665,15 +665,19 @@ const FormSubmitPage = () => {
                 field_id: fieldId,
               })
               .then((uploadResult) => {
-                const fileId = uploadResult.id || uploadResult.file_id;
-                // Store file ID with expiry date if provided
+                const fileRef =
+                  uploadResult.file_reference_id ??
+                  uploadResult.slug ??
+                  uploadResult.file_id ??
+                  uploadResult.id;
+                // Store file reference (slug) with expiry date if provided
                 if (field.file_expiry_date && fileData?.expiryDate) {
                   processedSubmissionData[fieldId] = {
-                    file_id: fileId,
+                    file_reference_id: fileRef,
                     expiry_date: fileData.expiryDate,
                   };
                 } else {
-                  processedSubmissionData[fieldId] = fileId;
+                  processedSubmissionData[fieldId] = fileRef;
                 }
               })
               .catch((error) => {
@@ -704,15 +708,19 @@ const FormSubmitPage = () => {
                   field_id: fieldId,
                 })
                 .then((uploadResult) => {
-                  const fileId = uploadResult.id || uploadResult.file_id;
-                  // Store file ID with expiry date if provided
+                  const fileRef =
+                    uploadResult.file_reference_id ??
+                    uploadResult.slug ??
+                    uploadResult.file_id ??
+                    uploadResult.id;
+                  // Store file reference (slug) with expiry date if provided
                   if (field.file_expiry_date && fileData?.expiryDate) {
                     return {
-                      file_id: fileId,
+                      file_reference_id: fileRef,
                       expiry_date: fileData.expiryDate,
                     };
                   }
-                  return fileId;
+                  return fileRef;
                 })
                 .catch((error) => {
                   console.error(`Failed to upload file ${index + 1} for field ${fieldId}:`, error);
@@ -734,7 +742,17 @@ const FormSubmitPage = () => {
           }
         } 
         // Handle existing file IDs (already uploaded, from edit mode or draft)
-        else if (typeof value === 'number' || (Array.isArray(value) && value.every(v => typeof v === 'number' || (typeof v === 'object' && v.file_id)))) {
+        else if (
+          typeof value === 'number' ||
+          (typeof value === 'string' && value.trim()) ||
+          (Array.isArray(value) &&
+            value.every(
+              (v) =>
+                typeof v === 'number' ||
+                (typeof v === 'string' && v.trim()) ||
+                (typeof v === 'object' && v && (v.file_reference_id || v.file_id))
+            ))
+        ) {
           processedSubmissionData[fieldId] = value;
         }
       } else {

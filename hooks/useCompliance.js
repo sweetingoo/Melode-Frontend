@@ -59,7 +59,12 @@ export const useUploadCompliance = () => {
       if (uploadData.file) {
         const uploadResult = await profileService.uploadFile(uploadData.file);
         // The upload endpoint returns file with slug or id (file_slug)
-        fileSlug = uploadResult.slug || uploadResult.id || uploadResult.file_slug;
+        fileSlug =
+          uploadResult.file_reference_id ||
+          uploadResult.slug ||
+          uploadResult.file_slug ||
+          uploadResult.file_id ||
+          uploadResult.id;
         
         if (!fileSlug) {
           throw new Error("File upload failed: No file reference returned");
@@ -139,7 +144,12 @@ export const useRenewCompliance = () => {
       if (renewalData.file) {
         const uploadResult = await profileService.uploadFile(renewalData.file);
         // The upload endpoint returns file with slug or id (file_slug)
-        fileSlug = uploadResult.slug || uploadResult.id || uploadResult.file_slug;
+        fileSlug =
+          uploadResult.file_reference_id ||
+          uploadResult.slug ||
+          uploadResult.file_slug ||
+          uploadResult.file_id ||
+          uploadResult.id;
         
         if (!fileSlug) {
           throw new Error("File upload failed: No file reference returned");

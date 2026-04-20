@@ -839,7 +839,11 @@ const FormSubmitPage = () => {
                 field_id: fieldId,
               })
               .then((uploadResult) => {
-                const fileRef = uploadResult.file_reference_id ?? uploadResult.id ?? uploadResult.file_id;
+                const fileRef =
+                  uploadResult.file_reference_id ??
+                  uploadResult.slug ??
+                  uploadResult.file_id ??
+                  uploadResult.id;
                 // Store file_reference_id (prefer over id) with expiry date if provided
                 if (field.file_expiry_date && fileData?.expiryDate) {
                   processedSubmissionData[fieldId] = {
@@ -878,7 +882,11 @@ const FormSubmitPage = () => {
                   field_id: fieldId,
                 })
                 .then((uploadResult) => {
-                  const fileRef = uploadResult.file_reference_id ?? uploadResult.id ?? uploadResult.file_id;
+                  const fileRef =
+                  uploadResult.file_reference_id ??
+                  uploadResult.slug ??
+                  uploadResult.file_id ??
+                  uploadResult.id;
                   // Store file_reference_id with expiry date if provided
                   if (field.file_expiry_date && fileData?.expiryDate) {
                     return {

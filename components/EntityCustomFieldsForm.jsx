@@ -253,13 +253,13 @@ export default function EntityCustomFieldsForm({
       // Use values from the values endpoint for user entities
       userCustomFieldsValues.sections.forEach((section) => {
         section.fields?.forEach((field) => {
-          // For file fields, prioritize file_id over value_data
+          // For file fields, prefer opaque file_reference_id from API, then legacy file_id
           const fieldType = field.field_type?.toLowerCase();
           if (fieldType === 'file') {
-            // If file_id exists, use it (this means a file has been uploaded)
-            if (field.file_id) {
-              initialData[field.id] = field.file_id;
-              console.log(`[FileField] Found uploaded file for field ${field.id} (${field.field_label}): file_id=${field.file_id}`);
+            const fileKey = field.file_reference_id || field.file_id;
+            if (fileKey) {
+              initialData[field.id] = fileKey;
+              console.log(`[FileField] Found uploaded file for field ${field.id} (${field.field_label}):`, fileKey);
             } else if (field.value_data) {
               // Fallback to value_data if file_id is not present
               const extractedValue = extractValueFromAPIResponse(field, field.value_data);
@@ -298,10 +298,9 @@ export default function EntityCustomFieldsForm({
       hierarchy.sections.forEach((section) => {
         section.fields?.forEach((field) => {
           const fieldType = field.field_type?.toLowerCase();
-          // For file fields, check both value and file_id
-          if (fieldType === 'file' && field.file_id) {
-            initialData[field.id] = field.file_id;
-            console.log(`[FileField] Found uploaded file in hierarchy for field ${field.id} (${field.field_label}): file_id=${field.file_id}`);
+          if (fieldType === 'file' && (field.file_reference_id || field.file_id)) {
+            initialData[field.id] = field.file_reference_id || field.file_id;
+            console.log(`[FileField] Found uploaded file in hierarchy for field ${field.id} (${field.field_label})`);
           } else if (field.value !== undefined && field.value !== null) {
             initialData[field.id] = field.value;
           }
@@ -554,7 +553,7 @@ export default function EntityCustomFieldsForm({
         }
         
         // Upload all files first
-        const uploadedFileIds = new Map(); // Maps fieldId to file_id
+        const uploadedFileKeys = new Map(); // fieldId -> file_reference_id (slug) or legacy numeric id
         for (const [fieldId, fileOrFiles] of fileFieldMap.entries()) {
           try {
             const field = hierarchy?.sections
@@ -572,11 +571,15 @@ export default function EntityCustomFieldsForm({
                   file: file,
                   field_id: fieldId.toString(),
                 });
-                const fileId = uploadResult.id || uploadResult.file_id;
-                console.log(`[FileUpload] Uploaded file ${file.name}: file_id=${fileId}`);
-                fileIds.push(fileId);
+                const fileKey =
+                  uploadResult.file_reference_id ??
+                  uploadResult.slug ??
+                  uploadResult.file_id ??
+                  uploadResult.id;
+                console.log(`[FileUpload] Uploaded file ${file.name}:`, fileKey);
+                fileIds.push(fileKey);
               }
-              uploadedFileIds.set(fieldId, fileIds);
+              uploadedFileKeys.set(fieldId, fileIds);
             } else {
               // Single file
               const file = fileOrFiles instanceof File ? fileOrFiles : fileOrFiles.file;
@@ -584,9 +587,13 @@ export default function EntityCustomFieldsForm({
                 file: file,
                 field_id: fieldId.toString(),
               });
-              const fileId = uploadResult.id || uploadResult.file_id;
-              console.log(`[FileUpload] Uploaded file ${file.name}: file_id=${fileId}`);
-              uploadedFileIds.set(fieldId, fileId);
+              const fileKey =
+                uploadResult.file_reference_id ??
+                uploadResult.slug ??
+                uploadResult.file_id ??
+                uploadResult.id;
+              console.log(`[FileUpload] Uploaded file ${file.name}:`, fileKey);
+              uploadedFileKeys.set(fieldId, fileKey);
             }
           } catch (error) {
             console.error(`[FileUpload] Failed to upload file for field ${fieldId}:`, error);
@@ -597,7 +604,7 @@ export default function EntityCustomFieldsForm({
           }
         }
         
-        console.log(`[FileUpload] Completed uploading ${uploadedFileIds.size} file(s)`);
+        console.log(`[FileUpload] Completed uploading ${uploadedFileKeys.size} file(s)`);
         
         // Prepare updates array - only include fields that have actually changed
         // Compare current values with initial values to detect changes
@@ -613,7 +620,7 @@ export default function EntityCustomFieldsForm({
             const initialValue = initialCustomFieldsData[fieldId];
             
             // For file fields, if we uploaded a file, it's a change
-            if (uploadedFileIds.has(fieldIdInt)) {
+            if (uploadedFileKeys.has(fieldIdInt)) {
               return true; // File was uploaded, this is a change
             }
             
@@ -622,7 +629,7 @@ export default function EntityCustomFieldsForm({
               if (val === null || val === undefined || val === '') return null;
               // Don't compare File objects - they're handled separately
               if (val instanceof File || (val && typeof val === 'object' && val.file instanceof File)) {
-                return null; // File objects are handled via uploadedFileIds
+                return null; // File objects are handled via uploadedFileKeys
               }
               // Filter out empty arrays like [{}] or empty objects
               if (Array.isArray(val)) {
@@ -657,21 +664,20 @@ export default function EntityCustomFieldsForm({
             const fieldSlug = fieldIdToSlugMap.get(fieldIdInt);
             
             // If this field has an uploaded file, use file_id instead of value
-            if (uploadedFileIds.has(fieldIdInt)) {
-              const fileId = uploadedFileIds.get(fieldIdInt);
-              const finalFileId = Array.isArray(fileId) ? fileId[0] : fileId; // For now, use first file if array (TODO: support multiple files)
-              
-              // Get field definition to check if it has value_data that needs to be preserved
+            if (uploadedFileKeys.has(fieldIdInt)) {
+              const fileKey = uploadedFileKeys.get(fieldIdInt);
+              const finalKey = Array.isArray(fileKey) ? fileKey[0] : fileKey;
+
               const field = hierarchy?.sections
                 ?.flatMap(section => section.fields || [])
                 ?.find(f => f.id === fieldIdInt);
-              
-              // For file fields, preserve existing value_data if it has meaningful content (not just [{}])
-              // This is important for compliance fields with sub-fields like notes, registration_number, etc.
-              const updateItem = {
-                field_slug: fieldSlug,
-                file_id: finalFileId,
-              };
+
+              const updateItem = { field_slug: fieldSlug };
+              if (typeof finalKey === 'string' && finalKey.trim() && !/^\d+$/.test(finalKey.trim())) {
+                updateItem.file_reference_id = finalKey.trim();
+              } else {
+                updateItem.file_id = typeof finalKey === 'string' ? parseInt(finalKey, 10) : finalKey;
+              }
               
               // Only preserve existing value_data if it has meaningful content (not just [{}])
               if (field && userCustomFieldsValues?.sections) {
@@ -756,7 +762,7 @@ export default function EntityCustomFieldsForm({
               ?.find(f => f.id === fieldIdInt);
             
             // If this is a file field and we don't have a file_id, don't send invalid values
-            if (field && field.field_type?.toLowerCase() === 'file' && !uploadedFileIds.has(fieldIdInt)) {
+            if (field && field.field_type?.toLowerCase() === 'file' && !uploadedFileKeys.has(fieldIdInt)) {
               // If value is not a File object and not a file_id, it's invalid - skip it
               // This prevents sending [{}] or other invalid structures
               const isValidFileValue = 
@@ -787,8 +793,8 @@ export default function EntityCustomFieldsForm({
         // Debug logging
         console.log('[EntityCustomFieldsForm] Submitting updates:', {
           totalUpdates: updates.length,
-          fileUploads: uploadedFileIds.size,
-          uploadedFileIds: Array.from(uploadedFileIds.entries()),
+          fileUploads: uploadedFileKeys.size,
+          uploadedFileKeys: Array.from(uploadedFileKeys.entries()),
           customFieldsDataSnapshot: Object.entries(customFieldsData)
             .filter(([fieldId]) => {
               const fieldIdInt = parseInt(fieldId);
@@ -828,7 +834,7 @@ export default function EntityCustomFieldsForm({
             customFieldsDataKeys: Object.keys(customFieldsData),
             customFieldsDataEntries: Object.entries(customFieldsData),
             hierarchySections: hierarchy?.sections?.length || 0,
-            uploadedFileIds: Array.from(uploadedFileIds.entries()),
+            uploadedFileKeys: Array.from(uploadedFileKeys.entries()),
           });
           toast.warning("No valid fields to update");
           setIsSubmitting(false);

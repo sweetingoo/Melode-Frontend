@@ -2120,11 +2120,10 @@ function ConfigurationPageContent() {
                                     });
                                     
                                     // Store file reference (slug or ID) instead of signed URL
-                                    const fileReference = uploadResult.file_slug || 
-                                                         uploadResult.slug || 
-                                                         uploadResult.file_reference_id ||
-                                                         uploadResult.id || 
-                                                         uploadResult.file_id;
+                                    const fileReference =
+                                      uploadResult.file_reference_id ||
+                                      uploadResult.slug ||
+                                      uploadResult.file_slug;
                                     
                                     if (fileReference) {
                                       markFieldModified('organization_logo_url');
@@ -2209,11 +2208,10 @@ function ConfigurationPageContent() {
                               });
                               
                               // Store file reference (slug or ID) instead of signed URL
-                              const fileReference = uploadResult.file_slug || 
-                                                   uploadResult.slug || 
-                                                   uploadResult.file_reference_id ||
-                                                   uploadResult.id || 
-                                                   uploadResult.file_id;
+                              const fileReference =
+                                uploadResult.file_reference_id ||
+                                uploadResult.slug ||
+                                uploadResult.file_slug;
                               
                               if (fileReference) {
                                 markFieldModified('organization_logo_url');
@@ -2311,11 +2309,10 @@ function ConfigurationPageContent() {
                               });
                               
                                     // Store file reference (slug or ID) instead of signed URL
-                                    const fileReference = uploadResult.file_slug || 
-                                                         uploadResult.slug || 
-                                                         uploadResult.file_reference_id ||
-                                                         uploadResult.id || 
-                                                         uploadResult.file_id;
+                                    const fileReference =
+                                      uploadResult.file_reference_id ||
+                                      uploadResult.slug ||
+                                      uploadResult.file_slug;
                                     
                                     if (fileReference) {
                                 markFieldModified('email_header_logo_url');
@@ -2400,11 +2397,10 @@ function ConfigurationPageContent() {
                               });
                               
                               // Store file reference (slug or ID) instead of signed URL
-                              const fileReference = uploadResult.file_slug || 
-                                                   uploadResult.slug || 
-                                                   uploadResult.file_reference_id ||
-                                                   uploadResult.id || 
-                                                   uploadResult.file_id;
+                              const fileReference =
+                                uploadResult.file_reference_id ||
+                                uploadResult.slug ||
+                                uploadResult.file_slug;
                               
                               if (fileReference) {
                                 markFieldModified('email_header_logo_url');

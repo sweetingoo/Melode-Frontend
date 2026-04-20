@@ -263,7 +263,18 @@ export const profileService = {
       }
 
       const payload = { value_data: valueData };
-      if (fileId) payload.file_id = fileId;
+      if (fileId != null && fileId !== '') {
+        if (typeof fileId === 'number') {
+          payload.file_id = fileId;
+        } else if (typeof fileId === 'string') {
+          const t = fileId.trim();
+          if (/^\d+$/.test(t)) {
+            payload.file_id = parseInt(t, 10);
+          } else {
+            payload.file_reference_id = t;
+          }
+        }
+      }
 
       const response = await api.put(`/settings/entities/user/${userSlug}/custom-fields/${fieldSlug}`, payload);
       return response.data || response;

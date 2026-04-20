@@ -716,8 +716,12 @@ const UserEditPage = () => {
           const fieldType = field.field_type?.toLowerCase();
           
           if (fieldType === 'file' || fieldType === 'image') {
-            if (field.file_id) {
-              fieldsMap[field.id] = field.file_id;
+            const fileRef =
+              field.file_reference_id ||
+              (field.file && (field.file.file_reference_id || field.file.slug)) ||
+              field.file_id;
+            if (fileRef) {
+              fieldsMap[field.id] = fileRef;
             } else {
               fieldsMap[field.id] = null;
             }
@@ -1040,20 +1044,27 @@ const UserEditPage = () => {
             finalValue = null;
           }
           
-          // If this is a file field and we don't have a file_id, don't send invalid values
+          // File fields: send opaque file_reference_id (slug) or legacy numeric file_id — not mixed into value_data
           if (field && field.field_type?.toLowerCase() === 'file') {
-            const isValidFileValue = 
-              finalValue instanceof File || 
+            const isValidFileValue =
+              finalValue instanceof File ||
               (finalValue && typeof finalValue === 'object' && finalValue.file instanceof File) ||
-              typeof finalValue === 'number' || 
+              typeof finalValue === 'number' ||
+              (typeof finalValue === 'string' && finalValue.trim().length > 0) ||
               finalValue === null;
-            
+
             if (!isValidFileValue) {
               console.warn(`Skipping invalid file field value for ${fieldSlug}:`, finalValue);
-              return null; // Filter this out
+              return null;
+            }
+            if (typeof finalValue === 'string' && finalValue.trim()) {
+              return { field_slug: fieldSlug, file_reference_id: finalValue.trim() };
+            }
+            if (typeof finalValue === 'number') {
+              return { field_slug: fieldSlug, file_id: finalValue };
             }
           }
-          
+
           return {
             field_slug: fieldSlug,
             value: finalValue,
@@ -1827,16 +1838,17 @@ const UserEditPage = () => {
       formDataUpload.append("file", compressedFile);
       const uploadResponse = await api.post("/settings/files/upload", formDataUpload);
       const uploadData = uploadResponse?.data ?? uploadResponse;
-      const fileId = uploadData?.id ?? uploadData?.file_id ?? uploadData?.file_reference_id;
-      if (!fileId) {
-        toast.error("Upload failed", { description: "No file ID received." });
+      const fileRef =
+        uploadData?.file_reference_id ?? uploadData?.slug ?? uploadData?.file_id ?? uploadData?.id;
+      if (!fileRef) {
+        toast.error("Upload failed", { description: "No file reference received from upload." });
         return;
       }
       await updateUserMutation.mutateAsync({
         slug: actualUserSlug,
-        userData: { avatar_url: String(fileId) },
+        userData: { avatar_url: String(fileRef) },
       });
-      setFormData((prev) => ({ ...prev, avatarUrl: String(fileId) }));
+      setFormData((prev) => ({ ...prev, avatarUrl: String(fileRef) }));
       setAvatarPreview(null);
       toast.success("Photo updated", { description: "Profile photo has been updated." });
       queryClient.invalidateQueries({ queryKey: userKeys.detail(actualUserSlug) });

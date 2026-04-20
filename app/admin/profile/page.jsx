@@ -706,8 +706,13 @@ export default function ProfilePage() {
         // Then update the field with the file ID
         updateUserCustomFieldMutation.mutate({
           fieldSlug: field.slug || field.field_name,
-          valueData: { file_id: uploadResult.id },
-          userSlug: profileData.slug
+          valueData: {},
+          fileId:
+            uploadResult.file_reference_id ??
+            uploadResult.slug ??
+            uploadResult.file_id ??
+            uploadResult.id,
+          userSlug: profileData.slug,
         });
       } catch (error) {
         console.error(`Failed to upload file for field ${field.field_name}:`, error);
@@ -841,8 +846,13 @@ export default function ProfilePage() {
               // Then update the field with the file ID
               await updateUserCustomFieldMutation.mutateAsync({
                 fieldSlug: field.slug || field.field_name,
-                valueData: { file_id: uploadResult.id },
-                userSlug: profileData.slug
+                valueData: {},
+                fileId:
+                  uploadResult.file_reference_id ??
+                  uploadResult.slug ??
+                  uploadResult.file_id ??
+                  uploadResult.id,
+                userSlug: profileData.slug,
               });
             } catch (error) {
               console.error(`Failed to upload file for field ${field.field_name}:`, error);

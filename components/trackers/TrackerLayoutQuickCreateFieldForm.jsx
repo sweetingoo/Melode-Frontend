@@ -259,8 +259,8 @@ export function TrackerLayoutQuickCreateFieldForm({
                     const fileRef =
                       uploadResult?.file_reference_id ??
                       uploadResult?.slug ??
-                      uploadResult?.id ??
-                      uploadResult?.file_id;
+                      uploadResult?.file_id ??
+                      uploadResult?.id;
                     if (fileRef === undefined || fileRef === null || fileRef === "") {
                       throw new Error("No file reference from upload");
                     }

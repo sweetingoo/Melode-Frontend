@@ -67,12 +67,10 @@ const FormSubmissionDetailPage = () => {
     if (file.file_url || file.download_url || file.url) {
       // Open in new tab for preview
       window.open(file.file_url || file.download_url || file.url, '_blank');
-    } else if (file.file_slug || file.slug) {
-      // Use slug for path parameter (preferred)
-      const fileSlug = file.file_slug || file.slug;
+    } else if (file.file_reference_id || file.file_slug || file.slug) {
+      const fileSlug = file.file_reference_id || file.file_slug || file.slug;
       window.open(`/api/v1/settings/files/${fileSlug}/download`, '_blank');
     } else if (file.file_id || file.id) {
-      // Fallback to ID only if slug is not available (for backward compatibility)
       const fileId = file.file_id || file.id;
       window.open(`/api/v1/settings/files/${fileId}/download`, '_blank');
     }
@@ -198,22 +196,27 @@ const FormSubmissionDetailPage = () => {
 
     // Handle file fields specifically
     if (fieldType === 'file') {
-      // Handle arrays (multiple files)
+      if (typeof value === 'object' && value !== null && !Array.isArray(value) && (value.file_reference_id || value.file_url)) {
+        return value;
+      }
       if (Array.isArray(value)) {
         if (value.length === 0) return null;
 
-        // Check if it's file objects
-        if (value[0] && typeof value[0] === 'object' && (value[0].file_id || value[0].id)) {
+        if (
+          value[0] &&
+          typeof value[0] === 'object' &&
+          (value[0].file_reference_id || value[0].file_slug || value[0].file_id || value[0].id)
+        ) {
           return value.map((file) => ({
+            file_reference_id: file.file_reference_id || file.file_slug || file.slug,
             file_id: file.file_id || file.id,
-            file_name: file.file_name || file.name || `File #${file.file_id || file.id}`,
+            file_name: file.file_name || file.name || 'File',
             file_url: file.file_url || file.download_url || file.url,
             file_size_bytes: file.file_size_bytes || file.file_size,
             content_type: file.content_type || file.mime_type,
           }));
         }
 
-        // Check if it's an array of file IDs (numbers)
         if (typeof value[0] === 'number') {
           return value.map((fileId) => ({
             file_id: fileId,
@@ -223,14 +226,24 @@ const FormSubmissionDetailPage = () => {
             content_type: null,
           }));
         }
+
+        if (typeof value[0] === 'string' && value[0].trim()) {
+          return value.map((slug) => ({
+            file_reference_id: slug.trim(),
+            file_name: 'File',
+            file_url: null,
+            file_size_bytes: null,
+            content_type: null,
+          }));
+        }
       }
 
-      // Handle single file object
-      if (typeof value === 'object') {
-        if (value.file_id || value.id) {
+      if (typeof value === 'object' && value !== null) {
+        if (value.file_reference_id || value.file_slug || value.slug || value.file_id || value.id) {
           return {
+            file_reference_id: value.file_reference_id || value.file_slug || value.slug,
             file_id: value.file_id || value.id,
-            file_name: value.file_name || value.name || `File #${value.file_id || value.id}`,
+            file_name: value.file_name || value.name || 'File',
             file_url: value.file_url || value.download_url || value.url,
             file_size_bytes: value.file_size_bytes || value.file_size,
             content_type: value.content_type || value.mime_type,
@@ -238,11 +251,20 @@ const FormSubmissionDetailPage = () => {
         }
       }
 
-      // Handle single file ID (number)
       if (typeof value === 'number') {
         return {
           file_id: value,
           file_name: `File #${value}`,
+          file_url: null,
+          file_size_bytes: null,
+          content_type: null,
+        };
+      }
+
+      if (typeof value === 'string' && value.trim()) {
+        return {
+          file_reference_id: value.trim(),
+          file_name: 'File',
           file_url: null,
           file_size_bytes: null,
           content_type: null,
@@ -301,14 +323,17 @@ const FormSubmissionDetailPage = () => {
   // Helper to handle file download
   const handleFileDownload = (file) => {
     if (file.file_url) {
-      // If we have a direct URL, open it
       window.open(file.file_url, '_blank');
-    } else if (file.file_slug || file.slug) {
-      // Use slug for path parameter
-      downloadFileMutation.mutate(file.file_slug || file.slug);
-    } else if (file.file_id) {
-      // Fallback to ID only if slug is not available (for backward compatibility)
-      downloadFileMutation.mutate(file.file_id);
+      return;
+    }
+    const ref = file.file_reference_id || file.file_slug || file.slug;
+    if (ref) {
+      downloadFileMutation.mutate(ref);
+      return;
+    }
+    const legacy = file.file_id ?? file.id;
+    if (legacy != null && legacy !== '') {
+      downloadFileMutation.mutate(String(legacy));
     }
   };
 
@@ -337,9 +362,14 @@ const FormSubmissionDetailPage = () => {
       );
     }
 
-    // Handle file objects (single file) - check for file_id or id property
-    if (isFileField && typeof formatted === 'object' && (formatted.file_id || formatted.id)) {
-      const fileName = formatted.file_name || formatted.name || `File #${formatted.file_id || formatted.id}`;
+    if (
+      isFileField &&
+      typeof formatted === 'object' &&
+      (formatted.file_reference_id || formatted.file_slug || formatted.slug || formatted.file_id || formatted.id)
+    ) {
+      const ref = formatted.file_reference_id || formatted.file_slug || formatted.slug;
+      const legacy = formatted.file_id || formatted.id;
+      const fileName = formatted.file_name || formatted.name || (ref ? 'File' : `File #${legacy}`);
       const fileSize = formatted.file_size_bytes || formatted.file_size;
       const contentType = formatted.content_type || formatted.mime_type;
       const hasViewUrl = !!(formatted.file_url || formatted.download_url || formatted.url);
@@ -354,7 +384,11 @@ const FormSubmissionDetailPage = () => {
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               {fileSize && <span>{formatFileSize(fileSize)}</span>}
               {contentType && <span>• {contentType}</span>}
-              {!fileSize && !contentType && <span>File ID: {formatted.file_id || formatted.id}</span>}
+              {!fileSize && !contentType && (ref || legacy) && (
+                <span className="truncate max-w-[12rem]" title={ref || String(legacy)}>
+                  Ref: {ref || legacy}
+                </span>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
@@ -391,12 +425,18 @@ const FormSubmissionDetailPage = () => {
       }
 
       // Check if it's file objects (for file fields)
-      const isFileArray = isFileField && formatted[0] && typeof formatted[0] === 'object' && (formatted[0].file_id || formatted[0].id);
+      const isFileArray =
+        isFileField &&
+        formatted[0] &&
+        typeof formatted[0] === 'object' &&
+        (formatted[0].file_reference_id || formatted[0].file_slug || formatted[0].slug || formatted[0].file_id || formatted[0].id);
       if (isFileArray) {
         return (
           <div className="space-y-2">
             {formatted.map((file, index) => {
-              const fileName = file.file_name || file.name || `File #${file.file_id || file.id}`;
+              const ref = file.file_reference_id || file.file_slug || file.slug;
+              const legacy = file.file_id || file.id;
+              const fileName = file.file_name || file.name || (ref ? 'File' : `File #${legacy}`);
               const fileSize = file.file_size_bytes || file.file_size;
               const contentType = file.content_type || file.mime_type;
               const hasViewUrl = !!(file.file_url || file.download_url || file.url);
@@ -411,7 +451,11 @@ const FormSubmissionDetailPage = () => {
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
                       {fileSize && <span>{formatFileSize(fileSize)}</span>}
                       {contentType && <span>• {contentType}</span>}
-                      {!fileSize && !contentType && <span>File ID: {file.file_id || file.id}</span>}
+                      {!fileSize && !contentType && (ref || legacy) && (
+                        <span className="truncate max-w-[12rem]" title={ref || String(legacy)}>
+                          Ref: {ref || legacy}
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
@@ -626,7 +670,7 @@ const FormSubmissionDetailPage = () => {
           <div className="text-2xl flex-shrink-0">📎</div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium truncate">File #{formatted}</p>
-            <p className="text-xs text-muted-foreground">File ID: {formatted}</p>
+            <p className="text-xs text-muted-foreground">Legacy numeric file key: {formatted}</p>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
             <Button
