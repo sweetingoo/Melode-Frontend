@@ -29,8 +29,10 @@ export const calendarEventsService = {
   selfRsvp(slug, data) {
     return apiClient.post(`/calendar-events/${encodeURIComponent(slug)}/rsvp`, data);
   },
-  patchAttended(slug, rsvpId, attended) {
-    return apiClient.patch(`/calendar-events/${encodeURIComponent(slug)}/rsvps/${rsvpId}/attended`, { attended });
+  /** @param {string|number} rsvpIdentifier RSVP slug (preferred) or legacy numeric id */
+  patchAttended(slug, rsvpIdentifier, attended) {
+    const seg = encodeURIComponent(String(rsvpIdentifier));
+    return apiClient.patch(`/calendar-events/${encodeURIComponent(slug)}/rsvps/${seg}/attended`, { attended });
   },
   processReminders() {
     return apiClient.post("/calendar-events/process-reminders");

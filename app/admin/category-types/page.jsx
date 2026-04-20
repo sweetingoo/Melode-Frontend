@@ -173,9 +173,9 @@ const CategoryTypesPage = () => {
     }
   };
 
-  const handleDeleteCategoryType = async (slug) => {
+  const handleDeleteCategoryType = async (identifier) => {
     try {
-      await deleteCategoryTypeMutation.mutateAsync(slug);
+      await deleteCategoryTypeMutation.mutateAsync(identifier);
     } catch (error) {
       console.error("Failed to delete category type:", error);
     }
@@ -318,7 +318,7 @@ const CategoryTypesPage = () => {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             {canUpdateCategoryType && (
-                              <DropdownMenuItem onClick={() => openEditModal(categoryType)}>
+                              <DropdownMenuItem disabled={!categoryType.slug} onClick={() => openEditModal(categoryType)}>
                                 <Edit className="mr-2 h-4 w-4" />
                                 Edit
                               </DropdownMenuItem>
@@ -329,6 +329,7 @@ const CategoryTypesPage = () => {
                                 <AlertDialog>
                                   <AlertDialogTrigger asChild>
                                     <DropdownMenuItem
+                                      disabled={!categoryType.slug}
                                       onSelect={(e) => e.preventDefault()}
                                       className="text-red-600"
                                     >

@@ -59,12 +59,14 @@ export const attendanceService = {
     }
   },
 
-  getContractType: async (idOrSlug) => {
+  /** @param {string} slug contract type slug (path segment; required) */
+  getContractType: async (slug) => {
     try {
-      const response = await api.get(`/attendance/contract-types/${idOrSlug}`);
+      const seg = encodeURIComponent(String(slug));
+      const response = await api.get(`/attendance/contract-types/${seg}`);
       return response.data ?? response;
     } catch (error) {
-      console.error(`Get contract type ${idOrSlug} failed:`, error);
+      console.error(`Get contract type ${slug} failed:`, error);
       throw error;
     }
   },
@@ -79,31 +81,37 @@ export const attendanceService = {
     }
   },
 
-  updateContractType: async (idOrSlug, data) => {
+  /** @param {string} slug contract type slug (path segment; required) */
+  updateContractType: async (slug, data) => {
     try {
-      const response = await api.put(`/attendance/contract-types/${idOrSlug}`, data);
+      const seg = encodeURIComponent(String(slug));
+      const response = await api.put(`/attendance/contract-types/${seg}`, data);
       return response.data ?? response;
     } catch (error) {
-      console.error(`Update contract type ${idOrSlug} failed:`, error);
+      console.error(`Update contract type ${slug} failed:`, error);
       throw error;
     }
   },
 
-  deleteContractType: async (idOrSlug) => {
+  /** @param {string} slug contract type slug (path segment; required) */
+  deleteContractType: async (slug) => {
     try {
-      await api.delete(`/attendance/contract-types/${idOrSlug}`);
+      const seg = encodeURIComponent(String(slug));
+      await api.delete(`/attendance/contract-types/${seg}`);
     } catch (error) {
-      console.error(`Delete contract type ${idOrSlug} failed:`, error);
+      console.error(`Delete contract type ${slug} failed:`, error);
       throw error;
     }
   },
 
   // Employee Job Role Settings
-  getEmployeeSettings: async (userId, params = {}) => {
+  /** @param {string} userSlug user slug (path segment; required) */
+  getEmployeeSettings: async (userSlug, params = {}) => {
     try {
-      return await api.get(`/attendance/employees/${userId}/settings`, { params });
+      const seg = encodeURIComponent(String(userSlug));
+      return await api.get(`/attendance/employees/${seg}/settings`, { params });
     } catch (error) {
-      console.error(`Get employee settings for user ${userId} failed:`, error);
+      console.error(`Get employee settings for user ${userSlug} failed:`, error);
       throw error;
     }
   },
@@ -117,11 +125,13 @@ export const attendanceService = {
     }
   },
 
-  updateEmployeeSettings: async (settingsId, settingsData) => {
+  /** @param {string} settingsSlug employee job role settings row slug (path segment; required) */
+  updateEmployeeSettings: async (settingsSlug, settingsData) => {
     try {
-      return await api.put(`/attendance/employee-settings/${settingsId}`, settingsData);
+      const seg = encodeURIComponent(String(settingsSlug));
+      return await api.put(`/attendance/employee-settings/${seg}`, settingsData);
     } catch (error) {
-      console.error(`Update employee settings ${settingsId} failed:`, error);
+      console.error(`Update employee settings ${settingsSlug} failed:`, error);
       throw error;
     }
   },
@@ -239,11 +249,10 @@ export const attendanceService = {
     }
   },
 
-  recalculateHolidayEntitlementHours: async (entitlementIdOrSlug) => {
+  recalculateHolidayEntitlementHours: async (entitlementSlug) => {
     try {
-      const response = await api.post(
-        `/attendance/holiday-entitlements/${entitlementIdOrSlug}/recalculate-hours`
-      );
+      const seg = encodeURIComponent(String(entitlementSlug));
+      const response = await api.post(`/attendance/holiday-entitlements/${seg}/recalculate-hours`);
       return response.data ?? response;
     } catch (error) {
       console.error("Recalculate holiday entitlement hours failed:", error);
@@ -319,10 +328,11 @@ export const attendanceService = {
     }
   },
 
-  /** Get departments this user can approve leave for (admin config). */
-  getLeaveApproverDepartments: async (userId) => {
+  /** Get departments this user can approve leave for (admin config). @param {string} userSlug user slug (path segment; required) */
+  getLeaveApproverDepartments: async (userSlug) => {
     try {
-      const res = await api.get(`/attendance/users/${userId}/leave-approver-departments`);
+      const seg = encodeURIComponent(String(userSlug));
+      const res = await api.get(`/attendance/users/${seg}/leave-approver-departments`);
       return Array.isArray(res?.data) ? res.data : (res?.data ?? res ?? []);
     } catch (error) {
       console.error("Get leave approver departments failed:", error);
@@ -330,10 +340,11 @@ export const attendanceService = {
     }
   },
 
-  /** Set departments this user can approve leave for. Empty list = all departments. */
-  setLeaveApproverDepartments: async (userId, { department_ids = [] }) => {
+  /** Set departments this user can approve leave for. Empty list = all departments. @param {string} userSlug user slug (path segment; required) */
+  setLeaveApproverDepartments: async (userSlug, { department_ids = [] }) => {
     try {
-      const res = await api.put(`/attendance/users/${userId}/leave-approver-departments`, { department_ids });
+      const seg = encodeURIComponent(String(userSlug));
+      const res = await api.put(`/attendance/users/${seg}/leave-approver-departments`, { department_ids });
       return Array.isArray(res?.data) ? res.data : (res?.data ?? res ?? []);
     } catch (error) {
       console.error("Set leave approver departments failed:", error);
@@ -574,11 +585,13 @@ export const attendanceService = {
     }
   },
 
-  getIndividualReport: async (userId, params = {}) => {
+  /** @param {string} userSlug user slug (path segment; required) */
+  getIndividualReport: async (userSlug, params = {}) => {
     try {
-      return await api.get(`/attendance/reports/individual/${userId}`, { params });
+      const seg = encodeURIComponent(String(userSlug));
+      return await api.get(`/attendance/reports/individual/${seg}`, { params });
     } catch (error) {
-      console.error(`Get individual report for user ${userId} failed:`, error);
+      console.error(`Get individual report for user ${userSlug} failed:`, error);
       throw error;
     }
   },

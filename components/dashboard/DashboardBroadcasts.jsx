@@ -40,13 +40,19 @@ export function DashboardBroadcasts() {
           <ul className="space-y-2.5">
             {displayList.slice(0, 3).map((b) => (
               <li key={b.id}>
-                <Link
-                  href={`/admin/broadcasts/${b.slug ?? b.id}`}
-                  className="text-sm font-medium text-foreground hover:text-primary flex items-center gap-2 py-1.5 rounded-lg hover:bg-muted/50 transition-colors -mx-1 px-1"
-                >
-                  <span className="truncate flex-1">{b.title}</span>
-                  <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                </Link>
+                {b.slug ? (
+                  <Link
+                    href={`/admin/broadcasts/${b.slug}`}
+                    className="text-sm font-medium text-foreground hover:text-primary flex items-center gap-2 py-1.5 rounded-lg hover:bg-muted/50 transition-colors -mx-1 px-1"
+                  >
+                    <span className="truncate flex-1">{b.title}</span>
+                    <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  </Link>
+                ) : (
+                  <span className="text-sm font-medium text-muted-foreground flex items-center gap-2 py-1.5 -mx-1 px-1">
+                    <span className="truncate flex-1">{b.title}</span>
+                  </span>
+                )}
               </li>
             ))}
           </ul>

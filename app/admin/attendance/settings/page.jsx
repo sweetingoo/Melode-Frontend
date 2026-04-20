@@ -90,7 +90,7 @@ export default function AttendanceSettingsPage() {
   const [selectedContractType, setSelectedContractType] = useState(null);
   const [contractTypeName, setContractTypeName] = useState("");
   const [contractTypeActive, setContractTypeActive] = useState(true);
-  const [deleteContractTypeId, setDeleteContractTypeId] = useState(null);
+  const [deleteContractTypeSlug, setDeleteContractTypeSlug] = useState(null);
 
   const { data: typesData, isLoading: typesLoading } = useShiftLeaveTypes({});
   const { data: contractTypesData, isLoading: contractTypesLoading } = useContractTypes({});
@@ -253,7 +253,7 @@ export default function AttendanceSettingsPage() {
                 </TableHeader>
                 <TableBody>
                   {types.map((type) => (
-                    <TableRow key={type.id || type.slug}>
+                    <TableRow key={type.slug || `shift-leave-${type.id}`}>
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-2">
                           {type.display_color && (
@@ -273,13 +273,13 @@ export default function AttendanceSettingsPage() {
                         <Switch
                           checked={!!type.is_active}
                           onCheckedChange={(checked) => {
-                            const idOrSlug = type.slug != null ? type.slug : String(type.id);
+                            if (!type.slug) return;
                             updateShiftLeaveType.mutate({
-                              slug: idOrSlug,
+                              slug: type.slug,
                               typeData: { is_active: !!checked },
                             });
                           }}
-                          disabled={updateShiftLeaveType.isPending}
+                          disabled={!type.slug || updateShiftLeaveType.isPending}
                         />
                       </TableCell>
                       <TableCell>
@@ -287,8 +287,9 @@ export default function AttendanceSettingsPage() {
                           <Button
                             variant="ghost"
                             size="sm"
+                            disabled={!type.slug}
                             onClick={() => {
-                              setSelectedTypeSlug(type.slug ?? type.id);
+                              setSelectedTypeSlug(type.slug);
                               setIsTypeFormOpen(true);
                             }}
                           >
@@ -298,10 +299,10 @@ export default function AttendanceSettingsPage() {
                             variant="ghost"
                             size="sm"
                             type="button"
+                            disabled={!type.slug}
                             onClick={() => {
-                              const idOrSlug = type.slug != null ? type.slug : String(type.id);
-                              setDeleteSlug(idOrSlug);
-                              deleteSlugRef.current = idOrSlug;
+                              setDeleteSlug(type.slug);
+                              deleteSlugRef.current = type.slug;
                             }}
                             className="text-destructive hover:text-destructive"
                           >
@@ -390,6 +391,7 @@ export default function AttendanceSettingsPage() {
                             <Button
                               variant="ghost"
                               size="sm"
+                              disabled={!ct.slug}
                               onClick={() => {
                                 setSelectedContractType(ct);
                                 setContractTypeName(ct.name || "");
@@ -403,7 +405,8 @@ export default function AttendanceSettingsPage() {
                               variant="ghost"
                               size="sm"
                               className="text-destructive hover:text-destructive"
-                              onClick={() => setDeleteContractTypeId(ct.id)}
+                              disabled={!ct.slug}
+                              onClick={() => setDeleteContractTypeSlug(ct.slug)}
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
@@ -450,14 +453,20 @@ export default function AttendanceSettingsPage() {
               Cancel
             </Button>
             <Button
-              disabled={!contractTypeName.trim() || createContractType.isPending || updateContractType.isPending}
+              disabled={
+                !contractTypeName.trim() ||
+                createContractType.isPending ||
+                updateContractType.isPending ||
+                !!(selectedContractType && !selectedContractType.slug)
+              }
               onClick={async () => {
                 const name = contractTypeName.trim();
                 if (!name) return;
                 try {
                   if (selectedContractType) {
+                    if (!selectedContractType.slug) return;
                     await updateContractType.mutateAsync({
-                      idOrSlug: String(selectedContractType.id),
+                      slug: selectedContractType.slug,
                       data: { name, is_active: contractTypeActive },
                     });
                   } else {
@@ -475,7 +484,7 @@ export default function AttendanceSettingsPage() {
       </Dialog>
 
       {/* Delete Contract Type confirmation */}
-      <AlertDialog open={!!deleteContractTypeId} onOpenChange={(open) => !open && setDeleteContractTypeId(null)}>
+      <AlertDialog open={!!deleteContractTypeSlug} onOpenChange={(open) => !open && setDeleteContractTypeSlug(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete contract type?</AlertDialogTitle>
@@ -484,13 +493,13 @@ export default function AttendanceSettingsPage() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setDeleteContractTypeId(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => setDeleteContractTypeSlug(null)}>Cancel</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={async () => {
-                if (deleteContractTypeId) {
-                  await deleteContractType.mutateAsync(String(deleteContractTypeId));
-                  setDeleteContractTypeId(null);
+                if (deleteContractTypeSlug) {
+                  await deleteContractType.mutateAsync(deleteContractTypeSlug);
+                  setDeleteContractTypeSlug(null);
                 }
               }}
             >

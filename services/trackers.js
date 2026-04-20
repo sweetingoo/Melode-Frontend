@@ -320,14 +320,16 @@ export const trackersService = {
   },
 
   // Mark inbound (patient) message as dealt with (Communications tab)
-  acknowledgeInboundMessage: async (entryIdentifier, messageId) => {
+  /** @param {string} messageSlug inbound message slug (path segment; required) */
+  acknowledgeInboundMessage: async (entryIdentifier, messageIdentifier) => {
     try {
+      const seg = encodeURIComponent(String(messageIdentifier));
       const response = await api.post(
-        `/trackers/entries/${entryIdentifier}/inbound-messages/${messageId}/acknowledge`
+        `/trackers/entries/${encodeURIComponent(String(entryIdentifier))}/inbound-messages/${seg}/acknowledge`
       );
       return response.data;
     } catch (error) {
-      console.error(`Acknowledge inbound message ${messageId} failed:`, error);
+      console.error(`Acknowledge inbound message ${messageIdentifier} failed:`, error);
       throw error;
     }
   },
@@ -413,12 +415,16 @@ export const trackersService = {
     }
   },
 
-  completeTrackerAction: async (entryIdentifier, actionId) => {
+  /** @param {string} actionSlug tracker action slug (path segment; required) */
+  completeTrackerAction: async (entryIdentifier, actionIdentifier) => {
     try {
-      const response = await api.post(`/trackers/entries/${entryIdentifier}/actions/${actionId}/complete`);
+      const seg = encodeURIComponent(String(actionIdentifier));
+      const response = await api.post(
+        `/trackers/entries/${encodeURIComponent(String(entryIdentifier))}/actions/${seg}/complete`
+      );
       return response.data;
     } catch (error) {
-      console.error(`Complete tracker action ${actionId} for ${entryIdentifier} failed:`, error);
+      console.error(`Complete tracker action ${actionIdentifier} for ${entryIdentifier} failed:`, error);
       throw error;
     }
   },
@@ -443,9 +449,12 @@ export const trackersService = {
     }
   },
 
+  /** @param {string} appointmentSlug appointment slug (path segment; required) */
   updateTrackerAppointment: async (entryIdentifier, appointmentId, body) => {
     try {
-      const response = await api.patch(`/trackers/entries/${entryIdentifier}/appointments/${appointmentId}`, body);
+      const entrySeg = encodeURIComponent(String(entryIdentifier));
+      const aptSeg = encodeURIComponent(String(appointmentId));
+      const response = await api.patch(`/trackers/entries/${entrySeg}/appointments/${aptSeg}`, body);
       return response.data;
     } catch (error) {
       console.error(`Update appointment ${appointmentId} for ${entryIdentifier} failed:`, error);
@@ -453,9 +462,12 @@ export const trackersService = {
     }
   },
 
+  /** @param {string} appointmentSlug appointment slug (path segment; required) */
   deleteTrackerAppointment: async (entryIdentifier, appointmentId) => {
     try {
-      await api.delete(`/trackers/entries/${entryIdentifier}/appointments/${appointmentId}`);
+      const entrySeg = encodeURIComponent(String(entryIdentifier));
+      const aptSeg = encodeURIComponent(String(appointmentId));
+      await api.delete(`/trackers/entries/${entrySeg}/appointments/${aptSeg}`);
     } catch (error) {
       console.error(`Delete appointment ${appointmentId} for ${entryIdentifier} failed:`, error);
       throw error;

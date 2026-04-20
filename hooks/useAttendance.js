@@ -10,9 +10,9 @@ export const attendanceKeys = {
   all: ["attendance"],
   shiftLeaveTypes: (params) => [...attendanceKeys.all, "shift-leave-types", params],
   shiftLeaveType: (slug) => [...attendanceKeys.all, "shift-leave-type", slug],
-  employeeSettings: (userId, params) => [...attendanceKeys.all, "employee-settings", userId, params],
+  employeeSettings: (userSlug, params) => [...attendanceKeys.all, "employee-settings", userSlug, params],
   contractTypes: (params) => [...attendanceKeys.all, "contract-types", params],
-  contractType: (idOrSlug) => [...attendanceKeys.all, "contract-type", idOrSlug],
+  contractType: (slug) => [...attendanceKeys.all, "contract-type", slug],
   holidayYears: (params) => [...attendanceKeys.all, "holiday-years", params],
   holidayYear: (slug) => [...attendanceKeys.all, "holiday-year", slug],
   currentHolidayYear: () => [...attendanceKeys.all, "holiday-year", "current"],
@@ -26,7 +26,7 @@ export const attendanceKeys = {
   leaveRequests: (params) => [...attendanceKeys.all, "leave-requests", params],
   pendingLeaveRequests: (params) => [...attendanceKeys.all, "leave-requests", "pending", params],
   pendingLeaveRequestDepartments: () => [...attendanceKeys.all, "leave-requests", "pending", "departments"],
-  leaveApproverDepartments: (userId) => [...attendanceKeys.all, "leave-approver-departments", userId],
+  leaveApproverDepartments: (userSlug) => [...attendanceKeys.all, "leave-approver-departments", userSlug],
   leaveRequest: (slug) => [...attendanceKeys.all, "leave-request", slug],
   coverage: (params) => [...attendanceKeys.all, "coverage", params],
   gaps: (params) => [...attendanceKeys.all, "gaps", params],
@@ -45,7 +45,7 @@ export const attendanceKeys = {
     holidayBalance: (params) => [...attendanceKeys.all, "reports", "holiday-balance", params],
     leaveCalendar: (params) => [...attendanceKeys.all, "reports", "leave-calendar", params],
     absence: (params) => [...attendanceKeys.all, "reports", "absence", params],
-    individual: (userId, params) => [...attendanceKeys.all, "reports", "individual", userId, params],
+    individual: (userSlug, params) => [...attendanceKeys.all, "reports", "individual", userSlug, params],
   },
   settings: () => [...attendanceKeys.all, "settings"],
 };
@@ -188,14 +188,15 @@ export const useDeleteShiftLeaveType = () => {
 };
 
 // Employee Settings
-export const useEmployeeSettings = (userId, params = {}, options = {}) => {
+/** @param {string|null|undefined} userSlug user slug (path segment; non-string values disable the query) */
+export const useEmployeeSettings = (userSlug, params = {}, options = {}) => {
   return useQuery({
-    queryKey: attendanceKeys.employeeSettings(userId, params),
+    queryKey: attendanceKeys.employeeSettings(userSlug, params),
     queryFn: async () => {
-      const response = await attendanceService.getEmployeeSettings(userId, params);
+      const response = await attendanceService.getEmployeeSettings(userSlug, params);
       return response.data || response;
     },
-    enabled: !!userId,
+    enabled: typeof userSlug === "string" && userSlug.trim() !== "",
     staleTime: 5 * 60 * 1000, // 5 minutes
     ...options,
   });
@@ -209,8 +210,8 @@ export const useCreateEmployeeSettings = () => {
       const response = await attendanceService.createEmployeeSettings(settingsData);
       return response.data || response;
     },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: [...attendanceKeys.all, "employee-settings", data.user_id] });
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [...attendanceKeys.all, "employee-settings"] });
       toast.success("Employee settings created successfully");
     },
     onError: (error) => {
@@ -225,16 +226,17 @@ export const useCreateEmployeeSettings = () => {
   });
 };
 
+/** @param {{ settingsSlug: string, settingsData: object }} variables — row slug only */
 export const useUpdateEmployeeSettings = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ settingsId, settingsData }) => {
-      const response = await attendanceService.updateEmployeeSettings(settingsId, settingsData);
+    mutationFn: async ({ settingsSlug, settingsData }) => {
+      const response = await attendanceService.updateEmployeeSettings(settingsSlug, settingsData);
       return response.data || response;
     },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: [...attendanceKeys.all, "employee-settings", data.user_id] });
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [...attendanceKeys.all, "employee-settings"] });
       toast.success("Employee settings updated successfully");
     },
     onError: (error) => {
@@ -283,8 +285,8 @@ export const useCreateContractType = () => {
 export const useUpdateContractType = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ idOrSlug, data }) => {
-      const response = await attendanceService.updateContractType(idOrSlug, data);
+    mutationFn: async ({ slug, data }) => {
+      const response = await attendanceService.updateContractType(slug, data);
       return response?.data ?? response;
     },
     onSuccess: async () => {
@@ -301,7 +303,7 @@ export const useUpdateContractType = () => {
 export const useDeleteContractType = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (idOrSlug) => attendanceService.deleteContractType(idOrSlug),
+    mutationFn: async (slug) => attendanceService.deleteContractType(slug),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: [...attendanceKeys.all, "contract-types"] });
       toast.success("Contract type deleted");
@@ -534,8 +536,8 @@ export const useRecalculateHolidayEntitlementHours = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (entitlementIdOrSlug) => {
-      const response = await attendanceService.recalculateHolidayEntitlementHours(entitlementIdOrSlug);
+    mutationFn: async (entitlementSlug) => {
+      const response = await attendanceService.recalculateHolidayEntitlementHours(entitlementSlug);
       return response.data ?? response;
     },
     onSuccess: (data) => {
@@ -562,28 +564,30 @@ export const useRecalculateHolidayEntitlementHours = () => {
 };
 
 // Leave approver departments (admin config: which departments a user can approve leave for)
-export const useLeaveApproverDepartments = (userId, options = {}) => {
+/** @param {string|null|undefined} userSlug user slug (path segment; non-string values disable the query) */
+export const useLeaveApproverDepartments = (userSlug, options = {}) => {
   return useQuery({
-    queryKey: attendanceKeys.leaveApproverDepartments(userId),
+    queryKey: attendanceKeys.leaveApproverDepartments(userSlug),
     queryFn: async () => {
-      const res = await attendanceService.getLeaveApproverDepartments(userId);
+      const res = await attendanceService.getLeaveApproverDepartments(userSlug);
       return Array.isArray(res) ? res : [];
     },
-    enabled: !!userId,
+    enabled: typeof userSlug === "string" && userSlug.trim() !== "",
     staleTime: 2 * 60 * 1000,
     ...options,
   });
 };
 
+/** @param {{ userSlug: string, department_ids: number[] }} variables */
 export const useSetLeaveApproverDepartments = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ userId, department_ids }) => {
-      const res = await attendanceService.setLeaveApproverDepartments(userId, { department_ids: department_ids ?? [] });
+    mutationFn: async ({ userSlug, department_ids }) => {
+      const res = await attendanceService.setLeaveApproverDepartments(userSlug, { department_ids: department_ids ?? [] });
       return res;
     },
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: attendanceKeys.leaveApproverDepartments(variables.userId) });
+      queryClient.invalidateQueries({ queryKey: attendanceKeys.leaveApproverDepartments(variables.userSlug) });
       queryClient.invalidateQueries({ queryKey: attendanceKeys.pendingLeaveRequestDepartments() });
       toast.success("Leave approval departments updated");
     },

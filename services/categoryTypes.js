@@ -22,20 +22,22 @@ export const categoryTypesService = {
     }
   },
 
-  // Get category type by slug
-  getCategoryType: async (slug) => {
+  /** @param {string} slug category type slug (path segment; required) */
+  getCategoryType: async (identifier) => {
     try {
-      return await api.get(`/category-types/slug/${slug}`);
+      const seg = encodeURIComponent(String(identifier));
+      return await api.get(`/category-types/${seg}`);
     } catch (error) {
-      console.error(`Get category type ${slug} failed:`, error);
+      console.error(`Get category type ${identifier} failed:`, error);
       throw error;
     }
   },
 
-  // Get category type by ID (for backward compatibility)
+  /** @param {string} slug category type slug (same path as getCategoryType; name kept for callers) */
   getCategoryTypeById: async (id) => {
     try {
-      return await api.get(`/category-types/${id}`);
+      const seg = encodeURIComponent(String(id));
+      return await api.get(`/category-types/${seg}`);
     } catch (error) {
       console.error(`Get category type ${id} failed:`, error);
       throw error;
@@ -52,40 +54,44 @@ export const categoryTypesService = {
     }
   },
 
-  // Update category type by slug
-  updateCategoryType: async (slug, categoryTypeData) => {
+  /** @param {string} slug category type slug (path segment; required) */
+  updateCategoryType: async (identifier, categoryTypeData) => {
     try {
-      return await api.put(`/category-types/slug/${slug}`, categoryTypeData);
+      const seg = encodeURIComponent(String(identifier));
+      return await api.put(`/category-types/${seg}`, categoryTypeData);
     } catch (error) {
-      console.error(`Update category type ${slug} failed:`, error);
+      console.error(`Update category type ${identifier} failed:`, error);
       throw error;
     }
   },
 
-  // Update category type by ID (for backward compatibility)
+  /** @param {string} slug category type slug (same path as updateCategoryType; name kept for callers) */
   updateCategoryTypeById: async (id, categoryTypeData) => {
     try {
-      return await api.put(`/category-types/${id}`, categoryTypeData);
+      const seg = encodeURIComponent(String(id));
+      return await api.put(`/category-types/${seg}`, categoryTypeData);
     } catch (error) {
       console.error(`Update category type ${id} failed:`, error);
       throw error;
     }
   },
 
-  // Delete category type by slug
-  deleteCategoryType: async (slug) => {
+  /** @param {string} slug category type slug (path segment; required) */
+  deleteCategoryType: async (identifier) => {
     try {
-      return await api.delete(`/category-types/slug/${slug}`);
+      const seg = encodeURIComponent(String(identifier));
+      await api.delete(`/category-types/${seg}`);
     } catch (error) {
-      console.error(`Delete category type ${slug} failed:`, error);
+      console.error(`Delete category type ${identifier} failed:`, error);
       throw error;
     }
   },
 
-  // Delete category type by ID (for backward compatibility)
+  /** @param {string} slug category type slug (same path as deleteCategoryType; name kept for callers) */
   deleteCategoryTypeById: async (id) => {
     try {
-      return await api.delete(`/category-types/${id}`);
+      const seg = encodeURIComponent(String(id));
+      await api.delete(`/category-types/${seg}`);
     } catch (error) {
       console.error(`Delete category type ${id} failed:`, error);
       throw error;

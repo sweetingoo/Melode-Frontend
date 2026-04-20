@@ -20,11 +20,13 @@ export const broadcastsService = {
     }
   },
 
-  getBroadcast: async (slug) => {
+  /** @param {string} slug broadcast slug (path segment; required) */
+  getBroadcast: async (identifier) => {
     try {
-      return await api.get(`/broadcasts/${slug}`);
+      const seg = encodeURIComponent(String(identifier));
+      return await api.get(`/broadcasts/${seg}`);
     } catch (error) {
-      console.error(`Get broadcast ${slug} failed:`, error);
+      console.error(`Get broadcast ${identifier} failed:`, error);
       throw error;
     }
   },
@@ -49,37 +51,43 @@ export const broadcastsService = {
     }
   },
 
-  updateBroadcast: async (slug, broadcastData) => {
+  /** @param {string} slug broadcast slug (path segment; required) */
+  updateBroadcast: async (identifier, broadcastData) => {
     try {
-      return await api.put(`/broadcasts/${slug}`, broadcastData);
+      const seg = encodeURIComponent(String(identifier));
+      return await api.put(`/broadcasts/${seg}`, broadcastData);
     } catch (error) {
-      console.error(`Update broadcast ${slug} failed:`, error);
+      console.error(`Update broadcast ${identifier} failed:`, error);
       throw error;
     }
   },
 
-  markBroadcastAsRead: async (slug, readVia = "web") => {
+  /** @param {string} slug broadcast slug (path segment; required) */
+  markBroadcastAsRead: async (identifier, readVia = "web") => {
     try {
       const userAgent = typeof navigator !== "undefined" ? navigator.userAgent : undefined;
       const requestBody = {
         read_via: readVia,
         ...(userAgent && { user_agent: userAgent }),
       };
-      return await api.post(`/broadcasts/${slug}/read`, requestBody);
+      const seg = encodeURIComponent(String(identifier));
+      return await api.post(`/broadcasts/${seg}/read`, requestBody);
     } catch (error) {
-      console.error(`Mark broadcast ${slug} as read failed:`, error);
+      console.error(`Mark broadcast ${identifier} as read failed:`, error);
       throw error;
     }
   },
 
-  acknowledgeBroadcast: async (slug, acknowledgementStatus, acknowledgementNote = "") => {
+  /** @param {string} slug broadcast slug (path segment; required) */
+  acknowledgeBroadcast: async (identifier, acknowledgementStatus, acknowledgementNote = "") => {
     try {
-      return await api.post(`/broadcasts/${slug}/acknowledge`, {
+      const seg = encodeURIComponent(String(identifier));
+      return await api.post(`/broadcasts/${seg}/acknowledge`, {
         acknowledgement_status: acknowledgementStatus,
         acknowledgement_note: acknowledgementNote,
       });
     } catch (error) {
-      console.error(`Acknowledge broadcast ${slug} failed:`, error);
+      console.error(`Acknowledge broadcast ${identifier} failed:`, error);
       throw error;
     }
   },

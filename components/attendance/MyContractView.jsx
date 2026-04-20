@@ -23,7 +23,8 @@ export function MyContractView() {
   const monthStart = startOfMonth(viewMonth);
   const monthEnd = endOfMonth(viewMonth);
 
-  const { data: settingsData, isLoading: settingsLoading } = useEmployeeSettings(user?.id ?? null, {}, { enabled: !!user?.id });
+  const employeeSettingsUserKey = user?.slug ?? null;
+  const { data: settingsData, isLoading: settingsLoading } = useEmployeeSettings(employeeSettingsUserKey, {}, { enabled: !!employeeSettingsUserKey });
   const { data: contractTypesData } = useContractTypes({});
   const contractTypesList = Array.isArray(contractTypesData) ? contractTypesData : contractTypesData?.data ?? [];
   const contractTypeById = useMemo(() => {

@@ -519,11 +519,15 @@ const BroadcastsPage = () => {
                   <Card
                     key={broadcast.id}
                     className={cn(
-                      "cursor-pointer hover:bg-muted/50 transition-colors border-l-4",
+                      "transition-colors border-l-4",
+                      broadcast.slug ? "cursor-pointer hover:bg-muted/50" : "cursor-default opacity-80",
                       !isRead && !isSent && "border-l-primary bg-primary/5",
                       isSent && "border-l-green-500 bg-green-50/30 dark:bg-green-950/10"
                     )}
-                    onClick={() => router.push(`/admin/broadcasts/${broadcast.slug || broadcast.id}`)}
+                    onClick={() => {
+                      if (!broadcast.slug) return;
+                      router.push(`/admin/broadcasts/${broadcast.slug}`);
+                    }}
                   >
                     <CardContent className="pt-4">
                       <div className="flex items-start justify-between gap-4">
@@ -612,18 +616,16 @@ const BroadcastsPage = () => {
                                   variant="ghost"
                                   size="sm"
                                   className="h-6 text-xs"
-                                  disabled={!broadcast.slug && !broadcast.id}
+                                  disabled={!broadcast.slug}
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    const broadcastIdentifier = broadcast.slug || broadcast.id;
-                                    if (broadcastIdentifier) {
-                                      router.push(`/admin/broadcasts/${broadcastIdentifier}/status`);
-                                    } else {
-                                      console.error("Cannot navigate to status: broadcast has no slug or id", broadcast);
+                                    if (!broadcast.slug) {
                                       toast.error("Error", {
-                                        description: "Cannot view status: broadcast identifier is missing.",
+                                        description: "Cannot view status: broadcast slug is missing.",
                                       });
+                                      return;
                                     }
+                                    router.push(`/admin/broadcasts/${broadcast.slug}/status`);
                                   }}
                                 >
                                   View Status
@@ -801,10 +803,14 @@ const BroadcastsPage = () => {
                         <Card
                           key={broadcast.id}
                           className={cn(
-                            "cursor-pointer hover:bg-muted/50 transition-colors border-l-4",
+                            "transition-colors border-l-4",
+                            broadcast.slug ? "cursor-pointer hover:bg-muted/50" : "cursor-default opacity-80",
                             "border-l-green-500 bg-green-50/30 dark:bg-green-950/10"
                           )}
-                          onClick={() => router.push(`/admin/broadcasts/${broadcast.slug || broadcast.id}`)}
+                          onClick={() => {
+                            if (!broadcast.slug) return;
+                            router.push(`/admin/broadcasts/${broadcast.slug}`);
+                          }}
                         >
                           <CardContent className="p-4">
                             <div className="flex items-start justify-between gap-4">
@@ -867,18 +873,16 @@ const BroadcastsPage = () => {
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  disabled={!broadcast.slug && !broadcast.id}
+                                  disabled={!broadcast.slug}
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    const broadcastIdentifier = broadcast.slug || broadcast.id;
-                                    if (broadcastIdentifier) {
-                                      router.push(`/admin/broadcasts/${broadcastIdentifier}/status`);
-                                    } else {
-                                      console.error("Cannot navigate to status: broadcast has no slug or id", broadcast);
+                                    if (!broadcast.slug) {
                                       toast.error("Error", {
-                                        description: "Cannot view status: broadcast identifier is missing.",
+                                        description: "Cannot view status: broadcast slug is missing.",
                                       });
+                                      return;
                                     }
+                                    router.push(`/admin/broadcasts/${broadcast.slug}/status`);
                                   }}
                                 >
                                   <BarChart3 className="h-4 w-4" />

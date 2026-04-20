@@ -103,23 +103,23 @@ export default function AttendanceReportsPage() {
   const [endDate, setEndDate] = useState(defaultRange.end);
   const [groupBy, setGroupBy] = useState("individual");
   const [payrollExporting, setPayrollExporting] = useState(false);
-  const [individualUserId, setIndividualUserId] = useState("");
+  const [individualUserSlug, setIndividualUserSlug] = useState("");
   const [individualStartDate, setIndividualStartDate] = useState(defaultRange.start);
   const [individualEndDate, setIndividualEndDate] = useState(defaultRange.end);
 
   const summaryParams = { start_date: startDate, end_date: endDate, group_by: groupBy };
   const absenceParams = { start_date: startDate, end_date: endDate };
   const holidayParams = {};
-  const individualParams = individualUserId
+  const individualParams = individualUserSlug
     ? { start_date: individualStartDate, end_date: individualEndDate }
     : null;
 
   const { data: usersData } = useUsers({ per_page: 100 });
   const users = usersData?.users ?? usersData?.data ?? [];
   const { data: individualData, isLoading: individualLoading } = useIndividualReport(
-    individualUserId ? parseInt(individualUserId, 10) : null,
+    individualUserSlug || null,
     individualParams || {},
-    { enabled: !!individualUserId && !!individualParams }
+    { enabled: !!individualUserSlug && !!individualParams }
   );
 
   const { data: summaryData, isLoading: summaryLoading, refetch: refetchSummary } = useAttendanceSummary(summaryParams);
@@ -353,16 +353,18 @@ export default function AttendanceReportsPage() {
           <div className="flex flex-wrap items-end gap-4">
             <div className="space-y-2">
               <Label>Employee</Label>
-              <Select value={individualUserId} onValueChange={setIndividualUserId}>
+              <Select value={individualUserSlug} onValueChange={setIndividualUserSlug}>
                 <SelectTrigger className="w-[220px]">
                   <SelectValue placeholder="Select employee" />
                 </SelectTrigger>
                 <SelectContent>
-                  {users.map((u) => (
-                    <SelectItem key={u.id} value={String(u.id)}>
-                      {u.display_name || u.full_name || u.email}
-                    </SelectItem>
-                  ))}
+                  {users
+                    .filter((u) => u.slug)
+                    .map((u) => (
+                      <SelectItem key={u.slug} value={String(u.slug)}>
+                        {u.display_name || u.full_name || u.email}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
             </div>
@@ -385,7 +387,7 @@ export default function AttendanceReportsPage() {
               />
             </div>
           </div>
-          {!individualUserId ? (
+          {!individualUserSlug ? (
             <p className="py-4 text-sm text-muted-foreground">Select an employee to view their individual report.</p>
           ) : individualLoading ? (
             <div className="flex items-center justify-center py-8">
@@ -394,7 +396,7 @@ export default function AttendanceReportsPage() {
           ) : individualData ? (
             <div className="space-y-4">
               <div className="rounded-md border p-4">
-                <h4 className="font-medium">{individualData.user_name || `User #${individualData.user_id}`}</h4>
+                <h4 className="font-medium">{individualData.user_name || "Employee"}</h4>
                 <p className="text-sm text-muted-foreground">
                   {individualData.start_date} to {individualData.end_date}
                 </p>

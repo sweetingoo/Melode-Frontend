@@ -19,6 +19,7 @@ import { useCreateEmployeeSettings, useUpdateEmployeeSettings, useContractTypes 
 import { useUsers } from "@/hooks/useUsers";
 import { useAssignments } from "@/hooks/useAssignments";
 import { formatDateForAPI } from "@/utils/time";
+import { toast } from "sonner";
 
 const WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
 
@@ -110,8 +111,12 @@ export const EmployeeSettingsForm = ({ open, onOpenChange, setting = null, prese
 
     try {
       if (setting) {
+        if (!setting.slug) {
+          toast.error("This row has no slug yet; refresh after migration or recreate the setting.");
+          return;
+        }
         await updateSettings.mutateAsync({
-          settingsId: setting.id,
+          settingsSlug: setting.slug,
           settingsData: {
             end_date: endDate || null,
             hours_per_day: numHours,

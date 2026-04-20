@@ -210,7 +210,7 @@ export function CalendarEventDetailSheet({ slug, open, onOpenChange }) {
                                   onCheckedChange={(c) =>
                                     patchAttendedMutation.mutate({
                                       slug,
-                                      rsvpId: row.rsvp.id,
+                                      rsvpId: row.rsvp.slug ?? row.rsvp.id,
                                       attended: !!c,
                                     })
                                   }
@@ -247,7 +247,7 @@ export function CalendarEventDetailSheet({ slug, open, onOpenChange }) {
                                     onCheckedChange={(c) =>
                                       patchAttendedMutation.mutate({
                                         slug,
-                                        rsvpId: row.id,
+                                        rsvpId: row.slug ?? row.id,
                                         attended: !!c,
                                       })
                                     }
@@ -288,7 +288,7 @@ export function CalendarEventDetailSheet({ slug, open, onOpenChange }) {
                                     onCheckedChange={(c) =>
                                       patchAttendedMutation.mutate({
                                         slug,
-                                        rsvpId: row.id,
+                                        rsvpId: row.slug ?? row.id,
                                         attended: !!c,
                                       })
                                     }

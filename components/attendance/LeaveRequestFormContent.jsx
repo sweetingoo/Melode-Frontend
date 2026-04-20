@@ -130,7 +130,8 @@ export const LeaveRequestFormContent = ({
 
   const createLeaveRequest = useCreateLeaveRequest();
   const updateLeaveRequest = useUpdateLeaveRequest();
-  const targetUserId = userId || user?.id;
+  const targetUserId = userId ?? user?.id;
+  const employeeSettingsUserKey = userId != null ? userId : user?.slug ?? null;
 
   const { data: assignmentsData } = useAssignments(
     { user_id: targetUserId, is_active: true },
@@ -157,9 +158,9 @@ export const LeaveRequestFormContent = ({
     { enabled: !!targetUserId && !!effectiveJobRoleId }
   );
   const { data: employeeSettingsData } = useEmployeeSettings(
-    targetUserId,
+    employeeSettingsUserKey,
     { job_role_id: effectiveJobRoleId },
-    { enabled: isReady && !!targetUserId && !!effectiveJobRoleId }
+    { enabled: isReady && !!employeeSettingsUserKey && !!effectiveJobRoleId }
   );
   const employeeSettingsList = Array.isArray(employeeSettingsData)
     ? employeeSettingsData

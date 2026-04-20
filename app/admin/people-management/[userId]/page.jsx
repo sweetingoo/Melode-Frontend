@@ -623,9 +623,9 @@ const UserEditPage = () => {
 
   // Employee job role settings and holiday entitlements (Shifts & Attendance tab)
   const { data: employeeSettingsData, isLoading: employeeSettingsLoading } = useEmployeeSettings(
-    userData?.id ?? null,
+    userData?.slug ?? null,
     {},
-    { enabled: !!userData?.id }
+    { enabled: !!userData?.slug }
   );
   const employeeSettingsList = Array.isArray(employeeSettingsData) ? employeeSettingsData : (employeeSettingsData ?? []);
   const { data: yearsData } = useHolidayYears({});
@@ -644,7 +644,8 @@ const UserEditPage = () => {
   });
   const entitlementsList = Array.isArray(entitlementsData) ? entitlementsData : (entitlementsData ?? []);
   const recalculateHoursMutation = useRecalculateHolidayEntitlementHours();
-  const { data: leaveApproverDeptsData } = useLeaveApproverDepartments(userData?.id ?? null, { enabled: !!userData?.id });
+  const leaveApproverUserKey = userData?.slug ?? null;
+  const { data: leaveApproverDeptsData } = useLeaveApproverDepartments(leaveApproverUserKey, { enabled: !!leaveApproverUserKey });
   const leaveApproverDepartmentsList = React.useMemo(
     () => (Array.isArray(leaveApproverDeptsData) ? leaveApproverDeptsData : []),
     [leaveApproverDeptsData]
@@ -3219,10 +3220,14 @@ const UserEditPage = () => {
                           size="sm"
                           onClick={async () => {
                             for (const ent of entitlementsList) {
-                              await recalculateHoursMutation.mutateAsync(ent.id ?? ent.slug);
+                              if (!ent.slug) continue;
+                              await recalculateHoursMutation.mutateAsync(ent.slug);
                             }
                           }}
-                          disabled={recalculateHoursMutation.isPending}
+                          disabled={
+                            recalculateHoursMutation.isPending ||
+                            !entitlementsList.some((e) => e.slug)
+                          }
                         >
                           {recalculateHoursMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
                           Recalculate hours from leave
@@ -3368,7 +3373,7 @@ const UserEditPage = () => {
                       onClick={async () => {
                         try {
                           await setLeaveApproverDepartmentsMutation.mutateAsync({
-                            userId: userData.id,
+                            userSlug: userData.slug,
                             department_ids: leaveApproverSelectedIds,
                           });
                         } catch (_) {

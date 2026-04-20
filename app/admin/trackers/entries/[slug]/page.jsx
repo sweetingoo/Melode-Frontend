@@ -730,7 +730,8 @@ const TrackerEntryDetailPage = () => {
         const actionId = ev.id?.startsWith("action_") ? Number(ev.id.slice(7)) : null;
         if (actionId == null) return;
         const completed = !!ev.completed_at;
-        items.push({ dateStr, type, actionId, completed });
+        const actionSlug = ev.action_slug;
+        items.push({ dateStr, type, actionId, actionSlug, completed });
       }
     });
     // Only pending chases in the sidebar — completed ones (e.g. SMS marked dealt with) clear from this list
@@ -747,10 +748,11 @@ const TrackerEntryDetailPage = () => {
     const sent = smsThreadData?.sent ?? [];
     const items = [];
     inbound.forEach((msg) => {
+      const ackIdentifier = msg.slug ?? null;
       items.push({
         type: "inbound",
         id: `inbound_${msg.id}`,
-        messageId: msg.id,
+        ackIdentifier,
         timestamp: msg.received_at,
         content: msg.content || "—",
         source_address: msg.source_address,
@@ -795,13 +797,13 @@ const TrackerEntryDetailPage = () => {
     const inbound = smsThreadData.inbound;
     const mostRecentId = inbound[inbound.length - 1]?.id;
     const unacknowledged = inbound.filter((m) => !m.acknowledged_at);
-    const toAutoAck = mostRecentId != null ? unacknowledged.filter((m) => m.id !== mostRecentId) : unacknowledged;
+    const toAutoAck = (mostRecentId != null ? unacknowledged.filter((m) => m.id !== mostRecentId) : unacknowledged).filter((m) => m.slug);
     if (toAutoAck.length === 0) return;
     autoAckInProgressRef.current = true;
     (async () => {
       try {
         await Promise.all(
-          toAutoAck.map((m) => trackersService.acknowledgeInboundMessage(entrySlug, m.id))
+          toAutoAck.map((m) => trackersService.acknowledgeInboundMessage(entrySlug, m.slug))
         );
         refetchSmsThread?.();
         refetchTimeline?.();
@@ -1739,7 +1741,7 @@ const TrackerEntryDetailPage = () => {
                     const statusLabel = statusOptions.find((s) => s.id === apt.status)?.label ?? apt.status;
                     const aptAt = apt.appointment_at ? (typeof apt.appointment_at === "string" ? new Date(apt.appointment_at) : apt.appointment_at) : null;
                     return (
-                      <li key={apt.id} className="flex items-start justify-between gap-2 py-1.5 border-b border-border/50 last:border-0 last:pb-0 first:pt-0">
+                      <li key={apt.slug ?? `apt-${apt.id}`} className="flex items-start justify-between gap-2 py-1.5 border-b border-border/50 last:border-0 last:pb-0 first:pt-0">
                         <div className="min-w-0 flex-1">
                           <div className="font-medium text-foreground leading-tight">
                             {aptAt ? format(aptAt, "d MMM HH:mm") : "—"}
@@ -1753,12 +1755,13 @@ const TrackerEntryDetailPage = () => {
                           <Select
                             value={apt.status}
                             onValueChange={(value) => {
+                              if (!apt.slug) return;
                               updateTrackerAppointmentMutation.mutate(
-                                { entryIdentifier: entrySlug, appointmentId: apt.id, body: { status: value } },
+                                { entryIdentifier: entrySlug, appointmentId: apt.slug, body: { status: value } },
                                 { onSuccess: () => refetchAppointments() }
                               );
                             }}
-                            disabled={updateTrackerAppointmentMutation.isPending}
+                            disabled={updateTrackerAppointmentMutation.isPending || !apt.slug}
                           >
                             <SelectTrigger className="h-6 text-[11px] w-[100px] py-0 shrink-0 border-muted-foreground/30">
                               <SelectValue />
@@ -1792,7 +1795,7 @@ const TrackerEntryDetailPage = () => {
                     const isPending = isAction && !item.completed;
                     return (
                       <li
-                        key={isAction ? `action_${item.actionId}` : `due_${item.dateStr}_${idx}`}
+                        key={isAction ? `action_${item.actionSlug ?? item.actionId}` : `due_${item.dateStr}_${idx}`}
                         className={cn(
                           "flex items-center justify-between gap-2 py-1.5 border-b border-border/50 last:border-0 first:pt-0",
                           item.completed && "opacity-70"
@@ -1811,8 +1814,9 @@ const TrackerEntryDetailPage = () => {
                             className="h-6 text-[11px] px-2 shrink-0"
                             disabled={completeTrackerActionMutation.isPending}
                             onClick={async () => {
-                              if (item.actionId == null || !entrySlug) return;
-                              await completeTrackerActionMutation.mutateAsync({ entryIdentifier: entrySlug, actionId: item.actionId });
+                              const ident = item.actionSlug ?? item.actionId;
+                              if (ident == null || !entrySlug) return;
+                              await completeTrackerActionMutation.mutateAsync({ entryIdentifier: entrySlug, actionId: ident });
                               refetchTimeline();
                               refetchEntry?.();
                             }}
@@ -1961,11 +1965,13 @@ const TrackerEntryDetailPage = () => {
                                     variant="outline"
                                     size="sm"
                                     className="h-6 text-xs"
-                                    disabled={completeTrackerActionMutation.isPending}
+                                    disabled={completeTrackerActionMutation.isPending || !event.action_slug}
                                     onClick={async () => {
-                                      const actionId = event.id?.startsWith("action_") ? Number(event.id.slice(7)) : null;
-                                      if (actionId == null || !entrySlug) return;
-                                      await completeTrackerActionMutation.mutateAsync({ entryIdentifier: entrySlug, actionId });
+                                      if (!event.action_slug || !entrySlug) return;
+                                      await completeTrackerActionMutation.mutateAsync({
+                                        entryIdentifier: entrySlug,
+                                        actionId: event.action_slug,
+                                      });
                                       refetchTimeline();
                                       refetchEntry?.();
                                     }}
@@ -3206,14 +3212,14 @@ const TrackerEntryDetailPage = () => {
                                   </Badge>
                                 ) : canEditCase ? (
                                   <Checkbox
-                                    id={`ack-${item.messageId}`}
+                                    id={`ack-${item.id}`}
                                     checked={false}
-                                    disabled={acknowledgingMessageId === item.messageId}
+                                    disabled={!item.ackIdentifier || acknowledgingMessageId === item.ackIdentifier}
                                     onCheckedChange={async (checked) => {
-                                      if (!checked || !entrySlug || item.messageId == null) return;
-                                      setAcknowledgingMessageId(item.messageId);
+                                      if (!checked || !entrySlug || !item.ackIdentifier) return;
+                                      setAcknowledgingMessageId(item.ackIdentifier);
                                       try {
-                                        await trackersService.acknowledgeInboundMessage(entrySlug, item.messageId);
+                                        await trackersService.acknowledgeInboundMessage(entrySlug, item.ackIdentifier);
                                         refetchSmsThread?.();
                                         refetchTimeline?.();
                                         refetchEntry?.();
@@ -3230,7 +3236,7 @@ const TrackerEntryDetailPage = () => {
                                   />
                                 ) : null}
                                 {canEditCase && !item.acknowledged_at && (
-                                  <label htmlFor={`ack-${item.messageId}`} className="text-[10px] text-muted-foreground cursor-pointer">
+                                  <label htmlFor={`ack-${item.id}`} className="text-[10px] text-muted-foreground cursor-pointer">
                                     Dealt with
                                   </label>
                                 )}
@@ -3302,9 +3308,9 @@ const TrackerEntryDetailPage = () => {
                                 setSendSmsMessage("");
                                 const inbound = smsThreadData?.inbound ?? [];
                                 const latestInbound = inbound[inbound.length - 1];
-                                if (latestInbound && !latestInbound.acknowledged_at) {
+                                if (latestInbound && !latestInbound.acknowledged_at && latestInbound.slug) {
                                   try {
-                                    await trackersService.acknowledgeInboundMessage(entrySlug, latestInbound.id);
+                                    await trackersService.acknowledgeInboundMessage(entrySlug, latestInbound.slug);
                                   } catch (_) {}
                                 }
                                 refetchSmsThread?.();

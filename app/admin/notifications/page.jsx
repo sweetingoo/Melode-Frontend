@@ -166,11 +166,12 @@ const NotificationsPage = () => {
       // Use preview route for shared documents (clean view without access history)
       router.push(`/documents/${notification.metadata.document_slug || notification.metadata.document_id}/preview`);
     } else if (notification.is_broadcast) {
+      if (!notification.slug) return;
       // For sent broadcasts, optionally show status page
       if (showStatus && notification.created_by_user_id === currentUser?.id) {
-        router.push(`/admin/broadcasts/${notification.slug || notification.id}/status`);
+        router.push(`/admin/broadcasts/${notification.slug}/status`);
       } else {
-        router.push(`/admin/broadcasts/${notification.slug || notification.id}`);
+        router.push(`/admin/broadcasts/${notification.slug}`);
       }
     } else if (notification.conversation_id) {
       router.push(`/admin/messages?conversation=${notification.conversation_id}`);

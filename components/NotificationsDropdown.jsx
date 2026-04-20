@@ -95,7 +95,8 @@ const NotificationsDropdown = () => {
       // Use preview route for shared documents (clean view without access history)
       router.push(`/documents/${notification.metadata.document_slug || notification.metadata.document_id}/preview`);
     } else if (notification.is_broadcast) {
-      router.push(`/admin/broadcasts/${notification.slug || notification.id}`);
+      if (!notification.slug) return;
+      router.push(`/admin/broadcasts/${notification.slug}`);
     } else if (notification.conversation_id) {
       router.push(`/admin/messages?conversation=${notification.conversation_id}`);
     } else if (notification.slug) {

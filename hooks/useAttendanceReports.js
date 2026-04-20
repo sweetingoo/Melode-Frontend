@@ -41,14 +41,15 @@ export const useLeaveCalendar = (params = {}, options = {}) => {
   });
 };
 
-export const useIndividualReport = (userId, params = {}, options = {}) => {
+/** @param {string|null|undefined} userSlug user slug (path segment; non-string values are ignored) */
+export const useIndividualReport = (userSlug, params = {}, options = {}) => {
   return useQuery({
-    queryKey: attendanceKeys.reports.individual(userId, params),
+    queryKey: attendanceKeys.reports.individual(userSlug, params),
     queryFn: async () => {
-      const response = await attendanceService.getIndividualReport(userId, params);
+      const response = await attendanceService.getIndividualReport(userSlug, params);
       return response.data || response;
     },
-    enabled: !!userId,
+    enabled: typeof userSlug === "string" && userSlug.trim() !== "",
     staleTime: 5 * 60 * 1000, // 5 minutes
     ...options,
   });
