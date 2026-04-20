@@ -944,7 +944,8 @@ const CustomFieldRenderer = ({
           value={value} 
           onChange={handleChange} 
           error={error} 
-          fieldId={fieldId} 
+          fieldId={fieldId}
+          readOnly={readOnly}
         />;
 
       case 'json':
@@ -1644,7 +1645,35 @@ const DatePickerWithTime = ({ fieldId, value, onChange, error, readOnly, shouldS
   );
 };
 
-const FileFieldRenderer = ({ field, value, onChange, error, fieldId }) => {
+/** Resolved uploaded file(s) from API (id/slug + display name). Ignores pending File picks. */
+function getUploadedFileDescriptors(value) {
+  const out = [];
+  const push = (v) => {
+    if (v == null || v instanceof File) return;
+    if (typeof v === "number" && Number.isFinite(v)) {
+      out.push({ downloadId: v, displayName: `File #${v}` });
+      return;
+    }
+    if (typeof v === "string" && v.trim()) {
+      const id = v.trim();
+      out.push({ downloadId: id, displayName: id });
+      return;
+    }
+    if (typeof v === "object" && v.file instanceof File) return;
+    if (typeof v === "object") {
+      const downloadId = v.file_reference_id ?? v.file_id ?? v.id ?? v.slug;
+      if (downloadId == null || downloadId === "") return;
+      const displayName =
+        v.file_name || v.name || v.filename || (typeof downloadId === "number" ? `File #${downloadId}` : String(downloadId));
+      out.push({ downloadId, displayName });
+    }
+  };
+  if (Array.isArray(value)) value.forEach(push);
+  else push(value);
+  return out;
+}
+
+const FileFieldRenderer = ({ field, value, onChange, error, fieldId, readOnly = false }) => {
   const downloadFileMutation = useDownloadFile();
   const [isDragOver, setIsDragOver] = React.useState(false);
   const fileInputRef = React.useRef(null);
@@ -1661,13 +1690,10 @@ const FileFieldRenderer = ({ field, value, onChange, error, fieldId }) => {
     return [value];
   }, [value]);
 
+  const uploadedDescriptors = React.useMemo(() => getUploadedFileDescriptors(value), [value]);
+
   // Track uploaded file info separately from new file selections
-  // When value is a number (file_id), it means a file has already been uploaded
-  const hasUploadedFile = React.useMemo(() => {
-    if (typeof value === 'number') return true;
-    if (Array.isArray(value) && value.length > 0 && typeof value[0] === 'number') return true;
-    return false;
-  }, [value]);
+  const hasUploadedFile = uploadedDescriptors.length > 0;
   
   // Debug logging
   React.useEffect(() => {
@@ -1878,7 +1904,57 @@ const FileFieldRenderer = ({ field, value, onChange, error, fieldId }) => {
 
   return (
     <div className="space-y-3">
-      {/* Upload Area with Border */}
+      {/* Already uploaded (API): numeric id, slug, or { file_id, file_name, ... } / array of those */}
+      {hasUploadedFile && (
+        <div className="space-y-2">
+          {uploadedDescriptors.map(({ downloadId, displayName }, index) => (
+            <div
+              key={`uploaded-${String(downloadId)}-${index}`}
+              className="flex items-center justify-between p-4 bg-green-50 dark:bg-green-950/20 rounded-lg border-2 border-green-300 dark:border-green-700"
+            >
+              <div className="flex items-center space-x-3 min-w-0">
+                <span className="text-2xl shrink-0">📎</span>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-green-900 dark:text-green-100 truncate" title={displayName}>
+                    {displayName}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {readOnly ? "Saved upload — open to view" : "Click download to view"}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center space-x-2 shrink-0">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    downloadFileMutation.mutate(downloadId);
+                  }}
+                  disabled={downloadFileMutation.isPending}
+                  className="flex items-center space-x-2 border-green-300 hover:bg-green-100 dark:hover:bg-green-900"
+                >
+                  <Download className="h-4 w-4" />
+                  <span>Download</span>
+                </Button>
+                {!readOnly && !allowMultiple && (
+                  <span className="text-xs text-muted-foreground italic ml-2 hidden sm:inline">
+                    Upload a new file to replace this one
+                  </span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {readOnly && !hasUploadedFile && (
+        <p className="text-sm text-muted-foreground">No file uploaded</p>
+      )}
+
+      {/* Upload Area with Border (hidden in read-only tracker / submission views) */}
+      {!readOnly && (
       <div
         className={`
           relative border-2 border-dashed rounded-lg p-6 transition-colors
@@ -1906,66 +1982,6 @@ const FileFieldRenderer = ({ field, value, onChange, error, fieldId }) => {
           })()}
           className="hidden"
         />
-        
-        {/* Already Uploaded File Display - Inside the border */}
-        {hasUploadedFile && (
-          <div className="space-y-2 mb-4">
-            {(() => {
-              // Get the file_id(s) - could be a single number or array of numbers
-              const fileIds = typeof value === 'number' ? [value] : (Array.isArray(value) ? value.filter(v => typeof v === 'number') : []);
-              
-              console.log(`[FileFieldRenderer] Displaying uploaded files for field ${field.id} (${field.field_label || field.field_name}):`, {
-                value,
-                valueType: typeof value,
-                fileIds,
-                hasUploadedFile,
-                fieldType: field.field_type,
-              });
-              
-              if (fileIds.length === 0) {
-                console.warn(`[FileFieldRenderer] hasUploadedFile is true but no fileIds found for field ${field.id}`);
-                return null;
-              }
-              
-              return fileIds.map((fileId, index) => (
-                <div key={`uploaded-${fileId}-${index}`} className="flex items-center justify-between p-4 bg-green-50 dark:bg-green-950/20 rounded-lg border-2 border-green-300 dark:border-green-700">
-                  <div className="flex items-center space-x-3">
-                    <span className="text-2xl">📎</span>
-                    <div>
-                      <p className="text-sm font-medium text-green-900 dark:text-green-100">
-                        ✓ File already uploaded
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Click download to view
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        downloadFileMutation.mutate(fileId);
-                      }}
-                      disabled={downloadFileMutation.isPending}
-                      className="flex items-center space-x-2 border-green-300 hover:bg-green-100 dark:hover:bg-green-900"
-                    >
-                      <Download className="h-4 w-4" />
-                      <span>Download</span>
-                    </Button>
-                    {!allowMultiple && (
-                      <span className="text-xs text-muted-foreground italic ml-2">
-                        Upload a new file to replace this one
-                      </span>
-                    )}
-                  </div>
-                </div>
-              ));
-            })()}
-          </div>
-        )}
         
         {/* Upload Area Content */}
         <div 
@@ -2014,6 +2030,7 @@ const FileFieldRenderer = ({ field, value, onChange, error, fieldId }) => {
           </div>
         </div>
       </div>
+      )}
 
       {/* Selected Files Preview (New files being uploaded) */}
       {(() => {
@@ -2083,33 +2100,6 @@ const FileFieldRenderer = ({ field, value, onChange, error, fieldId }) => {
             }
             return null;
           })}
-        </div>
-      )}
-      
-      {/* File Info from API Response (if value is a file object with metadata) */}
-      {value && typeof value === 'object' && value.file_name && !(value instanceof File) && (
-        <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg border">
-          <div className="flex items-center space-x-3">
-            <span className="text-2xl">{getFileIcon(value.file_name)}</span>
-            <div>
-              <p className="text-sm font-medium">{value.file_name}</p>
-              <p className="text-xs text-muted-foreground">
-                {value.file_size_bytes && formatFileSize(value.file_size_bytes)}
-                {value.content_type && ` • ${value.content_type}`}
-              </p>
-            </div>
-          </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => downloadFileMutation.mutate(value.id || value.file_id)}
-            disabled={downloadFileMutation.isPending}
-            className="flex items-center space-x-2"
-          >
-            <Download className="h-4 w-4" />
-            <span>Download</span>
-          </Button>
         </div>
       )}
     </div>
