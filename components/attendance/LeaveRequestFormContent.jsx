@@ -27,8 +27,9 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-const DEFAULT_FULL_DAY_HOURS = 8;
-const DEFAULT_PART_DAY_HOURS = 4;
+/** Fallback when attendance settings not loaded (API default is 7.5) */
+const DEFAULT_FULL_DAY_HOURS = 7.5;
+const DEFAULT_PART_DAY_HOURS = 3.75;
 
 function datesInRange(from, to) {
   if (!from || !to || to < from) return [];
@@ -169,12 +170,18 @@ export const LeaveRequestFormContent = ({
     employeeSettingsList.length > 0 && employeeSettingsList[0]?.hours_per_day != null
       ? Number(employeeSettingsList[0].hours_per_day)
       : null;
-  const fullDayHours = contractedHoursPerDay ?? DEFAULT_FULL_DAY_HOURS;
-  const partDayHours = contractedHoursPerDay != null
-    ? Math.round((contractedHoursPerDay / 2) * 100) / 100
-    : DEFAULT_PART_DAY_HOURS;
 
   const { data: attendanceSettings } = useAttendanceSettings();
+  const orgDefaultHoursPerDay =
+    attendanceSettings?.default_hours_per_day != null
+      ? Number(attendanceSettings.default_hours_per_day)
+      : DEFAULT_FULL_DAY_HOURS;
+  const fullDayHours = contractedHoursPerDay ?? orgDefaultHoursPerDay;
+  const partDayHours =
+    contractedHoursPerDay != null
+      ? Math.round((contractedHoursPerDay / 2) * 100) / 100
+      : Math.round((orgDefaultHoursPerDay / 2) * 100) / 100;
+
   const allowNegative = attendanceSettings?.allow_negative_holiday_balance === true;
   const remainingHours = balance?.remaining_hours != null ? Number(balance.remaining_hours) : null;
   const selectedType = shiftLeaveTypes.find((t) => String(t.id) === shiftLeaveTypeId);
