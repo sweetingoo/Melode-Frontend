@@ -185,12 +185,12 @@ export const usersService = {
     }
   },
 
-  // Assign direct permission to user
+  // Assign direct permission to user (path: /users/{user_slug}/permissions/{slug|name|legacy id})
   assignDirectPermission: async (slug, permissionSlug) => {
     try {
-      return await api.post(
-        `/users/${slug}/assign-permission/${permissionSlug}`
-      );
+      const u = encodeURIComponent(String(slug));
+      const p = encodeURIComponent(String(permissionSlug));
+      return await api.post(`/users/${u}/permissions/${p}`);
     } catch (error) {
       console.error(`Assign direct permission to user ${slug} failed:`, error);
       throw error;
@@ -207,10 +207,12 @@ export const usersService = {
     }
   },
 
-  // Remove direct permission from user
+  // Remove direct permission from user (matches DELETE /users/{user_slug}/permissions/{permission_slug})
   removeDirectPermission: async (slug, permissionSlug) => {
     try {
-      return await api.delete(`/users/${slug}/remove-permission/${permissionSlug}`);
+      const u = encodeURIComponent(String(slug));
+      const p = encodeURIComponent(String(permissionSlug));
+      return await api.delete(`/users/${u}/permissions/${p}`);
     } catch (error) {
       console.error(`Remove direct permission from user ${slug} failed:`, error);
       throw error;
