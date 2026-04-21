@@ -54,6 +54,9 @@ export function MyContractView() {
   }, [activeSetting, contractTypeById]);
 
   const monthlyContractedHours = activeSetting?.monthly_contracted_hours != null ? Number(activeSetting.monthly_contracted_hours) : null;
+  const weeklyContractedHours = activeSetting?.weekly_contracted_hours != null ? Number(activeSetting.weekly_contracted_hours) : null;
+  const unpaidBreakMins = activeSetting?.unpaid_break_over_6_hours_mins;
+  const annualSalary = activeSetting?.annual_salary != null ? Number(activeSetting.annual_salary) : null;
 
   const goPrevMonth = () => setViewMonth((m) => subMonths(m, 1));
   const goNextMonth = () => setViewMonth((m) => addMonths(m, 1));
@@ -120,16 +123,35 @@ export function MyContractView() {
                 <div className="rounded-lg border bg-muted/20 px-4 py-3 space-y-3">
                   <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Current contract</p>
                   <p className="font-medium text-foreground">{contractLabel}</p>
-                  {(contractTypeName || monthlyContractedHours != null) && (
+                  {(contractTypeName ||
+                    monthlyContractedHours != null ||
+                    weeklyContractedHours != null ||
+                    unpaidBreakMins != null ||
+                    annualSalary != null) && (
                     <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
                       {contractTypeName && (
                         <span>
                           <span className="font-medium text-foreground">Contract type:</span> {contractTypeName}
                         </span>
                       )}
+                      {weeklyContractedHours != null && (
+                        <span>
+                          <span className="font-medium text-foreground">Weekly contracted hours:</span> {weeklyContractedHours}
+                        </span>
+                      )}
                       {monthlyContractedHours != null && (
                         <span>
                           <span className="font-medium text-foreground">Monthly contracted hours:</span> {monthlyContractedHours}
+                        </span>
+                      )}
+                      {annualSalary != null && (
+                        <span>
+                          <span className="font-medium text-foreground">Annual salary:</span> {annualSalary.toLocaleString()}
+                        </span>
+                      )}
+                      {unpaidBreakMins != null && (
+                        <span>
+                          <span className="font-medium text-foreground">Unpaid break over 6 hours:</span> {unpaidBreakMins} min
                         </span>
                       )}
                     </div>

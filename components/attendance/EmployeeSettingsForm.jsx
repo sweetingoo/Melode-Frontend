@@ -30,8 +30,11 @@ export const EmployeeSettingsForm = ({ open, onOpenChange, setting = null, prese
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [hoursPerDay, setHoursPerDay] = useState("7.5");
+  const [weeklyContractedHours, setWeeklyContractedHours] = useState("");
+  const [unpaidBreakOver6HoursMins, setUnpaidBreakOver6HoursMins] = useState("");
   const [payRate, setPayRate] = useState("");
   const [monthlyContractedHours, setMonthlyContractedHours] = useState("");
+  const [annualSalary, setAnnualSalary] = useState("");
   const [contractTypeId, setContractTypeId] = useState("");
   const [workingDays, setWorkingDays] = useState(["monday", "tuesday", "wednesday", "thursday", "friday"]);
   const [isActive, setIsActive] = useState(true);
@@ -63,8 +66,13 @@ export const EmployeeSettingsForm = ({ open, onOpenChange, setting = null, prese
       setStartDate(setting.start_date ? String(setting.start_date).slice(0, 10) : "");
       setEndDate(setting.end_date ? String(setting.end_date).slice(0, 10) : "");
       setHoursPerDay(String(setting.hours_per_day ?? 7.5));
+      setWeeklyContractedHours(setting.weekly_contracted_hours != null ? String(setting.weekly_contracted_hours) : "");
+      setUnpaidBreakOver6HoursMins(
+        setting.unpaid_break_over_6_hours_mins != null ? String(setting.unpaid_break_over_6_hours_mins) : ""
+      );
       setPayRate(setting.pay_rate != null ? String(setting.pay_rate) : "");
       setMonthlyContractedHours(setting.monthly_contracted_hours != null ? String(setting.monthly_contracted_hours) : "");
+      setAnnualSalary(setting.annual_salary != null ? String(setting.annual_salary) : "");
       setContractTypeId(setting.contract_type_id != null ? String(setting.contract_type_id) : "");
       setWorkingDays(Array.isArray(setting.normal_working_days) ? [...setting.normal_working_days] : []);
       setIsActive(setting.is_active !== false);
@@ -75,8 +83,11 @@ export const EmployeeSettingsForm = ({ open, onOpenChange, setting = null, prese
       setStartDate("");
       setEndDate("");
       setHoursPerDay("7.5");
+      setWeeklyContractedHours("");
+      setUnpaidBreakOver6HoursMins("");
       setPayRate("");
       setMonthlyContractedHours("");
+      setAnnualSalary("");
       setContractTypeId("");
       setWorkingDays(["monday", "tuesday", "wednesday", "thursday", "friday"]);
       setIsActive(true);
@@ -120,8 +131,11 @@ export const EmployeeSettingsForm = ({ open, onOpenChange, setting = null, prese
           settingsData: {
             end_date: endDate || null,
             hours_per_day: numHours,
+            weekly_contracted_hours: weeklyContractedHours ? parseFloat(weeklyContractedHours) : null,
+            unpaid_break_over_6_hours_mins: unpaidBreakOver6HoursMins !== "" ? parseInt(unpaidBreakOver6HoursMins, 10) : null,
             pay_rate: payRate ? parseFloat(payRate) : null,
             monthly_contracted_hours: monthlyContractedHours ? parseFloat(monthlyContractedHours) : null,
+            annual_salary: annualSalary ? parseFloat(annualSalary) : null,
             contract_type_id: contractTypeId ? parseInt(contractTypeId, 10) : null,
             normal_working_days: workingDays,
             is_active: isActive,
@@ -135,8 +149,11 @@ export const EmployeeSettingsForm = ({ open, onOpenChange, setting = null, prese
           start_date: startDate,
           end_date: endDate || null,
           hours_per_day: numHours,
+          weekly_contracted_hours: weeklyContractedHours ? parseFloat(weeklyContractedHours) : null,
+          unpaid_break_over_6_hours_mins: unpaidBreakOver6HoursMins !== "" ? parseInt(unpaidBreakOver6HoursMins, 10) : null,
           pay_rate: payRate ? parseFloat(payRate) : null,
           monthly_contracted_hours: monthlyContractedHours ? parseFloat(monthlyContractedHours) : null,
+          annual_salary: annualSalary ? parseFloat(annualSalary) : null,
           contract_type_id: contractTypeId ? parseInt(contractTypeId, 10) : null,
           normal_working_days: workingDays,
           is_active: isActive,
@@ -159,7 +176,7 @@ export const EmployeeSettingsForm = ({ open, onOpenChange, setting = null, prese
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg max-h-[min(90vh,100dvh-2rem)] overflow-y-auto overscroll-contain">
         <DialogHeader>
           <DialogTitle>{setting ? "Edit employee settings" : "Add employee job role settings"}</DialogTitle>
           <DialogDescription>
@@ -220,14 +237,26 @@ export const EmployeeSettingsForm = ({ open, onOpenChange, setting = null, prese
             />
           </div>
           <div className="space-y-2">
-            <Label>Pay rate (optional, hourly)</Label>
+            <Label>Weekly contracted hours (optional)</Label>
             <Input
               type="number"
-              step="0.01"
+              step="0.25"
+              min="0.01"
+              max="168"
+              value={weeklyContractedHours}
+              onChange={(e) => setWeeklyContractedHours(e.target.value)}
+              placeholder="e.g. 37.5"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Unpaid break over 6 hours (mins, optional)</Label>
+            <Input
+              type="number"
+              step="1"
               min="0"
-              value={payRate}
-              onChange={(e) => setPayRate(e.target.value)}
-              placeholder="e.g. 12.50"
+              value={unpaidBreakOver6HoursMins}
+              onChange={(e) => setUnpaidBreakOver6HoursMins(e.target.value)}
+              placeholder="e.g. 30"
             />
           </div>
           <div className="space-y-2">
@@ -239,6 +268,28 @@ export const EmployeeSettingsForm = ({ open, onOpenChange, setting = null, prese
               value={monthlyContractedHours}
               onChange={(e) => setMonthlyContractedHours(e.target.value)}
               placeholder="e.g. 150"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Annual salary (optional)</Label>
+            <Input
+              type="number"
+              step="0.01"
+              min="0"
+              value={annualSalary}
+              onChange={(e) => setAnnualSalary(e.target.value)}
+              placeholder="e.g. 32000"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Pay rate (optional, hourly)</Label>
+            <Input
+              type="number"
+              step="0.01"
+              min="0"
+              value={payRate}
+              onChange={(e) => setPayRate(e.target.value)}
+              placeholder="e.g. 12.50"
             />
           </div>
           <div className="space-y-2">
