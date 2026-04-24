@@ -1032,6 +1032,15 @@ const TrackerEntryDetailPage = () => {
       const groups = section.groups && Array.isArray(section.groups) ? section.groups : [];
       const sectionLabel = section.label || section.title || section.id || "Section";
       const hasId = (f, id) => String(f?.id || f?.name || f?.field_id) === String(id);
+      const tableRadioFieldIdsForGroup = (groupId) =>
+        sectionFields
+          .filter(
+            (f) =>
+              String(f?.type || f?.field_type || "").toLowerCase() === "table_radio" &&
+              f?.field_options?.table_group_id &&
+              String(f.field_options.table_group_id) === String(groupId),
+          )
+          .map((f) => String(f?.id || f?.name || f?.field_id));
       let ungrouped = [];
       let groupsWithFields = [];
       if (groups.length > 0) {
@@ -1041,7 +1050,8 @@ const TrackerEntryDetailPage = () => {
             const fromFields = (g.fields || []).map(String);
             const fromTable = (g.table_rows || []).flatMap((row) => (row.cells || []).map((c) => c.field_id).filter(Boolean).map(String));
             const fromGrid = (g.grid_rows || []).flatMap((row) => gridRowFieldIdsFlat(row).map(String));
-            return [...fromFields, ...fromTable, ...fromGrid];
+            const fromBoundTableRadio = tableRadioFieldIdsForGroup(g.id);
+            return [...fromFields, ...fromTable, ...fromGrid, ...fromBoundTableRadio];
           })
         );
         ungrouped = sectionFields.filter((f) => !fieldIdsInGroups.has(String(f?.id || f?.name || f?.field_id)));
@@ -1051,6 +1061,7 @@ const TrackerEntryDetailPage = () => {
             ...(g.fields || []).map(String),
             ...(g.table_rows || []).flatMap((row) => (row.cells || []).map((c) => c.field_id).filter(Boolean).map(String)),
             ...(g.grid_rows || []).flatMap((row) => gridRowFieldIdsFlat(row).map(String)),
+            ...tableRadioFieldIdsForGroup(g.id),
           ]);
           return {
             group: g,
@@ -2620,11 +2631,6 @@ const TrackerEntryDetailPage = () => {
                             });
                           }
                           const { ungrouped: editUngrouped, groupsWithFields: editGroups } = layoutItemEdit;
-                          const tableRadioBoundGroupIds = new Set(
-                            allFieldsForEdit
-                              .filter((f) => (f.type || f.field_type) === "table_radio" && f.field_options?.table_group_id)
-                              .map((f) => String(f.field_options.table_group_id)),
-                          );
                           const getFieldByIdEdit = (fid) => allFieldsForEdit.find((f) => String(f.id || f.name || f.field_id) === String(fid));
                           const renderEditableField = (field) => {
                             const fieldId = field.id || field.name || field.field_id;
@@ -2652,8 +2658,20 @@ const TrackerEntryDetailPage = () => {
                                 const hasTableStructure = Array.isArray(group.table_columns) && group.table_columns.length > 0;
                                 const tableRowsForGroup = Array.isArray(group.table_rows) ? group.table_rows : [];
                                 const isTable = layout === "table" && (hasTableStructure || tableRowsForGroup.length > 0);
-                                if (isTable && group.id && tableRadioBoundGroupIds.has(String(group.id))) {
-                                  return null;
+                                const boundTableRadioField = isTable && group.id
+                                  ? groupFields.find(
+                                      (f) =>
+                                        String(f.type || f.field_type || "").toLowerCase() === "table_radio" &&
+                                        f.field_options?.table_group_id &&
+                                        String(f.field_options.table_group_id) === String(group.id),
+                                    )
+                                  : null;
+                                if (boundTableRadioField) {
+                                  return (
+                                    <div key={group.id || group.label || "g"} className="space-y-2">
+                                      {renderEditableField(boundTableRadioField)}
+                                    </div>
+                                  );
                                 }
                                 const gridRows = (group.grid_rows && group.grid_rows.length > 0) ? group.grid_rows : (group.grid_columns ? [{ ...group.grid_columns }] : []);
                                 const isGrid = layout === "grid" && gridRows.length > 0;
@@ -2785,11 +2803,6 @@ const TrackerEntryDetailPage = () => {
                           shouldShowRow: (row) => checkRowVisibility(row, displayData),
                           shouldShowField: (f) => checkFieldVisibility(f, displayData),
                         };
-                        const tableRadioBoundGroupIdsRo = new Set(
-                          allSectionFields
-                            .filter((f) => (f.type || f.field_type) === "table_radio" && f.field_options?.table_group_id)
-                            .map((f) => String(f.field_options.table_group_id)),
-                        );
                         // Priority: layout first (groups with Stack/Grid/Table), then ungrouped stage fields at the end
                         return (
                           <div className="space-y-4">
@@ -2799,8 +2812,28 @@ const TrackerEntryDetailPage = () => {
                               const hasTableStructure = Array.isArray(group.table_columns) && group.table_columns.length > 0;
                               const tableRowsForGroup = Array.isArray(group.table_rows) ? group.table_rows : [];
                               const isTable = layout === "table" && (hasTableStructure || tableRowsForGroup.length > 0);
-                              if (isTable && group.id && tableRadioBoundGroupIdsRo.has(String(group.id))) {
-                                return null;
+                              const boundTableRadioFieldRo = isTable && group.id
+                                ? groupFields.find(
+                                    (f) =>
+                                      String(f.type || f.field_type || "").toLowerCase() === "table_radio" &&
+                                      f.field_options?.table_group_id &&
+                                      String(f.field_options.table_group_id) === String(group.id),
+                                  )
+                                : null;
+                              if (boundTableRadioFieldRo) {
+                                const fieldId = boundTableRadioFieldRo.id || boundTableRadioFieldRo.name || boundTableRadioFieldRo.field_id;
+                                return (
+                                  <div key={group.id || group.label || "g"} className="space-y-2">
+                                    <CustomFieldRenderer
+                                      field={mapFieldToMapped(boundTableRadioFieldRo)}
+                                      value={displayData[fieldId]}
+                                      otherTextValue={displayData[`${fieldId}_other`]}
+                                      optionFreeTextMap={displayData[`${fieldId}_free_text`]}
+                                      readOnly
+                                      sectionLayoutContext={tableRadioReadOnlyCtx}
+                                    />
+                                  </div>
+                                );
                               }
                               const gridRows = (group.grid_rows && group.grid_rows.length > 0) ? group.grid_rows : (group.grid_columns ? [{ ...group.grid_columns }] : []);
                               const isGrid = layout === "grid" && gridRows.length > 0;
