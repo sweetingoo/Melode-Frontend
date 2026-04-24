@@ -19,6 +19,15 @@ function getFieldLabel(f) {
   return f.label ?? f.field_label ?? f.field_id ?? f.id ?? f.name ?? "";
 }
 
+function getFieldType(f) {
+  return String(f.field_type ?? f.type ?? "").toLowerCase();
+}
+
+function formatFieldType(type) {
+  if (!type) return "";
+  return type.replace(/_/g, " ");
+}
+
 /**
  * Searchable dropdown for choosing a form/tracker field (e.g. conditional visibility "depends on").
  * Use when the field list can be long (50+) so users can type to filter.
@@ -107,14 +116,20 @@ export function SearchableFieldSelect({
           <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className={cn("w-[var(--radix-popover-trigger-width)] p-0", compact && "max-h-[280px]")} align="start">
+      <PopoverContent
+        className={cn(
+          "w-[var(--radix-popover-trigger-width)] min-w-[320px] p-0",
+          compact && "min-w-[300px] max-h-[280px]"
+        )}
+        align="start"
+      >
         <div className="flex items-center border-b px-2">
           <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
           <Input
             placeholder="Search fields..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="h-9 border-0 shadow-none focus-visible:ring-0"
+            className="h-9 rounded-none border-0 bg-transparent px-2 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
           />
         </div>
         <ScrollArea className="max-h-[240px]">
@@ -134,17 +149,27 @@ export function SearchableFieldSelect({
             {filtered.map((f) => {
               const val = getFieldValue(f);
               const label = getFieldLabel(f);
+              const type = getFieldType(f);
               return (
                 <button
                   key={val}
                   type="button"
                   className={cn(
-                    "w-full cursor-pointer rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground",
+                    "w-full cursor-pointer rounded-sm px-2 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground",
                     value === val && "bg-accent"
                   )}
                   onClick={() => handleSelect(val)}
                 >
-                  {label || val}
+                  <span className="flex w-full min-w-0 items-center justify-between gap-3">
+                    <span className="min-w-0 flex-1 truncate text-left font-medium">
+                      {label || val}
+                    </span>
+                    {type && (
+                      <span className="shrink-0 rounded border bg-muted px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground">
+                        {formatFieldType(type)}
+                      </span>
+                    )}
+                  </span>
                 </button>
               );
             })}

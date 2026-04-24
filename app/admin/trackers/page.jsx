@@ -73,6 +73,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { checkGroupConditionalVisibility as checkGroupVisibility } from "@/lib/groupConditionalVisibility";
 import { filterNonEmptyGridColumns, gridRowFieldIdsFlat, normalizeGridRowColumns, trackerGridRowColsClass } from "@/utils/trackerGridLayout";
 import {
   useTrackers,
@@ -1746,25 +1747,6 @@ const TrackersPage = () => {
                     if (allowedFromStep && Array.isArray(allowedFromStep) && allowedFromStep.length > 0) {
                       createEntryStatusOptions = createEntryStatusOptions.filter((s) => allowedFromStep.includes(s));
                     }
-
-                    // Group visibility: show group only when condition on other fields' values is met
-                    const checkGroupVisibility = (group, data) => {
-                      if (!group?.conditional_visibility?.depends_on_field) return true;
-                      const { depends_on_field, show_when, value: expectedValue } = group.conditional_visibility;
-                      const dependentValue = data?.[depends_on_field];
-                      const normalize = (v) => {
-                        if (v === true || v === "true" || v === "True" || v === "TRUE") return true;
-                        if (v === false || v === "false" || v === "False" || v === "FALSE") return false;
-                        if (v === "yes" || v === "Yes" || v === "YES") return true;
-                        if (v === "no" || v === "No" || v === "NO") return false;
-                        return v;
-                      };
-                      if (show_when === "equals") return normalize(dependentValue) === normalize(expectedValue);
-                      if (show_when === "not_equals") return normalize(dependentValue) !== normalize(expectedValue);
-                      if (show_when === "is_empty") return !dependentValue || dependentValue === "" || dependentValue === false;
-                      if (show_when === "is_not_empty") return dependentValue != null && dependentValue !== "" && dependentValue !== false;
-                      return true;
-                    };
 
                     const renderField = (field) => {
                       const fieldId = field.id || field.field_id || field.name;

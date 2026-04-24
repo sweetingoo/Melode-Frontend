@@ -15,6 +15,7 @@ import CustomFieldRenderer from "@/components/CustomFieldRenderer";
 import { shouldShowTimeForDateField } from "@/utils/dateFieldUtils";
 import { humanizeStatusForDisplay } from "@/utils/slug";
 import { cn } from "@/lib/utils";
+import { checkGroupConditionalVisibility as checkGroupVisibility, checkLayoutRowVisibility, groupDefinesConditionalVisibility } from "@/lib/groupConditionalVisibility";
 import { toast } from "sonner";
 
 const FormSubmitPage = () => {
@@ -290,63 +291,13 @@ const FormSubmitPage = () => {
     return action === 'disable' && !met;
   };
 
-  // Evaluate a single visibility condition (depends_on_field, show_when, value)
-  const isGroupConditionMet = (condition, data) => {
-    if (!condition?.depends_on_field) return false;
-    const { depends_on_field, show_when, value: expectedValue } = condition;
-    const dependentValue = data?.[depends_on_field];
-    const normalize = (v) => {
-      if (v === true || v === 'true' || v === 'True' || v === 'TRUE') return true;
-      if (v === false || v === 'false' || v === 'False' || v === 'FALSE') return false;
-      if (v === 'yes' || v === 'Yes' || v === 'YES') return true;
-      if (v === 'no' || v === 'No' || v === 'NO') return false;
-      return v;
-    };
-    if (show_when === 'equals') return normalize(dependentValue) === normalize(expectedValue);
-    if (show_when === 'not_equals') return normalize(dependentValue) !== normalize(expectedValue);
-    if (show_when === 'contains') return Array.isArray(dependentValue) ? dependentValue.includes(expectedValue) : String(dependentValue || '').includes(String(expectedValue || ''));
-    if (show_when === 'is_empty') return !dependentValue || dependentValue === '' || dependentValue === false;
-    if (show_when === 'is_not_empty') return dependentValue != null && dependentValue !== '' && dependentValue !== false;
-    return true;
-  };
-
-  // Group-level conditional visibility: show when any condition is met (OR), or legacy single condition
-  const checkGroupVisibility = (group, data) => {
-    const cv = group?.conditional_visibility;
-    if (!cv) return true;
-    const conditions = Array.isArray(cv.conditions) ? cv.conditions : null;
-    if (conditions && conditions.length > 0) {
-      return conditions.some((c) => isGroupConditionMet(c, data));
-    }
-    if (!cv.depends_on_field) return true;
-    return isGroupConditionMet(cv, data);
-  };
-
-  // Table row conditional visibility (same logic as group)
-  const checkRowVisibility = (row, data) => {
-    if (!row?.conditional_visibility?.depends_on_field) return true;
-    const { depends_on_field, show_when, value: expectedValue } = row.conditional_visibility;
-    const dependentValue = data?.[depends_on_field];
-    const normalize = (v) => {
-      if (v === true || v === 'true' || v === 'True' || v === 'TRUE') return true;
-      if (v === false || v === 'false' || v === 'False' || v === 'FALSE') return false;
-      if (v === 'yes' || v === 'Yes' || v === 'YES') return true;
-      if (v === 'no' || v === 'No' || v === 'NO') return false;
-      return v;
-    };
-    if (show_when === 'equals') return normalize(dependentValue) === normalize(expectedValue);
-    if (show_when === 'not_equals') return normalize(dependentValue) !== normalize(expectedValue);
-    if (show_when === 'contains') return Array.isArray(dependentValue) ? dependentValue.includes(expectedValue) : String(dependentValue || '').includes(String(expectedValue || ''));
-    if (show_when === 'is_empty') return !dependentValue || dependentValue === '' || dependentValue === false;
-    if (show_when === 'is_not_empty') return dependentValue != null && dependentValue !== '' && dependentValue !== false;
-    return true;
-  };
+  const checkRowVisibility = checkLayoutRowVisibility;
 
   const isFieldInHiddenGroup = (fieldId, data) => {
     const formGroups = form?.form_fields?.groups || [];
     if (formGroups.length > 0) {
       for (const group of formGroups) {
-        if (!group?.conditional_visibility?.depends_on_field) continue;
+        if (!groupDefinesConditionalVisibility(group?.conditional_visibility)) continue;
         const fieldIds = group.fields || [];
         if (!fieldIds.includes(fieldId)) continue;
         if (!checkGroupVisibility(group, data)) return true;
@@ -357,7 +308,7 @@ const FormSubmitPage = () => {
     for (const section of sections) {
       const groups = section?.groups || [];
       for (const group of groups) {
-        if (!group?.conditional_visibility?.depends_on_field) continue;
+        if (!groupDefinesConditionalVisibility(group?.conditional_visibility)) continue;
         const fieldIds = group.fields || [];
         if (!fieldIds.includes(fieldId)) continue;
         if (!checkGroupVisibility(group, data)) return true;

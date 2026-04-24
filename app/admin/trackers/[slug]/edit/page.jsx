@@ -78,6 +78,7 @@ import { gridRowFieldIdsFlat, gridRowWithColumnsOnly, normalizeGridRowColumns } 
 import { cn } from "@/lib/utils";
 import { PeopleFieldRoleSelector } from "@/components/trackers/PeopleFieldRoleSelector";
 import { TrackerLayoutQuickCreateFieldForm } from "@/components/trackers/TrackerLayoutQuickCreateFieldForm";
+import { ConditionalVisibilityRuleEditor } from "@/components/admin/ConditionalVisibilityRuleEditor";
 import { trackersService } from "@/services/trackers";
 import { useUploadFile } from "@/hooks/useProfile";
 
@@ -419,10 +420,7 @@ function OneRowEditor({ row, rowIndex, sectionFields, allIdsInAnyGroup, onUpdate
   };
 
   const visibilityFields = sectionFields.filter((f) => !["text_block", "image_block", "line_break", "page_break", "download_link"].includes((f.type || f.field_type || "").toLowerCase()));
-  const cv = grid.conditional_visibility || {};
-  const depFieldForRowCv = cv.depends_on_field
-    ? sectionFields.find((f) => String(f.id || f.name || f.field_id) === String(cv.depends_on_field))
-    : null;
+  const cv = grid.conditional_visibility;
   const n = columnArrays.length;
 
   return (
@@ -499,58 +497,16 @@ function OneRowEditor({ row, rowIndex, sectionFields, allIdsInAnyGroup, onUpdate
           ))}
         </div>
       </div>
-      {/* Show row when (optional) – same as Forms grid row visibility */}
+      {/* Show row when — same rules as table rows (any_of, OR, single) */}
       <div className="pt-2 mt-2 border-t border-border/50">
-        <div className="flex flex-wrap items-center gap-2">
-          <Label className="text-xs font-medium text-muted-foreground shrink-0">Show row when:</Label>
-          <SearchableFieldSelect
-            fields={visibilityFields}
-            value={cv.depends_on_field ?? "__none__"}
-            onValueChange={(v) =>
-              updateRowMeta({
-                conditional_visibility:
-                  v && v !== "__none__" ? { depends_on_field: v, show_when: undefined, value: undefined } : undefined,
-              })
-            }
-            placeholder="Always show"
-            noneOption
-            noneLabel="Always show"
-            compact
-            className="h-7 text-xs w-40 inline-flex"
-          />
-          {cv.depends_on_field && (
-            <>
-              <Select
-                value={cv.show_when || ""}
-                onValueChange={(v) =>
-                  updateRowMeta({
-                    conditional_visibility: {
-                      ...cv,
-                      show_when: v || undefined,
-                      value: ["equals", "not_equals", "contains"].includes(v) ? cv.value : undefined,
-                    },
-                  })
-                }
-              >
-                <SelectTrigger className="h-7 text-xs w-24 inline-flex"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="equals">Equals</SelectItem>
-                  <SelectItem value="not_equals">Not equals</SelectItem>
-                  <SelectItem value="contains">Contains</SelectItem>
-                  <SelectItem value="is_empty">Is empty</SelectItem>
-                  <SelectItem value="is_not_empty">Not empty</SelectItem>
-                </SelectContent>
-              </Select>
-              <ConditionalVisibilityValueControl
-                depField={depFieldForRowCv}
-                value={cv.value}
-                showWhen={cv.show_when}
-                compact
-                onValueChange={(next) => updateRowMeta({ conditional_visibility: { ...cv, value: next } })}
-              />
-            </>
-          )}
-        </div>
+        <div className="text-xs font-medium text-muted-foreground mb-1">Show row when (optional)</div>
+        <ConditionalVisibilityRuleEditor
+          value={cv}
+          onChange={(next) => updateRowMeta({ conditional_visibility: next == null ? undefined : next })}
+          fields={visibilityFields}
+          excludeTypes={["text_block", "image_block", "line_break", "page_break", "download_link"]}
+          compact
+        />
       </div>
     </div>
   );
@@ -5024,9 +4980,6 @@ const TrackerEditPage = () => {
                                               const cells = (row.cells || []).slice(0, cols.length);
                                               while (cells.length < cols.length) cells.push({ text: "", field_id: null });
                                               const cv = row.conditional_visibility;
-                                              const depFieldForTableCv = cv?.depends_on_field
-                                                ? sectionFields.find((x) => String(x.id || x.name || x.field_id) === String(cv.depends_on_field))
-                                                : null;
                                               const trackerVisibilityFields = sectionFields.filter((x) => !["text_block", "image_block", "line_break", "page_break", "download_link"].includes((x.type || x.field_type || "").toLowerCase()));
                                               const isDragging = draggedTableRow?.groupIdx === groupIdx && draggedTableRow?.rowIdx === rIdx;
                                               const isDropTarget = dragOverTableRow?.groupIdx === groupIdx && dragOverTableRow?.rowIdx === rIdx && !isDragging;
@@ -5073,55 +5026,15 @@ const TrackerEditPage = () => {
                                                   </td>
                                                 </tr>
                                                 <tr className="border-b bg-muted/20">
-                                                  <td colSpan={cols.length + 2} className="p-1.5 text-xs">
-                                                    <span className="text-muted-foreground mr-1.5">Show row when:</span>
-                                                    <SearchableFieldSelect
+                                                  <td colSpan={cols.length + 2} className="p-1.5 text-xs align-top">
+                                                    <div className="text-muted-foreground text-[11px] font-medium mb-0.5">Show row when</div>
+                                                    <ConditionalVisibilityRuleEditor
+                                                      value={cv}
+                                                      onChange={(next) => setRowVisibility(rIdx, next)}
                                                       fields={trackerVisibilityFields}
-                                                      value={cv?.depends_on_field || "__none__"}
-                                                      onValueChange={(v) =>
-                                                        setRowVisibility(
-                                                          rIdx,
-                                                          v && v !== "__none__" ? { depends_on_field: v, show_when: undefined, value: undefined } : null,
-                                                        )
-                                                      }
-                                                      placeholder="Always"
-                                                      noneOption
-                                                      noneLabel="Always"
+                                                      excludeTypes={["text_block", "image_block", "line_break", "page_break", "download_link"]}
                                                       compact
-                                                      className="h-6 text-xs w-40 inline-flex"
                                                     />
-                                                    {cv?.depends_on_field && (
-                                                      <>
-                                                        <Select
-                                                          value={cv.show_when || ""}
-                                                          onValueChange={(v) =>
-                                                            setRowVisibility(rIdx, {
-                                                              ...cv,
-                                                              show_when: v,
-                                                              value: ["equals", "not_equals", "contains"].includes(v) ? cv.value : undefined,
-                                                            })
-                                                          }
-                                                        >
-                                                          <SelectTrigger className="h-6 text-xs w-24 inline-flex ml-1"><SelectValue /></SelectTrigger>
-                                                          <SelectContent>
-                                                            <SelectItem value="equals">Equals</SelectItem>
-                                                            <SelectItem value="not_equals">Not equals</SelectItem>
-                                                            <SelectItem value="contains">Contains</SelectItem>
-                                                            <SelectItem value="is_empty">Is empty</SelectItem>
-                                                            <SelectItem value="is_not_empty">Is not empty</SelectItem>
-                                                          </SelectContent>
-                                                        </Select>
-                                                        <span className="ml-1 inline-flex align-middle">
-                                                          <ConditionalVisibilityValueControl
-                                                            depField={depFieldForTableCv}
-                                                            value={cv.value}
-                                                            showWhen={cv.show_when}
-                                                            compact
-                                                            onValueChange={(next) => setRowVisibility(rIdx, { ...cv, value: next })}
-                                                          />
-                                                        </span>
-                                                      </>
-                                                    )}
                                                   </td>
                                                 </tr>
                                                 </React.Fragment>
@@ -5178,100 +5091,22 @@ const TrackerEditPage = () => {
                                 />
                               </div>
                               )}
-                              {/* Group conditional visibility: show when any condition matches (OR) */}
+                              {/* Group conditional visibility: OR conditions or any-of-N (same rule on multiple fields) */}
                               <div className="space-y-2 pt-2 border-t border-muted">
                                 <Label className="text-xs font-medium">Show group when (optional)</Label>
-                                <p className="text-xs text-muted-foreground">Show when any condition matches (OR).</p>
-                                {(() => {
-                                  const cv = group.conditional_visibility;
-                                  const conditions = Array.isArray(cv?.conditions)
-                                    ? cv.conditions
-                                    : cv?.depends_on_field
-                                      ? [{ depends_on_field: cv.depends_on_field, show_when: cv.show_when ?? null, value: cv.value ?? null }]
-                                      : [];
-                                  const setConditions = (newList) => {
+                                <ConditionalVisibilityRuleEditor
+                                  value={group.conditional_visibility}
+                                  onChange={(nextCv) => {
                                     const next = [...(editingSection.groups || [])];
-                                    next[groupIdx] = {
-                                      ...group,
-                                      conditional_visibility: newList.length === 0 ? undefined : { conditions: newList },
-                                    };
+                                    const g = { ...group };
+                                    if (nextCv === undefined) delete g.conditional_visibility;
+                                    else g.conditional_visibility = nextCv;
+                                    next[groupIdx] = g;
                                     setEditingSection((prev) => ({ ...prev, groups: next }));
-                                  };
-                                  const updateCondition = (cIdx, upd) => {
-                                    const newList = conditions.map((c, i) => (i === cIdx ? { ...c, ...upd } : c));
-                                    setConditions(newList);
-                                  };
-                                  const removeCondition = (cIdx) => {
-                                    setConditions(conditions.filter((_, i) => i !== cIdx));
-                                  };
-                                  const addCondition = () => {
-                                    setConditions([...conditions, { depends_on_field: null, show_when: null, value: null }]);
-                                  };
-                                  return (
-                                    <div className="space-y-2">
-                                      {conditions.length === 0 ? (
-                                        <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={addCondition}>
-                                          <Plus className="h-3 w-3 mr-1" /> Add condition
-                                        </Button>
-                                      ) : (
-                                        conditions.map((cond, cIdx) => {
-                                          const depField = sectionFields.find((f) => String(f.id || f.name || f.field_id) === cond.depends_on_field);
-                                          return (
-                                            <div key={cIdx} className="flex flex-wrap items-center gap-2 rounded border p-2 bg-muted/30">
-                                              <SearchableFieldSelect
-                                                fields={sectionFields}
-                                                value={cond.depends_on_field || "__none__"}
-                                                onValueChange={(v) => updateCondition(cIdx, { depends_on_field: v && v !== "__none__" ? v : null, show_when: null, value: null })}
-                                                placeholder="Select field"
-                                                noneOption
-                                                noneLabel="Select field"
-                                                excludeTypes={["text_block", "image_block", "line_break", "page_break", "download_link"]}
-                                                compact
-                                                className="h-8 text-xs w-44"
-                                              />
-                                              {cond.depends_on_field && (
-                                                <>
-                                                  <Select
-                                                    value={cond.show_when || ""}
-                                                    onValueChange={(v) =>
-                                                      updateCondition(cIdx, {
-                                                        show_when: v || null,
-                                                        value: ["equals", "not_equals", "contains"].includes(v) ? cond.value : null,
-                                                      })
-                                                    }
-                                                  >
-                                                    <SelectTrigger className="h-8 text-xs w-24"><SelectValue /></SelectTrigger>
-                                                    <SelectContent>
-                                                      <SelectItem value="equals">Equals</SelectItem>
-                                                      <SelectItem value="not_equals">Not equals</SelectItem>
-                                                      <SelectItem value="contains">Contains</SelectItem>
-                                                      <SelectItem value="is_empty">Is empty</SelectItem>
-                                                      <SelectItem value="is_not_empty">Not empty</SelectItem>
-                                                    </SelectContent>
-                                                  </Select>
-                                                  <ConditionalVisibilityValueControl
-                                                    depField={depField}
-                                                    value={cond.value}
-                                                    showWhen={cond.show_when}
-                                                    onValueChange={(next) => updateCondition(cIdx, { value: next })}
-                                                  />
-                                                </>
-                                              )}
-                                              <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0 text-destructive" onClick={() => removeCondition(cIdx)} title="Remove condition">
-                                                <Trash2 className="h-3 w-3" />
-                                              </Button>
-                                            </div>
-                                          );
-                                        })
-                                      )}
-                                      {conditions.length > 0 && (
-                                        <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={addCondition}>
-                                          <Plus className="h-3 w-3 mr-1" /> Add condition (OR)
-                                        </Button>
-                                      )}
-                                    </div>
-                                  );
-                                })()}
+                                  }}
+                                  fields={sectionFields}
+                                  excludeTypes={["text_block", "image_block", "line_break", "page_break", "download_link"]}
+                                />
                               </div>
                             </div>
                           ))}

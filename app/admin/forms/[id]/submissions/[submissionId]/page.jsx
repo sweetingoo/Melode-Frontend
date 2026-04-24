@@ -37,6 +37,7 @@ import CommentThread from "@/components/CommentThread";
 import { generateFormSubmissionPDFFromData } from "@/utils/pdf-generator";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { checkGroupConditionalVisibility as checkGroupVisibility, checkLayoutRowVisibility, groupDefinesConditionalVisibility } from "@/lib/groupConditionalVisibility";
 
 const FormSubmissionDetailPage = () => {
   const params = useParams();
@@ -305,28 +306,13 @@ const FormSubmissionDetailPage = () => {
     if (action === "disable") return true;
     return met;
   };
-  const isGroupConditionMet = (condition, data) => {
-    if (!condition?.depends_on_field) return false;
-    return isConditionMet(condition, data);
-  };
-  const checkGroupVisibility = (group, data) => {
-    const cv = group?.conditional_visibility;
-    if (!cv) return true;
-    const conditions = Array.isArray(cv.conditions) ? cv.conditions : null;
-    if (conditions?.length) return conditions.some((c) => isGroupConditionMet(c, data));
-    if (!cv.depends_on_field) return true;
-    return isGroupConditionMet(cv, data);
-  };
-  const checkRowVisibility = (row, data) => {
-    if (!row?.conditional_visibility?.depends_on_field) return true;
-    return isConditionMet(row.conditional_visibility, data);
-  };
+  const checkRowVisibility = checkLayoutRowVisibility;
   const isFieldInHiddenGroup = (fieldId, data) => {
     const formGroups = form?.form_fields?.groups || [];
     const fieldIdStr = fieldId != null ? String(fieldId) : "";
     const idInList = (list) => list && list.some((id) => String(id) === fieldIdStr);
     for (const group of formGroups) {
-      if (!group?.conditional_visibility?.depends_on_field) continue;
+      if (!groupDefinesConditionalVisibility(group?.conditional_visibility)) continue;
       const fieldIds = group.fields || [];
       if (!idInList(fieldIds)) continue;
       if (!checkGroupVisibility(group, data)) return true;
@@ -334,7 +320,7 @@ const FormSubmissionDetailPage = () => {
     const sections = form?.form_fields?.sections || [];
     for (const section of sections) {
       for (const group of section?.groups || []) {
-        if (!group?.conditional_visibility?.depends_on_field) continue;
+        if (!groupDefinesConditionalVisibility(group?.conditional_visibility)) continue;
         const fieldIds = group.fields || [];
         if (!idInList(fieldIds)) continue;
         if (!checkGroupVisibility(group, data)) return true;

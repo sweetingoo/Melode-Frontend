@@ -56,6 +56,7 @@ import {
   X
 } from "lucide-react";
 import CategoryTypeSelector from "@/components/CategoryTypeSelector";
+import { ConditionalVisibilityRuleEditor } from "@/components/admin/ConditionalVisibilityRuleEditor";
 import { useActiveCategoryTypes, useCreateCategoryType } from "@/hooks/useCategoryTypes";
 
 // Predefined file type categories for easy selection
@@ -334,7 +335,7 @@ function GridCellTableEditor({ tableCols, tableRows, fieldsList, allIdsInAnyGrou
       rows.forEach((row, rIdx) => {
         const cv = row.conditional_visibility;
         const ov = prev[rIdx];
-        if (ov && cv && ov.depends_on_field === cv.depends_on_field) {
+        if (ov && cv && JSON.stringify(ov) === JSON.stringify(cv)) {
           delete next[rIdx];
           changed = true;
         }
@@ -419,37 +420,15 @@ function GridCellTableEditor({ tableCols, tableRows, fieldsList, allIdsInAnyGrou
                   </td>
                 </tr>
                 <tr className="border-b bg-muted/30">
-                  <td colSpan={cols.length + 1} className="p-1.5 text-xs align-middle">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-medium text-muted-foreground shrink-0">Show row when:</span>
-                      <SearchableFieldSelect
-                        fields={visibilityFields}
-                        value={cv?.depends_on_field ?? "__none__"}
-                        onValueChange={(v) => setRowVisibility(rIdx, v && v !== "__none__" ? { ...(cv || {}), depends_on_field: v } : null)}
-                        placeholder="Always show"
-                        noneOption
-                        noneLabel="Always show"
-                        compact
-                        className="h-7 text-xs w-40 inline-flex"
-                      />
-                    {cv?.depends_on_field && (
-                      <>
-                        <Select value={cv.show_when || ""} onValueChange={(v) => setRowVisibility(rIdx, { ...cv, show_when: v })}>
-                          <SelectTrigger className="h-7 text-xs w-24 inline-flex"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="equals">Equals</SelectItem>
-                            <SelectItem value="not_equals">Not equals</SelectItem>
-                            <SelectItem value="contains">Contains</SelectItem>
-                            <SelectItem value="is_empty">Is empty</SelectItem>
-                            <SelectItem value="is_not_empty">Not empty</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        {["equals", "not_equals", "contains"].includes(cv.show_when) && (
-                          <Input placeholder="Value" className="h-7 text-xs w-24" value={cv.value ?? ""} onChange={(e) => setRowVisibility(rIdx, { ...cv, value: e.target.value })} />
-                        )}
-                      </>
-                    )}
-                    </div>
+                  <td colSpan={cols.length + 1} className="p-1.5 text-xs align-top">
+                    <div className="text-[10px] font-medium text-muted-foreground mb-0.5">Show row when</div>
+                    <ConditionalVisibilityRuleEditor
+                      value={cv}
+                      onChange={(next) => setRowVisibility(rIdx, next)}
+                      fields={visibilityFields}
+                      excludeTypes={["text_block", "image_block", "line_break", "page_break", "download_link"]}
+                      compact
+                    />
                   </td>
                 </tr>
                 </React.Fragment>
@@ -715,70 +694,16 @@ function FormOneRowEditor({ row, rowIndex, fieldsList, allIdsInAnyGroup, onUpdat
         })}
       </div>
 
-      {/* Grid row visibility: show this row when a field has a value */}
+      {/* Grid row visibility */}
       <div className="pt-2 mt-2 border-t border-border/50">
-        <div className="flex flex-wrap items-center gap-2">
-          <Label className="text-xs font-medium text-muted-foreground shrink-0">Show row when:</Label>
-          <SearchableFieldSelect
-            fields={fieldsList || []}
-            value={cvDisplay?.depends_on_field ?? "__none__"}
-            onValueChange={(v) => setRowVis(v && v !== "__none__" ? { ...(cvDisplay || {}), depends_on_field: v } : undefined)}
-            placeholder="Always show"
-            noneOption
-            noneLabel="Always show"
-            excludeTypes={["text_block", "image_block", "line_break", "page_break", "download_link"]}
-            compact
-            className="h-7 text-xs w-40"
-          />
-          {cvDisplay?.depends_on_field && (() => {
-            const depField = (fieldsList || []).find((f) => (f.field_id || f.id || f.name) === cvDisplay?.depends_on_field);
-            const depType = (depField?.field_type || depField?.type || "").toLowerCase();
-            const needsValue = ["equals", "not_equals", "contains"].includes(cvDisplay?.show_when || "");
-            const isBoolean = depType === "boolean" || depType === "checkbox" || depType === "boolean_with_description";
-            const isSelectLike = ["select", "dropdown", "radio", "radio_group"].includes(depType);
-            const isMultiselect = depType === "multiselect";
-            const isNumber = depType === "number" || depType === "integer";
-            const depOptions = depField ? (depField.field_options?.options || depField.options || []) : [];
-            const opts = Array.isArray(depOptions) ? depOptions : [];
-            const cv = cvDisplay;
-            const setCv = setRowVis;
-            return (
-              <>
-                <Select value={cv?.show_when || ""} onValueChange={(v) => setCv({ ...cv, show_when: v || null, value: ["equals", "not_equals", "contains"].includes(v) ? (cv?.value ?? null) : null })}>
-                  <SelectTrigger className="h-7 text-xs w-24"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="equals">Equals</SelectItem>
-                    <SelectItem value="not_equals">Not equals</SelectItem>
-                    <SelectItem value="contains">Contains</SelectItem>
-                    <SelectItem value="is_empty">Is empty</SelectItem>
-                    <SelectItem value="is_not_empty">Not empty</SelectItem>
-                  </SelectContent>
-                </Select>
-                {needsValue && (isBoolean ? (
-                  <Select value={cv?.value || ""} onValueChange={(v) => setCv({ ...cv, value: v || null })}>
-                    <SelectTrigger className="h-7 text-xs w-20"><SelectValue /></SelectTrigger>
-                    <SelectContent><SelectItem value="yes">Yes</SelectItem><SelectItem value="no">No</SelectItem></SelectContent>
-                  </Select>
-                ) : isSelectLike || isMultiselect ? (
-                  <Select value={cv?.value || ""} onValueChange={(v) => setCv({ ...cv, value: v || null })}>
-                    <SelectTrigger className="h-7 text-xs w-28"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {opts.map((opt, i) => {
-                        const val = typeof opt === "object" && opt !== null ? (opt.value ?? opt.label ?? "") : opt;
-                        const label = typeof opt === "object" && opt !== null ? (opt.label ?? opt.value ?? String(val)) : String(opt);
-                        return <SelectItem key={i} value={String(val)}>{label}</SelectItem>;
-                      })}
-                    </SelectContent>
-                  </Select>
-                ) : isNumber ? (
-                  <Input type="number" className="h-7 text-xs w-20" value={cv?.value ?? ""} onChange={(e) => setCv({ ...cv, value: e.target.value || null })} placeholder="Number" />
-                ) : (
-                  <Input className="h-7 text-xs w-24" value={cv?.value ?? ""} onChange={(e) => setCv({ ...cv, value: e.target.value || null })} placeholder="Value" />
-                ))}
-              </>
-            );
-          })()}
-        </div>
+        <div className="text-xs font-medium text-muted-foreground mb-1">Show row when (optional)</div>
+        <ConditionalVisibilityRuleEditor
+          value={cvDisplay}
+          onChange={(next) => setRowVis(next)}
+          fields={(fieldsList || []).filter((x) => !["text_block", "image_block", "line_break", "page_break", "download_link"].includes((x.field_type || x.type || "").toLowerCase()))}
+          excludeTypes={["text_block", "image_block", "line_break", "page_break", "download_link"]}
+          compact
+        />
       </div>
     </div>
   );
@@ -4330,112 +4255,19 @@ const EditFormPage = () => {
                         ) : null}
                         <div className="space-y-2 pt-2 border-t">
                           <Label className="text-xs">Show group when (optional)</Label>
-                          <p className="text-xs text-muted-foreground">Show when any condition matches (OR).</p>
-                          {(() => {
-                            const cv = group.conditional_visibility;
-                            const conditions = Array.isArray(cv?.conditions)
-                              ? cv.conditions
-                              : cv?.depends_on_field
-                                ? [{ depends_on_field: cv.depends_on_field, show_when: cv.show_when ?? null, value: cv.value ?? null }]
-                                : [];
-                            const formFields = formData.form_fields?.fields || [];
-                            const setConditions = (newList) => {
+                          <ConditionalVisibilityRuleEditor
+                            value={group.conditional_visibility}
+                            onChange={(nextCv) => {
                               const next = [...(formData.form_fields.groups || [])];
-                              next[gIdx] = {
-                                ...group,
-                                conditional_visibility: newList.length === 0 ? undefined : { conditions: newList },
-                              };
+                              const g = { ...group };
+                              if (nextCv === undefined) delete g.conditional_visibility;
+                              else g.conditional_visibility = nextCv;
+                              next[gIdx] = g;
                               setFormData({ ...formData, form_fields: { ...formData.form_fields, groups: next } });
-                            };
-                            const updateCondition = (cIdx, upd) => {
-                              const newList = conditions.map((c, i) => (i === cIdx ? { ...c, ...upd } : c));
-                              setConditions(newList);
-                            };
-                            const removeCondition = (cIdx) => {
-                              setConditions(conditions.filter((_, i) => i !== cIdx));
-                            };
-                            const addCondition = () => {
-                              setConditions([...conditions, { depends_on_field: null, show_when: null, value: null }]);
-                            };
-                            return (
-                              <div className="space-y-2">
-                                {conditions.length === 0 ? (
-                                  <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={addCondition}>
-                                    <Plus className="h-3 w-3 mr-1" /> Add condition
-                                  </Button>
-                                ) : (
-                                  conditions.map((cond, cIdx) => {
-                                    const depField = formFields.find((f) => (f.field_id || f.id || f.name) === cond.depends_on_field);
-                                    const depType = (depField?.field_type || depField?.type || "").toLowerCase();
-                                    const needsValue = ["equals", "not_equals", "contains"].includes(cond.show_when || "");
-                                    const isBoolean = depType === "boolean" || depType === "checkbox" || depType === "boolean_with_description";
-                                    const isSelectLike = ["select", "dropdown", "radio", "radio_group"].includes(depType);
-                                    const isMultiselect = depType === "multiselect";
-                                    const isNumber = depType === "number" || depType === "integer";
-                                    const depOptions = depField ? (depField.field_options?.options || depField.options || []) : [];
-                                    const opts = Array.isArray(depOptions) ? depOptions : [];
-                                    return (
-                                      <div key={cIdx} className="flex flex-wrap items-center gap-2 rounded border p-2 bg-muted/30">
-                                        <SearchableFieldSelect
-                                          fields={formFields}
-                                          value={cond.depends_on_field || "__none__"}
-                                          onValueChange={(v) => updateCondition(cIdx, { depends_on_field: v && v !== "__none__" ? v : null, show_when: null, value: null })}
-                                          placeholder="Select field"
-                                          noneOption
-                                          noneLabel="Select field"
-                                          compact
-                                          className="h-7 text-xs w-40"
-                                        />
-                                        {cond.depends_on_field && (
-                                          <>
-                                            <Select value={cond.show_when || ""} onValueChange={(v) => updateCondition(cIdx, { show_when: v || null, value: needsValue ? (cond.value ?? null) : null })}>
-                                              <SelectTrigger className="h-7 text-xs w-24"><SelectValue /></SelectTrigger>
-                                              <SelectContent>
-                                                <SelectItem value="equals">Equals</SelectItem>
-                                                <SelectItem value="not_equals">Not equals</SelectItem>
-                                                <SelectItem value="contains">Contains</SelectItem>
-                                                <SelectItem value="is_empty">Is empty</SelectItem>
-                                                <SelectItem value="is_not_empty">Not empty</SelectItem>
-                                              </SelectContent>
-                                            </Select>
-                                            {needsValue && (isBoolean ? (
-                                              <Select value={cond.value || ""} onValueChange={(v) => updateCondition(cIdx, { value: v || null })}>
-                                                <SelectTrigger className="h-7 text-xs w-20"><SelectValue /></SelectTrigger>
-                                                <SelectContent><SelectItem value="yes">Yes</SelectItem><SelectItem value="no">No</SelectItem></SelectContent>
-                                              </Select>
-                                            ) : isSelectLike || isMultiselect ? (
-                                              <Select value={cond.value || ""} onValueChange={(v) => updateCondition(cIdx, { value: v || null })}>
-                                                <SelectTrigger className="h-7 text-xs w-28"><SelectValue /></SelectTrigger>
-                                                <SelectContent>
-                                                  {opts.map((opt, i) => {
-                                                    const val = typeof opt === "object" && opt !== null ? (opt.value ?? opt.label ?? "") : opt;
-                                                    const label = typeof opt === "object" && opt !== null ? (opt.label ?? opt.value ?? String(val)) : String(opt);
-                                                    return <SelectItem key={i} value={String(val)}>{label}</SelectItem>;
-                                                  })}
-                                                </SelectContent>
-                                              </Select>
-                                            ) : isNumber ? (
-                                              <Input type="number" className="h-7 text-xs w-20" value={cond.value ?? ""} onChange={(e) => updateCondition(cIdx, { value: e.target.value || null })} placeholder="Number" />
-                                            ) : (
-                                              <Input className="h-7 text-xs w-24" value={cond.value ?? ""} onChange={(e) => updateCondition(cIdx, { value: e.target.value || null })} placeholder="Value" />
-                                            ))}
-                                          </>
-                                        )}
-                                        <Button type="button" variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-destructive" onClick={() => removeCondition(cIdx)} title="Remove condition">
-                                          <Trash2 className="h-3 w-3" />
-                                        </Button>
-                                      </div>
-                                    );
-                                  })
-                                )}
-                                {conditions.length > 0 && (
-                                  <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={addCondition}>
-                                    <Plus className="h-3 w-3 mr-1" /> Add condition (OR)
-                                  </Button>
-                                )}
-                              </div>
-                            );
-                          })()}
+                            }}
+                            fields={formData.form_fields?.fields || []}
+                            excludeTypes={["text_block", "image_block", "line_break", "page_break", "download_link"]}
+                          />
                         </div>
                       </div>
                     );

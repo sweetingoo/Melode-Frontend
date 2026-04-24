@@ -13,6 +13,7 @@ import { trackersService } from "@/services/trackers";
 import CustomFieldRenderer from "@/components/CustomFieldRenderer";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { checkGroupConditionalVisibility as checkGroupVisibility, checkLayoutRowVisibility } from "@/lib/groupConditionalVisibility";
 import { filterNonEmptyGridColumns, gridRowFieldIdsFlat, normalizeGridRowColumns, trackerGridRowColsClass } from "@/utils/trackerGridLayout";
 
 export default function PublicEntrySubmitPage() {
@@ -139,52 +140,7 @@ export default function PublicEntrySubmitPage() {
     return true;
   };
 
-  const isGroupConditionMet = (condition, data) => {
-    if (!condition?.depends_on_field) return true;
-    const dependentValue = data?.[condition.depends_on_field];
-    const expectedValue = condition.value;
-    const normalize = (v) => {
-      if (v === true || v === "true" || v === "True" || v === "TRUE") return true;
-      if (v === false || v === "false" || v === "False" || v === "FALSE") return false;
-      if (v === "yes" || v === "Yes" || v === "YES") return true;
-      if (v === "no" || v === "No" || v === "NO") return false;
-      return v;
-    };
-    if (condition.show_when === "equals") return normalize(dependentValue) === normalize(expectedValue);
-    if (condition.show_when === "not_equals") return normalize(dependentValue) !== normalize(expectedValue);
-    if (condition.show_when === "contains") return Array.isArray(dependentValue) ? dependentValue.includes(expectedValue) : String(dependentValue || "").includes(String(expectedValue || ""));
-    if (condition.show_when === "is_empty") return !dependentValue || dependentValue === "" || dependentValue === false;
-    if (condition.show_when === "is_not_empty") return dependentValue != null && dependentValue !== "" && dependentValue !== false;
-    return true;
-  };
-
-  const checkGroupVisibility = (group, data) => {
-    const cv = group?.conditional_visibility;
-    if (!cv) return true;
-    const conditions = Array.isArray(cv.conditions) ? cv.conditions : null;
-    if (conditions?.length) return conditions.some((c) => isGroupConditionMet(c, data));
-    if (!cv.depends_on_field) return true;
-    return isGroupConditionMet(cv, data);
-  };
-
-  const checkRowVisibility = (row, data) => {
-    if (!row?.conditional_visibility?.depends_on_field) return true;
-    const { depends_on_field, show_when, value: expectedValue } = row.conditional_visibility;
-    const dependentValue = data?.[depends_on_field];
-    const normalize = (v) => {
-      if (v === true || v === "true" || v === "True" || v === "TRUE") return true;
-      if (v === false || v === "false" || v === "False" || v === "FALSE") return false;
-      if (v === "yes" || v === "Yes" || v === "YES") return true;
-      if (v === "no" || v === "No" || v === "NO") return false;
-      return v;
-    };
-    if (show_when === "equals") return normalize(dependentValue) === normalize(expectedValue);
-    if (show_when === "not_equals") return normalize(dependentValue) !== normalize(expectedValue);
-    if (show_when === "contains") return Array.isArray(dependentValue) ? dependentValue.includes(expectedValue) : String(dependentValue || "").includes(String(expectedValue || ""));
-    if (show_when === "is_empty") return !dependentValue || dependentValue === "" || dependentValue === false;
-    if (show_when === "is_not_empty") return dependentValue != null && dependentValue !== "" && dependentValue !== false;
-    return true;
-  };
+  const checkRowVisibility = checkLayoutRowVisibility;
 
   const formLayout = useMemo(() => {
     if (!sections.length || !fields.length) return null;
