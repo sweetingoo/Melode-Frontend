@@ -545,6 +545,20 @@ function SidebarNavigationContent({
   complianceLoading
 }) {
   const { setOpenMobile, isMobile } = useSidebar();
+  const [hasHijackSession, setHasHijackSession] = useState(false);
+
+  useEffect(() => {
+    const updateHijackSessionState = () => {
+      setHasHijackSession(Boolean(localStorage.getItem("hijackSession")));
+    };
+
+    updateHijackSessionState();
+    window.addEventListener("storage", updateHijackSessionState);
+
+    return () => {
+      window.removeEventListener("storage", updateHijackSessionState);
+    };
+  }, []);
 
   // Handler to close mobile sidebar when link is clicked
   const handleMobileLinkClick = () => {
@@ -860,20 +874,19 @@ function SidebarNavigationContent({
                 </div>
 
                 {/* Hijack Session Indicator */}
-                {typeof window !== "undefined" &&
-                  localStorage.getItem("hijackSession") && (
-                    <div className="mt-2 p-2 bg-orange-100 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-md group-data-[collapsible=icon]:hidden">
-                      <div className="flex items-center gap-2 text-xs text-orange-800 dark:text-orange-200">
-                        <Shield className="h-3 w-3" />
-                        <span className="font-medium">
-                          Hijacked Session
-                        </span>
-                      </div>
-                      <div className="text-xs text-orange-600 dark:text-orange-300 mt-1">
-                        Acting as another user
-                      </div>
+                {hasHijackSession && (
+                  <div className="mt-2 p-2 bg-orange-100 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-md group-data-[collapsible=icon]:hidden">
+                    <div className="flex items-center gap-2 text-xs text-orange-800 dark:text-orange-200">
+                      <Shield className="h-3 w-3" />
+                      <span className="font-medium">
+                        Hijacked Session
+                      </span>
                     </div>
-                  )}
+                    <div className="text-xs text-orange-600 dark:text-orange-300 mt-1">
+                      Acting as another user
+                    </div>
+                  </div>
+                )}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent className="w-56">
@@ -883,23 +896,22 @@ function SidebarNavigationContent({
               </DropdownMenuItem>
 
               {/* Return to Original User - only show if hijacked */}
-              {typeof window !== "undefined" &&
-                localStorage.getItem("hijackSession") && (
-                  <DropdownMenuItem
-                    className="cursor-pointer"
-                    onClick={() => {
-                      returnToOriginalUserMutation.mutate();
-                    }}
-                    disabled={returnToOriginalUserMutation.isPending}
-                  >
-                    {returnToOriginalUserMutation.isPending ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <Shield className="mr-2 h-4 w-4" />
-                    )}
-                    Return to Original User
-                  </DropdownMenuItem>
-                )}
+              {hasHijackSession && (
+                <DropdownMenuItem
+                  className="cursor-pointer"
+                  onClick={() => {
+                    returnToOriginalUserMutation.mutate();
+                  }}
+                  disabled={returnToOriginalUserMutation.isPending}
+                >
+                  {returnToOriginalUserMutation.isPending ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Shield className="mr-2 h-4 w-4" />
+                  )}
+                  Return to Original User
+                </DropdownMenuItem>
+              )}
 
               <DropdownMenuSeparator />
               <DropdownMenuItem

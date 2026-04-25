@@ -7,12 +7,44 @@ import { Clock } from "lucide-react";
 
 function toYYYYMMDD(d) {
   const x = new Date(d);
-  return x.toISOString().slice(0, 10);
+  const year = x.getFullYear();
+  const month = String(x.getMonth() + 1).padStart(2, "0");
+  const day = String(x.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function hoursBetween(start, end) {
   if (!start || !end) return 0;
   return (new Date(end) - new Date(start)) / (1000 * 60 * 60);
+}
+
+function getDurationSeconds(record, start, end) {
+  const duration =
+    record.shift_duration_seconds ??
+    record.duration_seconds ??
+    record.shift_duration;
+  const seconds = Number(duration);
+
+  if (Number.isFinite(seconds) && seconds >= 0) {
+    return seconds;
+  }
+
+  return hoursBetween(start, end) * 3600;
+}
+
+function formatDurationHours(hours) {
+  const value = Number(hours);
+  if (!Number.isFinite(value) || value <= 0) return "0h";
+
+  if (value < 1 / 60) {
+    return `${Math.max(1, Math.round(value * 3600))}s`;
+  }
+
+  if (value < 1) {
+    return `${Math.round(value * 60)}m`;
+  }
+
+  return `${Number.isInteger(value) ? value : value.toFixed(1)}h`;
 }
 
 /** Hours worked by day (last 7 days). Uses existing clock records API. */
@@ -44,8 +76,8 @@ export function DashboardChartHoursWeek() {
     const end = r.clock_out_time ?? r.clock_out ?? new Date();
     const key = start ? toYYYYMMDD(start) : null;
     if (key && byDay[key] != null) {
-      const duration = r.shift_duration_seconds ?? r.duration_seconds ?? hoursBetween(start, end) * 3600;
-      byDay[key].hours += typeof duration === "number" ? duration / 3600 : 0;
+      const duration = getDurationSeconds(r, start, end);
+      byDay[key].hours += duration / 3600;
     }
   });
 
@@ -64,7 +96,7 @@ export function DashboardChartHoursWeek() {
       <CardContent className="pt-0 px-5 pb-5">
         <div className="h-[200px] w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} margin={{ top: 8, right: 8, left: 4, bottom: 0 }}>
+            <BarChart data={chartData} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
               <defs>
                 <linearGradient id="hoursBar" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="#0ea5e9" stopOpacity={1} />
@@ -74,8 +106,9 @@ export function DashboardChartHoursWeek() {
               <XAxis dataKey="label" tick={{ fontSize: 12, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} />
               <YAxis
                 tick={{ fontSize: 13, fill: "var(--foreground)", fontWeight: 500 }}
-                width={40}
-                tickFormatter={(v) => `${v}h`}
+                width={52}
+                tickMargin={8}
+                tickFormatter={formatDurationHours}
                 axisLine={false}
                 tickLine={false}
               />
@@ -87,7 +120,7 @@ export function DashboardChartHoursWeek() {
                   backgroundColor: "hsl(var(--card))",
                   color: "hsl(var(--card-foreground))",
                 }}
-                formatter={(v) => [`${Number(v).toFixed(1)}h`, "Hours"]}
+                formatter={(v) => [formatDurationHours(v), "Hours"]}
                 labelFormatter={(_, payload) => payload[0]?.payload?.date}
               />
               <Bar dataKey="hours" fill="url(#hoursBar)" radius={[8, 8, 0, 0]} maxBarSize={36} />

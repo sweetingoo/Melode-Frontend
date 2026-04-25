@@ -3,6 +3,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { attendanceService } from "@/services/attendance";
 import { attendanceKeys } from "./useAttendance";
+import { clockKeys } from "@/hooks/useClock";
 import { toast } from "sonner";
 
 // Shift Records
@@ -103,6 +104,7 @@ export const useDeleteShiftRecord = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [...attendanceKeys.all, "shift-records"] });
+      queryClient.invalidateQueries({ queryKey: [...clockKeys.all, "my-records"] });
       toast.success("Shift record deleted successfully");
     },
     onError: (error) => {
